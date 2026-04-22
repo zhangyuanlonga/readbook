@@ -365,6 +365,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kCustomBackgroundStoreQuality = 82;
   static const double _kPinnedHeaderHeight = 40;
   static const double _kBottomProgressReserve = 12;
+  static const double _kBottomOverlayReserve = 96;
   static const double _kBackgroundTileWidth = 72;
   static const double _kBackgroundTileHeight = 44;
   static const double _kSwipeTurnDistanceThreshold = 42;
@@ -1008,7 +1009,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       viewportSize: constraints.biggest,
       safeInsets: _readerSafeInsets(context),
       pinnedHeaderHeight: _pinnedHeaderTotalHeight(context),
-      bottomProgressReserve: _kBottomProgressReserve,
+      bottomProgressReserve:
+          _showOverlayControls
+              ? _kBottomOverlayReserve
+              : _kBottomProgressReserve,
     );
   }
 
@@ -11838,6 +11842,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           updatePaddingSettings(next);
                         }
 
+                        void resetBodyMarginsToDefault() {
+                          updatePaddingSettings(
+                            draft.copyWith(
+                              bodyMarginMode: ReaderBodyMarginMode.preset,
+                              bodyMarginPreset: ReaderBodyMarginPreset.standard,
+                              bodyMarginTop: 18,
+                              bodyMarginBottom: 18,
+                              bodyMarginLeft: 18,
+                              bodyMarginRight: 18,
+                            ),
+                          );
+                        }
+
                         Future<double?> promptExactMarginValue({
                           required String label,
                           required double currentValue,
@@ -12126,6 +12143,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       ),
                                       const SizedBox(height: 8),
                                       buildSectionTitle(title: '正文边距'),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: TextButton.icon(
+                                          onPressed: resetBodyMarginsToDefault,
+                                          icon: const Icon(
+                                            Icons.restart_alt_rounded,
+                                            size: 16,
+                                          ),
+                                          label: const Text('恢复默认'),
+                                        ),
+                                      ),
                                       Wrap(
                                         spacing: 8,
                                         runSpacing: 8,
@@ -13301,7 +13329,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   final effectiveMargins = draft.effectiveBodyMarginValues;
                   return <Widget>[
                     buildCompactSettingsCard([
-                      buildCompactSectionTitle('正文边距'),
+                      Row(
+                        children: [
+                          Expanded(child: buildCompactSectionTitle('正文边距')),
+                          TextButton.icon(
+                            onPressed: () {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  bodyMarginMode: ReaderBodyMarginMode.preset,
+                                  bodyMarginPreset:
+                                      ReaderBodyMarginPreset.standard,
+                                  bodyMarginTop: 18,
+                                  bodyMarginBottom: 18,
+                                  bodyMarginLeft: 18,
+                                  bodyMarginRight: 18,
+                                );
+                              });
+                            },
+                            icon: const Icon(
+                              Icons.restart_alt_rounded,
+                              size: 16,
+                            ),
+                            label: const Text('恢复默认'),
+                          ),
+                        ],
+                      ),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,

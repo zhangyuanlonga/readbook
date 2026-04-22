@@ -27,6 +27,7 @@ class BookmarksPage extends ConsumerStatefulWidget {
 }
 
 class _BookmarksPageState extends ConsumerState<BookmarksPage> {
+  static const Duration _loadTimeout = Duration(seconds: 8);
   final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
     AppDatabase.instance,
   );
@@ -55,10 +56,14 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     });
 
     try {
-      final bookmarksFuture = _bookmarkRepository.listAllBookmarks();
-      final booksFuture = _bookshelfService.getAll();
-      final bookmarks = await bookmarksFuture;
-      final books = await booksFuture;
+      final bookmarks = await _bookmarkRepository.listAllBookmarks().timeout(
+        _loadTimeout,
+        onTimeout: () => const <Bookmark>[],
+      );
+      final books = await _bookshelfService.getAll().timeout(
+        _loadTimeout,
+        onTimeout: () => const <BookshelfBook>[],
+      );
       final index = <String, BookshelfBook>{
         for (final book in books) book.bookId: book,
       };

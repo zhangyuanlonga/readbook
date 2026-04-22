@@ -25,6 +25,9 @@ import '../features/mine/presentation/cover_gallery_editor_page.dart';
 import '../features/mine/presentation/cover_gallery_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
 import '../features/mine/presentation/feature_placeholder_page.dart';
+import '../features/mine/presentation/launch_image_gallery_editor_page.dart';
+import '../features/mine/presentation/launch_image_gallery_page.dart';
+import '../features/mine/presentation/reader_background_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
 import '../features/auth/presentation/user_profile_page.dart';
@@ -115,18 +118,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/appearance/reader-background',
       name: 'reader-background',
-      builder:
-          (context, state) => const FeaturePlaceholderPage(
-            kind: FeaturePlaceholderKind.readerBackground,
-          ),
+      builder: (context, state) => const ReaderBackgroundPage(),
     ),
     GoRoute(
       path: '/appearance/launch-image',
       name: 'launch-image',
-      builder:
-          (context, state) => const FeaturePlaceholderPage(
-            kind: FeaturePlaceholderKind.launchImage,
-          ),
+      builder: (context, state) => const LaunchImageGalleryPage(),
+    ),
+    GoRoute(
+      path: '/appearance/launch-image/editor',
+      name: 'launch-image-editor',
+      builder: (context, state) {
+        final galleryId = state.uri.queryParameters['id'] ?? '';
+        return LaunchImageGalleryEditorPage(galleryId: galleryId);
+      },
     ),
     GoRoute(
       path: '/appearance/advanced-themes',

@@ -434,6 +434,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,

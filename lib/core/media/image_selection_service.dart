@@ -26,6 +26,36 @@ class ImageSelectionService {
 
   final ip.ImagePicker _mobilePicker;
 
+  Future<List<PickedImageData>> pickImages({
+    required String confirmButtonText,
+    Set<String> allowedExtensions = const {'jpg', 'jpeg', 'png', 'webp'},
+    ImageSelectionSource source = ImageSelectionSource.auto,
+  }) async {
+    final normalizedExtensions = _normalizeExtensions(allowedExtensions);
+    if (normalizedExtensions.isEmpty) {
+      throw const ImageSelectionException('未配置可选图片格式。');
+    }
+
+    return switch (source) {
+      ImageSelectionSource.gallery => _pickMultipleWithSystemPicker(
+        allowedExtensions: normalizedExtensions,
+      ),
+      ImageSelectionSource.files => _pickMultipleWithFileSelector(
+        confirmButtonText: confirmButtonText,
+        allowedExtensions: normalizedExtensions,
+      ),
+      ImageSelectionSource.auto =>
+        kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)
+            ? _pickMultipleWithFileSelector(
+              confirmButtonText: confirmButtonText,
+              allowedExtensions: normalizedExtensions,
+            )
+            : _pickMultipleWithSystemPicker(
+              allowedExtensions: normalizedExtensions,
+            ),
+    };
+  }
+
   Future<PickedImageData?> pickImage({
     required String confirmButtonText,
     Set<String> allowedExtensions = const {'jpg', 'jpeg', 'png', 'webp'},
@@ -98,6 +128,57 @@ class ImageSelectionService {
       fileName: picked.name,
       allowedExtensions: allowedExtensions,
     );
+  }
+
+  Future<List<PickedImageData>> _pickMultipleWithSystemPicker({
+    required Set<String> allowedExtensions,
+  }) async {
+    if (kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)) {
+      throw const ImageSelectionException('当前设备不支持从相册选择图片。');
+    }
+    final picked = await _mobilePicker.pickMultiImage(
+      requestFullMetadata: false,
+    );
+    if (picked.isEmpty) {
+      return const <PickedImageData>[];
+    }
+
+    final results = <PickedImageData>[];
+    for (final item in picked) {
+      results.add(
+        _toPickedImageData(
+          bytes: await item.readAsBytes(),
+          fileName: item.name,
+          allowedExtensions: allowedExtensions,
+        ),
+      );
+    }
+    return results;
+  }
+
+  Future<List<PickedImageData>> _pickMultipleWithFileSelector({
+    required String confirmButtonText,
+    required Set<String> allowedExtensions,
+  }) async {
+    final picked = await fs.openFiles(
+      acceptedTypeGroups: <fs.XTypeGroup>[_buildTypeGroup(allowedExtensions)],
+      confirmButtonText: confirmButtonText,
+    );
+    if (picked.isEmpty) {
+      return const <PickedImageData>[];
+    }
+
+    final results = <PickedImageData>[];
+    for (final item in picked) {
+      results.add(
+        _toPickedImageData(
+          bytes: await item.readAsBytes(),
+          fileName: item.name,
+          allowedExtensions: allowedExtensions,
+        ),
+      );
+    }
+    return results;
   }
 
   PickedImageData _toPickedImageData({

@@ -75,7 +75,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 (f) =>
                     f.path.endsWith('.jpg') ||
                     f.path.endsWith('.jpeg') ||
-                    f.path.endsWith('.png'),
+                    f.path.endsWith('.png') ||
+                    f.path.endsWith('.webp') ||
+                    f.path.endsWith('.gif'),
               )
               .map((f) => f.path)
               .toList();
@@ -105,12 +107,12 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         return;
       }
 
-      final picked = await _imageSelectionService.pickImage(
+      final pickedImages = await _imageSelectionService.pickImages(
         confirmButtonText: '选择背景',
         allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
         source: source,
       );
-      if (picked == null || !mounted) {
+      if (pickedImages.isEmpty || !mounted) {
         return;
       }
 
@@ -120,19 +122,24 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         await bgDir.create(recursive: true);
       }
 
-      final extension = _imageExtensionForName(picked.name);
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_bg.$extension';
-      final destPath = '${bgDir.path}/$fileName';
-      final destFile = File(destPath);
-      await destFile.writeAsBytes(picked.bytes, flush: true);
+      final savedPaths = <String>[];
+      for (final picked in pickedImages) {
+        final extension = _imageExtensionForName(picked.name);
+        final fileName =
+            '${DateTime.now().microsecondsSinceEpoch}_${savedPaths.length}_bg.$extension';
+        final destPath = '${bgDir.path}/$fileName';
+        final destFile = File(destPath);
+        await destFile.writeAsBytes(picked.bytes, flush: true);
+        savedPaths.add(destPath);
+      }
 
       if (!mounted) {
         return;
       }
       setState(() {
-        _backgroundPaths = <String>[..._backgroundPaths, destPath];
+        _backgroundPaths = <String>[..._backgroundPaths, ...savedPaths];
       });
-      _showMessage('背景已添加');
+      _showMessage('已添加 ${savedPaths.length} 张背景');
     } on ImageSelectionException catch (error) {
       _showMessage(error.message);
     } on PlatformException catch (error) {
@@ -1099,115 +1106,133 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
 
   Widget _buildBackgroundGallerySection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return _buildSectionCard(
-      context,
-      icon: Icons.wallpaper_outlined,
-      title: '背景',
-      subtitle: '移动端可选相册或文件，桌面端从文件选择。长按图片可删除。',
-      trailing: IconButton(
-        tooltip: '新增背景',
-        onPressed: _uploadBackground,
-        icon: const Icon(Icons.add_rounded),
-      ),
-      child:
-          _isLoadingBackgrounds
-              ? const SizedBox(
-                height: 80,
-                child: Center(child: CircularProgressIndicator()),
-              )
-              : LayoutBuilder(
-                builder: (context, constraints) {
-                  const spacing = 8.0;
-                  final columns = AppLayout.optionGridColumnsForWidth(
-                    constraints.maxWidth,
-                  ).clamp(3, 5);
-                  final itemWidth =
-                      (constraints.maxWidth - ((columns - 1) * spacing)) /
-                      columns;
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.wallpaper_outlined,
+                size: 16,
+                color: colorScheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '应用背景',
+                    style: textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    '移动端可选相册或文件，桌面端从文件选择。长按图片可删除。',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: '新增背景',
+              onPressed: _uploadBackground,
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_isLoadingBackgrounds)
+          const SizedBox(
+            height: 80,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              const columns = 3;
+              final itemWidth =
+                  (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_backgroundPaths.isEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 18,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.35,
+              if (_backgroundPaths.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    '还没有自定义应用背景，点击右上角 + 号开始。',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: _backgroundPaths
+                    .map((path) {
+                      return GestureDetector(
+                        onLongPress: () => _confirmDeleteBackground(path),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                width: itemWidth,
+                                height: itemWidth * 1.28,
+                                child: Image.file(
+                                  File(path),
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
-                          ),
-                          child: Text(
-                            '还没有自定义背景，点击右上角 + 号开始。',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        )
-                      else
-                        Wrap(
-                          spacing: spacing,
-                          runSpacing: spacing,
-                          children: _backgroundPaths
-                              .map((path) {
-                                return GestureDetector(
-                                  onLongPress:
-                                      () => _confirmDeleteBackground(path),
-                                  child: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: SizedBox(
-                                          width: itemWidth,
-                                          height: itemWidth * 1.28,
-                                          child: Image.file(
-                                            File(path),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        right: 6,
-                                        top: 6,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.45,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            '长按删除',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                            Positioned(
+                              right: 6,
+                              top: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  '长按删除',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                );
-                              })
-                              .toList(growable: false),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                    ],
-                  );
-                },
-              ),
+                      );
+                    })
+                    .toList(growable: false),
+              );
+            },
+          ),
+      ],
     );
   }
 

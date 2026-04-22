@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show FrameTiming;
 
@@ -19,6 +20,8 @@ import '../domain/entities/announcement.dart';
 import '../features/announcement/application/announcement_read_state_service.dart';
 import '../features/announcement/application/announcement_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/mine/application/advanced_theme_service.dart';
+import '../features/mine/application/launch_image_gallery_service.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import '../features/source/application/source_runtime_facade.dart';
 import 'layout/app_layout.dart';
@@ -903,19 +906,61 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
 class _StartupGuardPage extends StatelessWidget {
   const _StartupGuardPage();
-  static const String _startupArtwork =
-      'assets/branding/selune_launch_scene.png';
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: Color(0xFFF6F8FB),
+    return const _StartupGuardArtwork();
+  }
+}
+
+class _StartupGuardArtwork extends StatefulWidget {
+  const _StartupGuardArtwork();
+
+  @override
+  State<_StartupGuardArtwork> createState() => _StartupGuardArtworkState();
+}
+
+class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
+  static const String _fallbackStartupArtwork =
+      'assets/branding/selune_launch_scene.png';
+
+  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
+  final LaunchImageGalleryService _launchImageGalleryService =
+      LaunchImageGalleryService();
+  late final Future<String?> _startupImagePathFuture =
+      _resolveStartupImagePath();
+
+  Future<String?> _resolveStartupImagePath() async {
+    final activeTheme = await _advancedThemeService.loadActiveTheme();
+    return _launchImageGalleryService.loadLaunchImagePathForGallery(
+      activeTheme?.launchImageGalleryId,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF6F8FB),
       child: SizedBox.expand(
-        child: Image(
-          image: AssetImage(_startupArtwork),
-          fit: BoxFit.fill,
-          alignment: Alignment.center,
-          filterQuality: FilterQuality.high,
+        child: FutureBuilder<String?>(
+          future: _startupImagePathFuture,
+          builder: (context, snapshot) {
+            final resolvedPath = snapshot.data?.trim();
+            final useFile =
+                resolvedPath != null &&
+                resolvedPath.isNotEmpty &&
+                File(resolvedPath).existsSync();
+            final ImageProvider imageProvider =
+                useFile
+                    ? FileImage(File(resolvedPath))
+                    : const AssetImage(_fallbackStartupArtwork);
+            return Image(
+              image: imageProvider,
+              fit: BoxFit.fill,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.high,
+            );
+          },
         ),
       ),
     );

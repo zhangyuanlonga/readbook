@@ -3214,6 +3214,627 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
   }
 }
 
+class $StoredBookMetadataOverridesTable extends StoredBookMetadataOverrides
+    with
+        TableInfo<
+          $StoredBookMetadataOverridesTable,
+          StoredBookMetadataOverride
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookMetadataOverridesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _targetKeyMeta = const VerificationMeta(
+    'targetKey',
+  );
+  @override
+  late final GeneratedColumn<String> targetKey = GeneratedColumn<String>(
+    'target_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _authorMeta = const VerificationMeta('author');
+  @override
+  late final GeneratedColumn<String> author = GeneratedColumn<String>(
+    'author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _introMeta = const VerificationMeta('intro');
+  @override
+  late final GeneratedColumn<String> intro = GeneratedColumn<String>(
+    'intro',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverPathMeta = const VerificationMeta(
+    'coverPath',
+  );
+  @override
+  late final GeneratedColumn<String> coverPath = GeneratedColumn<String>(
+    'cover_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    targetKey,
+    bookId,
+    sourceId,
+    detailUrl,
+    title,
+    author,
+    intro,
+    coverPath,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'book_metadata_overrides';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookMetadataOverride> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('target_key')) {
+      context.handle(
+        _targetKeyMeta,
+        targetKey.isAcceptableOrUnknown(data['target_key']!, _targetKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetKeyMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('author')) {
+      context.handle(
+        _authorMeta,
+        author.isAcceptableOrUnknown(data['author']!, _authorMeta),
+      );
+    }
+    if (data.containsKey('intro')) {
+      context.handle(
+        _introMeta,
+        intro.isAcceptableOrUnknown(data['intro']!, _introMeta),
+      );
+    }
+    if (data.containsKey('cover_path')) {
+      context.handle(
+        _coverPathMeta,
+        coverPath.isAcceptableOrUnknown(data['cover_path']!, _coverPathMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {targetKey};
+  @override
+  StoredBookMetadataOverride map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookMetadataOverride(
+      targetKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}target_key'],
+          )!,
+      bookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_id'],
+      ),
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      ),
+      detailUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail_url'],
+      ),
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      ),
+      author: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author'],
+      ),
+      intro: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}intro'],
+      ),
+      coverPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_path'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookMetadataOverridesTable createAlias(String alias) {
+    return $StoredBookMetadataOverridesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookMetadataOverride extends DataClass
+    implements Insertable<StoredBookMetadataOverride> {
+  final String targetKey;
+  final String? bookId;
+  final String? sourceId;
+  final String? detailUrl;
+  final String? title;
+  final String? author;
+  final String? intro;
+  final String? coverPath;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const StoredBookMetadataOverride({
+    required this.targetKey,
+    this.bookId,
+    this.sourceId,
+    this.detailUrl,
+    this.title,
+    this.author,
+    this.intro,
+    this.coverPath,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['target_key'] = Variable<String>(targetKey);
+    if (!nullToAbsent || bookId != null) {
+      map['book_id'] = Variable<String>(bookId);
+    }
+    if (!nullToAbsent || sourceId != null) {
+      map['source_id'] = Variable<String>(sourceId);
+    }
+    if (!nullToAbsent || detailUrl != null) {
+      map['detail_url'] = Variable<String>(detailUrl);
+    }
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
+    if (!nullToAbsent || author != null) {
+      map['author'] = Variable<String>(author);
+    }
+    if (!nullToAbsent || intro != null) {
+      map['intro'] = Variable<String>(intro);
+    }
+    if (!nullToAbsent || coverPath != null) {
+      map['cover_path'] = Variable<String>(coverPath);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredBookMetadataOverridesCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookMetadataOverridesCompanion(
+      targetKey: Value(targetKey),
+      bookId:
+          bookId == null && nullToAbsent ? const Value.absent() : Value(bookId),
+      sourceId:
+          sourceId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(sourceId),
+      detailUrl:
+          detailUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(detailUrl),
+      title:
+          title == null && nullToAbsent ? const Value.absent() : Value(title),
+      author:
+          author == null && nullToAbsent ? const Value.absent() : Value(author),
+      intro:
+          intro == null && nullToAbsent ? const Value.absent() : Value(intro),
+      coverPath:
+          coverPath == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverPath),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredBookMetadataOverride.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookMetadataOverride(
+      targetKey: serializer.fromJson<String>(json['targetKey']),
+      bookId: serializer.fromJson<String?>(json['bookId']),
+      sourceId: serializer.fromJson<String?>(json['sourceId']),
+      detailUrl: serializer.fromJson<String?>(json['detailUrl']),
+      title: serializer.fromJson<String?>(json['title']),
+      author: serializer.fromJson<String?>(json['author']),
+      intro: serializer.fromJson<String?>(json['intro']),
+      coverPath: serializer.fromJson<String?>(json['coverPath']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'targetKey': serializer.toJson<String>(targetKey),
+      'bookId': serializer.toJson<String?>(bookId),
+      'sourceId': serializer.toJson<String?>(sourceId),
+      'detailUrl': serializer.toJson<String?>(detailUrl),
+      'title': serializer.toJson<String?>(title),
+      'author': serializer.toJson<String?>(author),
+      'intro': serializer.toJson<String?>(intro),
+      'coverPath': serializer.toJson<String?>(coverPath),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredBookMetadataOverride copyWith({
+    String? targetKey,
+    Value<String?> bookId = const Value.absent(),
+    Value<String?> sourceId = const Value.absent(),
+    Value<String?> detailUrl = const Value.absent(),
+    Value<String?> title = const Value.absent(),
+    Value<String?> author = const Value.absent(),
+    Value<String?> intro = const Value.absent(),
+    Value<String?> coverPath = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => StoredBookMetadataOverride(
+    targetKey: targetKey ?? this.targetKey,
+    bookId: bookId.present ? bookId.value : this.bookId,
+    sourceId: sourceId.present ? sourceId.value : this.sourceId,
+    detailUrl: detailUrl.present ? detailUrl.value : this.detailUrl,
+    title: title.present ? title.value : this.title,
+    author: author.present ? author.value : this.author,
+    intro: intro.present ? intro.value : this.intro,
+    coverPath: coverPath.present ? coverPath.value : this.coverPath,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredBookMetadataOverride copyWithCompanion(
+    StoredBookMetadataOverridesCompanion data,
+  ) {
+    return StoredBookMetadataOverride(
+      targetKey: data.targetKey.present ? data.targetKey.value : this.targetKey,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      title: data.title.present ? data.title.value : this.title,
+      author: data.author.present ? data.author.value : this.author,
+      intro: data.intro.present ? data.intro.value : this.intro,
+      coverPath: data.coverPath.present ? data.coverPath.value : this.coverPath,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookMetadataOverride(')
+          ..write('targetKey: $targetKey, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('title: $title, ')
+          ..write('author: $author, ')
+          ..write('intro: $intro, ')
+          ..write('coverPath: $coverPath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    targetKey,
+    bookId,
+    sourceId,
+    detailUrl,
+    title,
+    author,
+    intro,
+    coverPath,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookMetadataOverride &&
+          other.targetKey == this.targetKey &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.title == this.title &&
+          other.author == this.author &&
+          other.intro == this.intro &&
+          other.coverPath == this.coverPath &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredBookMetadataOverridesCompanion
+    extends UpdateCompanion<StoredBookMetadataOverride> {
+  final Value<String> targetKey;
+  final Value<String?> bookId;
+  final Value<String?> sourceId;
+  final Value<String?> detailUrl;
+  final Value<String?> title;
+  final Value<String?> author;
+  final Value<String?> intro;
+  final Value<String?> coverPath;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredBookMetadataOverridesCompanion({
+    this.targetKey = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.title = const Value.absent(),
+    this.author = const Value.absent(),
+    this.intro = const Value.absent(),
+    this.coverPath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookMetadataOverridesCompanion.insert({
+    required String targetKey,
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.title = const Value.absent(),
+    this.author = const Value.absent(),
+    this.intro = const Value.absent(),
+    this.coverPath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : targetKey = Value(targetKey);
+  static Insertable<StoredBookMetadataOverride> custom({
+    Expression<String>? targetKey,
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? title,
+    Expression<String>? author,
+    Expression<String>? intro,
+    Expression<String>? coverPath,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (targetKey != null) 'target_key': targetKey,
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (title != null) 'title': title,
+      if (author != null) 'author': author,
+      if (intro != null) 'intro': intro,
+      if (coverPath != null) 'cover_path': coverPath,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookMetadataOverridesCompanion copyWith({
+    Value<String>? targetKey,
+    Value<String?>? bookId,
+    Value<String?>? sourceId,
+    Value<String?>? detailUrl,
+    Value<String?>? title,
+    Value<String?>? author,
+    Value<String?>? intro,
+    Value<String?>? coverPath,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredBookMetadataOverridesCompanion(
+      targetKey: targetKey ?? this.targetKey,
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      title: title ?? this.title,
+      author: author ?? this.author,
+      intro: intro ?? this.intro,
+      coverPath: coverPath ?? this.coverPath,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (targetKey.present) {
+      map['target_key'] = Variable<String>(targetKey.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (author.present) {
+      map['author'] = Variable<String>(author.value);
+    }
+    if (intro.present) {
+      map['intro'] = Variable<String>(intro.value);
+    }
+    if (coverPath.present) {
+      map['cover_path'] = Variable<String>(coverPath.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookMetadataOverridesCompanion(')
+          ..write('targetKey: $targetKey, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('title: $title, ')
+          ..write('author: $author, ')
+          ..write('intro: $intro, ')
+          ..write('coverPath: $coverPath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $StoredReadingRecordsTable extends StoredReadingRecords
     with TableInfo<$StoredReadingRecordsTable, StoredReadingRecord> {
   @override
@@ -7624,6 +8245,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $StoredBookmarksTable storedBookmarks = $StoredBookmarksTable(
     this,
   );
+  late final $StoredBookMetadataOverridesTable storedBookMetadataOverrides =
+      $StoredBookMetadataOverridesTable(this);
   late final $StoredReadingRecordsTable storedReadingRecords =
       $StoredReadingRecordsTable(this);
   late final $StoredReadingRecordDaysTable storedReadingRecordDays =
@@ -7646,6 +8269,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedLocalBooks,
     storedLocalChapters,
     storedBookmarks,
+    storedBookMetadataOverrides,
     storedReadingRecords,
     storedReadingRecordDays,
     storedReadingRecordSessions,
@@ -9195,6 +9819,327 @@ typedef $$StoredBookmarksTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $StoredBookmarksTable, StoredBookmark>,
       ),
       StoredBookmark,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredBookMetadataOverridesTableCreateCompanionBuilder =
+    StoredBookMetadataOverridesCompanion Function({
+      required String targetKey,
+      Value<String?> bookId,
+      Value<String?> sourceId,
+      Value<String?> detailUrl,
+      Value<String?> title,
+      Value<String?> author,
+      Value<String?> intro,
+      Value<String?> coverPath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredBookMetadataOverridesTableUpdateCompanionBuilder =
+    StoredBookMetadataOverridesCompanion Function({
+      Value<String> targetKey,
+      Value<String?> bookId,
+      Value<String?> sourceId,
+      Value<String?> detailUrl,
+      Value<String?> title,
+      Value<String?> author,
+      Value<String?> intro,
+      Value<String?> coverPath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredBookMetadataOverridesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookMetadataOverridesTable> {
+  $$StoredBookMetadataOverridesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get targetKey => $composableBuilder(
+    column: $table.targetKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get intro => $composableBuilder(
+    column: $table.intro,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverPath => $composableBuilder(
+    column: $table.coverPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookMetadataOverridesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookMetadataOverridesTable> {
+  $$StoredBookMetadataOverridesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get targetKey => $composableBuilder(
+    column: $table.targetKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get intro => $composableBuilder(
+    column: $table.intro,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverPath => $composableBuilder(
+    column: $table.coverPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookMetadataOverridesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookMetadataOverridesTable> {
+  $$StoredBookMetadataOverridesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get targetKey =>
+      $composableBuilder(column: $table.targetKey, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get author =>
+      $composableBuilder(column: $table.author, builder: (column) => column);
+
+  GeneratedColumn<String> get intro =>
+      $composableBuilder(column: $table.intro, builder: (column) => column);
+
+  GeneratedColumn<String> get coverPath =>
+      $composableBuilder(column: $table.coverPath, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredBookMetadataOverridesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookMetadataOverridesTable,
+          StoredBookMetadataOverride,
+          $$StoredBookMetadataOverridesTableFilterComposer,
+          $$StoredBookMetadataOverridesTableOrderingComposer,
+          $$StoredBookMetadataOverridesTableAnnotationComposer,
+          $$StoredBookMetadataOverridesTableCreateCompanionBuilder,
+          $$StoredBookMetadataOverridesTableUpdateCompanionBuilder,
+          (
+            StoredBookMetadataOverride,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookMetadataOverridesTable,
+              StoredBookMetadataOverride
+            >,
+          ),
+          StoredBookMetadataOverride,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookMetadataOverridesTableTableManager(
+    _$AppDatabase db,
+    $StoredBookMetadataOverridesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredBookMetadataOverridesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredBookMetadataOverridesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookMetadataOverridesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> targetKey = const Value.absent(),
+                Value<String?> bookId = const Value.absent(),
+                Value<String?> sourceId = const Value.absent(),
+                Value<String?> detailUrl = const Value.absent(),
+                Value<String?> title = const Value.absent(),
+                Value<String?> author = const Value.absent(),
+                Value<String?> intro = const Value.absent(),
+                Value<String?> coverPath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookMetadataOverridesCompanion(
+                targetKey: targetKey,
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                title: title,
+                author: author,
+                intro: intro,
+                coverPath: coverPath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String targetKey,
+                Value<String?> bookId = const Value.absent(),
+                Value<String?> sourceId = const Value.absent(),
+                Value<String?> detailUrl = const Value.absent(),
+                Value<String?> title = const Value.absent(),
+                Value<String?> author = const Value.absent(),
+                Value<String?> intro = const Value.absent(),
+                Value<String?> coverPath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookMetadataOverridesCompanion.insert(
+                targetKey: targetKey,
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                title: title,
+                author: author,
+                intro: intro,
+                coverPath: coverPath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookMetadataOverridesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookMetadataOverridesTable,
+      StoredBookMetadataOverride,
+      $$StoredBookMetadataOverridesTableFilterComposer,
+      $$StoredBookMetadataOverridesTableOrderingComposer,
+      $$StoredBookMetadataOverridesTableAnnotationComposer,
+      $$StoredBookMetadataOverridesTableCreateCompanionBuilder,
+      $$StoredBookMetadataOverridesTableUpdateCompanionBuilder,
+      (
+        StoredBookMetadataOverride,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredBookMetadataOverridesTable,
+          StoredBookMetadataOverride
+        >,
+      ),
+      StoredBookMetadataOverride,
       PrefetchHooks Function()
     >;
 typedef $$StoredReadingRecordsTableCreateCompanionBuilder =
@@ -11394,6 +12339,12 @@ class $AppDatabaseManager {
       $$StoredLocalChaptersTableTableManager(_db, _db.storedLocalChapters);
   $$StoredBookmarksTableTableManager get storedBookmarks =>
       $$StoredBookmarksTableTableManager(_db, _db.storedBookmarks);
+  $$StoredBookMetadataOverridesTableTableManager
+  get storedBookMetadataOverrides =>
+      $$StoredBookMetadataOverridesTableTableManager(
+        _db,
+        _db.storedBookMetadataOverrides,
+      );
   $$StoredReadingRecordsTableTableManager get storedReadingRecords =>
       $$StoredReadingRecordsTableTableManager(_db, _db.storedReadingRecords);
   $$StoredReadingRecordDaysTableTableManager get storedReadingRecordDays =>

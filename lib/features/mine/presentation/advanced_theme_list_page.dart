@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -27,7 +28,7 @@ class AdvancedThemeListPage extends ConsumerStatefulWidget {
       _AdvancedThemeListPageState();
 }
 
-enum _AdvancedThemeAction { edit, duplicate, export, delete }
+enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   static const XTypeGroup _themeJsonTypeGroup = XTypeGroup(
@@ -35,6 +36,24 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     extensions: <String>['json'],
     mimeTypes: <String>['application/json', 'text/json', 'text/plain'],
     uniformTypeIdentifiers: <String>['public.json'],
+  );
+  static const XTypeGroup _themeZipTypeGroup = XTypeGroup(
+    label: 'Advanced theme bundle',
+    extensions: <String>['zip'],
+    mimeTypes: <String>['application/zip', 'application/x-zip-compressed'],
+    uniformTypeIdentifiers: <String>['public.zip-archive'],
+  );
+  static const XTypeGroup _themeImportTypeGroup = XTypeGroup(
+    label: 'Advanced theme package',
+    extensions: <String>['json', 'zip'],
+    mimeTypes: <String>[
+      'application/json',
+      'text/json',
+      'text/plain',
+      'application/zip',
+      'application/x-zip-compressed',
+    ],
+    uniformTypeIdentifiers: <String>['public.json', 'public.zip-archive'],
   );
 
   final AuthSessionStore _sessionStore = AuthSessionStore();
@@ -225,12 +244,58 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
+  Future<void> _exportThemeBundle(AppAdvancedTheme theme) async {
+    if (_isSaving) {
+      return;
+    }
+    final location = await getSaveLocation(
+      acceptedTypeGroups: const <XTypeGroup>[_themeZipTypeGroup],
+      suggestedName: '${_normalizedFileName(theme.name)}.zip',
+      confirmButtonText: '导出',
+    );
+    if (location == null) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final service = ref.read(advancedThemeServiceProvider);
+      final file = File(location.path);
+      await file.writeAsBytes(
+        await service.encodeThemeBundleZip(theme),
+        flush: true,
+      );
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已导出主题包「${theme.name}」');
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.message);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('导出主题包失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
   Future<void> _importTheme() async {
     if (_isSaving) {
       return;
     }
     final picked = await openFile(
-      acceptedTypeGroups: const <XTypeGroup>[_themeJsonTypeGroup],
+      acceptedTypeGroups: const <XTypeGroup>[_themeImportTypeGroup],
       confirmButtonText: '导入主题',
     );
     if (picked == null) {
@@ -241,9 +306,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _isSaving = true;
     });
     try {
-      final rawJson = await File(picked.path).readAsString();
       final service = ref.read(advancedThemeServiceProvider);
-      final importedTheme = await service.importThemeColorJson(rawJson);
+      final importedTheme =
+          p.extension(picked.path).toLowerCase() == '.zip'
+              ? await service.importThemeBundleZipBytes(
+                await File(picked.path).readAsBytes(),
+              )
+              : await service.importThemeColorJson(
+                await File(picked.path).readAsString(),
+              );
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
@@ -259,7 +330,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       if (!mounted) {
         return;
       }
-      _showMessage('导入失败，请确认 JSON 格式正确。');
+      _showMessage('导入失败，请确认主题文件格式正确。');
     } finally {
       if (mounted) {
         setState(() {
@@ -452,20 +523,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.transparent,
           actions: [
-            if (activeThemeId != null)
-              TextButton(
-                onPressed: _isLoading || _isSaving ? null : _disableActiveTheme,
-                child: const Text('停用'),
-              ),
             IconButton(
               tooltip: '导入主题',
               onPressed: _isLoading || _isSaving ? null : _importTheme,
               icon: const Icon(Icons.file_upload_outlined),
             ),
             IconButton(
-              tooltip: '新增高级主题',
+              tooltip: '新建高级主题',
               onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
-              icon: const Icon(Icons.add_rounded),
+              icon: const Icon(Icons.palette_outlined),
             ),
           ],
         ),
@@ -760,8 +826,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         _openEditor(theme);
                       case _AdvancedThemeAction.duplicate:
                         _duplicateTheme(theme);
-                      case _AdvancedThemeAction.export:
+                      case _AdvancedThemeAction.exportJson:
                         _exportTheme(theme);
+                      case _AdvancedThemeAction.exportZip:
+                        _exportThemeBundle(theme);
                       case _AdvancedThemeAction.delete:
                         _deleteTheme(theme);
                     }
@@ -777,8 +845,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                           child: Text('复制'),
                         ),
                         PopupMenuItem(
-                          value: _AdvancedThemeAction.export,
+                          value: _AdvancedThemeAction.exportJson,
                           child: Text('导出 JSON'),
+                        ),
+                        PopupMenuItem(
+                          value: _AdvancedThemeAction.exportZip,
+                          child: Text('导出 ZIP'),
                         ),
                         PopupMenuItem(
                           value: _AdvancedThemeAction.delete,
@@ -987,6 +1059,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
     if ((theme.coverGalleryId?.trim().isNotEmpty ?? false)) {
       badges.add(_buildResourceBadge(context, label: '封面'));
+    }
+    if ((theme.launchImageGalleryId?.trim().isNotEmpty ?? false)) {
+      badges.add(_buildResourceBadge(context, label: '启动图'));
     }
     if ((theme.bottomNavGalleryId?.trim().isNotEmpty ?? false)) {
       badges.add(_buildResourceBadge(context, label: '底栏'));

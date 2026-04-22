@@ -574,10 +574,14 @@ class _BookshelfTaxonomyManagementPageState
 
   Future<List<_BookshelfTaxonomyItem>> _loadItems() async {
     if (_isTag) {
-      final tagMapFuture = _bookshelfService.getTagMap();
-      final tagOrderFuture = _bookshelfService.getTagOrder();
-      final tagMap = await tagMapFuture;
-      final tagOrder = await tagOrderFuture;
+      final tagMap = await _bookshelfService.getTagMap().timeout(
+        widget.loadTimeout,
+        onTimeout: () => const {},
+      );
+      final tagOrder = await _bookshelfService.getTagOrder().timeout(
+        widget.loadTimeout,
+        onTimeout: () => const [],
+      );
       final counts = <String, int>{};
       for (final tags in tagMap.values) {
         for (final tag in tags) {
@@ -587,10 +591,14 @@ class _BookshelfTaxonomyManagementPageState
       return _mergeOrderedItems(counts: counts, order: tagOrder);
     }
 
-    final categoryMapFuture = _bookshelfService.getCategoryMap();
-    final categoryOrderFuture = _bookshelfService.getCategoryOrder();
-    final categoryMap = await categoryMapFuture;
-    final categoryOrder = await categoryOrderFuture;
+    final categoryMap = await _bookshelfService.getCategoryMap().timeout(
+      widget.loadTimeout,
+      onTimeout: () => const {},
+    );
+    final categoryOrder = await _bookshelfService.getCategoryOrder().timeout(
+      widget.loadTimeout,
+      onTimeout: () => const [],
+    );
     final counts = <String, int>{};
     for (final category in categoryMap.values) {
       counts[category] = (counts[category] ?? 0) + 1;

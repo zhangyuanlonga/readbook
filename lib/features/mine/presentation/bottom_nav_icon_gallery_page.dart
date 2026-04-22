@@ -129,7 +129,8 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
           .markChanged();
       await _load();
       if (!mounted) return;
-      context.push('/bottom-nav-icon-galleries/editor?id=${gallery.id}');
+      await context.push('/bottom-nav-icon-galleries/editor?id=${gallery.id}');
+      await _load();
     } finally {
       if (mounted) {
         setState(() {
@@ -190,7 +191,8 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
       if (!mounted) {
         return;
       }
-      context.push('/bottom-nav-icon-galleries/editor?id=${copied.id}');
+      await context.push('/bottom-nav-icon-galleries/editor?id=${copied.id}');
+      await _load();
     } finally {
       if (mounted) {
         setState(() {

@@ -124,8 +124,13 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          title: const Text('本地缓存'),
+          title: const Text('书籍缓存'),
           actions: [
+            IconButton(
+              onPressed: _confirmClearAll,
+              tooltip: '清理全部缓存',
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
             IconButton(
               onPressed: () {
                 _reloadBookPresentationIndex();
@@ -180,15 +185,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                                   context,
                                   cachedBookCount: summaries.length,
                                   cachedChapterCount: totalCachedChapters,
-                                  onClearAll: _confirmClearAll,
                                 ),
                                 const SizedBox(height: 12),
-                                Text(
-                                  '小说缓存',
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 8),
                                 Expanded(
                                   child: _buildCacheList(
                                     context,
@@ -224,7 +222,6 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     BuildContext context, {
     required int cachedBookCount,
     required int cachedChapterCount,
-    required VoidCallback? onClearAll,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -266,18 +263,6 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      onPressed: onClearAll,
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      label: const Text('清理全部缓存'),
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 8),
               Text(
@@ -327,38 +312,114 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
 
         final rawTitle = presentation?.title?.trim() ?? '';
         final title = rawTitle.isNotEmpty ? rawTitle : '未知书籍';
-        final subtitle =
+        final author = presentation?.author?.trim() ?? '';
+        final statusLabel =
             presentation == null
-                ? '已缓存 ${summary.cachedCount} 章 · 缺少书籍信息'
+                ? '缺少书籍信息'
                 : presentation.inBookshelf
-                ? '已缓存 ${summary.cachedCount} 章'
-                : '已缓存 ${summary.cachedCount} 章 · 书籍已从书架移除';
+                ? '书架中'
+                : '已移出书架';
 
-        return Card(
-          child: ListTile(
-            leading: _buildCover(
-              realCoverUrl: presentation?.coverUrl,
-              title: title,
-              author: presentation?.author,
-              bookId: presentation?.bookId ?? summary.bookId,
-              sourceId: presentation?.sourceId,
-              detailUrl: presentation?.detailUrl,
+        return InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _confirmClearBook(summary, presentation),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.45),
+              ),
             ),
-            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCover(
+                  realCoverUrl: presentation?.coverUrl,
+                  title: title,
+                  author: presentation?.author,
+                  bookId: presentation?.bookId ?? summary.bookId,
+                  sourceId: presentation?.sourceId,
+                  detailUrl: presentation?.detailUrl,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (author.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _buildInfoChip(context, '${summary.cachedCount} 章缓存'),
+                          _buildInfoChip(context, statusLabel),
+                          _buildInfoChip(
+                            context,
+                            '更新于 ${_formatTime(summary.updatedAt)}',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: '清理本书缓存',
+                  onPressed: () => _confirmClearBook(summary, presentation),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              ],
             ),
-            trailing: IconButton(
-              tooltip: '清理本书缓存',
-              onPressed: () => _confirmClearBook(summary, presentation),
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
-            onTap: () => _confirmClearBook(summary, presentation),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildInfoChip(BuildContext context, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
@@ -474,6 +535,15 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         content: Text(clearedCover ? '已清理《$title》的缓存与封面。' : '已清理《$title》的缓存。'),
       ),
     );
+  }
+
+  String _formatTime(DateTime time) {
+    final local = time.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$month-$day $hour:$minute';
   }
 }
 

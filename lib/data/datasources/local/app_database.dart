@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../domain/entities/bookmark.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/reader_document.dart';
@@ -112,6 +113,25 @@ class StoredBookmarks extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+}
+
+class StoredBookMetadataOverrides extends Table {
+  TextColumn get targetKey => text()();
+  TextColumn get bookId => text().nullable()();
+  TextColumn get sourceId => text().nullable()();
+  TextColumn get detailUrl => text().nullable()();
+  TextColumn get title => text().nullable()();
+  TextColumn get author => text().nullable()();
+  TextColumn get intro => text().nullable()();
+  TextColumn get coverPath => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'book_metadata_overrides';
+
+  @override
+  Set<Column<Object>> get primaryKey => {targetKey};
 }
 
 class StoredReadingRecords extends Table {
@@ -280,6 +300,7 @@ class SearchSourceHitUpsert {
     StoredLocalBooks,
     StoredLocalChapters,
     StoredBookmarks,
+    StoredBookMetadataOverrides,
     StoredReadingRecords,
     StoredReadingRecordDays,
     StoredReadingRecordSessions,
@@ -297,7 +318,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   @override
   MigrationStrategy get migration {
@@ -454,6 +475,9 @@ class AppDatabase extends _$AppDatabase {
                   storedLocalBooks.description,
                 ),
           );
+        }
+        if (from < 23) {
+          await migrator.createTable(storedBookMetadataOverrides);
         }
         if (from < 13) {
           await _addColumnIfMissing(
@@ -1643,6 +1667,117 @@ class AppDatabase extends _$AppDatabase {
       ..where((table) => table.bookId.equals(normalizedBookId))).go();
   }
 
+  Future<void> upsertBookMetadataOverride(
+    BookMetadataOverride metadataOverride,
+  ) async {
+    final normalizedTargetKey = metadataOverride.targetKey.trim();
+    if (normalizedTargetKey.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    await into(storedBookMetadataOverrides).insert(
+      StoredBookMetadataOverridesCompanion(
+        targetKey: Value(normalizedTargetKey),
+        bookId: Value(_nullableString(metadataOverride.bookId)),
+        sourceId: Value(_nullableString(metadataOverride.sourceId)),
+        detailUrl: Value(_nullableString(metadataOverride.detailUrl)),
+        title: Value(_nullableString(metadataOverride.title)),
+        author: Value(_nullableString(metadataOverride.author)),
+        intro: Value(_nullableString(metadataOverride.intro)),
+        coverPath: Value(_nullableString(metadataOverride.coverPath)),
+        createdAt: Value(metadataOverride.createdAt),
+        updatedAt: Value(metadataOverride.updatedAt == metadataOverride.createdAt
+            ? now
+            : metadataOverride.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<BookMetadataOverride?> getBookMetadataOverrideByTargetKey(
+    String targetKey,
+  ) async {
+    final normalizedTargetKey = targetKey.trim();
+    if (normalizedTargetKey.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedBookMetadataOverrides)
+          ..where((table) => table.targetKey.equals(normalizedTargetKey)))
+            .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapRowToBookMetadataOverride(row);
+  }
+
+  Future<BookMetadataOverride?> getBookMetadataOverrideByLocalBookId(
+    String bookId,
+  ) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+    return getBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.localTargetKey(normalizedBookId),
+    );
+  }
+
+  Future<BookMetadataOverride?> getBookMetadataOverrideByRemoteBook({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return null;
+    }
+    return getBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.remoteTargetKey(
+        sourceId: normalizedSourceId,
+        detailUrl: normalizedDetailUrl,
+      ),
+    );
+  }
+
+  Future<void> deleteBookMetadataOverrideByTargetKey(String targetKey) {
+    final normalizedTargetKey = targetKey.trim();
+    if (normalizedTargetKey.isEmpty) {
+      return Future<void>.value();
+    }
+    return (delete(storedBookMetadataOverrides)
+      ..where((table) => table.targetKey.equals(normalizedTargetKey))).go();
+  }
+
+  Future<void> deleteBookMetadataOverrideByLocalBookId(String bookId) {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return Future<void>.value();
+    }
+    return deleteBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.localTargetKey(normalizedBookId),
+    );
+  }
+
+  Future<void> deleteBookMetadataOverrideByRemoteBook({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return Future<void>.value();
+    }
+    return deleteBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.remoteTargetKey(
+        sourceId: normalizedSourceId,
+        detailUrl: normalizedDetailUrl,
+      ),
+    );
+  }
+
   Future<void> upsertReadingRecord(ReadingRecord record) async {
     final normalizedBookId = record.bookId.trim();
     final normalizedSourceId = record.sourceId.trim();
@@ -2131,6 +2266,23 @@ class AppDatabase extends _$AppDatabase {
       isUnderline: row.isUnderline,
       isWavy: row.isWavy,
       color: row.color,
+    );
+  }
+
+  BookMetadataOverride _mapRowToBookMetadataOverride(
+    StoredBookMetadataOverride row,
+  ) {
+    return BookMetadataOverride(
+      targetKey: row.targetKey,
+      bookId: _nullableString(row.bookId),
+      sourceId: _nullableString(row.sourceId),
+      detailUrl: _nullableString(row.detailUrl),
+      title: _nullableString(row.title),
+      author: _nullableString(row.author),
+      intro: _nullableString(row.intro),
+      coverPath: _nullableString(row.coverPath),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     );
   }
 

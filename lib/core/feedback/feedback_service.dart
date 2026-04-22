@@ -33,8 +33,6 @@ class FeedbackService {
     int pageSize = 20,
   }) async {
     _ensureBaseUrl();
-    final identity = await _identityService.loadIdentity();
-    final accessToken = (await _sessionStore.getAccessToken())?.trim();
 
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.get,
@@ -44,15 +42,9 @@ class FeedbackService {
           'keyword': keyword.trim(),
         if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
         if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
-        'install_id': identity.installId,
         'page': page < 1 ? 1 : page,
         'page_size': pageSize < 1 ? 20 : pageSize,
       },
-      headers: {
-        if (accessToken != null && accessToken.isNotEmpty)
-          'Authorization': 'Bearer $accessToken',
-      },
-      enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
@@ -118,17 +110,9 @@ class FeedbackService {
       );
     }
 
-    final identity = await _identityService.loadIdentity();
-    final accessToken = (await _sessionStore.getAccessToken())?.trim();
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.get,
       path: '/v1/feedback/$normalizedId',
-      queryParameters: {'install_id': identity.installId},
-      headers: {
-        if (accessToken != null && accessToken.isNotEmpty)
-          'Authorization': 'Bearer $accessToken',
-      },
-      enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );

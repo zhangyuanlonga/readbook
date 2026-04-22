@@ -32,6 +32,7 @@ void main() {
         readerWallpaperPath: '/tmp/reader_dark.jpg',
       ),
       coverGalleryId: 'cover_gallery_1',
+      launchImageGalleryId: 'launch_gallery_1',
       bottomNavGalleryId: 'bottom_gallery_1',
     );
 
@@ -44,6 +45,7 @@ void main() {
     expect(decoded['lightColors'], isA<Map>());
     expect(decoded['darkColors'], isA<Map>());
     expect(decoded.containsKey('coverGalleryId'), isFalse);
+    expect(decoded.containsKey('launchImageGalleryId'), isFalse);
     expect(decoded.containsKey('bottomNavGalleryId'), isFalse);
     expect(decoded.containsKey('wallpaperPath'), isFalse);
   });
@@ -72,6 +74,7 @@ void main() {
     expect(imported.lightConfig.colors.primaryColorValue, 0xFF556677);
     expect(imported.darkConfig.colors.primaryColorValue, 0xFF99AABB);
     expect(imported.coverGalleryId, isNull);
+    expect(imported.launchImageGalleryId, isNull);
     expect(imported.bottomNavGalleryId, isNull);
     expect(imported.lightConfig.wallpaperPath, isNull);
     expect(imported.darkConfig.wallpaperPath, isNull);
@@ -107,5 +110,24 @@ void main() {
       '/tmp/reader_light.jpg',
     );
     expect(themes.first.darkConfig.readerWallpaperPath, '/tmp/reader_dark.jpg');
+  });
+
+  test('persists launch image gallery binding in theme payload', () async {
+    final service = AdvancedThemeService();
+    final theme = AppAdvancedTheme(
+      id: 'theme_launch_gallery',
+      name: '启动联动',
+      createdAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
+      lightConfig: const AppAdvancedThemeModeConfig(),
+      darkConfig: const AppAdvancedThemeModeConfig(),
+      launchImageGalleryId: 'launch_gallery_a',
+    );
+
+    await service.saveTheme(theme);
+    final themes = await service.loadThemes();
+
+    expect(themes, hasLength(1));
+    expect(themes.first.launchImageGalleryId, 'launch_gallery_a');
   });
 }

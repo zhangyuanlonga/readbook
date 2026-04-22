@@ -32,6 +32,7 @@ import '../../../core/mobile_features/mobile_feature_module.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/launch_image_gallery_provider.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -120,6 +121,8 @@ class _MinePageState extends ConsumerState<MinePage> {
       effectiveBottomNavIconGalleryProvider,
     );
     final activeAdvancedTheme = ref.watch(activeAdvancedThemeProvider);
+    final launchImageGalleries =
+        ref.watch(launchImageGalleriesProvider).valueOrNull ?? const [];
     final advancedPalette = _resolveAdvancedPalette(
       context,
       activeAdvancedTheme.valueOrNull,
@@ -288,6 +291,24 @@ class _MinePageState extends ConsumerState<MinePage> {
                             _MineActionItem(
                               icon: Icons.rocket_launch_outlined,
                               label: '启动图集',
+                              subtitle: activeAdvancedTheme.when(
+                                data: (theme) {
+                                  final galleryId =
+                                      theme?.launchImageGalleryId?.trim() ?? '';
+                                  if (galleryId.isEmpty) {
+                                    return null;
+                                  }
+                                  for (final gallery in launchImageGalleries) {
+                                    if (gallery.id == galleryId &&
+                                        gallery.name.trim().isNotEmpty) {
+                                      return gallery.name;
+                                    }
+                                  }
+                                  return '当前主题已绑定';
+                                },
+                                loading: () => null,
+                                error: (_, _) => null,
+                              ),
                               onTap:
                                   () =>
                                       context.push('/appearance/launch-image'),
@@ -358,7 +379,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                               ),
                             _MineActionItem(
                               icon: Icons.cloud_outlined,
-                              label: '本地缓存',
+                              label: '书籍缓存',
                               onTap: () => context.push('/cache'),
                             ),
                           ],

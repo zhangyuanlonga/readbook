@@ -205,12 +205,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    topInset + 12,
-                    horizontal,
-                    12 + contentBottomInset,
-                  ),
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       if (AppLayout.isExpandedWidth(constraints.maxWidth)) {
@@ -220,6 +215,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                               AppLayout.discoverExpandedSidePanelWidth,
                           maxContentWidth:
                               AppLayout.discoverExpandedContentMaxWidth,
+                          topContentPadding: topInset + 12,
+                          bottomContentPadding: 12 + contentBottomInset,
                         );
                       }
                       if (constraints.maxWidth >=
@@ -230,9 +227,15 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                               AppLayout.discoverMediumSidePanelWidth,
                           maxContentWidth:
                               AppLayout.discoverMediumContentMaxWidth,
+                          topContentPadding: topInset + 12,
+                          bottomContentPadding: 12 + contentBottomInset,
                         );
                       }
-                      return _buildCompactLayout(context);
+                      return _buildCompactLayout(
+                        context,
+                        topContentPadding: topInset + 12,
+                        bottomContentPadding: 12 + contentBottomInset,
+                      );
                     },
                   ),
                 ),
@@ -349,7 +352,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     await _loadSources();
   }
 
-  Widget _buildCompactLayout(BuildContext context) {
+  Widget _buildCompactLayout(
+    BuildContext context, {
+    required double topContentPadding,
+    required double bottomContentPadding,
+  }) {
     return ScrollConfiguration(
       behavior: const MaterialScrollBehavior().copyWith(
         dragDevices: _dragDevices,
@@ -360,11 +367,13 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
           controller: _booksScrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: <Widget>[
+            SliverToBoxAdapter(child: SizedBox(height: topContentPadding)),
             SliverToBoxAdapter(child: _buildSourceSelectorCard(context)),
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
             SliverToBoxAdapter(child: _buildCategoryStripCard(context)),
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ..._buildBooksPaneSlivers(context),
+            SliverToBoxAdapter(child: SizedBox(height: bottomContentPadding)),
           ],
         ),
       ),
@@ -375,34 +384,49 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     BuildContext context, {
     required double sidePanelWidth,
     required double maxContentWidth,
+    required double topContentPadding,
+    required double bottomContentPadding,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        SizedBox(width: sidePanelWidth, child: _buildSidePanel(context)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxContentWidth),
-              child: ScrollConfiguration(
-                behavior: const MaterialScrollBehavior().copyWith(
-                  dragDevices: _dragDevices,
-                ),
-                child: RefreshIndicator(
-                  onRefresh: _refreshCurrentView,
-                  child: CustomScrollView(
-                    controller: _booksScrollController,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: _buildBooksPaneSlivers(context),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        0,
+        topContentPadding,
+        0,
+        bottomContentPadding,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(width: sidePanelWidth, child: _buildSidePanel(context)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxContentWidth),
+                child: ScrollConfiguration(
+                  behavior: const MaterialScrollBehavior().copyWith(
+                    dragDevices: _dragDevices,
+                  ),
+                  child: RefreshIndicator(
+                    onRefresh: _refreshCurrentView,
+                    child: CustomScrollView(
+                      controller: _booksScrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: <Widget>[
+                        ..._buildBooksPaneSlivers(context),
+                        SliverToBoxAdapter(
+                          child: SizedBox(height: bottomContentPadding),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

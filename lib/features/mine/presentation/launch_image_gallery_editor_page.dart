@@ -10,25 +10,27 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../domain/entities/cover_gallery.dart';
-import '../application/cover_gallery_provider.dart';
-import '../application/cover_gallery_service.dart';
+import '../../../domain/entities/launch_image_gallery.dart';
+import '../application/launch_image_gallery_provider.dart';
+import '../application/launch_image_gallery_service.dart';
 
-class CoverGalleryEditorPage extends StatefulWidget {
-  const CoverGalleryEditorPage({super.key, required this.galleryId});
+class LaunchImageGalleryEditorPage extends StatefulWidget {
+  const LaunchImageGalleryEditorPage({super.key, required this.galleryId});
 
   final String galleryId;
 
   @override
-  State<CoverGalleryEditorPage> createState() => _CoverGalleryEditorPageState();
+  State<LaunchImageGalleryEditorPage> createState() =>
+      _LaunchImageGalleryEditorPageState();
 }
 
-class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
-  final CoverGalleryService _service = CoverGalleryService();
+class _LaunchImageGalleryEditorPageState
+    extends State<LaunchImageGalleryEditorPage> {
+  final LaunchImageGalleryService _service = LaunchImageGalleryService();
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final TextEditingController _nameController = TextEditingController();
 
-  CoverGallery? _gallery;
+  LaunchImageGallery? _gallery;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditingName = false;
@@ -83,11 +85,13 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
       _showMessage('图集名称不能为空');
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.renameGallery(galleryId: gallery.id, name: nextName);
+      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -119,8 +123,8 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         return;
       }
       final pickedImages = await _imageSelectionService.pickImages(
-        confirmButtonText: '选择封面',
-        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp'},
+        confirmButtonText: '选择启动图',
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
         source: source,
       );
       if (pickedImages.isEmpty || !mounted) {
@@ -137,14 +141,14 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
           fileName: picked.name,
         );
       }
-      container.read(coverGalleryRevisionProvider.notifier).markChanged();
+      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
       setState(() {
         _gallery = saved;
       });
-      _showMessage('已添加 ${pickedImages.length} 张封面');
+      _showMessage('已添加 ${pickedImages.length} 张启动图');
     } on ImageSelectionException catch (error) {
       _showMessage(error.message);
     } finally {
@@ -233,7 +237,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         galleryId: gallery.id,
         paths: _selectedPaths.toList(growable: false),
       );
-      container.read(coverGalleryRevisionProvider.notifier).markChanged();
+      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -278,11 +282,13 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
     if (confirmed != true || !mounted) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.deleteGallery(gallery.id);
+      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -353,7 +359,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         if (didPop || !context.mounted) {
           return;
         }
-        context.go('/cover-galleries');
+        context.go('/appearance/launch-image');
       },
       child: Scaffold(
         appBar: AppBar(
@@ -396,7 +402,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
                       children: [
                         Flexible(
                           child: Text(
-                            gallery?.name ?? '封面图集',
+                            gallery?.name ?? '启动图集',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -471,7 +477,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
                                 crossAxisCount: 3,
                                 crossAxisSpacing: 8,
                                 mainAxisSpacing: 8,
-                                childAspectRatio: 0.72,
+                                childAspectRatio: 0.66,
                               ),
                           itemBuilder: (context, index) {
                             final path = gallery.imagePaths[index];

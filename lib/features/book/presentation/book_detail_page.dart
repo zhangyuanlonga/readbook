@@ -23,12 +23,16 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
+import '../../../data/repositories/book_metadata_override_repository_impl.dart';
+import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookmark.dart';
-import '../../../domain/entities/book_detail.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
+import '../../../domain/repositories/book_metadata_override_repository.dart';
+import '../../../domain/repositories/local_book_repository.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
@@ -56,6 +60,7 @@ import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
 import '../application/book_detail_service.dart';
+import '../application/book_metadata_presentation_resolver.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
@@ -190,6 +195,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String? _displayTitle;
   BookDetailLoadResult? _result;
   LocalBook? _localBookMeta;
+  BookMetadataOverride? _metadataOverride;
   StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
@@ -197,6 +203,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
     AppDatabase.instance,
   );
+  final BookMetadataOverrideRepository _bookMetadataOverrideRepository =
+      BookMetadataOverrideRepositoryImpl(AppDatabase.instance);
+  final LocalBookRepository _localBookRepository = LocalBookRepositoryImpl(
+    AppDatabase.instance,
+  );
+  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
+      const BookMetadataPresentationResolver();
   final ReaderCatalogSearchService _catalogSearchService =
       const ReaderCatalogSearchService();
   final ReaderSystemSettingsService _readerSystemSettingsService =
@@ -206,6 +219,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final ReadingRecordService _readingRecordService = ReadingRecordService();
+  final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
@@ -298,6 +312,21 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _isInBookshelf = nextState.isInBookshelf;
     _localBookMeta = nextState.localBookMeta;
     _showLocalAdvancedOptions = nextState.showLocalAdvancedOptions;
+  }
+
+  BookMetadataPresentation _resolvePresentedMetadata({
+    BookDetailLoadResult? result,
+  }) {
+    final activeResult = result ?? _result;
+    final detail = activeResult?.detail;
+    return _bookMetadataPresentationResolver.resolve(
+      fallbackTitle: detail?.title ?? _displayTitle ?? widget.title,
+      fallbackAuthor: detail?.author,
+      fallbackIntro: detail?.intro,
+      realCoverUrl: detail?.coverUrl,
+      localBook: _localBookMeta,
+      metadataOverride: _metadataOverride,
+    );
   }
 
   @override
@@ -430,6 +459,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 else if (result != null) ...[
                                   _buildDetailCard(result),
                                   const SizedBox(height: 12),
+                                  Builder(
+                                    builder: (context) {
+                                      final presentedIntro = _resolveIntro(
+                                        _resolvePresentedMetadata(
+                                          result: result,
+                                        ).displayIntro,
+                                      );
+                                      if (presentedIntro == null) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Column(
+                                        children: [
+                                          BookDetailIntroCard(
+                                            intro: presentedIntro,
+                                          ),
+                                          const SizedBox(height: 12),
+                                        ],
+                                      );
+                                    },
+                                  ),
                                   ValueListenableBuilder<
                                     _BookDetailAuxiliaryState
                                   >(
@@ -441,14 +490,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                       );
                                     },
                                   ),
-                                  if (_resolveIntro(result.detail.intro) !=
-                                      null) ...[
-                                    const SizedBox(height: 12),
-                                    BookDetailIntroCard(
-                                      intro:
-                                          _resolveIntro(result.detail.intro)!,
-                                    ),
-                                  ],
                                   ValueListenableBuilder<
                                     _BookDetailAuxiliaryState
                                   >(
@@ -586,6 +627,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildDetailCard(BookDetailLoadResult result) {
     final detail = result.detail;
+    final presentation = _resolvePresentedMetadata(result: result);
     final heroTag =
         widget.heroTag?.trim().isNotEmpty == true
             ? widget.heroTag!.trim()
@@ -596,14 +638,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
             );
 
     return BookDetailSummaryCard(
-      title: detail.title,
+      title: presentation.displayTitle,
       sourceName: result.sourceName,
-      author: _cleanSummaryMetaValue(detail.author),
+      author: _cleanSummaryMetaValue(presentation.displayAuthor),
       latestChapter: _resolveLatestChapter(result)?.title,
       cover: _buildCoverPreview(
-        detail.coverUrl,
-        title: detail.title,
-        author: detail.author,
+        presentation.realCoverUrl,
+        customCoverPath: presentation.customCoverPath,
+        title: presentation.displayTitle,
+        author: presentation.displayAuthor,
         heroTag: heroTag,
         bookId: detail.id,
         sourceId: detail.sourceId,
@@ -664,31 +707,520 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Future<void> _handleEditAction() async {
-    final localBook = _localBookMeta;
-    if (!_isLocalContent || localBook == null) {
+    final result = _result;
+    if (result == null) {
       _showMessage('当前书籍暂无可编辑项。');
       return;
     }
+    final localBook = _localBookMeta;
+    final isLocalEditable = _isLocalContent && localBook != null;
+    final presentation = _resolvePresentedMetadata(result: result);
+    final defaultSplitLongChapterEnabled =
+        isLocalEditable
+            ? await _readerSystemSettingsService
+                .loadLocalTxtSplitLongChapterEnabled()
+            : true;
+    if (!mounted) {
+      return;
+    }
 
-    await showModalBottomSheet<void>(
+    final sheetResult = await showModalBottomSheet<
+      _BookMetadataEditSheetResult
+    >(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
       builder: (context) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            child: _buildLocalDiagnosticsPanel(),
-          ),
+        final titleController = TextEditingController(
+          text: presentation.displayTitle,
+        );
+        final authorController = TextEditingController(
+          text: presentation.displayAuthor ?? '',
+        );
+        final introController = TextEditingController(
+          text: presentation.displayIntro ?? '',
+        );
+        var customCoverPath = presentation.customCoverPath;
+        String? selectedCharset;
+        bool splitLongChapter;
+        if (_isLocalContent && localBook != null) {
+          selectedCharset = localBook.charset?.trim();
+          splitLongChapter = localBook.splitLongChapter;
+        } else {
+          selectedCharset = null;
+          splitLongChapter = defaultSplitLongChapterEnabled;
+        }
+        if (selectedCharset != null && selectedCharset.isEmpty) {
+          selectedCharset = null;
+        }
+        var isSaving = false;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> pickCover() async {
+              final nextPath = await _pickEditableCoverPath(result);
+              if (!context.mounted || nextPath == null) {
+                return;
+              }
+              setSheetState(() {
+                customCoverPath = nextPath;
+              });
+            }
+
+            Future<void> submit(_BookMetadataEditAction action) async {
+              if (isSaving) {
+                return;
+              }
+              if (action == _BookMetadataEditAction.save &&
+                  titleController.text.trim().isEmpty) {
+                _showMessage('书名不能为空。');
+                return;
+              }
+              setSheetState(() {
+                isSaving = true;
+              });
+              Navigator.of(context).pop(
+                _BookMetadataEditSheetResult(
+                  action: action,
+                  draft: _BookMetadataEditDraft(
+                    title: titleController.text.trim(),
+                    author: authorController.text.trim(),
+                    intro: introController.text.trim(),
+                    customCoverPath: customCoverPath,
+                    charset: selectedCharset,
+                    splitLongChapter: splitLongChapter,
+                  ),
+                ),
+              );
+            }
+
+            return SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '编辑书籍信息',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isLocalEditable
+                          ? '保存到本地图书资料，影响书架和阅读展示。'
+                          : '仅保存在本机，不会修改书源。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        ref.watch(activeAdvancedThemeProvider);
+                        ref.watch(coverGalleriesProvider);
+                        final resolvedCover = resolveBookCover(
+                          realCoverUrl: presentation.realCoverUrl,
+                          customCoverPath: customCoverPath,
+                          activeTheme:
+                              ref.read(activeAdvancedThemeProvider).valueOrNull,
+                          galleries:
+                              ref.read(coverGalleriesProvider).valueOrNull ??
+                              const [],
+                          bookId: result.detail.id,
+                          sourceId: result.detail.sourceId,
+                          detailUrl: result.detail.detailUrl,
+                        );
+                        return Center(
+                          child: ResolvedBookCoverView(
+                            cover: resolvedCover,
+                            title:
+                                titleController.text.trim().isNotEmpty
+                                    ? titleController.text.trim()
+                                    : presentation.displayTitle,
+                            author:
+                                authorController.text.trim().isEmpty
+                                    ? null
+                                    : authorController.text.trim(),
+                            width: 88,
+                            height: 124,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: isSaving ? null : pickCover,
+                          icon: const Icon(Icons.image_outlined, size: 16),
+                          label: const Text('选择封面'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed:
+                              isSaving
+                                  ? null
+                                  : () {
+                                    setSheetState(() {
+                                      customCoverPath = null;
+                                    });
+                                  },
+                          icon: const Icon(Icons.delete_outline, size: 16),
+                          label: const Text('移除封面'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: '书名',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: authorController,
+                      decoration: const InputDecoration(
+                        labelText: '作者',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: introController,
+                      minLines: 4,
+                      maxLines: 8,
+                      decoration: const InputDecoration(
+                        labelText: '简介',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (isLocalEditable) ...[
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedCharset,
+                        decoration: const InputDecoration(
+                          labelText: '编码',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _kLocalCharsetOptions
+                            .map(
+                              (option) => DropdownMenuItem<String?>(
+                                value: option.charset,
+                                child: Text(option.label),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged:
+                            isSaving
+                                ? null
+                                : (value) {
+                                  setSheetState(() {
+                                    selectedCharset = value;
+                                  });
+                                },
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('长章节拆分'),
+                        subtitle: const Text('修改后可选择重新索引使其生效。'),
+                        value: splitLongChapter,
+                        onChanged:
+                            isSaving
+                                ? null
+                                : (value) {
+                                  setSheetState(() {
+                                    splitLongChapter = value;
+                                  });
+                                },
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed:
+                              isSaving
+                                  ? null
+                                  : () => submit(_BookMetadataEditAction.reset),
+                          child: const Text('恢复默认'),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed:
+                              isSaving
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed:
+                              isSaving
+                                  ? null
+                                  : () => submit(_BookMetadataEditAction.save),
+                          child: Text(isSaving ? '保存中...' : '保存'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
+
+    if (!mounted || sheetResult == null) {
+      return;
+    }
+
+    try {
+      switch (sheetResult.action) {
+        case _BookMetadataEditAction.reset:
+          if (_isLocalContent && localBook != null) {
+            await _resetLocalBookMetadata(
+              result: result,
+              localBook: localBook,
+              defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
+            );
+          } else {
+            await _resetRemoteBookMetadata(result: result);
+          }
+          break;
+        case _BookMetadataEditAction.save:
+          if (_isLocalContent && localBook != null) {
+            await _saveLocalBookMetadata(
+              result: result,
+              localBook: localBook,
+              draft: sheetResult.draft,
+              defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
+            );
+          } else {
+            await _saveRemoteBookMetadata(
+              result: result,
+              draft: sheetResult.draft,
+            );
+          }
+          break;
+      }
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (_) {
+      _showMessage('保存失败，请稍后重试。');
+    }
+  }
+
+  Future<String?> _pickEditableCoverPath(BookDetailLoadResult result) async {
+    final picked = await _imageSelectionService.pickImage(
+      confirmButtonText: '选择封面',
+      allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+    );
+    if (!mounted || picked == null) {
+      return null;
+    }
+    final storedCoverUri = await _persistCustomCover(result, picked);
+    if (storedCoverUri == null) {
+      return null;
+    }
+    return storedCoverUri.toFilePath();
+  }
+
+  Future<void> _saveRemoteBookMetadata({
+    required BookDetailLoadResult result,
+    required _BookMetadataEditDraft draft,
+  }) async {
+    final detail = result.detail;
+    final normalizedTitle = draft.title.trim();
+    final normalizedAuthor = _normalizeOptionalText(draft.author);
+    final normalizedIntro = _normalizeOptionalText(draft.intro);
+    final normalizedCoverPath = _normalizeOptionalText(draft.customCoverPath);
+
+    final rawTitle = detail.title.trim();
+    final rawAuthor = _normalizeOptionalText(detail.author);
+    final rawIntro = _normalizeOptionalText(detail.intro);
+
+    final noDiff =
+        normalizedTitle == rawTitle &&
+        normalizedAuthor == rawAuthor &&
+        normalizedIntro == rawIntro &&
+        normalizedCoverPath == null;
+
+    if (noDiff) {
+      await _bookMetadataOverrideRepository.deleteByRemoteBook(
+        sourceId: detail.sourceId,
+        detailUrl: detail.detailUrl,
+      );
+      _metadataOverride = null;
+    } else {
+      final nextOverride = BookMetadataOverride.forRemote(
+        sourceId: detail.sourceId,
+        detailUrl: detail.detailUrl,
+        title: normalizedTitle,
+        author: normalizedAuthor,
+        intro: normalizedIntro,
+        coverPath: normalizedCoverPath,
+      );
+      await _bookMetadataOverrideRepository.upsert(nextOverride);
+      _metadataOverride = nextOverride;
+    }
+
+    await _refreshPresentedMetadata(result: result, message: '已保存书籍信息。');
+  }
+
+  Future<void> _saveLocalBookMetadata({
+    required BookDetailLoadResult result,
+    required LocalBook localBook,
+    required _BookMetadataEditDraft draft,
+    required bool defaultSplitLongChapterEnabled,
+  }) async {
+    final normalizedTitle = draft.title.trim();
+    final normalizedAuthor = _normalizeOptionalText(draft.author);
+    final normalizedIntro = _normalizeOptionalText(draft.intro);
+    final normalizedCoverPath = _normalizeOptionalText(draft.customCoverPath);
+    final normalizedCharset = _normalizeOptionalText(draft.charset);
+
+    final nextLocalBook = localBook.copyWith(
+      title: normalizedTitle,
+      author: normalizedAuthor,
+      clearAuthor: normalizedAuthor == null,
+      description: normalizedIntro,
+      clearDescription: normalizedIntro == null,
+      coverPath: normalizedCoverPath,
+      clearCoverPath: normalizedCoverPath == null,
+      charset: normalizedCharset,
+      clearCharset: normalizedCharset == null,
+      splitLongChapter: draft.splitLongChapter,
+      updatedAt: DateTime.now(),
+    );
+
+    await _localBookRepository.upsertBook(nextLocalBook);
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(localBookMeta: nextLocalBook),
+    );
+
+    final needsReindex =
+        (localBook.charset?.trim() ?? '') !=
+            (nextLocalBook.charset?.trim() ?? '') ||
+        localBook.splitLongChapter != nextLocalBook.splitLongChapter;
+
+    await _refreshPresentedMetadata(result: result, message: '已保存本地图书信息。');
+
+    if (needsReindex && mounted) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('需要重新索引'),
+            content: const Text('编码或长章节拆分已修改，是否立即重新索引以使正文生效？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('稍后'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('立即重建'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed == true) {
+        await _localBookIndexService.ensureIndexed(
+          bookId: localBook.id,
+          force: true,
+        );
+        if (mounted) {
+          _showMessage('已开始重新索引。');
+        }
+      } else if (mounted && !defaultSplitLongChapterEnabled) {
+        _showMessage('设置已保存，稍后重新索引后正文才会完全生效。');
+      }
+    }
+  }
+
+  Future<void> _resetRemoteBookMetadata({
+    required BookDetailLoadResult result,
+  }) async {
+    final detail = result.detail;
+    await _bookMetadataOverrideRepository.deleteByRemoteBook(
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
+    _metadataOverride = null;
+    await _refreshPresentedMetadata(result: result, message: '已恢复默认展示。');
+  }
+
+  Future<void> _resetLocalBookMetadata({
+    required BookDetailLoadResult result,
+    required LocalBook localBook,
+    required bool defaultSplitLongChapterEnabled,
+  }) async {
+    final detail = result.detail;
+    final fallbackTitle =
+        detail.title.trim().isNotEmpty ? detail.title.trim() : localBook.title;
+    final fallbackAuthor = _normalizeOptionalText(detail.author);
+    final fallbackIntro = _normalizeOptionalText(detail.intro);
+    final nextLocalBook = localBook.copyWith(
+      title: fallbackTitle,
+      author: fallbackAuthor,
+      clearAuthor: fallbackAuthor == null,
+      description: fallbackIntro,
+      clearDescription: fallbackIntro == null,
+      clearCoverPath: true,
+      clearCharset: true,
+      splitLongChapter: defaultSplitLongChapterEnabled,
+      updatedAt: DateTime.now(),
+    );
+    await _localBookRepository.upsertBook(nextLocalBook);
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(localBookMeta: nextLocalBook),
+    );
+    await _refreshPresentedMetadata(result: result, message: '已恢复默认展示。');
+  }
+
+  Future<void> _refreshPresentedMetadata({
+    required BookDetailLoadResult result,
+    required String message,
+  }) async {
+    final presentation = _resolvePresentedMetadata(result: result);
+    _displayTitle = presentation.displayTitle;
+    _updatePresentationState(_presentationState.copyWith(result: result));
+    await _readingRecordService.syncBookPresentation(
+      bookId: result.detail.id,
+      bookTitle: presentation.displayTitle,
+      bookAuthor: presentation.displayAuthor,
+      coverUrl: presentation.displayCover,
+    );
+    if (mounted) {
+      _showMessage(message);
+    }
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final normalized = (value ?? '').trim();
+    return normalized.isEmpty ? null : normalized;
   }
 
   Future<void> _handleShareAction() async {
     final detail = _result?.detail;
-    final title = (detail?.title ?? _displayTitle ?? '书籍详情').trim();
-    final author = (detail?.author ?? '').trim();
+    final presentation = _resolvePresentedMetadata();
+    final title =
+        (presentation.displayTitle.isNotEmpty
+                ? presentation.displayTitle
+                : (detail?.title ?? _displayTitle ?? '书籍详情'))
+            .trim();
+    final author = (presentation.displayAuthor ?? detail?.author ?? '').trim();
     final detailUrl = (detail?.detailUrl ?? _activeDetailUrl ?? '').trim();
     final lines = <String>[
       if (title.isNotEmpty) title,
@@ -819,6 +1351,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildCoverPreview(
     String? coverUrl, {
+    String? customCoverPath,
     required String title,
     String? author,
     required String heroTag,
@@ -832,7 +1365,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         ref.watch(coverGalleriesProvider);
         final resolvedCover = resolveBookCover(
           realCoverUrl: coverUrl,
-          customCoverPath: _localBookMeta?.coverPath,
+          customCoverPath: customCoverPath ?? _localBookMeta?.coverPath,
           activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
           galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
           bookId: bookId,
@@ -1271,15 +1804,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
+    final presentation = _resolvePresentedMetadata(result: result);
     final selected = await showReaderCatalogSheet(
       context: context,
       readerModalTheme: Theme.of(context),
       chapters: chapters,
       currentChapterIndex: null,
-      bookTitle: result.detail.title,
-      bookAuthor: result.detail.author,
-      bookCoverUrl: result.detail.coverUrl,
-      customCoverPath: _localBookMeta?.coverPath,
+      bookTitle: presentation.displayTitle,
+      bookAuthor: presentation.displayAuthor,
+      bookCoverUrl: presentation.realCoverUrl,
+      customCoverPath: presentation.customCoverPath,
       supportsContentSearch: false,
       bookmarkRepository: _bookmarkRepository,
       currentBookId: _activeBookId,
@@ -1868,9 +2402,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _displayTitle = result.detail.title.trim();
 
       await _syncLocalBookMeta(loadRequestToken: requestToken);
+      await _syncBookMetadataOverride(loadRequestToken: requestToken);
       if (!_isActiveDetailLoadRequest(requestToken)) {
         return false;
       }
+      _updatePresentationState(_presentationState.copyWith(result: result));
       _scheduleBookshelfStateRefresh(result);
       return true;
     } on AppException catch (error) {
@@ -1961,6 +2497,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
           (loadRequestToken != null &&
               !_isActiveDetailLoadRequest(loadRequestToken))) {
         _localBookMeta = null;
+        _metadataOverride = null;
         return;
       }
       _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
@@ -1987,6 +2524,35 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 : _auxiliaryState.showLocalAdvancedOptions,
       ),
     );
+  }
+
+  Future<void> _syncBookMetadataOverride({int? loadRequestToken}) async {
+    if (loadRequestToken != null &&
+        !_isActiveDetailLoadRequest(loadRequestToken)) {
+      return;
+    }
+
+    if (_isLocalContent) {
+      _metadataOverride = null;
+      return;
+    }
+
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
+      _metadataOverride = null;
+      return;
+    }
+
+    final metadataOverride = await _bookMetadataOverrideRepository
+        .getByRemoteBook(sourceId: sourceId, detailUrl: detailUrl);
+    if (!mounted ||
+        (loadRequestToken != null &&
+            !_isActiveDetailLoadRequest(loadRequestToken))) {
+      _metadataOverride = metadataOverride;
+      return;
+    }
+    _metadataOverride = metadataOverride;
   }
 
   bool _isActiveDetailLoadRequest(int requestToken) {
@@ -2105,6 +2671,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         (localBook.lastError?.trim().isNotEmpty ?? false);
   }
 
+  // ignore: unused_element
   Widget _buildLocalDiagnosticsPanel() {
     final localBook = _localBookMeta;
     if (!_isLocalContent || localBook == null) {
@@ -2591,48 +3158,29 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _showMessage('封面保存失败，请重试。');
         return;
       }
-
-      final coverUrl = storedCoverUri.toString();
-      final detail = detailResult.detail;
-      await _bookshelfService.upsert(
-        BookshelfBook(
-          bookId: detail.id,
-          sourceId: detail.sourceId,
-          title: detail.title,
-          detailUrl: detail.detailUrl,
-          author: detail.author,
-          coverUrl: coverUrl,
-          addedAt: DateTime.now(),
-        ),
+      final coverPath = storedCoverUri.toFilePath();
+      final presentation = _resolvePresentedMetadata(result: detailResult);
+      final draft = _BookMetadataEditDraft(
+        title: presentation.displayTitle,
+        author: presentation.displayAuthor ?? '',
+        intro: presentation.displayIntro ?? '',
+        customCoverPath: coverPath,
+        charset: _localBookMeta?.charset,
+        splitLongChapter: _localBookMeta?.splitLongChapter ?? true,
       );
-      await _readingRecordService.syncBookPresentation(
-        bookId: detail.id,
-        bookTitle: detail.title,
-        bookAuthor: detail.author,
-        coverUrl: coverUrl,
-      );
-
-      _updatePresentationState(
-        _presentationState.copyWith(
-          result: BookDetailLoadResult(
-            detail: BookDetail(
-              id: detail.id,
-              sourceId: detail.sourceId,
-              title: detail.title,
-              detailUrl: detail.detailUrl,
-              author: detail.author,
-              intro: detail.intro,
-              coverUrl: coverUrl,
-              tocUrl: detail.tocUrl,
-            ),
-            chapters: detailResult.chapters,
-            sourceName: detailResult.sourceName,
-            tocFromCache: detailResult.tocFromCache,
-            tocError: detailResult.tocError,
-          ),
-        ),
-      );
-      _showMessage('已更新自定义封面。');
+      if (_isLocalContent && _localBookMeta != null) {
+        final defaultSplitLongChapterEnabled =
+            await _readerSystemSettingsService
+                .loadLocalTxtSplitLongChapterEnabled();
+        await _saveLocalBookMetadata(
+          result: detailResult,
+          localBook: _localBookMeta!,
+          draft: draft,
+          defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
+        );
+      } else {
+        await _saveRemoteBookMetadata(result: detailResult, draft: draft);
+      }
     } on ImageSelectionException catch (error) {
       _showMessage(error.message);
     } on AppException catch (error) {
@@ -2857,6 +3405,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     try {
       final detail = result.detail;
+      final presentation = _resolvePresentedMetadata(result: result);
       if (wasInBookshelf) {
         await _bookshelfService.remove(
           sourceId: detail.sourceId,
@@ -2868,10 +3417,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
           BookshelfBook(
             bookId: detail.id,
             sourceId: detail.sourceId,
-            title: detail.title,
+            title: presentation.displayTitle,
             detailUrl: detail.detailUrl,
-            author: detail.author,
-            coverUrl: detail.coverUrl,
+            author: presentation.displayAuthor,
+            coverUrl: presentation.displayCover,
             latestChapter: latestChapter,
             addedAt: DateTime.now(),
           ),
@@ -2940,6 +3489,36 @@ class _LocalCharsetOption {
 
   final String label;
   final String? charset;
+}
+
+enum _BookMetadataEditAction { save, reset }
+
+class _BookMetadataEditDraft {
+  const _BookMetadataEditDraft({
+    required this.title,
+    required this.author,
+    required this.intro,
+    required this.customCoverPath,
+    required this.charset,
+    required this.splitLongChapter,
+  });
+
+  final String title;
+  final String author;
+  final String intro;
+  final String? customCoverPath;
+  final String? charset;
+  final bool splitLongChapter;
+}
+
+class _BookMetadataEditSheetResult {
+  const _BookMetadataEditSheetResult({
+    required this.action,
+    required this.draft,
+  });
+
+  final _BookMetadataEditAction action;
+  final _BookMetadataEditDraft draft;
 }
 
 enum _DetailSwitchSourceApplyResult {
