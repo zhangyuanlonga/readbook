@@ -73,7 +73,7 @@ class SourceHttpContext {
     try {
       if (request.execution == RuntimeRequestExecution.browser) {
         final response = await _requestInBrowser(request);
-        _appendDebugTrace(_session, <String, Object?>{
+        appendDebugTrace(_session, <String, Object?>{
           'kind': 'http',
           'execution': 'browser',
           'startedAt': startedAt.toIso8601String(),
@@ -92,7 +92,7 @@ class SourceHttpContext {
       }
       await _applyRateLimitIfNeeded(request.resolvedUri);
       final response = await _requestEngine.request(request, session: _session);
-      _appendDebugTrace(_session, <String, Object?>{
+      appendDebugTrace(_session, <String, Object?>{
         'kind': 'http',
         'execution': 'http',
         'startedAt': startedAt.toIso8601String(),
@@ -110,7 +110,7 @@ class SourceHttpContext {
       });
       return response;
     } catch (error) {
-      _appendDebugTrace(_session, <String, Object?>{
+      appendDebugTrace(_session, <String, Object?>{
         'kind': 'http',
         'execution': request.execution.name,
         'startedAt': startedAt.toIso8601String(),
@@ -261,7 +261,7 @@ class SourceBrowserContext {
     return _browserRuntime
         .open(request, session: _session)
         .then((_) {
-          _appendDebugTrace(_session, <String, Object?>{
+          appendDebugTrace(_session, <String, Object?>{
             'kind': 'browser',
             'action': 'open',
             'startedAt': startedAt.toIso8601String(),
@@ -269,7 +269,7 @@ class SourceBrowserContext {
           });
         })
         .catchError((Object error) {
-          _appendDebugTrace(_session, <String, Object?>{
+          appendDebugTrace(_session, <String, Object?>{
             'kind': 'browser',
             'action': 'open',
             'startedAt': startedAt.toIso8601String(),
@@ -285,7 +285,7 @@ class SourceBrowserContext {
     return _browserRuntime
         .challenge(request, session: _session)
         .then((_) {
-          _appendDebugTrace(_session, <String, Object?>{
+          appendDebugTrace(_session, <String, Object?>{
             'kind': 'browser',
             'action': 'challenge',
             'startedAt': startedAt.toIso8601String(),
@@ -295,7 +295,7 @@ class SourceBrowserContext {
           });
         })
         .catchError((Object error) {
-          _appendDebugTrace(_session, <String, Object?>{
+          appendDebugTrace(_session, <String, Object?>{
             'kind': 'browser',
             'action': 'challenge',
             'startedAt': startedAt.toIso8601String(),
@@ -351,7 +351,7 @@ class SourceBrowserContext {
     return _browserRuntime
         .eval(request, session: _session)
         .then((Object? result) {
-          _appendDebugTrace(_session, <String, Object?>{
+          appendDebugTrace(_session, <String, Object?>{
             'kind': 'browser',
             'action': 'eval',
             'startedAt': startedAt.toIso8601String(),
@@ -365,7 +365,7 @@ class SourceBrowserContext {
           return result;
         })
         .catchError((Object error) {
-          _appendDebugTrace(_session, <String, Object?>{
+          appendDebugTrace(_session, <String, Object?>{
             'kind': 'browser',
             'action': 'eval',
             'startedAt': startedAt.toIso8601String(),
@@ -408,7 +408,8 @@ class SourceUtilsContext {
   SourceUtilsContext({
     DeviceIdentityService? deviceIdentityService,
     AuthSessionStore? authSessionStore,
-  }) : _deviceIdentityService = deviceIdentityService ?? DeviceIdentityService(),
+  }) : _deviceIdentityService =
+           deviceIdentityService ?? DeviceIdentityService(),
        _authSessionStore = authSessionStore ?? AuthSessionStore();
 
   final DeviceIdentityService _deviceIdentityService;
@@ -670,19 +671,66 @@ class RuntimeSourceDefinition {
   final void Function()? dispose;
 }
 
-const String _debugTraceSessionKey = '__debug_traces';
+const String debugTraceSessionKey = '__debug_traces';
+const String debugLogSessionKey = '__debug_logs';
 
-void _appendDebugTrace(SourceSession session, Map<String, Object?> trace) {
+void appendDebugTrace(SourceSession session, Map<String, Object?> trace) {
   final existing =
       session
-          .get<List<Object?>>(_debugTraceSessionKey)
+          .get<List<Object?>>(debugTraceSessionKey)
           ?.cast<Map<String, Object?>>() ??
       <Map<String, Object?>>[];
   existing.add(trace);
   if (existing.length > 60) {
     existing.removeRange(0, existing.length - 60);
   }
-  session.set(_debugTraceSessionKey, existing);
+  session.set(debugTraceSessionKey, existing);
+}
+
+void appendDebugLog(
+  SourceSession session, {
+  required String message,
+  String level = 'info',
+}) {
+  final normalizedMessage = message.trim();
+  if (normalizedMessage.isEmpty) {
+    return;
+  }
+  final existing =
+      session
+          .get<List<Object?>>(debugLogSessionKey)
+          ?.cast<Map<String, Object?>>() ??
+      <Map<String, Object?>>[];
+  existing.add(<String, Object?>{
+    'at': DateTime.now().toIso8601String(),
+    'level': level.trim().isEmpty ? 'info' : level.trim(),
+    'message': normalizedMessage,
+  });
+  if (existing.length > 120) {
+    existing.removeRange(0, existing.length - 120);
+  }
+  session.set(debugLogSessionKey, existing);
+}
+
+List<Map<String, Object?>> readDebugTraces(SourceSession session) {
+  return session
+          .get<List<Object?>>(debugTraceSessionKey)
+          ?.whereType<Map<String, Object?>>()
+          .toList(growable: false) ??
+      const <Map<String, Object?>>[];
+}
+
+List<Map<String, Object?>> readDebugLogs(SourceSession session) {
+  return session
+          .get<List<Object?>>(debugLogSessionKey)
+          ?.whereType<Map<String, Object?>>()
+          .toList(growable: false) ??
+      const <Map<String, Object?>>[];
+}
+
+void clearDebugArtifacts(SourceSession session) {
+  session.clear(debugTraceSessionKey);
+  session.clear(debugLogSessionKey);
 }
 
 class _SourceDomainRateLimiter {

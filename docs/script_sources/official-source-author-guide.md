@@ -13,7 +13,7 @@
 - App 不再导入或执行旧规则 JSON
 - 一个书源就是一个 `export default { ... }` 的 JavaScript 文件
 
-这份手册主要解决这些问题：
+这份手册是唯一保留的书源编写文档，主要解决这些问题：
 
 - 书源文件整体应该怎么写
 - `meta` 怎么写
@@ -22,11 +22,8 @@
 - 标准对象应该返回什么结构
 - 写完后怎么调试和检查
 
-相关文档：
+相关模板：
 
-- 规范定义：[source-spec-v1.md](./source-spec-v1.md)
-- 运行时边界：[runtime-ctx-api.md](./runtime-ctx-api.md)
-- 总体架构：[architecture.md](./architecture.md)
 - 官方模板：[source_template_v1.js](../templates/source_template_v1.js)
 
 ## 2. 快速开始
@@ -2134,9 +2131,237 @@ const cacheKey = userId ? `feed:${userId}` : 'feed:guest';
 
 ## 16. `ctx.crypto`
 
-`ctx.crypto` 涉及方法较多，已单独整理到：
+`ctx.crypto` 用于摘要、HMAC、加解密、签名验签、随机数、时间戳，以及签名常用的字节编码转换。
 
-- [宿主运行时加解密 API v2](./runtime-ctx-crypto-v2.md)
+### 16.1 编码与字节工具
+
+支持：
+
+- `ctx.crypto.hexEncode(value, options?)`
+- `ctx.crypto.hexDecode(value, options?)`
+- `ctx.crypto.hexToBytes(value)`
+- `ctx.crypto.bytesToHex(value)`
+- `ctx.crypto.base64Encode(value, options?)`
+- `ctx.crypto.base64Decode(value, options?)`
+- `ctx.crypto.base64ToBytes(value)`
+- `ctx.crypto.bytesToBase64(value)`
+
+#### 方法：`ctx.crypto.hexDecode(value, options?)`
+
+把十六进制字符串解码为字节数组或 UTF-8 字符串。
+
+```js
+const hmacHex = ctx.crypto.hmacSha256('hello', 'secret');
+const hmacBytes = ctx.crypto.hexDecode(hmacHex);
+const text = ctx.crypto.hexDecode('616263', { output: 'string' });
+```
+
+参数：
+
+- `value`：十六进制字符串
+- `options.output`：默认 `bytes`；可选 `string / utf8 / utf-8 / array`
+- `options.outputEncoding`：`options.output` 的兼容别名
+
+返回值：
+
+- 默认返回 `Uint8Array`
+- `output: 'string'` 时返回 UTF-8 字符串
+- `output: 'array'` 时返回普通数字数组
+
+注意事项：
+
+- 签名、异或、二进制拼接等场景优先使用 `ctx.crypto.hexDecode(...)`
+- `ctx.utils.hexDecode(...)` 保持旧行为：返回 UTF-8 字符串，不适合当字节数组使用
+
+#### 方法：`ctx.crypto.hexEncode(value, options?)`
+
+把字符串、普通数组或 `Uint8Array` 编码成十六进制字符串。
+
+```js
+const hex = ctx.crypto.hexEncode(new Uint8Array([0x61, 0x62, 0x63]));
+```
+
+参数：
+
+- `value`：字符串、普通数字数组或 `Uint8Array`
+- `options.inputEncoding`：可选，支持 `hex / base64`
+
+#### 方法：`ctx.crypto.base64Decode(value, options?)`
+
+把 Base64 字符串解码为字节数组或 UTF-8 字符串。
+
+```js
+const bytes = ctx.crypto.base64Decode('YWJj');
+const text = ctx.crypto.base64Decode('YWJj', { output: 'string' });
+```
+
+#### 方法：`ctx.crypto.base64Encode(value, options?)`
+
+把字符串、普通数组或 `Uint8Array` 编码成 Base64 字符串。
+
+```js
+const b64 = ctx.crypto.base64Encode(new Uint8Array([0x61, 0x62, 0x63]));
+```
+
+### 16.2 摘要方法
+
+支持：
+
+- `ctx.crypto.md5(value, options?)`
+- `ctx.crypto.sha1(value, options?)`
+- `ctx.crypto.sha256(value, options?)`
+- `ctx.crypto.sha512(value, options?)`
+- `ctx.crypto.sm3(value, options?)`
+
+示例：
+
+```js
+const digest = ctx.crypto.sha256('hello');
+const digestBase64 = ctx.crypto.sha256('hello', { outputEncoding: 'base64' });
+```
+
+常用参数：
+
+- `options.inputEncoding`：默认 `utf8`，也支持 `base64 / hex`
+- `options.outputEncoding`：默认 `hex`，也支持 `base64 / utf8`
+
+### 16.3 HMAC 方法
+
+支持：
+
+- `ctx.crypto.hmacSha1(value, key, options?)`
+- `ctx.crypto.hmacSha256(value, key, options?)`
+- `ctx.crypto.hmacSha512(value, key, options?)`
+
+示例：
+
+```js
+const sign = ctx.crypto.hmacSha256('hello', 'secret');
+const signBytes = ctx.crypto.hexDecode(sign);
+```
+
+常用参数：
+
+- `options.inputEncoding`
+- `options.keyEncoding`
+- `options.outputEncoding`
+
+### 16.4 对称加解密
+
+支持：
+
+- `ctx.crypto.aesEncrypt(options)`
+- `ctx.crypto.aesDecrypt(options)`
+- `ctx.crypto.desEncrypt(options)`
+- `ctx.crypto.desDecrypt(options)`
+- `ctx.crypto.tripleDesEncrypt(options)`
+- `ctx.crypto.tripleDesDecrypt(options)`
+- `ctx.crypto.rc4Encrypt(options)`
+- `ctx.crypto.rc4Decrypt(options)`
+- `ctx.crypto.symmetricEncrypt(options)`
+- `ctx.crypto.symmetricDecrypt(options)`
+- `ctx.crypto.symmetricCrypto(key, iv, algorithm, data)`
+
+AES 示例：
+
+```js
+const encrypted = ctx.crypto.aesEncrypt({
+  data: 'hello',
+  key: '1234567890123456',
+  iv: '1234567890123456',
+  mode: 'cbc',
+  outputEncoding: 'base64',
+});
+
+const plain = ctx.crypto.aesDecrypt({
+  data: encrypted,
+  key: '1234567890123456',
+  iv: '1234567890123456',
+  mode: 'cbc',
+  inputEncoding: 'base64',
+  outputEncoding: 'utf8',
+});
+```
+
+通用算法示例：
+
+```js
+const encrypted = ctx.crypto.symmetricEncrypt({
+  algorithm: 'AES-CBC-PKCS5Padding',
+  data: 'hello',
+  key: '1234567890123456',
+  iv: '1234567890123456',
+  outputEncoding: 'base64',
+});
+```
+
+链式写法示例：
+
+```js
+const encrypted = ctx.crypto
+  .symmetricCrypto('1234567890123456', '1234567890123456', 'AES-CBC-PKCS5Padding', 'hello')
+  .encrypt()
+  .base64();
+```
+
+### 16.5 非对称加解密与签名
+
+支持：
+
+- `ctx.crypto.rsaEncrypt(options)`
+- `ctx.crypto.rsaDecrypt(options)`
+- `ctx.crypto.rsaSign(options)`
+- `ctx.crypto.rsaVerify(options)`
+- `ctx.crypto.asymmetricEncrypt(options)`
+- `ctx.crypto.asymmetricDecrypt(options)`
+- `ctx.crypto.asymmetricCrypto(algorithm, data)`
+
+签名示例：
+
+```js
+const signature = ctx.crypto.rsaSign({
+  data: 'hello',
+  privateKey: '-----BEGIN PRIVATE KEY-----...',
+  algorithm: 'SHA-256/RSA',
+  outputEncoding: 'base64',
+});
+```
+
+验签示例：
+
+```js
+const ok = ctx.crypto.rsaVerify({
+  data: 'hello',
+  publicKey: '-----BEGIN PUBLIC KEY-----...',
+  signature,
+  algorithm: 'SHA-256/RSA',
+  signatureEncoding: 'base64',
+});
+```
+
+### 16.6 随机数与时间
+
+支持：
+
+- `ctx.crypto.randomBytes(length, options?)`
+- `ctx.crypto.randomString(length, options?)`
+- `ctx.crypto.timestamp(options?)`
+
+示例：
+
+```js
+const nonce = ctx.crypto.randomString(16);
+const randomHex = ctx.crypto.randomBytes(16, { outputEncoding: 'hex' });
+const timestampMs = ctx.crypto.timestamp();
+const timestampSeconds = ctx.crypto.timestamp({ unit: 's' });
+```
+
+### 16.7 使用建议
+
+- 字符串级编码转换可以用 `ctx.utils`
+- 涉及签名、异或、字节数组时优先用 `ctx.crypto.hexDecode/base64Decode`
+- 简单摘要和 HMAC 优先用直接方法
+- 算法由站点动态下发时，再考虑 `symmetricEncrypt/asymmetricEncrypt` 或链式 API
 
 ## 17. `ctx.log`
 
@@ -2173,19 +2398,360 @@ ctx.log(`search keyword=${keyword}`);
 
 ## 18. 标准对象
 
-标准对象已单独整理到：
+书源方法返回值必须尽量靠近标准对象结构。宿主会做一定兼容和归一化，但不要依赖宿主猜测字段。
 
-- [书源标准对象参考](./source-object-reference.md)
+### 18.1 `DiscoverCategory`
 
-## 19. 调试与发布前检查
+用于发现页分类，由 `discoverCategories(ctx)` 返回。
+
+最小示例：
+
+```js
+{
+  title: '推荐',
+  url: 'https://example.com/discover/recommend',
+}
+```
+
+常用字段：
+
+- `title`：分类标题
+- `url`：分类请求地址或站点分类标识
+- `style`：展示辅助信息
+- `extra`：后续请求要用的扩展字段
+- `debug`：调试辅助字段
+
+注意事项：
+
+- `title` 建议非空
+- `url` 可以是 URL，也可以是你自己定义的分类 key
+- 不要把大量列表数据塞进分类对象
+
+### 18.2 `Book`
+
+用于搜索、发现和详情阶段。
+
+最小示例：
+
+```js
+{
+  title: '示例小说',
+  author: '作者名',
+  detailUrl: 'https://example.com/book/1',
+}
+```
+
+常用字段：
+
+- `title`：书名
+- `author`：作者
+- `type`：内容类型，如 `novel / manga`
+- `cover`：封面 URL
+- `intro`：简介
+- `status`：连载状态
+- `category`：分类
+- `score`：评分
+- `wordCount`：字数
+- `updateTime`：更新时间
+- `tags`：标签数组
+- `latestChapter`：最新章节
+- `detailUrl`：详情页地址或详情标识
+- `tocUrl`：目录页地址或目录标识
+- `sourceId`：通常不用手写，宿主会补齐
+- `extra`：跨阶段传递的自定义数据
+- `debug`：调试辅助字段
+
+注意事项：
+
+- `title` 和 `detailUrl` 是最关键字段
+- `tocUrl` 可以在 `detail` 阶段补齐
+- 搜索阶段不要为了补全所有字段而做大量额外请求
+
+### 18.3 `Chapter`
+
+用于目录阶段，由 `chapters(ctx, book)` 返回。
+
+最小示例：
+
+```js
+{
+  title: '第 1 章',
+  url: 'https://example.com/book/1/chapter/1',
+}
+```
+
+常用字段：
+
+- `title`：章节标题
+- `url`：正文请求地址或章节标识
+- `index`：章节序号；可不写，宿主按数组顺序归一化
+- `isVolume`：是否为卷标题
+- `vip` / `isVip`：是否会员章节
+- `isPay`：是否付费章节
+- `updateTime`：更新时间
+- `extra`：正文阶段要用的扩展字段
+- `debug`：调试辅助字段
+
+注意事项：
+
+- 可读章节必须有 `url`
+- 卷标题可以 `isVolume: true` 且 `url` 为空
+- 建议按站点目录顺序返回完整数组
+
+### 18.4 `Content`
+
+用于正文阶段，由 `content(ctx, book, chapter)` 返回。
+
+最小示例：
+
+```js
+{
+  title: chapter.title,
+  content: '正文内容',
+}
+```
+
+常用字段：
+
+- `title`：章节标题
+- `content`：正文文本
+- `nextUrl`：下一章地址，通常可不写
+- `images`：图片章节的图片 URL 数组
+- `extra`：扩展字段
+- `debug`：调试辅助字段
+
+注意事项：
+
+- 小说正文优先返回 `content`
+- 漫画或图片章节可返回 `images`
+- 不要把 HTML 原文直接当正文返回，建议清洗成可读文本
+
+### 18.5 `extra`
+
+`extra` 用于跨阶段传递业务字段，例如接口需要的 `bookId`、`chapterId`、签名参数、分页 key。
+
+示例：
+
+```js
+return {
+  title: item.name,
+  detailUrl: item.id,
+  extra: {
+    bookId: item.id,
+    sourceType: item.type,
+  },
+};
+```
+
+注意事项：
+
+- `extra` 应保持可 JSON 序列化
+- 不要放函数、DOM 节点、循环引用或过大的响应原文
+
+### 18.6 `debug`
+
+`debug` 用于调试辅助，不建议业务强依赖。
+
+示例：
+
+```js
+return {
+  title: item.name,
+  detailUrl: item.id,
+  debug: {
+    rawTitle: item.title,
+    matchedSelector: '.book-item',
+  },
+};
+```
+
+注意事项：
+
+- `debug` 可以帮助网页调试台定位问题
+- 发布前可以保留少量有价值信息
+- 不要放敏感 Cookie、Token 或完整加密密钥
+
+## 19. 网页调试服务
+
+网页调试服务用于在浏览器中连接 App 本地服务，编辑书源并执行单步或完整链路调试。
+
+### 19.1 连接方式
+
+App 侧启动“书源网页调试服务”后，会提供类似这样的地址：
+
+```text
+http://192.168.1.23:15421
+```
+
+在网页调试台填入该地址后，会调用：
+
+```text
+GET /api/debug/ping
+```
+
+成功后即可加载书源列表、编辑代码、保存和运行调试。
+
+### 19.2 调试接口
+
+统一响应结构：
+
+```js
+{
+  ok: true,
+  data: {},
+  error: null,
+  meta: {
+    requestId: 'req_...',
+    timestamp: '...',
+  },
+}
+```
+
+失败响应：
+
+```js
+{
+  ok: false,
+  data: null,
+  error: {
+    code: 'unknown',
+    message: '...',
+    stage: 'content',
+    detail: '...',
+  },
+}
+```
+
+主要接口：
+
+- `GET /api/debug/ping`
+- `GET /api/sources`
+- `GET /api/sources/:id`
+- `POST /api/sources`
+- `PUT /api/sources/:id`
+- `DELETE /api/sources/:id`
+- `PATCH /api/sources/:id/enabled`
+- `POST /api/debug/search`
+- `POST /api/debug/detail`
+- `POST /api/debug/chapters`
+- `POST /api/debug/content`
+- `POST /api/debug/full-run`
+
+### 19.3 `logs`、`traces`、`stages`
+
+调试接口会尽量返回结构化信息：
+
+- `logs`：调试日志，包括脚本里的 `ctx.log(...)`
+- `traces`：运行轨迹，包括 HTTP 请求、浏览器动作、执行摘要
+- `stages`：完整链路中的阶段结果
+
+单步接口成功时，`logs/traces` 位于 `data`：
+
+```js
+{
+  ok: true,
+  data: {
+    step: 'content',
+    result: {},
+    logs: [],
+    traces: [],
+  },
+}
+```
+
+失败时，结构化信息会放在 `error.detail` 的 JSON 字符串里：
+
+```js
+{
+  error: {
+    stage: 'content',
+    detail: '{"durationMs":91,"logs":[],"traces":[]}',
+  },
+}
+```
+
+### 19.4 推荐调试顺序
 
 推荐在网页调试台中分别验证：
 
-- 搜索
-- 详情
-- 目录
-- 正文
-- 完整链路
+1. 搜索
+2. 详情
+3. 目录
+4. 正文
+5. 完整链路
+
+不要只跑 `full-run`。单步调试能更快定位是入参、网络、解析还是返回对象的问题。
+
+### 19.5 常见错误
+
+`SourceScriptCompileException: not a function` 通常表示脚本调用了不存在的方法，或导出对象里的对应步骤不是函数。
+
+排查顺序：
+
+1. 看错误里的 `stage`
+2. 打开 `logs` 看 `ctx.log(...)` 输出
+3. 打开 `traces` 看请求 URL、状态码和运行摘要
+4. 检查当前阶段调用的 `ctx.*` API 是否存在
+5. 检查返回对象是否是可序列化普通对象
+
+## 20. 运行时边界与维护原则
+
+### 20.1 当前只支持脚本源
+
+当前 App 只执行 JavaScript 脚本源，不再导入或执行旧规则 JSON。旧规则可以作为迁移参考，但不能直接作为运行时格式。
+
+### 20.2 执行链路
+
+标准链路是：
+
+```text
+search -> detail -> chapters -> content
+```
+
+发现页链路是：
+
+```text
+discoverCategories -> discoverBooks -> detail -> chapters -> content
+```
+
+### 20.3 阶段职责
+
+- `search`：只负责找书，返回候选 `Book[]`
+- `detail`：补齐书籍详情、目录地址或跨阶段字段
+- `chapters`：返回完整目录
+- `content`：返回单章正文或图片
+- `discoverCategories`：返回发现页分类
+- `discoverBooks`：返回分类分页书籍
+
+### 20.4 运行时隔离
+
+宿主会根据场景选择普通容器或隔离容器执行脚本。书源作者不应该依赖全局变量长期保活；需要跨阶段传递的数据应放在 `book.extra`、`chapter.extra`、`ctx.cache` 或 `ctx.session`。
+
+### 20.5 返回值序列化
+
+返回值必须可 JSON 序列化。
+
+不要返回：
+
+- 函数
+- DOM 节点
+- `Map / Set`
+- 循环引用对象
+- 超大原始响应体
+
+### 20.6 错误处理
+
+脚本里可以抛出普通 `Error`，宿主会归一化为阶段错误。建议错误信息包含关键上下文，但不要包含敏感信息。
+
+示例：
+
+```js
+if (!response.ok) {
+  throw new Error(`章节请求失败 status=${response.status}`);
+}
+```
+
+## 21. 发布前检查
 
 发布前至少检查：
 
@@ -2197,10 +2763,8 @@ ctx.log(`search keyword=${keyword}`);
 6. `checkKeyword` 合理
 7. Challenge 场景可继续
 
-## 20. 下一步
+## 22. 维护说明
 
-如果继续完善文档，建议下一步补：
+本目录只保留这一份书源编写文档。需要新增书源规范、运行时 API、调试台行为、对象字段说明时，都直接更新本文档。
 
-- cookbook
-- troubleshooting
-- `ctx.crypto` 逐方法精细化说明
+历史计划、阶段任务、API 草稿不再单独保留，避免作者阅读入口分散。

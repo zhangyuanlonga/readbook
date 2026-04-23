@@ -7,6 +7,7 @@ import '../../../runtime/http/request_engine.dart';
 import '../../../runtime/session/session_manager.dart';
 import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/persisted_source_loader.dart';
+import '../../../runtime/sources/source_contract.dart';
 import '../../../runtime/sources/source_executor.dart';
 import '../../../runtime/sources/source_file_store.dart';
 import '../../../runtime/sources/source_registry.dart';
@@ -17,6 +18,18 @@ import '../../../core/logging/app_logger.dart';
 import 'source_runtime_diagnostic_execution_container.dart';
 import 'source_runtime_reading_flow_container_service.dart';
 import 'source_runtime_request_execution_container.dart';
+
+class SourceRuntimeDebugArtifacts {
+  const SourceRuntimeDebugArtifacts({
+    this.logs = const <Map<String, Object?>>[],
+    this.traces = const <Map<String, Object?>>[],
+  });
+
+  final List<Map<String, Object?>> logs;
+  final List<Map<String, Object?>> traces;
+
+  bool get isEmpty => logs.isEmpty && traces.isEmpty;
+}
 
 class ScriptSourceRuntimeService {
   ScriptSourceRuntimeService({
@@ -64,6 +77,8 @@ class ScriptSourceRuntimeService {
   late final PersistedSourceLoader _persistedLoader;
   late final SourceExecutor _executor;
   static Future<void> _isolatedExecutionQueue = Future<void>.value();
+  final Map<String, SourceRuntimeDebugArtifacts> _lastDebugArtifactsBySourceId =
+      <String, SourceRuntimeDebugArtifacts>{};
 
   List<RegisteredSource> allSources({bool enabledOnly = true}) {
     return registry.all(enabledOnly: enabledOnly);
@@ -83,6 +98,7 @@ class ScriptSourceRuntimeService {
     readingFlowContainerService.clearSource(normalized);
     sessionManager.clearSource(normalized);
     cacheManager.invalidateSource(normalized);
+    _lastDebugArtifactsBySourceId.remove(normalized);
   }
 
   void clearReadingFlow({
@@ -156,9 +172,7 @@ class ScriptSourceRuntimeService {
       onDispose: () {
         _logger.info(
           'Source runtime diagnostic container disposed',
-          context: <String, Object?>{
-            'sourceId': sourceId.trim(),
-          },
+          context: <String, Object?>{'sourceId': sourceId.trim()},
         );
       },
     );
@@ -216,6 +230,7 @@ class ScriptSourceRuntimeService {
       sessionCancellationHandleKey,
     );
     final previous = session.get<bool>(key);
+    _prepareDebugArtifacts(session);
     session.set(key, allowInteractiveChallenge);
     if (cancellationHandle != null) {
       session.set(sessionCancellationHandleKey, cancellationHandle);
@@ -225,6 +240,7 @@ class ScriptSourceRuntimeService {
     try {
       return _executor.search(source, keyword);
     } finally {
+      _captureDebugArtifacts(sourceId, session);
       if (previous == null) {
         session.clear(key);
       } else {
@@ -269,6 +285,7 @@ class ScriptSourceRuntimeService {
       },
     );
     const key = '__allow_interactive_challenge__';
+    _prepareDebugArtifacts(container.session);
     container.session.set(key, allowInteractiveChallenge);
     if (cancellationHandle != null) {
       container.session.set(sessionCancellationHandleKey, cancellationHandle);
@@ -392,7 +409,13 @@ class ScriptSourceRuntimeService {
     required runtime_models.Book book,
   }) async {
     final source = _requireSource(sourceId);
-    return _executor.detail(source, book);
+    final session = sessionManager.sessionFor(sourceId);
+    _prepareDebugArtifacts(session);
+    try {
+      return await _executor.detail(source, book);
+    } finally {
+      _captureDebugArtifacts(sourceId, session);
+    }
   }
 
   Future<runtime_models.Book> detailIsolated({
@@ -423,7 +446,13 @@ class ScriptSourceRuntimeService {
     required runtime_models.Book book,
   }) async {
     final source = _requireSource(sourceId);
-    return _executor.chapters(source, book);
+    final session = sessionManager.sessionFor(sourceId);
+    _prepareDebugArtifacts(session);
+    try {
+      return await _executor.chapters(source, book);
+    } finally {
+      _captureDebugArtifacts(sourceId, session);
+    }
   }
 
   Future<List<runtime_models.Chapter>> chaptersIsolated({
@@ -448,7 +477,22 @@ class ScriptSourceRuntimeService {
     required runtime_models.Chapter chapter,
   }) async {
     final source = _requireSource(sourceId);
-    return _executor.content(source, book, chapter);
+    final session = sessionManager.sessionFor(sourceId);
+    _prepareDebugArtifacts(session);
+    try {
+      return await _executor.content(source, book, chapter);
+    } finally {
+      _captureDebugArtifacts(sourceId, session);
+    }
+  }
+
+  SourceRuntimeDebugArtifacts consumeLastDebugArtifacts(String sourceId) {
+    final normalized = sourceId.trim();
+    if (normalized.isEmpty) {
+      return const SourceRuntimeDebugArtifacts();
+    }
+    return _lastDebugArtifactsBySourceId.remove(normalized) ??
+        const SourceRuntimeDebugArtifacts();
   }
 
   Future<runtime_models.Content> contentIsolated({
@@ -498,30 +542,30 @@ class ScriptSourceRuntimeService {
       }
     }
     final completer = Completer<T>();
-    _isolatedExecutionQueue = _isolatedExecutionQueue
-        .catchError((_) {})
-        .then((_) async {
-          final definition = await scriptCompiler.compile(sourceCode);
-          final isolatedSource = RegisteredSource(
-            runtime: SourceRuntimeInfo(
-              id: sourceId.trim(),
-              name: definition.manifest.name,
-              group: definition.manifest.group,
-              revision: 'isolated:${DateTime.now().millisecondsSinceEpoch}',
-            ),
-            definition: definition,
-          );
-          try {
-            completer.complete(await action(isolatedSource));
-          } catch (error, stackTrace) {
-            completer.completeError(error, stackTrace);
-          } finally {
-            definition.dispose?.call();
-          }
-        });
+    _isolatedExecutionQueue = _isolatedExecutionQueue.catchError((_) {}).then((
+      _,
+    ) async {
+      final definition = await scriptCompiler.compile(sourceCode);
+      final isolatedSource = RegisteredSource(
+        runtime: SourceRuntimeInfo(
+          id: sourceId.trim(),
+          name: definition.manifest.name,
+          group: definition.manifest.group,
+          revision: 'isolated:${DateTime.now().millisecondsSinceEpoch}',
+        ),
+        definition: definition,
+      );
+      try {
+        completer.complete(await action(isolatedSource));
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      } finally {
+        definition.dispose?.call();
+      }
+    });
     return completer.future;
   }
- 
+
   Future<T> _runRequestIsolated<T>({
     required String sourceId,
     required String sourceCode,
@@ -529,6 +573,7 @@ class ScriptSourceRuntimeService {
     required Future<T> Function(RegisteredSource source) action,
     bool serializeStartup = true,
   }) async {
+    _prepareDebugArtifacts(container.session);
     try {
       return await _runIsolated(
         sourceId: sourceId,
@@ -538,6 +583,7 @@ class ScriptSourceRuntimeService {
         serializeStartup: serializeStartup,
       );
     } finally {
+      _captureDebugArtifacts(sourceId, container.session);
       container.dispose();
     }
   }
@@ -565,7 +611,27 @@ class ScriptSourceRuntimeService {
           book: book,
           serializeStartup: serializeStartup,
         );
-    return action(container);
+    _prepareDebugArtifacts(container.requestContainer.session);
+    try {
+      return await action(container);
+    } finally {
+      _captureDebugArtifacts(sourceId, container.requestContainer.session);
+    }
+  }
+
+  void _prepareDebugArtifacts(SourceSession session) {
+    clearDebugArtifacts(session);
+  }
+
+  void _captureDebugArtifacts(String sourceId, SourceSession session) {
+    final normalized = sourceId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    _lastDebugArtifactsBySourceId[normalized] = SourceRuntimeDebugArtifacts(
+      logs: readDebugLogs(session),
+      traces: readDebugTraces(session),
+    );
   }
 
   Future<SourceRuntimeReadingFlowExecutionContainer>
@@ -632,26 +698,26 @@ class ScriptSourceRuntimeService {
       );
     }
     final completer = Completer<RegisteredSource>();
-    _isolatedExecutionQueue = _isolatedExecutionQueue
-        .catchError((_) {})
-        .then((_) async {
-          try {
-            final definition = await scriptCompiler.compile(sourceCode);
-            completer.complete(
-              RegisteredSource(
-                runtime: SourceRuntimeInfo(
-                  id: sourceId.trim(),
-                  name: definition.manifest.name,
-                  group: definition.manifest.group,
-                  revision: 'isolated:${DateTime.now().millisecondsSinceEpoch}',
-                ),
-                definition: definition,
-              ),
-            );
-          } catch (error, stackTrace) {
-            completer.completeError(error, stackTrace);
-          }
-        });
+    _isolatedExecutionQueue = _isolatedExecutionQueue.catchError((_) {}).then((
+      _,
+    ) async {
+      try {
+        final definition = await scriptCompiler.compile(sourceCode);
+        completer.complete(
+          RegisteredSource(
+            runtime: SourceRuntimeInfo(
+              id: sourceId.trim(),
+              name: definition.manifest.name,
+              group: definition.manifest.group,
+              revision: 'isolated:${DateTime.now().millisecondsSinceEpoch}',
+            ),
+            definition: definition,
+          ),
+        );
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
     return completer.future;
   }
 }

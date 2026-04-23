@@ -143,15 +143,14 @@ class SourceDebugWebService extends ChangeNotifier {
       _lastErrorText = error.toString();
     }
 
-    final sorted = urls.toList(growable: false)
-      ..sort((String a, String b) {
-        final aLoopback = a.contains('127.0.0.1');
-        final bLoopback = b.contains('127.0.0.1');
-        if (aLoopback == bLoopback) {
-          return a.compareTo(b);
-        }
-        return aLoopback ? 1 : -1;
-      });
+    final sorted = urls.toList(growable: false)..sort((String a, String b) {
+      final aLoopback = a.contains('127.0.0.1');
+      final bLoopback = b.contains('127.0.0.1');
+      if (aLoopback == bLoopback) {
+        return a.compareTo(b);
+      }
+      return aLoopback ? 1 : -1;
+    });
     _advertisedBaseUrls = sorted;
     notifyListeners();
   }
@@ -168,15 +167,12 @@ class SourceDebugWebService extends ChangeNotifier {
       }
 
       if (method == 'GET' && path == '/api/debug/ping') {
-        await _writeJson(
-          request.response,
-          <String, Object?>{
-            'ok': true,
-            'data': _buildPingPayload(),
-            'error': null,
-            'meta': _buildMeta(),
-          },
-        );
+        await _writeJson(request.response, <String, Object?>{
+          'ok': true,
+          'data': _buildPingPayload(),
+          'error': null,
+          'meta': _buildMeta(),
+        });
         return;
       }
 
@@ -210,7 +206,9 @@ class SourceDebugWebService extends ChangeNotifier {
         return;
       }
 
-      final sourceRouteMatch = RegExp(r'^/api/sources/([^/]+)$').firstMatch(path);
+      final sourceRouteMatch = RegExp(
+        r'^/api/sources/([^/]+)$',
+      ).firstMatch(path);
       final sourceEnabledRouteMatch = RegExp(
         r'^/api/sources/([^/]+)/enabled$',
       ).firstMatch(path);
@@ -242,49 +240,38 @@ class SourceDebugWebService extends ChangeNotifier {
         return;
       }
 
-      await _writeJson(
-        request.response,
-        <String, Object?>{
-          'ok': false,
-          'data': null,
-          'error': <String, Object?>{
-            'code': 'not_found',
-            'message': '未找到接口：${request.method} $path',
-            'stage': 'router',
-          },
-          'meta': _buildMeta(),
+      await _writeJson(request.response, <String, Object?>{
+        'ok': false,
+        'data': null,
+        'error': <String, Object?>{
+          'code': 'not_found',
+          'message': '未找到接口：${request.method} $path',
+          'stage': 'router',
         },
-        statusCode: HttpStatus.notFound,
-      );
+        'meta': _buildMeta(),
+      }, statusCode: HttpStatus.notFound);
     } catch (error) {
       _lastErrorText = error.toString();
-      await _writeJson(
-        request.response,
-        <String, Object?>{
-          'ok': false,
-          'data': null,
-          'error': <String, Object?>{
-            'code': 'internal_error',
-            'message': '本地调试服务处理失败。',
-            'detail': error.toString(),
-            'stage': 'router',
-          },
-          'meta': _buildMeta(),
+      await _writeJson(request.response, <String, Object?>{
+        'ok': false,
+        'data': null,
+        'error': <String, Object?>{
+          'code': 'internal_error',
+          'message': '本地调试服务处理失败。',
+          'detail': error.toString(),
+          'stage': 'router',
         },
-        statusCode: HttpStatus.internalServerError,
-      );
+        'meta': _buildMeta(),
+      }, statusCode: HttpStatus.internalServerError);
     }
   }
 
   Future<void> _handleListSources(HttpRequest request) async {
     try {
       final items = await _sourceRuntimeFacade.listScriptSources();
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{
-          'items': items.map(_sourceSummaryToJson).toList(growable: false),
-        },
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'items': items.map(_sourceSummaryToJson).toList(growable: false),
+      });
     } catch (error) {
       await _writeFailure(
         request.response,
@@ -307,10 +294,9 @@ class SourceDebugWebService extends ChangeNotifier {
         );
         return;
       }
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{'item': _sourceDetailToJson(source)},
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'item': _sourceDetailToJson(source),
+      });
     } catch (error) {
       await _writeFailure(
         request.response,
@@ -330,11 +316,9 @@ class SourceDebugWebService extends ChangeNotifier {
         sourceCode: sourceCode,
         enabled: enabled,
       );
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{'item': _sourceDetailToJson(saved)},
-        statusCode: HttpStatus.created,
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'item': _sourceDetailToJson(saved),
+      }, statusCode: HttpStatus.created);
     } catch (error) {
       await _handleSourceMutationError(
         request.response,
@@ -345,10 +329,7 @@ class SourceDebugWebService extends ChangeNotifier {
     }
   }
 
-  Future<void> _handleUpdateSource(
-    HttpRequest request,
-    String sourceId,
-  ) async {
+  Future<void> _handleUpdateSource(HttpRequest request, String sourceId) async {
     try {
       final existing = await _sourceRuntimeFacade.getScriptSourceById(sourceId);
       if (existing == null) {
@@ -368,10 +349,9 @@ class SourceDebugWebService extends ChangeNotifier {
         sourceCode: sourceCode,
         enabled: enabled,
       );
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{'item': _sourceDetailToJson(saved)},
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'item': _sourceDetailToJson(saved),
+      });
     } catch (error) {
       await _handleSourceMutationError(
         request.response,
@@ -406,10 +386,10 @@ class SourceDebugWebService extends ChangeNotifier {
         id: sourceId,
         enabled: enabled,
       );
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{'id': sourceId, 'enabled': enabled},
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'id': sourceId,
+        'enabled': enabled,
+      });
     } catch (error) {
       await _handleSourceMutationError(
         request.response,
@@ -433,10 +413,10 @@ class SourceDebugWebService extends ChangeNotifier {
         return;
       }
       await _sourceRuntimeFacade.deleteScriptSource(sourceId);
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{'id': sourceId, 'deleted': true},
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'id': sourceId,
+        'deleted': true,
+      });
     } catch (error) {
       await _writeFailure(
         request.response,
@@ -449,10 +429,12 @@ class SourceDebugWebService extends ChangeNotifier {
 
   Future<void> _handleDebugSearch(HttpRequest request) async {
     final stopwatch = Stopwatch()..start();
+    var sourceId = '';
+    var keyword = '';
     try {
       final body = await _readJsonMap(request);
-      final sourceId = _readRequiredString(body, 'sourceId');
-      final keyword = _readRequiredString(body, 'keyword');
+      sourceId = _readRequiredString(body, 'sourceId');
+      keyword = _readRequiredString(body, 'keyword');
       final logs = <Object?>[
         _logEntry(
           level: 'info',
@@ -466,6 +448,9 @@ class SourceDebugWebService extends ChangeNotifier {
         keyword: keyword,
       );
       stopwatch.stop();
+      final runtimeArtifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
       logs.add(
         _logEntry(
           level: books.isEmpty ? 'warn' : 'success',
@@ -487,18 +472,16 @@ class SourceDebugWebService extends ChangeNotifier {
           request: <String, Object?>{'keyword': keyword},
           resultSummary: _summarizeBooks(books),
         ),
+        ...runtimeArtifacts.traces,
       ];
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{
-          'sourceId': sourceId,
-          'step': 'search',
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'result': books.map(_bookToJson).toList(growable: false),
-          'logs': logs,
-          'traces': traces,
-        },
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'sourceId': sourceId,
+        'step': 'search',
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'result': books.map(_bookToJson).toList(growable: false),
+        'logs': _mergeLogs(logs, runtimeArtifacts.logs),
+        'traces': traces,
+      });
     } catch (error) {
       stopwatch.stop();
       await _handleDebugExecutionError(
@@ -506,17 +489,22 @@ class SourceDebugWebService extends ChangeNotifier {
         error,
         step: 'search',
         durationMs: stopwatch.elapsedMilliseconds,
-        requestSummary: const <String, Object?>{},
+        requestSummary: <String, Object?>{
+          if (sourceId.isNotEmpty) 'sourceId': sourceId,
+          if (keyword.isNotEmpty) 'keyword': keyword,
+        },
       );
     }
   }
 
   Future<void> _handleDebugDetail(HttpRequest request) async {
     final stopwatch = Stopwatch()..start();
+    var sourceId = '';
+    runtime_models.Book? book;
     try {
       final body = await _readJsonMap(request);
-      final sourceId = _readRequiredString(body, 'sourceId');
-      final book = _readRequiredBook(body, sourceId);
+      sourceId = _readRequiredString(body, 'sourceId');
+      book = _readRequiredBook(body, sourceId);
       final logs = <Object?>[
         _logEntry(
           level: 'info',
@@ -533,6 +521,9 @@ class SourceDebugWebService extends ChangeNotifier {
         book: book,
       );
       stopwatch.stop();
+      final runtimeArtifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
       logs.add(
         _logEntry(
           level: 'success',
@@ -554,18 +545,16 @@ class SourceDebugWebService extends ChangeNotifier {
           request: <String, Object?>{'book': _summarizeBook(book)},
           resultSummary: _summarizeBook(detail),
         ),
+        ...runtimeArtifacts.traces,
       ];
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{
-          'sourceId': sourceId,
-          'step': 'detail',
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'result': _bookToJson(detail),
-          'logs': logs,
-          'traces': traces,
-        },
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'sourceId': sourceId,
+        'step': 'detail',
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'result': _bookToJson(detail),
+        'logs': _mergeLogs(logs, runtimeArtifacts.logs),
+        'traces': traces,
+      });
     } catch (error) {
       stopwatch.stop();
       await _handleDebugExecutionError(
@@ -573,17 +562,22 @@ class SourceDebugWebService extends ChangeNotifier {
         error,
         step: 'detail',
         durationMs: stopwatch.elapsedMilliseconds,
-        requestSummary: const <String, Object?>{},
+        requestSummary: <String, Object?>{
+          if (sourceId.isNotEmpty) 'sourceId': sourceId,
+          if (book != null) 'book': _summarizeBook(book),
+        },
       );
     }
   }
 
   Future<void> _handleDebugChapters(HttpRequest request) async {
     final stopwatch = Stopwatch()..start();
+    var sourceId = '';
+    runtime_models.Book? book;
     try {
       final body = await _readJsonMap(request);
-      final sourceId = _readRequiredString(body, 'sourceId');
-      final book = _readRequiredBook(body, sourceId);
+      sourceId = _readRequiredString(body, 'sourceId');
+      book = _readRequiredBook(body, sourceId);
       final logs = <Object?>[
         _logEntry(
           level: 'info',
@@ -600,6 +594,9 @@ class SourceDebugWebService extends ChangeNotifier {
         book: book,
       );
       stopwatch.stop();
+      final runtimeArtifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
       logs.add(
         _logEntry(
           level: chapters.isEmpty ? 'warn' : 'success',
@@ -621,18 +618,16 @@ class SourceDebugWebService extends ChangeNotifier {
           request: <String, Object?>{'book': _summarizeBook(book)},
           resultSummary: _summarizeChapters(chapters),
         ),
+        ...runtimeArtifacts.traces,
       ];
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{
-          'sourceId': sourceId,
-          'step': 'chapters',
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'result': chapters.map(_chapterToJson).toList(growable: false),
-          'logs': logs,
-          'traces': traces,
-        },
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'sourceId': sourceId,
+        'step': 'chapters',
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'result': chapters.map(_chapterToJson).toList(growable: false),
+        'logs': _mergeLogs(logs, runtimeArtifacts.logs),
+        'traces': traces,
+      });
     } catch (error) {
       stopwatch.stop();
       await _handleDebugExecutionError(
@@ -640,18 +635,24 @@ class SourceDebugWebService extends ChangeNotifier {
         error,
         step: 'chapters',
         durationMs: stopwatch.elapsedMilliseconds,
-        requestSummary: const <String, Object?>{},
+        requestSummary: <String, Object?>{
+          if (sourceId.isNotEmpty) 'sourceId': sourceId,
+          if (book != null) 'book': _summarizeBook(book),
+        },
       );
     }
   }
 
   Future<void> _handleDebugContent(HttpRequest request) async {
     final stopwatch = Stopwatch()..start();
+    var sourceId = '';
+    runtime_models.Book? book;
+    runtime_models.Chapter? chapter;
     try {
       final body = await _readJsonMap(request);
-      final sourceId = _readRequiredString(body, 'sourceId');
-      final book = _readRequiredBook(body, sourceId);
-      final chapter = _readRequiredChapter(body, sourceId);
+      sourceId = _readRequiredString(body, 'sourceId');
+      book = _readRequiredBook(body, sourceId);
+      chapter = _readRequiredChapter(body, sourceId);
       final logs = <Object?>[
         _logEntry(
           level: 'info',
@@ -670,6 +671,9 @@ class SourceDebugWebService extends ChangeNotifier {
         chapter: chapter,
       );
       stopwatch.stop();
+      final runtimeArtifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
       logs.add(
         _logEntry(
           level: content.content.trim().isEmpty ? 'warn' : 'success',
@@ -694,18 +698,16 @@ class SourceDebugWebService extends ChangeNotifier {
           },
           resultSummary: _summarizeContent(content),
         ),
+        ...runtimeArtifacts.traces,
       ];
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{
-          'sourceId': sourceId,
-          'step': 'content',
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'result': _contentToJson(content),
-          'logs': logs,
-          'traces': traces,
-        },
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'sourceId': sourceId,
+        'step': 'content',
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'result': _contentToJson(content),
+        'logs': _mergeLogs(logs, runtimeArtifacts.logs),
+        'traces': traces,
+      });
     } catch (error) {
       stopwatch.stop();
       await _handleDebugExecutionError(
@@ -713,17 +715,23 @@ class SourceDebugWebService extends ChangeNotifier {
         error,
         step: 'content',
         durationMs: stopwatch.elapsedMilliseconds,
-        requestSummary: const <String, Object?>{},
+        requestSummary: <String, Object?>{
+          if (sourceId.isNotEmpty) 'sourceId': sourceId,
+          if (book != null) 'book': _summarizeBook(book),
+          if (chapter != null) 'chapter': _summarizeChapter(chapter),
+        },
       );
     }
   }
 
   Future<void> _handleDebugFullRun(HttpRequest request) async {
     final stopwatch = Stopwatch()..start();
+    var sourceId = '';
+    var keyword = '';
     try {
       final body = await _readJsonMap(request);
-      final sourceId = _readRequiredString(body, 'sourceId');
-      final keyword = _readRequiredString(body, 'keyword');
+      sourceId = _readRequiredString(body, 'sourceId');
+      keyword = _readRequiredString(body, 'keyword');
 
       final stages = <Map<String, Object?>>[];
       final outputs = <String, Object?>{};
@@ -732,10 +740,7 @@ class SourceDebugWebService extends ChangeNotifier {
           level: 'info',
           step: 'full-run',
           message: '开始完整链路调试',
-          details: <String, Object?>{
-            'sourceId': sourceId,
-            'keyword': keyword,
-          },
+          details: <String, Object?>{'sourceId': sourceId, 'keyword': keyword},
         ),
       ];
       final traces = <Object?>[
@@ -757,13 +762,15 @@ class SourceDebugWebService extends ChangeNotifier {
           keyword: keyword,
         );
         searchWatch.stop();
+        final runtimeArtifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+          sourceId,
+        );
         outputs['search'] = books.map(_bookToJson).toList(growable: false);
         stages.add(<String, Object?>{
           'step': 'search',
           'ok': books.isNotEmpty,
           'durationMs': searchWatch.elapsedMilliseconds,
-          'summary':
-              books.isEmpty ? '搜索无结果' : '返回 ${books.length} 本书',
+          'summary': books.isEmpty ? '搜索无结果' : '返回 ${books.length} 本书',
         });
         logs.add(
           _logEntry(
@@ -787,12 +794,19 @@ class SourceDebugWebService extends ChangeNotifier {
             resultSummary: _summarizeBooks(books),
           ),
         );
+        traces.addAll(runtimeArtifacts.traces);
+        logs.addAll(runtimeArtifacts.logs);
         if (books.isEmpty) {
           overallOk = false;
         }
       } catch (error) {
         searchWatch.stop();
-        stages.add(_failedStage('search', searchWatch.elapsedMilliseconds, error));
+        final runtimeArtifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+          sourceId,
+        );
+        stages.add(
+          _failedStage('search', searchWatch.elapsedMilliseconds, error),
+        );
         outputs['search'] = const <Object?>[];
         logs.add(
           _logEntry(
@@ -816,6 +830,8 @@ class SourceDebugWebService extends ChangeNotifier {
             resultSummary: _errorSummary(error),
           ),
         );
+        traces.addAll(runtimeArtifacts.traces);
+        logs.addAll(runtimeArtifacts.logs);
         overallOk = false;
       }
 
@@ -828,6 +844,8 @@ class SourceDebugWebService extends ChangeNotifier {
             book: books.first,
           );
           detailWatch.stop();
+          final runtimeArtifacts = _sourceRuntimeFacade
+              .consumeLastDebugArtifacts(sourceId);
           outputs['detail'] = _bookToJson(detailBook);
           stages.add(<String, Object?>{
             'step': 'detail',
@@ -853,15 +871,19 @@ class SourceDebugWebService extends ChangeNotifier {
               sourceId: sourceId,
               durationMs: detailWatch.elapsedMilliseconds,
               status: 'ok',
-              request: <String, Object?>{
-                'book': _summarizeBook(books.first),
-              },
+              request: <String, Object?>{'book': _summarizeBook(books.first)},
               resultSummary: _summarizeBook(detailBook),
             ),
           );
+          traces.addAll(runtimeArtifacts.traces);
+          logs.addAll(runtimeArtifacts.logs);
         } catch (error) {
           detailWatch.stop();
-          stages.add(_failedStage('detail', detailWatch.elapsedMilliseconds, error));
+          final runtimeArtifacts = _sourceRuntimeFacade
+              .consumeLastDebugArtifacts(sourceId);
+          stages.add(
+            _failedStage('detail', detailWatch.elapsedMilliseconds, error),
+          );
           outputs['detail'] = null;
           logs.add(
             _logEntry(
@@ -881,12 +903,12 @@ class SourceDebugWebService extends ChangeNotifier {
               sourceId: sourceId,
               durationMs: detailWatch.elapsedMilliseconds,
               status: 'failed',
-              request: <String, Object?>{
-                'book': _summarizeBook(books.first),
-              },
+              request: <String, Object?>{'book': _summarizeBook(books.first)},
               resultSummary: _errorSummary(error),
             ),
           );
+          traces.addAll(runtimeArtifacts.traces);
+          logs.addAll(runtimeArtifacts.logs);
           overallOk = false;
         }
       } else {
@@ -902,6 +924,8 @@ class SourceDebugWebService extends ChangeNotifier {
             book: detailBook,
           );
           chaptersWatch.stop();
+          final runtimeArtifacts = _sourceRuntimeFacade
+              .consumeLastDebugArtifacts(sourceId);
           outputs['chapters'] = chapters
               .map(_chapterToJson)
               .toList(growable: false);
@@ -909,8 +933,7 @@ class SourceDebugWebService extends ChangeNotifier {
             'step': 'chapters',
             'ok': chapters.isNotEmpty,
             'durationMs': chaptersWatch.elapsedMilliseconds,
-            'summary':
-                chapters.isEmpty ? '目录为空' : '返回 ${chapters.length} 章',
+            'summary': chapters.isEmpty ? '目录为空' : '返回 ${chapters.length} 章',
           });
           logs.add(
             _logEntry(
@@ -930,17 +953,19 @@ class SourceDebugWebService extends ChangeNotifier {
               sourceId: sourceId,
               durationMs: chaptersWatch.elapsedMilliseconds,
               status: chapters.isEmpty ? 'empty' : 'ok',
-              request: <String, Object?>{
-                'book': _summarizeBook(detailBook),
-              },
+              request: <String, Object?>{'book': _summarizeBook(detailBook)},
               resultSummary: _summarizeChapters(chapters),
             ),
           );
+          traces.addAll(runtimeArtifacts.traces);
+          logs.addAll(runtimeArtifacts.logs);
           if (chapters.isEmpty) {
             overallOk = false;
           }
         } catch (error) {
           chaptersWatch.stop();
+          final runtimeArtifacts = _sourceRuntimeFacade
+              .consumeLastDebugArtifacts(sourceId);
           stages.add(
             _failedStage('chapters', chaptersWatch.elapsedMilliseconds, error),
           );
@@ -963,12 +988,12 @@ class SourceDebugWebService extends ChangeNotifier {
               sourceId: sourceId,
               durationMs: chaptersWatch.elapsedMilliseconds,
               status: 'failed',
-              request: <String, Object?>{
-                'book': _summarizeBook(detailBook),
-              },
+              request: <String, Object?>{'book': _summarizeBook(detailBook)},
               resultSummary: _errorSummary(error),
             ),
           );
+          traces.addAll(runtimeArtifacts.traces);
+          logs.addAll(runtimeArtifacts.logs);
           overallOk = false;
         }
       } else {
@@ -984,6 +1009,8 @@ class SourceDebugWebService extends ChangeNotifier {
             chapter: chapters.first,
           );
           contentWatch.stop();
+          final runtimeArtifacts = _sourceRuntimeFacade
+              .consumeLastDebugArtifacts(sourceId);
           outputs['content'] = _contentToJson(content);
           stages.add(<String, Object?>{
             'step': 'content',
@@ -1016,9 +1043,15 @@ class SourceDebugWebService extends ChangeNotifier {
               resultSummary: _summarizeContent(content),
             ),
           );
+          traces.addAll(runtimeArtifacts.traces);
+          logs.addAll(runtimeArtifacts.logs);
         } catch (error) {
           contentWatch.stop();
-          stages.add(_failedStage('content', contentWatch.elapsedMilliseconds, error));
+          final runtimeArtifacts = _sourceRuntimeFacade
+              .consumeLastDebugArtifacts(sourceId);
+          stages.add(
+            _failedStage('content', contentWatch.elapsedMilliseconds, error),
+          );
           outputs['content'] = null;
           logs.add(
             _logEntry(
@@ -1045,6 +1078,8 @@ class SourceDebugWebService extends ChangeNotifier {
               resultSummary: _errorSummary(error),
             ),
           );
+          traces.addAll(runtimeArtifacts.traces);
+          logs.addAll(runtimeArtifacts.logs);
           overallOk = false;
         }
       } else {
@@ -1074,20 +1109,17 @@ class SourceDebugWebService extends ChangeNotifier {
           resultSummary: 'stages=${stages.length}',
         ),
       );
-      await _writeSuccess(
-        request.response,
-        <String, Object?>{
-          'sourceId': sourceId,
-          'step': 'full-run',
-          'usedKeyword': keyword,
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'overallOk': overallOk,
-          'stages': stages,
-          'outputs': outputs,
-          'logs': logs,
-          'traces': traces,
-        },
-      );
+      await _writeSuccess(request.response, <String, Object?>{
+        'sourceId': sourceId,
+        'step': 'full-run',
+        'usedKeyword': keyword,
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'overallOk': overallOk,
+        'stages': stages,
+        'outputs': outputs,
+        'logs': logs,
+        'traces': traces,
+      });
     } catch (error) {
       stopwatch.stop();
       await _handleDebugExecutionError(
@@ -1095,6 +1127,10 @@ class SourceDebugWebService extends ChangeNotifier {
         error,
         step: 'full-run',
         durationMs: stopwatch.elapsedMilliseconds,
+        requestSummary: <String, Object?>{
+          if (sourceId.isNotEmpty) 'sourceId': sourceId,
+          if (keyword.isNotEmpty) 'keyword': keyword,
+        },
       );
     }
   }
@@ -1368,11 +1404,17 @@ class SourceDebugWebService extends ChangeNotifier {
     return error.toString();
   }
 
-  Map<String, Object?> _failedStage(
-    String step,
-    int durationMs,
-    Object error,
+  List<Object?> _mergeLogs(
+    List<Object?> baseLogs,
+    List<Map<String, Object?>> runtimeLogs,
   ) {
+    if (runtimeLogs.isEmpty) {
+      return baseLogs;
+    }
+    return <Object?>[...baseLogs, ...runtimeLogs];
+  }
+
+  Map<String, Object?> _failedStage(String step, int durationMs, Object error) {
     if (error is AppException) {
       return <String, Object?>{
         'step': step,
@@ -1409,13 +1451,16 @@ class SourceDebugWebService extends ChangeNotifier {
       'buildNumber': _packageInfo?.buildNumber ?? '',
       'platform': kIsWeb ? 'web' : Platform.operatingSystem,
       'deviceName':
-          kIsWeb ? 'web' : Platform.localHostname.trim().isEmpty
+          kIsWeb
+              ? 'web'
+              : Platform.localHostname.trim().isEmpty
               ? 'unknown'
               : Platform.localHostname.trim(),
       'port': _port,
       'baseUrls': advertisedBaseUrls,
       'startedAt': startedAt?.toIso8601String(),
-      'uptimeMs': startedAt == null ? 0 : now.difference(startedAt).inMilliseconds,
+      'uptimeMs':
+          startedAt == null ? 0 : now.difference(startedAt).inMilliseconds,
     };
   }
 
@@ -1443,16 +1488,12 @@ class SourceDebugWebService extends ChangeNotifier {
     Map<String, Object?> data, {
     int statusCode = HttpStatus.ok,
   }) {
-    return _writeJson(
-      response,
-      <String, Object?>{
-        'ok': true,
-        'data': data,
-        'error': null,
-        'meta': _buildMeta(),
-      },
-      statusCode: statusCode,
-    );
+    return _writeJson(response, <String, Object?>{
+      'ok': true,
+      'data': data,
+      'error': null,
+      'meta': _buildMeta(),
+    }, statusCode: statusCode);
   }
 
   Future<void> _writeFailure(
@@ -1463,21 +1504,17 @@ class SourceDebugWebService extends ChangeNotifier {
     String? stage,
     int statusCode = HttpStatus.internalServerError,
   }) {
-    return _writeJson(
-      response,
-      <String, Object?>{
-        'ok': false,
-        'data': null,
-        'error': <String, Object?>{
-          'code': code,
-          'message': message,
-          if (stage != null && stage.trim().isNotEmpty) 'stage': stage,
-          if (detail != null && detail.trim().isNotEmpty) 'detail': detail,
-        },
-        'meta': _buildMeta(),
+    return _writeJson(response, <String, Object?>{
+      'ok': false,
+      'data': null,
+      'error': <String, Object?>{
+        'code': code,
+        'message': message,
+        if (stage != null && stage.trim().isNotEmpty) 'stage': stage,
+        if (detail != null && detail.trim().isNotEmpty) 'detail': detail,
       },
-      statusCode: statusCode,
-    );
+      'meta': _buildMeta(),
+    }, statusCode: statusCode);
   }
 
   Future<void> _handleDebugExecutionError(
@@ -1498,16 +1535,22 @@ class SourceDebugWebService extends ChangeNotifier {
         },
       ),
     ];
+    final sourceId = requestSummary['sourceId']?.toString().trim() ?? '';
+    final runtimeArtifacts =
+        sourceId.isEmpty
+            ? const SourceRuntimeDebugArtifactsSnapshot()
+            : _sourceRuntimeFacade.consumeLastDebugArtifacts(sourceId);
     final traces = <Object?>[
       _traceEntry(
         step: step,
         label: 'runtime.$step',
-        sourceId: requestSummary['sourceId']?.toString() ?? '',
+        sourceId: sourceId,
         durationMs: durationMs,
         status: 'failed',
         request: requestSummary,
         resultSummary: _errorSummary(error),
       ),
+      ...runtimeArtifacts.traces,
     ];
     if (error is _SourceDebugValidationException) {
       await _writeFailure(
@@ -1517,7 +1560,7 @@ class SourceDebugWebService extends ChangeNotifier {
         stage: step,
         detail: jsonEncode(<String, Object?>{
           'durationMs': durationMs,
-          'logs': logs,
+          'logs': _mergeLogs(logs, runtimeArtifacts.logs),
           'traces': traces,
         }),
         statusCode: HttpStatus.badRequest,
@@ -1533,7 +1576,7 @@ class SourceDebugWebService extends ChangeNotifier {
         detail: jsonEncode(<String, Object?>{
           'error': error.toString(),
           'durationMs': durationMs,
-          'logs': logs,
+          'logs': _mergeLogs(logs, runtimeArtifacts.logs),
           'traces': traces,
         }),
         statusCode: HttpStatus.badRequest,
@@ -1548,7 +1591,7 @@ class SourceDebugWebService extends ChangeNotifier {
       detail: jsonEncode(<String, Object?>{
         'error': error.toString(),
         'durationMs': durationMs,
-        'logs': logs,
+        'logs': _mergeLogs(logs, runtimeArtifacts.logs),
         'traces': traces,
       }),
       statusCode: HttpStatus.internalServerError,

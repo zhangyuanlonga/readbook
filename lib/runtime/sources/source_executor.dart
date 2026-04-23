@@ -154,7 +154,8 @@ class SourceExecutor {
             step: SourceTaskStep.search,
             keyword: keyword,
           ),
-      action: (context) async => await source.definition.search(context, keyword),
+      action:
+          (context) async => await source.definition.search(context, keyword),
     );
     final normalized = books
         .map(
@@ -228,7 +229,8 @@ class SourceExecutor {
             step: SourceTaskStep.chapters,
             book: book,
           ),
-      action: (context) async => await source.definition.chapters(context, book),
+      action:
+          (context) async => await source.definition.chapters(context, book),
     );
     final normalized = result
         .map(
@@ -313,7 +315,9 @@ class SourceExecutor {
     return _coldStartGate.run(
       key: gateKey,
       onColdStart: () {
-        _logger?.call('[${source.runtime.id}] cold-start gate enter ${step.name}');
+        _logger?.call(
+          '[${source.runtime.id}] cold-start gate enter ${step.name}',
+        );
       },
       onWarmRun: () {
         _logger?.call('[${source.runtime.id}] warm step ${step.name}');
@@ -351,6 +355,7 @@ class SourceExecutor {
       utils: SourceUtilsContext(),
       crypto: SourceCryptoContext(),
       log: (String message) {
+        appendDebugLog(session, message: message);
         _logger?.call('[${runtime.id}] $message');
       },
     );

@@ -343,6 +343,7 @@ class SourceScriptDebugService {
       utils: SourceUtilsContext(),
       crypto: SourceCryptoContext(),
       log: (String message) {
+        appendDebugLog(session, message: message);
         logs.add(
           SourceScriptDebugLogEntry(
             timestamp: DateTime.now(),
@@ -422,11 +423,7 @@ $command
   }
 
   List<Map<String, Object?>> _readDebugTraces(SourceSession session) {
-    return session
-            .get<List<Object?>>('__debug_traces')
-            ?.whereType<Map<String, Object?>>()
-            .toList(growable: false) ??
-        const <Map<String, Object?>>[];
+    return readDebugTraces(session);
   }
 }
 
@@ -1966,6 +1963,185 @@ var source = undefined;
     }
   }
 
+  function utf8Encode(value) {
+    const input = String(value ?? '');
+    const bytes = [];
+    for (let index = 0; index < input.length; index += 1) {
+      let codePoint = input.charCodeAt(index);
+      if (
+        codePoint >= 0xd800 &&
+        codePoint <= 0xdbff &&
+        index + 1 < input.length
+      ) {
+        const next = input.charCodeAt(index + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          codePoint =
+            0x10000 + ((codePoint - 0xd800) << 10) + (next - 0xdc00);
+          index += 1;
+        }
+      }
+
+      if (codePoint <= 0x7f) {
+        bytes.push(codePoint);
+      } else if (codePoint <= 0x7ff) {
+        bytes.push(0xc0 | (codePoint >> 6));
+        bytes.push(0x80 | (codePoint & 0x3f));
+      } else if (codePoint <= 0xffff) {
+        bytes.push(0xe0 | (codePoint >> 12));
+        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
+        bytes.push(0x80 | (codePoint & 0x3f));
+      } else {
+        bytes.push(0xf0 | (codePoint >> 18));
+        bytes.push(0x80 | ((codePoint >> 12) & 0x3f));
+        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
+        bytes.push(0x80 | (codePoint & 0x3f));
+      }
+    }
+    return new Uint8Array(bytes);
+  }
+
+  function utf8Decode(bytes) {
+    const input = normalizeBytes(bytes);
+    let output = '';
+    for (let index = 0; index < input.length; ) {
+      const first = input[index++];
+      if (first < 0x80) {
+        output += String.fromCharCode(first);
+      } else if (first >= 0xc0 && first < 0xe0 && index < input.length) {
+        const second = input[index++];
+        output += String.fromCharCode(((first & 0x1f) << 6) | (second & 0x3f));
+      } else if (first >= 0xe0 && first < 0xf0 && index + 1 < input.length) {
+        const second = input[index++];
+        const third = input[index++];
+        output += String.fromCharCode(
+          ((first & 0x0f) << 12) | ((second & 0x3f) << 6) | (third & 0x3f)
+        );
+      } else if (first >= 0xf0 && index + 2 < input.length) {
+        const second = input[index++];
+        const third = input[index++];
+        const fourth = input[index++];
+        let codePoint =
+          ((first & 0x07) << 18) |
+          ((second & 0x3f) << 12) |
+          ((third & 0x3f) << 6) |
+          (fourth & 0x3f);
+        codePoint -= 0x10000;
+        output += String.fromCharCode(
+          0xd800 + (codePoint >> 10),
+          0xdc00 + (codePoint & 0x3ff)
+        );
+      } else {
+        output += '\ufffd';
+      }
+    }
+    return output;
+  }
+
+  function normalizeBytes(value) {
+    if (value instanceof Uint8Array) {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return new Uint8Array(value.map((item) => Number(item) & 0xff));
+    }
+    if (value && typeof value.length === 'number') {
+      const bytes = [];
+      for (let index = 0; index < value.length; index += 1) {
+        bytes.push(Number(value[index]) & 0xff);
+      }
+      return new Uint8Array(bytes);
+    }
+    return utf8Encode(value ?? '');
+  }
+
+  function bytesToHex(value) {
+    const bytes = normalizeBytes(value);
+    let output = '';
+    for (let index = 0; index < bytes.length; index += 1) {
+      output += bytes[index].toString(16).padStart(2, '0');
+    }
+    return output;
+  }
+
+  function hexToBytes(value) {
+    const raw = String(value ?? '').trim();
+    if (raw.length === 0) {
+      return new Uint8Array();
+    }
+    if (raw.length % 2 !== 0) {
+      throw new Error('hex string length must be even');
+    }
+    const output = new Uint8Array(raw.length / 2);
+    for (let index = 0; index < raw.length; index += 2) {
+      const byte = Number.parseInt(raw.slice(index, index + 2), 16);
+      if (!Number.isFinite(byte)) {
+        throw new Error('invalid hex string');
+      }
+      output[index / 2] = byte;
+    }
+    return output;
+  }
+
+  const base64Alphabet =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+  function bytesToBase64(value) {
+    const bytes = normalizeBytes(value);
+    let output = '';
+    let index = 0;
+    for (; index + 2 < bytes.length; index += 3) {
+      output += base64Alphabet[bytes[index] >> 2];
+      output += base64Alphabet[((bytes[index] & 3) << 4) | (bytes[index + 1] >> 4)];
+      output += base64Alphabet[((bytes[index + 1] & 15) << 2) | (bytes[index + 2] >> 6)];
+      output += base64Alphabet[bytes[index + 2] & 63];
+    }
+    if (index < bytes.length) {
+      output += base64Alphabet[bytes[index] >> 2];
+      if (index === bytes.length - 1) {
+        output += base64Alphabet[(bytes[index] & 3) << 4] + '==';
+      } else {
+        output += base64Alphabet[((bytes[index] & 3) << 4) | (bytes[index + 1] >> 4)];
+        output += base64Alphabet[(bytes[index + 1] & 15) << 2] + '=';
+      }
+    }
+    return output;
+  }
+
+  function base64ToBytes(value) {
+    const raw = String(value ?? '').replace(/\s+/g, '');
+    if (!raw) {
+      return new Uint8Array();
+    }
+    const clean = raw.replace(/=+$/, '');
+    const output = [];
+    let buffer = 0;
+    let bits = 0;
+    for (let index = 0; index < clean.length; index += 1) {
+      const valueIndex = base64Alphabet.indexOf(clean[index]);
+      if (valueIndex < 0) {
+        throw new Error('invalid base64 string');
+      }
+      buffer = (buffer << 6) | valueIndex;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        output.push((buffer >> bits) & 0xff);
+      }
+    }
+    return new Uint8Array(output);
+  }
+
+  function bytesOrString(bytes, outputEncoding) {
+    const normalized = String(outputEncoding || 'bytes').toLowerCase();
+    if (normalized === 'string' || normalized === 'utf8' || normalized === 'utf-8') {
+      return utf8Decode(bytes);
+    }
+    if (normalized === 'array') {
+      return Array.from(normalizeBytes(bytes));
+    }
+    return normalizeBytes(bytes);
+  }
+
   function wrapNode(handle) {
     if (handle === null || handle === undefined) {
       return null;
@@ -2169,6 +2345,42 @@ var source = undefined;
         }
       },
       crypto: {
+        hexEncode(value, options = {}) {
+          return bytesToHex(
+            options.inputEncoding === 'hex'
+              ? hexToBytes(value)
+              : options.inputEncoding === 'base64'
+                ? base64ToBytes(value)
+                : normalizeBytes(value)
+          );
+        },
+        hexDecode(value, options = {}) {
+          return bytesOrString(hexToBytes(value), options.output || options.outputEncoding);
+        },
+        hexToBytes(value) {
+          return hexToBytes(value);
+        },
+        bytesToHex(value) {
+          return bytesToHex(value);
+        },
+        base64Encode(value, options = {}) {
+          if (options.inputEncoding === 'hex') {
+            return bytesToBase64(hexToBytes(value));
+          }
+          if (options.inputEncoding === 'base64') {
+            return bytesToBase64(base64ToBytes(value));
+          }
+          return bytesToBase64(value);
+        },
+        base64Decode(value, options = {}) {
+          return bytesOrString(base64ToBytes(value), options.output || options.outputEncoding);
+        },
+        base64ToBytes(value) {
+          return base64ToBytes(value);
+        },
+        bytesToBase64(value) {
+          return bytesToBase64(value);
+        },
         md5(value, options = {}) {
           return hostCall('__ctx_crypto_md5', {
             value,
@@ -2255,11 +2467,23 @@ var source = undefined;
         tripleDesDecrypt(options) {
           return hostCall('__ctx_crypto_3des_decrypt', options || {});
         },
+        symmetricEncrypt(options) {
+          return hostCall('__ctx_crypto_symmetric_encrypt', options || {});
+        },
+        symmetricDecrypt(options) {
+          return hostCall('__ctx_crypto_symmetric_decrypt', options || {});
+        },
         rsaEncrypt(options) {
           return hostCall('__ctx_crypto_rsa_encrypt', options || {});
         },
         rsaDecrypt(options) {
           return hostCall('__ctx_crypto_rsa_decrypt', options || {});
+        },
+        asymmetricEncrypt(options) {
+          return hostCall('__ctx_crypto_asymmetric_encrypt', options || {});
+        },
+        asymmetricDecrypt(options) {
+          return hostCall('__ctx_crypto_asymmetric_decrypt', options || {});
         },
         rsaSign(options) {
           return hostCall('__ctx_crypto_rsa_sign', options || {});

@@ -40,12 +40,8 @@
   阅读记录、书签、缓存、自定义规则和本地阅读。
 - `docs/engineering_delivery_guide.md`
   书源列表性能、Android 发布和移动端后端集成。
-- `docs/script_sources/README.md`
-  脚本源运行时文档入口，包含作者手册、规范、运行时 API、架构和模板。
-- `docs/script_sources/search-runtime-redesign.md`
-  搜索、换源和自动换源的脚本源运行时重构方案。
-- `docs/script_sources/source-health-system-plan.md`
-  源健康系统规划，覆盖搜索、换源、书源列表、源检测和停用策略。
+- `docs/script_sources/official-source-author-guide.md`
+  唯一保留的书源编写文档，包含作者手册、规范、标准对象、`ctx` API、加解密能力和网页调试服务说明。
 
 ## 使用建议
 
@@ -58,13 +54,8 @@
 
 ## 脚本源文档
 
-脚本源和新规则运行时的相关文档已整体迁入：
+脚本源和新规则运行时的相关文档已合并为单一入口：
 
-- `docs/script_sources/README.md`
+- `docs/script_sources/official-source-author-guide.md`
 
-建议阅读顺序：
-
-1. `docs/script_sources/official-source-author-guide.md`
-2. `docs/script_sources/source-spec-v1.md`
-3. `docs/script_sources/runtime-ctx-api.md`
-4. `docs/script_sources/architecture.md`
+后续书源规范、运行时 API、标准对象和调试服务说明都直接维护在这一个文件中。

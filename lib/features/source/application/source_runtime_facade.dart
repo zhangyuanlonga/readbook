@@ -39,6 +39,16 @@ class ScriptSourceReloadReport {
   final List<ScriptSourceReloadFailure> failures;
 }
 
+class SourceRuntimeDebugArtifactsSnapshot {
+  const SourceRuntimeDebugArtifactsSnapshot({
+    this.logs = const <Map<String, Object?>>[],
+    this.traces = const <Map<String, Object?>>[],
+  });
+
+  final List<Map<String, Object?>> logs;
+  final List<Map<String, Object?>> traces;
+}
+
 class SourceRuntimeFacade {
   static final SourceRuntimeFacade instance = SourceRuntimeFacade(
     scriptSourceRepository: ScriptSourceRepositoryImpl(AppDatabase.instance),
@@ -87,6 +97,16 @@ class SourceRuntimeFacade {
 
   Future<ScriptSource?> getScriptSourceById(String id) {
     return _scriptSourceRepository.getById(id);
+  }
+
+  SourceRuntimeDebugArtifactsSnapshot consumeLastDebugArtifacts(
+    String sourceId,
+  ) {
+    final artifacts = _scriptRuntimeService.consumeLastDebugArtifacts(sourceId);
+    return SourceRuntimeDebugArtifactsSnapshot(
+      logs: artifacts.logs,
+      traces: artifacts.traces,
+    );
   }
 
   Future<ScriptSource> saveScriptSource({

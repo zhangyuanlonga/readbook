@@ -95,6 +95,15 @@ void main() {
       expect(chapters[1].isVolume, isFalse);
       expect(chapters[2].isVolume, isFalse);
     });
+
+    test('crypto byte helpers are available to source scripts', () async {
+      final definition = await compiler.compile(_sourceWithCryptoByteHelpers);
+
+      final books = await definition.search(_buildRuntimeContext(), '任意');
+
+      expect(books, hasLength(1));
+      expect(books.single.title, '97,98,99|abc|YWJj');
+    });
   });
 
   group('SourceScriptCompiler runtime isolation', () {
@@ -194,6 +203,22 @@ void main() {
         contains(
           'globalThis.__appreadEncodeHostSuccess = function(value, methodName)',
         ),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('hexDecode(value, options = {})'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('base64Decode(value, options = {})'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('symmetricEncrypt(options)'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('asymmetricEncrypt(options)'),
       );
       expect(factory.lastRunSnippet, contains('ctx = __ctx;'));
       expect(factory.lastRunSnippet, contains('source = __source;'));
@@ -352,6 +377,27 @@ export default {
       { title: '第二章', url: 'https://example.com/2' },
     ];
   },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''';
+
+const String _sourceWithCryptoByteHelpers = '''
+export default {
+  meta: {
+    name: '加密字节工具测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  async search(ctx, keyword) {
+    const bytes = ctx.crypto.hexDecode('616263');
+    const text = ctx.crypto.base64Decode('YWJj', { output: 'string' });
+    const encoded = ctx.crypto.base64Encode(bytes);
+    return [{ title: Array.from(bytes).join(',') + '|' + text + '|' + encoded, detailUrl: 'https://book' }];
+  },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
   async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
 };
 ''';
