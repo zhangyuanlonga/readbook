@@ -1664,9 +1664,9 @@ var source = undefined;
 (function() {
   const __appreadOmit = Symbol('appread.omit');
   const __appreadMaxSanitizeDepth = 8;
-  const __appreadMaxArrayLength = 200;
-  const __appreadMaxChapterArrayLength = 10000;
-  const __appreadMaxObjectEntries = 200;
+  const __appreadMaxArrayLength = Number.MAX_SAFE_INTEGER;
+  const __appreadMaxChapterArrayLength = Number.MAX_SAFE_INTEGER;
+  const __appreadMaxObjectEntries = Number.MAX_SAFE_INTEGER;
 
   function isPlainObject(value) {
     if (!value || typeof value !== 'object') {

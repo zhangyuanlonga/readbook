@@ -378,6 +378,12 @@ class _MinePageState extends ConsumerState<MinePage> {
                                 onTap: _handleSourceTap,
                               ),
                             _MineActionItem(
+                              icon: Icons.lan_outlined,
+                              label: '网页调试服务',
+                              subtitle: '为网站调试台提供局域网本地接口',
+                              onTap: () => context.push('/mine/source-debug-service'),
+                            ),
+                            _MineActionItem(
                               icon: Icons.cloud_outlined,
                               label: '书籍缓存',
                               onTap: () => context.push('/cache'),

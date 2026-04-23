@@ -29,6 +29,7 @@ import '../features/mine/presentation/launch_image_gallery_editor_page.dart';
 import '../features/mine/presentation/launch_image_gallery_page.dart';
 import '../features/mine/presentation/reader_background_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
+import '../features/mine/presentation/source_debug_service_page.dart';
 import '../features/auth/presentation/auth_page.dart';
 import '../features/auth/presentation/user_profile_page.dart';
 import '../features/reader/presentation/reader_page.dart';
@@ -208,6 +209,11 @@ final GoRouter appRouter = GoRouter(
           (context, state) => const MineManagementPage(
             section: MineManagementSection.contentCleanup,
           ),
+    ),
+    GoRoute(
+      path: '/mine/source-debug-service',
+      name: 'mine-source-debug-service',
+      builder: (context, state) => const SourceDebugServicePage(),
     ),
     GoRoute(
       path: '/membership',

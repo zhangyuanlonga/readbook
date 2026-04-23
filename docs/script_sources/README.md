@@ -1,6 +1,6 @@
 # 脚本源文档索引
 
-更新时间：2026-04-07
+更新时间：2026-04-23
 
 当前 `flutterreadbook` 运行时只支持脚本源。
 
@@ -17,11 +17,19 @@
 
 1. [官方书源编写手册](./official-source-author-guide.md)
    书源作者的主入口。包含模板、流程、标准对象、方法职责和完整 `ctx.*` API。
-2. [书源规范 v1](./source-spec-v1.md)
+2. [官方书源编写手册 v2](./official-source-author-guide-v2.md)
+   新版重整草稿。优先围绕 `meta / search / detail / chapters / content` 说明“这个方法该怎么写”。
+3. [书源规范 v1](./source-spec-v1.md)
    规范性文档。只定义书源文件结构、标准对象和兼容约定。
-3. [宿主运行时 API](./runtime-ctx-api.md)
+4. [宿主运行时 API](./runtime-ctx-api.md)
    边界说明文档。只说明当前运行时到底开放了什么，以及哪些能力不要误解。
-4. [总体架构](./architecture.md)
+5. [宿主运行时 API v2](./runtime-ctx-api-v2.md)
+   新版重整草稿。优先整理 `ctx.http / ctx.html / ctx.browser / ctx.utils` 的方法说明。
+6. [宿主运行时加解密 API v2](./runtime-ctx-crypto-v2.md)
+   新版重整草稿。集中整理 `ctx.crypto` 相关能力，避免主 API 文档过胖。
+7. [书源标准对象参考](./source-object-reference.md)
+   用于统一说明 `DiscoverCategory / Book / Chapter / Content / extra / debug`。
+8. [总体架构](./architecture.md)
    用于说明当前脚本源运行时在产品中的角色和核心模块。
 
 ## 开发文档
@@ -45,6 +53,18 @@
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
 - [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)
   用于推进调试 UI、联调流程和运行时可观测性的具体实施文档。
+- [书源网页调试台落地方案](./web-debug-service-implementation-plan.md)
+  用于推进“网站调试台直连 App 本地服务”这一局域网调试模式的产品范围、接口范围和实施阶段。
+- [书源网页调试服务开发文档](./web-debug-service-development-guide.md)
+  用于说明 App 本地服务、网站前端联调、接口实现映射以及开发排查口径。
+- [书源网页调试服务阶段任务清单](./web-debug-service-task-list.md)
+  用于按阶段勾选本地调试服务、接口、前端页面和联调测试进度。
+- [书源文档重整方案](./source-docs-reorganization-plan.md)
+  用于把现有作者手册、API 手册、对象说明和排错内容重新组织成更适合作者阅读的结构。
+- [书源方法说明模板](./source-method-template.md)
+  用于统一 `ctx.utils`、`ctx.http`、`ctx.html`、`ctx.browser` 等方法的写法格式。
+- [新版书源作者手册骨架](./source-author-guide-v2-outline.md)
+  用于先确认新版主手册结构，再逐章重写正式内容。
 
 ## 模板
 

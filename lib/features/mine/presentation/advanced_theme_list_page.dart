@@ -506,6 +506,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final activeThemeId = ref.watch(activeAdvancedThemeIdProvider);
     final activeThemeAsync = ref.watch(activeAdvancedThemeProvider);
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeThemeAsync.valueOrNull,
+    );
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -541,40 +545,43 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               context,
               maxWidth: AppLayout.settingsContentMaxWidth,
             );
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child:
-                    _isAccessLoading || _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : !_canUseAdvancedThemes
-                        ? _buildVipLockedState(context, topInset: topInset)
-                        : ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            topInset + 12,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          children: [
-                            _buildIntroCard(context, activeThemeAsync),
-                            const SizedBox(height: 10),
-                            if (_themes.isEmpty)
-                              _buildEmptyState(context)
-                            else
-                              ..._themes.map(
-                                (theme) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: _buildThemeCard(
-                                    context,
-                                    theme,
-                                    isActive: activeThemeId == theme.id,
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child:
+                      _isAccessLoading || _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : !_canUseAdvancedThemes
+                          ? _buildVipLockedState(context, topInset: topInset)
+                          : ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + 12,
+                              horizontal,
+                              16 + bottomSafe,
+                            ),
+                            children: [
+                              _buildIntroCard(context, activeThemeAsync),
+                              const SizedBox(height: 10),
+                              if (_themes.isEmpty)
+                                _buildEmptyState(context)
+                              else
+                                ..._themes.map(
+                                  (theme) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildThemeCard(
+                                      context,
+                                      theme,
+                                      isActive: activeThemeId == theme.id,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
+                            ],
+                          ),
+                ),
               ),
             );
           },
