@@ -318,6 +318,14 @@ import UniformTypeIdentifiers
     let extensionName = url.pathExtension.lowercased()
     let normalizedMimeType = mimeType?.lowercased()
 
+    if extensionName == "json" ||
+      extensionName == "zip" ||
+      extensionName == "red" ||
+      normalizedMimeType == "application/json" ||
+      normalizedMimeType == "application/zip" ||
+      normalizedMimeType == "application/x-zip-compressed" {
+      return payloadTypeAdvancedTheme
+    }
     if extensionName == "txt" ||
       extensionName == "epub" ||
       extensionName == "md" ||
@@ -336,8 +344,7 @@ import UniformTypeIdentifiers
       normalizedMimeType == "application/pdf" ||
       normalizedMimeType == "application/x-mobipocket-ebook" ||
       normalizedMimeType == "application/vnd.amazon.ebook" ||
-      normalizedMimeType == "application/vnd.amazon.mobi8-ebook" ||
-      normalizedMimeType == "application/octet-stream" {
+      normalizedMimeType == "application/vnd.amazon.mobi8-ebook" {
       return payloadTypeLocalBook
     }
     if extensionName == "js" ||
@@ -345,10 +352,6 @@ import UniformTypeIdentifiers
       normalizedMimeType == "text/javascript" ||
       normalizedMimeType == "application/javascript" {
       return payloadTypeScriptSource
-    }
-    if extensionName == "json" ||
-      normalizedMimeType == "application/json" {
-      return payloadTypeAdvancedTheme
     }
     return nil
   }
@@ -502,6 +505,15 @@ import UniformTypeIdentifiers
     if urlExtension == "mjs" {
       return ".mjs"
     }
+    if urlExtension == "json" {
+      return ".json"
+    }
+    if urlExtension == "zip" {
+      return ".zip"
+    }
+    if urlExtension == "red" {
+      return ".red"
+    }
     if lowerLabel.hasSuffix(".txt") {
       return ".txt"
     }
@@ -538,6 +550,15 @@ import UniformTypeIdentifiers
     if lowerLabel.hasSuffix(".mjs") {
       return ".mjs"
     }
+    if lowerLabel.hasSuffix(".json") {
+      return ".json"
+    }
+    if lowerLabel.hasSuffix(".zip") {
+      return ".zip"
+    }
+    if lowerLabel.hasSuffix(".red") {
+      return ".red"
+    }
     if normalizedMimeType == "application/epub+zip" {
       return ".epub"
     }
@@ -564,6 +585,12 @@ import UniformTypeIdentifiers
     }
     if normalizedMimeType == "text/javascript" || normalizedMimeType == "application/javascript" {
       return ".js"
+    }
+    if normalizedMimeType == "application/json" {
+      return ".json"
+    }
+    if normalizedMimeType == "application/zip" || normalizedMimeType == "application/x-zip-compressed" {
+      return ".zip"
     }
     return nil
   }

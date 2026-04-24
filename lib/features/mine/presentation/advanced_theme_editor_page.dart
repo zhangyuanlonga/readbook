@@ -42,6 +42,8 @@ class AdvancedThemeEditorPage extends ConsumerStatefulWidget {
 class _AdvancedThemeEditorPageState
     extends ConsumerState<AdvancedThemeEditorPage>
     with SingleTickerProviderStateMixin {
+  static const double _resourcePickerSheetHeightFactor = 0.7;
+
   final AdvancedThemeService _service = AdvancedThemeService();
   final BottomNavIconGalleryService _bottomNavIconGalleryService =
       BottomNavIconGalleryService();
@@ -191,6 +193,7 @@ class _AdvancedThemeEditorPageState
             colorScheme.primary.withValues(alpha: 0.18).toARGB32(),
         wallpaperOverlayColorValue: colorScheme.surface.toARGB32(),
       ),
+      readerWallpaperOverlayOpacity: 0,
       wallpaperOverlayOpacity:
           colorScheme.brightness == Brightness.dark ? 0.46 : 0.28,
     );
@@ -349,185 +352,66 @@ class _AdvancedThemeEditorPageState
     if (_isSaving) {
       return;
     }
-    String? selectedPath;
+    final draft = _draft;
+    String? selectedPath =
+        draft == null ? null : _selectedWallpaperPreviewPath(draft);
+    final imagePaths = _existingImagePaths(_backgroundLibraryPaths);
     final confirmedPath = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '选择背景库图片',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_readerBackgroundLibraryPaths.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.wallpaper_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '还没有阅读背景素材',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '先去阅读背景页添加图片，再回来选择。',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择壁纸',
+              helperText: '显示的是背景页素材列表，长按图片可放大预览。',
+              content:
+                  imagePaths.isEmpty
+                      ? _buildEmptyResourceState(
+                        context,
+                        icon: Icons.wallpaper_outlined,
+                        title: '还没有背景素材',
+                        description: '先去背景页添加图片，再回来选择。',
                       )
-                    else
-                      Flexible(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            const spacing = 8.0;
-                            final columns = AppLayout.optionGridColumnsForWidth(
-                              constraints.maxWidth,
-                            ).clamp(3, 5);
-                            final itemWidth =
-                                (constraints.maxWidth -
-                                    ((columns - 1) * spacing)) /
-                                columns;
-                            return SingleChildScrollView(
-                              child: Wrap(
-                                spacing: spacing,
-                                runSpacing: spacing,
-                                children: _readerBackgroundLibraryPaths
-                                    .map((path) {
-                                      final selected = path == selectedPath;
-                                      return InkWell(
-                                        borderRadius: BorderRadius.circular(12),
-                                        onTap: () {
-                                          setSheetState(() {
-                                            selectedPath = path;
-                                          });
-                                        },
-                                        child: Stack(
-                                          children: [
-                                            Container(
-                                              width: itemWidth,
-                                              height: itemWidth * 1.28,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color:
-                                                      selected
-                                                          ? colorScheme.primary
-                                                          : colorScheme
-                                                              .outlineVariant
-                                                              .withValues(
-                                                                alpha: 0.45,
-                                                              ),
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                child: Image.file(
-                                                  File(path),
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            ),
-                                            if (selected)
-                                              Positioned(
-                                                top: 8,
-                                                right: 8,
-                                                child: Container(
-                                                  width: 24,
-                                                  height: 24,
-                                                  decoration: BoxDecoration(
-                                                    color: colorScheme.primary,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.check_rounded,
-                                                    size: 16,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      );
-                                    })
-                                    .toList(growable: false),
-                              ),
-                            );
-                          },
+                      : _buildImageSelectionGrid(
+                        context,
+                        imagePaths: imagePaths,
+                        selectedPath: selectedPath,
+                        titleBuilder: (_) => '壁纸',
+                        onSelected: (path) {
+                          setSheetState(() {
+                            selectedPath = path;
+                          });
+                        },
+                      ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed:
+                      () => unawaited(
+                        _openRouteFromSheet(
+                          context,
+                          '/appearance?section=background',
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed:
-                              () => unawaited(
-                                _openRouteFromSheet(
-                                  context,
-                                  '/appearance?section=background',
-                                ),
-                              ),
-                          child: const Text('去管理'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed:
-                              selectedPath == null
-                                  ? null
-                                  : () =>
-                                      Navigator.of(context).pop(selectedPath),
-                          child: const Text('应用'),
-                        ),
-                      ],
-                    ),
-                  ],
+                  child: const Text('去管理'),
                 ),
-              ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      selectedPath == null
+                          ? null
+                          : () => Navigator.of(context).pop(selectedPath),
+                  child: const Text('应用'),
+                ),
+              ],
             );
           },
         );
@@ -591,185 +475,66 @@ class _AdvancedThemeEditorPageState
     if (_isSaving) {
       return;
     }
-    String? selectedPath;
+    final draft = _draft;
+    String? selectedPath =
+        draft == null ? null : _selectedReaderWallpaperPreviewPath(draft);
+    final imagePaths = _existingImagePaths(_readerBackgroundLibraryPaths);
     final confirmedPath = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '选择阅读器背景',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_backgroundLibraryPaths.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.wallpaper_outlined,
-                              size: 22,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '还没有背景素材',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '先去背景页添加图片，再回来选择。',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择阅读器背景',
+              helperText: '显示的是阅读背景页素材列表，长按图片可放大预览。',
+              content:
+                  imagePaths.isEmpty
+                      ? _buildEmptyResourceState(
+                        context,
+                        icon: Icons.chrome_reader_mode_outlined,
+                        title: '还没有阅读背景素材',
+                        description: '先去阅读背景页添加图片，再回来选择。',
                       )
-                    else
-                      Flexible(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            const spacing = 8.0;
-                            final columns = AppLayout.optionGridColumnsForWidth(
-                              constraints.maxWidth,
-                            ).clamp(3, 5);
-                            final itemWidth =
-                                (constraints.maxWidth -
-                                    ((columns - 1) * spacing)) /
-                                columns;
-                            return SingleChildScrollView(
-                              child: Wrap(
-                                spacing: spacing,
-                                runSpacing: spacing,
-                                children: _backgroundLibraryPaths
-                                    .map((path) {
-                                      final selected = path == selectedPath;
-                                      return InkWell(
-                                        borderRadius: BorderRadius.circular(12),
-                                        onTap: () {
-                                          setSheetState(() {
-                                            selectedPath = path;
-                                          });
-                                        },
-                                        child: Stack(
-                                          children: [
-                                            Container(
-                                              width: itemWidth,
-                                              height: itemWidth * 1.28,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color:
-                                                      selected
-                                                          ? colorScheme.primary
-                                                          : colorScheme
-                                                              .outlineVariant
-                                                              .withValues(
-                                                                alpha: 0.45,
-                                                              ),
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                child: Image.file(
-                                                  File(path),
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            ),
-                                            if (selected)
-                                              Positioned(
-                                                top: 8,
-                                                right: 8,
-                                                child: Container(
-                                                  width: 24,
-                                                  height: 24,
-                                                  decoration: BoxDecoration(
-                                                    color: colorScheme.primary,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.check_rounded,
-                                                    size: 16,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      );
-                                    })
-                                    .toList(growable: false),
-                              ),
-                            );
-                          },
+                      : _buildImageSelectionGrid(
+                        context,
+                        imagePaths: imagePaths,
+                        selectedPath: selectedPath,
+                        titleBuilder: (_) => '阅读器背景',
+                        onSelected: (path) {
+                          setSheetState(() {
+                            selectedPath = path;
+                          });
+                        },
+                      ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      () => unawaited(
+                        _openRouteFromSheet(
+                          context,
+                          '/appearance/reader-background',
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed:
-                              () => unawaited(
-                                _openRouteFromSheet(
-                                  context,
-                                  '/appearance/reader-background',
-                                ),
-                              ),
-                          child: const Text('去管理'),
-                        ),
-                        const Spacer(),
-                        OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton(
-                          onPressed:
-                              selectedPath == null
-                                  ? null
-                                  : () =>
-                                      Navigator.of(context).pop(selectedPath),
-                          child: const Text('应用'),
-                        ),
-                      ],
-                    ),
-                  ],
+                  child: const Text('去管理'),
                 ),
-              ),
+                const Spacer(),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  onPressed:
+                      selectedPath == null
+                          ? null
+                          : () => Navigator.of(context).pop(selectedPath),
+                  child: const Text('应用'),
+                ),
+              ],
             );
           },
         );
@@ -780,7 +545,6 @@ class _AdvancedThemeEditorPageState
       return;
     }
 
-    final draft = _draft;
     if (draft == null || _isSaving) {
       return;
     }
@@ -1128,201 +892,93 @@ class _AdvancedThemeEditorPageState
     }
 
     String? selectedId = _draft?.launchImageGalleryId?.trim();
-    final result = await showModalBottomSheet<
-      _LaunchImageGallerySelectionResult
-    >(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '选择启动图集',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+    final result =
+        await showModalBottomSheet<_LaunchImageGallerySelectionResult>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          useSafeArea: true,
+          builder: (context) {
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                return _buildResourcePickerSheet(
+                  context,
+                  title: '选择启动图',
+                  helperText: '显示的是启动图集页的列表图，点选图集即可绑定，长按缩略图可放大。',
+                  content:
+                      _launchImageGalleries.isEmpty
+                          ? _buildEmptyResourceState(
+                            context,
+                            icon: Icons.rocket_launch_outlined,
+                            title: '还没有启动图集',
+                            description: '先去启动图集页准备素材，再回来绑定。',
+                          )
+                          : ListView.separated(
+                            itemCount: _launchImageGalleries.length,
+                            separatorBuilder:
+                                (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final gallery = _launchImageGalleries[index];
+                              return _buildLaunchGallerySelectionCard(
+                                context,
+                                gallery: gallery,
+                                selected: gallery.id == selectedId,
+                                onTap: () {
+                                  setSheetState(() {
+                                    selectedId = gallery.id;
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
                     ),
-                    const SizedBox(height: 10),
-                    if (_launchImageGalleries.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
+                    const Spacer(),
+                    TextButton(
+                      onPressed:
+                          () => unawaited(
+                            _openRouteFromSheet(
+                              context,
+                              '/appearance/launch-image',
                             ),
                           ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.rocket_launch_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '还没有启动图集',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '先去启动图集页准备素材，再回来绑定。',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _launchImageGalleries.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final gallery = _launchImageGalleries[index];
-                            final selected = gallery.id == selectedId;
-                            final previewPath = _firstExistingImagePath(
-                              gallery.imagePaths,
-                            );
-                            final imageCount = gallery.imagePaths.length;
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                setSheetState(() {
-                                  selectedId = gallery.id;
-                                });
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    _buildGalleryPreviewThumb(
-                                      context,
-                                      previewPath: previewPath,
-                                      title: gallery.name,
-                                      width: 32,
-                                      height: 48,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            gallery.name,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.labelLarge?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            imageCount <= 0
-                                                ? '暂无图片'
-                                                : '$imageCount 张图片',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (selected)
-                                      Icon(
-                                        Icons.check_rounded,
-                                        color: colorScheme.primary,
-                                        size: 18,
-                                      ),
-                                  ],
+                      child: const Text('去管理'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed:
+                          selectedId == null
+                              ? null
+                              : () => Navigator.of(context).pop(
+                                const _LaunchImageGallerySelectionResult(
+                                  applied: true,
+                                  galleryId: null,
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed:
-                              () => unawaited(
-                                _openRouteFromSheet(
-                                  context,
-                                  '/appearance/launch-image',
+                      child: const Text('取消绑定'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed:
+                          selectedId == null
+                              ? null
+                              : () => Navigator.of(context).pop(
+                                _LaunchImageGallerySelectionResult(
+                                  applied: true,
+                                  galleryId: selectedId,
                                 ),
                               ),
-                          child: const Text('去管理'),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed:
-                              selectedId == null
-                                  ? null
-                                  : () => Navigator.of(context).pop(
-                                    const _LaunchImageGallerySelectionResult(
-                                      applied: true,
-                                      galleryId: null,
-                                    ),
-                                  ),
-                          child: const Text('取消绑定'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed:
-                              selectedId == null
-                                  ? null
-                                  : () => Navigator.of(context).pop(
-                                    _LaunchImageGallerySelectionResult(
-                                      applied: true,
-                                      galleryId: selectedId,
-                                    ),
-                                  ),
-                          child: const Text('应用'),
-                        ),
-                      ],
+                      child: const Text('应用'),
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             );
           },
         );
-      },
-    );
     if (result == null || !result.applied || !mounted) {
       return;
     }
@@ -1492,6 +1148,408 @@ class _AdvancedThemeEditorPageState
     return File(normalized);
   }
 
+  List<String> _existingImagePaths(Iterable<String> imagePaths) {
+    final existing = <String>[];
+    for (final rawPath in imagePaths) {
+      final normalized = rawPath.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final file = _resolveLocalImageFile(normalized);
+      if (file.existsSync()) {
+        existing.add(file.path);
+      }
+    }
+    return existing;
+  }
+
+  Future<void> _showImagePreviewDialog({
+    required String imagePath,
+    required String title,
+  }) async {
+    final file = _resolveLocalImageFile(imagePath);
+    if (!file.existsSync()) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.88),
+      builder: (dialogContext) {
+        final colorScheme = Theme.of(dialogContext).colorScheme;
+        return Dialog(
+          insetPadding: const EdgeInsets.all(14),
+          backgroundColor: Colors.transparent,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              color: const Color(0xFF111317),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                dialogContext,
+                              ).textTheme.titleMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '关闭',
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: InteractiveViewer(
+                        minScale: 1,
+                        maxScale: 4,
+                        child: Center(
+                          child: Image.file(
+                            file,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Text(
+                        '双指缩放，拖动查看细节',
+                        style: Theme.of(
+                          dialogContext,
+                        ).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.92,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResourcePickerSheet(
+    BuildContext context, {
+    required String title,
+    required Widget content,
+    required List<Widget> actions,
+    String? helperText,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    return FractionallySizedBox(
+      heightFactor: _resourcePickerSheetHeightFactor,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (helperText != null && helperText.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                helperText,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Expanded(child: content),
+            const SizedBox(height: 12),
+            Row(children: actions),
+          ],
+        ),
+      ),
+    );
+  }
+
+  AppAdvancedThemeModeConfig _defaultModeConfigForMode(
+    AppAdvancedThemeMode mode,
+  ) {
+    final seedColor = ref.read(appSeedColorProvider);
+    return switch (mode) {
+      AppAdvancedThemeMode.light => _modeConfigFromScheme(
+        buildAppLightColorScheme(seedColor),
+      ),
+      AppAdvancedThemeMode.dark => _modeConfigFromScheme(
+        buildAppDarkColorScheme(seedColor),
+      ),
+    };
+  }
+
+  Widget _buildEmptyResourceState(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: colorScheme.onSurfaceVariant),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageSelectionGrid(
+    BuildContext context, {
+    required List<String> imagePaths,
+    required String? selectedPath,
+    required String Function(String imagePath) titleBuilder,
+    required ValueChanged<String> onSelected,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final columns = AppLayout.optionGridColumnsForWidth(
+          constraints.maxWidth,
+        ).clamp(3, 5);
+        return GridView.builder(
+          itemCount: imagePaths.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: spacing,
+            crossAxisSpacing: spacing,
+            childAspectRatio: 1 / 1.28,
+          ),
+          itemBuilder: (context, index) {
+            final path = imagePaths[index];
+            return _buildSelectableImageTile(
+              context,
+              imagePath: path,
+              title: titleBuilder(path),
+              selected: path == selectedPath,
+              onTap: () => onSelected(path),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSelectableImageTile(
+    BuildContext context, {
+    required String imagePath,
+    required String title,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final file = _resolveLocalImageFile(imagePath);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        onLongPress:
+            () => unawaited(
+              _showImagePreviewDialog(imagePath: file.path, title: title),
+            ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color:
+                        selected
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant.withValues(
+                              alpha: 0.45,
+                            ),
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(file, fit: BoxFit.cover),
+                ),
+              ),
+            ),
+            if (selected)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLaunchGallerySelectionCard(
+    BuildContext context, {
+    required LaunchImageGallery gallery,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final previewPaths = _existingImagePaths(gallery.imagePaths);
+    final imageCount = previewPaths.length;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.46)
+                    : colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color:
+                  selected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant.withValues(alpha: 0.45),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      gallery.name,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (selected)
+                    Icon(
+                      Icons.check_circle_rounded,
+                      color: colorScheme.primary,
+                      size: 18,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                imageCount <= 0 ? '暂无图片' : '$imageCount 张启动图',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 96,
+                child: Row(
+                  children: List.generate(3, (index) {
+                    final previewPath =
+                        index < previewPaths.length
+                            ? previewPaths[index]
+                            : null;
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: index == 2 ? 0 : 6),
+                        child: SizedBox(
+                          height: 96,
+                          child: _buildGalleryPreviewThumb(
+                            context,
+                            previewPath: previewPath,
+                            title: gallery.name,
+                            width: double.infinity,
+                            height: 96,
+                            borderRadius: 12,
+                            onTap: onTap,
+                            onLongPress:
+                                previewPath == null
+                                    ? null
+                                    : () => unawaited(
+                                      _showImagePreviewDialog(
+                                        imagePath: previewPath,
+                                        title: gallery.name,
+                                      ),
+                                    ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGalleryPreviewThumb(
     BuildContext context, {
     required String? previewPath,
@@ -1500,11 +1558,14 @@ class _AdvancedThemeEditorPageState
     double height = 48,
     double borderRadius = 8,
     bool useAddPlaceholder = false,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    late final Widget child;
     if (previewPath == null || previewPath.isEmpty) {
       if (useAddPlaceholder) {
-        return Container(
+        child = Container(
           width: width,
           height: height,
           decoration: BoxDecoration(
@@ -1520,37 +1581,52 @@ class _AdvancedThemeEditorPageState
             color: colorScheme.onSurfaceVariant,
           ),
         );
+      } else {
+        child = SizedBox(
+          width: width,
+          height: height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(borderRadius),
+            child: TextCoverPlaceholder(
+              title: title,
+              width: width,
+              height: height,
+              borderRadius: BorderRadius.circular(borderRadius),
+            ),
+          ),
+        );
       }
-      return SizedBox(
+    } else {
+      child = Container(
         width: width,
         height: height,
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(borderRadius),
-          child: TextCoverPlaceholder(
-            title: title,
-            width: width,
-            height: height,
-            borderRadius: BorderRadius.circular(borderRadius),
+          child: Image.file(
+            _resolveLocalImageFile(previewPath),
+            fit: BoxFit.cover,
           ),
         ),
       );
     }
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
+
+    if (onTap == null && onLongPress == null) {
+      return child;
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: Image.file(
-          _resolveLocalImageFile(previewPath),
-          fit: BoxFit.cover,
-        ),
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: child,
       ),
     );
   }
@@ -1628,6 +1704,131 @@ class _AdvancedThemeEditorPageState
       _draft = draft.copyWithModeConfig(
         _selectedMode,
         currentConfig.copyWith(wallpaperOverlayOpacity: normalized),
+      );
+    });
+  }
+
+  void _setWallpaperOpacity(double value) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    final normalized = value.clamp(0.0, 1.0).toDouble();
+    if ((currentConfig.wallpaperOpacity - normalized).abs() < 0.0001) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(wallpaperOpacity: normalized),
+      );
+    });
+  }
+
+  void _setWallpaperBlurSigma(double value) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    final normalized = value.clamp(0.0, 24.0).toDouble();
+    if ((currentConfig.wallpaperBlurSigma - normalized).abs() < 0.0001) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(wallpaperBlurSigma: normalized),
+      );
+    });
+  }
+
+  void _setWallpaperFit(AppAdvancedThemeWallpaperFit fit) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    if (currentConfig.wallpaperFit == fit) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(wallpaperFit: fit),
+      );
+    });
+  }
+
+  void _setReaderWallpaperOverlayOpacity(double value) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    final normalized = value.clamp(0.0, 1.0).toDouble();
+    if ((currentConfig.readerWallpaperOverlayOpacity - normalized).abs() <
+        0.0001) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(readerWallpaperOverlayOpacity: normalized),
+      );
+    });
+  }
+
+  void _setReaderWallpaperOpacity(double value) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    final normalized = value.clamp(0.0, 1.0).toDouble();
+    if ((currentConfig.readerWallpaperOpacity - normalized).abs() < 0.0001) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(readerWallpaperOpacity: normalized),
+      );
+    });
+  }
+
+  void _setReaderWallpaperBlurSigma(double value) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    final normalized = value.clamp(0.0, 24.0).toDouble();
+    if ((currentConfig.readerWallpaperBlurSigma - normalized).abs() < 0.0001) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(readerWallpaperBlurSigma: normalized),
+      );
+    });
+  }
+
+  void _setReaderWallpaperFit(AppAdvancedThemeWallpaperFit fit) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    if (currentConfig.readerWallpaperFit == fit) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(readerWallpaperFit: fit),
       );
     });
   }
@@ -2218,6 +2419,15 @@ class _AdvancedThemeEditorPageState
                     height: 46,
                     borderRadius: 10,
                     useAddPlaceholder: true,
+                    onLongPress:
+                        wallpaperPath == null
+                            ? null
+                            : () => unawaited(
+                              _showImagePreviewDialog(
+                                imagePath: wallpaperPath,
+                                title: '壁纸',
+                              ),
+                            ),
                   ),
                 ),
               ),
@@ -2239,6 +2449,18 @@ class _AdvancedThemeEditorPageState
                 opacity: currentConfig.wallpaperOverlayOpacity,
               ),
               const Divider(height: 1),
+              _buildWallpaperOpacityRow(
+                context,
+                opacity: currentConfig.wallpaperOpacity,
+              ),
+              const Divider(height: 1),
+              _buildWallpaperBlurRow(
+                context,
+                blurSigma: currentConfig.wallpaperBlurSigma,
+              ),
+              const Divider(height: 1),
+              _buildWallpaperFitRow(context, fit: currentConfig.wallpaperFit),
+              const Divider(height: 1),
               _buildAppearanceLinkTile(
                 context,
                 icon: Icons.chrome_reader_mode_outlined,
@@ -2259,6 +2481,15 @@ class _AdvancedThemeEditorPageState
                     height: 46,
                     borderRadius: 10,
                     useAddPlaceholder: true,
+                    onLongPress:
+                        readerWallpaperPath == null
+                            ? null
+                            : () => unawaited(
+                              _showImagePreviewDialog(
+                                imagePath: readerWallpaperPath,
+                                title: '阅读器背景',
+                              ),
+                            ),
                   ),
                 ),
               ),
@@ -2275,6 +2506,26 @@ class _AdvancedThemeEditorPageState
                 const Divider(height: 1),
               ] else
                 const Divider(height: 1),
+              _buildReaderWallpaperOverlayOpacityRow(
+                context,
+                opacity: currentConfig.readerWallpaperOverlayOpacity,
+              ),
+              const Divider(height: 1),
+              _buildReaderWallpaperOpacityRow(
+                context,
+                opacity: currentConfig.readerWallpaperOpacity,
+              ),
+              const Divider(height: 1),
+              _buildReaderWallpaperBlurRow(
+                context,
+                blurSigma: currentConfig.readerWallpaperBlurSigma,
+              ),
+              const Divider(height: 1),
+              _buildReaderWallpaperFitRow(
+                context,
+                fit: currentConfig.readerWallpaperFit,
+              ),
+              const Divider(height: 1),
               _buildAppearanceLinkTile(
                 context,
                 icon: Icons.photo_library_outlined,
@@ -2291,6 +2542,15 @@ class _AdvancedThemeEditorPageState
                     width: 30,
                     height: 42,
                     useAddPlaceholder: true,
+                    onLongPress:
+                        _selectedCoverGalleryPreviewPath() == null
+                            ? null
+                            : () => unawaited(
+                              _showImagePreviewDialog(
+                                imagePath: _selectedCoverGalleryPreviewPath()!,
+                                title: _selectedCoverGallery()?.name ?? '封面图集',
+                              ),
+                            ),
                   ),
                 ),
               ),
@@ -2311,6 +2571,18 @@ class _AdvancedThemeEditorPageState
                     width: 30,
                     height: 42,
                     useAddPlaceholder: true,
+                    onLongPress:
+                        _selectedLaunchImageGalleryPreviewPath() == null
+                            ? null
+                            : () => unawaited(
+                              _showImagePreviewDialog(
+                                imagePath:
+                                    _selectedLaunchImageGalleryPreviewPath()!,
+                                title:
+                                    _selectedLaunchImageGallery()?.name ??
+                                    '启动图集',
+                              ),
+                            ),
                   ),
                 ),
               ),
@@ -2333,76 +2605,321 @@ class _AdvancedThemeEditorPageState
     BuildContext context, {
     required double opacity,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
-    final percentage = (normalizedOpacity * 100).round();
+    final defaultValue =
+        _defaultModeConfigForMode(_selectedMode).wallpaperOverlayOpacity;
+    return _buildCompactStepperRow(
+      context,
+      label: '壁纸遮罩透明度',
+      valueLabel: '${(normalizedOpacity * 100).round()}%',
+      onIncrease:
+          _isSaving
+              ? null
+              : () => _setWallpaperOverlayOpacity(normalizedOpacity + 0.05),
+      onReset:
+          _isSaving ? null : () => _setWallpaperOverlayOpacity(defaultValue),
+      onDecrease:
+          _isSaving
+              ? null
+              : () => _setWallpaperOverlayOpacity(normalizedOpacity - 0.05),
+    );
+  }
 
+  Widget _buildWallpaperOpacityRow(
+    BuildContext context, {
+    required double opacity,
+  }) {
+    final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    return _buildCompactStepperRow(
+      context,
+      label: '壁纸不透明度',
+      valueLabel: '${(normalizedOpacity * 100).round()}%',
+      onIncrease:
+          _isSaving
+              ? null
+              : () => _setWallpaperOpacity(normalizedOpacity + 0.05),
+      onReset: _isSaving ? null : () => _setWallpaperOpacity(1),
+      onDecrease:
+          _isSaving
+              ? null
+              : () => _setWallpaperOpacity(normalizedOpacity - 0.05),
+    );
+  }
+
+  Widget _buildWallpaperBlurRow(
+    BuildContext context, {
+    required double blurSigma,
+  }) {
+    final normalizedBlur = blurSigma.clamp(0.0, 24.0).toDouble();
+    final blurLabel = normalizedBlur.toStringAsFixed(0);
+    return _buildCompactStepperRow(
+      context,
+      label: '壁纸模糊程度',
+      valueLabel: blurLabel,
+      onIncrease:
+          _isSaving ? null : () => _setWallpaperBlurSigma(normalizedBlur + 1),
+      onReset: _isSaving ? null : () => _setWallpaperBlurSigma(0),
+      onDecrease:
+          _isSaving ? null : () => _setWallpaperBlurSigma(normalizedBlur - 1),
+    );
+  }
+
+  Widget _buildWallpaperFitRow(
+    BuildContext context, {
+    required AppAdvancedThemeWallpaperFit fit,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '壁纸遮罩透明度',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '控制当前${_modeLabel(_selectedMode)}模式下页面壁纸的覆盖强度。',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '图片适配',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Text(
-                  '$percentage%',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                const SizedBox(height: 2),
+                Text(
+                  '选择当前${_modeLabel(_selectedMode)}模式下壁纸的铺满方式。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              ],
             ),
-            child: Slider(
-              value: normalizedOpacity,
-              min: 0,
-              max: 1,
-              divisions: 20,
-              label: '$percentage%',
+          ),
+          const SizedBox(width: 12),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<AppAdvancedThemeWallpaperFit>(
+              value: fit,
+              borderRadius: BorderRadius.circular(12),
               onChanged:
                   _isSaving
                       ? null
-                      : (value) => _setWallpaperOverlayOpacity(value),
+                      : (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        _setWallpaperFit(value);
+                      },
+              items: const [
+                DropdownMenuItem(
+                  value: AppAdvancedThemeWallpaperFit.fill,
+                  child: Text('拉伸填充'),
+                ),
+                DropdownMenuItem(
+                  value: AppAdvancedThemeWallpaperFit.cover,
+                  child: Text('居中裁剪'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReaderWallpaperOverlayOpacityRow(
+    BuildContext context, {
+    required double opacity,
+  }) {
+    final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    return _buildCompactStepperRow(
+      context,
+      label: '阅读器遮罩透明度',
+      valueLabel: '${(normalizedOpacity * 100).round()}%',
+      onIncrease:
+          _isSaving
+              ? null
+              : () =>
+                  _setReaderWallpaperOverlayOpacity(normalizedOpacity + 0.05),
+      onReset: _isSaving ? null : () => _setReaderWallpaperOverlayOpacity(0),
+      onDecrease:
+          _isSaving
+              ? null
+              : () =>
+                  _setReaderWallpaperOverlayOpacity(normalizedOpacity - 0.05),
+    );
+  }
+
+  Widget _buildReaderWallpaperOpacityRow(
+    BuildContext context, {
+    required double opacity,
+  }) {
+    final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    return _buildCompactStepperRow(
+      context,
+      label: '阅读器背景不透明度',
+      valueLabel: '${(normalizedOpacity * 100).round()}%',
+      onIncrease:
+          _isSaving
+              ? null
+              : () => _setReaderWallpaperOpacity(normalizedOpacity + 0.05),
+      onReset: _isSaving ? null : () => _setReaderWallpaperOpacity(1),
+      onDecrease:
+          _isSaving
+              ? null
+              : () => _setReaderWallpaperOpacity(normalizedOpacity - 0.05),
+    );
+  }
+
+  Widget _buildReaderWallpaperBlurRow(
+    BuildContext context, {
+    required double blurSigma,
+  }) {
+    final normalizedBlur = blurSigma.clamp(0.0, 24.0).toDouble();
+    return _buildCompactStepperRow(
+      context,
+      label: '阅读器背景模糊程度',
+      valueLabel: normalizedBlur.toStringAsFixed(0),
+      onIncrease:
+          _isSaving
+              ? null
+              : () => _setReaderWallpaperBlurSigma(normalizedBlur + 1),
+      onReset: _isSaving ? null : () => _setReaderWallpaperBlurSigma(0),
+      onDecrease:
+          _isSaving
+              ? null
+              : () => _setReaderWallpaperBlurSigma(normalizedBlur - 1),
+    );
+  }
+
+  Widget _buildReaderWallpaperFitRow(
+    BuildContext context, {
+    required AppAdvancedThemeWallpaperFit fit,
+  }) {
+    return _buildCompactFitRow(
+      context,
+      label: '阅读器图片适配',
+      fit: fit,
+      onChanged: _isSaving ? null : _setReaderWallpaperFit,
+    );
+  }
+
+  Widget _buildCompactStepperRow(
+    BuildContext context, {
+    required String label,
+    required String valueLabel,
+    required VoidCallback? onIncrease,
+    required VoidCallback? onReset,
+    required VoidCallback? onDecrease,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$label  $valueLabel',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _buildCompactStepButton(
+            context,
+            label: '+',
+            onPressed: onIncrease,
+            colorScheme: colorScheme,
+          ),
+          const SizedBox(width: 6),
+          _buildCompactStepButton(
+            context,
+            label: '0',
+            onPressed: onReset,
+            colorScheme: colorScheme,
+          ),
+          const SizedBox(width: 6),
+          _buildCompactStepButton(
+            context,
+            label: '-',
+            onPressed: onDecrease,
+            colorScheme: colorScheme,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactStepButton(
+    BuildContext context, {
+    required String label,
+    required VoidCallback? onPressed,
+    required ColorScheme colorScheme,
+  }) {
+    return SizedBox(
+      width: 32,
+      height: 28,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _buildCompactFitRow(
+    BuildContext context, {
+    required String label,
+    required AppAdvancedThemeWallpaperFit fit,
+    required ValueChanged<AppAdvancedThemeWallpaperFit>? onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 12),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<AppAdvancedThemeWallpaperFit>(
+              value: fit,
+              borderRadius: BorderRadius.circular(12),
+              dropdownColor: colorScheme.surface,
+              onChanged:
+                  onChanged == null
+                      ? null
+                      : (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        onChanged(value);
+                      },
+              items: const [
+                DropdownMenuItem(
+                  value: AppAdvancedThemeWallpaperFit.fill,
+                  child: Text('拉伸填充'),
+                ),
+                DropdownMenuItem(
+                  value: AppAdvancedThemeWallpaperFit.cover,
+                  child: Text('居中裁剪'),
+                ),
+              ],
             ),
           ),
         ],

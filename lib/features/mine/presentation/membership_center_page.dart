@@ -587,7 +587,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             ? '登录/注册'
             : _hasActiveMembership
             ? '管理会员'
-            : '¥38 立即购买';
+            : '¥68 立即购买';
     final primaryColor =
         _hasActiveMembership
             ? Theme.of(context).colorScheme.primary
@@ -931,7 +931,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '¥38',
+                '¥68',
                 style: theme.textTheme.headlineLarge?.copyWith(
                   color: accentDeepColor,
                   fontWeight: FontWeight.w900,
@@ -940,7 +940,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
               ),
               const SizedBox(width: 10),
               Text(
-                '¥68/年',
+                '¥88/永久',
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w700,

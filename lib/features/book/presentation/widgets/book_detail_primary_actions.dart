@@ -5,6 +5,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
     super.key,
     required this.availableWidth,
     required this.isInBookshelf,
+    required this.isShelfStateLoading,
     required this.isShelfActionLoading,
     required this.onToggleBookshelf,
     required this.onOpenCatalog,
@@ -20,6 +21,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
 
   final double availableWidth;
   final bool isInBookshelf;
+  final bool isShelfStateLoading;
   final bool isShelfActionLoading;
   final VoidCallback? onToggleBookshelf;
   final VoidCallback? onOpenCatalog;
@@ -37,7 +39,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
 
     Widget buildAction({
       required Key key,
-      required IconData icon,
+      required Widget icon,
       required String label,
       required VoidCallback? onPressed,
       bool enabled = true,
@@ -63,58 +65,62 @@ class BookDetailPrimaryActions extends StatelessWidget {
       );
     }
 
+    final isShelfLoading = isShelfStateLoading || isShelfActionLoading;
     final shelfButton = buildAction(
       key: const Key('book_detail_shelf_button'),
       icon:
-          isInBookshelf
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
+          isShelfLoading
+              ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              )
+              : Icon(
+                isInBookshelf
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                size: 18,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
       label: '书架',
-      onPressed: isShelfActionLoading ? null : onToggleBookshelf,
+      onPressed: isShelfLoading ? null : onToggleBookshelf,
     );
     final catalogButton = buildAction(
       key: const Key('book_detail_catalog_button'),
-      icon: Icons.menu_book_rounded,
+      icon: Icon(
+        Icons.menu_book_rounded,
+        size: 18,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
       label: '目录',
       onPressed: onOpenCatalog,
       enabled: isCatalogEnabled,
     );
     final sourceButton = buildAction(
       key: const Key('book_detail_source_button'),
-      icon: Icons.swap_horiz_rounded,
+      icon: Icon(
+        Icons.swap_horiz_rounded,
+        size: 18,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
       label: '书源',
       onPressed: onSwitchSource,
       enabled: isSwitchSourceEnabled,
     );
     final cacheButton = buildAction(
       key: const Key('book_detail_cache_button'),
-      icon: Icons.category_outlined,
+      icon: Icon(
+        Icons.category_outlined,
+        size: 18,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
       label: '归类',
       onPressed: onOpenOrganize,
       enabled: isOrganizeEnabled,
     );
-
-    if (availableWidth < 320) {
-      return Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: shelfButton),
-              const SizedBox(width: actionButtonGap),
-              Expanded(child: catalogButton),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: sourceButton),
-              const SizedBox(width: actionButtonGap),
-              Expanded(child: cacheButton),
-            ],
-          ),
-        ],
-      );
-    }
 
     return Row(
       children: [
@@ -137,25 +143,26 @@ class _ActionButtonContent extends StatelessWidget {
     this.textStyle,
   });
 
-  final IconData icon;
+  final Widget icon;
   final String label;
   final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurface;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: color),
+          icon,
           const SizedBox(height: 3),
           Text(
             label,
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
-            style: textStyle?.copyWith(color: color),
+            style: textStyle?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ],
       ),

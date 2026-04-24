@@ -26,6 +26,7 @@ import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -34,6 +35,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
+import '../../../data/repositories/book_metadata_override_repository_impl.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
@@ -45,7 +47,9 @@ import '../../../domain/entities/source_health.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
+import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
@@ -218,6 +222,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
     AppDatabase.instance,
   );
+  final BookMetadataOverrideRepository _bookMetadataOverrideRepository =
+      BookMetadataOverrideRepositoryImpl(AppDatabase.instance);
+  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
+      const BookMetadataPresentationResolver();
   final Uuid _uuid = const Uuid();
 
   late String _chapterId;
@@ -231,6 +239,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String _bookTitle = '';
   String? _bookAuthor;
   String? _bookCoverUrl;
+  String? _bookCustomCoverPath;
 
   ReaderSettings _settings = const ReaderSettings();
   List<Chapter> _chapters = const [];
@@ -1330,50 +1339,64 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  BoxDecoration _buildReaderBackgroundDecoration(_ReaderThemeColors colors) {
-    final backgroundImage = _resolveBackgroundDecorationImage();
-    return switch (_settings.backgroundStyle) {
-      ReaderBackgroundStyle.plain => BoxDecoration(
-        color: colors.background,
-        image: backgroundImage,
+  Decoration _buildReaderBackgroundDecoration(_ReaderThemeColors colors) {
+    final resolvedBackground = _resolveReaderBackgroundVisual();
+    final (backgroundColor, surfaceColor) = switch (_settings.backgroundStyle) {
+      ReaderBackgroundStyle.plain => (colors.background, colors.background),
+      ReaderBackgroundStyle.paper => (
+        _shiftLightness(colors.background, 0.03),
+        _shiftLightness(colors.background, -0.02),
       ),
-      ReaderBackgroundStyle.paper => BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _shiftLightness(colors.background, 0.03),
-            _shiftLightness(colors.background, -0.02),
-          ],
-        ),
-        image: backgroundImage,
-      ),
-      ReaderBackgroundStyle.warm => BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            _shiftLightness(colors.background, 0.03),
-            _shiftLightness(colors.background, -0.02),
-          ],
-        ),
-        image: backgroundImage,
+      ReaderBackgroundStyle.warm => (
+        _shiftLightness(colors.background, 0.03),
+        _shiftLightness(colors.background, -0.02),
       ),
     };
+    return buildImageBackdropDecoration(
+      backgroundColor: backgroundColor,
+      surfaceColor: surfaceColor,
+      imageProvider: resolvedBackground?.imageProvider,
+      imageOpacity: resolvedBackground?.opacity ?? 1,
+      imageBlurSigma: resolvedBackground?.blurSigma ?? 0,
+      imageFit: resolvedBackground?.fit ?? BoxFit.cover,
+      overlayColor: colors.background,
+      overlayOpacity: resolvedBackground?.overlayOpacity ?? 0,
+    );
   }
 
-  DecorationImage? _resolveBackgroundDecorationImage() {
+  _ResolvedReaderBackgroundVisual? _resolveReaderBackgroundVisual() {
     final raw = _effectiveReaderBackgroundPath();
     if (raw == null || raw.isEmpty) {
       _cachedBackgroundImageKey = null;
       _cachedBackgroundImage = null;
       return null;
     }
+    final themeModeConfig = _effectiveReaderBackgroundThemeConfig();
+    final fit = switch (themeModeConfig?.readerWallpaperFit) {
+      AppAdvancedThemeWallpaperFit.fill => BoxFit.fill,
+      AppAdvancedThemeWallpaperFit.cover || null => BoxFit.cover,
+    };
+    final opacity = (themeModeConfig?.readerWallpaperOpacity ?? 1).clamp(
+      0.0,
+      1.0,
+    );
+    final blurSigma = (themeModeConfig?.readerWallpaperBlurSigma ?? 0).clamp(
+      0.0,
+      24.0,
+    );
+    final overlayOpacity = (themeModeConfig?.readerWallpaperOverlayOpacity ?? 0)
+        .clamp(0.0, 1.0);
 
     if (_isPresetBackgroundAssetPath(raw)) {
       _cachedBackgroundImageKey = null;
       _cachedBackgroundImage = null;
-      return DecorationImage(image: AssetImage(raw), fit: BoxFit.cover);
+      return _ResolvedReaderBackgroundVisual(
+        imageProvider: AssetImage(raw),
+        fit: fit,
+        opacity: opacity,
+        blurSigma: blurSigma,
+        overlayOpacity: overlayOpacity,
+      );
     }
 
     if (_isManagedBackgroundPath(raw)) {
@@ -1386,7 +1409,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _cachedBackgroundImage = null;
         return null;
       }
-      return DecorationImage(image: FileImage(file), fit: BoxFit.cover);
+      return _ResolvedReaderBackgroundVisual(
+        imageProvider: FileImage(file),
+        fit: fit,
+        opacity: opacity,
+        blurSigma: blurSigma,
+        overlayOpacity: overlayOpacity,
+      );
     }
 
     if (_cachedBackgroundImageKey != raw || _cachedBackgroundImage == null) {
@@ -1400,7 +1429,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _cachedBackgroundImage = MemoryImage(bytes);
     }
 
-    return DecorationImage(image: _cachedBackgroundImage!, fit: BoxFit.cover);
+    return _ResolvedReaderBackgroundVisual(
+      imageProvider: _cachedBackgroundImage!,
+      fit: fit,
+      opacity: opacity,
+      blurSigma: blurSigma,
+      overlayOpacity: overlayOpacity,
+    );
   }
 
   Uint8List? _tryDecodeBase64(String? value) {
@@ -2179,7 +2214,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return null;
   }
 
-  String? _effectiveReaderBackgroundPath() {
+  AppAdvancedThemeModeConfig? _effectiveReaderBackgroundThemeConfig() {
     final activeThemeAsync = ref.read(activeAdvancedThemeProvider);
     final activeTheme = activeThemeAsync.valueOrNull;
     if (activeTheme != null) {
@@ -2191,8 +2226,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
       final themeReaderWallpaper = modeConfig.readerWallpaperPath?.trim();
       if (themeReaderWallpaper != null && themeReaderWallpaper.isNotEmpty) {
-        return themeReaderWallpaper;
+        return modeConfig;
       }
+    }
+    return null;
+  }
+
+  String? _effectiveReaderBackgroundPath() {
+    final themeModeConfig = _effectiveReaderBackgroundThemeConfig();
+    if (themeModeConfig != null) {
+      return themeModeConfig.readerWallpaperPath?.trim();
     }
     final ownBackground = _settings.backgroundImageBase64?.trim();
     if (ownBackground == null || ownBackground.isEmpty) {
@@ -6926,6 +6969,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _bookTitle = detailResult.detail.title;
         _bookAuthor = detailResult.detail.author;
         _bookCoverUrl = detailResult.detail.coverUrl;
+        _bookCustomCoverPath = null;
         _chapters = chapters;
         _currentIndex = targetIndex;
         _chapterId = targetChapter.id;
@@ -6933,6 +6977,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _chapterTitle = targetChapter.title;
         _errorText = null;
       });
+      await _applyPresentedBookMetadata(
+        fallbackTitle: detailResult.detail.title,
+        fallbackAuthor: detailResult.detail.author,
+        realCoverUrl: detailResult.detail.coverUrl,
+        sourceId: candidate.book.sourceId,
+        detailUrl: candidate.book.detailUrl,
+      );
       _cancelBackgroundRefreshConflictForCurrentBook();
 
       final loaded = await _loadCurrentChapter(
@@ -7721,6 +7772,53 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         : '自定义';
   }
 
+  Future<void> _applyPresentedBookMetadata({
+    String? fallbackTitle,
+    String? fallbackAuthor,
+    String? fallbackIntro,
+    String? realCoverUrl,
+    String? sourceId,
+    String? detailUrl,
+    bool allowSetState = true,
+  }) async {
+    final resolvedSourceId = (sourceId ?? _sourceId ?? '').trim();
+    final resolvedDetailUrl = (detailUrl ?? _detailUrl ?? '').trim();
+    final localBook =
+        _isLocalContent
+            ? await AppDatabase.instance.getLocalBookById(_currentBookId)
+            : null;
+    final metadataOverride =
+        !_isLocalContent &&
+                resolvedSourceId.isNotEmpty &&
+                resolvedDetailUrl.isNotEmpty
+            ? await _bookMetadataOverrideRepository.getByRemoteBook(
+              sourceId: resolvedSourceId,
+              detailUrl: resolvedDetailUrl,
+            )
+            : null;
+    final presentation = _bookMetadataPresentationResolver.resolve(
+      fallbackTitle: fallbackTitle ?? _bookTitle,
+      fallbackAuthor: fallbackAuthor ?? _bookAuthor,
+      fallbackIntro: fallbackIntro,
+      realCoverUrl: realCoverUrl ?? _bookCoverUrl,
+      localBook: localBook,
+      metadataOverride: metadataOverride,
+    );
+    if (!mounted || !allowSetState) {
+      _bookTitle = presentation.displayTitle;
+      _bookAuthor = presentation.displayAuthor;
+      _bookCoverUrl = presentation.realCoverUrl;
+      _bookCustomCoverPath = presentation.customCoverPath;
+      return;
+    }
+    setState(() {
+      _bookTitle = presentation.displayTitle;
+      _bookAuthor = presentation.displayAuthor;
+      _bookCoverUrl = presentation.realCoverUrl;
+      _bookCustomCoverPath = presentation.customCoverPath;
+    });
+  }
+
   Future<void> _bootstrap() async {
     _cancelBackgroundRefreshConflictForCurrentBook();
     try {
@@ -7891,8 +7989,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _bookTitle = detailResult.detail.title;
       _bookAuthor = detailResult.detail.author;
       _bookCoverUrl = detailResult.detail.coverUrl;
+      _bookCustomCoverPath = null;
       _chapters = detailResult.chapters;
       _currentIndex = _resolveCurrentIndex(_chapters);
+      await _applyPresentedBookMetadata(
+        fallbackTitle: detailResult.detail.title,
+        fallbackAuthor: detailResult.detail.author,
+        realCoverUrl: detailResult.detail.coverUrl,
+      );
 
       if (_currentIndex == null) {
         if (!mounted) {
@@ -9588,6 +9692,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _bookTitle = snapshot.title;
           _bookAuthor = snapshot.author;
           _bookCoverUrl = snapshot.coverUrl;
+          _bookCustomCoverPath = null;
           _chapters = chapters;
           _currentIndex = resolvedIndex;
           _chapterId = current.id;
@@ -9599,6 +9704,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _bookTitle = snapshot.title;
         _bookAuthor = snapshot.author;
         _bookCoverUrl = snapshot.coverUrl;
+        _bookCustomCoverPath = null;
         _chapters = chapters;
         _currentIndex = resolvedIndex;
         _chapterId = current.id;
@@ -9607,6 +9713,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _errorText = null;
       }
 
+      await _applyPresentedBookMetadata(
+        fallbackTitle: snapshot.title,
+        fallbackAuthor: snapshot.author,
+        realCoverUrl: snapshot.coverUrl,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      );
       return true;
     } catch (_) {
       return false;
@@ -9635,6 +9748,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           chapters: detailResult.chapters,
           updatedAt: DateTime.now(),
         ),
+      );
+      await _applyPresentedBookMetadata(
+        fallbackTitle: detailResult.detail.title,
+        fallbackAuthor: detailResult.detail.author,
+        fallbackIntro: null,
+        realCoverUrl: detailResult.detail.coverUrl,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
       );
     } catch (_) {
       // Ignore snapshot persistence failures.
@@ -9940,6 +10061,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       detailUrl: detailUrl,
       title:
           _bookTitle.isNotEmpty ? _bookTitle : (widget.chapterTitle ?? '书籍详情'),
+      author: _bookAuthor,
+      coverUrl: _bookCustomCoverPath ?? _bookCoverUrl,
     );
 
     context.push(route);
@@ -10473,7 +10596,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     _stopAutoReadSession();
-    final customCoverPath = await _resolveCurrentBookCustomCoverPath();
+    final customCoverPath =
+        _bookCustomCoverPath ?? await _resolveCurrentBookCustomCoverPath();
     if (!mounted) {
       return;
     }
@@ -17780,4 +17904,20 @@ class _DecodedDataUriImage {
   final String mediaType;
   final Uint8List bytes;
   final String text;
+}
+
+class _ResolvedReaderBackgroundVisual {
+  const _ResolvedReaderBackgroundVisual({
+    required this.imageProvider,
+    required this.fit,
+    required this.opacity,
+    required this.blurSigma,
+    required this.overlayOpacity,
+  });
+
+  final ImageProvider imageProvider;
+  final BoxFit fit;
+  final double opacity;
+  final double blurSigma;
+  final double overlayOpacity;
 }

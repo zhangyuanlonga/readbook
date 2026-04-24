@@ -10,6 +10,7 @@ import 'package:image_picker_platform_interface/image_picker_platform_interface.
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'startup_artwork_store.dart';
 import '../features/source/application/source_health_service.dart';
 import '../features/source/application/source_runtime_diagnostics_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
@@ -34,7 +35,10 @@ Future<void> bootstrap() async {
   AppInterfaceFontSettingsNotifier.prime(prefs);
   AppInterfaceTextScaleNotifier.prime(prefs);
   AppInterfaceFontWeightNotifier.prime(prefs);
-  await ReaderFontRegistryService().restoreRegisteredFonts();
+  await Future.wait<void>([
+    ReaderFontRegistryService().restoreRegisteredFonts(),
+    StartupArtworkStore.prime(preferences: prefs),
+  ]);
   runApp(const ProviderScope(child: App()));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(_runDeferredBootstrapTasks());

@@ -12,14 +12,18 @@ import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
+import '../../../data/datasources/local/app_database.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../book/presentation/book_detail_route.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
+import '../application/local/local_reader_identity.dart';
 import '../application/reading_book_status_service.dart';
 import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_preferences_service.dart';
@@ -53,6 +57,8 @@ class ReadingRecordsPage extends ConsumerStatefulWidget {
 }
 
 class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
+  static const double _kStatsPageBottomGap = 24;
+
   late final ReadingRecordService _readingRecordService;
   final ReadingRecordsQueryService _readingRecordsQueryService =
       const ReadingRecordsQueryService();
@@ -62,6 +68,11 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final ReadingBookStatusService _readingBookStatusService;
   late final Stream<bool> _readRecordEnabledStream;
+  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
+      const BookMetadataPresentationResolver();
+  Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
+  Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
+      const <String, BookMetadataOverride>{};
 
   ReadingRecordsPeriod _period = ReadingRecordsPeriod.day;
   DateTime _periodAnchor = DateTime.now();
@@ -217,6 +228,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
         sourceId: record.sourceId,
         detailUrl: record.detailUrl,
         title: record.bookTitle,
+        author: record.bookAuthor,
+        coverUrl: record.coverUrl,
       ),
     );
   }
@@ -259,11 +272,6 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     );
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
-    );
-    final bottomInset = mobileBottomNavigationContentInset(
-      context,
-      style: effectiveNavigationStyle,
-      showNavigationLabels: showNavigationLabels,
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -311,101 +319,138 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                     localBooksSnapshot.data ??
                                     const <LocalBook>[];
                                 return StreamBuilder<
-                                  List<ReadingBookStatusEntry>
+                                  List<BookMetadataOverride>
                                 >(
                                   stream:
-                                      _readingBookStatusService
-                                          .watchManualStatuses(),
-                                  builder: (context, statusSnapshot) {
-                                    final manualStatuses =
-                                        statusSnapshot.data ??
-                                        const <ReadingBookStatusEntry>[];
-                                    final resolvedStatusesByBookId =
-                                        _readingBookStatusService
-                                            .resolveStatuses(
-                                              latestRecords: latestRecords,
-                                              localBooks: localBooks,
-                                              manualStatuses: manualStatuses,
-                                            );
-                                    final queryView =
-                                        _readingRecordsQueryService
-                                            .buildQueryView(
-                                              latestRecords: latestRecords,
-                                              dailyRecords: dailyRecords,
-                                              sessions: sessions,
-                                              period: _period,
-                                              anchor: _periodAnchor,
-                                              resolvedStatusesByBookId:
-                                                  resolvedStatusesByBookId,
-                                            );
-                                    final showRanking =
-                                        _period == ReadingRecordsPeriod.day ||
-                                        _period == ReadingRecordsPeriod.week ||
-                                        _period == ReadingRecordsPeriod.month ||
-                                        _period == ReadingRecordsPeriod.year ||
-                                        _period == ReadingRecordsPeriod.all;
-                                    final showWeekActivity =
-                                        _period == ReadingRecordsPeriod.week;
-                                    final showCalendar =
-                                        _period == ReadingRecordsPeriod.month;
-                                    final showHeatmap =
-                                        _period == ReadingRecordsPeriod.year ||
-                                        _period == ReadingRecordsPeriod.all;
+                                      AppDatabase.instance
+                                          .watchBookMetadataOverrides(),
+                                  builder: (context, overrideSnapshot) {
+                                    final overrides =
+                                        overrideSnapshot.data ??
+                                        const <BookMetadataOverride>[];
+                                    _localBooksById = <String, LocalBook>{
+                                      for (final book in localBooks)
+                                        book.id.trim(): book,
+                                    };
+                                    _metadataOverridesByTargetKey =
+                                        <String, BookMetadataOverride>{
+                                          for (final item in overrides)
+                                            item.targetKey: item,
+                                        };
+                                    return StreamBuilder<
+                                      List<ReadingBookStatusEntry>
+                                    >(
+                                      stream:
+                                          _readingBookStatusService
+                                              .watchManualStatuses(),
+                                      builder: (context, statusSnapshot) {
+                                        final manualStatuses =
+                                            statusSnapshot.data ??
+                                            const <ReadingBookStatusEntry>[];
+                                        final resolvedStatusesByBookId =
+                                            _readingBookStatusService
+                                                .resolveStatuses(
+                                                  latestRecords: latestRecords,
+                                                  localBooks: localBooks,
+                                                  manualStatuses:
+                                                      manualStatuses,
+                                                );
+                                        final queryView =
+                                            _readingRecordsQueryService
+                                                .buildQueryView(
+                                                  latestRecords: latestRecords,
+                                                  dailyRecords: dailyRecords,
+                                                  sessions: sessions,
+                                                  period: _period,
+                                                  anchor: _periodAnchor,
+                                                  resolvedStatusesByBookId:
+                                                      resolvedStatusesByBookId,
+                                                );
+                                        final showRanking =
+                                            _period ==
+                                                ReadingRecordsPeriod.day ||
+                                            _period ==
+                                                ReadingRecordsPeriod.week ||
+                                            _period ==
+                                                ReadingRecordsPeriod.month ||
+                                            _period ==
+                                                ReadingRecordsPeriod.year ||
+                                            _period == ReadingRecordsPeriod.all;
+                                        final showWeekActivity =
+                                            _period ==
+                                            ReadingRecordsPeriod.week;
+                                        final showCalendar =
+                                            _period ==
+                                            ReadingRecordsPeriod.month;
+                                        final showHeatmap =
+                                            _period ==
+                                                ReadingRecordsPeriod.year ||
+                                            _period == ReadingRecordsPeriod.all;
 
-                                    return ListView(
-                                      padding: EdgeInsets.fromLTRB(
-                                        horizontal,
-                                        topInset + 12,
-                                        horizontal,
-                                        12 + bottomInset,
-                                      ),
-                                      children: [
-                                        _buildControlsCard(),
-                                        const SizedBox(height: 6),
-                                        _buildSummaryCard(
-                                          summary: queryView.summary,
-                                        ),
-                                        const SizedBox(height: 10),
-                                        _buildSectionHeading(
-                                          queryView.distribution.title,
-                                          subtitle: '当前周期内的阅读时长变化',
-                                        ),
-                                        _buildDurationDistributionCard(
-                                          queryView.distribution,
-                                          calendar:
-                                              queryView.distributionCalendar,
-                                        ),
-                                        if (showWeekActivity) ...[
-                                          const SizedBox(height: 10),
-                                          _buildWeeklyActivityCard(
-                                            periodRange: queryView.periodRange,
-                                            dailyRecords: dailyRecords,
-                                            sessions: sessions,
-                                          ),
-                                        ],
-                                        if (showCalendar) ...[
-                                          const SizedBox(height: 10),
-                                          _buildReadingCalendarCard(
-                                            queryView.distributionCalendar,
-                                            dailyRecords: dailyRecords,
-                                            sessions: sessions,
-                                          ),
-                                        ],
-                                        if (showRanking) ...[
-                                          const SizedBox(height: 10),
-                                          _buildDurationRankingSection(
-                                            queryView.rankings,
-                                          ),
-                                        ],
-                                        if (showHeatmap) ...[
-                                          const SizedBox(height: 10),
-                                          _buildHeatmapCard(
-                                            dailyRecords,
-                                            sessions: sessions,
-                                            periodRange: queryView.periodRange,
-                                          ),
-                                        ],
-                                      ],
+                                        return ListView(
+                                          padding:
+                                              mobileBottomNavigationBodyPadding(
+                                                context,
+                                                style: effectiveNavigationStyle,
+                                                showNavigationLabels:
+                                                    showNavigationLabels,
+                                                left: horizontal,
+                                                top: topInset + 12,
+                                                right: horizontal,
+                                                bottom: _kStatsPageBottomGap,
+                                              ),
+                                          children: [
+                                            _buildControlsCard(),
+                                            const SizedBox(height: 6),
+                                            _buildSummaryCard(
+                                              summary: queryView.summary,
+                                            ),
+                                            const SizedBox(height: 10),
+                                            _buildSectionHeading(
+                                              queryView.distribution.title,
+                                              subtitle: '当前周期内的阅读时长变化',
+                                            ),
+                                            _buildDurationDistributionCard(
+                                              queryView.distribution,
+                                              calendar:
+                                                  queryView
+                                                      .distributionCalendar,
+                                            ),
+                                            if (showWeekActivity) ...[
+                                              const SizedBox(height: 10),
+                                              _buildWeeklyActivityCard(
+                                                periodRange:
+                                                    queryView.periodRange,
+                                                dailyRecords: dailyRecords,
+                                                sessions: sessions,
+                                              ),
+                                            ],
+                                            if (showCalendar) ...[
+                                              const SizedBox(height: 10),
+                                              _buildReadingCalendarCard(
+                                                queryView.distributionCalendar,
+                                                dailyRecords: dailyRecords,
+                                                sessions: sessions,
+                                              ),
+                                            ],
+                                            if (showRanking) ...[
+                                              const SizedBox(height: 10),
+                                              _buildDurationRankingSection(
+                                                queryView.rankings,
+                                              ),
+                                            ],
+                                            if (showHeatmap) ...[
+                                              const SizedBox(height: 10),
+                                              _buildHeatmapCard(
+                                                dailyRecords,
+                                                sessions: sessions,
+                                                periodRange:
+                                                    queryView.periodRange,
+                                              ),
+                                            ],
+                                          ],
+                                        );
+                                      },
                                     );
                                   },
                                 );
@@ -1677,46 +1722,61 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
             ),
             const SizedBox(height: 10),
             for (final book in detail.books.take(3))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildCover(
-                      realCoverUrl: book.coverUrl,
-                      title: book.title,
-                      author: book.author,
-                      bookId: book.bookId,
-                      width: 28,
-                      height: 40,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            book.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+              Builder(
+                builder: (context) {
+                  final presentation = _resolvePresentation(
+                    bookId: book.bookId,
+                    sourceId: null,
+                    detailUrl: null,
+                    title: book.title,
+                    author: book.author,
+                    coverUrl: book.coverUrl,
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCover(
+                          realCoverUrl: presentation.realCoverUrl,
+                          title: presentation.displayTitle,
+                          author: presentation.displayAuthor,
+                          bookId: book.bookId,
+                          width: 28,
+                          height: 40,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                presentation.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                book.chapterTitle?.trim().isNotEmpty == true
+                                    ? '${_formatDuration(book.readMillis)} · ${book.chapterTitle}'
+                                    : _formatDuration(book.readMillis),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            book.chapterTitle?.trim().isNotEmpty == true
-                                ? '${_formatDuration(book.readMillis)} · ${book.chapterTitle}'
-                                : _formatDuration(book.readMillis),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
           ],
         ],
@@ -1850,6 +1910,39 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
         : '${hours.toStringAsFixed(1)}时';
   }
 
+  BookMetadataPresentation _resolvePresentation({
+    required String bookId,
+    required String? sourceId,
+    required String? detailUrl,
+    required String? title,
+    String? author,
+    String? intro,
+    String? coverUrl,
+  }) {
+    final normalizedBookId = bookId.trim();
+    final normalizedSourceId = (sourceId ?? '').trim();
+    final normalizedDetailUrl = (detailUrl ?? '').trim();
+    final localBook =
+        normalizedSourceId == LocalReaderIdentity.localSourceId
+            ? _localBooksById[normalizedBookId]
+            : null;
+    final overrideKey =
+        normalizedSourceId == LocalReaderIdentity.localSourceId
+            ? BookMetadataOverride.localTargetKey(normalizedBookId)
+            : BookMetadataOverride.remoteTargetKey(
+              sourceId: normalizedSourceId,
+              detailUrl: normalizedDetailUrl,
+            );
+    return _bookMetadataPresentationResolver.resolve(
+      fallbackTitle: title,
+      fallbackAuthor: author,
+      fallbackIntro: intro,
+      realCoverUrl: coverUrl,
+      localBook: localBook,
+      metadataOverride: _metadataOverridesByTargetKey[overrideKey],
+    );
+  }
+
   Widget _buildDurationRankingSection(
     List<ReadingDurationRankingItem> rankings,
   ) {
@@ -1864,66 +1957,81 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       children: [
         _buildSectionHeading('阅读时长排行榜', subtitle: '按当前周期阅读时长排序'),
         for (var index = 0; index < visibleItems.length; index++) ...[
-          _buildRecordSurface(
-            InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => _openRecord(visibleItems[index].record),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(11, 9, 10, 9),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 28,
-                      child: Text(
-                        '${index + 1}',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    _buildCover(
-                      realCoverUrl: visibleItems[index].record.coverUrl,
-                      title: visibleItems[index].record.bookTitle,
-                      author: visibleItems[index].record.bookAuthor,
-                      bookId: visibleItems[index].record.bookId,
-                      sourceId: visibleItems[index].record.sourceId,
-                      detailUrl: visibleItems[index].record.detailUrl,
-                      width: 42,
-                      height: 58,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            visibleItems[index].record.bookTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall,
+          Builder(
+            builder: (context) {
+              final item = visibleItems[index];
+              final presentation = _resolvePresentation(
+                bookId: item.record.bookId,
+                sourceId: item.record.sourceId,
+                detailUrl: item.record.detailUrl,
+                title: item.record.bookTitle,
+                author: item.record.bookAuthor,
+                coverUrl: item.record.coverUrl,
+              );
+              return _buildRecordSurface(
+                InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => _openRecord(item.record),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(11, 9, 10, 9),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 28,
+                          child: Text(
+                            '${index + 1}',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            '阅读字数 ${_formatReadChars(visibleItems[index].readChars)}'
-                            '${visibleItems[index].readDays > 0 ? ' · ${visibleItems[index].readDays} 天' : ''}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(width: 4),
+                        _buildCover(
+                          realCoverUrl: presentation.realCoverUrl,
+                          title: presentation.displayTitle,
+                          author: presentation.displayAuthor,
+                          bookId: item.record.bookId,
+                          sourceId: item.record.sourceId,
+                          detailUrl: item.record.detailUrl,
+                          width: 42,
+                          height: 58,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                presentation.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                '阅读字数 ${_formatReadChars(item.readChars)}'
+                                '${item.readDays > 0 ? ' · ${item.readDays} 天' : ''}',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDuration(item.readMillis),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _formatDuration(visibleItems[index].readMillis),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
           if (index < visibleItems.length - 1) const SizedBox(height: 8),
         ],
@@ -2452,8 +2560,17 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     double width = 54,
     double height = 74,
   }) {
+    final presentation = _resolvePresentation(
+      bookId: bookId ?? '',
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      title: title,
+      author: author,
+      coverUrl: realCoverUrl,
+    );
     final resolvedCover = resolveBookCover(
-      realCoverUrl: realCoverUrl,
+      realCoverUrl: presentation.realCoverUrl,
+      customCoverPath: presentation.customCoverPath,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: bookId,
@@ -2462,8 +2579,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     );
     return ResolvedBookCoverView(
       cover: resolvedCover,
-      title: title ?? '',
-      author: author,
+      title: presentation.displayTitle,
+      author: presentation.displayAuthor,
       width: width,
       height: height,
       borderRadius: BorderRadius.circular(10),

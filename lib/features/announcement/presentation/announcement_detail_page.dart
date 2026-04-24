@@ -5,8 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../application/announcement_service.dart';
 import '../application/announcement_read_state_service.dart';
 
@@ -81,28 +84,44 @@ class _AnnouncementDetailPageState
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeTheme,
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('公告详情')),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.mineContentMaxWidth,
-          );
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('公告详情'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: _buildBody(
-                context,
-                horizontal: horizontal,
-                bottomSafe: bottomSafe,
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: _buildBody(
+                  context,
+                  horizontal: horizontal,
+                  bottomSafe: bottomSafe,
+                  topInset: topInset,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -111,6 +130,7 @@ class _AnnouncementDetailPageState
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
   }) {
     if (_isLoading) {
       return Center(
@@ -127,6 +147,7 @@ class _AnnouncementDetailPageState
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '加载失败',
         message: errorText,
         actionLabel: '重试',
@@ -140,6 +161,7 @@ class _AnnouncementDetailPageState
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '暂无内容',
         message: '公告内容为空或已下线。',
         actionLabel: '刷新',
@@ -153,7 +175,7 @@ class _AnnouncementDetailPageState
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          16,
+          topInset + 16,
           horizontal,
           20 + bottomSafe,
         ),
@@ -204,6 +226,7 @@ class _AnnouncementDetailPageState
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
     required String title,
     required String message,
     required String actionLabel,
@@ -218,7 +241,7 @@ class _AnnouncementDetailPageState
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          48,
+          topInset + 36,
           horizontal,
           24 + bottomSafe,
         ),

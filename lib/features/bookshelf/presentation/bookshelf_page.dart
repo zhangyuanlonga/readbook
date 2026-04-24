@@ -17,11 +17,13 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/local_book_repository_impl.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
+import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
@@ -29,6 +31,7 @@ import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
@@ -203,6 +206,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
+  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
+      const BookMetadataPresentationResolver();
   final BookDetailService _bookDetailService = BookDetailService();
   final TextEditingController _bookshelfSearchController =
       TextEditingController();
@@ -231,6 +236,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   _bookCardStateNotifiers = <String, ValueNotifier<_BookshelfBookCardState>>{};
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
+  Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
+      const <String, BookMetadataOverride>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
   List<String> _tagOrder = const <String>[];
   Map<String, String> _bookCategoriesByKey = const <String, String>{};
@@ -409,10 +416,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
-    final navigationComfortInset =
-        effectiveNavigationStyle == AppNavigationStyle.cupertinoDock
-            ? 8.0
-            : 0.0;
+    final navigationComfortInset = mobileBottomNavigationComfortInset(
+      style: effectiveNavigationStyle,
+    );
     final showTopSearchAction =
         effectiveNavigationStyle != AppNavigationStyle.cupertinoDock;
     final filteredBooks = _filteredBooks;
@@ -2852,6 +2858,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final latestChapterText = _toSingleLineText(
       cardState.latestCachedChapterTitle ?? book.latestChapter ?? '',
     );
+    final coverHeroTag = _buildBookCoverHeroTag(book);
     final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
         latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无缓存章节';
@@ -2910,6 +2917,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               bookId: book.bookId,
                               sourceId: book.sourceId,
                               detailUrl: book.detailUrl,
+                              heroTag: coverHeroTag,
                               width: constraints.maxWidth,
                               height: constraints.maxHeight,
                             );
@@ -3091,6 +3099,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final latestChapterText = _toSingleLineText(
       cardState.latestCachedChapterTitle ?? book.latestChapter ?? '',
     );
+    final coverHeroTag = _buildBookCoverHeroTag(book);
     final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
         latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无章节';
@@ -3164,6 +3173,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           bookId: book.bookId,
                           sourceId: book.sourceId,
                           detailUrl: book.detailUrl,
+                          heroTag: coverHeroTag,
                           width: 68,
                           height: 96,
                         ),
@@ -3990,26 +4000,52 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     String? bookId,
     String? sourceId,
     String? detailUrl,
+    String? heroTag,
     double width = 78,
     double height = 108,
   }) {
-    final resolvedCover = resolveBookCover(
+    final normalizedBookId = (bookId ?? '').trim();
+    final localBook =
+        normalizedBookId.isNotEmpty ? _localBooksById[normalizedBookId] : null;
+    final override =
+        normalizedBookId.isNotEmpty
+            ? (sourceId == _kLocalBookSourceId
+                ? _metadataOverridesByTargetKey[BookMetadataOverride.localTargetKey(
+                  normalizedBookId,
+                )]
+                : _metadataOverridesByTargetKey[BookMetadataOverride.remoteTargetKey(
+                  sourceId: sourceId ?? '',
+                  detailUrl: detailUrl ?? '',
+                )])
+            : null;
+    final presentation = _bookMetadataPresentationResolver.resolve(
+      fallbackTitle: title,
+      fallbackAuthor: author,
       realCoverUrl: realCoverUrl,
-      customCoverPath: customCoverPath,
+      localBook: localBook,
+      metadataOverride: override,
+    );
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: presentation.realCoverUrl,
+      customCoverPath: presentation.customCoverPath ?? customCoverPath,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,
     );
-    return ResolvedBookCoverView(
+    final coverView = ResolvedBookCoverView(
       cover: resolvedCover,
-      title: title ?? '',
-      author: author,
+      title: presentation.displayTitle,
+      author: presentation.displayAuthor,
       width: width,
       height: height,
       borderRadius: BorderRadius.circular(12),
     );
+    if (heroTag == null || heroTag.trim().isEmpty) {
+      return coverView;
+    }
+    return Hero(tag: heroTag.trim(), child: coverView);
   }
 
   ValueNotifier<_BookshelfBookCardState> _ensureBookCardStateNotifier(
@@ -4112,22 +4148,41 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _localBooksById[book.bookId.trim()];
   }
 
+  BookMetadataOverride? _bookshelfMetadataOverride(BookshelfBook book) {
+    final key =
+        book.sourceId == _kLocalBookSourceId
+            ? BookMetadataOverride.localTargetKey(book.bookId)
+            : BookMetadataOverride.remoteTargetKey(
+              sourceId: book.sourceId,
+              detailUrl: book.detailUrl,
+            );
+    return _metadataOverridesByTargetKey[key];
+  }
+
   String _displayBookTitle(BookshelfBook book, {LocalBook? localBook}) {
-    final resolvedLocalBook = localBook ?? _bookshelfLocalBook(book);
-    final localTitle = resolvedLocalBook?.title.trim() ?? '';
-    if (localTitle.isNotEmpty) {
-      return localTitle;
-    }
-    return book.title;
+    final presentation = _bookMetadataPresentationResolver.resolve(
+      fallbackTitle: book.title,
+      fallbackAuthor: book.author,
+      realCoverUrl: book.coverUrl,
+      localBook: localBook ?? _bookshelfLocalBook(book),
+      metadataOverride: _bookshelfMetadataOverride(book),
+    );
+    return presentation.displayTitle;
+  }
+
+  String _buildBookCoverHeroTag(BookshelfBook book) {
+    return 'book_cover_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
   }
 
   String? _displayBookAuthor(BookshelfBook book, {LocalBook? localBook}) {
-    final resolvedLocalBook = localBook ?? _bookshelfLocalBook(book);
-    final localAuthor = resolvedLocalBook?.author?.trim() ?? '';
-    if (localAuthor.isNotEmpty) {
-      return localAuthor;
-    }
-    return book.author;
+    final presentation = _bookMetadataPresentationResolver.resolve(
+      fallbackTitle: book.title,
+      fallbackAuthor: book.author,
+      realCoverUrl: book.coverUrl,
+      localBook: localBook ?? _bookshelfLocalBook(book),
+      metadataOverride: _bookshelfMetadataOverride(book),
+    );
+    return presentation.displayAuthor;
   }
 
   Widget _buildSourceBadge(BookshelfBook book, {bool compact = false}) {
@@ -4337,6 +4392,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }) async {
     final sourceTypeFuture = _loadSourceTypeMap();
     final localBooksFuture = _loadLocalBookMap(books);
+    final metadataOverridesFuture = _loadBookMetadataOverrideMap(books);
     final rawTagMapFuture = _bookshelfService.getTagMap();
     final tagOrderFuture = _bookshelfService.getTagOrder();
     final rawCategoryMapFuture = _bookshelfService.getCategoryMap();
@@ -4347,6 +4403,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       await Future.wait<dynamic>([
         sourceTypeFuture,
         localBooksFuture,
+        metadataOverridesFuture,
         rawTagMapFuture,
         tagOrderFuture,
         rawCategoryMapFuture,
@@ -4363,6 +4420,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     final sourceTypeMap = await sourceTypeFuture;
     final localBooksById = await localBooksFuture;
+    final metadataOverridesByTargetKey = await metadataOverridesFuture;
     final rawTagMap = await rawTagMapFuture;
     final tagOrder = await tagOrderFuture;
     final rawCategoryMap = await rawCategoryMapFuture;
@@ -4400,6 +4458,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     setState(() {
       _sourceTypeBySourceId = sourceTypeMap;
       _localBooksById = localBooksById;
+      _metadataOverridesByTargetKey = metadataOverridesByTargetKey;
       _bookTagsByKey = tagMap;
       _tagOrder = _normalizeTags(tagOrder);
       _bookCategoriesByKey = categoryMap;
@@ -4420,6 +4479,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
     _updateBookCardStatesForBooks(books, localBooksById: localBooksById);
     _syncSelectionWithBooks();
+  }
+
+  Future<Map<String, BookMetadataOverride>> _loadBookMetadataOverrideMap(
+    List<BookshelfBook> books,
+  ) async {
+    if (books.isEmpty) {
+      return const <String, BookMetadataOverride>{};
+    }
+    try {
+      final overrides =
+          await AppDatabase.instance.getAllBookMetadataOverrides();
+      final validKeys = <String>{
+        for (final book in books)
+          if (book.sourceId == _kLocalBookSourceId)
+            BookMetadataOverride.localTargetKey(book.bookId)
+          else
+            BookMetadataOverride.remoteTargetKey(
+              sourceId: book.sourceId,
+              detailUrl: book.detailUrl,
+            ),
+      };
+      return <String, BookMetadataOverride>{
+        for (final item in overrides)
+          if (validKeys.contains(item.targetKey)) item.targetKey: item,
+      };
+    } catch (_) {
+      return const <String, BookMetadataOverride>{};
+    }
   }
 
   Future<Map<String, LocalBook>> _loadLocalBookMap(
@@ -4603,6 +4690,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         if (detailResult == null) {
           continue;
         }
+        await _saveBackgroundTocSnapshot(detailResult);
 
         final latestChapterTitle =
             detailResult.chapters
@@ -4620,6 +4708,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         final detailAuthor = detailResult.detail.author?.trim();
         final normalizedAuthor =
             detailAuthor == null || detailAuthor.isEmpty ? null : detailAuthor;
+        final detailTitle = detailResult.detail.title.trim();
+        final normalizedTitle =
+            detailTitle.isEmpty ? book.title.trim() : detailTitle;
         final detailCoverUrl = detailResult.detail.coverUrl?.trim();
         final normalizedCoverUrl =
             detailCoverUrl == null || detailCoverUrl.isEmpty
@@ -4627,6 +4718,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 : detailCoverUrl;
         final currentLatestChapter = book.latestChapter?.trim();
         final currentAuthor = book.author?.trim();
+        final currentTitle = book.title.trim();
         final currentCoverUrl = book.coverUrl?.trim();
         final preserveLocalCustomCover = _hasUsableLocalCustomCover(
           currentCoverUrl,
@@ -4639,6 +4731,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         final currentCoverCompareKey = _coverUrlCompareKey(currentCoverUrl);
 
         final needsUpdate =
+            normalizedTitle != currentTitle ||
             normalizedLatestChapter != currentLatestChapter ||
             normalizedAuthor != currentAuthor ||
             normalizedCoverCompareKey != currentCoverCompareKey;
@@ -4647,6 +4740,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         }
 
         final updatedBook = book.copyWith(
+          title: normalizedTitle,
           latestChapter: normalizedLatestChapter,
           clearLatestChapter: normalizedLatestChapter == null,
           author: normalizedAuthor,
@@ -4681,6 +4775,33 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _derivedBookshelfFingerprint = null;
     });
     _syncBookCardStateNotifiers(_books);
+  }
+
+  Future<void> _saveBackgroundTocSnapshot(
+    BookDetailLoadResult detailResult,
+  ) async {
+    final detail = detailResult.detail;
+    final title = detail.title.trim();
+    if (title.isEmpty || detailResult.chapters.isEmpty) {
+      return;
+    }
+
+    try {
+      await _readerPreferencesService.saveTocSnapshot(
+        ReaderTocSnapshot(
+          bookId: detail.id,
+          sourceId: detail.sourceId,
+          detailUrl: detail.detailUrl,
+          title: title,
+          author: detail.author?.trim(),
+          coverUrl: detail.coverUrl?.trim(),
+          chapters: detailResult.chapters,
+          updatedAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      // Ignore toc snapshot write failures during lightweight shelf refresh.
+    }
   }
 
   void _cancelBackgroundLatestInfoRefresh() {
@@ -5815,6 +5936,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       title: book.title,
+      author: book.author,
+      coverUrl: book.coverUrl,
+      heroTag: _buildBookCoverHeroTag(book),
     );
     context.push(route);
   }

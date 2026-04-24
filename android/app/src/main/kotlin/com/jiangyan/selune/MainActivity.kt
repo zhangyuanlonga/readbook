@@ -271,8 +271,25 @@ class MainActivity : FlutterActivity() {
 
     private fun classifyPayloadType(uri: Uri, label: String, mimeType: String?): String? {
         val extension = label.substringAfterLast('.', "").lowercase(Locale.ROOT)
+        val uriExtension = uri.lastPathSegment
+            ?.substringAfterLast('.', "")
+            ?.lowercase(Locale.ROOT)
+            ?: ""
         val normalizedMimeType = mimeType?.lowercase(Locale.ROOT)
 
+        if (
+            extension == "json" ||
+            extension == "zip" ||
+            extension == "red" ||
+            uriExtension == "json" ||
+            uriExtension == "zip" ||
+            uriExtension == "red" ||
+            normalizedMimeType == "application/json" ||
+            normalizedMimeType == "application/zip" ||
+            normalizedMimeType == "application/x-zip-compressed"
+        ) {
+            return PAYLOAD_TYPE_ADVANCED_THEME
+        }
         if (
             extension == "js" ||
             extension == "mjs" ||
@@ -281,9 +298,6 @@ class MainActivity : FlutterActivity() {
             normalizedMimeType == "application/x-javascript"
         ) {
             return PAYLOAD_TYPE_SCRIPT_SOURCE
-        }
-        if (extension == "json" || normalizedMimeType == "application/json") {
-            return PAYLOAD_TYPE_ADVANCED_THEME
         }
         if (
             extension == "txt" ||
@@ -304,8 +318,7 @@ class MainActivity : FlutterActivity() {
             normalizedMimeType == "application/pdf" ||
             normalizedMimeType == "application/x-mobipocket-ebook" ||
             normalizedMimeType == "application/vnd.amazon.ebook" ||
-            normalizedMimeType == "application/vnd.amazon.mobi8-ebook" ||
-            normalizedMimeType == "application/octet-stream"
+            normalizedMimeType == "application/vnd.amazon.mobi8-ebook"
         ) {
             return PAYLOAD_TYPE_LOCAL_BOOK
         }
@@ -410,7 +423,11 @@ class MainActivity : FlutterActivity() {
         val lowerLabel = label.lowercase(Locale.ROOT)
         return when {
             lowerLabel.endsWith(".json") -> ".json"
+            lowerLabel.endsWith(".zip") -> ".zip"
+            lowerLabel.endsWith(".red") -> ".red"
             mimeType.equals("application/json", ignoreCase = true) -> ".json"
+            mimeType.equals("application/zip", ignoreCase = true) -> ".zip"
+            mimeType.equals("application/x-zip-compressed", ignoreCase = true) -> ".zip"
             else -> null
         }
     }

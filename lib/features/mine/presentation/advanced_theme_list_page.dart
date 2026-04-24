@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -30,9 +34,11 @@ class AdvancedThemeListPage extends ConsumerStatefulWidget {
 
 enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 
+enum _ThemeImportPackageKind { official, red }
+
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   static const XTypeGroup _themeJsonTypeGroup = XTypeGroup(
-    label: 'Advanced theme JSON',
+    label: 'Advanced theme color JSON',
     extensions: <String>['json'],
     mimeTypes: <String>['application/json', 'text/json', 'text/plain'],
     uniformTypeIdentifiers: <String>['public.json'],
@@ -54,6 +60,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       'application/x-zip-compressed',
     ],
     uniformTypeIdentifiers: <String>['public.json', 'public.zip-archive'],
+  );
+  static const XTypeGroup _themeRedTypeGroup = XTypeGroup(
+    label: 'Red theme package',
+    extensions: <String>['red'],
+    mimeTypes: <String>['application/octet-stream', 'application/zip'],
+    uniformTypeIdentifiers: <String>['public.data'],
   );
 
   final AuthSessionStore _sessionStore = AuthSessionStore();
@@ -202,29 +214,39 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    final location = await getSaveLocation(
-      acceptedTypeGroups: const <XTypeGroup>[_themeJsonTypeGroup],
-      suggestedName: '${_normalizedFileName(theme.name)}.json',
-      confirmButtonText: '导出',
-    );
-    if (location == null) {
-      return;
-    }
-
     setState(() {
       _isSaving = true;
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
-      final file = File(location.path);
-      await file.writeAsString(
-        service.encodeThemeColorJson(theme),
-        flush: true,
-      );
+      final fileName = '${_normalizedFileName(theme.name)}.json';
+      final content = service.encodeThemeColorJson(theme);
+      if (_shouldUseSaveLocationPicker) {
+        final location = await getSaveLocation(
+          acceptedTypeGroups: const <XTypeGroup>[_themeJsonTypeGroup],
+          suggestedName: fileName,
+          confirmButtonText: '导出',
+        );
+        if (location == null) {
+          return;
+        }
+        final file = File(location.path);
+        await file.writeAsString(content, flush: true);
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsString(content, flush: true);
+        await _shareExportedThemeFile(
+          file: file,
+          text: '分享颜色主题：${theme.name}',
+          subject: theme.name,
+          clipboardText: content,
+        );
+      }
       if (!mounted) {
         return;
       }
-      _showMessage('已导出主题「${theme.name}」');
+      _showMessage('已导出颜色配置「${theme.name}」');
     } on FormatException catch (error) {
       if (!mounted) {
         return;
@@ -248,25 +270,34 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    final location = await getSaveLocation(
-      acceptedTypeGroups: const <XTypeGroup>[_themeZipTypeGroup],
-      suggestedName: '${_normalizedFileName(theme.name)}.zip',
-      confirmButtonText: '导出',
-    );
-    if (location == null) {
-      return;
-    }
-
     setState(() {
       _isSaving = true;
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
-      final file = File(location.path);
-      await file.writeAsBytes(
-        await service.encodeThemeBundleZip(theme),
-        flush: true,
-      );
+      final fileName = '${_normalizedFileName(theme.name)}.zip';
+      final bytes = await service.encodeThemeBundleZip(theme);
+      if (_shouldUseSaveLocationPicker) {
+        final location = await getSaveLocation(
+          acceptedTypeGroups: const <XTypeGroup>[_themeZipTypeGroup],
+          suggestedName: fileName,
+          confirmButtonText: '导出',
+        );
+        if (location == null) {
+          return;
+        }
+        final file = File(location.path);
+        await file.writeAsBytes(bytes, flush: true);
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsBytes(bytes, flush: true);
+        await _shareExportedThemeFile(
+          file: file,
+          text: '分享主题包：${theme.name}',
+          subject: theme.name,
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -290,12 +321,51 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
+  bool get _shouldUseSaveLocationPicker {
+    return kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
+  Future<void> _shareExportedThemeFile({
+    required File file,
+    required String text,
+    required String subject,
+    String? clipboardText,
+  }) async {
+    try {
+      await Share.shareXFiles([XFile(file.path)], text: text, subject: subject);
+    } on MissingPluginException {
+      final fallbackText = clipboardText;
+      if (fallbackText != null && fallbackText.isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: fallbackText));
+      }
+      if (!mounted) {
+        return;
+      }
+      _showMessage(
+        fallbackText == null || fallbackText.isEmpty
+            ? '当前安装包暂不支持系统分享，请完整重启 App 后重试。'
+            : '当前安装包暂不支持系统分享，已复制主题内容，请完整重启 App 后重试。',
+      );
+    }
+  }
+
   Future<void> _importTheme() async {
     if (_isSaving) {
       return;
     }
+    final packageKind = await _chooseImportPackageKind();
+    if (packageKind == null) {
+      return;
+    }
     final picked = await openFile(
-      acceptedTypeGroups: const <XTypeGroup>[_themeImportTypeGroup],
+      acceptedTypeGroups: <XTypeGroup>[
+        packageKind == _ThemeImportPackageKind.red
+            ? _themeRedTypeGroup
+            : _themeImportTypeGroup,
+      ],
       confirmButtonText: '导入主题',
     );
     if (picked == null) {
@@ -306,17 +376,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _isSaving = true;
     });
     try {
-      final service = ref.read(advancedThemeServiceProvider);
-      final importedTheme =
-          p.extension(picked.path).toLowerCase() == '.zip'
-              ? await service.importThemeBundleZipBytes(
-                await File(picked.path).readAsBytes(),
-              )
-              : await service.importThemeColorJson(
-                await File(picked.path).readAsString(),
-              );
-      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
-      await _load();
+      final importedTheme = await _importThemeFromPath(
+        path: picked.path,
+        packageKind: packageKind,
+      );
       if (!mounted) {
         return;
       }
@@ -373,10 +436,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
 
     try {
-      final rawJson = await File(cached.path).readAsString();
-      final service = ref.read(advancedThemeServiceProvider);
-      final importedTheme = await service.importThemeColorJson(rawJson);
-      await _load();
+      final importedTheme = await _importThemeFromPath(
+        path: cached.path,
+        mimeType: cached.mimeType ?? payload.mimeType,
+      );
       if (!mounted) {
         return;
       }
@@ -392,6 +455,174 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       }
       _showMessage('导入外部主题失败：${payload.label}');
     }
+  }
+
+  Future<AppAdvancedTheme> _importThemeFromPath({
+    required String path,
+    String? mimeType,
+    _ThemeImportPackageKind? packageKind,
+  }) async {
+    final service = ref.read(advancedThemeServiceProvider);
+    final file = File(path);
+    final effectiveKind =
+        packageKind ?? await _detectPackageKind(path: path, mimeType: mimeType);
+    final importedTheme = switch (effectiveKind) {
+      _ThemeImportPackageKind.red => await service.importRedThemePackageBytes(
+        await file.readAsBytes(),
+      ),
+      _ThemeImportPackageKind.official =>
+        _isZipThemeFile(path: path, mimeType: mimeType)
+            ? await service.importThemeBundleZipBytes(await file.readAsBytes())
+            : await service.importThemeColorJson(await file.readAsString()),
+    };
+    ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+    await _load();
+    return importedTheme;
+  }
+
+  Future<_ThemeImportPackageKind?> _chooseImportPackageKind() {
+    return showModalBottomSheet<_ThemeImportPackageKind>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final colorScheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '选择导入类型',
+                      style: Theme.of(sheetContext).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Red 导入说明',
+                    onPressed: () => _showRedImportSupportHelp(sheetContext),
+                    icon: Icon(
+                      Icons.help_outline_rounded,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                '请选择要导入的主题包类型。',
+                style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  Icons.inventory_2_outlined,
+                  color: colorScheme.primary,
+                ),
+                title: const Text('官方主题包'),
+                subtitle: const Text('导入应用当前支持的 JSON / ZIP 主题包'),
+                onTap:
+                    () => Navigator.of(
+                      sheetContext,
+                    ).pop(_ThemeImportPackageKind.official),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  Icons.auto_awesome_outlined,
+                  color: colorScheme.primary,
+                ),
+                title: const Text('Red 主题包'),
+                subtitle: const Text('导入Reeden 主题包并按兼容规则转换'),
+                onTap:
+                    () => Navigator.of(
+                      sheetContext,
+                    ).pop(_ThemeImportPackageKind.red),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showRedImportSupportHelp(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Red 导入说明'),
+          content: const Text(
+            '当前 Red 兼容导入支持：\n'
+            '1. 主题名称\n'
+            '2. 浅色 / 深色颜色\n'
+            '3. 页面壁纸\n'
+            '4. 封面图集\n'
+            '5. 底栏图标包\n'
+            '6. 阅读器背景图\n'
+            '7. 阅读器背景不透明度与图片适配\n\n'
+            '暂不支持完整还原Reeden的阅读器排版、字体、页眉页脚模板和交互行为。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<_ThemeImportPackageKind> _detectPackageKind({
+    required String path,
+    String? mimeType,
+  }) async {
+    final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
+    if (normalizedMime.contains('octet-stream') &&
+        p.extension(path).trim().toLowerCase() == '.red') {
+      return _ThemeImportPackageKind.red;
+    }
+    if (p.extension(path).trim().toLowerCase() == '.red') {
+      return _ThemeImportPackageKind.red;
+    }
+    try {
+      final file = File(path);
+      final bytes = await file.openRead(0, 8).fold<List<int>>(<int>[], (
+        previous,
+        element,
+      ) {
+        return <int>[...previous, ...element];
+      });
+      if (_hasRedHeader(bytes)) {
+        return _ThemeImportPackageKind.red;
+      }
+    } catch (_) {
+      // Fall through to official package detection.
+    }
+    return _ThemeImportPackageKind.official;
+  }
+
+  bool _hasRedHeader(List<int> bytes) {
+    return bytes.length >= 4 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x45 &&
+        bytes[2] == 0x44;
+  }
+
+  bool _isZipThemeFile({required String path, String? mimeType}) {
+    final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
+    if (normalizedMime.contains('zip')) {
+      return true;
+    }
+    return p.extension(path).trim().toLowerCase() == '.zip';
   }
 
   Future<void> _deleteTheme(AppAdvancedTheme theme) async {
@@ -853,7 +1084,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         ),
                         PopupMenuItem(
                           value: _AdvancedThemeAction.exportJson,
-                          child: Text('导出 JSON'),
+                          child: Text('导出颜色 JSON'),
                         ),
                         PopupMenuItem(
                           value: _AdvancedThemeAction.exportZip,

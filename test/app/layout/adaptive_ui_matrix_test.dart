@@ -37,9 +37,7 @@ void main() {
     }
   });
 
-  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持四个操作文案和图标', (
-    tester,
-  ) async {
+  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持四个操作文案和图标', (tester) async {
     for (final width in widths) {
       await _pumpPrimaryActions(tester, width: width);
 
@@ -108,9 +106,7 @@ void main() {
     }
   });
 
-  testWidgets('矩阵测试：ShellScaffold 在手机和平板尺寸下可正常渲染', (
-    tester,
-  ) async {
+  testWidgets('矩阵测试：ShellScaffold 在手机和平板尺寸下可正常渲染', (tester) async {
     const cases = <_ViewportCase>[
       _ViewportCase(name: 'phone_360', size: Size(360, 800), dpr: 3.0),
       _ViewportCase(name: 'phone_390', size: Size(390, 844), dpr: 3.0),
@@ -191,6 +187,7 @@ Future<void> _pumpPrimaryActions(
                 return BookDetailPrimaryActions(
                   availableWidth: constraints.maxWidth,
                   isInBookshelf: false,
+                  isShelfStateLoading: false,
                   isShelfActionLoading: false,
                   onToggleBookshelf: () {},
                   onOpenCatalog: () {},

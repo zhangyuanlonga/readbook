@@ -40,13 +40,14 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   late final CodeController _controller;
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final MobileFeatureService _mobileFeatureService = MobileFeatureService();
+  final ValueNotifier<_EditorIssueSummary> _issueSummaryNotifier =
+      ValueNotifier<_EditorIssueSummary>(_EditorIssueSummary.empty);
 
   ScriptSource? _source;
   _EditorAppearance _appearance = _EditorAppearance.night;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isDirty = false;
-  bool _isEditorMounted = false;
   bool _isApplyingEditorValue = false;
 
   bool get _isEditingExisting =>
@@ -61,9 +62,9 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     final lineCount = '\n'.allMatches(_controller.fullText).length + 1;
     final digitCount = lineCount.toString().length;
     return switch (digitCount) {
-      1 || 2 => 72,
-      3 => 80,
-      _ => 88,
+      1 || 2 => 58,
+      3 => 66,
+      _ => 74,
     };
   }
 
@@ -104,6 +105,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     );
     _controller.autocompleter.setCustomWords(_scriptSourceAutocompleteWords);
     _controller.addListener(_handleEditorChanged);
+    _controller.addListener(_handleAnalysisResultChanged);
     final scriptSourceId = widget.scriptSourceId?.trim() ?? '';
     if (scriptSourceId.isEmpty) {
       _isApplyingEditorValue = true;
@@ -111,7 +113,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       _isApplyingEditorValue = false;
       _isLoading = false;
     }
-    unawaited(_scheduleEditorMount());
+    _refreshIssueSummary();
     if (scriptSourceId.isNotEmpty) {
       unawaited(_loadInitialValue());
     }
@@ -120,6 +122,8 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   @override
   void dispose() {
     _controller.removeListener(_handleEditorChanged);
+    _controller.removeListener(_handleAnalysisResultChanged);
+    _issueSummaryNotifier.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -151,6 +155,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     _isApplyingEditorValue = true;
     _controller.fullText = value;
     _isApplyingEditorValue = false;
+    _refreshIssueSummary();
     if (!mounted) {
       return;
     }
@@ -187,6 +192,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       setState(() {
         _isLoading = false;
       });
+      _refreshIssueSummary();
     } catch (error) {
       if (!mounted) {
         return;
@@ -198,14 +204,16 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     }
   }
 
-  Future<void> _scheduleEditorMount() async {
-    await SchedulerBinding.instance.endOfFrame;
-    if (!mounted) {
+  void _handleAnalysisResultChanged() {
+    _refreshIssueSummary();
+  }
+
+  void _refreshIssueSummary() {
+    final next = _EditorIssueSummary.fromIssues(_controller.analysisResult.issues);
+    if (_issueSummaryNotifier.value == next) {
       return;
     }
-    setState(() {
-      _isEditorMounted = true;
-    });
+    _issueSummaryNotifier.value = next;
   }
 
   Future<void> _save() async {
@@ -327,8 +335,9 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       previousOffset.clamp(0, formatted.length),
       formatted.length,
     );
-    _controller.selection = TextSelection.collapsed(offset: nextOffset);
+      _controller.selection = TextSelection.collapsed(offset: nextOffset);
     _isApplyingEditorValue = false;
+    _refreshIssueSummary();
     if (!mounted) {
       return;
     }
@@ -425,10 +434,14 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
                 children: [
                   if (_isLoading) const LinearProgressIndicator(minHeight: 2),
                   _buildEditorToolbar(context),
-                  _buildIssueBanner(context),
+                  _EditorIssueBanner(
+                    issueSummaryListenable: _issueSummaryNotifier,
+                    isLoading: _isLoading,
+                    palette: _palette,
+                  ),
                   Expanded(
                     child:
-                        _isLoading || !_isEditorMounted
+                        _isLoading
                             ? _buildEditorLoadingState(context)
                             : _buildCodeEditor(context),
                   ),
@@ -499,19 +512,19 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
             wrap: false,
             background: _palette.panelBackground,
             cursorColor: _palette.accent,
-            padding: EdgeInsets.only(top: 12, right: 18, bottom: 18),
+            padding: const EdgeInsets.only(top: 8, right: 12, bottom: 12),
             textStyle: TextStyle(
               color: _palette.textPrimary,
               fontFamily: 'Menlo, Consolas, "Courier New", monospace',
-              fontSize: 13.5,
-              height: 1.55,
-              letterSpacing: 0.15,
+              fontSize: 12.5,
+              height: 1.42,
+              letterSpacing: 0.05,
             ),
             gutterStyle: GutterStyle(
               width: _gutterWidth,
-              margin: 8,
+              margin: 6,
               background: _palette.tabBackground,
-              textStyle: TextStyle(color: _palette.textMuted, fontSize: 12),
+              textStyle: TextStyle(color: _palette.textMuted, fontSize: 11),
               showErrors: true,
               showFoldingHandles: true,
             ),
@@ -524,46 +537,44 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   }
 
   Widget _buildEditorToolbar(BuildContext context) {
-    return ColoredBox(
-      color: _palette.tabBackground,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: '返回',
-                  onPressed: () => unawaited(_handleBackPressed()),
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  padding: EdgeInsets.zero,
-                  icon: Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    color: _palette.textPrimary,
-                    size: 16,
+    return RepaintBoundary(
+      child: ColoredBox(
+        color: _palette.tabBackground,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: '返回',
+                onPressed: () => unawaited(_handleBackPressed()),
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: _palette.textPrimary,
+                  size: 16,
+                ),
+              ),
+              const Spacer(),
+              if (_isDirty)
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    color: _palette.accent,
+                    shape: BoxShape.circle,
                   ),
                 ),
-                const Spacer(),
-                if (_isDirty)
-                  Container(
-                    width: 7,
-                    height: 7,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      color: _palette.accent,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                const SizedBox(width: 6),
-                ..._buildToolbarActions(context),
-              ],
-            ),
-          );
-        },
+              const SizedBox(width: 6),
+              ..._buildToolbarActions(context),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -584,8 +595,8 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
           backgroundColor: _palette.accent,
           foregroundColor: _palette.onAccent,
           visualDensity: VisualDensity.compact,
-          minimumSize: const Size(38, 38),
-          padding: const EdgeInsets.all(8),
+          minimumSize: const Size(34, 34),
+          padding: const EdgeInsets.all(7),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         onPressed: _isLoading || _isSaving ? null : _save,
@@ -626,16 +637,16 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
             ],
         child: Container(
           width: 38,
-          height: 38,
+          height: 34,
           decoration: BoxDecoration(
             color: _palette.statusBackground,
-            borderRadius: BorderRadius.circular(19),
+            borderRadius: BorderRadius.circular(17),
             border: Border.all(color: _palette.border),
           ),
           alignment: Alignment.center,
           child: Icon(
             Icons.more_vert_rounded,
-            size: 18,
+            size: 17,
             color: _palette.textPrimary,
           ),
         ),
@@ -657,8 +668,8 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         backgroundColor: backgroundColor ?? _palette.statusBackground,
         foregroundColor: foregroundColor ?? _palette.textPrimary,
         visualDensity: VisualDensity.compact,
-        minimumSize: const Size(38, 38),
-        padding: const EdgeInsets.all(8),
+        minimumSize: const Size(34, 34),
+        padding: const EdgeInsets.all(7),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       onPressed: onPressed,
@@ -691,65 +702,126 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         break;
     }
   }
+}
 
-  Widget _buildIssueBanner(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final issues = _controller.analysisResult.issues;
-        if (_isLoading || issues.isEmpty) {
-          return const SizedBox.shrink();
-        }
+class _EditorIssueBanner extends StatelessWidget {
+  const _EditorIssueBanner({
+    required this.issueSummaryListenable,
+    required this.isLoading,
+    required this.palette,
+  });
 
-        final firstIssue = issues.first;
-        final issueColor = switch (firstIssue.type) {
-          IssueType.error => const Color(0xFFE85D75),
-          IssueType.warning => const Color(0xFFF0B44C),
-          IssueType.info => _palette.accent,
-        };
-        final issueLabel =
-            issues.length == 1 ? '1 个问题' : '${issues.length} 个问题';
+  final ValueNotifier<_EditorIssueSummary> issueSummaryListenable;
+  final bool isLoading;
+  final _EditorPalette palette;
 
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: _palette.statusBackground,
-            border: Border(
-              top: BorderSide(color: _palette.border),
-              bottom: BorderSide(color: _palette.border),
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: ValueListenableBuilder<_EditorIssueSummary>(
+        valueListenable: issueSummaryListenable,
+        builder: (context, summary, _) {
+          if (isLoading || !summary.hasIssues) {
+            return const SizedBox.shrink();
+          }
+
+          final firstIssue = summary.firstIssue!;
+          final issueColor = switch (firstIssue.type) {
+            IssueType.error => const Color(0xFFE85D75),
+            IssueType.warning => const Color(0xFFF0B44C),
+            IssueType.info => palette.accent,
+          };
+          final issueLabel =
+              summary.count == 1 ? '1 个问题' : '${summary.count} 个问题';
+
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.statusBackground,
+              border: Border(
+                top: BorderSide(color: palette.border),
+                bottom: BorderSide(color: palette.border),
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-            child: Row(
-              children: [
-                Icon(Icons.error_outline_rounded, size: 18, color: issueColor),
-                const SizedBox(width: 10),
-                Text(
-                  issueLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: issueColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '第 ${firstIssue.line + 1} 行: ${firstIssue.message}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _palette.textPrimary,
-                      fontWeight: FontWeight.w500,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline_rounded, size: 18, color: issueColor),
+                  const SizedBox(width: 10),
+                  Text(
+                    issueLabel,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: issueColor,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '第 ${firstIssue.line + 1} 行: ${firstIssue.message}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: palette.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
+}
+
+class _EditorIssueSummary {
+  const _EditorIssueSummary({
+    required this.count,
+    required this.firstIssue,
+  });
+
+  static const _EditorIssueSummary empty = _EditorIssueSummary(
+    count: 0,
+    firstIssue: null,
+  );
+
+  final int count;
+  final Issue? firstIssue;
+
+  bool get hasIssues => count > 0 && firstIssue != null;
+
+  factory _EditorIssueSummary.fromIssues(List<Issue> issues) {
+    if (issues.isEmpty) {
+      return empty;
+    }
+    return _EditorIssueSummary(
+      count: issues.length,
+      firstIssue: issues.first,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is _EditorIssueSummary &&
+        other.count == count &&
+        other.firstIssue?.line == firstIssue?.line &&
+        other.firstIssue?.message == firstIssue?.message &&
+        other.firstIssue?.type == firstIssue?.type;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        count,
+        firstIssue?.line,
+        firstIssue?.message,
+        firstIssue?.type,
+      );
 }
 
 class _ScriptSourceEditorAnalyzer extends AbstractAnalyzer {
@@ -758,12 +830,17 @@ class _ScriptSourceEditorAnalyzer extends AbstractAnalyzer {
   @override
   Future<AnalysisResult> analyze(Code code) async {
     final baseResult = await const DefaultLocalAnalyzer().analyze(code);
-    final draftIssues = analyzeScriptSourceDraftIssues(code.text);
+    final draftIssues = _analyzeScriptSourceDraftIssues(
+      code.text,
+      mode: _DraftAnalysisMode.light,
+    );
     final mergedIssues = <Issue>[...baseResult.issues, ...draftIssues]
       ..sort(issueLineComparator);
     return AnalysisResult(issues: mergedIssues);
   }
 }
+
+enum _DraftAnalysisMode { light, full }
 
 enum _EditorAppearance { day, night }
 
@@ -845,7 +922,10 @@ class _EditorPalette {
 
 @visibleForTesting
 String? validateScriptSourceDraft(String sourceCode) {
-  final issues = analyzeScriptSourceDraftIssues(sourceCode);
+  final issues = _analyzeScriptSourceDraftIssues(
+    sourceCode,
+    mode: _DraftAnalysisMode.full,
+  );
   if (issues.isEmpty) {
     return null;
   }
@@ -853,7 +933,19 @@ String? validateScriptSourceDraft(String sourceCode) {
 }
 
 @visibleForTesting
-List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
+List<Issue> analyzeScriptSourceDraftIssues(
+  String sourceCode,
+) {
+  return _analyzeScriptSourceDraftIssues(
+    sourceCode,
+    mode: _DraftAnalysisMode.full,
+  );
+}
+
+List<Issue> _analyzeScriptSourceDraftIssues(
+  String sourceCode, {
+  required _DraftAnalysisMode mode,
+}) {
   final trimmed = sourceCode.trimLeft();
   final issues = <Issue>[];
   if (trimmed.isEmpty) {
@@ -896,6 +988,10 @@ List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
         type: IssueType.error,
       ),
     );
+  }
+
+  if (mode == _DraftAnalysisMode.light) {
+    return issues;
   }
 
   final metaNameLine = _findLineForPattern(

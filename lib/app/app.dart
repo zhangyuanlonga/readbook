@@ -20,13 +20,12 @@ import '../domain/entities/announcement.dart';
 import '../features/announcement/application/announcement_read_state_service.dart';
 import '../features/announcement/application/announcement_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
-import '../features/mine/application/advanced_theme_service.dart';
-import '../features/mine/application/launch_image_gallery_service.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import '../features/source/application/source_runtime_facade.dart';
 import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
 import 'router.dart';
+import 'startup_artwork_store.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_interface_typography_provider.dart';
@@ -159,7 +158,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     'serif',
   ];
 
-  static const Duration _kStartupMinDuration = Duration(seconds: 1);
+  static const Duration _kStartupMinDuration = Duration(milliseconds: 250);
   static const Duration _kStartupDeferredTasksDelay = Duration(
     milliseconds: 1800,
   );
@@ -924,43 +923,25 @@ class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
   static const String _fallbackStartupArtwork =
       'assets/branding/selune_launch_scene.png';
 
-  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
-  final LaunchImageGalleryService _launchImageGalleryService =
-      LaunchImageGalleryService();
-  late final Future<String?> _startupImagePathFuture =
-      _resolveStartupImagePath();
-
-  Future<String?> _resolveStartupImagePath() async {
-    final activeTheme = await _advancedThemeService.loadActiveTheme();
-    return _launchImageGalleryService.loadLaunchImagePathForGallery(
-      activeTheme?.launchImageGalleryId,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
+    final useFile =
+        resolvedPath != null &&
+        resolvedPath.isNotEmpty &&
+        File(resolvedPath).existsSync();
+    final ImageProvider imageProvider =
+        useFile
+            ? FileImage(File(resolvedPath))
+            : const AssetImage(_fallbackStartupArtwork);
     return ColoredBox(
       color: const Color(0xFFF6F8FB),
       child: SizedBox.expand(
-        child: FutureBuilder<String?>(
-          future: _startupImagePathFuture,
-          builder: (context, snapshot) {
-            final resolvedPath = snapshot.data?.trim();
-            final useFile =
-                resolvedPath != null &&
-                resolvedPath.isNotEmpty &&
-                File(resolvedPath).existsSync();
-            final ImageProvider imageProvider =
-                useFile
-                    ? FileImage(File(resolvedPath))
-                    : const AssetImage(_fallbackStartupArtwork);
-            return Image(
-              image: imageProvider,
-              fit: BoxFit.fill,
-              alignment: Alignment.center,
-              filterQuality: FilterQuality.high,
-            );
-          },
+        child: Image(
+          image: imageProvider,
+          fit: BoxFit.fill,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.high,
         ),
       ),
     );

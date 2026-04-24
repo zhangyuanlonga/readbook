@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../../app/widgets/resolved_book_cover.dart';
+import '../../../../data/datasources/local/app_database.dart';
 import '../../../../domain/entities/book.dart';
+import '../../../book/application/book_metadata_presentation_resolver.dart';
 import '../../../mine/application/advanced_theme_provider.dart';
 import '../../../mine/application/cover_gallery_provider.dart';
 
@@ -36,121 +38,156 @@ class SearchBookCard extends ConsumerWidget {
       colorScheme,
       ref.read(activeAdvancedThemeProvider).valueOrNull,
     );
-    final author = book.author?.trim();
     final showHitCount = sourceHitCount > 1;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _CoverPreview(
-                coverUrl: book.coverUrl,
-                title: book.title,
-                author: book.author,
-                heroTag: heroTag,
-                bookId: book.id,
-                sourceId: book.sourceId,
-                detailUrl: book.detailUrl,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      book.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+    return FutureBuilder<BookMetadataPresentation>(
+      future: _resolvePresentation(book),
+      builder: (context, snapshot) {
+        final presentation =
+            snapshot.data ?? const BookMetadataPresentation(displayTitle: '');
+        final displayTitle =
+            presentation.displayTitle.isNotEmpty
+                ? presentation.displayTitle
+                : book.title;
+        final displayAuthor =
+            presentation.displayAuthor?.trim().isNotEmpty == true
+                ? presentation.displayAuthor!.trim()
+                : book.author?.trim();
+        final displayIntro =
+            presentation.displayIntro?.trim().isNotEmpty == true
+                ? presentation.displayIntro!.trim()
+                : normalizedIntro;
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _CoverPreview(
+                    coverUrl: presentation.realCoverUrl ?? book.coverUrl,
+                    customCoverPath: presentation.customCoverPath,
+                    title: displayTitle,
+                    author: displayAuthor,
+                    heroTag: heroTag,
+                    bookId: book.id,
+                    sourceId: book.sourceId,
+                    detailUrl: book.detailUrl,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _InfoPill(
-                          label: '来源',
-                          value: sourceName,
-                          backgroundColor: palette.primaryContainerColor,
-                          textColor: palette.textPrimaryColor,
+                        Text(
+                          displayTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        if (author != null && author.isNotEmpty)
-                          _InfoPill(
-                            label: '作者',
-                            value: author,
-                            backgroundColor: palette.primaryContainerColor,
-                            textColor: palette.textPrimaryColor,
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _InfoPill(
+                              label: '来源',
+                              value: sourceName,
+                              backgroundColor: palette.primaryContainerColor,
+                              textColor: palette.textPrimaryColor,
+                            ),
+                            if (displayAuthor != null &&
+                                displayAuthor.isNotEmpty)
+                              _InfoPill(
+                                label: '作者',
+                                value: displayAuthor,
+                                backgroundColor: palette.primaryContainerColor,
+                                textColor: palette.textPrimaryColor,
+                              ),
+                          ],
+                        ),
+                        if (normalizedLatestChapter != null &&
+                            normalizedLatestChapter!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              '最新章节: $normalizedLatestChapter',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        if (displayIntro != null && displayIntro.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.elevatedSurfaceColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                displayIntro,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: palette.textSecondaryColor,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
                           ),
                       ],
                     ),
-                    if (normalizedLatestChapter != null &&
-                        normalizedLatestChapter!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          '最新章节: $normalizedLatestChapter',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall,
-                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (showHitCount)
+                        _SourceHitBadge(
+                          count: sourceHitCount,
+                          backgroundColor: palette.secondaryColor,
+                          textColor: palette.buttonTextColor,
+                        )
+                      else
+                        const SizedBox(height: 20),
+                      Icon(
+                        Icons.chevron_right,
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                    if (normalizedIntro != null && normalizedIntro!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.elevatedSurfaceColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            normalizedIntro!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: palette.textSecondaryColor,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (showHitCount)
-                    _SourceHitBadge(
-                      count: sourceHitCount,
-                      backgroundColor: palette.secondaryColor,
-                      textColor: palette.buttonTextColor,
-                    )
-                  else
-                    const SizedBox(height: 20),
-                  Icon(
-                    Icons.chevron_right,
-                    color: colorScheme.onSurfaceVariant,
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
+    );
+  }
+
+  Future<BookMetadataPresentation> _resolvePresentation(Book book) async {
+    final override = await AppDatabase.instance
+        .getBookMetadataOverrideByRemoteBook(
+          sourceId: book.sourceId,
+          detailUrl: book.detailUrl,
+        );
+    return const BookMetadataPresentationResolver().resolve(
+      fallbackTitle: book.title,
+      fallbackAuthor: book.author,
+      fallbackIntro: book.intro,
+      realCoverUrl: book.coverUrl,
+      metadataOverride: override,
     );
   }
 }
@@ -158,6 +195,7 @@ class SearchBookCard extends ConsumerWidget {
 class _CoverPreview extends StatelessWidget {
   const _CoverPreview({
     required this.coverUrl,
+    this.customCoverPath,
     required this.title,
     required this.heroTag,
     this.author,
@@ -167,6 +205,7 @@ class _CoverPreview extends StatelessWidget {
   });
 
   final String? coverUrl;
+  final String? customCoverPath;
   final String title;
   final String? author;
   final String heroTag;
@@ -182,6 +221,7 @@ class _CoverPreview extends StatelessWidget {
         ref.watch(coverGalleriesProvider);
         final resolvedCover = resolveBookCover(
           realCoverUrl: coverUrl,
+          customCoverPath: customCoverPath,
           activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
           galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
           bookId: bookId,

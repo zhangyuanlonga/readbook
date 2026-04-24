@@ -1,5 +1,7 @@
 enum AppAdvancedThemeMode { light, dark }
 
+enum AppAdvancedThemeWallpaperFit { fill, cover }
+
 class AppAdvancedThemeColors {
   const AppAdvancedThemeColors({
     this.primaryColorValue,
@@ -270,13 +272,27 @@ class AppAdvancedThemeModeConfig {
     this.colors = const AppAdvancedThemeColors(),
     this.wallpaperPath,
     this.readerWallpaperPath,
+    this.wallpaperOpacity = 1,
+    this.wallpaperBlurSigma = 0,
+    this.wallpaperFit = AppAdvancedThemeWallpaperFit.cover,
     this.wallpaperOverlayOpacity = 0.32,
+    this.readerWallpaperOpacity = 1,
+    this.readerWallpaperBlurSigma = 0,
+    this.readerWallpaperFit = AppAdvancedThemeWallpaperFit.cover,
+    this.readerWallpaperOverlayOpacity = 0,
   });
 
   final AppAdvancedThemeColors colors;
   final String? wallpaperPath;
   final String? readerWallpaperPath;
+  final double wallpaperOpacity;
+  final double wallpaperBlurSigma;
+  final AppAdvancedThemeWallpaperFit wallpaperFit;
   final double wallpaperOverlayOpacity;
+  final double readerWallpaperOpacity;
+  final double readerWallpaperBlurSigma;
+  final AppAdvancedThemeWallpaperFit readerWallpaperFit;
+  final double readerWallpaperOverlayOpacity;
 
   Map<String, dynamic> toJson() {
     return {
@@ -285,7 +301,14 @@ class AppAdvancedThemeModeConfig {
         'wallpaperPath': wallpaperPath,
       if (readerWallpaperPath != null && readerWallpaperPath!.trim().isNotEmpty)
         'readerWallpaperPath': readerWallpaperPath,
+      'wallpaperOpacity': wallpaperOpacity,
+      'wallpaperBlurSigma': wallpaperBlurSigma,
+      'wallpaperFit': wallpaperFit.name,
       'wallpaperOverlayOpacity': wallpaperOverlayOpacity,
+      'readerWallpaperOpacity': readerWallpaperOpacity,
+      'readerWallpaperBlurSigma': readerWallpaperBlurSigma,
+      'readerWallpaperFit': readerWallpaperFit.name,
+      'readerWallpaperOverlayOpacity': readerWallpaperOverlayOpacity,
     };
   }
 
@@ -302,8 +325,21 @@ class AppAdvancedThemeModeConfig {
       colors: colors,
       wallpaperPath: _readNullableString(json, 'wallpaperPath'),
       readerWallpaperPath: _readNullableString(json, 'readerWallpaperPath'),
+      wallpaperOpacity: _readDouble(json, 'wallpaperOpacity') ?? 1,
+      wallpaperBlurSigma: _readDouble(json, 'wallpaperBlurSigma') ?? 0,
+      wallpaperFit:
+          _readWallpaperFit(json, 'wallpaperFit') ??
+          AppAdvancedThemeWallpaperFit.cover,
       wallpaperOverlayOpacity:
           _readDouble(json, 'wallpaperOverlayOpacity') ?? 0.32,
+      readerWallpaperOpacity: _readDouble(json, 'readerWallpaperOpacity') ?? 1,
+      readerWallpaperBlurSigma:
+          _readDouble(json, 'readerWallpaperBlurSigma') ?? 0,
+      readerWallpaperFit:
+          _readWallpaperFit(json, 'readerWallpaperFit') ??
+          AppAdvancedThemeWallpaperFit.cover,
+      readerWallpaperOverlayOpacity:
+          _readDouble(json, 'readerWallpaperOverlayOpacity') ?? 0,
     );
   }
 
@@ -313,7 +349,14 @@ class AppAdvancedThemeModeConfig {
     bool clearWallpaperPath = false,
     String? readerWallpaperPath,
     bool clearReaderWallpaperPath = false,
+    double? wallpaperOpacity,
+    double? wallpaperBlurSigma,
+    AppAdvancedThemeWallpaperFit? wallpaperFit,
     double? wallpaperOverlayOpacity,
+    double? readerWallpaperOpacity,
+    double? readerWallpaperBlurSigma,
+    AppAdvancedThemeWallpaperFit? readerWallpaperFit,
+    double? readerWallpaperOverlayOpacity,
   }) {
     return AppAdvancedThemeModeConfig(
       colors: colors ?? this.colors,
@@ -323,8 +366,18 @@ class AppAdvancedThemeModeConfig {
           clearReaderWallpaperPath
               ? null
               : (readerWallpaperPath ?? this.readerWallpaperPath),
+      wallpaperOpacity: wallpaperOpacity ?? this.wallpaperOpacity,
+      wallpaperBlurSigma: wallpaperBlurSigma ?? this.wallpaperBlurSigma,
+      wallpaperFit: wallpaperFit ?? this.wallpaperFit,
       wallpaperOverlayOpacity:
           wallpaperOverlayOpacity ?? this.wallpaperOverlayOpacity,
+      readerWallpaperOpacity:
+          readerWallpaperOpacity ?? this.readerWallpaperOpacity,
+      readerWallpaperBlurSigma:
+          readerWallpaperBlurSigma ?? this.readerWallpaperBlurSigma,
+      readerWallpaperFit: readerWallpaperFit ?? this.readerWallpaperFit,
+      readerWallpaperOverlayOpacity:
+          readerWallpaperOverlayOpacity ?? this.readerWallpaperOverlayOpacity,
     );
   }
 
@@ -358,6 +411,18 @@ class AppAdvancedThemeModeConfig {
       return value.toDouble();
     }
     return double.tryParse(value.toString().trim());
+  }
+
+  static AppAdvancedThemeWallpaperFit? _readWallpaperFit(
+    Map<String, dynamic> json,
+    String key,
+  ) {
+    final raw = json[key]?.toString().trim();
+    return switch (raw) {
+      'fill' => AppAdvancedThemeWallpaperFit.fill,
+      'cover' => AppAdvancedThemeWallpaperFit.cover,
+      _ => null,
+    };
   }
 }
 

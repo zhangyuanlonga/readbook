@@ -2001,6 +2001,7 @@ class _SourcePageState extends State<SourcePage> {
         builder:
             (_) => ScriptSourceDebugPage(
               sourceCode: source.sourceCode,
+              sourceId: source.id,
               title: '${source.name} 调试',
               initialKeyword: source.checkKeyword,
             ),

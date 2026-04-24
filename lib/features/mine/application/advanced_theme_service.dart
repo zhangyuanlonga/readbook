@@ -17,7 +17,8 @@ import 'launch_image_gallery_service.dart';
 class AdvancedThemeService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
   static const String _colorExportType = 'advanced_theme_colors';
-  static const int _colorExportVersion = 1;
+  static const int _legacyColorExportVersion = 1;
+  static const int _colorExportVersion = 2;
   static const String _bundleExportType = 'advanced_theme_bundle';
   static const int _bundleExportVersion = 1;
 
@@ -203,8 +204,8 @@ class AdvancedThemeService {
       'type': _colorExportType,
       'version': _colorExportVersion,
       'name': theme.name,
-      'lightColors': theme.lightConfig.colors.toJson(),
-      'darkColors': theme.darkConfig.colors.toJson(),
+      'lightConfig': _encodeThemeColorModeConfig(theme.lightConfig),
+      'darkConfig': _encodeThemeColorModeConfig(theme.darkConfig),
     });
   }
 
@@ -223,22 +224,33 @@ class AdvancedThemeService {
     final version = payload['version'];
     final normalizedVersion =
         version is num ? version.toInt() : int.tryParse('$version');
-    if (normalizedVersion != _colorExportVersion) {
+    if (normalizedVersion != _legacyColorExportVersion &&
+        normalizedVersion != _colorExportVersion) {
       throw const FormatException('Unsupported theme JSON version.');
     }
 
     final rawName = payload['name']?.toString().trim() ?? '';
     final now = DateTime.now().toUtc();
-    final lightColors = _readExportedColors(payload, 'lightColors');
-    final darkColors = _readExportedColors(payload, 'darkColors');
+    final lightConfig =
+        normalizedVersion == _legacyColorExportVersion
+            ? AppAdvancedThemeModeConfig(
+              colors: _readExportedColors(payload, 'lightColors'),
+            )
+            : _readExportedModeConfig(payload, 'lightConfig');
+    final darkConfig =
+        normalizedVersion == _legacyColorExportVersion
+            ? AppAdvancedThemeModeConfig(
+              colors: _readExportedColors(payload, 'darkColors'),
+            )
+            : _readExportedModeConfig(payload, 'darkConfig');
 
     final importedTheme = AppAdvancedTheme(
       id: createThemeId(),
       name: rawName.isEmpty ? '导入主题' : rawName,
       createdAt: now,
       updatedAt: now,
-      lightConfig: AppAdvancedThemeModeConfig(colors: lightColors),
-      darkConfig: AppAdvancedThemeModeConfig(colors: darkColors),
+      lightConfig: lightConfig,
+      darkConfig: darkConfig,
     );
     return saveTheme(importedTheme);
   }
@@ -339,7 +351,7 @@ class AdvancedThemeService {
   }
 
   Future<AppAdvancedTheme> importThemeBundleZipBytes(List<int> bytes) async {
-    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    final archive = _decodeZipArchiveBytes(bytes);
     final manifestFile = archive.findFile('manifest.json');
     if (manifestFile == null) {
       throw const FormatException('主题压缩包缺少 manifest.json。');
@@ -373,82 +385,198 @@ class AdvancedThemeService {
     final themeId = createThemeId();
     final now = DateTime.now().toUtc();
     final themeDirectory = await _themeDirectory(themeId);
-    if (!await themeDirectory.exists()) {
-      await themeDirectory.create(recursive: true);
+    String? coverGalleryId;
+    String? launchImageGalleryId;
+    String? bottomNavGalleryId;
+
+    try {
+      if (!await themeDirectory.exists()) {
+        await themeDirectory.create(recursive: true);
+      }
+
+      final resourceMap =
+          manifest['resources'] is Map
+              ? (manifest['resources'] as Map).map(
+                (key, value) => MapEntry(key.toString(), value?.toString()),
+              )
+              : const <String, String?>{};
+
+      final lightWallpaperPath = await _extractArchiveFileToThemeDirectory(
+        archive,
+        themeDirectory,
+        resourceMap['lightWallpaperPath'],
+        targetNamePrefix: 'wallpaper_light',
+      );
+      final darkWallpaperPath = await _extractArchiveFileToThemeDirectory(
+        archive,
+        themeDirectory,
+        resourceMap['darkWallpaperPath'],
+        targetNamePrefix: 'wallpaper_dark',
+      );
+      final lightReaderWallpaperPath =
+          await _extractArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            resourceMap['lightReaderWallpaperPath'],
+            targetNamePrefix: 'reader_wallpaper_light',
+          );
+      final darkReaderWallpaperPath = await _extractArchiveFileToThemeDirectory(
+        archive,
+        themeDirectory,
+        resourceMap['darkReaderWallpaperPath'],
+        targetNamePrefix: 'reader_wallpaper_dark',
+      );
+
+      coverGalleryId = await _importImageGalleryFromBundle(
+        archive,
+        manifest['coverGallery'],
+        isLaunchGallery: false,
+      );
+      launchImageGalleryId = await _importImageGalleryFromBundle(
+        archive,
+        manifest['launchImageGallery'],
+        isLaunchGallery: true,
+      );
+      bottomNavGalleryId = await _importBottomNavGalleryFromBundle(
+        archive,
+        manifest['bottomNavGallery'],
+      );
+
+      final theme = importedTheme.copyWith(
+        id: themeId,
+        name: importedTheme.name,
+        createdAt: now,
+        updatedAt: now,
+        lightConfig: importedTheme.lightConfig.copyWith(
+          wallpaperPath: lightWallpaperPath,
+          clearWallpaperPath: lightWallpaperPath == null,
+          readerWallpaperPath: lightReaderWallpaperPath,
+          clearReaderWallpaperPath: lightReaderWallpaperPath == null,
+        ),
+        darkConfig: importedTheme.darkConfig.copyWith(
+          wallpaperPath: darkWallpaperPath,
+          clearWallpaperPath: darkWallpaperPath == null,
+          readerWallpaperPath: darkReaderWallpaperPath,
+          clearReaderWallpaperPath: darkReaderWallpaperPath == null,
+        ),
+        coverGalleryId: coverGalleryId,
+        clearCoverGalleryId: coverGalleryId == null,
+        launchImageGalleryId: launchImageGalleryId,
+        clearLaunchImageGalleryId: launchImageGalleryId == null,
+        bottomNavGalleryId: bottomNavGalleryId,
+        clearBottomNavGalleryId: bottomNavGalleryId == null,
+      );
+      return saveTheme(theme);
+    } catch (_) {
+      await _cleanupImportedThemeBundleArtifacts(
+        themeDirectory: themeDirectory,
+        coverGalleryId: coverGalleryId,
+        launchImageGalleryId: launchImageGalleryId,
+        bottomNavGalleryId: bottomNavGalleryId,
+      );
+      rethrow;
     }
+  }
 
-    final resourceMap =
-        manifest['resources'] is Map
-            ? (manifest['resources'] as Map).map(
-              (key, value) => MapEntry(key.toString(), value?.toString()),
-            )
-            : const <String, String?>{};
+  Future<AppAdvancedTheme> importRedThemePackageBytes(List<int> bytes) async {
+    final archive = _decodeRedThemeArchiveBytes(bytes);
+    final themeFile = archive.findFile('theme.json');
+    if (themeFile == null) {
+      throw const FormatException('Red 主题包缺少 theme.json。');
+    }
+    final decoded = jsonDecode(
+      utf8.decode(_archiveFileBytes(themeFile), allowMalformed: true),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('Red 主题包配置无效。');
+    }
+    final manifest = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final rawName = manifest['name']?.toString().trim() ?? '';
+    final lightSection = _readRequiredMap(manifest, 'light');
+    final darkSection = _readRequiredMap(manifest, 'dark');
+    final themeId = createThemeId();
+    final now = DateTime.now().toUtc();
+    final themeDirectory = await _themeDirectory(themeId);
+    String? coverGalleryId;
+    String? bottomNavGalleryId;
 
-    final lightWallpaperPath = await _extractArchiveFileToThemeDirectory(
-      archive,
-      themeDirectory,
-      resourceMap['lightWallpaperPath'],
-      targetNamePrefix: 'wallpaper_light',
-    );
-    final darkWallpaperPath = await _extractArchiveFileToThemeDirectory(
-      archive,
-      themeDirectory,
-      resourceMap['darkWallpaperPath'],
-      targetNamePrefix: 'wallpaper_dark',
-    );
-    final lightReaderWallpaperPath = await _extractArchiveFileToThemeDirectory(
-      archive,
-      themeDirectory,
-      resourceMap['lightReaderWallpaperPath'],
-      targetNamePrefix: 'reader_wallpaper_light',
-    );
-    final darkReaderWallpaperPath = await _extractArchiveFileToThemeDirectory(
-      archive,
-      themeDirectory,
-      resourceMap['darkReaderWallpaperPath'],
-      targetNamePrefix: 'reader_wallpaper_dark',
-    );
+    try {
+      if (!await themeDirectory.exists()) {
+        await themeDirectory.create(recursive: true);
+      }
 
-    final coverGalleryId = await _importImageGalleryFromBundle(
-      archive,
-      manifest['coverGallery'],
-      isLaunchGallery: false,
-    );
-    final launchImageGalleryId = await _importImageGalleryFromBundle(
-      archive,
-      manifest['launchImageGallery'],
-      isLaunchGallery: true,
-    );
-    final bottomNavGalleryId = await _importBottomNavGalleryFromBundle(
-      archive,
-      manifest['bottomNavGallery'],
-    );
+      final lightWallpaperPath =
+          await _extractOptionalArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            'light/theme_bg.img',
+            targetNamePrefix: 'wallpaper_light_red',
+          );
+      final darkWallpaperPath =
+          await _extractOptionalArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            'dark/theme_bg.img',
+            targetNamePrefix: 'wallpaper_dark_red',
+          );
 
-    final theme = importedTheme.copyWith(
-      id: themeId,
-      name: importedTheme.name,
-      createdAt: now,
-      updatedAt: now,
-      lightConfig: importedTheme.lightConfig.copyWith(
-        wallpaperPath: lightWallpaperPath,
-        clearWallpaperPath: lightWallpaperPath == null,
-        readerWallpaperPath: lightReaderWallpaperPath,
-        clearReaderWallpaperPath: lightReaderWallpaperPath == null,
-      ),
-      darkConfig: importedTheme.darkConfig.copyWith(
-        wallpaperPath: darkWallpaperPath,
-        clearWallpaperPath: darkWallpaperPath == null,
-        readerWallpaperPath: darkReaderWallpaperPath,
-        clearReaderWallpaperPath: darkReaderWallpaperPath == null,
-      ),
-      coverGalleryId: coverGalleryId,
-      clearCoverGalleryId: coverGalleryId == null,
-      launchImageGalleryId: launchImageGalleryId,
-      clearLaunchImageGalleryId: launchImageGalleryId == null,
-      bottomNavGalleryId: bottomNavGalleryId,
-      clearBottomNavGalleryId: bottomNavGalleryId == null,
-    );
-    return saveTheme(theme);
+      final lightReaderSchema = await _importRedReaderSchema(
+        archive,
+        themeDirectory,
+        schemaId: lightSection['readerColorSchemaId']?.toString(),
+        targetNamePrefix: 'reader_wallpaper_light_red',
+      );
+      final darkReaderSchema = await _importRedReaderSchema(
+        archive,
+        themeDirectory,
+        schemaId: darkSection['readerColorSchemaId']?.toString(),
+        targetNamePrefix: 'reader_wallpaper_dark_red',
+      );
+
+      coverGalleryId = await _importRedCoverGallery(
+        archive,
+        galleryIds: <String>{
+          lightSection['coverGalleryId']?.toString().trim() ?? '',
+          darkSection['coverGalleryId']?.toString().trim() ?? '',
+        },
+        fallbackName: rawName.isEmpty ? 'Red 主题封面' : '$rawName 封面',
+      );
+      bottomNavGalleryId = await _importRedBottomNavGallery(
+        archive,
+        lightPackId: lightSection['navbarPackId']?.toString(),
+        darkPackId: darkSection['navbarPackId']?.toString(),
+        fallbackName: rawName.isEmpty ? 'Red 主题底栏' : '$rawName 底栏',
+      );
+
+      final theme = AppAdvancedTheme(
+        id: themeId,
+        name: rawName.isEmpty ? '导入 Red 主题' : rawName,
+        createdAt: now,
+        updatedAt: now,
+        lightConfig: _buildModeConfigFromRedSection(
+          lightSection,
+          wallpaperPath: lightWallpaperPath,
+          readerSchema: lightReaderSchema,
+        ),
+        darkConfig: _buildModeConfigFromRedSection(
+          darkSection,
+          wallpaperPath: darkWallpaperPath,
+          readerSchema: darkReaderSchema,
+        ),
+        coverGalleryId: coverGalleryId,
+        bottomNavGalleryId: bottomNavGalleryId,
+      );
+      return saveTheme(theme);
+    } catch (_) {
+      await _cleanupImportedThemeBundleArtifacts(
+        themeDirectory: themeDirectory,
+        coverGalleryId: coverGalleryId,
+        bottomNavGalleryId: bottomNavGalleryId,
+      );
+      rethrow;
+    }
   }
 
   Future<String> saveWallpaper({
@@ -535,6 +663,215 @@ class AdvancedThemeService {
         (nestedKey, nestedValue) => MapEntry(nestedKey.toString(), nestedValue),
       ),
     );
+  }
+
+  Map<String, dynamic> _encodeThemeColorModeConfig(
+    AppAdvancedThemeModeConfig config,
+  ) {
+    return <String, dynamic>{
+      'colors': config.colors.toJson(),
+      'wallpaperOpacity': config.wallpaperOpacity,
+      'wallpaperBlurSigma': config.wallpaperBlurSigma,
+      'wallpaperFit': config.wallpaperFit.name,
+      'wallpaperOverlayOpacity': config.wallpaperOverlayOpacity,
+      'readerWallpaperOpacity': config.readerWallpaperOpacity,
+      'readerWallpaperBlurSigma': config.readerWallpaperBlurSigma,
+      'readerWallpaperFit': config.readerWallpaperFit.name,
+      'readerWallpaperOverlayOpacity': config.readerWallpaperOverlayOpacity,
+    };
+  }
+
+  AppAdvancedThemeModeConfig _readExportedModeConfig(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final rawConfig = payload[key];
+    if (rawConfig is! Map) {
+      throw FormatException('Missing or invalid field: $key');
+    }
+    final normalizedConfig = rawConfig.map(
+      (nestedKey, nestedValue) => MapEntry(nestedKey.toString(), nestedValue),
+    );
+    return AppAdvancedThemeModeConfig(
+      colors: _readExportedColors(normalizedConfig, 'colors'),
+      wallpaperOpacity:
+          _readExportedDouble(normalizedConfig, 'wallpaperOpacity') ?? 1,
+      wallpaperBlurSigma:
+          _readExportedDouble(normalizedConfig, 'wallpaperBlurSigma') ?? 0,
+      wallpaperFit:
+          _readExportedWallpaperFit(normalizedConfig, 'wallpaperFit') ??
+          AppAdvancedThemeWallpaperFit.cover,
+      wallpaperOverlayOpacity:
+          _readExportedDouble(normalizedConfig, 'wallpaperOverlayOpacity') ??
+          0.32,
+      readerWallpaperOpacity:
+          _readExportedDouble(normalizedConfig, 'readerWallpaperOpacity') ?? 1,
+      readerWallpaperBlurSigma:
+          _readExportedDouble(normalizedConfig, 'readerWallpaperBlurSigma') ??
+          0,
+      readerWallpaperFit:
+          _readExportedWallpaperFit(normalizedConfig, 'readerWallpaperFit') ??
+          AppAdvancedThemeWallpaperFit.cover,
+      readerWallpaperOverlayOpacity:
+          _readExportedDouble(
+            normalizedConfig,
+            'readerWallpaperOverlayOpacity',
+          ) ??
+          0,
+    );
+  }
+
+  double? _readExportedDouble(Map<String, dynamic> payload, String key) {
+    final value = payload[key];
+    if (value == null) {
+      return null;
+    }
+    if (value is double) {
+      return value;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value.toString().trim());
+  }
+
+  AppAdvancedThemeWallpaperFit? _readExportedWallpaperFit(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final raw = payload[key]?.toString().trim();
+    return switch (raw) {
+      'fill' => AppAdvancedThemeWallpaperFit.fill,
+      'cover' => AppAdvancedThemeWallpaperFit.cover,
+      _ => null,
+    };
+  }
+
+  Archive _decodeZipArchiveBytes(List<int> bytes) {
+    return ZipDecoder().decodeBytes(bytes, verify: true);
+  }
+
+  Archive _decodeRedThemeArchiveBytes(List<int> bytes) {
+    if (bytes.length < 8) {
+      throw const FormatException('Red 主题包内容无效。');
+    }
+    if (_hasRedPrefix(bytes)) {
+      return _decodeZipArchiveBytes(bytes.sublist(4));
+    }
+    if (_looksLikeZip(bytes)) {
+      return _decodeZipArchiveBytes(bytes);
+    }
+    throw const FormatException('不支持的 Red 主题包格式。');
+  }
+
+  bool _hasRedPrefix(List<int> bytes) {
+    return bytes.length >= 8 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x45 &&
+        bytes[2] == 0x44 &&
+        _looksLikeZip(bytes.sublist(4));
+  }
+
+  bool _looksLikeZip(List<int> bytes) {
+    return bytes.length >= 4 &&
+        bytes[0] == 0x50 &&
+        bytes[1] == 0x4B &&
+        bytes[2] == 0x03 &&
+        bytes[3] == 0x04;
+  }
+
+  Map<String, dynamic> _readRequiredMap(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final raw = payload[key];
+    if (raw is! Map) {
+      throw FormatException('Missing or invalid field: $key');
+    }
+    return raw.map((nestedKey, nestedValue) {
+      return MapEntry(nestedKey.toString(), nestedValue);
+    });
+  }
+
+  AppAdvancedThemeModeConfig _buildModeConfigFromRedSection(
+    Map<String, dynamic> payload, {
+    required String? wallpaperPath,
+    required _RedReaderSchemaImport? readerSchema,
+  }) {
+    final backgroundColor = _parseHexColorValue(
+      payload['backgroundColor']?.toString(),
+    );
+    final foregroundColor = _parseHexColorValue(
+      payload['foregroundColor']?.toString(),
+    );
+    final mutedForegroundColor = _parseHexColorValue(
+      payload['mutedForegroundColor']?.toString(),
+    );
+    final cardColor = _parseHexColorValue(payload['cardColor']?.toString());
+    final cardForegroundColor = _parseHexColorValue(
+      payload['cardForegroundColor']?.toString(),
+    );
+    final mutedColor = _parseHexColorValue(payload['mutedColor']?.toString());
+    final borderColor = _parseHexColorValue(payload['borderColor']?.toString());
+    final primaryColor = _parseHexColorValue(
+      payload['primaryColor']?.toString() ?? payload['accentColor']?.toString(),
+    );
+    final accentColor = _parseHexColorValue(payload['accentColor']?.toString());
+    final searchFieldBackgroundColor = _parseHexColorValue(
+      payload['searchFieldBackgroundColor']?.toString(),
+    );
+
+    return AppAdvancedThemeModeConfig(
+      colors: AppAdvancedThemeColors(
+        primaryColorValue: primaryColor ?? accentColor,
+        secondaryColorValue: accentColor ?? primaryColor,
+        noticeAccentColorValue: accentColor ?? primaryColor,
+        noticeSurfaceColorValue: mutedColor,
+        primaryContainerColorValue: mutedColor,
+        backgroundColorValue: backgroundColor,
+        surfaceColorValue: mutedColor ?? cardColor,
+        searchFieldBackgroundColorValue:
+            searchFieldBackgroundColor ?? mutedColor ?? cardColor,
+        elevatedSurfaceColorValue: cardColor ?? mutedColor,
+        cardColorValue: cardColor,
+        cardTextColorValue: cardForegroundColor ?? foregroundColor,
+        cardBorderColorValue: borderColor,
+        iconBackgroundColorValue: mutedColor,
+        textPrimaryColorValue: foregroundColor,
+        textSecondaryColorValue: mutedForegroundColor,
+        buttonTextColorValue: foregroundColor,
+        outlineColorValue: borderColor,
+        shadowColorValue: null,
+        wallpaperOverlayColorValue: backgroundColor,
+      ),
+      wallpaperPath: wallpaperPath,
+      wallpaperOpacity: wallpaperPath == null ? 1 : 1,
+      wallpaperBlurSigma: 0,
+      wallpaperFit: AppAdvancedThemeWallpaperFit.fill,
+      wallpaperOverlayOpacity: wallpaperPath == null ? 0.32 : 0,
+      readerWallpaperPath: readerSchema?.backgroundPath,
+      readerWallpaperOpacity: readerSchema?.opacity ?? 1,
+      readerWallpaperBlurSigma: readerSchema?.blurSigma ?? 0,
+      readerWallpaperFit:
+          readerSchema?.fit ?? AppAdvancedThemeWallpaperFit.fill,
+      readerWallpaperOverlayOpacity: readerSchema?.overlayOpacity ?? 0,
+    );
+  }
+
+  int? _parseHexColorValue(String? raw) {
+    final normalized = raw?.trim().toUpperCase() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final body =
+        normalized.startsWith('#') ? normalized.substring(1) : normalized;
+    if (body.length == 6) {
+      return int.tryParse('FF$body', radix: 16);
+    }
+    if (body.length == 8) {
+      return int.tryParse(body, radix: 16);
+    }
+    return null;
   }
 
   Future<Map<String, dynamic>?> _appendImageGalleryToArchive(
@@ -650,6 +987,29 @@ class AdvancedThemeService {
     }
     final file = archive.findFile(normalized);
     if (file == null) {
+      throw FormatException('主题压缩包资源缺失：$normalized');
+    }
+    final ext = p.extension(normalized);
+    final targetPath = p.join(
+      themeDirectory.path,
+      '$targetNamePrefix${ext.isEmpty ? '.png' : ext}',
+    );
+    await File(targetPath).writeAsBytes(_archiveFileBytes(file), flush: true);
+    return targetPath;
+  }
+
+  Future<String?> _extractOptionalArchiveFileToThemeDirectory(
+    Archive archive,
+    Directory themeDirectory,
+    String? bundlePath, {
+    required String targetNamePrefix,
+  }) async {
+    final normalized = bundlePath?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final file = archive.findFile(normalized);
+    if (file == null) {
       return null;
     }
     final ext = p.extension(normalized);
@@ -678,41 +1038,69 @@ class AdvancedThemeService {
       return null;
     }
 
+    final bundlePaths = <String>[];
+    for (final rawPath in images) {
+      final bundlePath = rawPath.toString().trim();
+      if (bundlePath.isEmpty) {
+        continue;
+      }
+      final file = archive.findFile(bundlePath);
+      if (file == null) {
+        throw FormatException('主题压缩包资源缺失：$bundlePath');
+      }
+      bundlePaths.add(bundlePath);
+    }
+    if (bundlePaths.isEmpty) {
+      return null;
+    }
+
     if (isLaunchGallery) {
       final service = LaunchImageGalleryService(
         preferences: await _preferencesFuture,
       );
       final gallery = await service.createGallery(name: name);
-      for (final rawPath in images) {
-        final bundlePath = rawPath.toString().trim();
-        final file = archive.findFile(bundlePath);
-        if (file == null) {
-          continue;
+      try {
+        for (final bundlePath in bundlePaths) {
+          final file = archive.findFile(bundlePath)!;
+          await service.importImage(
+            galleryId: gallery.id,
+            bytes: _archiveFileBytes(file),
+            fileName: p.basename(bundlePath),
+          );
         }
+        final savedGallery = await service.loadGallery(gallery.id);
+        if (savedGallery == null || savedGallery.imagePaths.isEmpty) {
+          await service.deleteGallery(gallery.id);
+          return null;
+        }
+        return gallery.id;
+      } catch (_) {
+        await _safeDeleteLaunchGallery(gallery.id);
+        rethrow;
+      }
+    }
+
+    final service = CoverGalleryService(preferences: await _preferencesFuture);
+    final gallery = await service.createGallery(name: name);
+    try {
+      for (final bundlePath in bundlePaths) {
+        final file = archive.findFile(bundlePath)!;
         await service.importImage(
           galleryId: gallery.id,
           bytes: _archiveFileBytes(file),
           fileName: p.basename(bundlePath),
         );
       }
-      return gallery.id;
-    }
-
-    final service = CoverGalleryService(preferences: await _preferencesFuture);
-    final gallery = await service.createGallery(name: name);
-    for (final rawPath in images) {
-      final bundlePath = rawPath.toString().trim();
-      final file = archive.findFile(bundlePath);
-      if (file == null) {
-        continue;
+      final savedGallery = await service.loadGallery(gallery.id);
+      if (savedGallery == null || savedGallery.imagePaths.isEmpty) {
+        await service.deleteGallery(gallery.id);
+        return null;
       }
-      await service.importImage(
-        galleryId: gallery.id,
-        bytes: _archiveFileBytes(file),
-        fileName: p.basename(bundlePath),
-      );
+      return gallery.id;
+    } catch (_) {
+      await _safeDeleteCoverGallery(gallery.id);
+      rethrow;
     }
-    return gallery.id;
   }
 
   Future<String?> _importBottomNavGalleryFromBundle(
@@ -735,6 +1123,68 @@ class AdvancedThemeService {
       return null;
     }
 
+    final importAssignments = <_BottomNavBundleImportAssignment>[];
+    for (final tabEntry in items.entries) {
+      final tab = _bottomNavTabFromName(tabEntry.key.toString());
+      if (tab == null || tabEntry.value is! Map) {
+        continue;
+      }
+      final slotMap = (tabEntry.value as Map).map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      for (final slotEntry in slotMap.entries) {
+        final slot = _bottomNavSlotFromName(slotEntry.key);
+        if (slot == null || slotEntry.value is! Map) {
+          continue;
+        }
+        final assetMap = (slotEntry.value as Map).map(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        final isAsset = assetMap['isAsset'] == true;
+        final format = _bottomNavFormatFromName(assetMap['format']?.toString());
+        if (format == null) {
+          continue;
+        }
+        if (isAsset) {
+          final path = assetMap['path']?.toString().trim() ?? '';
+          if (path.isEmpty) {
+            continue;
+          }
+          importAssignments.add(
+            _BottomNavBundleImportAssignment.asset(
+              tab: tab,
+              slot: slot,
+              assetRef: BottomNavIconAssetRef(
+                path: path,
+                format: format,
+                isAsset: true,
+              ),
+            ),
+          );
+          continue;
+        }
+        final bundlePath = assetMap['bundlePath']?.toString().trim() ?? '';
+        if (bundlePath.isEmpty) {
+          continue;
+        }
+        final archiveFile = archive.findFile(bundlePath);
+        if (archiveFile == null) {
+          throw FormatException('主题压缩包资源缺失：$bundlePath');
+        }
+        importAssignments.add(
+          _BottomNavBundleImportAssignment.bundle(
+            tab: tab,
+            slot: slot,
+            format: format,
+            bundlePath: bundlePath,
+          ),
+        );
+      }
+    }
+    if (importAssignments.isEmpty) {
+      return null;
+    }
+
     final service = BottomNavIconGalleryService(
       preferences: await _preferencesFuture,
     );
@@ -746,72 +1196,341 @@ class AdvancedThemeService {
       'advanced_theme_bundle_import_',
     );
     try {
-      for (final tabEntry in items.entries) {
-        final tab = _bottomNavTabFromName(tabEntry.key.toString());
-        if (tab == null || tabEntry.value is! Map) {
+      for (final assignment in importAssignments) {
+        var iconSet = nextItems[assignment.tab] ?? const BottomNavIconSet();
+        if (assignment.assetRef != null) {
+          iconSet = iconSet.copyWithSlot(
+            assignment.slot,
+            asset: assignment.assetRef,
+          );
+          nextItems[assignment.tab] = iconSet;
           continue;
         }
-        var iconSet = nextItems[tab] ?? const BottomNavIconSet();
-        final slotMap = (tabEntry.value as Map).map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
-        for (final slotEntry in slotMap.entries) {
-          final slot = _bottomNavSlotFromName(slotEntry.key);
-          if (slot == null || slotEntry.value is! Map) {
-            continue;
-          }
-          final assetMap = (slotEntry.value as Map).map(
-            (key, value) => MapEntry(key.toString(), value),
-          );
-          final isAsset = assetMap['isAsset'] == true;
-          final format = _bottomNavFormatFromName(
-            assetMap['format']?.toString(),
-          );
-          if (format == null) {
-            continue;
-          }
-          if (isAsset) {
-            final path = assetMap['path']?.toString().trim() ?? '';
-            if (path.isEmpty) {
-              continue;
-            }
-            iconSet = iconSet.copyWithSlot(
-              slot,
-              asset: BottomNavIconAssetRef(
-                path: path,
-                format: format,
-                isAsset: true,
-              ),
-            );
-            continue;
-          }
-          final bundlePath = assetMap['bundlePath']?.toString().trim() ?? '';
-          final archiveFile = archive.findFile(bundlePath);
-          if (archiveFile == null) {
-            continue;
-          }
-          final tempPath = p.join(tempDirectory.path, p.basename(bundlePath));
-          await File(
-            tempPath,
-          ).writeAsBytes(_archiveFileBytes(archiveFile), flush: true);
-          final importedAsset = await service.importIconAsset(
-            galleryId: gallery.id,
-            tab: tab,
-            slot: slot,
-            sourcePath: tempPath,
-            format: format,
-          );
-          iconSet = iconSet.copyWithSlot(slot, asset: importedAsset);
+        final archiveFile = archive.findFile(assignment.bundlePath!);
+        if (archiveFile == null) {
+          throw FormatException('主题压缩包资源缺失：${assignment.bundlePath}');
         }
-        nextItems[tab] = iconSet;
+        final tempPath = p.join(
+          tempDirectory.path,
+          p.basename(assignment.bundlePath!),
+        );
+        await File(
+          tempPath,
+        ).writeAsBytes(_archiveFileBytes(archiveFile), flush: true);
+        final importedAsset = await service.importIconAsset(
+          galleryId: gallery.id,
+          tab: assignment.tab,
+          slot: assignment.slot,
+          sourcePath: tempPath,
+          format: assignment.format!,
+        );
+        iconSet = iconSet.copyWithSlot(assignment.slot, asset: importedAsset);
+        nextItems[assignment.tab] = iconSet;
       }
       gallery = await service.saveGallery(gallery.copyWith(items: nextItems));
       return gallery.id;
+    } catch (_) {
+      await _safeDeleteBottomNavGallery(gallery.id);
+      rethrow;
     } finally {
       if (await tempDirectory.exists()) {
         await tempDirectory.delete(recursive: true);
       }
     }
+  }
+
+  Future<_RedReaderSchemaImport?> _importRedReaderSchema(
+    Archive archive,
+    Directory themeDirectory, {
+    required String? schemaId,
+    required String targetNamePrefix,
+  }) async {
+    final normalizedId = schemaId?.trim() ?? '';
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+    final schemaPath = 'reader_schema/$normalizedId/schema.json';
+    final schemaFile = archive.findFile(schemaPath);
+    if (schemaFile == null) {
+      throw FormatException('Red 主题包缺少阅读器配置：$schemaPath');
+    }
+    final decoded = jsonDecode(
+      utf8.decode(_archiveFileBytes(schemaFile), allowMalformed: true),
+    );
+    if (decoded is! Map) {
+      throw FormatException('Red 阅读器配置无效：$schemaPath');
+    }
+    final manifest = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final backgroundPath = await _extractOptionalArchiveFileToThemeDirectory(
+      archive,
+      themeDirectory,
+      'reader_schema/$normalizedId/bg.img',
+      targetNamePrefix: targetNamePrefix,
+    );
+    final backgroundFit =
+        switch ((manifest['backgroundImageFit']?.toString().trim() ?? '')
+            .toLowerCase()) {
+          'fill' => AppAdvancedThemeWallpaperFit.fill,
+          'cover' => AppAdvancedThemeWallpaperFit.cover,
+          _ => AppAdvancedThemeWallpaperFit.fill,
+        };
+    final blurSigma =
+        _readExportedDouble(manifest, 'backgroundImageBlur') ??
+        _readBackgroundBlurFromLayoutConfig(
+          manifest['layoutConfig']?.toString(),
+        ) ??
+        0;
+    return _RedReaderSchemaImport(
+      backgroundPath: backgroundPath,
+      opacity: _readExportedDouble(manifest, 'backgroundImageOpacity') ?? 1,
+      blurSigma: blurSigma,
+      fit: backgroundFit,
+      overlayOpacity: 0,
+    );
+  }
+
+  double? _readBackgroundBlurFromLayoutConfig(String? rawLayoutConfig) {
+    final normalized = rawLayoutConfig?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return null;
+      }
+      final payload = decoded.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      return _readExportedDouble(payload, 'backgroundImageBlur');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _importRedCoverGallery(
+    Archive archive, {
+    required Set<String> galleryIds,
+    required String fallbackName,
+  }) async {
+    final normalizedIds = galleryIds
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty);
+    final ids = normalizedIds.toSet();
+    if (ids.isEmpty) {
+      return null;
+    }
+
+    final images = <_RedArchiveImageEntry>[];
+    String galleryName = fallbackName;
+    for (final id in ids) {
+      final metaPath = 'cover_gallery/$id/meta.json';
+      final metaFile = archive.findFile(metaPath);
+      if (metaFile == null) {
+        throw FormatException('Red 主题包缺少封面图库配置：$metaPath');
+      }
+      final metaDecoded = jsonDecode(
+        utf8.decode(_archiveFileBytes(metaFile), allowMalformed: true),
+      );
+      if (metaDecoded is Map) {
+        final normalizedMeta = metaDecoded.map(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        final name = normalizedMeta['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty) {
+          galleryName = name;
+        }
+      }
+      final prefix = 'cover_gallery/$id/';
+      final groupImages = archive.files
+        .where(
+          (file) =>
+              file.name.startsWith(prefix) &&
+              !file.name.endsWith('/meta.json') &&
+              !file.name.endsWith('/'),
+        )
+        .map((file) => _RedArchiveImageEntry(file.name))
+        .toList(growable: false)..sort((a, b) => a.path.compareTo(b.path));
+      if (groupImages.isEmpty) {
+        throw FormatException('Red 主题包封面图库为空：$id');
+      }
+      images.addAll(groupImages);
+    }
+
+    final service = CoverGalleryService(preferences: await _preferencesFuture);
+    final gallery = await service.createGallery(name: galleryName);
+    try {
+      for (final image in images) {
+        final file = archive.findFile(image.path);
+        if (file == null) {
+          throw FormatException('Red 主题包资源缺失：${image.path}');
+        }
+        await service.importImage(
+          galleryId: gallery.id,
+          bytes: _archiveFileBytes(file),
+          fileName: p.basename(image.path),
+        );
+      }
+      return gallery.id;
+    } catch (_) {
+      await _safeDeleteCoverGallery(gallery.id);
+      rethrow;
+    }
+  }
+
+  Future<String?> _importRedBottomNavGallery(
+    Archive archive, {
+    required String? lightPackId,
+    required String? darkPackId,
+    required String fallbackName,
+  }) async {
+    final assignments = <_BottomNavBundleImportAssignment>[
+      ..._collectRedBottomNavAssignments(
+        archive,
+        packId: lightPackId,
+        isDark: false,
+      ),
+      ..._collectRedBottomNavAssignments(
+        archive,
+        packId: darkPackId,
+        isDark: true,
+      ),
+    ];
+    if (assignments.isEmpty) {
+      return null;
+    }
+
+    final service = BottomNavIconGalleryService(
+      preferences: await _preferencesFuture,
+    );
+    var gallery = await service.createGallery(name: fallbackName);
+    var nextItems = Map<BottomNavIconGalleryTab, BottomNavIconSet>.from(
+      gallery.items,
+    );
+    final tempDirectory = await Directory.systemTemp.createTemp(
+      'red_theme_nav_import_',
+    );
+    try {
+      for (final assignment in assignments) {
+        var iconSet = nextItems[assignment.tab] ?? const BottomNavIconSet();
+        final archiveFile = archive.findFile(assignment.bundlePath!);
+        if (archiveFile == null) {
+          throw FormatException('Red 主题包资源缺失：${assignment.bundlePath}');
+        }
+        final tempPath = p.join(
+          tempDirectory.path,
+          p.basename(assignment.bundlePath!),
+        );
+        await File(
+          tempPath,
+        ).writeAsBytes(_archiveFileBytes(archiveFile), flush: true);
+        final importedAsset = await service.importIconAsset(
+          galleryId: gallery.id,
+          tab: assignment.tab,
+          slot: assignment.slot,
+          sourcePath: tempPath,
+          format: assignment.format!,
+        );
+        iconSet = iconSet.copyWithSlot(assignment.slot, asset: importedAsset);
+        nextItems[assignment.tab] = iconSet;
+      }
+      gallery = await service.saveGallery(gallery.copyWith(items: nextItems));
+      return gallery.id;
+    } catch (_) {
+      await _safeDeleteBottomNavGallery(gallery.id);
+      rethrow;
+    } finally {
+      if (await tempDirectory.exists()) {
+        await tempDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  List<_BottomNavBundleImportAssignment> _collectRedBottomNavAssignments(
+    Archive archive, {
+    required String? packId,
+    required bool isDark,
+  }) {
+    final normalizedId = packId?.trim() ?? '';
+    if (normalizedId.isEmpty) {
+      return const <_BottomNavBundleImportAssignment>[];
+    }
+    final metaPath = 'navbar_pack/$normalizedId/meta.json';
+    final metaFile = archive.findFile(metaPath);
+    if (metaFile == null) {
+      throw FormatException('Red 主题包缺少底栏图标包配置：$metaPath');
+    }
+
+    final filenameMap =
+        <String, (BottomNavIconGalleryTab, BottomNavIconVariantSlot)>{
+          'bookshelf_normal.png': (
+            BottomNavIconGalleryTab.bookshelf,
+            isDark
+                ? BottomNavIconVariantSlot.darkUnselected
+                : BottomNavIconVariantSlot.lightUnselected,
+          ),
+          'bookshelf_selected.png': (
+            BottomNavIconGalleryTab.bookshelf,
+            isDark
+                ? BottomNavIconVariantSlot.darkSelected
+                : BottomNavIconVariantSlot.lightSelected,
+          ),
+          'home_normal.png': (
+            BottomNavIconGalleryTab.discover,
+            isDark
+                ? BottomNavIconVariantSlot.darkUnselected
+                : BottomNavIconVariantSlot.lightUnselected,
+          ),
+          'home_selected.png': (
+            BottomNavIconGalleryTab.discover,
+            isDark
+                ? BottomNavIconVariantSlot.darkSelected
+                : BottomNavIconVariantSlot.lightSelected,
+          ),
+          'statistics_normal.png': (
+            BottomNavIconGalleryTab.stats,
+            isDark
+                ? BottomNavIconVariantSlot.darkUnselected
+                : BottomNavIconVariantSlot.lightUnselected,
+          ),
+          'statistics_selected.png': (
+            BottomNavIconGalleryTab.stats,
+            isDark
+                ? BottomNavIconVariantSlot.darkSelected
+                : BottomNavIconVariantSlot.lightSelected,
+          ),
+          'settings_normal.png': (
+            BottomNavIconGalleryTab.mine,
+            isDark
+                ? BottomNavIconVariantSlot.darkUnselected
+                : BottomNavIconVariantSlot.lightUnselected,
+          ),
+          'settings_selected.png': (
+            BottomNavIconGalleryTab.mine,
+            isDark
+                ? BottomNavIconVariantSlot.darkSelected
+                : BottomNavIconVariantSlot.lightSelected,
+          ),
+        };
+
+    final assignments = <_BottomNavBundleImportAssignment>[];
+    for (final entry in filenameMap.entries) {
+      final bundlePath = 'navbar_pack/$normalizedId/${entry.key}';
+      if (archive.findFile(bundlePath) == null) {
+        continue;
+      }
+      assignments.add(
+        _BottomNavBundleImportAssignment.bundle(
+          tab: entry.value.$1,
+          slot: entry.value.$2,
+          format: BottomNavIconAssetFormat.png,
+          bundlePath: bundlePath,
+        ),
+      );
+    }
+    return assignments;
   }
 
   BottomNavIconGalleryTab? _bottomNavTabFromName(String raw) {
@@ -845,4 +1564,104 @@ class AdvancedThemeService {
   List<int> _archiveFileBytes(ArchiveFile file) {
     return List<int>.from(file.content);
   }
+
+  Future<void> _cleanupImportedThemeBundleArtifacts({
+    required Directory themeDirectory,
+    String? coverGalleryId,
+    String? launchImageGalleryId,
+    String? bottomNavGalleryId,
+  }) async {
+    await _safeDeleteCoverGallery(coverGalleryId);
+    await _safeDeleteLaunchGallery(launchImageGalleryId);
+    await _safeDeleteBottomNavGallery(bottomNavGalleryId);
+    if (await themeDirectory.exists()) {
+      await themeDirectory.delete(recursive: true);
+    }
+  }
+
+  Future<void> _safeDeleteCoverGallery(String? galleryId) async {
+    final normalized = galleryId?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return;
+    }
+    try {
+      await CoverGalleryService(
+        preferences: await _preferencesFuture,
+      ).deleteGallery(normalized);
+    } catch (_) {
+      // Ignore rollback failures.
+    }
+  }
+
+  Future<void> _safeDeleteLaunchGallery(String? galleryId) async {
+    final normalized = galleryId?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return;
+    }
+    try {
+      await LaunchImageGalleryService(
+        preferences: await _preferencesFuture,
+      ).deleteGallery(normalized);
+    } catch (_) {
+      // Ignore rollback failures.
+    }
+  }
+
+  Future<void> _safeDeleteBottomNavGallery(String? galleryId) async {
+    final normalized = galleryId?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return;
+    }
+    try {
+      await BottomNavIconGalleryService(
+        preferences: await _preferencesFuture,
+      ).deleteGallery(normalized);
+    } catch (_) {
+      // Ignore rollback failures.
+    }
+  }
+}
+
+class _BottomNavBundleImportAssignment {
+  const _BottomNavBundleImportAssignment.asset({
+    required this.tab,
+    required this.slot,
+    required BottomNavIconAssetRef this.assetRef,
+  }) : bundlePath = null,
+       format = null;
+
+  const _BottomNavBundleImportAssignment.bundle({
+    required this.tab,
+    required this.slot,
+    required this.bundlePath,
+    required this.format,
+  }) : assetRef = null;
+
+  final BottomNavIconGalleryTab tab;
+  final BottomNavIconVariantSlot slot;
+  final BottomNavIconAssetRef? assetRef;
+  final String? bundlePath;
+  final BottomNavIconAssetFormat? format;
+}
+
+class _RedReaderSchemaImport {
+  const _RedReaderSchemaImport({
+    required this.backgroundPath,
+    required this.opacity,
+    required this.blurSigma,
+    required this.fit,
+    required this.overlayOpacity,
+  });
+
+  final String? backgroundPath;
+  final double opacity;
+  final double blurSigma;
+  final AppAdvancedThemeWallpaperFit fit;
+  final double overlayOpacity;
+}
+
+class _RedArchiveImageEntry {
+  const _RedArchiveImageEntry(this.path);
+
+  final String path;
 }

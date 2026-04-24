@@ -49,6 +49,9 @@ class ResolvedAdvancedThemeBackdrop {
     required this.backgroundColor,
     required this.surfaceColor,
     required this.wallpaperPath,
+    required this.wallpaperOpacity,
+    required this.wallpaperBlurSigma,
+    required this.wallpaperFit,
     required this.wallpaperOverlayColor,
     required this.wallpaperOverlayOpacity,
   });
@@ -56,6 +59,9 @@ class ResolvedAdvancedThemeBackdrop {
   final Color backgroundColor;
   final Color surfaceColor;
   final String? wallpaperPath;
+  final double wallpaperOpacity;
+  final double wallpaperBlurSigma;
+  final AppAdvancedThemeWallpaperFit wallpaperFit;
   final Color wallpaperOverlayColor;
   final double wallpaperOverlayOpacity;
 }
@@ -181,6 +187,10 @@ ResolvedAdvancedThemeBackdrop resolveAdvancedThemeBackdropFromModeConfig(
             ? Color(colors!.surfaceColorValue!)
             : colorScheme.surfaceContainerLow,
     wallpaperPath: modeConfig?.wallpaperPath?.trim(),
+    wallpaperOpacity: modeConfig?.wallpaperOpacity ?? 1,
+    wallpaperBlurSigma: modeConfig?.wallpaperBlurSigma ?? 0,
+    wallpaperFit:
+        modeConfig?.wallpaperFit ?? AppAdvancedThemeWallpaperFit.cover,
     wallpaperOverlayColor:
         colors?.wallpaperOverlayColorValue != null
             ? Color(colors!.wallpaperOverlayColorValue!)

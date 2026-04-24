@@ -58,6 +58,20 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>高级主题文件</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.json</string>
+				<string>public.zip-archive</string>
+				<string>com.jiangyan.selune.red-theme</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>本地图书文件</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -166,6 +180,27 @@
 				<key>public.mime-type</key>
 				<array>
 					<string>application/vnd.amazon.mobi8-ebook</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.jiangyan.selune.red-theme</string>
+			<key>UTTypeDescription</key>
+			<string>Red Theme Package</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>red</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/octet-stream</string>
 				</array>
 			</dict>
 		</dict>

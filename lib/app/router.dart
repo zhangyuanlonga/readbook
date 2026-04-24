@@ -475,19 +475,45 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/book/:bookId',
       name: 'book',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final bookId = state.pathParameters['bookId'] ?? 'unknown-book';
         final sourceId = state.uri.queryParameters['sourceId'];
         final detailUrl = state.uri.queryParameters['detailUrl'];
         final title = state.uri.queryParameters['title'];
+        final author = state.uri.queryParameters['author'];
+        final coverUrl = state.uri.queryParameters['coverUrl'];
         final heroTag = state.uri.queryParameters['heroTag'];
 
-        return BookDetailPage(
-          bookId: bookId,
-          sourceId: sourceId,
-          detailUrl: detailUrl,
-          title: title,
-          heroTag: heroTag,
+        return CustomTransitionPage<void>(
+          key: state.pageKey,
+          transitionDuration: const Duration(milliseconds: 260),
+          reverseTransitionDuration: const Duration(milliseconds: 200),
+          child: BookDetailPage(
+            bookId: bookId,
+            sourceId: sourceId,
+            detailUrl: detailUrl,
+            title: title,
+            author: author,
+            coverUrl: coverUrl,
+            heroTag: heroTag,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: Tween<double>(begin: 0.82, end: 1).animate(curved),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.02),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              ),
+            );
+          },
         );
       },
     ),

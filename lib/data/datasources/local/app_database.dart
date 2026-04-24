@@ -1687,9 +1687,11 @@ class AppDatabase extends _$AppDatabase {
         intro: Value(_nullableString(metadataOverride.intro)),
         coverPath: Value(_nullableString(metadataOverride.coverPath)),
         createdAt: Value(metadataOverride.createdAt),
-        updatedAt: Value(metadataOverride.updatedAt == metadataOverride.createdAt
-            ? now
-            : metadataOverride.updatedAt),
+        updatedAt: Value(
+          metadataOverride.updatedAt == metadataOverride.createdAt
+              ? now
+              : metadataOverride.updatedAt,
+        ),
       ),
       mode: InsertMode.insertOrReplace,
     );
@@ -1704,9 +1706,9 @@ class AppDatabase extends _$AppDatabase {
     }
 
     final row =
-        await (select(storedBookMetadataOverrides)
-          ..where((table) => table.targetKey.equals(normalizedTargetKey)))
-            .getSingleOrNull();
+        await (select(storedBookMetadataOverrides)..where(
+          (table) => table.targetKey.equals(normalizedTargetKey),
+        )).getSingleOrNull();
     if (row == null) {
       return null;
     }
@@ -1739,6 +1741,21 @@ class AppDatabase extends _$AppDatabase {
         sourceId: normalizedSourceId,
         detailUrl: normalizedDetailUrl,
       ),
+    );
+  }
+
+  Future<List<BookMetadataOverride>> getAllBookMetadataOverrides() async {
+    final rows =
+        await (select(storedBookMetadataOverrides)
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
+    return rows.map(_mapRowToBookMetadataOverride).toList(growable: false);
+  }
+
+  Stream<List<BookMetadataOverride>> watchBookMetadataOverrides() {
+    final query = select(storedBookMetadataOverrides)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    return query.watch().map(
+      (rows) => rows.map(_mapRowToBookMetadataOverride).toList(growable: false),
     );
   }
 

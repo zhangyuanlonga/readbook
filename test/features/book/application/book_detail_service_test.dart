@@ -197,6 +197,14 @@ void main() {
       expect(result, isNotNull);
       expect(result!.detail.title, '刷新书籍');
       expect(result.chapters, hasLength(1));
+      final cached = service.peekCached(
+        sourceId: 'source_refresh',
+        detailUrl: 'https://example.com/book/r',
+      );
+      expect(cached, isNotNull);
+      expect(cached!.detail.title, '刷新书籍');
+      expect(cached.chapters, hasLength(1));
+      expect(cached.tocFromCache, isTrue);
       expect(runtimeFacade.createdDiagnosticContainerCount, 1);
       expect(runtimeFacade.disposedDiagnosticContainerCount, 1);
       expect(runtimeFacade.lastDiagnosticCancellationHandleWasSet, isFalse);
@@ -358,7 +366,9 @@ class _FakeDiagnosticExecutionContainer
   }
 
   @override
-  Future<List<runtime_models.Chapter>> chapters(runtime_models.Book book) async {
+  Future<List<runtime_models.Chapter>> chapters(
+    runtime_models.Book book,
+  ) async {
     return chapterList;
   }
 

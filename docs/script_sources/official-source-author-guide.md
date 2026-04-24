@@ -147,7 +147,13 @@ meta: {
   homepage: 'https://...',
   checkKeyword: '...',
   domains: ['example.com'],
-  capabilities: ['discover'],
+  capabilities: ['novel', 'discover'],
+  rateLimits: {
+    'www.example.com': {
+      minIntervalMs: 800,
+    },
+    'api.example.com': 300,
+  },
 }
 ```
 
@@ -172,6 +178,12 @@ meta: {
   homepage: 'https://www.example.com',
   checkKeyword: '凡人修仙传',
   domains: ['www.example.com'],
+  capabilities: ['novel'],
+  rateLimits: {
+    'www.example.com': {
+      minIntervalMs: 800,
+    },
+  },
 }
 ```
 
@@ -180,7 +192,13 @@ meta: {
 - `name` 基本上应视为必填
 - `checkKeyword` 很重要，影响单源检测和调试默认关键词
 - `homepage` 与 `domains` 建议尽量填写，方便站点识别与归类
+- `capabilities` 会被宿主转成小写后使用，建议统一写小写
 - 如果实现了 `discoverCategories / discoverBooks`，再声明 `discover` 能力
+- 文本类书源常见能力标记：`novel / book / text`
+- 漫画类书源常见能力标记：`manga / comic / manhua / manhwa`
+- 依赖挑战页、浏览器流程或前端渲染较重时，可额外声明：`browser / webview / challenge / js-heavy / script-heavy`
+- `rateLimits` 用于声明域名级最小请求间隔；值既可以直接写毫秒数，也可以写 `{ minIntervalMs: ... }`
+- `enabled` 虽然会被宿主识别，但启用/停用状态通常由 App 管理，作者一般不需要在脚本里手写
 - 不要把运行时状态写进 `meta`
 
 ## 5. 核心方法
@@ -683,8 +701,10 @@ await ctx.http.request(options)
 - `options.responseType`
 - `options.charset`
 - `options.referer`
+- `options.followRedirects`
 - `options.execution`
 - `options.webView`
+- `options.proxy`
 
 #### 返回值
 
@@ -717,6 +737,11 @@ const response = await ctx.http.request({
 #### 注意事项
 
 - 普通请求优先走 `ctx.http.request(...)`
+- `bodyType` 常用值：`auto / json / form / text / bytes`
+- `responseType` 常用值：`text / json / bytes`
+- `execution` 常用值：`http / browser`
+- `webView: true` 可以视为 `execution: 'browser'` 的兼容写法
+- 需要观察 302、登录跳转或风控跳转时，可显式传 `followRedirects: false`
 - 命中挑战页后再考虑浏览器流程
 
 ### 方法：`ctx.http.isHtml(response)`
@@ -881,6 +906,14 @@ const doc = ctx.html.parse(response.text);
 #### 注意事项
 
 - 输入应是 HTML 字符串
+- `parse(...)` 返回的是宿主包装过的文档/节点对象，可直接继续调用：
+  - `querySelector(selector)`
+  - `querySelectorAll(selector)`
+  - `getAttribute(name)`
+  - `textContent`
+  - `innerText`
+  - `innerHtml`
+- 作者更推荐优先使用本文档里的 `ctx.html.text / attr / innerHtml / collect`
 
 ### 方法：`ctx.html.text(node)`
 
@@ -1092,7 +1125,7 @@ await ctx.browser.challenge({
 
 #### 功能
 
-在当前浏览器页面环境执行脚本并返回结果。
+在目标浏览器页面环境执行脚本并返回结果。
 
 #### 签名
 
@@ -1102,7 +1135,9 @@ await ctx.browser.eval(options)
 
 #### 参数
 
+- `options.url`
 - `options.script`
+- `options.timeoutMs`
 
 #### 返回值
 
@@ -1112,12 +1147,14 @@ await ctx.browser.eval(options)
 
 ```js
 const token = await ctx.browser.eval({
+  url: 'https://example.com/profile',
   script: "localStorage.getItem('token')",
 });
 ```
 
 #### 注意事项
 
+- `eval(...)` 通常应显式传 `url`
 - 如果只取一个明确值，优先用 `eval(...)`
 
 ### 方法：`ctx.browser.waitForUrl(options)`
@@ -1134,7 +1171,9 @@ await ctx.browser.waitForUrl(options)
 
 #### 参数
 
-- `options.includes`
+- `options.urlIncludes`
+- `options.url`
+- `options.reason`
 - `options.timeoutMs`
 
 #### 返回值
@@ -1145,13 +1184,14 @@ await ctx.browser.waitForUrl(options)
 
 ```js
 await ctx.browser.waitForUrl({
-  includes: '/bookshelf',
+  urlIncludes: '/bookshelf',
   timeoutMs: 120000,
 });
 ```
 
 #### 注意事项
 
+- `url` 可选；不传时默认基于当前浏览器页面继续等待
 - 更适合监听跳转
 
 ### 方法：`ctx.browser.waitForText(options)`
@@ -1168,7 +1208,9 @@ await ctx.browser.waitForText(options)
 
 #### 参数
 
-- `options.text`
+- `options.textIncludes`
+- `options.url`
+- `options.reason`
 - `options.timeoutMs`
 
 #### 返回值
@@ -1179,13 +1221,14 @@ await ctx.browser.waitForText(options)
 
 ```js
 await ctx.browser.waitForText({
-  text: '欢迎回来',
+  textIncludes: '欢迎回来',
   timeoutMs: 120000,
 });
 ```
 
 #### 注意事项
 
+- `url` 可选；不传时默认基于当前浏览器页面继续等待
 - 适合监听用户可见提示
 
 ### 方法：`ctx.browser.getCookies()`
@@ -1536,6 +1579,11 @@ ctx.cache.set(key, value)
 ```js
 ctx.cache.set(`search:${keyword}`, books);
 ```
+
+#### 注意事项
+
+- 当前脚本层只开放 `set(key, value)` 这一种写法
+- 宿主内部虽然支持更细的缓存策略参数，但目前没有暴露给书源脚本
 
 ### 方法：`ctx.cache.remove(key)`
 
@@ -2135,6 +2183,13 @@ const cacheKey = userId ? `feed:${userId}` : 'feed:guest';
 
 ### 16.1 编码与字节工具
 
+这组能力里有两类来源：
+
+- 一类直接走宿主桥接，例如 `md5 / sha256 / aesEncrypt`
+- 一类由脚本运行时 bootstrap 直接提供 helper，例如 `hexToBytes / bytesToHex / base64ToBytes / bytesToBase64`
+
+对书源作者来说，这两类都属于当前可直接使用的官方 API。
+
 支持：
 
 - `ctx.crypto.hexEncode(value, options?)`
@@ -2362,6 +2417,7 @@ const timestampSeconds = ctx.crypto.timestamp({ unit: 's' });
 - 涉及签名、异或、字节数组时优先用 `ctx.crypto.hexDecode/base64Decode`
 - 简单摘要和 HMAC 优先用直接方法
 - 算法由站点动态下发时，再考虑 `symmetricEncrypt/asymmetricEncrypt` 或链式 API
+- `symmetricCrypto / asymmetricCrypto` 属于链式 helper，也属于当前可直接使用的作者 API
 
 ## 17. `ctx.log`
 
@@ -2425,6 +2481,7 @@ ctx.log(`search keyword=${keyword}`);
 
 - `title` 建议非空
 - `url` 可以是 URL，也可以是你自己定义的分类 key
+- 宿主会兼容读取 `name / label` 作为标题、`href / link` 作为地址，但新书源仍建议统一写 `title / url`
 - 不要把大量列表数据塞进分类对象
 
 ### 18.2 `Book`
@@ -2465,6 +2522,7 @@ ctx.log(`search keyword=${keyword}`);
 
 - `title` 和 `detailUrl` 是最关键字段
 - `tocUrl` 可以在 `detail` 阶段补齐
+- 宿主会兼容读取 `catalogUrl` 作为 `tocUrl`，但新书源建议统一返回 `tocUrl`
 - 搜索阶段不要为了补全所有字段而做大量额外请求
 
 ### 18.3 `Chapter`
@@ -2496,6 +2554,7 @@ ctx.log(`search keyword=${keyword}`);
 
 - 可读章节必须有 `url`
 - 卷标题可以 `isVolume: true` 且 `url` 为空
+- `vip` 和 `isVip` 都能被宿主识别，但新书源建议统一写 `isVip`
 - 建议按站点目录顺序返回完整数组
 
 ### 18.4 `Content`
@@ -2523,7 +2582,7 @@ ctx.log(`search keyword=${keyword}`);
 注意事项：
 
 - 小说正文优先返回 `content`
-- 漫画或图片章节可返回 `images`
+- 正文里如果本来就有少量插图，优先保留在 `content` 的可读文本流程里；只有纯图片章节再返回 `images`
 - 不要把 HTML 原文直接当正文返回，建议清洗成可读文本
 
 ### 18.5 `extra`
@@ -2750,6 +2809,16 @@ if (!response.ok) {
   throw new Error(`章节请求失败 status=${response.status}`);
 }
 ```
+
+### 20.7 当前未开放给脚本作者的宿主内部能力
+
+下面这些能力存在于宿主实现里，但当前不属于书源作者 API：
+
+- `ctx.cache.set(..., { policy })` 这类缓存策略控制参数
+- 调试产物内部读写函数，例如运行时调试日志、调试轨迹的宿主内部读取与清理
+- `SourceManifest`、调度器、限流器等宿主内部对象上的辅助方法
+
+这类能力如果未来决定开放，应先补桥接，再更新本文档；在那之前不要把它们当成可用脚本 API。
 
 ## 21. 发布前检查
 

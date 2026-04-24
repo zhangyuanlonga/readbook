@@ -38,6 +38,12 @@
                     android:mimeType="application/json" />
                 <data
                     android:scheme="content"
+                    android:mimeType="application/zip" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-zip-compressed" />
+                <data
+                    android:scheme="content"
                     android:mimeType="application/javascript" />
                 <data
                     android:scheme="content"
@@ -104,6 +110,12 @@
                     android:mimeType="application/json" />
                 <data
                     android:scheme="file"
+                    android:mimeType="application/zip" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-zip-compressed" />
+                <data
+                    android:scheme="file"
                     android:mimeType="application/javascript" />
                 <data
                     android:scheme="file"
@@ -122,6 +134,8 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="application/javascript" />
                 <data android:mimeType="text/javascript" />
                 <data android:mimeType="application/x-javascript" />
@@ -140,6 +154,8 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="application/javascript" />
                 <data android:mimeType="text/javascript" />
                 <data android:mimeType="application/x-javascript" />

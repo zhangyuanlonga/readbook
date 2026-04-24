@@ -1,46 +1,62 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/layout/app_layout.dart';
+import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../core/errors/app_exception.dart';
 import '../../../runtime/host/appread_browser_runtime.dart';
 import '../../../runtime/session/source_session.dart';
+import '../../../runtime/sources/source_registry.dart';
+import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../../runtime/sources/source_script_compiler.dart';
+import '../../mine/application/advanced_theme_provider.dart';
+import '../application/source_runtime_facade.dart';
+import '../application/source_check_service.dart';
 
 class ScriptSourceDebugPage extends StatefulWidget {
   const ScriptSourceDebugPage({
     super.key,
     required this.sourceCode,
+    this.sourceId,
     this.title,
     this.initialKeyword,
     this.autoRunOnInit = false,
   });
 
   final String sourceCode;
+  final String? sourceId;
   final String? title;
   final String? initialKeyword;
   final bool autoRunOnInit;
+
+  bool get useInstalledSourceFlow => sourceId?.trim().isNotEmpty == true;
 
   @override
   State<ScriptSourceDebugPage> createState() => _ScriptSourceDebugPageState();
 }
 
 class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
-  final SourceScriptDebugService _debugService = SourceScriptDebugService(
+  final SourceRuntimeFacade _sourceRuntimeFacade = SourceRuntimeFacade.instance;
+  final SourceScriptDebugService _draftDebugService = SourceScriptDebugService(
     browserRuntime: AppReadBrowserRuntime(),
   );
-  final SourceSession _session = SourceSession(sourceId: '__script_debug__');
+  final SourceSession _draftSession = SourceSession(
+    sourceId: '__script_debug__',
+  );
   late final TextEditingController _keywordController = TextEditingController(
     text:
         widget.initialKeyword?.trim().isNotEmpty == true
             ? widget.initialKeyword!.trim()
-            : '斗罗大陆',
+            : SourceCheckService.defaultCheckKeyword,
   );
 
+  SourceCheckLevel _selectedLevel = SourceCheckLevel.searchOnly;
   bool _isRunning = false;
-  int _runningStageIndex = -1;
-  Duration? _lastRunDuration;
-  final List<_StageResult> _stageResults = <_StageResult>[];
+  _RunReport? _report;
 
   @override
   void initState() {
@@ -50,7 +66,7 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
         if (!mounted) {
           return;
         }
-        _runPipeline();
+        _runInspection();
       });
     }
   }
@@ -61,43 +77,1044 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
     super.dispose();
   }
 
-  List<_DebugStageSpec> _buildStages(String keyword) {
+  Future<void> _runInspection() async {
+    if (_isRunning) {
+      return;
+    }
+    final rawKeyword = _keywordController.text.trim();
+    if (rawKeyword.isEmpty) {
+      _showTransientMessage('请先填写调试关键词。');
+      return;
+    }
+
+    setState(() {
+      _isRunning = true;
+      _report = null;
+    });
+
+    try {
+      final report =
+          widget.useInstalledSourceFlow
+              ? await _runInstalledSourceInspection(rawKeyword)
+              : await _runDraftInspection(rawKeyword);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _report = report;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+        });
+      }
+    }
+  }
+
+  Future<_RunReport> _runInstalledSourceInspection(String rawKeyword) async {
+    final sourceId = widget.sourceId!.trim();
+    final registered = await _sourceRuntimeFacade
+        .ensureRegisteredScriptSourceById(sourceId);
+    if (registered == null) {
+      return _RunReport(
+        mode: _DebugMode.installedSource,
+        keyword: rawKeyword,
+        level: _selectedLevel,
+        sourceName:
+            widget.title?.trim().isNotEmpty == true ? widget.title! : sourceId,
+        summary: _RunSummary(
+          status: SourceCheckStatus.failed,
+          stepReached: SourceCheckStep.none,
+          message: '书源不存在或已禁用。',
+          duration: Duration.zero,
+          needsBrowser: false,
+        ),
+        stages: const <_StageReport>[],
+      );
+    }
+
+    final effectiveKeyword = SourceCheckService.resolveCheckKeyword(
+      rawKeyword,
+      manifestKeyword: registered.definition.manifest.checkKeyword,
+    );
+    final needsBrowser = _looksLikeBrowserCapable(registered);
+    final runStartedAt = DateTime.now();
+    final stopwatch = Stopwatch()..start();
+    final stages = <_StageReport>[];
+
+    runtime_models.Book? workingBook;
+    runtime_models.Chapter? workingChapter;
+
+    final searchStage = await _runInstalledSearchStage(
+      sourceId: sourceId,
+      keyword: effectiveKeyword,
+      runStartedAt: runStartedAt,
+    );
+    stages.add(searchStage);
+    if (!searchStage.isSuccess) {
+      stopwatch.stop();
+      return _buildInstalledReport(
+        sourceName: registered.runtime.name,
+        keyword: effectiveKeyword,
+        needsBrowser: needsBrowser,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+    workingBook = searchStage.book;
+
+    if (_selectedLevel == SourceCheckLevel.searchOnly) {
+      stopwatch.stop();
+      return _buildInstalledReport(
+        sourceName: registered.runtime.name,
+        keyword: effectiveKeyword,
+        needsBrowser: needsBrowser,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+
+    final detailStage = await _runInstalledDetailStage(
+      sourceId: sourceId,
+      book: workingBook!,
+      runStartedAt: runStartedAt,
+    );
+    stages.add(detailStage);
+    if (!detailStage.isSuccess) {
+      stopwatch.stop();
+      return _buildInstalledReport(
+        sourceName: registered.runtime.name,
+        keyword: effectiveKeyword,
+        needsBrowser: needsBrowser,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+    workingBook = detailStage.book;
+
+    if (_selectedLevel == SourceCheckLevel.searchAndDetail) {
+      stopwatch.stop();
+      return _buildInstalledReport(
+        sourceName: registered.runtime.name,
+        keyword: effectiveKeyword,
+        needsBrowser: needsBrowser,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+
+    final chaptersStage = await _runInstalledChaptersStage(
+      sourceId: sourceId,
+      book: workingBook!,
+      runStartedAt: runStartedAt,
+    );
+    stages.add(chaptersStage);
+    if (!chaptersStage.isSuccess) {
+      stopwatch.stop();
+      return _buildInstalledReport(
+        sourceName: registered.runtime.name,
+        keyword: effectiveKeyword,
+        needsBrowser: needsBrowser,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+    workingChapter = chaptersStage.chapter;
+
+    final contentStage = await _runInstalledContentStage(
+      sourceId: sourceId,
+      book: workingBook,
+      chapter: workingChapter!,
+      runStartedAt: runStartedAt,
+    );
+    stages.add(contentStage);
+
+    stopwatch.stop();
+    return _buildInstalledReport(
+      sourceName: registered.runtime.name,
+      keyword: effectiveKeyword,
+      needsBrowser: needsBrowser,
+      stages: stages,
+      duration: stopwatch.elapsed,
+    );
+  }
+
+  Future<_StageReport> _runInstalledSearchStage({
+    required String sourceId,
+    required String keyword,
+    required DateTime runStartedAt,
+  }) async {
+    try {
+      final books = await _sourceRuntimeFacade.search(
+        sourceId: sourceId,
+        keyword: keyword,
+        allowInteractiveChallenge: false,
+      );
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      final payload = books.map(_bookToMap).toList(growable: false);
+      if (books.isEmpty) {
+        return _emptyStage(
+          step: SourceCheckStep.search,
+          title: '搜索',
+          summary: '搜索已执行，但没有返回任何书籍。',
+          payload: payload,
+          runStartedAt: runStartedAt,
+          logs: artifacts.logs,
+          traces: artifacts.traces,
+        );
+      }
+      final firstBook = books.first;
+      return _successStage(
+        step: SourceCheckStep.search,
+        title: '搜索',
+        summary: '搜索返回 ${books.length} 本书，已拿到首条结果。',
+        highlights: <String>[
+          '结果数 ${books.length}',
+          '首本《${firstBook.title}》',
+          if (firstBook.author.trim().isNotEmpty) '作者 ${firstBook.author}',
+        ],
+        payload: payload,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+        stageSpecificEntries: <_TimelineEntry>[
+          _payloadEntry(
+            runStartedAt: runStartedAt,
+            message: '获取书籍列表',
+            detail: '列表大小 ${books.length}',
+          ),
+          _payloadEntry(
+            runStartedAt: runStartedAt,
+            message: '获取首本书名',
+            detail: firstBook.title,
+          ),
+          if (firstBook.author.trim().isNotEmpty)
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取首本作者',
+              detail: firstBook.author,
+            ),
+        ],
+        book: firstBook,
+      );
+    } catch (error) {
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      return _failedStage(
+        step: SourceCheckStep.search,
+        title: '搜索',
+        summary: _friendlyErrorMessage(error),
+        payload: null,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+      );
+    }
+  }
+
+  Future<_StageReport> _runInstalledDetailStage({
+    required String sourceId,
+    required runtime_models.Book book,
+    required DateTime runStartedAt,
+  }) async {
+    try {
+      final detail = await _sourceRuntimeFacade.detail(
+        sourceId: sourceId,
+        book: book,
+      );
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      if (detail.title.trim().isEmpty) {
+        return _failedStage(
+          step: SourceCheckStep.detail,
+          title: '详情',
+          summary: '详情结果缺少标题。',
+          payload: _bookToMap(detail),
+          runStartedAt: runStartedAt,
+          logs: artifacts.logs,
+          traces: artifacts.traces,
+        );
+      }
+      return _successStage(
+        step: SourceCheckStep.detail,
+        title: '详情',
+        summary: '详情页数据可用，已拿到书籍关键信息。',
+        highlights: <String>[
+          '书名《${detail.title}》',
+          if (detail.author.trim().isNotEmpty) '作者 ${detail.author}',
+          if (detail.latestChapter.trim().isNotEmpty)
+            '最新章节 ${detail.latestChapter}',
+          if (detail.detailUrl.trim().isNotEmpty) '详情链接已返回',
+        ],
+        payload: _bookToMap(detail),
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+        stageSpecificEntries: <_TimelineEntry>[
+          _payloadEntry(
+            runStartedAt: runStartedAt,
+            message: '获取书名',
+            detail: detail.title,
+          ),
+          if (detail.author.trim().isNotEmpty)
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取作者',
+              detail: detail.author,
+            ),
+          if (detail.intro.trim().isNotEmpty)
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取简介',
+              detail: _truncate(detail.intro, maxLength: 200),
+            ),
+        ],
+        book: detail,
+      );
+    } catch (error) {
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      return _failedStage(
+        step: SourceCheckStep.detail,
+        title: '详情',
+        summary: _friendlyErrorMessage(error),
+        payload: null,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+      );
+    }
+  }
+
+  Future<_StageReport> _runInstalledChaptersStage({
+    required String sourceId,
+    required runtime_models.Book book,
+    required DateTime runStartedAt,
+  }) async {
+    try {
+      final chapters = await _sourceRuntimeFacade.chapters(
+        sourceId: sourceId,
+        book: book,
+      );
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      final payload = chapters.map(_chapterToMap).toList(growable: false);
+      if (chapters.isEmpty) {
+        return _emptyStage(
+          step: SourceCheckStep.chapters,
+          title: '目录',
+          summary: '目录阶段返回空列表。',
+          payload: payload,
+          runStartedAt: runStartedAt,
+          logs: artifacts.logs,
+          traces: artifacts.traces,
+        );
+      }
+      final readable = chapters.where(
+        (item) => !item.isVolume && item.url.trim().isNotEmpty,
+      );
+      final firstReadable = readable.isNotEmpty ? readable.first : null;
+      if (firstReadable == null) {
+        return _emptyStage(
+          step: SourceCheckStep.chapters,
+          title: '目录',
+          summary: '目录无可读章节。',
+          payload: payload,
+          runStartedAt: runStartedAt,
+          logs: artifacts.logs,
+          traces: artifacts.traces,
+        );
+      }
+      return _successStage(
+        step: SourceCheckStep.chapters,
+        title: '目录',
+        summary: '目录可用，已拿到章节列表。',
+        highlights: <String>[
+          '章节数 ${chapters.length}',
+          '首个可读章节 ${firstReadable.title}',
+          if (chapters.last.title.trim().isNotEmpty)
+            '末章 ${chapters.last.title}',
+        ],
+        payload: payload,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+        stageSpecificEntries: <_TimelineEntry>[
+          _payloadEntry(
+            runStartedAt: runStartedAt,
+            message: '获取章节列表',
+            detail: '章节总数 ${chapters.length}',
+          ),
+          _payloadEntry(
+            runStartedAt: runStartedAt,
+            message: '获取首个可读章节',
+            detail: firstReadable.title,
+          ),
+        ],
+        chapter: firstReadable,
+      );
+    } catch (error) {
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      return _failedStage(
+        step: SourceCheckStep.chapters,
+        title: '目录',
+        summary: _friendlyErrorMessage(error),
+        payload: null,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+      );
+    }
+  }
+
+  Future<_StageReport> _runInstalledContentStage({
+    required String sourceId,
+    required runtime_models.Book book,
+    required runtime_models.Chapter chapter,
+    required DateTime runStartedAt,
+  }) async {
+    try {
+      final content = await _sourceRuntimeFacade.content(
+        sourceId: sourceId,
+        book: book,
+        chapter: chapter,
+      );
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      final payload = _contentToMap(content);
+      if (content.content.trim().isEmpty && content.images.isEmpty) {
+        return _emptyStage(
+          step: SourceCheckStep.content,
+          title: '正文',
+          summary: '正文阶段没有返回文字，也没有返回图片。',
+          payload: payload,
+          runStartedAt: runStartedAt,
+          logs: artifacts.logs,
+          traces: artifacts.traces,
+        );
+      }
+      return _successStage(
+        step: SourceCheckStep.content,
+        title: '正文',
+        summary: '正文内容可读，最终链路已跑通。',
+        highlights: <String>[
+          if (content.title.trim().isNotEmpty) '标题 ${content.title}',
+          if (content.content.trim().isNotEmpty)
+            '正文 ${content.content.runes.length} 字',
+          if (content.images.isNotEmpty) '图片 ${content.images.length} 张',
+        ],
+        payload: payload,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+        stageSpecificEntries: <_TimelineEntry>[
+          if (content.title.trim().isNotEmpty)
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取标题',
+              detail: content.title,
+            ),
+          if (content.content.trim().isNotEmpty)
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取正文',
+              detail: '${content.content.runes.length} 字',
+            ),
+          if (content.images.isNotEmpty)
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取图片',
+              detail: '${content.images.length} 张',
+            ),
+        ],
+      );
+    } catch (error) {
+      final artifacts = _sourceRuntimeFacade.consumeLastDebugArtifacts(
+        sourceId,
+      );
+      return _failedStage(
+        step: SourceCheckStep.content,
+        title: '正文',
+        summary: _friendlyErrorMessage(error),
+        payload: null,
+        runStartedAt: runStartedAt,
+        logs: artifacts.logs,
+        traces: artifacts.traces,
+      );
+    }
+  }
+
+  _RunReport _buildInstalledReport({
+    required String sourceName,
+    required String keyword,
+    required bool needsBrowser,
+    required List<_StageReport> stages,
+    required Duration duration,
+  }) {
+    final firstFailed = stages.cast<_StageReport?>().firstWhere(
+      (stage) => stage != null && !stage.isSuccess,
+      orElse: () => null,
+    );
+    final status =
+        firstFailed != null
+            ? SourceCheckStatus.failed
+            : (needsBrowser
+                ? SourceCheckStatus.warning
+                : SourceCheckStatus.healthy);
+    final message =
+        firstFailed != null
+            ? firstFailed.summary
+            : (needsBrowser ? '可用，但存在 browser/challenge 风险。' : '检测通过。');
+    final stepReached =
+        firstFailed != null
+            ? firstFailed.step
+            : (stages.isEmpty ? SourceCheckStep.none : stages.last.step);
+    return _RunReport(
+      mode: _DebugMode.installedSource,
+      keyword: keyword,
+      level: _selectedLevel,
+      sourceName: sourceName,
+      summary: _RunSummary(
+        status: status,
+        stepReached: stepReached,
+        message: message,
+        duration: duration,
+        needsBrowser: needsBrowser,
+      ),
+      stages: List<_StageReport>.unmodifiable(stages),
+    );
+  }
+
+  Future<_RunReport> _runDraftInspection(String rawKeyword) async {
+    final runStartedAt = DateTime.now();
+    final stopwatch = Stopwatch()..start();
+    final stages = <_StageReport>[];
+    _draftSession.clear();
+    _draftSession.clearCookies();
+
+    final searchStage = await _runDraftStage(
+      step: SourceCheckStep.search,
+      title: '搜索',
+      command: _draftSearchCommand(rawKeyword),
+      runStartedAt: runStartedAt,
+      summaryBuilder: (payload) {
+        if (payload is! List) {
+          return _DraftStageSemantic.invalid('搜索结果不是列表结构。');
+        }
+        if (payload.isEmpty) {
+          return _DraftStageSemantic.empty('搜索已执行，但没有返回任何书籍。');
+        }
+        final firstBook = _asMap(payload.first);
+        final title = _readString(firstBook?['title']);
+        if (title.isEmpty) {
+          return _DraftStageSemantic.invalid('搜索结果缺少书籍标题。');
+        }
+        return _DraftStageSemantic.success(
+          summary: '搜索返回 ${payload.length} 本书，已拿到首条结果。',
+          highlights: <String>[
+            '结果数 ${payload.length}',
+            '首本《$title》',
+            if (_readString(firstBook?['author']).isNotEmpty)
+              '作者 ${_readString(firstBook?['author'])}',
+          ],
+          extraEntries: <_TimelineEntry>[
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取书籍列表',
+              detail: '列表大小 ${payload.length}',
+            ),
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取首本书名',
+              detail: title,
+            ),
+          ],
+        );
+      },
+    );
+    stages.add(searchStage);
+    if (!searchStage.isSuccess ||
+        _selectedLevel == SourceCheckLevel.searchOnly) {
+      stopwatch.stop();
+      return _buildDraftReport(
+        keyword: rawKeyword,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+
+    final detailStage = await _runDraftStage(
+      step: SourceCheckStep.detail,
+      title: '详情',
+      command: _draftDetailCommand(rawKeyword),
+      runStartedAt: runStartedAt,
+      summaryBuilder: (payload) {
+        final detail = _asMap(payload);
+        if (detail == null) {
+          return _DraftStageSemantic.invalid('详情结果不是对象结构。');
+        }
+        final title = _readString(detail['title']);
+        if (title.isEmpty) {
+          return _DraftStageSemantic.invalid('详情结果缺少标题。');
+        }
+        return _DraftStageSemantic.success(
+          summary: '详情页数据可用，已拿到书籍关键信息。',
+          highlights: <String>[
+            '书名《$title》',
+            if (_readString(detail['author']).isNotEmpty)
+              '作者 ${_readString(detail['author'])}',
+          ],
+          extraEntries: <_TimelineEntry>[
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取书名',
+              detail: title,
+            ),
+          ],
+        );
+      },
+    );
+    stages.add(detailStage);
+    if (!detailStage.isSuccess ||
+        _selectedLevel == SourceCheckLevel.searchAndDetail) {
+      stopwatch.stop();
+      return _buildDraftReport(
+        keyword: rawKeyword,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+
+    final chaptersStage = await _runDraftStage(
+      step: SourceCheckStep.chapters,
+      title: '目录',
+      command: _draftChaptersCommand(rawKeyword),
+      runStartedAt: runStartedAt,
+      summaryBuilder: (payload) {
+        if (payload is! List) {
+          return _DraftStageSemantic.invalid('目录结果不是列表结构。');
+        }
+        if (payload.isEmpty) {
+          return _DraftStageSemantic.empty('目录阶段返回空列表。');
+        }
+        final first = _asMap(payload.first);
+        final title = _readString(first?['title']);
+        if (title.isEmpty) {
+          return _DraftStageSemantic.invalid('目录项缺少标题。');
+        }
+        final chapter = payload
+            .map(_asMap)
+            .whereType<Map<String, Object?>>()
+            .firstWhere(
+              (item) =>
+                  _readString(item['url']).isNotEmpty &&
+                  item['isVolume'] != true,
+              orElse: () => <String, Object?>{},
+            );
+        if (_readString(chapter['url']).isEmpty) {
+          return _DraftStageSemantic.empty('目录无可读章节。');
+        }
+        return _DraftStageSemantic.success(
+          summary: '目录可用，已拿到章节列表。',
+          highlights: <String>[
+            '章节数 ${payload.length}',
+            '首个可读章节 ${_readString(chapter['title'])}',
+          ],
+          extraEntries: <_TimelineEntry>[
+            _payloadEntry(
+              runStartedAt: runStartedAt,
+              message: '获取章节列表',
+              detail: '章节总数 ${payload.length}',
+            ),
+          ],
+        );
+      },
+    );
+    stages.add(chaptersStage);
+    if (!chaptersStage.isSuccess) {
+      stopwatch.stop();
+      return _buildDraftReport(
+        keyword: rawKeyword,
+        stages: stages,
+        duration: stopwatch.elapsed,
+      );
+    }
+
+    final contentStage = await _runDraftStage(
+      step: SourceCheckStep.content,
+      title: '正文',
+      command: _draftContentCommand(rawKeyword),
+      runStartedAt: runStartedAt,
+      summaryBuilder: (payload) {
+        final content = _asMap(payload);
+        if (content == null) {
+          return _DraftStageSemantic.invalid('正文结果不是对象结构。');
+        }
+        final text = _readString(content['content']);
+        final images = _asList(content['images']);
+        if (text.isEmpty && images.isEmpty) {
+          return _DraftStageSemantic.empty('正文阶段没有返回文字，也没有返回图片。');
+        }
+        return _DraftStageSemantic.success(
+          summary: '正文内容可读，最终链路已跑通。',
+          highlights: <String>[
+            if (_readString(content['title']).isNotEmpty)
+              '标题 ${_readString(content['title'])}',
+            if (text.isNotEmpty) '正文 ${text.runes.length} 字',
+            if (images.isNotEmpty) '图片 ${images.length} 张',
+          ],
+          extraEntries: <_TimelineEntry>[
+            if (text.isNotEmpty)
+              _payloadEntry(
+                runStartedAt: runStartedAt,
+                message: '获取正文',
+                detail: '${text.runes.length} 字',
+              ),
+          ],
+        );
+      },
+    );
+    stages.add(contentStage);
+
+    stopwatch.stop();
+    return _buildDraftReport(
+      keyword: rawKeyword,
+      stages: stages,
+      duration: stopwatch.elapsed,
+    );
+  }
+
+  Future<_StageReport> _runDraftStage({
+    required SourceCheckStep step,
+    required String title,
+    required String command,
+    required DateTime runStartedAt,
+    required _DraftStageSemantic Function(Object? payload) summaryBuilder,
+  }) async {
+    final result = await _draftDebugService.evaluate(
+      sourceCode: widget.sourceCode,
+      command: command,
+      session: _draftSession,
+    );
+
+    final logs = result.logs
+        .map(
+          (entry) => <String, Object?>{
+            'at': entry.timestamp.toIso8601String(),
+            'level': entry.level.name,
+            'message': entry.message,
+          },
+        )
+        .toList(growable: false);
+
+    if (result.errorText != null && result.errorText!.trim().isNotEmpty) {
+      return _failedStage(
+        step: step,
+        title: title,
+        summary: result.errorText!.trim(),
+        payload: result.result,
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: result.debugTraces,
+      );
+    }
+
+    final semantic = summaryBuilder(result.result);
+    return switch (semantic.kind) {
+      _StageOutcome.success => _successStage(
+        step: step,
+        title: title,
+        summary: semantic.summary,
+        highlights: semantic.highlights,
+        payload: result.result,
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: result.debugTraces,
+        stageSpecificEntries: semantic.extraEntries,
+      ),
+      _StageOutcome.empty => _emptyStage(
+        step: step,
+        title: title,
+        summary: semantic.summary,
+        payload: result.result,
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: result.debugTraces,
+      ),
+      _StageOutcome.invalid => _failedStage(
+        step: step,
+        title: title,
+        summary: semantic.summary,
+        payload: result.result,
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: result.debugTraces,
+      ),
+      _StageOutcome.failed => _failedStage(
+        step: step,
+        title: title,
+        summary: semantic.summary,
+        payload: result.result,
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: result.debugTraces,
+      ),
+    };
+  }
+
+  _RunReport _buildDraftReport({
+    required String keyword,
+    required List<_StageReport> stages,
+    required Duration duration,
+  }) {
+    final firstFailed = stages.cast<_StageReport?>().firstWhere(
+      (stage) => stage != null && !stage.isSuccess,
+      orElse: () => null,
+    );
+    return _RunReport(
+      mode: _DebugMode.draft,
+      keyword: keyword,
+      level: _selectedLevel,
+      sourceName:
+          widget.title?.trim().isNotEmpty == true ? widget.title! : '草稿调试',
+      summary: _RunSummary(
+        status:
+            firstFailed == null
+                ? SourceCheckStatus.warning
+                : SourceCheckStatus.failed,
+        stepReached:
+            firstFailed == null
+                ? (stages.isEmpty ? SourceCheckStep.none : stages.last.step)
+                : firstFailed.step,
+        message:
+            firstFailed == null
+                ? '草稿调试链路已跑通。注意：这不是已安装书源的正式检测结果。'
+                : firstFailed.summary,
+        duration: duration,
+        needsBrowser: false,
+      ),
+      stages: List<_StageReport>.unmodifiable(stages),
+    );
+  }
+
+  _StageReport _successStage({
+    required SourceCheckStep step,
+    required String title,
+    required String summary,
+    required List<String> highlights,
+    required Object? payload,
+    required DateTime runStartedAt,
+    required List<Map<String, Object?>> logs,
+    required List<Map<String, Object?>> traces,
+    List<_TimelineEntry> stageSpecificEntries = const <_TimelineEntry>[],
+    runtime_models.Book? book,
+    runtime_models.Chapter? chapter,
+  }) {
+    return _StageReport(
+      step: step,
+      title: title,
+      outcome: _StageOutcome.success,
+      summary: summary,
+      highlights: List<String>.unmodifiable(highlights),
+      payload: payload,
+      entries: _buildTimelineEntries(
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: traces,
+        stageSpecificEntries: stageSpecificEntries,
+      ),
+      rawLogs: List<Map<String, Object?>>.unmodifiable(logs),
+      rawTraces: List<Map<String, Object?>>.unmodifiable(traces),
+      book: book,
+      chapter: chapter,
+    );
+  }
+
+  _StageReport _emptyStage({
+    required SourceCheckStep step,
+    required String title,
+    required String summary,
+    required Object? payload,
+    required DateTime runStartedAt,
+    required List<Map<String, Object?>> logs,
+    required List<Map<String, Object?>> traces,
+  }) {
+    return _StageReport(
+      step: step,
+      title: title,
+      outcome: _StageOutcome.empty,
+      summary: summary,
+      highlights: const <String>[],
+      payload: payload,
+      entries: _buildTimelineEntries(
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: traces,
+      ),
+      rawLogs: List<Map<String, Object?>>.unmodifiable(logs),
+      rawTraces: List<Map<String, Object?>>.unmodifiable(traces),
+    );
+  }
+
+  _StageReport _failedStage({
+    required SourceCheckStep step,
+    required String title,
+    required String summary,
+    required Object? payload,
+    required DateTime runStartedAt,
+    required List<Map<String, Object?>> logs,
+    required List<Map<String, Object?>> traces,
+  }) {
+    return _StageReport(
+      step: step,
+      title: title,
+      outcome: _StageOutcome.failed,
+      summary: summary,
+      highlights: const <String>[],
+      payload: payload,
+      entries: _buildTimelineEntries(
+        runStartedAt: runStartedAt,
+        logs: logs,
+        traces: traces,
+        stageSpecificEntries: <_TimelineEntry>[
+          _payloadEntry(
+            runStartedAt: runStartedAt,
+            message: '阶段失败',
+            detail: summary,
+            isError: true,
+          ),
+        ],
+      ),
+      rawLogs: List<Map<String, Object?>>.unmodifiable(logs),
+      rawTraces: List<Map<String, Object?>>.unmodifiable(traces),
+    );
+  }
+
+  List<_TimelineEntry> _buildTimelineEntries({
+    required DateTime runStartedAt,
+    required List<Map<String, Object?>> logs,
+    required List<Map<String, Object?>> traces,
+    List<_TimelineEntry> stageSpecificEntries = const <_TimelineEntry>[],
+  }) {
+    final entries = <_TimelineEntry>[
+      ...traces.map((trace) => _traceEntry(trace, runStartedAt)),
+      ...logs.map((log) => _logEntry(log, runStartedAt)),
+      ...stageSpecificEntries,
+    ]..sort((left, right) => left.offset.compareTo(right.offset));
+    return List<_TimelineEntry>.unmodifiable(entries);
+  }
+
+  _TimelineEntry _traceEntry(
+    Map<String, Object?> trace,
+    DateTime runStartedAt,
+  ) {
+    final offset = _readOffset(
+      _readString(trace['startedAt']),
+      runStartedAt: runStartedAt,
+    );
+    final error = _readString(trace['error']);
+    final kind = _readString(trace['kind']);
+    if (kind == 'http') {
+      final method = _readString(trace['method']);
+      final status = _readString(trace['status']);
+      final url = _readString(trace['url']);
+      return _TimelineEntry(
+        offset: offset,
+        message:
+            error.isNotEmpty
+                ? 'HTTP ${method.isEmpty ? 'REQUEST' : method} 请求失败'
+                : 'HTTP ${method.isEmpty ? 'REQUEST' : method} ${status.isEmpty ? '' : status}'
+                    .trim(),
+        detail: error.isNotEmpty ? '$url\n$error' : url,
+        isError: error.isNotEmpty,
+      );
+    }
+    if (kind == 'browser') {
+      final action = _readString(trace['action']);
+      final url = _readString(trace['url']);
+      return _TimelineEntry(
+        offset: offset,
+        message: error.isNotEmpty ? '浏览器动作失败：$action' : '浏览器动作：$action',
+        detail: error.isNotEmpty ? '$url\n$error' : url,
+        isError: error.isNotEmpty,
+      );
+    }
+    return _TimelineEntry(
+      offset: offset,
+      message: error.isNotEmpty ? '运行轨迹异常' : '运行轨迹',
+      detail:
+          error.isNotEmpty
+              ? error
+              : _truncate(_formatJson(trace), maxLength: 220),
+      isError: error.isNotEmpty,
+    );
+  }
+
+  _TimelineEntry _logEntry(Map<String, Object?> log, DateTime runStartedAt) {
+    final offset = _readOffset(
+      _readString(log['at']),
+      runStartedAt: runStartedAt,
+    );
+    final level = _readString(log['level']).toLowerCase();
+    final message = _readString(log['message']);
+    return _TimelineEntry(
+      offset: offset,
+      message: level.isEmpty ? '日志' : '日志[$level]',
+      detail: message,
+      isError: level == 'error',
+    );
+  }
+
+  _TimelineEntry _payloadEntry({
+    required DateTime runStartedAt,
+    required String message,
+    required String detail,
+    bool isError = false,
+  }) {
+    return _TimelineEntry(
+      offset: DateTime.now().difference(runStartedAt),
+      message: message,
+      detail: detail,
+      isError: isError,
+    );
+  }
+
+  String _draftSearchCommand(String keyword) {
     final encodedKeyword = jsonEncode(keyword);
-    return <_DebugStageSpec>[
-      _DebugStageSpec(
-        index: 0,
-        kind: _DebugStageKind.search,
-        shortLabel: '搜索',
-        title: '搜索结果',
-        command: '''
+    return '''
 const keyword = $encodedKeyword;
 const books = await source.search(ctx, keyword);
 console.log('search result', books);
 return books;
-''',
-      ),
-      _DebugStageSpec(
-        index: 1,
-        kind: _DebugStageKind.detail,
-        shortLabel: '详情',
-        title: '详情结果',
-        command: '''
+''';
+  }
+
+  String _draftDetailCommand(String keyword) {
+    final encodedKeyword = jsonEncode(keyword);
+    return '''
 const keyword = $encodedKeyword;
 const books = await source.search(ctx, keyword);
 const first = books?.[0];
-console.log('search first', first);
 if (!first) return null;
 const detail = await source.detail(ctx, first);
 console.log('detail result', detail);
 return detail;
-''',
-      ),
-      _DebugStageSpec(
-        index: 2,
-        kind: _DebugStageKind.chapters,
-        shortLabel: '目录',
-        title: '目录结果',
-        command: '''
+''';
+  }
+
+  String _draftChaptersCommand(String keyword) {
+    final encodedKeyword = jsonEncode(keyword);
+    return '''
 const keyword = $encodedKeyword;
 const books = await source.search(ctx, keyword);
 const first = books?.[0];
@@ -106,577 +1123,132 @@ const detail = await source.detail(ctx, first);
 const chapters = await source.chapters(ctx, detail);
 console.log('chapters result', chapters);
 return chapters;
-''',
-      ),
-      _DebugStageSpec(
-        index: 3,
-        kind: _DebugStageKind.content,
-        shortLabel: '正文',
-        title: '正文结果',
-        command: '''
+''';
+  }
+
+  String _draftContentCommand(String keyword) {
+    final encodedKeyword = jsonEncode(keyword);
+    return '''
 const keyword = $encodedKeyword;
 const books = await source.search(ctx, keyword);
 const first = books?.[0];
 if (!first) return null;
 const detail = await source.detail(ctx, first);
 const chapters = await source.chapters(ctx, detail);
-const chapter = chapters?.[0];
+const chapter = chapters?.find((item) => item && !item.isVolume && item.url);
 if (!chapter) return null;
 const content = await source.content(ctx, detail, chapter);
 console.log('content result', content);
 return content;
-''',
-      ),
-    ];
+''';
   }
 
-  Future<void> _runPipeline() async {
-    final keyword = _keywordController.text.trim();
-    if (_isRunning) {
-      return;
-    }
-    if (keyword.isEmpty) {
-      _showTransientMessage('请先填写调试关键词。');
-      return;
-    }
-
-    final stages = _buildStages(keyword);
-    final pipelineStopwatch = Stopwatch()..start();
-
-    setState(() {
-      _isRunning = true;
-      _runningStageIndex = 0;
-      _lastRunDuration = null;
-      _stageResults.clear();
-      _session.clear();
-      _session.clearCookies();
-    });
-
-    final nextStageResults = <_StageResult>[];
-    var traceOffset = 0;
-    var shouldContinue = true;
-    String? stopReason;
-
-    for (final stage in stages) {
-      if (!shouldContinue) {
-        nextStageResults.add(
-          _StageResult.skipped(
-            stage: stage,
-            summary: stopReason ?? '前一阶段未通过，后续阶段已跳过。',
-          ),
-        );
-        if (mounted) {
-          setState(() {
-            _stageResults
-              ..clear()
-              ..addAll(nextStageResults);
-          });
-        }
-        continue;
-      }
-
-      if (mounted) {
-        setState(() {
-          _runningStageIndex = stage.index;
-        });
-      }
-
-      final stageStopwatch = Stopwatch()..start();
-      final result = await _debugService.evaluate(
-        sourceCode: widget.sourceCode,
-        command: stage.command,
-        session: _session,
-      );
-      stageStopwatch.stop();
-
-      final cumulativeTraces = result.debugTraces;
-      final stageTraces = cumulativeTraces
-          .skip(traceOffset)
-          .map((trace) => Map<String, Object?>.from(trace))
-          .toList(growable: false);
-      traceOffset = cumulativeTraces.length;
-
-      final analyzed = _analyzeStage(
-        stage: stage,
-        payload: result.result,
-        errorText: result.errorText,
-        logs: result.logs,
-        stageTraces: stageTraces,
-        duration: stageStopwatch.elapsed,
-      );
-
-      nextStageResults.add(analyzed);
-      if (analyzed.outcome != _StageOutcome.success) {
-        shouldContinue = false;
-        stopReason = '${stage.shortLabel}阶段未通过：${analyzed.summary}';
-      }
-
-      if (mounted) {
-        setState(() {
-          _stageResults
-            ..clear()
-            ..addAll(nextStageResults);
-        });
-      }
-    }
-
-    pipelineStopwatch.stop();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _isRunning = false;
-      _runningStageIndex = -1;
-      _lastRunDuration = pipelineStopwatch.elapsed;
-    });
+  bool _looksLikeBrowserCapable(RegisteredSource registeredSource) {
+    final manifest = registeredSource.definition.manifest;
+    return manifest.supportsCapability('browser') ||
+        manifest.supportsCapability('webview') ||
+        manifest.supportsCapability('challenge');
   }
 
-  _StageResult _analyzeStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required String? errorText,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-  }) {
-    if (errorText != null && errorText.trim().isNotEmpty) {
-      return _StageResult(
-        stage: stage,
-        outcome: _StageOutcome.failed,
-        summary: '执行抛出异常，阶段未完成。',
-        highlights: _buildCommonHighlights(duration, stageTraces, logs),
-        payload: payload,
-        errorText: errorText,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-      );
+  String _friendlyErrorMessage(Object error) {
+    if (error is AppException) {
+      return error.briefMessage;
     }
+    return error.toString();
+  }
 
-    return switch (stage.kind) {
-      _DebugStageKind.search => _analyzeSearchStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-      ),
-      _DebugStageKind.detail => _analyzeDetailStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-      ),
-      _DebugStageKind.chapters => _analyzeChaptersStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-      ),
-      _DebugStageKind.content => _analyzeContentStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-      ),
+  Map<String, Object?> _bookToMap(runtime_models.Book book) {
+    return <String, Object?>{
+      'title': book.title,
+      'author': book.author,
+      'type': book.type,
+      'cover': book.cover,
+      'intro': book.intro,
+      'status': book.status,
+      'category': book.category,
+      'score': book.score,
+      'wordCount': book.wordCount,
+      'updateTime': book.updateTime,
+      'tags': book.tags,
+      'latestChapter': book.latestChapter,
+      'detailUrl': book.detailUrl,
+      'tocUrl': book.tocUrl,
+      'sourceId': book.sourceId,
+      'extra': book.extra,
+      'debug': book.debug,
     };
   }
 
-  _StageResult _analyzeSearchStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-  }) {
-    if (payload is! List) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '搜索结果不是列表结构。',
-      );
-    }
-    if (payload.isEmpty) {
-      return _emptyStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '搜索已执行，但没有返回任何书籍。',
-      );
-    }
-
-    final firstBook = _asMap(payload.first);
-    final firstTitle = _readString(firstBook?['title']);
-    final firstAuthor = _readString(firstBook?['author']);
-    if (firstBook == null || firstTitle.isEmpty) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '搜索结果缺少书籍标题，结构不符合预期。',
-      );
-    }
-
-    return _successStage(
-      stage: stage,
-      payload: payload,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-      summary: '搜索返回 ${payload.length} 本书，已拿到可继续调试的首条结果。',
-      highlights: <String>[
-        '结果数 ${payload.length}',
-        '首本《$firstTitle》',
-        if (firstAuthor.isNotEmpty) '作者 $firstAuthor',
-        ..._buildCommonHighlights(duration, stageTraces, logs),
-      ],
-    );
-  }
-
-  _StageResult _analyzeDetailStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-  }) {
-    final detail = _asMap(payload);
-    if (payload == null) {
-      return _emptyStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '详情阶段返回空结果。',
-      );
-    }
-    if (detail == null) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '详情结果不是对象结构。',
-      );
-    }
-
-    final title = _readString(detail['title']);
-    final author = _readString(detail['author']);
-    final detailUrl = _readString(detail['detailUrl']);
-    final latestChapter = _readString(detail['latestChapter']);
-    if (title.isEmpty) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '详情结果缺少标题。',
-      );
-    }
-
-    return _successStage(
-      stage: stage,
-      payload: payload,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-      summary: '详情页数据可用，已拿到书籍关键信息。',
-      highlights: <String>[
-        '书名《$title》',
-        if (author.isNotEmpty) '作者 $author',
-        if (latestChapter.isNotEmpty) '最新章节 $latestChapter',
-        if (detailUrl.isNotEmpty) '详情链接已返回',
-        ..._buildCommonHighlights(duration, stageTraces, logs),
-      ],
-    );
-  }
-
-  _StageResult _analyzeChaptersStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-  }) {
-    if (payload is! List) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '目录结果不是列表结构。',
-      );
-    }
-    if (payload.isEmpty) {
-      return _emptyStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '目录阶段返回空列表。',
-      );
-    }
-
-    final firstChapter = _asMap(payload.first);
-    final lastChapter = _asMap(payload.last);
-    final firstTitle = _readString(firstChapter?['title']);
-    final lastTitle = _readString(lastChapter?['title']);
-    if (firstChapter == null || firstTitle.isEmpty) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '目录项缺少标题，结构不符合预期。',
-      );
-    }
-
-    return _successStage(
-      stage: stage,
-      payload: payload,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-      summary: '目录可用，已拿到章节列表。',
-      highlights: <String>[
-        '章节数 ${payload.length}',
-        '首章 $firstTitle',
-        if (lastTitle.isNotEmpty && lastTitle != firstTitle) '末章 $lastTitle',
-        ..._buildCommonHighlights(duration, stageTraces, logs),
-      ],
-    );
-  }
-
-  _StageResult _analyzeContentStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-  }) {
-    final content = _asMap(payload);
-    if (payload == null) {
-      return _emptyStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '正文阶段返回空结果。',
-      );
-    }
-    if (content == null) {
-      return _invalidStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '正文结果不是对象结构。',
-      );
-    }
-
-    final title = _readString(content['title']);
-    final text = _readString(content['content']);
-    final images = _asList(content['images']);
-    if (text.isEmpty && images.isEmpty) {
-      return _emptyStage(
-        stage: stage,
-        payload: payload,
-        logs: logs,
-        stageTraces: stageTraces,
-        duration: duration,
-        summary: '正文阶段没有返回文字，也没有返回图片。',
-      );
-    }
-
-    return _successStage(
-      stage: stage,
-      payload: payload,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-      summary: '正文内容可读，最终链路已跑通。',
-      highlights: <String>[
-        if (title.isNotEmpty) '标题 $title',
-        if (text.isNotEmpty) '正文 ${text.runes.length} 字',
-        if (images.isNotEmpty) '图片 ${images.length} 张',
-        ..._buildCommonHighlights(duration, stageTraces, logs),
-      ],
-    );
-  }
-
-  _StageResult _successStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-    required String summary,
-    required List<String> highlights,
-  }) {
-    return _StageResult(
-      stage: stage,
-      outcome: _StageOutcome.success,
-      summary: summary,
-      highlights: highlights,
-      payload: payload,
-      errorText: null,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-    );
-  }
-
-  _StageResult _emptyStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-    required String summary,
-  }) {
-    return _StageResult(
-      stage: stage,
-      outcome: _StageOutcome.empty,
-      summary: summary,
-      highlights: _buildCommonHighlights(duration, stageTraces, logs),
-      payload: payload,
-      errorText: null,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-    );
-  }
-
-  _StageResult _invalidStage({
-    required _DebugStageSpec stage,
-    required Object? payload,
-    required List<SourceScriptDebugLogEntry> logs,
-    required List<Map<String, Object?>> stageTraces,
-    required Duration duration,
-    required String summary,
-  }) {
-    return _StageResult(
-      stage: stage,
-      outcome: _StageOutcome.invalid,
-      summary: summary,
-      highlights: _buildCommonHighlights(duration, stageTraces, logs),
-      payload: payload,
-      errorText: null,
-      logs: logs,
-      stageTraces: stageTraces,
-      duration: duration,
-    );
-  }
-
-  List<String> _buildCommonHighlights(
-    Duration duration,
-    List<Map<String, Object?>> stageTraces,
-    List<SourceScriptDebugLogEntry> logs,
-  ) {
-    final httpCount =
-        stageTraces.where((trace) => trace['kind'] == 'http').length;
-    final browserCount =
-        stageTraces.where((trace) => trace['kind'] == 'browser').length;
-    final errorCount =
-        stageTraces
-            .where((trace) => _readString(trace['error']).isNotEmpty)
-            .length;
-    return <String>[
-      '耗时 ${_formatDuration(duration)}',
-      if (httpCount > 0) 'HTTP $httpCount 次',
-      if (browserCount > 0) '浏览器动作 $browserCount 次',
-      if (logs.isNotEmpty) '日志 ${logs.length} 条',
-      if (errorCount > 0) '轨迹错误 $errorCount 条',
-    ];
-  }
-
-  _RunSummary get _runSummary {
-    if (_stageResults.isEmpty) {
-      return _RunSummary.empty();
-    }
-
-    final successCount =
-        _stageResults
-            .where((result) => result.outcome == _StageOutcome.success)
-            .length;
-    final failedCount =
-        _stageResults.where((result) => result.isBlockingFailure).length;
-    final skippedCount =
-        _stageResults
-            .where((result) => result.outcome == _StageOutcome.skipped)
-            .length;
-    final totalHttpCount = _stageResults.fold<int>(
-      0,
-      (total, result) =>
-          total +
-          result.stageTraces.where((trace) => trace['kind'] == 'http').length,
-    );
-    final totalBrowserCount = _stageResults.fold<int>(
-      0,
-      (total, result) =>
-          total +
-          result.stageTraces
-              .where((trace) => trace['kind'] == 'browser')
-              .length,
-    );
-    final totalTraceErrors = _stageResults.fold<int>(
-      0,
-      (total, result) =>
-          total +
-          result.stageTraces
-              .where((trace) => _readString(trace['error']).isNotEmpty)
-              .length,
-    );
-    final firstIssue = _stageResults.firstWhere(
-      (result) => result.outcome != _StageOutcome.success,
-      orElse: () => _stageResults.last,
-    );
-
-    final outcome =
-        successCount == _stageResults.length
-            ? _RunOutcome.success
-            : successCount > 0
-            ? _RunOutcome.partial
-            : _RunOutcome.failed;
-
-    final summaryText = switch (outcome) {
-      _RunOutcome.success => '4/4 阶段通过，书源主链路可以跑通。',
-      _RunOutcome.partial =>
-        '${firstIssue.stage.shortLabel}阶段未通过：${firstIssue.summary}',
-      _RunOutcome.failed =>
-        '${firstIssue.stage.shortLabel}阶段未通过：${firstIssue.summary}',
-      _RunOutcome.idle => '尚未执行调试。',
+  Map<String, Object?> _chapterToMap(runtime_models.Chapter chapter) {
+    return <String, Object?>{
+      'title': chapter.title,
+      'url': chapter.url,
+      'index': chapter.index,
+      'isVolume': chapter.isVolume,
+      'isVip': chapter.vip,
+      'isPay': chapter.isPay,
+      'updateTime': chapter.updateTime,
+      'sourceId': chapter.sourceId,
+      'extra': chapter.extra,
+      'debug': chapter.debug,
     };
+  }
 
-    return _RunSummary(
-      outcome: outcome,
-      summaryText: summaryText,
-      successCount: successCount,
-      failedCount: failedCount,
-      skippedCount: skippedCount,
-      httpCount: totalHttpCount,
-      browserCount: totalBrowserCount,
-      traceErrorCount: totalTraceErrors,
-      totalDuration: _lastRunDuration,
-    );
+  Map<String, Object?> _contentToMap(runtime_models.Content content) {
+    return <String, Object?>{
+      'title': content.title,
+      'content': content.content,
+      'nextUrl': content.nextUrl,
+      'images': content.images,
+      'sourceId': content.sourceId,
+      'extra': content.extra,
+      'debug': content.debug,
+    };
+  }
+
+  Map<String, Object?>? _asMap(Object? value) {
+    if (value is Map<String, Object?>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
+    }
+    return null;
+  }
+
+  List<Object?> _asList(Object? value) {
+    if (value is List) {
+      return value.cast<Object?>();
+    }
+    return const <Object?>[];
+  }
+
+  String _readString(Object? value) {
+    return value?.toString().trim() ?? '';
+  }
+
+  Duration _readOffset(String rawTime, {required DateTime runStartedAt}) {
+    final parsed = DateTime.tryParse(rawTime);
+    if (parsed == null) {
+      return Duration.zero;
+    }
+    final difference = parsed.difference(runStartedAt);
+    return difference.isNegative ? Duration.zero : difference;
+  }
+
+  String _truncate(String value, {int maxLength = 120}) {
+    if (value.length <= maxLength) {
+      return value;
+    }
+    return '${value.substring(0, maxLength)}...';
+  }
+
+  String _formatJson(Object? value) {
+    try {
+      return const JsonEncoder.withIndent('  ').convert(value);
+    } catch (_) {
+      return value?.toString() ?? 'null';
+    }
   }
 
   void _showTransientMessage(String message) {
@@ -688,34 +1260,21 @@ return content;
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _formatValue(Object? value) {
-    if (value == null) {
-      return 'null';
-    }
-    if (value is String) {
-      return value;
-    }
-    try {
-      return const JsonEncoder.withIndent('  ').convert(value);
-    } catch (_) {
-      return value.toString();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    const pageBackground = Color(0xFF0A0D12);
-    const panelBackground = Color(0xFF10141B);
-    const panelBorder = Color(0xFF242A35);
-
+    final report = _report;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         title: Text(
           widget.title?.trim().isNotEmpty == true ? widget.title! : '书源调试',
         ),
         actions: [
           TextButton.icon(
-            onPressed: _isRunning ? null : _runPipeline,
+            onPressed: _isRunning ? null : _runInspection,
             icon:
                 _isRunning
                     ? const SizedBox(
@@ -729,297 +1288,289 @@ return content;
           const SizedBox(width: 12),
         ],
       ),
-      body: ColoredBox(
-        color: pageBackground,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            child: Column(
-              children: [
-                _DebugInputCard(
-                  controller: _keywordController,
-                  isRunning: _isRunning,
-                  completedCount:
-                      _stageResults
-                          .where(
-                            (result) => result.outcome != _StageOutcome.skipped,
-                          )
-                          .length,
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      _DebugOverviewCard(
-                        summary: _runSummary,
-                        runningStageIndex: _runningStageIndex,
-                        hasResults: _stageResults.isNotEmpty,
-                      ),
-                      const SizedBox(height: 12),
-                      _StageProgressStrip(
-                        stageResults: _stageResults,
-                        runningStageIndex: _runningStageIndex,
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: panelBackground,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: panelBorder),
+      body: Consumer(
+        builder: (context, ref, _) {
+          final activeTheme =
+              ref.watch(activeAdvancedThemeProvider).valueOrNull;
+          final backdrop = resolveAdvancedThemeBackdrop(
+            Theme.of(context).colorScheme,
+            activeTheme,
+          );
+          final horizontal = AppSpacing.pageHorizontal(context);
+          final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+          final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: SafeArea(
+              top: false,
+              child: LayoutBuilder(
+                builder: (context, _) {
+                  final maxWidth = AppLayout.pageContentMaxWidth(
+                    context,
+                    maxWidth: AppLayout.settingsContentMaxWidth,
+                  );
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset + 12,
+                          horizontal,
+                          16 + bottomSafe,
                         ),
-                        padding: const EdgeInsets.all(12),
-                        child:
-                            _stageResults.isEmpty && _isRunning
-                                ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 48),
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                )
-                                : _stageResults.isEmpty
-                                ? const _DebugEmptyState()
-                                : Column(
-                                  children: [
-                                    for (
-                                      var index = 0;
-                                      index < _stageResults.length;
-                                      index++
-                                    ) ...[
-                                      _StageResultCard(
-                                        key: ValueKey(
-                                          _stageResults[index].stage.kind,
-                                        ),
-                                        result: _stageResults[index],
-                                        formatValue: _formatValue,
-                                        initiallyExpanded:
-                                            _stageResults[index]
-                                                .shouldExpandByDefault,
-                                      ),
-                                      if (index != _stageResults.length - 1)
-                                        const SizedBox(height: 10),
-                                    ],
-                                  ],
+                        children: [
+                          _DebugInputCard(
+                            controller: _keywordController,
+                            selectedLevel: _selectedLevel,
+                            isRunning: _isRunning,
+                            mode:
+                                widget.useInstalledSourceFlow
+                                    ? _DebugMode.installedSource
+                                    : _DebugMode.draft,
+                            onLevelChanged: (value) {
+                              setState(() {
+                                _selectedLevel = value;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _SummaryCard(report: report),
+                          const SizedBox(height: 12),
+                          if (_isRunning && report == null)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 36),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (report == null)
+                            const _EmptyState()
+                          else
+                            ...report.stages.map(
+                              (stage) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _StageCard(
+                                  stage: stage,
+                                  formatJson: _formatJson,
                                 ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-enum _DebugStageKind { search, detail, chapters, content }
+enum _DebugMode { installedSource, draft }
 
-enum _StageOutcome { success, empty, invalid, failed, skipped }
+enum _StageOutcome { success, empty, invalid, failed }
 
-enum _RunOutcome { idle, success, partial, failed }
-
-class _DebugStageSpec {
-  const _DebugStageSpec({
-    required this.index,
-    required this.kind,
-    required this.shortLabel,
-    required this.title,
-    required this.command,
-  });
-
-  final int index;
-  final _DebugStageKind kind;
-  final String shortLabel;
-  final String title;
-  final String command;
-}
-
-class _StageResult {
-  const _StageResult({
-    required this.stage,
-    required this.outcome,
+class _RunReport {
+  const _RunReport({
+    required this.mode,
+    required this.keyword,
+    required this.level,
+    required this.sourceName,
     required this.summary,
-    required this.highlights,
-    required this.payload,
-    required this.errorText,
-    required this.logs,
-    required this.stageTraces,
-    required this.duration,
+    required this.stages,
   });
 
-  factory _StageResult.skipped({
-    required _DebugStageSpec stage,
-    required String summary,
-  }) {
-    return _StageResult(
-      stage: stage,
-      outcome: _StageOutcome.skipped,
-      summary: summary,
-      highlights: const <String>[],
-      payload: null,
-      errorText: null,
-      logs: const <SourceScriptDebugLogEntry>[],
-      stageTraces: const <Map<String, Object?>>[],
-      duration: Duration.zero,
-    );
-  }
-
-  final _DebugStageSpec stage;
-  final _StageOutcome outcome;
-  final String summary;
-  final List<String> highlights;
-  final Object? payload;
-  final String? errorText;
-  final List<SourceScriptDebugLogEntry> logs;
-  final List<Map<String, Object?>> stageTraces;
-  final Duration duration;
-
-  bool get isBlockingFailure =>
-      outcome == _StageOutcome.empty ||
-      outcome == _StageOutcome.invalid ||
-      outcome == _StageOutcome.failed;
-
-  bool get shouldExpandByDefault =>
-      outcome == _StageOutcome.failed ||
-      outcome == _StageOutcome.invalid ||
-      outcome == _StageOutcome.empty;
-
-  String get statusLabel => switch (outcome) {
-    _StageOutcome.success => '成功',
-    _StageOutcome.empty => '空结果',
-    _StageOutcome.invalid => '结构异常',
-    _StageOutcome.failed => '失败',
-    _StageOutcome.skipped => '跳过',
-  };
-
-  Color get accent => switch (outcome) {
-    _StageOutcome.success => const Color(0xFF37D67A),
-    _StageOutcome.empty => const Color(0xFFFFC857),
-    _StageOutcome.invalid => const Color(0xFFFF9F5A),
-    _StageOutcome.failed => const Color(0xFFFF5D73),
-    _StageOutcome.skipped => const Color(0xFF6E7785),
-  };
+  final _DebugMode mode;
+  final String keyword;
+  final SourceCheckLevel level;
+  final String sourceName;
+  final _RunSummary summary;
+  final List<_StageReport> stages;
 }
 
 class _RunSummary {
   const _RunSummary({
-    required this.outcome,
-    required this.summaryText,
-    required this.successCount,
-    required this.failedCount,
-    required this.skippedCount,
-    required this.httpCount,
-    required this.browserCount,
-    required this.traceErrorCount,
-    required this.totalDuration,
+    required this.status,
+    required this.stepReached,
+    required this.message,
+    required this.duration,
+    required this.needsBrowser,
   });
 
-  factory _RunSummary.empty() {
-    return const _RunSummary(
-      outcome: _RunOutcome.idle,
-      summaryText: '输入关键词后执行调试，页面会直接给出结论。',
-      successCount: 0,
-      failedCount: 0,
-      skippedCount: 0,
-      httpCount: 0,
-      browserCount: 0,
-      traceErrorCount: 0,
-      totalDuration: null,
+  final SourceCheckStatus status;
+  final SourceCheckStep stepReached;
+  final String message;
+  final Duration duration;
+  final bool needsBrowser;
+}
+
+class _StageReport {
+  const _StageReport({
+    required this.step,
+    required this.title,
+    required this.outcome,
+    required this.summary,
+    required this.highlights,
+    required this.payload,
+    required this.entries,
+    required this.rawLogs,
+    required this.rawTraces,
+    this.book,
+    this.chapter,
+  });
+
+  final SourceCheckStep step;
+  final String title;
+  final _StageOutcome outcome;
+  final String summary;
+  final List<String> highlights;
+  final Object? payload;
+  final List<_TimelineEntry> entries;
+  final List<Map<String, Object?>> rawLogs;
+  final List<Map<String, Object?>> rawTraces;
+  final runtime_models.Book? book;
+  final runtime_models.Chapter? chapter;
+
+  bool get isSuccess => outcome == _StageOutcome.success;
+}
+
+class _TimelineEntry {
+  const _TimelineEntry({
+    required this.offset,
+    required this.message,
+    this.detail,
+    this.isError = false,
+  });
+
+  final Duration offset;
+  final String message;
+  final String? detail;
+  final bool isError;
+}
+
+class _DraftStageSemantic {
+  const _DraftStageSemantic._({
+    required this.kind,
+    required this.summary,
+    this.highlights = const <String>[],
+    this.extraEntries = const <_TimelineEntry>[],
+  });
+
+  final _StageOutcome kind;
+  final String summary;
+  final List<String> highlights;
+  final List<_TimelineEntry> extraEntries;
+
+  factory _DraftStageSemantic.success({
+    required String summary,
+    required List<String> highlights,
+    List<_TimelineEntry> extraEntries = const <_TimelineEntry>[],
+  }) {
+    return _DraftStageSemantic._(
+      kind: _StageOutcome.success,
+      summary: summary,
+      highlights: highlights,
+      extraEntries: extraEntries,
     );
   }
 
-  final _RunOutcome outcome;
-  final String summaryText;
-  final int successCount;
-  final int failedCount;
-  final int skippedCount;
-  final int httpCount;
-  final int browserCount;
-  final int traceErrorCount;
-  final Duration? totalDuration;
+  factory _DraftStageSemantic.empty(String summary) {
+    return _DraftStageSemantic._(kind: _StageOutcome.empty, summary: summary);
+  }
 
-  String get title => switch (outcome) {
-    _RunOutcome.idle => '等待执行',
-    _RunOutcome.success => '调试成功',
-    _RunOutcome.partial => '部分通过',
-    _RunOutcome.failed => '调试失败',
-  };
-
-  Color get accent => switch (outcome) {
-    _RunOutcome.idle => const Color(0xFF7F8792),
-    _RunOutcome.success => const Color(0xFF37D67A),
-    _RunOutcome.partial => const Color(0xFFFFC857),
-    _RunOutcome.failed => const Color(0xFFFF5D73),
-  };
+  factory _DraftStageSemantic.invalid(String summary) {
+    return _DraftStageSemantic._(kind: _StageOutcome.invalid, summary: summary);
+  }
 }
 
 class _DebugInputCard extends StatelessWidget {
   const _DebugInputCard({
     required this.controller,
+    required this.selectedLevel,
     required this.isRunning,
-    required this.completedCount,
+    required this.mode,
+    required this.onLevelChanged,
   });
 
   final TextEditingController controller;
+  final SourceCheckLevel selectedLevel;
   final bool isRunning;
-  final int completedCount;
+  final _DebugMode mode;
+  final ValueChanged<SourceCheckLevel> onLevelChanged;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card.outlined(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      color: const Color(0xFF10141B),
+    final modeLabel = switch (mode) {
+      _DebugMode.installedSource => '标准检测模式',
+      _DebugMode.draft => '草稿调试模式',
+    };
+    final helperText = switch (mode) {
+      _DebugMode.installedSource => '执行逻辑会尽量贴近书源列表里的单源检测，顶部结论与外部检测保持同一心智。',
+      _DebugMode.draft => '当前是草稿调试模式，会执行当前编辑中的脚本内容；结果不代表已安装书源的正式检测结论。',
+    };
+    return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   '调试参数',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const Spacer(),
-                _MetricChip(
-                  label: isRunning ? '状态' : '结果',
-                  value: isRunning ? '执行中' : '$completedCount/4',
-                  compact: true,
-                ),
+                Chip(label: Text(modeLabel)),
               ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              helperText,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(height: 1.45),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
+              enabled: !isRunning,
+              decoration: const InputDecoration(
                 labelText: '调试关键词',
-                labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                hintText: '例如：斗罗大陆',
-                helperText: '建议使用稳定能搜到结果的关键词。',
-                helperStyle: const TextStyle(color: Color(0xFF6E7785)),
-                filled: true,
-                fillColor: const Color(0xFF0B0F14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: colorScheme.primary),
-                ),
+                border: OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<SourceCheckLevel>(
+              initialValue: selectedLevel,
+              decoration: const InputDecoration(
+                labelText: '检测级别',
+                border: OutlineInputBorder(),
+              ),
+              items: SourceCheckLevel.values
+                  .map(
+                    (level) => DropdownMenuItem<SourceCheckLevel>(
+                      value: level,
+                      child: Text(_checkLevelLabel(level)),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged:
+                  isRunning
+                      ? null
+                      : (value) {
+                        if (value != null) {
+                          onLevelChanged(value);
+                        }
+                      },
             ),
           ],
         ),
@@ -1028,27 +1579,39 @@ class _DebugInputCard extends StatelessWidget {
   }
 }
 
-class _DebugOverviewCard extends StatelessWidget {
-  const _DebugOverviewCard({
-    required this.summary,
-    required this.runningStageIndex,
-    required this.hasResults,
-  });
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.report});
 
-  final _RunSummary summary;
-  final int runningStageIndex;
-  final bool hasResults;
+  final _RunReport? report;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isRunning = runningStageIndex >= 0;
-    return Card.outlined(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      color: const Color(0xFF10141B),
+    if (report == null) {
+      return Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            '输入关键词后执行调试，页面会先给出标准结论，再展开详细日志和阶段输出。',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+        ),
+      );
+    }
+
+    final summary = report!.summary;
+    final statusColor = switch (summary.status) {
+      SourceCheckStatus.healthy => const Color(0xFF2E9B57),
+      SourceCheckStatus.warning => const Color(0xFFB97A00),
+      SourceCheckStatus.failed => const Color(0xFFD64545),
+      SourceCheckStatus.skipped => const Color(0xFF6A7381),
+    };
+    return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1058,66 +1621,41 @@ class _DebugOverviewCard extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: summary.accent,
+                    color: statusColor,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    summary.title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                const SizedBox(width: 8),
+                Text(
+                  _checkStatusLabel(summary.status),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (isRunning)
-                  Text(
-                    '第 ${runningStageIndex + 1} 步执行中',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
               ],
             ),
             const SizedBox(height: 10),
-            Text(
-              summary.summaryText,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFFE4E8EF),
-                fontWeight: FontWeight.w600,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 12),
             Wrap(
-              spacing: 8,
+              spacing: 10,
               runSpacing: 8,
               children: [
-                _MetricChip(label: '通过', value: '${summary.successCount}'),
-                _MetricChip(label: '未通过', value: '${summary.failedCount}'),
-                if (summary.skippedCount > 0)
-                  _MetricChip(label: '跳过', value: '${summary.skippedCount}'),
-                _MetricChip(label: 'HTTP', value: '${summary.httpCount}'),
-                _MetricChip(label: '浏览器', value: '${summary.browserCount}'),
-                _MetricChip(label: '轨迹错误', value: '${summary.traceErrorCount}'),
-                if (summary.totalDuration != null)
-                  _MetricChip(
-                    label: '总耗时',
-                    value: _formatDuration(summary.totalDuration!),
-                  ),
+                _SummaryChip(label: '关键词 ${report!.keyword}'),
+                _SummaryChip(label: '级别 ${_checkLevelLabel(report!.level)}'),
+                _SummaryChip(
+                  label: '步骤 ${_checkStepLabel(summary.stepReached)}',
+                ),
+                _SummaryChip(label: '耗时 ${_formatDuration(summary.duration)}'),
+                if (summary.needsBrowser) const _SummaryChip(label: '存在浏览器风险'),
               ],
             ),
-            if (!hasResults && !isRunning) ...[
-              const SizedBox(height: 10),
-              Text(
-                '执行后会先给出结论，再展示阶段详情和原始结果。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+            const SizedBox(height: 12),
+            Text(
+              summary.message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
           ],
         ),
       ),
@@ -1125,343 +1663,104 @@ class _DebugOverviewCard extends StatelessWidget {
   }
 }
 
-class _StageProgressStrip extends StatelessWidget {
-  const _StageProgressStrip({
-    required this.stageResults,
-    required this.runningStageIndex,
-  });
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({required this.label});
 
-  final List<_StageResult> stageResults;
-  final int runningStageIndex;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    const stages = <String>['搜索', '详情', '目录', '正文'];
-    return Card.outlined(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      color: const Color(0xFF10141B),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _StageCard extends StatelessWidget {
+  const _StageCard({required this.stage, required this.formatJson});
+
+  final _StageReport stage;
+  final String Function(Object? value) formatJson;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = switch (stage.outcome) {
+      _StageOutcome.success => const Color(0xFF2E9B57),
+      _StageOutcome.empty => const Color(0xFFE09A00),
+      _StageOutcome.invalid => const Color(0xFFD27A00),
+      _StageOutcome.failed => const Color(0xFFD64545),
+    };
+    return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        child: Row(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var index = 0; index < stages.length; index++) ...[
-              Expanded(
-                child: _StageProgressNode(
-                  index: index,
-                  label: stages[index],
-                  result:
-                      index < stageResults.length ? stageResults[index] : null,
-                  isRunning: runningStageIndex == index,
-                ),
-              ),
-              if (index != stages.length - 1)
-                Expanded(
-                  child: Container(
-                    height: 1,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    color: const Color(0xFF2B3442),
+            Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    shape: BoxShape.circle,
                   ),
                 ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StageProgressNode extends StatelessWidget {
-  const _StageProgressNode({
-    required this.index,
-    required this.label,
-    required this.result,
-    required this.isRunning,
-  });
-
-  final int index;
-  final String label;
-  final _StageResult? result;
-  final bool isRunning;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final accent =
-        isRunning
-            ? const Color(0xFF72B8FF)
-            : result?.accent ?? const Color(0xFF4B5563);
-    final status =
-        isRunning ? '执行中' : (result == null ? '待执行' : result!.statusLabel);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-            border: Border.all(color: accent.withValues(alpha: 0.4)),
-          ),
-          child: Text(
-            '${index + 1}',
-            style: TextStyle(color: accent, fontWeight: FontWeight.w800),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          status,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: isRunning ? accent : colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StageResultCard extends StatelessWidget {
-  const _StageResultCard({
-    super.key,
-    required this.result,
-    required this.formatValue,
-    required this.initiallyExpanded,
-  });
-
-  final _StageResult result;
-  final String Function(Object? value) formatValue;
-  final bool initiallyExpanded;
-
-  String _buildStageCopyText() {
-    final buffer =
-        StringBuffer()
-          ..writeln('阶段：${result.stage.title}')
-          ..writeln('状态：${result.statusLabel}')
-          ..writeln('摘要：${result.summary}');
-
-    if (result.highlights.isNotEmpty) {
-      buffer.writeln('亮点：${result.highlights.join(' / ')}');
-    }
-    if (result.errorText != null && result.errorText!.trim().isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('错误信息')
-        ..writeln(result.errorText!.trim());
-    }
-    if (result.logs.isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('脚本日志');
-      for (final log in result.logs) {
-        final label = switch (log.level) {
-          SourceScriptDebugLogLevel.warn => 'warn',
-          SourceScriptDebugLogLevel.error => 'error',
-          SourceScriptDebugLogLevel.info => 'log',
-        };
-        buffer.writeln('[$label] ${log.message}');
-      }
-    }
-    if (result.stageTraces.isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('网络轨迹');
-      for (final trace in result.stageTraces) {
-        buffer.writeln(jsonEncode(trace));
-      }
-    }
-    buffer
-      ..writeln()
-      ..writeln('原始结果')
-      ..writeln(formatValue(result.payload));
-    return buffer.toString().trimRight();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final preview = _buildPreview(result);
-    final payloadText = formatValue(result.payload);
-    final logsText = result.logs
-        .map((log) {
-          final label = switch (log.level) {
-            SourceScriptDebugLogLevel.warn => 'warn',
-            SourceScriptDebugLogLevel.error => 'error',
-            SourceScriptDebugLogLevel.info => 'log',
-          };
-          return '[$label] ${log.message}';
-        })
-        .join('\n');
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B0F14),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: result.accent.withValues(alpha: 0.28)),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          tilePadding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          title: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: result.accent.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '${result.stage.index + 1}',
-                  style: TextStyle(
-                    color: result.accent,
-                    fontWeight: FontWeight.w800,
+                const SizedBox(width: 8),
+                Text(
+                  '${stage.title} · ${_stageOutcomeLabel(stage.outcome)}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      result.stage.title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      result.summary,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFFAFB7C4),
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: '复制完整信息',
-                visualDensity: VisualDensity.compact,
-                onPressed: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: _buildStageCopyText()),
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('已复制完整调试信息')));
-                  }
-                },
-                icon: const Icon(Icons.copy_rounded, size: 18),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: result.accent.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  result.statusLabel,
-                  style: TextStyle(
-                    color: result.accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          children: [
-            if (result.highlights.isNotEmpty)
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              stage.summary,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(height: 1.45),
+            ),
+            if (stage.highlights.isNotEmpty) ...[
+              const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: result.highlights
-                    .map((item) => _HighlightChip(text: item))
+                children: stage.highlights
+                    .map((item) => _SummaryChip(label: item))
                     .toList(growable: false),
               ),
-            if (preview != null) ...[
-              const SizedBox(height: 12),
-              _DetailBlock(
-                title: '快速预览',
-                child: SelectableText(
-                  preview,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                    fontSize: 12.5,
-                    height: 1.45,
-                  ),
-                ),
-              ),
             ],
-            if (result.errorText != null &&
-                result.errorText!.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _DetailBlock(
-                title: '错误信息',
-                accent: const Color(0xFFFF5D73),
-                child: SelectableText(
-                  result.errorText!,
-                  style: const TextStyle(
-                    color: Color(0xFFFFA3B1),
-                    fontFamily: 'monospace',
-                    fontSize: 12.5,
-                    height: 1.45,
-                  ),
-                ),
+            if (stage.entries.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                '执行时间线',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
-            ],
-            if (result.logs.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _DetailBlock(
-                title: '脚本日志',
-                child: SelectableText(
-                  logsText,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                    fontSize: 12.5,
-                    height: 1.45,
-                  ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            ],
-            if (result.stageTraces.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _DetailBlock(
-                title: '网络轨迹',
+                padding: const EdgeInsets.all(12),
                 child: Column(
-                  children: result.stageTraces
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: stage.entries
                       .map(
-                        (trace) => Padding(
+                        (entry) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: _TraceTile(trace: trace),
+                          child: _TimelineRow(entry: entry),
                         ),
                       )
                       .toList(growable: false),
@@ -1469,18 +1768,26 @@ class _StageResultCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
-            _DetailBlock(
-              title: '原始结果',
-              child: SelectableText(
-                payloadText,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'monospace',
-                  fontSize: 12.5,
-                  height: 1.45,
-                ),
-              ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: const Text('原始输出'),
+              children: [_CodeLikeBlock(text: formatJson(stage.payload))],
             ),
+            if (stage.rawLogs.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text('结构化日志 (${stage.rawLogs.length})'),
+                children: [_CodeLikeBlock(text: formatJson(stage.rawLogs))],
+              ),
+            if (stage.rawTraces.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text('结构化轨迹 (${stage.rawTraces.length})'),
+                children: [_CodeLikeBlock(text: formatJson(stage.rawTraces))],
+              ),
           ],
         ),
       ),
@@ -1488,414 +1795,138 @@ class _StageResultCard extends StatelessWidget {
   }
 }
 
-class _DebugEmptyState extends StatelessWidget {
-  const _DebugEmptyState();
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.entry});
+
+  final _TimelineEntry entry;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 48, horizontal: 12),
-      child: Column(
-        children: [
-          Text(
-            '还没有调试结果',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
+    final detail = entry.detail?.trim() ?? '';
+    final messageColor =
+        entry.isError
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.onSurface;
+    final mono = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace', height: 1.45);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '[${_formatOffset(entry.offset)}] ${entry.message}',
+          style: mono?.copyWith(
+            color: messageColor,
+            fontWeight: entry.isError ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+        if (detail.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 8, top: 2),
+            child: Text(
+              detail,
+              style: mono?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            '执行后这里会按搜索、详情、目录、正文四步展示是否成功，以及每一步的关键摘要。',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF97A0AE),
-              fontSize: 13,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
 
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({
-    required this.label,
-    required this.value,
-    this.compact = false,
-  });
-
-  final String label;
-  final String value;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 10 : 10,
-        vertical: compact ? 6 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: RichText(
-        text: TextSpan(
-          children: [
-            TextSpan(
-              text: '$label ',
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontSize: compact ? 11.5 : 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            TextSpan(
-              text: value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HighlightChip extends StatelessWidget {
-  const _HighlightChip({required this.text});
+class _CodeLikeBlock extends StatelessWidget {
+  const _CodeLikeBlock({required this.text});
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F141B),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF1E2430)),
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
+      padding: const EdgeInsets.all(12),
+      child: SelectableText(
         text,
-        style: const TextStyle(
-          color: Color(0xFFD8DEE8),
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace', height: 1.45),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
         ),
       ),
     );
   }
 }
 
-class _DetailBlock extends StatelessWidget {
-  const _DetailBlock({
-    required this.title,
-    required this.child,
-    this.accent = const Color(0xFF72B8FF),
-  });
-
-  final String title;
-  final Widget child;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F141B),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF1E2430)),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              title,
-              style: TextStyle(
-                color: accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
+String _checkLevelLabel(SourceCheckLevel level) {
+  return switch (level) {
+    SourceCheckLevel.searchOnly => '仅搜索',
+    SourceCheckLevel.searchAndDetail => '搜索 + 详情',
+    SourceCheckLevel.fullReadPath => '完整阅读链路',
+  };
 }
 
-class _TraceTile extends StatelessWidget {
-  const _TraceTile({required this.trace});
-
-  final Map<String, Object?> trace;
-
-  @override
-  Widget build(BuildContext context) {
-    final kind = _readString(trace['kind']);
-    final error = _readString(trace['error']);
-    final accent =
-        error.isNotEmpty
-            ? const Color(0xFFFF5D73)
-            : kind == 'browser'
-            ? const Color(0xFF72B8FF)
-            : const Color(0xFF37D67A);
-    final title = _traceTitle(trace);
-    final subtitle = _traceSubtitle(trace);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF121924),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E2430)),
-      ),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  kind.isEmpty ? 'trace' : kind,
-                  style: TextStyle(
-                    color: accent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: Color(0xFF97A0AE),
-                          fontSize: 12,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (error.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            SelectableText(
-              error,
-              style: const TextStyle(
-                color: Color(0xFFFFA3B1),
-                fontFamily: 'monospace',
-                fontSize: 12.5,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+String _checkStatusLabel(SourceCheckStatus status) {
+  return switch (status) {
+    SourceCheckStatus.healthy => '检测通过',
+    SourceCheckStatus.warning => '可用但有风险',
+    SourceCheckStatus.failed => '检测失败',
+    SourceCheckStatus.skipped => '已跳过',
+  };
 }
 
-String _traceTitle(Map<String, Object?> trace) {
-  final kind = _readString(trace['kind']);
-  if (kind == 'http') {
-    final method = _readString(trace['method']);
-    final url = _readString(trace['url']);
-    final status = _readString(trace['status']);
-    return '${method.isEmpty ? 'HTTP' : method} ${_shortenUrl(url)}${status.isNotEmpty ? ' -> $status' : ''}';
-  }
-
-  if (kind == 'browser') {
-    final action = _readString(trace['action']);
-    final url = _readString(trace['url']);
-    return '${action.isEmpty ? 'browser' : action} ${_shortenUrl(url)}';
-  }
-
-  return _shortenText(const JsonEncoder.withIndent('  ').convert(trace), 120);
+String _checkStepLabel(SourceCheckStep step) {
+  return switch (step) {
+    SourceCheckStep.none => '未开始',
+    SourceCheckStep.search => '搜索',
+    SourceCheckStep.detail => '详情',
+    SourceCheckStep.chapters => '目录',
+    SourceCheckStep.content => '正文',
+  };
 }
 
-String _traceSubtitle(Map<String, Object?> trace) {
-  final kind = _readString(trace['kind']);
-  if (kind == 'http') {
-    final responseJson = trace['responseJson'];
-    final responseText = _readString(trace['responseText']);
-    if (responseJson != null) {
-      return '返回 JSON';
-    }
-    if (responseText.isNotEmpty) {
-      return _shortenText(responseText.replaceAll(RegExp(r'\s+'), ' '), 120);
-    }
-    return '';
-  }
-
-  if (kind == 'browser') {
-    final reason = _readString(trace['reason']);
-    final waitFor = trace['waitFor'];
-    if (reason.isNotEmpty) {
-      return 'reason: $reason';
-    }
-    if (waitFor != null) {
-      return _shortenText(waitFor.toString(), 120);
-    }
-  }
-  return '';
-}
-
-String? _buildPreview(_StageResult result) {
-  switch (result.stage.kind) {
-    case _DebugStageKind.search:
-      final list =
-          result.payload is List ? result.payload! as List : const <Object?>[];
-      if (list.isEmpty) {
-        return null;
-      }
-      final items = list
-          .take(3)
-          .map((item) {
-            final map = _asMap(item);
-            if (map == null) {
-              return item.toString();
-            }
-            final title = _readString(map['title']);
-            final author = _readString(map['author']);
-            return '《$title》${author.isNotEmpty ? ' / $author' : ''}';
-          })
-          .toList(growable: false);
-      return items.join('\n');
-    case _DebugStageKind.detail:
-      final map = _asMap(result.payload);
-      if (map == null) {
-        return null;
-      }
-      return <String>[
-        if (_readString(map['title']).isNotEmpty)
-          '书名：${_readString(map['title'])}',
-        if (_readString(map['author']).isNotEmpty)
-          '作者：${_readString(map['author'])}',
-        if (_readString(map['intro']).isNotEmpty)
-          '简介：${_shortenText(_readString(map['intro']), 120)}',
-        if (_readString(map['latestChapter']).isNotEmpty)
-          '最新章节：${_readString(map['latestChapter'])}',
-      ].join('\n');
-    case _DebugStageKind.chapters:
-      final list =
-          result.payload is List ? result.payload! as List : const <Object?>[];
-      if (list.isEmpty) {
-        return null;
-      }
-      return list
-          .take(5)
-          .map((item) {
-            final map = _asMap(item);
-            return _readString(map?['title']);
-          })
-          .where((item) => item.isNotEmpty)
-          .join('\n');
-    case _DebugStageKind.content:
-      final map = _asMap(result.payload);
-      if (map == null) {
-        return null;
-      }
-      final title = _readString(map['title']);
-      final content = _shortenText(_readString(map['content']), 180);
-      final images = _asList(map['images']);
-      return <String>[
-        if (title.isNotEmpty) '标题：$title',
-        if (content.isNotEmpty) content,
-        if (images.isNotEmpty) '图片：${images.length} 张',
-      ].join('\n\n');
-  }
-}
-
-Map<String, Object?>? _asMap(Object? value) {
-  if (value is Map<String, Object?>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.map(
-      (Object? key, Object? mapValue) => MapEntry(key.toString(), mapValue),
-    );
-  }
-  return null;
-}
-
-List<Object?> _asList(Object? value) {
-  if (value is List<Object?>) {
-    return value;
-  }
-  if (value is List) {
-    return value.cast<Object?>();
-  }
-  return const <Object?>[];
-}
-
-String _readString(Object? value) {
-  return value?.toString().trim() ?? '';
-}
-
-String _shortenText(String value, int maxLength) {
-  if (value.length <= maxLength) {
-    return value;
-  }
-  return '${value.substring(0, maxLength)}...';
-}
-
-String _shortenUrl(String value) {
-  if (value.isEmpty) {
-    return '';
-  }
-  return _shortenText(value, 72);
+String _stageOutcomeLabel(_StageOutcome outcome) {
+  return switch (outcome) {
+    _StageOutcome.success => '成功',
+    _StageOutcome.empty => '空结果',
+    _StageOutcome.invalid => '结构异常',
+    _StageOutcome.failed => '失败',
+  };
 }
 
 String _formatDuration(Duration duration) {
-  final milliseconds = duration.inMilliseconds;
-  if (milliseconds < 1000) {
-    return '${milliseconds}ms';
+  if (duration.inSeconds >= 1) {
+    return '${duration.inMilliseconds / 1000}s';
   }
-  return '${(milliseconds / 1000).toStringAsFixed(milliseconds >= 10000 ? 0 : 1)}s';
+  return '${duration.inMilliseconds} ms';
+}
+
+String _formatOffset(Duration duration) {
+  final totalMillis = duration.inMilliseconds.clamp(0, 359999999);
+  final minutes = totalMillis ~/ 60000;
+  final seconds = (totalMillis % 60000) ~/ 1000;
+  final millis = totalMillis % 1000;
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${seconds.toString().padLeft(2, '0')}.'
+      '${millis.toString().padLeft(3, '0')}';
 }

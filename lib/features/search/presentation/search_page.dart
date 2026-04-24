@@ -909,6 +909,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       title: book.title,
+      author: book.author,
+      coverUrl: book.coverUrl,
       heroTag: heroTag,
     );
     _pauseActiveSearchIfNeeded();

@@ -6,8 +6,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../application/announcement_service.dart';
 import '../application/announcement_read_state_service.dart';
 
@@ -82,9 +85,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
 
     Announcement? latest;
     try {
-      latest = await _service.fetchLatestAnnouncement(
-        useCache: !forceRefresh,
-      );
+      latest = await _service.fetchLatestAnnouncement(useCache: !forceRefresh);
     } catch (error) {
       _showMessage(_resolveErrorText(error));
     }
@@ -162,9 +163,19 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeTheme,
+    );
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         title: const Text('公告'),
         actions: [
           IconButton(
@@ -174,24 +185,28 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.mineContentMaxWidth,
-          );
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: _buildBody(
-                context,
-                horizontal: horizontal,
-                bottomSafe: bottomSafe,
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: _buildBody(
+                  context,
+                  horizontal: horizontal,
+                  bottomSafe: bottomSafe,
+                  topInset: topInset,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -200,6 +215,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
   }) {
     if (_isLoading) {
       return Center(
@@ -216,6 +232,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '加载失败',
         message: errorText,
         actionLabel: '重试',
@@ -235,6 +252,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '暂无公告',
         message: '当前没有可用的公告内容。',
         actionLabel: '刷新',
@@ -271,9 +289,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
           child: Text(
             '已加载全部公告',
             textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
@@ -288,7 +304,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          12,
+          topInset + 12,
           horizontal,
           12 + bottomSafe,
         ),
@@ -301,6 +317,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
     required String title,
     required String message,
     required String actionLabel,
@@ -315,7 +332,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          48,
+          topInset + 36,
           horizontal,
           24 + bottomSafe,
         ),

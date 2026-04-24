@@ -11,6 +11,7 @@ void main() {
       tester,
       width: 185,
       isInBookshelf: true,
+      isShelfStateLoading: false,
       isShelfActionLoading: false,
     );
 
@@ -31,6 +32,7 @@ void main() {
       tester,
       width: 430,
       isInBookshelf: true,
+      isShelfStateLoading: false,
       isShelfActionLoading: false,
     );
 
@@ -44,13 +46,12 @@ void main() {
     expect(find.byIcon(Icons.category_outlined), findsOneWidget);
   });
 
-  testWidgets('keeps four actions visible at medium width', (
-    tester,
-  ) async {
+  testWidgets('keeps four actions visible at medium width', (tester) async {
     await _pumpPrimaryActions(
       tester,
       width: 205,
       isInBookshelf: true,
+      isShelfStateLoading: false,
       isShelfActionLoading: false,
     );
 
@@ -61,13 +62,12 @@ void main() {
     expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
   });
 
-  testWidgets('loading state disables shelf button', (
-    tester,
-  ) async {
+  testWidgets('loading state disables shelf button', (tester) async {
     await _pumpPrimaryActions(
       tester,
       width: 300,
       isInBookshelf: true,
+      isShelfStateLoading: false,
       isShelfActionLoading: true,
     );
 
@@ -84,6 +84,7 @@ void main() {
       tester,
       width: 300,
       isInBookshelf: false,
+      isShelfStateLoading: false,
       isShelfActionLoading: false,
       onOpenOrganize: null,
     );
@@ -93,12 +94,31 @@ void main() {
     );
     expect(cacheButton.onTap, isNull);
   });
+
+  testWidgets('shows progress indicator while shelf state is loading', (
+    tester,
+  ) async {
+    await _pumpPrimaryActions(
+      tester,
+      width: 300,
+      isInBookshelf: false,
+      isShelfStateLoading: true,
+      isShelfActionLoading: false,
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    final shelfButton = tester.widget<InkWell>(
+      find.byKey(const Key('book_detail_shelf_button')),
+    );
+    expect(shelfButton.onTap, isNull);
+  });
 }
 
 Future<void> _pumpPrimaryActions(
   WidgetTester tester, {
   required double width,
   required bool isInBookshelf,
+  required bool isShelfStateLoading,
   required bool isShelfActionLoading,
   VoidCallback? onToggleBookshelf = _noop,
   VoidCallback? onOpenCatalog = _noop,
@@ -116,6 +136,7 @@ Future<void> _pumpPrimaryActions(
                 return BookDetailPrimaryActions(
                   availableWidth: constraints.maxWidth,
                   isInBookshelf: isInBookshelf,
+                  isShelfStateLoading: isShelfStateLoading,
                   isShelfActionLoading: isShelfActionLoading,
                   onToggleBookshelf: onToggleBookshelf,
                   onOpenCatalog: onOpenCatalog,

@@ -5,6 +5,8 @@ import 'app_navigation_style_provider.dart';
 
 const double _kStandardNavigationBarHeightWithLabels = 80;
 const double _kStandardNavigationBarHeightIconOnly = 64;
+const double _kStandardNavigationContentComfortInset = 8;
+const double _kCupertinoDockContentComfortInset = 8;
 
 double mobileBottomNavigationContentInset(
   BuildContext context, {
@@ -24,4 +26,48 @@ double mobileBottomNavigationContentInset(
         showLabels: showNavigationLabels,
       ),
   };
+}
+
+double mobileBottomNavigationComfortInset({required AppNavigationStyle style}) {
+  return switch (style) {
+    AppNavigationStyle.standard => _kStandardNavigationContentComfortInset,
+    AppNavigationStyle.cupertinoDock => _kCupertinoDockContentComfortInset,
+  };
+}
+
+double mobileBottomNavigationBodyInset(
+  BuildContext context, {
+  required AppNavigationStyle style,
+  required bool showNavigationLabels,
+  double extra = 0,
+}) {
+  return mobileBottomNavigationContentInset(
+        context,
+        style: style,
+        showNavigationLabels: showNavigationLabels,
+      ) +
+      mobileBottomNavigationComfortInset(style: style) +
+      extra;
+}
+
+EdgeInsets mobileBottomNavigationBodyPadding(
+  BuildContext context, {
+  required AppNavigationStyle style,
+  required bool showNavigationLabels,
+  double left = 0,
+  double top = 0,
+  double right = 0,
+  double bottom = 0,
+}) {
+  return EdgeInsets.fromLTRB(
+    left,
+    top,
+    right,
+    bottom +
+        mobileBottomNavigationBodyInset(
+          context,
+          style: style,
+          showNavigationLabels: showNavigationLabels,
+        ),
+  );
 }

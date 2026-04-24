@@ -143,16 +143,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
-    final bottomInset = mobileBottomNavigationContentInset(
-      context,
-      style: effectiveNavigationStyle,
-      showNavigationLabels: showNavigationLabels,
-    );
-    final contentBottomInset =
-        bottomInset +
-        (effectiveNavigationStyle == AppNavigationStyle.cupertinoDock
-            ? 8.0
-            : 0.0);
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final toggleTooltip =
         _layoutMode == _MineLayoutMode.grid ? '切换为列表' : '切换为网格';
@@ -193,11 +183,14 @@ class _MinePageState extends ConsumerState<MinePage> {
                   onRefresh: _refreshMine,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      topInset + 4,
-                      horizontal,
-                      24 + contentBottomInset,
+                    padding: mobileBottomNavigationBodyPadding(
+                      context,
+                      style: effectiveNavigationStyle,
+                      showNavigationLabels: showNavigationLabels,
+                      left: horizontal,
+                      top: topInset + 4,
+                      right: horizontal,
+                      bottom: 24,
                     ),
                     children: [
                       _buildPageEntrance(
@@ -381,7 +374,10 @@ class _MinePageState extends ConsumerState<MinePage> {
                               icon: Icons.lan_outlined,
                               label: '网页调试服务',
                               subtitle: '为网站调试台提供局域网本地接口',
-                              onTap: () => context.push('/mine/source-debug-service'),
+                              onTap:
+                                  () => context.push(
+                                    '/mine/source-debug-service',
+                                  ),
                             ),
                             _MineActionItem(
                               icon: Icons.cloud_outlined,

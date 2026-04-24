@@ -30,6 +30,7 @@ import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
+import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -72,6 +73,8 @@ class BookDetailPage extends StatefulWidget {
     this.sourceId,
     this.detailUrl,
     this.title,
+    this.author,
+    this.coverUrl,
     this.heroTag,
     this.bookDetailService,
     this.bookshelfService,
@@ -82,6 +85,8 @@ class BookDetailPage extends StatefulWidget {
   final String? sourceId;
   final String? detailUrl;
   final String? title;
+  final String? author;
+  final String? coverUrl;
   final String? heroTag;
   final BookDetailService? bookDetailService;
   final BookshelfService? bookshelfService;
@@ -126,18 +131,21 @@ class _BookDetailPresentationState {
 class _BookDetailAuxiliaryState {
   const _BookDetailAuxiliaryState({
     this.isInBookshelf = false,
+    this.isShelfStateLoading = true,
     this.isShelfActionLoading = false,
     this.localBookMeta,
     this.showLocalAdvancedOptions = false,
   });
 
   final bool isInBookshelf;
+  final bool isShelfStateLoading;
   final bool isShelfActionLoading;
   final LocalBook? localBookMeta;
   final bool showLocalAdvancedOptions;
 
   _BookDetailAuxiliaryState copyWith({
     bool? isInBookshelf,
+    bool? isShelfStateLoading,
     bool? isShelfActionLoading,
     LocalBook? localBookMeta,
     bool clearLocalBookMeta = false,
@@ -145,6 +153,7 @@ class _BookDetailAuxiliaryState {
   }) {
     return _BookDetailAuxiliaryState(
       isInBookshelf: isInBookshelf ?? this.isInBookshelf,
+      isShelfStateLoading: isShelfStateLoading ?? this.isShelfStateLoading,
       isShelfActionLoading: isShelfActionLoading ?? this.isShelfActionLoading,
       localBookMeta:
           clearLocalBookMeta ? null : (localBookMeta ?? this.localBookMeta),
@@ -184,7 +193,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _manualTocReversed = false;
   bool _isInBookshelf = false;
   bool _showLocalAdvancedOptions = false;
-  int _bookshelfStateSyncToken = 0;
+  bool _isEditingMetadata = false;
+  bool _isSavingMetadata = false;
+  String? _metadataInlineNotice;
   int _detailLoadRequestToken = 0;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
@@ -227,6 +238,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
       SourceRuntimeTaskConflictService.instance;
   final SourceRuntimeSchedulerService _taskScheduler =
       SourceRuntimeSchedulerService.instance;
+  final TextEditingController _editTitleController = TextEditingController();
+  final TextEditingController _editAuthorController = TextEditingController();
+  final TextEditingController _editIntroController = TextEditingController();
+  String? _editingCoverPath;
+  String? _editingCharset;
+  bool _editingSplitLongChapter = true;
+  bool _defaultSplitLongChapterEnabled = true;
   String? _catalogSearchCacheFingerprint;
   Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
       const <String, List<ReaderCatalogSearchEntry>>{};
@@ -274,6 +292,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _detailLoadRequestToken += 1;
     _cancelActiveSwitchSourceSearch();
     _localIndexEventSubscription?.cancel();
+    _editTitleController.dispose();
+    _editAuthorController.dispose();
+    _editIntroController.dispose();
     final sourceId = (_activeSourceId ?? '').trim();
     if (sourceId.isNotEmpty) {
       SourceRuntimeFacade.instance.clearReadingFlow(
@@ -329,6 +350,144 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
+  Future<void> _enterEditingMode() async {
+    final result = _result;
+    if (result == null) {
+      _showMessage('当前书籍暂无可编辑项。');
+      return;
+    }
+    final presentation = _resolvePresentedMetadata(result: result);
+    _defaultSplitLongChapterEnabled =
+        _isLocalContent
+            ? await _readerSystemSettingsService
+                .loadLocalTxtSplitLongChapterEnabled()
+            : true;
+    if (!mounted) {
+      return;
+    }
+    _editTitleController.text = presentation.displayTitle;
+    _editAuthorController.text = presentation.displayAuthor ?? '';
+    _editIntroController.text = presentation.displayIntro ?? '';
+    _editingCoverPath = presentation.customCoverPath;
+    _editingCharset = _localBookMeta?.charset?.trim();
+    if (_editingCharset != null && _editingCharset!.isEmpty) {
+      _editingCharset = null;
+    }
+    _editingSplitLongChapter =
+        _localBookMeta?.splitLongChapter ?? _defaultSplitLongChapterEnabled;
+    setState(() {
+      _isEditingMetadata = true;
+    });
+  }
+
+  void _cancelEditingMode() {
+    if (!_isEditingMetadata) {
+      return;
+    }
+    setState(() {
+      _isEditingMetadata = false;
+      _isSavingMetadata = false;
+    });
+  }
+
+  void _showMetadataInlineNotice(String message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _metadataInlineNotice = message;
+    });
+  }
+
+  Future<void> _handleSaveMetadataEditing() async {
+    final result = _result;
+    final localBook = _localBookMeta;
+    if (result == null) {
+      _showMessage('当前书籍暂无可编辑项。');
+      return;
+    }
+    if (_editTitleController.text.trim().isEmpty) {
+      _showMessage('书名不能为空。');
+      return;
+    }
+
+    setState(() {
+      _isSavingMetadata = true;
+    });
+    try {
+      final draft = _BookMetadataEditDraft(
+        title: _editTitleController.text.trim(),
+        author: _editAuthorController.text.trim(),
+        intro: _editIntroController.text.trim(),
+        customCoverPath: _editingCoverPath,
+        charset: _editingCharset,
+        splitLongChapter: _editingSplitLongChapter,
+      );
+      if (_isLocalContent && localBook != null) {
+        await _saveLocalBookMetadata(
+          result: result,
+          localBook: localBook,
+          draft: draft,
+          defaultSplitLongChapterEnabled: _defaultSplitLongChapterEnabled,
+        );
+      } else {
+        await _saveRemoteBookMetadata(result: result, draft: draft);
+      }
+      if (mounted) {
+        setState(() {
+          _isEditingMetadata = false;
+        });
+      }
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (_) {
+      _showMessage('保存失败，请稍后重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingMetadata = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleResetMetadataEditing() async {
+    final result = _result;
+    final localBook = _localBookMeta;
+    if (result == null) {
+      return;
+    }
+    setState(() {
+      _isSavingMetadata = true;
+    });
+    try {
+      if (_isLocalContent && localBook != null) {
+        await _resetLocalBookMetadata(
+          result: result,
+          localBook: localBook,
+          defaultSplitLongChapterEnabled: _defaultSplitLongChapterEnabled,
+        );
+      } else {
+        await _resetRemoteBookMetadata(result: result);
+      }
+      if (mounted) {
+        setState(() {
+          _isEditingMetadata = false;
+        });
+      }
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (_) {
+      _showMessage('恢复默认失败，请稍后重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingMetadata = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer(
@@ -342,6 +501,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         );
         final horizontal = AppSpacing.pageHorizontal(context);
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
         final canPopRoute = context.canPop();
 
@@ -354,6 +514,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
             context.go('/bookshelf');
           },
           child: Scaffold(
+            resizeToAvoidBottomInset: false,
             extendBodyBehindAppBar: true,
             appBar: AppBar(
               backgroundColor: Colors.transparent,
@@ -365,21 +526,41 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 icon: const Icon(Icons.arrow_back),
               ),
               actions: [
-                IconButton(
-                  onPressed: _handleEditAction,
-                  tooltip: '编辑',
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  onPressed: _handleShareAction,
-                  tooltip: '分享',
-                  icon: const Icon(Icons.share_outlined),
-                ),
-                IconButton(
-                  onPressed: _showMoreActionsSheet,
-                  tooltip: '更多',
-                  icon: const Icon(Icons.more_horiz_rounded),
-                ),
+                if (_isEditingMetadata) ...[
+                  TextButton(
+                    onPressed: _isSavingMetadata ? null : _cancelEditingMode,
+                    child: const Text('取消'),
+                  ),
+                  TextButton(
+                    onPressed:
+                        _isSavingMetadata ? null : _handleResetMetadataEditing,
+                    child: const Text('恢复默认'),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilledButton(
+                      onPressed:
+                          _isSavingMetadata ? null : _handleSaveMetadataEditing,
+                      child: Text(_isSavingMetadata ? '保存中' : '保存'),
+                    ),
+                  ),
+                ] else ...[
+                  IconButton(
+                    onPressed: _handleEditAction,
+                    tooltip: '编辑',
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    onPressed: _handleShareAction,
+                    tooltip: '分享',
+                    icon: const Icon(Icons.share_outlined),
+                  ),
+                  IconButton(
+                    onPressed: _showMoreActionsSheet,
+                    tooltip: '更多',
+                    icon: const Icon(Icons.more_horiz_rounded),
+                  ),
+                ],
               ],
             ),
             floatingActionButton:
@@ -387,7 +568,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   valueListenable: _presentationStateNotifier,
                   builder: (context, presentationState, _) {
                     final result = presentationState.result;
-                    return result == null
+                    return result == null || _isEditingMetadata
                         ? const SizedBox.shrink()
                         : (_buildReadFloatingActionButton(result) ??
                             const SizedBox.shrink());
@@ -423,9 +604,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 horizontal,
                                 topInset + 16,
                                 horizontal,
-                                16 + bottomSafe,
+                                16 +
+                                    bottomSafe +
+                                    (_isEditingMetadata ? keyboardInset : 0),
                               ),
                               children: [
+                                if (_metadataInlineNotice != null) ...[
+                                  _buildMetadataInlineNoticeCard(
+                                    _metadataInlineNotice!,
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
                                 if (_isMissingParams)
                                   RuntimeFeedbackCard(
                                     title: '参数不完整',
@@ -457,66 +646,80 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     ],
                                   )
                                 else if (result != null) ...[
-                                  _buildDetailCard(result),
+                                  if (presentationState.isLoading) ...[
+                                    _buildInlineRefreshNotice(),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  _isEditingMetadata
+                                      ? _buildEditingDetailCard(result)
+                                      : _buildDetailCard(result),
                                   const SizedBox(height: 12),
-                                  Builder(
-                                    builder: (context) {
-                                      final presentedIntro = _resolveIntro(
-                                        _resolvePresentedMetadata(
-                                          result: result,
-                                        ).displayIntro,
-                                      );
-                                      if (presentedIntro == null) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      return Column(
-                                        children: [
-                                          BookDetailIntroCard(
-                                            intro: presentedIntro,
-                                          ),
-                                          const SizedBox(height: 12),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                  ValueListenableBuilder<
-                                    _BookDetailAuxiliaryState
-                                  >(
-                                    valueListenable: _auxiliaryStateNotifier,
-                                    builder: (context, auxiliaryState, _) {
-                                      return _buildQuickActionsCard(
-                                        result,
-                                        auxiliaryState: auxiliaryState,
-                                      );
-                                    },
-                                  ),
-                                  ValueListenableBuilder<
-                                    _BookDetailAuxiliaryState
-                                  >(
-                                    valueListenable: _auxiliaryStateNotifier,
-                                    builder: (context, auxiliaryState, _) {
-                                      final localBookMeta =
-                                          auxiliaryState.localBookMeta;
-                                      if (!_isLocalContent ||
-                                          localBookMeta == null ||
-                                          localBookMeta.indexStatus ==
-                                              LocalBookIndexStatus.ready) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      return Column(
-                                        children: [
-                                          const SizedBox(height: 12),
-                                          _buildLocalIndexStatusCard(
-                                            localBookMeta,
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                  _isEditingMetadata
+                                      ? _buildEditingIntroCard(result)
+                                      : Builder(
+                                        builder: (context) {
+                                          final presentedIntro = _resolveIntro(
+                                            _resolvePresentedMetadata(
+                                              result: result,
+                                            ).displayIntro,
+                                          );
+                                          if (presentedIntro == null) {
+                                            return const SizedBox.shrink();
+                                          }
+                                          return Column(
+                                            children: [
+                                              BookDetailIntroCard(
+                                                intro: presentedIntro,
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                  if (_isEditingMetadata)
+                                    _buildEditingLocalOptionsCard()
+                                  else ...[
+                                    ValueListenableBuilder<
+                                      _BookDetailAuxiliaryState
+                                    >(
+                                      valueListenable: _auxiliaryStateNotifier,
+                                      builder: (context, auxiliaryState, _) {
+                                        return _buildQuickActionsCard(
+                                          result,
+                                          auxiliaryState: auxiliaryState,
+                                        );
+                                      },
+                                    ),
+                                    ValueListenableBuilder<
+                                      _BookDetailAuxiliaryState
+                                    >(
+                                      valueListenable: _auxiliaryStateNotifier,
+                                      builder: (context, auxiliaryState, _) {
+                                        final localBookMeta =
+                                            auxiliaryState.localBookMeta;
+                                        if (!_isLocalContent ||
+                                            localBookMeta == null ||
+                                            localBookMeta.indexStatus ==
+                                                LocalBookIndexStatus.ready) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Column(
+                                          children: [
+                                            const SizedBox(height: 12),
+                                            _buildLocalIndexStatusCard(
+                                              localBookMeta,
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
                                   if (tocWarningText != null) ...[
                                     const SizedBox(height: 12),
                                     _buildTocWarningCard(tocWarningText),
                                   ],
+                                ] else if (presentationState.isLoading) ...[
+                                  _buildInitialLoadingContent(),
                                 ],
                               ],
                             ),
@@ -557,7 +760,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       sourceId: sourceId,
       detailUrl: detailUrl,
     );
-    if (cached == null) {
+    if (cached == null || _shouldSkipCachedHydration(cached)) {
       return false;
     }
 
@@ -574,7 +777,28 @@ class _BookDetailPageState extends State<BookDetailPage> {
         clearTocWarningText: true,
       ),
     );
+    unawaited(
+      _loadSupplementaryState(
+        result: cached,
+        loadRequestToken: _detailLoadRequestToken,
+        updatePresentationAfterSync: true,
+      ),
+    );
     return true;
+  }
+
+  bool _shouldSkipCachedHydration(BookDetailLoadResult cached) {
+    bool hasMeaningfulMismatch(String? routeValue, String? cachedValue) {
+      final routeText = (routeValue ?? '').trim();
+      if (routeText.isEmpty) {
+        return false;
+      }
+      return routeText != (cachedValue ?? '').trim();
+    }
+
+    return hasMeaningfulMismatch(widget.title, cached.detail.title) ||
+        hasMeaningfulMismatch(widget.author, cached.detail.author) ||
+        hasMeaningfulMismatch(widget.coverUrl, cached.detail.coverUrl);
   }
 
   bool get _isMissingParams {
@@ -676,6 +900,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
           return BookDetailPrimaryActions(
             availableWidth: constraints.maxWidth,
             isInBookshelf: auxiliaryState.isInBookshelf,
+            isShelfStateLoading: auxiliaryState.isShelfStateLoading,
             isShelfActionLoading: auxiliaryState.isShelfActionLoading,
             onToggleBookshelf: _toggleBookshelf,
             onOpenCatalog:
@@ -693,6 +918,233 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
+  Widget _buildEditingDetailCard(BookDetailLoadResult result) {
+    final detail = result.detail;
+    final heroTag =
+        widget.heroTag?.trim().isNotEmpty == true
+            ? widget.heroTag!.trim()
+            : _buildBookCoverHeroTag(
+              bookId: detail.id,
+              sourceId: detail.sourceId,
+              detailUrl: detail.detailUrl,
+            );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCoverPreview(
+                  _resolvePresentedMetadata(result: result).realCoverUrl,
+                  customCoverPath: _editingCoverPath,
+                  title:
+                      _editTitleController.text.trim().isEmpty
+                          ? _resolvePresentedMetadata(
+                            result: result,
+                          ).displayTitle
+                          : _editTitleController.text.trim(),
+                  author:
+                      _editAuthorController.text.trim().isEmpty
+                          ? null
+                          : _editAuthorController.text.trim(),
+                  heroTag: heroTag,
+                  bookId: detail.id,
+                  sourceId: detail.sourceId,
+                  detailUrl: detail.detailUrl,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _editTitleController,
+                        enabled: !_isSavingMetadata,
+                        decoration: const InputDecoration(
+                          labelText: '书名',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _editAuthorController,
+                        enabled: !_isSavingMetadata,
+                        decoration: const InputDecoration(
+                          labelText: '作者',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed:
+                      _isSavingMetadata
+                          ? null
+                          : () async {
+                            final nextPath = await _pickEditableCoverPath(
+                              result,
+                            );
+                            if (!mounted || nextPath == null) {
+                              return;
+                            }
+                            setState(() {
+                              _editingCoverPath = nextPath;
+                            });
+                          },
+                  icon: const Icon(Icons.image_outlined, size: 16),
+                  label: const Text('更换封面'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _isSavingMetadata
+                          ? null
+                          : () {
+                            setState(() {
+                              _editingCoverPath = null;
+                            });
+                          },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('移除封面'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _isLocalContent
+                  ? '当前为本地图书编辑，保存后会影响书架和阅读展示。'
+                  : '当前为在线书本地覆盖编辑，保存后不会修改书源。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditingIntroCard(BookDetailLoadResult result) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '简介',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _editIntroController,
+                enabled: !_isSavingMetadata,
+                minLines: 6,
+                maxLines: 12,
+                decoration: const InputDecoration(
+                  hintText: '输入书籍简介',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _buildEditingLocalOptionsCard() {
+    if (!_isLocalContent || _localBookMeta == null) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '本地图书高级项',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                initialValue: _editingCharset,
+                decoration: const InputDecoration(
+                  labelText: '编码',
+                  border: OutlineInputBorder(),
+                ),
+                items: _kLocalCharsetOptions
+                    .map(
+                      (option) => DropdownMenuItem<String?>(
+                        value: option.charset,
+                        child: Text(option.label),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged:
+                    _isSavingMetadata
+                        ? null
+                        : (value) {
+                          setState(() {
+                            _editingCharset = value;
+                          });
+                        },
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('长章节拆分'),
+                subtitle: const Text('修改后可选择立即重新索引使正文生效。'),
+                value: _editingSplitLongChapter,
+                onChanged:
+                    _isSavingMetadata
+                        ? null
+                        : (value) {
+                          setState(() {
+                            _editingSplitLongChapter = value;
+                          });
+                        },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
   Widget? _buildReadFloatingActionButton(BookDetailLoadResult result) {
     final readableChapters = _readableChapters(result.chapters);
     if (readableChapters.isEmpty) {
@@ -706,318 +1158,257 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
-  Future<void> _handleEditAction() async {
-    final result = _result;
-    if (result == null) {
-      _showMessage('当前书籍暂无可编辑项。');
-      return;
+  Widget _buildDetailLoadingSkeleton() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    Widget block({
+      required double height,
+      double? width,
+      BorderRadius? borderRadius,
+    }) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+          borderRadius: borderRadius ?? BorderRadius.circular(10),
+        ),
+      );
     }
-    final localBook = _localBookMeta;
-    final isLocalEditable = _isLocalContent && localBook != null;
-    final presentation = _resolvePresentedMetadata(result: result);
-    final defaultSplitLongChapterEnabled =
-        isLocalEditable
-            ? await _readerSystemSettingsService
-                .loadLocalTxtSplitLongChapterEnabled()
-            : true;
-    if (!mounted) {
-      return;
-    }
 
-    final sheetResult = await showModalBottomSheet<
-      _BookMetadataEditSheetResult
-    >(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) {
-        final titleController = TextEditingController(
-          text: presentation.displayTitle,
-        );
-        final authorController = TextEditingController(
-          text: presentation.displayAuthor ?? '',
-        );
-        final introController = TextEditingController(
-          text: presentation.displayIntro ?? '',
-        );
-        var customCoverPath = presentation.customCoverPath;
-        String? selectedCharset;
-        bool splitLongChapter;
-        if (_isLocalContent && localBook != null) {
-          selectedCharset = localBook.charset?.trim();
-          splitLongChapter = localBook.splitLongChapter;
-        } else {
-          selectedCharset = null;
-          splitLongChapter = defaultSplitLongChapterEnabled;
-        }
-        if (selectedCharset != null && selectedCharset.isEmpty) {
-          selectedCharset = null;
-        }
-        var isSaving = false;
-
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            Future<void> pickCover() async {
-              final nextPath = await _pickEditableCoverPath(result);
-              if (!context.mounted || nextPath == null) {
-                return;
-              }
-              setSheetState(() {
-                customCoverPath = nextPath;
-              });
-            }
-
-            Future<void> submit(_BookMetadataEditAction action) async {
-              if (isSaving) {
-                return;
-              }
-              if (action == _BookMetadataEditAction.save &&
-                  titleController.text.trim().isEmpty) {
-                _showMessage('书名不能为空。');
-                return;
-              }
-              setSheetState(() {
-                isSaving = true;
-              });
-              Navigator.of(context).pop(
-                _BookMetadataEditSheetResult(
-                  action: action,
-                  draft: _BookMetadataEditDraft(
-                    title: titleController.text.trim(),
-                    author: authorController.text.trim(),
-                    intro: introController.text.trim(),
-                    customCoverPath: customCoverPath,
-                    charset: selectedCharset,
-                    splitLongChapter: splitLongChapter,
+    return Column(
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                block(
+                  width: 104,
+                  height: 148,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      block(height: 22, width: double.infinity),
+                      const SizedBox(height: 12),
+                      block(height: 16, width: 160),
+                      const SizedBox(height: 8),
+                      block(height: 16, width: 130),
+                      const SizedBox(height: 8),
+                      block(height: 16, width: 200),
+                    ],
                   ),
                 ),
-              );
-            }
-
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '编辑书籍信息',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      isLocalEditable
-                          ? '保存到本地图书资料，影响书架和阅读展示。'
-                          : '仅保存在本机，不会修改书源。',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Consumer(
-                      builder: (context, ref, _) {
-                        ref.watch(activeAdvancedThemeProvider);
-                        ref.watch(coverGalleriesProvider);
-                        final resolvedCover = resolveBookCover(
-                          realCoverUrl: presentation.realCoverUrl,
-                          customCoverPath: customCoverPath,
-                          activeTheme:
-                              ref.read(activeAdvancedThemeProvider).valueOrNull,
-                          galleries:
-                              ref.read(coverGalleriesProvider).valueOrNull ??
-                              const [],
-                          bookId: result.detail.id,
-                          sourceId: result.detail.sourceId,
-                          detailUrl: result.detail.detailUrl,
-                        );
-                        return Center(
-                          child: ResolvedBookCoverView(
-                            cover: resolvedCover,
-                            title:
-                                titleController.text.trim().isNotEmpty
-                                    ? titleController.text.trim()
-                                    : presentation.displayTitle,
-                            author:
-                                authorController.text.trim().isEmpty
-                                    ? null
-                                    : authorController.text.trim(),
-                            width: 88,
-                            height: 124,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: isSaving ? null : pickCover,
-                          icon: const Icon(Icons.image_outlined, size: 16),
-                          label: const Text('选择封面'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed:
-                              isSaving
-                                  ? null
-                                  : () {
-                                    setSheetState(() {
-                                      customCoverPath = null;
-                                    });
-                                  },
-                          icon: const Icon(Icons.delete_outline, size: 16),
-                          label: const Text('移除封面'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: '书名',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: authorController,
-                      decoration: const InputDecoration(
-                        labelText: '作者',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: introController,
-                      minLines: 4,
-                      maxLines: 8,
-                      decoration: const InputDecoration(
-                        labelText: '简介',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    if (isLocalEditable) ...[
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String?>(
-                        initialValue: selectedCharset,
-                        decoration: const InputDecoration(
-                          labelText: '编码',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _kLocalCharsetOptions
-                            .map(
-                              (option) => DropdownMenuItem<String?>(
-                                value: option.charset,
-                                child: Text(option.label),
-                              ),
-                            )
-                            .toList(growable: false),
-                        onChanged:
-                            isSaving
-                                ? null
-                                : (value) {
-                                  setSheetState(() {
-                                    selectedCharset = value;
-                                  });
-                                },
-                      ),
-                      const SizedBox(height: 10),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('长章节拆分'),
-                        subtitle: const Text('修改后可选择重新索引使其生效。'),
-                        value: splitLongChapter,
-                        onChanged:
-                            isSaving
-                                ? null
-                                : (value) {
-                                  setSheetState(() {
-                                    splitLongChapter = value;
-                                  });
-                                },
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed:
-                              isSaving
-                                  ? null
-                                  : () => submit(_BookMetadataEditAction.reset),
-                          child: const Text('恢复默认'),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed:
-                              isSaving
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed:
-                              isSaving
-                                  ? null
-                                  : () => submit(_BookMetadataEditAction.save),
-                          child: Text(isSaving ? '保存中...' : '保存'),
-                        ),
-                      ],
-                    ),
-                  ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Row(
+              children: List.generate(
+                4,
+                (index) => Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: index == 3 ? 0 : 4),
+                    child: block(height: 62),
+                  ),
                 ),
               ),
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              block(height: 18, width: 48),
+              const SizedBox(height: 10),
+              block(height: 14, width: double.infinity),
+              const SizedBox(height: 8),
+              block(height: 14, width: double.infinity),
+              const SizedBox(height: 8),
+              block(height: 14, width: 220),
+            ],
+          ),
+        ),
+      ],
     );
+  }
 
-    if (!mounted || sheetResult == null) {
-      return;
+  Widget _buildInitialLoadingContent() {
+    final bootstrapTitle =
+        (_displayTitle ?? widget.title ?? '').trim().isNotEmpty
+            ? (_displayTitle ?? widget.title ?? '').trim()
+            : '加载书籍详情中';
+    final bootstrapAuthor = (widget.author ?? '').trim();
+    final bootstrapCover = (widget.coverUrl ?? '').trim();
+
+    if (bootstrapAuthor.isEmpty && bootstrapCover.isEmpty) {
+      return _buildDetailLoadingSkeleton();
     }
 
-    try {
-      switch (sheetResult.action) {
-        case _BookMetadataEditAction.reset:
-          if (_isLocalContent && localBook != null) {
-            await _resetLocalBookMetadata(
-              result: result,
-              localBook: localBook,
-              defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
-            );
-          } else {
-            await _resetRemoteBookMetadata(result: result);
-          }
-          break;
-        case _BookMetadataEditAction.save:
-          if (_isLocalContent && localBook != null) {
-            await _saveLocalBookMetadata(
-              result: result,
-              localBook: localBook,
-              draft: sheetResult.draft,
-              defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
-            );
-          } else {
-            await _saveRemoteBookMetadata(
-              result: result,
-              draft: sheetResult.draft,
-            );
-          }
-          break;
-      }
-    } on AppException catch (error) {
-      _showMessage(error.briefMessage);
-    } catch (_) {
-      _showMessage('保存失败，请稍后重试。');
-    }
+    return Column(
+      children: [
+        _buildBootstrapPreviewCard(
+          title: bootstrapTitle,
+          author: bootstrapAuthor.isEmpty ? null : bootstrapAuthor,
+          coverUrl: bootstrapCover.isEmpty ? null : bootstrapCover,
+        ),
+        const SizedBox(height: 12),
+        _buildDetailLoadingSkeleton(),
+      ],
+    );
+  }
+
+  Widget _buildBootstrapPreviewCard({
+    required String title,
+    String? author,
+    String? coverUrl,
+  }) {
+    final heroTag =
+        widget.heroTag?.trim().isNotEmpty == true
+            ? widget.heroTag!.trim()
+            : null;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCoverPreview(
+              coverUrl,
+              title: title,
+              author: author,
+              heroTag: heroTag ?? 'book_bootstrap_${widget.bookId}',
+              bookId: widget.bookId,
+              sourceId: widget.sourceId,
+              detailUrl: widget.detailUrl,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    author?.isNotEmpty == true ? author! : '作者信息加载中',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineRefreshNotice() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '正在刷新最新详情…',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetadataInlineNoticeCard(String message) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 18,
+            color: colorScheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _metadataInlineNotice = null;
+              });
+            },
+            icon: Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleEditAction() async {
+    await _enterEditingMode();
   }
 
   Future<String?> _pickEditableCoverPath(BookDetailLoadResult result) async {
@@ -1196,12 +1587,43 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final presentation = _resolvePresentedMetadata(result: result);
     _displayTitle = presentation.displayTitle;
     _updatePresentationState(_presentationState.copyWith(result: result));
+    try {
+      await _readerPreferencesService.saveTocSnapshot(
+        ReaderTocSnapshot(
+          bookId: result.detail.id,
+          sourceId: result.detail.sourceId,
+          detailUrl: result.detail.detailUrl,
+          title: presentation.displayTitle,
+          author: presentation.displayAuthor,
+          coverUrl: presentation.displayCover,
+          chapters: result.chapters,
+          updatedAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      // Ignore toc snapshot persistence failures when refreshing presentation.
+    }
     await _readingRecordService.syncBookPresentation(
       bookId: result.detail.id,
       bookTitle: presentation.displayTitle,
       bookAuthor: presentation.displayAuthor,
       coverUrl: presentation.displayCover,
     );
+    if (_auxiliaryState.isInBookshelf) {
+      await _bookshelfService.upsert(
+        BookshelfBook(
+          bookId: result.detail.id,
+          sourceId: result.detail.sourceId,
+          title: presentation.displayTitle,
+          detailUrl: result.detail.detailUrl,
+          author: presentation.displayAuthor,
+          coverUrl: presentation.displayCover,
+          latestChapter: _resolveLatestChapter(result)?.title,
+          addedAt: DateTime.now(),
+        ),
+      );
+    }
+    _showMetadataInlineNotice(message);
     if (mounted) {
       _showMessage(message);
     }
@@ -2227,7 +2649,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       return false;
     } catch (_) {
-      _scheduleBookshelfStateRefresh(result);
+      unawaited(_loadSupplementaryState(result: result));
       return true;
     }
   }
@@ -2372,6 +2794,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
       clearResult: clearResult,
     );
     _updatePresentationState(nextPresentationBeforeLoad);
+    if (!backgroundRefresh || _result == null || clearResult) {
+      _updateAuxiliaryState(
+        _auxiliaryState.copyWith(isShelfStateLoading: true),
+      );
+    }
 
     try {
       final detailProvider = _requireContentProvider(
@@ -2390,24 +2817,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return false;
       }
 
-      _updatePresentationState(
-        _presentationState.copyWith(
-          result: result,
-          tocWarningText: _toTocWarningText(result.tocError),
-        ),
-      );
       _activeBookId = result.detail.id.trim();
       _activeSourceId = result.detail.sourceId.trim();
       _activeDetailUrl = result.detail.detailUrl.trim();
       _displayTitle = result.detail.title.trim();
 
-      await _syncLocalBookMeta(loadRequestToken: requestToken);
-      await _syncBookMetadataOverride(loadRequestToken: requestToken);
-      if (!_isActiveDetailLoadRequest(requestToken)) {
-        return false;
-      }
-      _updatePresentationState(_presentationState.copyWith(result: result));
-      _scheduleBookshelfStateRefresh(result);
+      await _loadSupplementaryState(
+        result: result,
+        loadRequestToken: requestToken,
+        updatePresentationAfterSync: true,
+      );
       return true;
     } on AppException catch (error) {
       if (!_isActiveDetailLoadRequest(requestToken)) {
@@ -2425,7 +2844,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
           clearTocWarningText: true,
         ),
       );
-      _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
+      _updateAuxiliaryState(
+        _auxiliaryState.copyWith(
+          clearLocalBookMeta: true,
+          isShelfStateLoading: false,
+        ),
+      );
       return false;
     } catch (_) {
       if (!_isActiveDetailLoadRequest(requestToken)) {
@@ -2443,7 +2867,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
           clearTocWarningText: true,
         ),
       );
-      _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
+      _updateAuxiliaryState(
+        _auxiliaryState.copyWith(
+          clearLocalBookMeta: true,
+          isShelfStateLoading: false,
+        ),
+      );
       return false;
     } finally {
       if (_isActiveDetailLoadRequest(requestToken) && shouldShowLoading) {
@@ -2487,25 +2916,149 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
+  Future<void> _loadSupplementaryState({
+    required BookDetailLoadResult result,
+    int? loadRequestToken,
+    bool updatePresentationAfterSync = false,
+  }) async {
+    if (loadRequestToken != null &&
+        !_isActiveDetailLoadRequest(loadRequestToken)) {
+      return;
+    }
+
+    final sourceId = result.detail.sourceId.trim();
+    final detailUrl = result.detail.detailUrl.trim();
+    final bookId = result.detail.id.trim();
+    final initialShowLocalAdvancedOptions =
+        _auxiliaryState.showLocalAdvancedOptions;
+
+    final localBookFuture = _loadLocalBookMetaSnapshot(
+      sourceId: sourceId,
+      bookId: bookId,
+    );
+    final metadataOverrideFuture = _loadBookMetadataOverrideSnapshot(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    final bookshelfStateFuture = _loadBookshelfStateSnapshot(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+
+    final localBook = await localBookFuture;
+    final metadataOverride = await metadataOverrideFuture;
+    final isActive =
+        loadRequestToken != null
+            ? _isActiveDetailLoadRequest(loadRequestToken)
+            : mounted;
+    if (!isActive) {
+      _localBookMeta = localBook;
+      _metadataOverride = metadataOverride;
+      return;
+    }
+
+    _metadataOverride = metadataOverride;
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(
+        clearLocalBookMeta: localBook == null,
+        localBookMeta: localBook,
+        showLocalAdvancedOptions: _resolveShowLocalAdvancedOptions(
+          localBook,
+          currentValue: initialShowLocalAdvancedOptions,
+        ),
+      ),
+    );
+    if (updatePresentationAfterSync) {
+      _updatePresentationState(
+        _presentationState.copyWith(
+          result: result,
+          tocWarningText: _toTocWarningText(result.tocError),
+        ),
+      );
+    }
+
+    final isInBookshelf = await bookshelfStateFuture;
+    final isStillActive =
+        loadRequestToken != null
+            ? _isActiveDetailLoadRequest(loadRequestToken)
+            : mounted;
+    if (!isStillActive) {
+      return;
+    }
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(
+        isInBookshelf: isInBookshelf,
+        isShelfStateLoading: false,
+      ),
+    );
+  }
+
+  Future<LocalBook?> _loadLocalBookMetaSnapshot({
+    required String sourceId,
+    required String bookId,
+  }) async {
+    if (!LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      return null;
+    }
+    return AppDatabase.instance.getLocalBookById(bookId);
+  }
+
+  Future<BookMetadataOverride?> _loadBookMetadataOverrideSnapshot({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    if (LocalReaderIdentity.isLocalSourceId(sourceId) ||
+        sourceId.isEmpty ||
+        detailUrl.isEmpty) {
+      return null;
+    }
+    return _bookMetadataOverrideRepository.getByRemoteBook(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+  }
+
+  Future<bool> _loadBookshelfStateSnapshot({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
+      return false;
+    }
+    try {
+      return await _bookshelfService.contains(
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _resolveShowLocalAdvancedOptions(
+    LocalBook? localBook, {
+    required bool currentValue,
+  }) {
+    if (localBook == null) {
+      return false;
+    }
+    if (localBook.format == LocalBookFormat.txt) {
+      return true;
+    }
+    if (!_hasLocalRepairIssue(localBook)) {
+      return false;
+    }
+    return currentValue;
+  }
+
   Future<void> _syncLocalBookMeta({int? loadRequestToken}) async {
     if (loadRequestToken != null &&
         !_isActiveDetailLoadRequest(loadRequestToken)) {
       return;
     }
-    if (!_isLocalContent) {
-      if (!mounted ||
-          (loadRequestToken != null &&
-              !_isActiveDetailLoadRequest(loadRequestToken))) {
-        _localBookMeta = null;
-        _metadataOverride = null;
-        return;
-      }
-      _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
-      return;
-    }
-
-    final localBook = await AppDatabase.instance.getLocalBookById(
-      _activeBookId,
+    final localBook = await _loadLocalBookMetaSnapshot(
+      sourceId: (_activeSourceId ?? '').trim(),
+      bookId: _activeBookId,
     );
     if (!mounted ||
         (loadRequestToken != null &&
@@ -2515,44 +3068,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
     _updateAuxiliaryState(
       _auxiliaryState.copyWith(
+        clearLocalBookMeta: localBook == null,
         localBookMeta: localBook,
-        showLocalAdvancedOptions:
-            localBook != null && localBook.format == LocalBookFormat.txt
-                ? true
-                : localBook != null && !_hasLocalRepairIssue(localBook)
-                ? false
-                : _auxiliaryState.showLocalAdvancedOptions,
+        showLocalAdvancedOptions: _resolveShowLocalAdvancedOptions(
+          localBook,
+          currentValue: _auxiliaryState.showLocalAdvancedOptions,
+        ),
       ),
     );
-  }
-
-  Future<void> _syncBookMetadataOverride({int? loadRequestToken}) async {
-    if (loadRequestToken != null &&
-        !_isActiveDetailLoadRequest(loadRequestToken)) {
-      return;
-    }
-
-    if (_isLocalContent) {
-      _metadataOverride = null;
-      return;
-    }
-
-    final sourceId = (_activeSourceId ?? '').trim();
-    final detailUrl = (_activeDetailUrl ?? '').trim();
-    if (sourceId.isEmpty || detailUrl.isEmpty) {
-      _metadataOverride = null;
-      return;
-    }
-
-    final metadataOverride = await _bookMetadataOverrideRepository
-        .getByRemoteBook(sourceId: sourceId, detailUrl: detailUrl);
-    if (!mounted ||
-        (loadRequestToken != null &&
-            !_isActiveDetailLoadRequest(loadRequestToken))) {
-      _metadataOverride = metadataOverride;
-      return;
-    }
-    _metadataOverride = metadataOverride;
   }
 
   bool _isActiveDetailLoadRequest(int requestToken) {
@@ -3354,40 +3877,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
-  void _scheduleBookshelfStateRefresh(BookDetailLoadResult result) {
-    final sourceId = result.detail.sourceId.trim();
-    final detailUrl = result.detail.detailUrl.trim();
-    if (sourceId.isEmpty || detailUrl.isEmpty) {
-      return;
-    }
-
-    final syncToken = ++_bookshelfStateSyncToken;
-    unawaited(() async {
-      bool isInBookshelf;
-      try {
-        isInBookshelf = await _bookshelfService.contains(
-          sourceId: sourceId,
-          detailUrl: detailUrl,
-        );
-      } catch (_) {
-        return;
-      }
-
-      if (!mounted || syncToken != _bookshelfStateSyncToken) {
-        return;
-      }
-      final activeSourceId = (_activeSourceId ?? '').trim();
-      final activeDetailUrl = (_activeDetailUrl ?? '').trim();
-      if (activeSourceId != sourceId || activeDetailUrl != detailUrl) {
-        return;
-      }
-
-      _updateAuxiliaryState(
-        _auxiliaryState.copyWith(isInBookshelf: isInBookshelf),
-      );
-    }());
-  }
-
   Future<void> _toggleBookshelf() async {
     final result = _result;
     if (result == null) {
@@ -3401,7 +3890,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         isInBookshelf: !wasInBookshelf,
       ),
     );
-    _bookshelfStateSyncToken++;
 
     try {
       final detail = result.detail;
@@ -3491,8 +3979,6 @@ class _LocalCharsetOption {
   final String? charset;
 }
 
-enum _BookMetadataEditAction { save, reset }
-
 class _BookMetadataEditDraft {
   const _BookMetadataEditDraft({
     required this.title,
@@ -3509,16 +3995,6 @@ class _BookMetadataEditDraft {
   final String? customCoverPath;
   final String? charset;
   final bool splitLongChapter;
-}
-
-class _BookMetadataEditSheetResult {
-  const _BookMetadataEditSheetResult({
-    required this.action,
-    required this.draft,
-  });
-
-  final _BookMetadataEditAction action;
-  final _BookMetadataEditDraft draft;
 }
 
 enum _DetailSwitchSourceApplyResult {

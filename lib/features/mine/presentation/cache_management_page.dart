@@ -11,9 +11,13 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/cache/cover_image_disk_cache.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../domain/entities/book_metadata_override.dart';
+import '../../../domain/entities/local_book.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
+import '../../reader/application/local/local_reader_identity.dart';
 
 class CacheManagementPage extends ConsumerStatefulWidget {
   const CacheManagementPage({super.key});
@@ -25,6 +29,8 @@ class CacheManagementPage extends ConsumerStatefulWidget {
 
 class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   final BookshelfService _bookshelfService = BookshelfService();
+  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
+      const BookMetadataPresentationResolver();
   late Future<Map<String, _CachedBookPresentation>>
   _bookPresentationIndexFuture;
 
@@ -38,6 +44,15 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   _buildBookPresentationIndex() async {
     final items = await _bookshelfService.getAll();
     final records = await AppDatabase.instance.listLatestReadingRecords();
+    final localBooks = await AppDatabase.instance.getAllLocalBooks();
+    final metadataOverrides =
+        await AppDatabase.instance.getAllBookMetadataOverrides();
+    final localBooksById = <String, LocalBook>{
+      for (final book in localBooks) book.id.trim(): book,
+    };
+    final metadataOverridesByTargetKey = <String, BookMetadataOverride>{
+      for (final item in metadataOverrides) item.targetKey: item,
+    };
     final result = <String, _CachedBookPresentation>{};
 
     for (final record in records) {
@@ -46,13 +61,33 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         continue;
       }
       final title = record.bookTitle.trim();
+      final presentation = _bookMetadataPresentationResolver.resolve(
+        fallbackTitle: title,
+        fallbackAuthor: record.bookAuthor,
+        realCoverUrl: record.coverUrl,
+        localBook:
+            record.sourceId == LocalReaderIdentity.localSourceId
+                ? localBooksById[bookId]
+                : null,
+        metadataOverride:
+            metadataOverridesByTargetKey[record.sourceId ==
+                    LocalReaderIdentity.localSourceId
+                ? BookMetadataOverride.localTargetKey(bookId)
+                : BookMetadataOverride.remoteTargetKey(
+                  sourceId: record.sourceId,
+                  detailUrl: record.detailUrl,
+                )],
+      );
       result[bookId] = _CachedBookPresentation(
         bookId: record.bookId,
         sourceId: record.sourceId,
         detailUrl: record.detailUrl,
-        title: title.isEmpty ? null : title,
-        author: record.bookAuthor?.trim(),
-        coverUrl: record.coverUrl?.trim(),
+        title:
+            presentation.displayTitle.trim().isEmpty
+                ? null
+                : presentation.displayTitle.trim(),
+        author: presentation.displayAuthor?.trim(),
+        coverUrl: presentation.displayCover?.trim(),
         inBookshelf: false,
       );
     }
@@ -62,22 +97,33 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       if (bookId.isEmpty) {
         continue;
       }
+      final presentation = _bookMetadataPresentationResolver.resolve(
+        fallbackTitle: item.title,
+        fallbackAuthor: item.author,
+        realCoverUrl: item.coverUrl,
+        localBook:
+            item.sourceId == LocalReaderIdentity.localSourceId
+                ? localBooksById[bookId]
+                : null,
+        metadataOverride:
+            metadataOverridesByTargetKey[item.sourceId ==
+                    LocalReaderIdentity.localSourceId
+                ? BookMetadataOverride.localTargetKey(bookId)
+                : BookMetadataOverride.remoteTargetKey(
+                  sourceId: item.sourceId,
+                  detailUrl: item.detailUrl,
+                )],
+      );
       result[bookId] = _CachedBookPresentation(
         bookId: item.bookId,
         sourceId: item.sourceId,
         detailUrl: item.detailUrl,
         title:
-            item.title.trim().isEmpty
+            presentation.displayTitle.trim().isEmpty
                 ? result[bookId]?.title
-                : item.title.trim(),
-        author:
-            item.author?.trim().isNotEmpty == true
-                ? item.author!.trim()
-                : result[bookId]?.author,
-        coverUrl:
-            item.coverUrl?.trim().isNotEmpty == true
-                ? item.coverUrl!.trim()
-                : result[bookId]?.coverUrl,
+                : presentation.displayTitle.trim(),
+        author: presentation.displayAuthor?.trim() ?? result[bookId]?.author,
+        coverUrl: presentation.displayCover?.trim() ?? result[bookId]?.coverUrl,
         inBookshelf: true,
       );
     }

@@ -208,12 +208,14 @@ class BookDetailService {
       );
     }
 
+    final cacheKey = '$normalizedSourceId|$normalizedDetailUrl';
     return _loadWithDiagnosticContainer(
       sourceId: normalizedSourceId,
       bookId: normalizedBookId,
       detailUrl: normalizedDetailUrl,
       fallbackTitle: normalizedFallbackTitle,
       fallbackAuthor: normalizedFallbackAuthor,
+      cacheKey: cacheKey,
       cancellationHandle: cancellationHandle,
     );
   }
@@ -405,6 +407,7 @@ class BookDetailService {
     required String detailUrl,
     required String? fallbackTitle,
     required String? fallbackAuthor,
+    required String cacheKey,
     SessionCancellationHandle? cancellationHandle,
   }) async {
     final facade = _sourceRuntimeFacade;
@@ -425,9 +428,8 @@ class BookDetailService {
       );
     }
 
-    final diagnosticContainer = await facade.createDiagnosticExecutionContainerById(
-      sourceId,
-    );
+    final diagnosticContainer = await facade
+        .createDiagnosticExecutionContainerById(sourceId);
     if (diagnosticContainer == null) {
       _sourceHealthService.markDetailFailure(
         sourceId: sourceId,
@@ -523,7 +525,7 @@ class BookDetailService {
           )
           .toList(growable: false);
 
-      return BookDetailLoadResult(
+      final result = BookDetailLoadResult(
         detail: BookDetail(
           id: bookId,
           sourceId: sourceId,
@@ -548,6 +550,11 @@ class BookDetailService {
         tocFromCache: false,
         tocError: null,
       );
+      if (chapters.isNotEmpty) {
+        _writeTocCache(cacheKey, chapters);
+      }
+      _writeDetailCache(cacheKey, result);
+      return result;
     } on AppException catch (error) {
       _recordStepFailure(
         sourceId: sourceId,
