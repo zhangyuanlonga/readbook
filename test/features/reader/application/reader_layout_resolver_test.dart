@@ -9,6 +9,7 @@ void main() {
 
     test('derives paged layout metrics from clamped settings', () {
       const settings = ReaderSettings(
+        bodyMarginMode: ReaderBodyMarginMode.custom,
         bodyMarginTop: 52,
         bodyMarginBottom: -4,
         bodyMarginLeft: 12,
@@ -44,6 +45,7 @@ void main() {
 
     test('builds scroll body padding with safe bottom and extra reserve', () {
       const settings = ReaderSettings(
+        bodyMarginMode: ReaderBodyMarginMode.custom,
         bodyMarginTop: 10,
         bodyMarginBottom: 12,
         bodyMarginLeft: 14,

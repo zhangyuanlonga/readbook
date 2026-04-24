@@ -69,6 +69,8 @@ Arguments:
 Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
   APK_PROFILE   APK output profile: arm64 | split | universal (default: arm64)
+                arm64 uses --target-platform android-arm64 to preserve the raw versionCode.
+                split uses --split-per-abi, which lets Android append ABI-specific versionCode offsets.
   SPLIT_PER_ABI Legacy alias. Set to 1 for APK_PROFILE=split
   OUTPUT_DIR    Output artifacts folder (default: artifacts/android)
   ARTIFACT_NAME Final artifact display name prefix (default: Selune)
@@ -199,9 +201,12 @@ fi
 
 build_apk() {
   local cmd=("${FLUTTER_CMD}" build apk "--${BUILD_MODE}")
-  if [[ "${APK_PROFILE}" == "split" || "${APK_PROFILE}" == "arm64" ]]; then
+  if [[ "${APK_PROFILE}" == "split" ]]; then
     echo "==> flutter build apk --${BUILD_MODE} --split-per-abi"
     cmd+=(--split-per-abi)
+  elif [[ "${APK_PROFILE}" == "arm64" ]]; then
+    echo "==> flutter build apk --${BUILD_MODE} --target-platform android-arm64"
+    cmd+=(--target-platform android-arm64)
   else
     echo "==> flutter build apk --${BUILD_MODE}"
   fi
@@ -217,7 +222,7 @@ build_apk() {
   local apk_dir="${PROJECT_ROOT}/build/app/outputs/flutter-apk"
   local copied=0
 
-  if [[ "${APK_PROFILE}" == "split" || "${APK_PROFILE}" == "arm64" ]]; then
+  if [[ "${APK_PROFILE}" == "split" ]]; then
     while IFS= read -r -d '' file; do
       local base
       base="$(basename "${file}")"
@@ -227,12 +232,15 @@ build_apk() {
         *armeabi-v7a*) abi_label="armeabi-v7a" ;;
         *x86_64*) abi_label="x86_64" ;;
       esac
-      if [[ "${APK_PROFILE}" == "arm64" && "${abi_label}" != "arm64-v8a" ]]; then
-        continue
-      fi
       cp "${file}" "${SESSION_DIR}/$(android_apk_name "${abi_label}")"
       copied=1
     done < <(find "${apk_dir}" -maxdepth 1 -type f -name "app-*-${BUILD_MODE}.apk" -print0)
+  elif [[ "${APK_PROFILE}" == "arm64" ]]; then
+    local apk_file="${apk_dir}/app-${BUILD_MODE}.apk"
+    if [[ -f "${apk_file}" ]]; then
+      cp "${apk_file}" "${SESSION_DIR}/$(android_apk_name "arm64-v8a")"
+      copied=1
+    fi
   else
     local apk_file="${apk_dir}/app-${BUILD_MODE}.apk"
     if [[ -f "${apk_file}" ]]; then

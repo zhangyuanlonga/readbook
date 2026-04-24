@@ -1015,15 +1015,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     BoxConstraints constraints,
   ) {
     final pagedInfoOverlayReserve = _resolvePagedInfoOverlayReserve(context);
+    final pagedBottomReserve = max(
+      _kBottomOverlayReserve,
+      pagedInfoOverlayReserve,
+    );
     return _layoutResolver.resolvePagedMetrics(
       settings: _settings,
       viewportSize: constraints.biggest,
       safeInsets: _readerSafeInsets(context),
       pinnedHeaderHeight: _pinnedHeaderTotalHeight(context),
-      bottomProgressReserve: max(
-        _showOverlayControls ? _kBottomOverlayReserve : _kBottomProgressReserve,
-        pagedInfoOverlayReserve,
-      ),
+      bottomProgressReserve: pagedBottomReserve,
     );
   }
 
@@ -4940,6 +4941,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       bottomInset,
       _effectiveBottomSafeInset(context),
     );
+    final effectiveBottomReserve = max(
+      safeBottomInset,
+      _showOverlayControls ? _kBottomOverlayReserve : 0.0,
+    );
     final footerPadding = _layoutResolver.resolveInfoBarPadding(
       _settings,
       isHeader: false,
@@ -4952,7 +4957,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             )
             .toDouble();
     final collapsedTextBottomPadding =
-        safeBottomInset + footerPadding.bottom + max(4.0, innerPadding * 0.5);
+        effectiveBottomReserve +
+        footerPadding.bottom +
+        max(4.0, innerPadding * 0.5);
 
     final rightItems = <String>[];
     if (showTime) {

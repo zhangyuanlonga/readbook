@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../source/application/external_import_catalog.dart';
 import '../application/local_book_import_service.dart';
 
 class LocalLibraryPage extends StatefulWidget {
@@ -53,44 +54,8 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     }
 
     final files = await openFiles(
-      acceptedTypeGroups: const [
-        XTypeGroup(
-          label: 'Book Files',
-          extensions: [
-            'txt',
-            'epub',
-            'md',
-            'markdown',
-            'html',
-            'htm',
-            'pdf',
-            'mobi',
-            'azw',
-            'azw3',
-          ],
-          mimeTypes: [
-            'text/plain',
-            'application/epub+zip',
-            'text/markdown',
-            'text/x-markdown',
-            'text/html',
-            'application/pdf',
-            'application/x-mobipocket-ebook',
-            'application/vnd.amazon.ebook',
-            'application/vnd.amazon.mobi8-ebook',
-          ],
-          uniformTypeIdentifiers: [
-            'public.plain-text',
-            'public.text',
-            'org.idpf.epub-container',
-            'com.jiangyan.selune.markdown',
-            'public.html',
-            'com.adobe.pdf',
-            'com.jiangyan.selune.mobi',
-            'com.jiangyan.selune.azw',
-            'com.jiangyan.selune.azw3',
-          ],
-        ),
+      acceptedTypeGroups: const <XTypeGroup>[
+        ExternalImportCatalog.localBookTypeGroup,
       ],
       confirmButtonText: '选择本地图书',
     );

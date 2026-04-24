@@ -48,13 +48,6 @@ GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
 final GoRouter appRouter = GoRouter(
   navigatorKey: globalRootNavigatorKey,
   initialLocation: '/bookshelf',
-  redirect: (context, state) {
-    final scheme = state.uri.scheme.toLowerCase();
-    if (scheme == 'file' || scheme == 'content') {
-      return '/source';
-    }
-    return null;
-  },
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

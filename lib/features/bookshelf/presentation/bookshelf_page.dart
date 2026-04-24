@@ -38,6 +38,8 @@ import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
+import '../../source/application/external_import_catalog.dart';
+import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
@@ -1802,44 +1804,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     final files = await openFiles(
-      acceptedTypeGroups: const [
-        XTypeGroup(
-          label: 'Book Files',
-          extensions: [
-            'txt',
-            'epub',
-            'md',
-            'markdown',
-            'html',
-            'htm',
-            'pdf',
-            'mobi',
-            'azw',
-            'azw3',
-          ],
-          mimeTypes: [
-            'text/plain',
-            'application/epub+zip',
-            'text/markdown',
-            'text/x-markdown',
-            'text/html',
-            'application/pdf',
-            'application/x-mobipocket-ebook',
-            'application/vnd.amazon.ebook',
-            'application/vnd.amazon.mobi8-ebook',
-          ],
-          uniformTypeIdentifiers: [
-            'public.plain-text',
-            'public.text',
-            'org.idpf.epub-container',
-            'com.jiangyan.selune.markdown',
-            'public.html',
-            'com.adobe.pdf',
-            'com.jiangyan.selune.mobi',
-            'com.jiangyan.selune.azw',
-            'com.jiangyan.selune.azw3',
-          ],
-        ),
+      acceptedTypeGroups: const <XTypeGroup>[
+        ExternalImportCatalog.localBookTypeGroup,
       ],
       confirmButtonText: '选择本地图书',
     );
@@ -1937,24 +1903,32 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       payload,
     );
     if (cached == null) {
-      _showMessage('读取外部图书失败：${payload.label}');
+      ExternalImportDiagnostics.logCacheFailed(payload);
+      _showMessage(
+        ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        ),
+      );
       return;
     }
 
     final tempFile = File(cached.path);
     try {
-      final extension = p.extension(cached.label).toLowerCase();
-      if (extension != '.txt' &&
-          extension != '.epub' &&
-          extension != '.md' &&
-          extension != '.markdown' &&
-          extension != '.html' &&
-          extension != '.htm' &&
-          extension != '.pdf' &&
-          extension != '.mobi' &&
-          extension != '.azw' &&
-          extension != '.azw3') {
-        _showMessage('暂不支持导入该文件：${cached.label}');
+      if (!ExternalImportCatalog.supportsFileLabel(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+      )) {
+        ExternalImportDiagnostics.logImportUnsupported(
+          ExternalImportPayloadType.localBook,
+          cached.label,
+        );
+        _showMessage(
+          ExternalImportCatalog.unsupportedFileMessage(
+            ExternalImportPayloadType.localBook,
+            cached.label,
+          ),
+        );
         return;
       }
 
@@ -1967,11 +1941,31 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       if (!mounted) {
         return;
       }
+      ExternalImportDiagnostics.logImportSucceeded(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+      );
       _showMessage('已导入 ${cached.label}');
     } on AppException catch (error) {
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+        error,
+      );
       _showMessage(error.briefMessage);
     } catch (error) {
-      _showMessage('导入失败：$error');
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+        error,
+      );
+      _showMessage(
+        ExternalImportDiagnostics.importFailedMessage(
+          ExternalImportPayloadType.localBook,
+          '$error',
+          label: cached.label,
+        ),
+      );
     } finally {
       try {
         if (await tempFile.exists()) {

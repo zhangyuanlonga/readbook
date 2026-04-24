@@ -356,6 +356,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _showMessage('当前书籍暂无可编辑项。');
       return;
     }
+    final ensuredLocalBook =
+        _isLocalContent ? await _ensureEditableLocalBookMeta() : _localBookMeta;
     final presentation = _resolvePresentedMetadata(result: result);
     _defaultSplitLongChapterEnabled =
         _isLocalContent
@@ -369,12 +371,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _editAuthorController.text = presentation.displayAuthor ?? '';
     _editIntroController.text = presentation.displayIntro ?? '';
     _editingCoverPath = presentation.customCoverPath;
-    _editingCharset = _localBookMeta?.charset?.trim();
+    _editingCharset = ensuredLocalBook?.charset?.trim();
     if (_editingCharset != null && _editingCharset!.isEmpty) {
       _editingCharset = null;
     }
     _editingSplitLongChapter =
-        _localBookMeta?.splitLongChapter ?? _defaultSplitLongChapterEnabled;
+        ensuredLocalBook?.splitLongChapter ?? _defaultSplitLongChapterEnabled;
     setState(() {
       _isEditingMetadata = true;
     });
@@ -401,7 +403,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Future<void> _handleSaveMetadataEditing() async {
     final result = _result;
-    final localBook = _localBookMeta;
+    final localBook =
+        _isLocalContent ? await _ensureEditableLocalBookMeta() : _localBookMeta;
     if (result == null) {
       _showMessage('当前书籍暂无可编辑项。');
       return;
@@ -431,6 +434,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
           defaultSplitLongChapterEnabled: _defaultSplitLongChapterEnabled,
         );
       } else {
+        if (_isLocalContent) {
+          _showMessage('本地图书信息尚未同步完成，请稍后重试。');
+          return;
+        }
         await _saveRemoteBookMetadata(result: result, draft: draft);
       }
       if (mounted) {
@@ -453,7 +460,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Future<void> _handleResetMetadataEditing() async {
     final result = _result;
-    final localBook = _localBookMeta;
+    final localBook =
+        _isLocalContent ? await _ensureEditableLocalBookMeta() : _localBookMeta;
     if (result == null) {
       return;
     }
@@ -468,6 +476,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
           defaultSplitLongChapterEnabled: _defaultSplitLongChapterEnabled,
         );
       } else {
+        if (_isLocalContent) {
+          _showMessage('本地图书信息尚未同步完成，请稍后重试。');
+          return;
+        }
         await _resetRemoteBookMetadata(result: result);
       }
       if (mounted) {
@@ -654,6 +666,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                       ? _buildEditingDetailCard(result)
                                       : _buildDetailCard(result),
                                   const SizedBox(height: 12),
+                                  if (_isEditingMetadata)
+                                    _buildEditingActionCard(result),
                                   _isEditingMetadata
                                       ? _buildEditingIntroCard(result)
                                       : Builder(
@@ -982,52 +996,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
               ],
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed:
-                      _isSavingMetadata
-                          ? null
-                          : () async {
-                            final nextPath = await _pickEditableCoverPath(
-                              result,
-                            );
-                            if (!mounted || nextPath == null) {
-                              return;
-                            }
-                            setState(() {
-                              _editingCoverPath = nextPath;
-                            });
-                          },
-                  icon: const Icon(Icons.image_outlined, size: 16),
-                  label: const Text('更换封面'),
-                ),
-                OutlinedButton.icon(
-                  onPressed:
-                      _isSavingMetadata
-                          ? null
-                          : () {
-                            setState(() {
-                              _editingCoverPath = null;
-                            });
-                          },
-                  icon: const Icon(Icons.delete_outline, size: 16),
-                  label: const Text('移除封面'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _isLocalContent
-                  ? '当前为本地图书编辑，保存后会影响书架和阅读展示。'
-                  : '当前为在线书本地覆盖编辑，保存后不会修改书源。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.35,
-              ),
-            ),
           ],
         ),
       ),
@@ -1063,6 +1031,83 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   hintText: '输入书籍简介',
                   border: OutlineInputBorder(),
                   alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _buildEditingActionCard(BookDetailLoadResult result) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '操作',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed:
+                        _isSavingMetadata
+                            ? null
+                            : () async {
+                              final nextPath = await _pickEditableCoverPath(
+                                result,
+                              );
+                              if (!mounted || nextPath == null) {
+                                return;
+                              }
+                              setState(() {
+                                _editingCoverPath = nextPath;
+                              });
+                            },
+                    icon: const Icon(Icons.image_outlined, size: 16),
+                    label: const Text('更换封面'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _isSavingMetadata
+                            ? null
+                            : () {
+                              setState(() {
+                                _editingCoverPath = null;
+                              });
+                            },
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('移除封面'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _isLocalContent
+                    ? '当前为本地图书编辑，保存后会影响书架和阅读展示。'
+                    : '当前为在线书本地覆盖编辑，保存后不会修改书源。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.35,
                 ),
               ),
             ],
@@ -3003,6 +3048,38 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return AppDatabase.instance.getLocalBookById(bookId);
   }
 
+  Future<LocalBook?> _ensureEditableLocalBookMeta() async {
+    if (!_isLocalContent) {
+      return null;
+    }
+
+    final current = _localBookMeta;
+    if (current != null) {
+      return current;
+    }
+
+    final localBook = await _loadLocalBookMetaSnapshot(
+      sourceId: (_activeSourceId ?? '').trim(),
+      bookId: _activeBookId,
+    );
+    if (!mounted) {
+      _localBookMeta = localBook;
+      return localBook;
+    }
+
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(
+        clearLocalBookMeta: localBook == null,
+        localBookMeta: localBook,
+        showLocalAdvancedOptions: _resolveShowLocalAdvancedOptions(
+          localBook,
+          currentValue: _auxiliaryState.showLocalAdvancedOptions,
+        ),
+      ),
+    );
+    return localBook;
+  }
+
   Future<BookMetadataOverride?> _loadBookMetadataOverrideSnapshot({
     required String sourceId,
     required String detailUrl,
@@ -3682,26 +3759,34 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return;
       }
       final coverPath = storedCoverUri.toFilePath();
+      final localBook =
+          _isLocalContent
+              ? await _ensureEditableLocalBookMeta()
+              : _localBookMeta;
       final presentation = _resolvePresentedMetadata(result: detailResult);
       final draft = _BookMetadataEditDraft(
         title: presentation.displayTitle,
         author: presentation.displayAuthor ?? '',
         intro: presentation.displayIntro ?? '',
         customCoverPath: coverPath,
-        charset: _localBookMeta?.charset,
-        splitLongChapter: _localBookMeta?.splitLongChapter ?? true,
+        charset: localBook?.charset,
+        splitLongChapter: localBook?.splitLongChapter ?? true,
       );
-      if (_isLocalContent && _localBookMeta != null) {
+      if (_isLocalContent && localBook != null) {
         final defaultSplitLongChapterEnabled =
             await _readerSystemSettingsService
                 .loadLocalTxtSplitLongChapterEnabled();
         await _saveLocalBookMetadata(
           result: detailResult,
-          localBook: _localBookMeta!,
+          localBook: localBook,
           draft: draft,
           defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
         );
       } else {
+        if (_isLocalContent) {
+          _showMessage('本地图书信息尚未同步完成，请稍后重试。');
+          return;
+        }
         await _saveRemoteBookMetadata(result: detailResult, draft: draft);
       }
     } on ImageSelectionException catch (error) {
