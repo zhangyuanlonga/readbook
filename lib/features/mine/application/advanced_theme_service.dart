@@ -13,6 +13,7 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import 'cover_gallery_service.dart';
 import 'launch_image_gallery_service.dart';
+import 'reader_background_service.dart';
 
 class AdvancedThemeService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
@@ -388,6 +389,8 @@ class AdvancedThemeService {
     String? coverGalleryId;
     String? launchImageGalleryId;
     String? bottomNavGalleryId;
+    final sharedBackgroundPaths = <String>[];
+    final sharedReaderBackgroundPaths = <String>[];
 
     try {
       if (!await themeDirectory.exists()) {
@@ -426,6 +429,39 @@ class AdvancedThemeService {
         resourceMap['darkReaderWallpaperPath'],
         targetNamePrefix: 'reader_wallpaper_dark',
       );
+
+      if (lightWallpaperPath != null) {
+        sharedBackgroundPaths.add(
+          await _importAppearanceBackgroundFromFile(
+            lightWallpaperPath,
+            fileName: p.basename(lightWallpaperPath),
+          ),
+        );
+      }
+      if (darkWallpaperPath != null) {
+        sharedBackgroundPaths.add(
+          await _importAppearanceBackgroundFromFile(
+            darkWallpaperPath,
+            fileName: p.basename(darkWallpaperPath),
+          ),
+        );
+      }
+      if (lightReaderWallpaperPath != null) {
+        sharedReaderBackgroundPaths.add(
+          await ReaderBackgroundService().importBackground(
+            bytes: await File(lightReaderWallpaperPath).readAsBytes(),
+            fileName: p.basename(lightReaderWallpaperPath),
+          ),
+        );
+      }
+      if (darkReaderWallpaperPath != null) {
+        sharedReaderBackgroundPaths.add(
+          await ReaderBackgroundService().importBackground(
+            bytes: await File(darkReaderWallpaperPath).readAsBytes(),
+            fileName: p.basename(darkReaderWallpaperPath),
+          ),
+        );
+      }
 
       coverGalleryId = await _importImageGalleryFromBundle(
         archive,
@@ -473,6 +509,8 @@ class AdvancedThemeService {
         coverGalleryId: coverGalleryId,
         launchImageGalleryId: launchImageGalleryId,
         bottomNavGalleryId: bottomNavGalleryId,
+        sharedBackgroundPaths: sharedBackgroundPaths,
+        sharedReaderBackgroundPaths: sharedReaderBackgroundPaths,
       );
       rethrow;
     }
@@ -501,6 +539,8 @@ class AdvancedThemeService {
     final themeDirectory = await _themeDirectory(themeId);
     String? coverGalleryId;
     String? bottomNavGalleryId;
+    final sharedBackgroundPaths = <String>[];
+    final sharedReaderBackgroundPaths = <String>[];
 
     try {
       if (!await themeDirectory.exists()) {
@@ -522,6 +562,23 @@ class AdvancedThemeService {
             targetNamePrefix: 'wallpaper_dark_red',
           );
 
+      if (lightWallpaperPath != null) {
+        sharedBackgroundPaths.add(
+          await _importAppearanceBackgroundFromFile(
+            lightWallpaperPath,
+            fileName: p.basename(lightWallpaperPath),
+          ),
+        );
+      }
+      if (darkWallpaperPath != null) {
+        sharedBackgroundPaths.add(
+          await _importAppearanceBackgroundFromFile(
+            darkWallpaperPath,
+            fileName: p.basename(darkWallpaperPath),
+          ),
+        );
+      }
+
       final lightReaderSchema = await _importRedReaderSchema(
         archive,
         themeDirectory,
@@ -534,6 +591,23 @@ class AdvancedThemeService {
         schemaId: darkSection['readerColorSchemaId']?.toString(),
         targetNamePrefix: 'reader_wallpaper_dark_red',
       );
+
+      if (lightReaderSchema?.backgroundPath != null) {
+        sharedReaderBackgroundPaths.add(
+          await ReaderBackgroundService().importBackground(
+            bytes: await File(lightReaderSchema!.backgroundPath!).readAsBytes(),
+            fileName: p.basename(lightReaderSchema.backgroundPath!),
+          ),
+        );
+      }
+      if (darkReaderSchema?.backgroundPath != null) {
+        sharedReaderBackgroundPaths.add(
+          await ReaderBackgroundService().importBackground(
+            bytes: await File(darkReaderSchema!.backgroundPath!).readAsBytes(),
+            fileName: p.basename(darkReaderSchema.backgroundPath!),
+          ),
+        );
+      }
 
       coverGalleryId = await _importRedCoverGallery(
         archive,
@@ -574,6 +648,105 @@ class AdvancedThemeService {
         themeDirectory: themeDirectory,
         coverGalleryId: coverGalleryId,
         bottomNavGalleryId: bottomNavGalleryId,
+        sharedBackgroundPaths: sharedBackgroundPaths,
+        sharedReaderBackgroundPaths: sharedReaderBackgroundPaths,
+      );
+      rethrow;
+    }
+  }
+
+  Future<AppAdvancedTheme> importRgShareThemePackageBytes(
+    List<int> bytes,
+  ) async {
+    final archive = _decodeZipArchiveBytes(bytes);
+    final themeFile = archive.findFile('theme.json');
+    if (themeFile == null) {
+      throw const FormatException('RGShare 主题包缺少 theme.json。');
+    }
+    final decoded = jsonDecode(
+      utf8.decode(_archiveFileBytes(themeFile), allowMalformed: true),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('RGShare 主题包配置无效。');
+    }
+    final manifest = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final rawName = manifest['1']?.toString().trim() ?? '';
+    final themeId = createThemeId();
+    final now = DateTime.now().toUtc();
+    final themeDirectory = await _themeDirectory(themeId);
+    final sharedBackgroundPaths = <String>[];
+
+    try {
+      if (!await themeDirectory.exists()) {
+        await themeDirectory.create(recursive: true);
+      }
+
+      final imageMap = _readOptionalMap(manifest['4']);
+      final lightWallpaperAsset = _resolveRgShareWallpaperFilename(
+        imageMap,
+        isDark: false,
+      );
+      final darkWallpaperAsset = _resolveRgShareWallpaperFilename(
+        imageMap,
+        isDark: true,
+      );
+
+      final lightWallpaperPath =
+          await _extractOptionalArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            lightWallpaperAsset == null ? null : 'images/$lightWallpaperAsset',
+            targetNamePrefix: 'wallpaper_light_rgshare',
+          );
+      final darkWallpaperPath =
+          await _extractOptionalArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            darkWallpaperAsset == null ? null : 'images/$darkWallpaperAsset',
+            targetNamePrefix: 'wallpaper_dark_rgshare',
+          );
+
+      if (lightWallpaperPath != null) {
+        sharedBackgroundPaths.add(
+          await _importAppearanceBackgroundFromFile(
+            lightWallpaperPath,
+            fileName: p.basename(lightWallpaperPath),
+          ),
+        );
+      }
+      if (darkWallpaperPath != null) {
+        sharedBackgroundPaths.add(
+          await _importAppearanceBackgroundFromFile(
+            darkWallpaperPath,
+            fileName: p.basename(darkWallpaperPath),
+          ),
+        );
+      }
+
+      final colors = _readOptionalMap(manifest['2']);
+      final theme = AppAdvancedTheme(
+        id: themeId,
+        name: rawName.isEmpty ? '导入 RGShare 主题' : rawName,
+        createdAt: now,
+        updatedAt: now,
+        lightConfig: _buildModeConfigFromRgShare(
+          colors,
+          wallpaperPath: lightWallpaperPath,
+          isDark: false,
+        ),
+        darkConfig: _buildModeConfigFromRgShare(
+          colors,
+          wallpaperPath: darkWallpaperPath,
+          isDark: true,
+        ),
+      );
+      return saveTheme(theme);
+    } catch (_) {
+      await _cleanupImportedThemeBundleArtifacts(
+        themeDirectory: themeDirectory,
+        sharedBackgroundPaths: sharedBackgroundPaths,
       );
       rethrow;
     }
@@ -793,6 +966,15 @@ class AdvancedThemeService {
     });
   }
 
+  Map<String, dynamic> _readOptionalMap(Object? raw) {
+    if (raw is! Map) {
+      return const <String, dynamic>{};
+    }
+    return raw.map(
+      (nestedKey, nestedValue) => MapEntry(nestedKey.toString(), nestedValue),
+    );
+  }
+
   AppAdvancedThemeModeConfig _buildModeConfigFromRedSection(
     Map<String, dynamic> payload, {
     required String? wallpaperPath,
@@ -856,6 +1038,76 @@ class AdvancedThemeService {
           readerSchema?.fit ?? AppAdvancedThemeWallpaperFit.fill,
       readerWallpaperOverlayOpacity: readerSchema?.overlayOpacity ?? 0,
     );
+  }
+
+  AppAdvancedThemeModeConfig _buildModeConfigFromRgShare(
+    Map<String, dynamic> colors, {
+    required String? wallpaperPath,
+    required bool isDark,
+  }) {
+    int? read(String key) => _parseHexColorValue(colors[key]?.toString());
+
+    final primaryColor = read(isDark ? '28' : '27') ?? read('5');
+    final backgroundColor = read(isDark ? '14' : '13');
+    final surfaceColor = read(isDark ? '18' : '17') ?? backgroundColor;
+    final textPrimaryColor = read(isDark ? '25' : '12');
+    final textSecondaryColor = read(isDark ? '22' : '24');
+    final outlineColor = read(isDark ? '24' : '23');
+    final cardColor = read(isDark ? '18' : '17') ?? surfaceColor;
+    final cardTextColor = read(isDark ? '25' : '12') ?? textPrimaryColor;
+    final searchFieldBackgroundColor = read(isDark ? '18' : '17') ?? cardColor;
+
+    return AppAdvancedThemeModeConfig(
+      colors: AppAdvancedThemeColors(
+        primaryColorValue: primaryColor,
+        secondaryColorValue: primaryColor,
+        noticeAccentColorValue: primaryColor,
+        noticeSurfaceColorValue: surfaceColor,
+        primaryContainerColorValue: surfaceColor,
+        backgroundColorValue: backgroundColor,
+        surfaceColorValue: surfaceColor,
+        searchFieldBackgroundColorValue: searchFieldBackgroundColor,
+        elevatedSurfaceColorValue: cardColor,
+        cardColorValue: cardColor,
+        cardTextColorValue: cardTextColor,
+        cardBorderColorValue: outlineColor,
+        iconBackgroundColorValue: surfaceColor,
+        textPrimaryColorValue: textPrimaryColor,
+        textSecondaryColorValue: textSecondaryColor,
+        buttonTextColorValue: read(isDark ? '26' : '25') ?? cardTextColor,
+        outlineColorValue: outlineColor,
+        wallpaperOverlayColorValue: backgroundColor,
+      ),
+      wallpaperPath: wallpaperPath,
+      wallpaperFit: AppAdvancedThemeWallpaperFit.fill,
+      wallpaperOverlayOpacity: wallpaperPath == null ? 0.32 : 0,
+    );
+  }
+
+  String? _resolveRgShareWallpaperFilename(
+    Map<String, dynamic> imageMap, {
+    required bool isDark,
+  }) {
+    final expectedSuffix = isDark ? '_dark' : '_light';
+    for (final entry in imageMap.entries) {
+      final value = entry.value?.toString().trim() ?? '';
+      if (value.isNotEmpty &&
+          value.toLowerCase().contains(expectedSuffix) &&
+          value.toLowerCase().endsWith('.jpg')) {
+        return value;
+      }
+    }
+    final candidates = imageMap.values
+        .map((value) => value?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    if (candidates.isEmpty) {
+      return null;
+    }
+    if (candidates.length == 1) {
+      return candidates.first;
+    }
+    return isDark ? candidates.last : candidates.first;
   }
 
   int? _parseHexColorValue(String? raw) {
@@ -1570,7 +1822,15 @@ class AdvancedThemeService {
     String? coverGalleryId,
     String? launchImageGalleryId,
     String? bottomNavGalleryId,
+    List<String> sharedBackgroundPaths = const <String>[],
+    List<String> sharedReaderBackgroundPaths = const <String>[],
   }) async {
+    for (final path in sharedBackgroundPaths) {
+      await _safeDeleteAppearanceBackground(path);
+    }
+    for (final path in sharedReaderBackgroundPaths) {
+      await _safeDeleteReaderBackground(path);
+    }
     await _safeDeleteCoverGallery(coverGalleryId);
     await _safeDeleteLaunchGallery(launchImageGalleryId);
     await _safeDeleteBottomNavGallery(bottomNavGalleryId);
@@ -1619,6 +1879,108 @@ class AdvancedThemeService {
     } catch (_) {
       // Ignore rollback failures.
     }
+  }
+
+  Future<String> _importAppearanceBackgroundFromFile(
+    String sourcePath, {
+    required String fileName,
+  }) async {
+    final sourceFile = File(sourcePath);
+    final bytes = await sourceFile.readAsBytes();
+    final directory = await _appearanceBackgroundDirectory();
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    final extension = _normalizeSharedImageExtension(bytes, fileName);
+    final targetPath = p.join(
+      directory.path,
+      'theme_bg_${DateTime.now().millisecondsSinceEpoch}.$extension',
+    );
+    await File(targetPath).writeAsBytes(bytes, flush: true);
+    await evictFileImagePath(targetPath);
+    return targetPath;
+  }
+
+  Future<Directory> _appearanceBackgroundDirectory() async {
+    final documents = await getApplicationDocumentsDirectory();
+    return Directory(p.join(documents.path, 'backgrounds'));
+  }
+
+  Future<void> _safeDeleteAppearanceBackground(String path) async {
+    final normalized = path.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    try {
+      await evictFileImagePath(normalized);
+      final file = File(normalized);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {
+      // Ignore rollback failures.
+    }
+  }
+
+  Future<void> _safeDeleteReaderBackground(String path) async {
+    final normalized = path.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    try {
+      await ReaderBackgroundService().deleteBackground(normalized);
+    } catch (_) {
+      // Ignore rollback failures.
+    }
+  }
+
+  String _normalizeSharedImageExtension(List<int> bytes, String fileName) {
+    final detected = _detectImageExtension(bytes);
+    if (detected != null) {
+      return detected;
+    }
+    final normalized = _normalizeFileExtension(fileName);
+    return switch (normalized) {
+      'img' => 'png',
+      _ => normalized,
+    };
+  }
+
+  String? _detectImageExtension(List<int> bytes) {
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'webp';
+    }
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'png';
+    }
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'jpg';
+    }
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38 &&
+        (bytes[4] == 0x37 || bytes[4] == 0x39) &&
+        bytes[5] == 0x61) {
+      return 'gif';
+    }
+    return null;
   }
 }
 

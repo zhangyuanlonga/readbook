@@ -136,6 +136,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final canPopRoute = context.canPop();
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -146,6 +147,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         context.go('/bookshelf');
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
@@ -250,7 +252,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                 if (_isSearching) {
                                   return SliverPadding(
                                     padding: EdgeInsets.only(
-                                      bottom: 16 + bottomSafe,
+                                      bottom: 16 + bottomSafe + keyboardInset,
                                     ),
                                     sliver: const SliverToBoxAdapter(
                                       child: SizedBox.shrink(),
@@ -262,7 +264,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                     horizontal,
                                     8,
                                     horizontal,
-                                    16 + bottomSafe,
+                                    16 + bottomSafe + keyboardInset,
                                   ),
                                   sliver: SliverToBoxAdapter(
                                     child: SearchEmptyState(
@@ -287,7 +289,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                     horizontal,
                                     8,
                                     horizontal,
-                                    16 + bottomSafe,
+                                    16 + bottomSafe + keyboardInset,
                                   ),
                                   sliver: SliverToBoxAdapter(
                                     child: SearchGroupedEmptyFallbackCard(
@@ -312,7 +314,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                   horizontal,
                                   8,
                                   horizontal,
-                                  16 + bottomSafe,
+                                  16 + bottomSafe + keyboardInset,
                                 ),
                                 sliver: SliverList(
                                   delegate: SliverChildBuilderDelegate((

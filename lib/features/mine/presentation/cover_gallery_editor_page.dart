@@ -356,6 +356,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         context.go('/cover-galleries');
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           leading:
               _isSelectionMode

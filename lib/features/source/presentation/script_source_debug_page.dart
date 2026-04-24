@@ -1264,6 +1264,7 @@ return content;
   Widget build(BuildContext context) {
     final report = _report;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1298,6 +1299,7 @@ return content;
           );
           final horizontal = AppSpacing.pageHorizontal(context);
           final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+          final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
           return DecoratedBox(
             decoration: buildAdvancedThemeBackdropDecoration(backdrop),
@@ -1318,7 +1320,7 @@ return content;
                           horizontal,
                           topInset + 12,
                           horizontal,
-                          16 + bottomSafe,
+                          16 + bottomSafe + keyboardInset,
                         ),
                         children: [
                           _DebugInputCard(

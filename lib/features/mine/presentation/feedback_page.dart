@@ -120,10 +120,12 @@ class _FeedbackPageState extends State<FeedbackPage>
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -174,7 +176,7 @@ class _FeedbackPageState extends State<FeedbackPage>
                           horizontal,
                           topInset + 12,
                           horizontal,
-                          20 + bottomSafe,
+                          20 + bottomSafe + keyboardInset,
                         ),
                         children: [
                           _buildTypeTabs(context),
@@ -595,9 +597,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('反馈详情'),
@@ -634,7 +638,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           horizontal,
                           topInset + 12,
                           horizontal,
-                          20 + bottomSafe,
+                          20 + bottomSafe + keyboardInset,
                         ),
                         children: [
                           if (_isLoading)
@@ -886,10 +890,12 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('提交反馈'),
@@ -923,7 +929,7 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
                         horizontal,
                         topInset + 12,
                         horizontal,
-                        20 + bottomSafe,
+                        20 + bottomSafe + keyboardInset,
                       ),
                       children: [
                         Container(

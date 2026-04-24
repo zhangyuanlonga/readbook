@@ -190,6 +190,7 @@ class _BottomNavIconGalleryEditorPageState
         context.go('/bottom-nav-icon-galleries');
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           title:
               _isEditingName

@@ -20,6 +20,8 @@ import '../domain/entities/announcement.dart';
 import '../features/announcement/application/announcement_read_state_service.dart';
 import '../features/announcement/application/announcement_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/source/application/external_import_catalog.dart';
+import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import '../features/source/application/source_runtime_facade.dart';
 import 'layout/app_layout.dart';
@@ -838,12 +840,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
       if (!mounted) {
         return;
       }
-      final target = switch (payload.type) {
-        ExternalImportPayloadType.scriptSource => '/source',
-        ExternalImportPayloadType.localBook => '/bookshelf',
-        ExternalImportPayloadType.advancedTheme =>
-          '/appearance/advanced-themes',
-      };
+      ExternalImportDiagnostics.logNavigationScheduled(payload);
+      final target = ExternalImportCatalog.routeForPayloadType(payload.type);
       _safeGo(target);
     });
   }

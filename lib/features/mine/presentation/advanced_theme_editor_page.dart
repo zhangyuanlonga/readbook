@@ -1989,9 +1989,10 @@ class _AdvancedThemeEditorPageState
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final draft = _draft;
     final theme = Theme.of(context);
-    const sectionGap = 10.0;
+    const sectionGap = 8.0;
     final editorBackdrop =
         draft == null
             ? null
@@ -2001,6 +2002,7 @@ class _AdvancedThemeEditorPageState
             );
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title:
             _isEditingName
@@ -2042,14 +2044,14 @@ class _AdvancedThemeEditorPageState
                   ),
                 ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
+          preferredSize: const Size.fromHeight(42),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
             child: Container(
-              height: 40,
+              height: 36,
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: theme.colorScheme.outlineVariant.withValues(
                     alpha: 0.45,
@@ -2062,7 +2064,7 @@ class _AdvancedThemeEditorPageState
                 indicatorSize: TabBarIndicatorSize.tab,
                 indicator: BoxDecoration(
                   color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: theme.colorScheme.outlineVariant.withValues(
                       alpha: 0.5,
@@ -2072,10 +2074,10 @@ class _AdvancedThemeEditorPageState
                 indicatorPadding: const EdgeInsets.all(3),
                 labelColor: theme.colorScheme.onSurface,
                 unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                labelStyle: theme.textTheme.labelLarge?.copyWith(
+                labelStyle: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
-                unselectedLabelStyle: theme.textTheme.labelLarge?.copyWith(
+                unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
                 tabs: const [
@@ -2084,7 +2086,7 @@ class _AdvancedThemeEditorPageState
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.light_mode_outlined, size: 16),
-                        SizedBox(width: 6),
+                        SizedBox(width: 4),
                         Text('浅色主题'),
                       ],
                     ),
@@ -2094,7 +2096,7 @@ class _AdvancedThemeEditorPageState
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.dark_mode_outlined, size: 16),
-                        SizedBox(width: 6),
+                        SizedBox(width: 4),
                         Text('深色主题'),
                       ],
                     ),
@@ -2141,9 +2143,9 @@ class _AdvancedThemeEditorPageState
                         : ListView(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
-                            8,
+                            6,
                             horizontal,
-                            12 + bottomSafe,
+                            10 + bottomSafe + keyboardInset,
                           ),
                           children: [
                             _buildColorsSection(context),
@@ -2166,12 +2168,12 @@ class _AdvancedThemeEditorPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel(context, '基础主题层'),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         _buildSectionDescription(
           context,
           '这一层决定整体风格，会影响大面积背景、输入区、选中态、文字层级和通用边框。',
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         _buildPanel(
           context,
           child: Column(
@@ -2229,14 +2231,14 @@ class _AdvancedThemeEditorPageState
             ]),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         _buildSectionLabel(context, '精细覆盖层'),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         _buildSectionDescription(
           context,
           '这一层负责局部精修，主要影响卡片、提示块、图标承托、按钮文字和阴影等具体视觉块。',
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         _buildPanel(
           context,
           child: Column(
@@ -2308,7 +2310,7 @@ class _AdvancedThemeEditorPageState
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Expanded(
@@ -2360,8 +2362,9 @@ class _AdvancedThemeEditorPageState
       child: Text(
         description,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          fontSize: 11,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
-          height: 1.45,
+          height: 1.35,
         ),
       ),
     );
@@ -2373,11 +2376,6 @@ class _AdvancedThemeEditorPageState
       children: [
         _buildSectionLabel(context, '资源层'),
         const SizedBox(height: 4),
-        _buildSectionDescription(
-          context,
-          '资源层统一管理壁纸、封面图集、启动图集和底栏图集等素材，不参与基础主题层和精细覆盖层的颜色计算。',
-        ),
-        const SizedBox(height: 6),
         _buildAppearanceLinkSection(context, draft),
       ],
     );
@@ -2397,7 +2395,7 @@ class _AdvancedThemeEditorPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel(context, '其他外观'),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         _buildPanel(
           context,
           child: Column(
@@ -2615,13 +2613,13 @@ class _AdvancedThemeEditorPageState
       onIncrease:
           _isSaving
               ? null
-              : () => _setWallpaperOverlayOpacity(normalizedOpacity + 0.05),
+              : () => _setWallpaperOverlayOpacity(normalizedOpacity + 0.01),
       onReset:
           _isSaving ? null : () => _setWallpaperOverlayOpacity(defaultValue),
       onDecrease:
           _isSaving
               ? null
-              : () => _setWallpaperOverlayOpacity(normalizedOpacity - 0.05),
+              : () => _setWallpaperOverlayOpacity(normalizedOpacity - 0.01),
     );
   }
 
@@ -2637,12 +2635,12 @@ class _AdvancedThemeEditorPageState
       onIncrease:
           _isSaving
               ? null
-              : () => _setWallpaperOpacity(normalizedOpacity + 0.05),
+              : () => _setWallpaperOpacity(normalizedOpacity + 0.01),
       onReset: _isSaving ? null : () => _setWallpaperOpacity(1),
       onDecrease:
           _isSaving
               ? null
-              : () => _setWallpaperOpacity(normalizedOpacity - 0.05),
+              : () => _setWallpaperOpacity(normalizedOpacity - 0.01),
     );
   }
 
@@ -2668,59 +2666,11 @@ class _AdvancedThemeEditorPageState
     BuildContext context, {
     required AppAdvancedThemeWallpaperFit fit,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '图片适配',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '选择当前${_modeLabel(_selectedMode)}模式下壁纸的铺满方式。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<AppAdvancedThemeWallpaperFit>(
-              value: fit,
-              borderRadius: BorderRadius.circular(12),
-              onChanged:
-                  _isSaving
-                      ? null
-                      : (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        _setWallpaperFit(value);
-                      },
-              items: const [
-                DropdownMenuItem(
-                  value: AppAdvancedThemeWallpaperFit.fill,
-                  child: Text('拉伸填充'),
-                ),
-                DropdownMenuItem(
-                  value: AppAdvancedThemeWallpaperFit.cover,
-                  child: Text('居中裁剪'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return _buildCompactFitRow(
+      context,
+      label: '壁纸图片适配',
+      fit: fit,
+      onChanged: _isSaving ? null : _setWallpaperFit,
     );
   }
 
@@ -2737,13 +2687,13 @@ class _AdvancedThemeEditorPageState
           _isSaving
               ? null
               : () =>
-                  _setReaderWallpaperOverlayOpacity(normalizedOpacity + 0.05),
+                  _setReaderWallpaperOverlayOpacity(normalizedOpacity + 0.01),
       onReset: _isSaving ? null : () => _setReaderWallpaperOverlayOpacity(0),
       onDecrease:
           _isSaving
               ? null
               : () =>
-                  _setReaderWallpaperOverlayOpacity(normalizedOpacity - 0.05),
+                  _setReaderWallpaperOverlayOpacity(normalizedOpacity - 0.01),
     );
   }
 
@@ -2759,12 +2709,12 @@ class _AdvancedThemeEditorPageState
       onIncrease:
           _isSaving
               ? null
-              : () => _setReaderWallpaperOpacity(normalizedOpacity + 0.05),
+              : () => _setReaderWallpaperOpacity(normalizedOpacity + 0.01),
       onReset: _isSaving ? null : () => _setReaderWallpaperOpacity(1),
       onDecrease:
           _isSaving
               ? null
-              : () => _setReaderWallpaperOpacity(normalizedOpacity - 0.05),
+              : () => _setReaderWallpaperOpacity(normalizedOpacity - 0.01),
     );
   }
 
@@ -2817,7 +2767,7 @@ class _AdvancedThemeEditorPageState
         children: [
           Expanded(
             child: Text(
-              '$label  $valueLabel',
+              label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.labelLarge?.copyWith(
@@ -2826,24 +2776,24 @@ class _AdvancedThemeEditorPageState
             ),
           ),
           const SizedBox(width: 10),
-          _buildCompactStepButton(
+          _buildCompactIconStepButton(
             context,
-            label: '+',
-            onPressed: onIncrease,
+            icon: Icons.remove_rounded,
+            onPressed: onDecrease,
             colorScheme: colorScheme,
           ),
           const SizedBox(width: 6),
-          _buildCompactStepButton(
+          _buildCompactValueButton(
             context,
-            label: '0',
+            label: valueLabel,
             onPressed: onReset,
             colorScheme: colorScheme,
           ),
           const SizedBox(width: 6),
-          _buildCompactStepButton(
+          _buildCompactIconStepButton(
             context,
-            label: '-',
-            onPressed: onDecrease,
+            icon: Icons.add_rounded,
+            onPressed: onIncrease,
             colorScheme: colorScheme,
           ),
         ],
@@ -2851,9 +2801,9 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildCompactStepButton(
+  Widget _buildCompactIconStepButton(
     BuildContext context, {
-    required String label,
+    required IconData icon,
     required VoidCallback? onPressed,
     required ColorScheme colorScheme,
   }) {
@@ -2871,7 +2821,37 @@ class _AdvancedThemeEditorPageState
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: Text(label),
+        child: Icon(icon, size: 16),
+      ),
+    );
+  }
+
+  Widget _buildCompactValueButton(
+    BuildContext context, {
+    required String label,
+    required VoidCallback? onPressed,
+    required ColorScheme colorScheme,
+  }) {
+    return SizedBox(
+      height: 28,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          backgroundColor: colorScheme.surfaceContainerLow,
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
@@ -2896,33 +2876,72 @@ class _AdvancedThemeEditorPageState
             ),
           ),
           const SizedBox(width: 12),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<AppAdvancedThemeWallpaperFit>(
-              value: fit,
-              borderRadius: BorderRadius.circular(12),
-              dropdownColor: colorScheme.surface,
-              onChanged:
-                  onChanged == null
-                      ? null
-                      : (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        onChanged(value);
-                      },
-              items: const [
-                DropdownMenuItem(
-                  value: AppAdvancedThemeWallpaperFit.fill,
-                  child: Text('拉伸填充'),
-                ),
-                DropdownMenuItem(
-                  value: AppAdvancedThemeWallpaperFit.cover,
-                  child: Text('居中裁剪'),
-                ),
-              ],
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildFitChoiceButton(
+                context,
+                label: '拉伸填充',
+                selected: fit == AppAdvancedThemeWallpaperFit.fill,
+                onPressed:
+                    onChanged == null
+                        ? null
+                        : () => onChanged(AppAdvancedThemeWallpaperFit.fill),
+                colorScheme: colorScheme,
+              ),
+              const SizedBox(width: 6),
+              _buildFitChoiceButton(
+                context,
+                label: '居中裁剪',
+                selected: fit == AppAdvancedThemeWallpaperFit.cover,
+                onPressed:
+                    onChanged == null
+                        ? null
+                        : () => onChanged(AppAdvancedThemeWallpaperFit.cover),
+                colorScheme: colorScheme,
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFitChoiceButton(
+    BuildContext context, {
+    required String label,
+    required bool selected,
+    required VoidCallback? onPressed,
+    required ColorScheme colorScheme,
+  }) {
+    return SizedBox(
+      height: 28,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          backgroundColor:
+              selected ? colorScheme.primaryContainer : colorScheme.surface,
+          foregroundColor:
+              selected
+                  ? colorScheme.onPrimaryContainer
+                  : colorScheme.onSurfaceVariant,
+          side: BorderSide(
+            color:
+                selected
+                    ? colorScheme.primary.withValues(alpha: 0.6)
+                    : colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
@@ -3038,15 +3057,15 @@ class _AdvancedThemeEditorPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel(context, '预览'),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         _buildPanel(
           context,
           backgroundColor: palette.surfaceColor,
           child: Container(
-            constraints: const BoxConstraints(minHeight: 180),
+            constraints: const BoxConstraints(minHeight: 158),
             decoration: buildAdvancedThemeBackdropDecoration(
               backdrop,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: resolveAppBorderColor(
                   colorScheme,
@@ -3056,7 +3075,7 @@ class _AdvancedThemeEditorPageState
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -3068,13 +3087,13 @@ class _AdvancedThemeEditorPageState
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: palette.cardColor.withValues(alpha: 0.96),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: resolveAppBorderColor(
                           colorScheme,
@@ -3085,8 +3104,8 @@ class _AdvancedThemeEditorPageState
                       boxShadow: [
                         BoxShadow(
                           color: palette.shadowColor,
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
+                          blurRadius: 12,
+                          offset: const Offset(0, 5),
                         ),
                       ],
                     ),
@@ -3186,10 +3205,10 @@ class _AdvancedThemeEditorPageState
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         Container(
-                          width: 78,
-                          height: 26,
+                          width: 72,
+                          height: 24,
                           decoration: BoxDecoration(
                             color: palette.primaryColor,
                             borderRadius: BorderRadius.circular(999),
@@ -3247,23 +3266,24 @@ class _AdvancedThemeEditorPageState
               children: [
                 Text(
                   field.label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   field.description,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           SizedBox(
-            width: 164,
+            width: 150,
             child: TextField(
               controller: controller,
               enabled: !_isSaving,
@@ -3279,23 +3299,23 @@ class _AdvancedThemeEditorPageState
                 filled: true,
                 fillColor: colorScheme.surface,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 10,
+                  horizontal: 9,
+                  vertical: 9,
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(9),
                   borderSide: BorderSide(
                     color: colorScheme.outlineVariant.withValues(alpha: 0.55),
                   ),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(9),
                   borderSide: BorderSide(
                     color: colorScheme.outlineVariant.withValues(alpha: 0.55),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(9),
                   borderSide: BorderSide(
                     color: colorScheme.primary,
                     width: 1.2,
@@ -3305,13 +3325,13 @@ class _AdvancedThemeEditorPageState
                   borderRadius: BorderRadius.circular(8),
                   onTap: _isSaving ? null : () => _pickColorForSlot(slot),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+                    padding: const EdgeInsets.fromLTRB(6, 6, 8, 6),
                     child: Container(
-                      width: 22,
-                      height: 22,
+                      width: 18,
+                      height: 18,
                       decoration: BoxDecoration(
                         color: previewColor,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(5),
                         border: Border.all(
                           color: colorScheme.outlineVariant.withValues(
                             alpha: 0.45,
@@ -3346,7 +3366,8 @@ class _AdvancedThemeEditorPageState
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontSize: 12,
           fontWeight: FontWeight.w700,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
@@ -3362,10 +3383,10 @@ class _AdvancedThemeEditorPageState
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         color: backgroundColor ?? colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.35),
         ),

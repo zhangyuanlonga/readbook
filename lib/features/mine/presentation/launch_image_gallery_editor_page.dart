@@ -362,6 +362,7 @@ class _LaunchImageGalleryEditorPageState
         context.go('/appearance/launch-image');
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           leading:
               _isSelectionMode

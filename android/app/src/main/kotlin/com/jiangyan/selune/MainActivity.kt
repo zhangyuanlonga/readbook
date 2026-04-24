@@ -14,8 +14,16 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import android.view.KeyEvent
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.Locale
+
+private data class ExternalImportSpec(
+    val type: String,
+    val extensions: Set<String>,
+    val mimeTypeToExtension: Map<String, String>,
+)
 
 class MainActivity : FlutterActivity() {
     private companion object {
@@ -30,6 +38,57 @@ class MainActivity : FlutterActivity() {
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
         private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
         private const val PAYLOAD_TYPE_ADVANCED_THEME = "advancedTheme"
+        private val SCRIPT_SOURCE_IMPORT_SPEC = ExternalImportSpec(
+            type = PAYLOAD_TYPE_SCRIPT_SOURCE,
+            extensions = linkedSetOf("js", "mjs", "txt"),
+            mimeTypeToExtension = linkedMapOf(
+                "application/javascript" to "js",
+                "text/javascript" to "js",
+                "application/x-javascript" to "js",
+                "text/plain" to "txt",
+            )
+        )
+        private val LOCAL_BOOK_IMPORT_SPEC = ExternalImportSpec(
+            type = PAYLOAD_TYPE_LOCAL_BOOK,
+            extensions = linkedSetOf(
+                "txt",
+                "epub",
+                "md",
+                "markdown",
+                "html",
+                "htm",
+                "pdf",
+                "mobi",
+                "azw",
+                "azw3",
+            ),
+            mimeTypeToExtension = linkedMapOf(
+                "application/epub+zip" to "epub",
+                "text/markdown" to "md",
+                "text/x-markdown" to "md",
+                "text/html" to "html",
+                "application/pdf" to "pdf",
+                "application/x-mobipocket-ebook" to "mobi",
+                "application/vnd.amazon.ebook" to "azw",
+                "application/vnd.amazon.mobi8-ebook" to "azw3",
+                "text/plain" to "txt",
+                "application/octet-stream" to "txt",
+            )
+        )
+        private val ADVANCED_THEME_IMPORT_SPEC = ExternalImportSpec(
+            type = PAYLOAD_TYPE_ADVANCED_THEME,
+            extensions = linkedSetOf("json", "zip", "red", "rgshare"),
+            mimeTypeToExtension = linkedMapOf(
+                "application/json" to "json",
+                "application/zip" to "zip",
+                "application/x-zip-compressed" to "zip",
+            )
+        )
+        private val EXTERNAL_IMPORT_SPECS = listOf(
+            ADVANCED_THEME_IMPORT_SPEC,
+            SCRIPT_SOURCE_IMPORT_SPEC,
+            LOCAL_BOOK_IMPORT_SPEC,
+        )
     }
 
     private var sourceImportMethodChannel: MethodChannel? = null
@@ -270,57 +329,19 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun classifyPayloadType(uri: Uri, label: String, mimeType: String?): String? {
-        val extension = label.substringAfterLast('.', "").lowercase(Locale.ROOT)
-        val uriExtension = uri.lastPathSegment
-            ?.substringAfterLast('.', "")
-            ?.lowercase(Locale.ROOT)
-            ?: ""
-        val normalizedMimeType = mimeType?.lowercase(Locale.ROOT)
+        val extensionCandidates = sequenceOf(
+            normalizedExtension(label),
+            normalizedExtension(uri.lastPathSegment.orEmpty()),
+        ).filter { it.isNotEmpty() }.toSet()
+        val normalizedMimeType = mimeType?.lowercase(Locale.ROOT)?.trim()
 
-        if (
-            extension == "json" ||
-            extension == "zip" ||
-            extension == "red" ||
-            uriExtension == "json" ||
-            uriExtension == "zip" ||
-            uriExtension == "red" ||
-            normalizedMimeType == "application/json" ||
-            normalizedMimeType == "application/zip" ||
-            normalizedMimeType == "application/x-zip-compressed"
-        ) {
-            return PAYLOAD_TYPE_ADVANCED_THEME
-        }
-        if (
-            extension == "js" ||
-            extension == "mjs" ||
-            normalizedMimeType == "application/javascript" ||
-            normalizedMimeType == "text/javascript" ||
-            normalizedMimeType == "application/x-javascript"
-        ) {
-            return PAYLOAD_TYPE_SCRIPT_SOURCE
-        }
-        if (
-            extension == "txt" ||
-            extension == "epub" ||
-            extension == "md" ||
-            extension == "markdown" ||
-            extension == "html" ||
-            extension == "htm" ||
-            extension == "pdf" ||
-            extension == "mobi" ||
-            extension == "azw" ||
-            extension == "azw3" ||
-            normalizedMimeType == "application/epub+zip" ||
-            normalizedMimeType == "text/plain" ||
-            normalizedMimeType == "text/markdown" ||
-            normalizedMimeType == "text/x-markdown" ||
-            normalizedMimeType == "text/html" ||
-            normalizedMimeType == "application/pdf" ||
-            normalizedMimeType == "application/x-mobipocket-ebook" ||
-            normalizedMimeType == "application/vnd.amazon.ebook" ||
-            normalizedMimeType == "application/vnd.amazon.mobi8-ebook"
-        ) {
-            return PAYLOAD_TYPE_LOCAL_BOOK
+        for (spec in EXTERNAL_IMPORT_SPECS) {
+            if (extensionCandidates.any(spec.extensions::contains)) {
+                return spec.type
+            }
+            if (normalizedMimeType != null && spec.mimeTypeToExtension.containsKey(normalizedMimeType)) {
+                return spec.type
+            }
         }
         return null
     }
@@ -333,16 +354,12 @@ class MainActivity : FlutterActivity() {
         val rawLabel = args["label"]?.toString()?.trim()
         val label = if (rawLabel.isNullOrEmpty()) resolvePayloadLabel(uri) else rawLabel
         val mimeType = args["mimeType"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: resolveMimeType(uri, null)
-        val extension = resolveExternalImportExtension(type, label, mimeType)
+        val extension = resolveExternalImportExtension(type, uri, label, mimeType)
         if (extension == null) {
             return null
         }
 
-        val input = try {
-            contentResolver.openInputStream(uri)
-        } catch (_: Exception) {
-            null
-        } ?: return null
+        val input = openExternalInputStream(uri) ?: return null
 
         val safeBaseName = sanitizeFileToken(label.substringBeforeLast('.', label))
         val cacheDir = File(cacheDir, "external_imports")
@@ -368,68 +385,71 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun resolveExternalImportExtension(type: String?, label: String, mimeType: String?): String? {
-        return when (type?.trim()) {
-            PAYLOAD_TYPE_SCRIPT_SOURCE -> resolveScriptSourceExtension(label, mimeType)
-            PAYLOAD_TYPE_LOCAL_BOOK -> resolveLocalBookExtension(label, mimeType)
-            PAYLOAD_TYPE_ADVANCED_THEME -> resolveAdvancedThemeExtension(label, mimeType)
-            else -> resolveScriptSourceExtension(label, mimeType)
-                ?: resolveAdvancedThemeExtension(label, mimeType)
-                ?: resolveLocalBookExtension(label, mimeType)
+    private fun openExternalInputStream(uri: Uri): InputStream? {
+        return try {
+            when (uri.scheme?.lowercase(Locale.ROOT)) {
+                "file" -> {
+                    val path = uri.path?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
+                    FileInputStream(File(path))
+                }
+                else -> contentResolver.openInputStream(uri)
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
-    private fun resolveLocalBookExtension(label: String, mimeType: String?): String? {
-        val lowerLabel = label.lowercase(Locale.ROOT)
-        return when {
-            lowerLabel.endsWith(".txt") -> ".txt"
-            lowerLabel.endsWith(".epub") -> ".epub"
-            lowerLabel.endsWith(".md") -> ".md"
-            lowerLabel.endsWith(".markdown") -> ".markdown"
-            lowerLabel.endsWith(".html") -> ".html"
-            lowerLabel.endsWith(".htm") -> ".htm"
-            lowerLabel.endsWith(".pdf") -> ".pdf"
-            lowerLabel.endsWith(".mobi") -> ".mobi"
-            lowerLabel.endsWith(".azw") -> ".azw"
-            lowerLabel.endsWith(".azw3") -> ".azw3"
-            mimeType.equals("application/epub+zip", ignoreCase = true) -> ".epub"
-            mimeType.equals("text/markdown", ignoreCase = true) ||
-                mimeType.equals("text/x-markdown", ignoreCase = true) -> ".md"
-            mimeType.equals("text/html", ignoreCase = true) -> ".html"
-            mimeType.equals("application/pdf", ignoreCase = true) -> ".pdf"
-            mimeType.equals("application/x-mobipocket-ebook", ignoreCase = true) -> ".mobi"
-            mimeType.equals("application/vnd.amazon.ebook", ignoreCase = true) -> ".azw"
-            mimeType.equals("application/vnd.amazon.mobi8-ebook", ignoreCase = true) -> ".azw3"
-            mimeType.equals("text/plain", ignoreCase = true) ||
-                mimeType.equals("application/octet-stream", ignoreCase = true) -> ".txt"
-            else -> null
+    private fun resolveExternalImportExtension(
+        type: String?,
+        uri: Uri,
+        label: String,
+        mimeType: String?
+    ): String? {
+        val specs = when (type?.trim()) {
+            PAYLOAD_TYPE_SCRIPT_SOURCE -> listOf(SCRIPT_SOURCE_IMPORT_SPEC)
+            PAYLOAD_TYPE_LOCAL_BOOK -> listOf(LOCAL_BOOK_IMPORT_SPEC)
+            PAYLOAD_TYPE_ADVANCED_THEME -> listOf(ADVANCED_THEME_IMPORT_SPEC)
+            else -> EXTERNAL_IMPORT_SPECS
         }
+        return resolveImportExtension(specs, uri, label, mimeType)
     }
 
-    private fun resolveScriptSourceExtension(label: String, mimeType: String?): String? {
-        val lowerLabel = label.lowercase(Locale.ROOT)
-        return when {
-            lowerLabel.endsWith(".mjs") -> ".mjs"
-            lowerLabel.endsWith(".js") -> ".js"
-            lowerLabel.endsWith(".txt") -> ".txt"
-            mimeType.equals("application/javascript", ignoreCase = true) ||
-                mimeType.equals("text/javascript", ignoreCase = true) ||
-                mimeType.equals("application/x-javascript", ignoreCase = true) -> ".js"
-            else -> null
+    private fun resolveImportExtension(
+        specs: List<ExternalImportSpec>,
+        uri: Uri,
+        label: String,
+        mimeType: String?
+    ): String? {
+        val extensionCandidates = sequenceOf(
+            normalizedExtension(uri.lastPathSegment.orEmpty()),
+            normalizedExtension(label),
+        ).filter { it.isNotEmpty() }
+        for (extension in extensionCandidates) {
+            for (spec in specs) {
+                if (spec.extensions.contains(extension)) {
+                    return ".$extension"
+                }
+            }
         }
+
+        val normalizedMimeType = mimeType?.lowercase(Locale.ROOT)?.trim()
+        if (normalizedMimeType != null) {
+            for (spec in specs) {
+                val extension = spec.mimeTypeToExtension[normalizedMimeType]
+                if (extension != null) {
+                    return ".$extension"
+                }
+            }
+        }
+        return null
     }
 
-    private fun resolveAdvancedThemeExtension(label: String, mimeType: String?): String? {
-        val lowerLabel = label.lowercase(Locale.ROOT)
-        return when {
-            lowerLabel.endsWith(".json") -> ".json"
-            lowerLabel.endsWith(".zip") -> ".zip"
-            lowerLabel.endsWith(".red") -> ".red"
-            mimeType.equals("application/json", ignoreCase = true) -> ".json"
-            mimeType.equals("application/zip", ignoreCase = true) -> ".zip"
-            mimeType.equals("application/x-zip-compressed", ignoreCase = true) -> ".zip"
-            else -> null
+    private fun normalizedExtension(value: String): String {
+        val normalized = value.trim().lowercase(Locale.ROOT)
+        if (!normalized.contains('.')) {
+            return ""
         }
+        return normalized.substringAfterLast('.')
     }
 
     private fun sanitizeFileToken(value: String): String {

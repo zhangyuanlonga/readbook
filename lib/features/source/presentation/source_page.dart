@@ -23,6 +23,8 @@ import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../application/external_import_catalog.dart';
+import '../application/external_import_diagnostics.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_health_action_policy_service.dart';
 import '../application/source_check_service.dart';
@@ -483,20 +485,6 @@ class SourcePage extends StatefulWidget {
 class _SourcePageState extends State<SourcePage> {
   static const String _ungroupedGroupKey = '__ungrouped__';
   static const String _duplicateGroupKey = '__duplicate__';
-  static const XTypeGroup _scriptSourceFileTypeGroup = XTypeGroup(
-    label: 'Script Sources',
-    extensions: <String>['js', 'mjs', 'txt'],
-    mimeTypes: <String>[
-      'text/javascript',
-      'application/javascript',
-      'text/plain',
-    ],
-    uniformTypeIdentifiers: <String>[
-      'com.netscape.javascript-source',
-      'public.plain-text',
-    ],
-  );
-
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final SourceCheckService _sourceCheckService;
   late final SourceHealthService _sourceHealthService;
@@ -683,6 +671,7 @@ class _SourcePageState extends State<SourcePage> {
 
         if (_isFeatureAccessLoading) {
           return Scaffold(
+            resizeToAvoidBottomInset: false,
             extendBodyBehindAppBar: true,
             appBar: AppBar(
               title: const Text('书源'),
@@ -697,6 +686,7 @@ class _SourcePageState extends State<SourcePage> {
         // 只有在明确被禁用时才显示提示（基本上不会发生）
         if (!_canAccessSourcePage) {
           return Scaffold(
+            resizeToAvoidBottomInset: false,
             extendBodyBehindAppBar: true,
             appBar: AppBar(
               title: const Text('书源'),
@@ -779,6 +769,7 @@ class _SourcePageState extends State<SourcePage> {
               }
 
               return Scaffold(
+                resizeToAvoidBottomInset: false,
                 extendBodyBehindAppBar: true,
                 appBar: AppBar(
                   backgroundColor: Colors.transparent,
@@ -927,6 +918,7 @@ class _SourcePageState extends State<SourcePage> {
   }) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final hasAnySource = rawSources.isNotEmpty;
     final hasFilter =
         _searchQuery.trim().isNotEmpty || _selectedGroupKey != null;
@@ -949,7 +941,7 @@ class _SourcePageState extends State<SourcePage> {
             horizontal,
             topInset + 12,
             horizontal,
-            12 + bottomSafe,
+            12 + bottomSafe + keyboardInset,
           ),
           children: [
             _buildFilterSummary(
@@ -2017,7 +2009,9 @@ class _SourcePageState extends State<SourcePage> {
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux) {
         final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[_scriptSourceFileTypeGroup],
+          acceptedTypeGroups: const <XTypeGroup>[
+            ExternalImportCatalog.scriptSourceTypeGroup,
+          ],
           suggestedName: fileName,
           confirmButtonText: '导出书源',
         );
@@ -2064,7 +2058,9 @@ class _SourcePageState extends State<SourcePage> {
 
   Future<void> _importLocalScriptSources() async {
     final files = await openFiles(
-      acceptedTypeGroups: const <XTypeGroup>[_scriptSourceFileTypeGroup],
+      acceptedTypeGroups: const <XTypeGroup>[
+        ExternalImportCatalog.scriptSourceTypeGroup,
+      ],
       confirmButtonText: '选择书源脚本',
     );
     if (!mounted || files.isEmpty) {
@@ -2212,20 +2208,32 @@ class _SourcePageState extends State<SourcePage> {
       payload,
     );
     if (cached == null) {
-      _showMessage('读取外部书源失败：${payload.label}');
+      ExternalImportDiagnostics.logCacheFailed(payload);
+      _showMessage(
+        ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        ),
+      );
       return;
     }
 
     final tempFile = File(cached.path);
     try {
-      final extension =
-          cached.label.contains('.')
-              ? cached.label
-                  .substring(cached.label.lastIndexOf('.'))
-                  .toLowerCase()
-              : '';
-      if (extension != '.js' && extension != '.mjs' && extension != '.txt') {
-        _showMessage('暂不支持导入该书源文件：${cached.label}');
+      if (!ExternalImportCatalog.supportsFileLabel(
+        ExternalImportPayloadType.scriptSource,
+        cached.label,
+      )) {
+        ExternalImportDiagnostics.logImportUnsupported(
+          ExternalImportPayloadType.scriptSource,
+          cached.label,
+        );
+        _showMessage(
+          ExternalImportCatalog.unsupportedFileMessage(
+            ExternalImportPayloadType.scriptSource,
+            cached.label,
+          ),
+        );
         return;
       }
 
@@ -2234,12 +2242,27 @@ class _SourcePageState extends State<SourcePage> {
       if (!mounted) {
         return;
       }
+      ExternalImportDiagnostics.logImportSucceeded(
+        ExternalImportPayloadType.scriptSource,
+        cached.label,
+      );
       _showMessage('已导入 ${cached.label}');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _showMessage('导入失败：${_toFriendlyImportError(error)}');
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.scriptSource,
+        cached.label,
+        error,
+      );
+      _showMessage(
+        ExternalImportDiagnostics.importFailedMessage(
+          ExternalImportPayloadType.scriptSource,
+          _toFriendlyImportError(error),
+          label: cached.label,
+        ),
+      );
     } finally {
       try {
         if (await tempFile.exists()) {

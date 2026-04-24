@@ -375,6 +375,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kPinnedHeaderHeight = 40;
   static const double _kBottomProgressReserve = 12;
   static const double _kBottomOverlayReserve = 96;
+  static const double _kMarginControlStep = 0.5;
   static const double _kBackgroundTileWidth = 72;
   static const double _kBackgroundTileHeight = 44;
   static const double _kSwipeTurnDistanceThreshold = 42;
@@ -1013,16 +1014,62 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     BuildContext context,
     BoxConstraints constraints,
   ) {
+    final pagedInfoOverlayReserve = _resolvePagedInfoOverlayReserve(context);
     return _layoutResolver.resolvePagedMetrics(
       settings: _settings,
       viewportSize: constraints.biggest,
       safeInsets: _readerSafeInsets(context),
       pinnedHeaderHeight: _pinnedHeaderTotalHeight(context),
-      bottomProgressReserve:
-          _showOverlayControls
-              ? _kBottomOverlayReserve
-              : _kBottomProgressReserve,
+      bottomProgressReserve: max(
+        _showOverlayControls ? _kBottomOverlayReserve : _kBottomProgressReserve,
+        pagedInfoOverlayReserve,
+      ),
     );
+  }
+
+  bool _hasPagedInfoOverlay() {
+    return _settings.infoShowProgress ||
+        _settings.infoShowTime ||
+        _settings.infoShowBattery;
+  }
+
+  double _resolvePagedInfoOverlayReserve(BuildContext context) {
+    if (!_hasPagedInfoOverlay()) {
+      return _kBottomProgressReserve;
+    }
+    final footerPadding = _layoutResolver.resolveInfoBarPadding(
+      _settings,
+      isHeader: false,
+    );
+    final innerPadding =
+        _settings.infoFooterPadding
+            .clamp(
+              ReaderSettings.minInfoBarPadding,
+              ReaderSettings.maxInfoBarPadding,
+            )
+            .toDouble();
+    final textStyle = Theme.of(context).textTheme.bodySmall;
+    final fontSize = max(11.5, textStyle?.fontSize ?? 11.5);
+    final lineHeightFactor = textStyle?.height ?? 1.2;
+    final lineHeight = fontSize * lineHeightFactor;
+    final overlaySpacing = max(4.0, innerPadding * 0.5);
+    return footerPadding.top +
+        footerPadding.bottom +
+        overlaySpacing +
+        lineHeight +
+        6;
+  }
+
+  String _formatLayoutMarginValue(double value) {
+    final normalized = value.clamp(
+      ReaderSettings.minLayoutMargin,
+      ReaderSettings.maxLayoutMargin,
+    );
+    final rounded = normalized.roundToDouble();
+    if ((normalized - rounded).abs() < 0.001) {
+      return rounded.toInt().toString();
+    }
+    return normalized.toStringAsFixed(1);
   }
 
   @override
@@ -4873,9 +4920,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return Text(
       '$current/$safeTotal · ${percent.toStringAsFixed(2)}%',
       style: TextStyle(
-        color: colors.text.withValues(alpha: 0.85),
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
+        color: colors.meta.withValues(alpha: 0.9),
+        fontSize: 11.5,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -4889,15 +4936,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final showProgress = _settings.infoShowProgress;
     final showTime = _settings.infoShowTime;
     final showBattery = _settings.infoShowBattery;
-    final platform = Theme.of(context).platform;
     final safeBottomInset = max(
       bottomInset,
       _effectiveBottomSafeInset(context),
     );
+    final footerPadding = _layoutResolver.resolveInfoBarPadding(
+      _settings,
+      isHeader: false,
+    );
+    final innerPadding =
+        _settings.infoFooterPadding
+            .clamp(
+              ReaderSettings.minInfoBarPadding,
+              ReaderSettings.maxInfoBarPadding,
+            )
+            .toDouble();
     final collapsedTextBottomPadding =
-        platform == TargetPlatform.iOS
-            ? (safeBottomInset - 8).clamp(0.0, 64.0)
-            : 4.0 + safeBottomInset;
+        safeBottomInset + footerPadding.bottom + max(4.0, innerPadding * 0.5);
 
     final rightItems = <String>[];
     if (showTime) {
@@ -4916,12 +4971,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       animation: _overlayControlsController,
       builder: (context, _) {
         final overlayFade = _overlayControlsFadeProgress;
-        final infoMaxWidth = AppLayout.dialogMaxWidth(
-          context,
-          maxWidth: 520,
-          horizontalMargin: 28,
+        final horizontalPadding = max(
+          14.0,
+          max(footerPadding.left, footerPadding.right),
         );
-        final infoMinWidth = min(160.0, infoMaxWidth);
 
         return Positioned(
           left: 0,
@@ -4932,42 +4985,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               opacity: lerpDouble(1.0, 0.84, overlayFade)!,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  14,
-                  0,
-                  14,
+                  horizontalPadding,
+                  footerPadding.top,
+                  horizontalPadding,
                   collapsedTextBottomPadding,
                 ),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: infoMinWidth,
-                      maxWidth: infoMaxWidth,
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: Row(
-                        children: [
-                          if (showProgress)
-                            _buildPageIndexBadge(
-                              colors: colors,
-                              index: index,
-                              total: total,
+                child: SizedBox.expand(
+                  child: Stack(
+                    children: [
+                      if (showProgress)
+                        Align(
+                          alignment: Alignment.bottomLeft,
+                          child: _buildPageIndexBadge(
+                            colors: colors,
+                            index: index,
+                            total: total,
+                          ),
+                        ),
+                      if (rightLabel.isNotEmpty)
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Text(
+                            rightLabel,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: colors.meta.withValues(alpha: 0.9),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
                             ),
-                          if (showProgress && rightLabel.isNotEmpty)
-                            const Spacer(),
-                          if (rightLabel.isNotEmpty)
-                            Text(
-                              rightLabel,
-                              style: TextStyle(
-                                color: colors.meta.withValues(alpha: 0.9),
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -11983,7 +12031,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           required String label,
                           required double currentValue,
                         }) async {
-                          var draftValue = currentValue.round().toString();
+                          var draftValue = _formatLayoutMarginValue(
+                            currentValue,
+                          );
                           String? errorText;
 
                           final result = await showDialog<double>(
@@ -12058,7 +12108,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             },
                           );
 
-                          return result;
+                          if (result == null) {
+                            return null;
+                          }
+                          return ((result * 2).round() / 2).toDouble();
                         }
 
                         Widget buildMarginControlRow({
@@ -12098,7 +12151,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  onPressed: () => nudge(-1),
+                                  onPressed: () => nudge(-_kMarginControlStep),
                                   icon: const Icon(Icons.remove_rounded),
                                 ),
                                 Expanded(
@@ -12106,8 +12159,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     min: ReaderSettings.minLayoutMargin,
                                     max: ReaderSettings.maxLayoutMargin,
                                     divisions:
-                                        (ReaderSettings.maxLayoutMargin -
-                                                ReaderSettings.minLayoutMargin)
+                                        ((ReaderSettings.maxLayoutMargin -
+                                                    ReaderSettings
+                                                        .minLayoutMargin) /
+                                                _kMarginControlStep)
                                             .round(),
                                     value: safeValue,
                                     onChanged: onChanged,
@@ -12115,7 +12170,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  onPressed: () => nudge(1),
+                                  onPressed: () => nudge(_kMarginControlStep),
                                   icon: const Icon(Icons.add_rounded),
                                 ),
                                 SizedBox(
@@ -12138,7 +12193,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         vertical: 6,
                                       ),
                                       child: Text(
-                                        safeValue.round().toString(),
+                                        _formatLayoutMarginValue(safeValue),
                                         textAlign: TextAlign.right,
                                         style: textTheme.labelLarge?.copyWith(
                                           color: colorScheme.primary,
@@ -13447,8 +13502,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
                 List<Widget> buildQuickMarginCards() {
                   final marginDivisions =
-                      (ReaderSettings.maxLayoutMargin -
-                              ReaderSettings.minLayoutMargin)
+                      ((ReaderSettings.maxLayoutMargin -
+                                  ReaderSettings.minLayoutMargin) /
+                              _kMarginControlStep)
                           .round();
                   final effectiveMargins = draft.effectiveBodyMarginValues;
                   return <Widget>[
@@ -13543,8 +13599,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           max: ReaderSettings.maxLayoutMargin,
                           divisions: marginDivisions,
                           value: draft.bodyMarginTop,
-                          step: 1,
-                          valueLabel: draft.bodyMarginTop.round().toString(),
+                          step: _kMarginControlStep,
+                          valueLabel: _formatLayoutMarginValue(
+                            draft.bodyMarginTop,
+                          ),
                           onChanged: (value) {
                             setModalState(() {
                               draft = draft.copyWith(
@@ -13560,8 +13618,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           max: ReaderSettings.maxLayoutMargin,
                           divisions: marginDivisions,
                           value: draft.bodyMarginBottom,
-                          step: 1,
-                          valueLabel: draft.bodyMarginBottom.round().toString(),
+                          step: _kMarginControlStep,
+                          valueLabel: _formatLayoutMarginValue(
+                            draft.bodyMarginBottom,
+                          ),
                           onChanged: (value) {
                             setModalState(() {
                               draft = draft.copyWith(
@@ -13577,8 +13637,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           max: ReaderSettings.maxLayoutMargin,
                           divisions: marginDivisions,
                           value: draft.bodyMarginLeft,
-                          step: 1,
-                          valueLabel: draft.bodyMarginLeft.round().toString(),
+                          step: _kMarginControlStep,
+                          valueLabel: _formatLayoutMarginValue(
+                            draft.bodyMarginLeft,
+                          ),
                           onChanged: (value) {
                             setModalState(() {
                               draft = draft.copyWith(
@@ -13594,8 +13656,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           max: ReaderSettings.maxLayoutMargin,
                           divisions: marginDivisions,
                           value: draft.bodyMarginRight,
-                          step: 1,
-                          valueLabel: draft.bodyMarginRight.round().toString(),
+                          step: _kMarginControlStep,
+                          valueLabel: _formatLayoutMarginValue(
+                            draft.bodyMarginRight,
+                          ),
                           onChanged: (value) {
                             setModalState(() {
                               draft = draft.copyWith(

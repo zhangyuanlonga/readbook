@@ -22,6 +22,8 @@ import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../source/application/external_source_import_bridge.dart';
+import '../../source/application/external_import_diagnostics.dart';
+import '../../source/application/external_import_catalog.dart';
 import '../application/advanced_theme_provider.dart';
 
 class AdvancedThemeListPage extends ConsumerStatefulWidget {
@@ -34,40 +36,9 @@ class AdvancedThemeListPage extends ConsumerStatefulWidget {
 
 enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 
-enum _ThemeImportPackageKind { official, red }
+enum _ThemeImportPackageKind { official, red, rgshare }
 
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
-  static const XTypeGroup _themeJsonTypeGroup = XTypeGroup(
-    label: 'Advanced theme color JSON',
-    extensions: <String>['json'],
-    mimeTypes: <String>['application/json', 'text/json', 'text/plain'],
-    uniformTypeIdentifiers: <String>['public.json'],
-  );
-  static const XTypeGroup _themeZipTypeGroup = XTypeGroup(
-    label: 'Advanced theme bundle',
-    extensions: <String>['zip'],
-    mimeTypes: <String>['application/zip', 'application/x-zip-compressed'],
-    uniformTypeIdentifiers: <String>['public.zip-archive'],
-  );
-  static const XTypeGroup _themeImportTypeGroup = XTypeGroup(
-    label: 'Advanced theme package',
-    extensions: <String>['json', 'zip'],
-    mimeTypes: <String>[
-      'application/json',
-      'text/json',
-      'text/plain',
-      'application/zip',
-      'application/x-zip-compressed',
-    ],
-    uniformTypeIdentifiers: <String>['public.json', 'public.zip-archive'],
-  );
-  static const XTypeGroup _themeRedTypeGroup = XTypeGroup(
-    label: 'Red theme package',
-    extensions: <String>['red'],
-    mimeTypes: <String>['application/octet-stream', 'application/zip'],
-    uniformTypeIdentifiers: <String>['public.data'],
-  );
-
   final AuthSessionStore _sessionStore = AuthSessionStore();
   final MembershipService _membershipService = MembershipService();
   List<AppAdvancedTheme> _themes = const <AppAdvancedTheme>[];
@@ -223,7 +194,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final content = service.encodeThemeColorJson(theme);
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[_themeJsonTypeGroup],
+          acceptedTypeGroups: const <XTypeGroup>[
+            ExternalImportCatalog.advancedThemeJsonTypeGroup,
+          ],
           suggestedName: fileName,
           confirmButtonText: '导出',
         );
@@ -279,7 +252,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final bytes = await service.encodeThemeBundleZip(theme);
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[_themeZipTypeGroup],
+          acceptedTypeGroups: const <XTypeGroup>[
+            ExternalImportCatalog.advancedThemeZipTypeGroup,
+          ],
           suggestedName: fileName,
           confirmButtonText: '导出',
         );
@@ -362,9 +337,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
     final picked = await openFile(
       acceptedTypeGroups: <XTypeGroup>[
-        packageKind == _ThemeImportPackageKind.red
-            ? _themeRedTypeGroup
-            : _themeImportTypeGroup,
+        switch (packageKind) {
+          _ThemeImportPackageKind.red =>
+            ExternalImportCatalog.advancedThemeRedTypeGroup,
+          _ThemeImportPackageKind.rgshare =>
+            ExternalImportCatalog.advancedThemeRgShareTypeGroup,
+          _ThemeImportPackageKind.official =>
+            ExternalImportCatalog.advancedThemeImportTypeGroup,
+        },
       ],
       confirmButtonText: '导入主题',
     );
@@ -431,11 +411,33 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       payload,
     );
     if (cached == null) {
-      _showMessage('读取外部主题失败：${payload.label}');
+      ExternalImportDiagnostics.logCacheFailed(payload);
+      _showMessage(
+        ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        ),
+      );
       return;
     }
 
     try {
+      if (!ExternalImportCatalog.supportsFileLabel(
+        ExternalImportPayloadType.advancedTheme,
+        cached.label,
+      )) {
+        ExternalImportDiagnostics.logImportUnsupported(
+          ExternalImportPayloadType.advancedTheme,
+          cached.label,
+        );
+        _showMessage(
+          ExternalImportCatalog.unsupportedFileMessage(
+            ExternalImportPayloadType.advancedTheme,
+            cached.label,
+          ),
+        );
+        return;
+      }
       final importedTheme = await _importThemeFromPath(
         path: cached.path,
         mimeType: cached.mimeType ?? payload.mimeType,
@@ -443,17 +445,37 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       if (!mounted) {
         return;
       }
+      ExternalImportDiagnostics.logImportSucceeded(
+        ExternalImportPayloadType.advancedTheme,
+        importedTheme.name,
+      );
       _showMessage('已导入主题「${importedTheme.name}」');
     } on FormatException catch (error) {
       if (!mounted) {
         return;
       }
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.advancedTheme,
+        cached.label,
+        error,
+      );
       _showMessage(error.message);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      _showMessage('导入外部主题失败：${payload.label}');
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.advancedTheme,
+        cached.label,
+        error,
+      );
+      _showMessage(
+        ExternalImportDiagnostics.importFailedMessage(
+          ExternalImportPayloadType.advancedTheme,
+          '$error',
+          label: cached.label,
+        ),
+      );
     }
   }
 
@@ -470,6 +492,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _ThemeImportPackageKind.red => await service.importRedThemePackageBytes(
         await file.readAsBytes(),
       ),
+      _ThemeImportPackageKind.rgshare => await service
+          .importRgShareThemePackageBytes(await file.readAsBytes()),
       _ThemeImportPackageKind.official =>
         _isZipThemeFile(path: path, mimeType: mimeType)
             ? await service.importThemeBundleZipBytes(await file.readAsBytes())
@@ -503,8 +527,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Red 导入说明',
-                    onPressed: () => _showRedImportSupportHelp(sheetContext),
+                    tooltip: '导入说明',
+                    onPressed: () => _showThemeImportSupportHelp(sheetContext),
                     icon: Icon(
                       Icons.help_outline_rounded,
                       color: colorScheme.onSurfaceVariant,
@@ -545,6 +569,19 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       sheetContext,
                     ).pop(_ThemeImportPackageKind.red),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  Icons.layers_outlined,
+                  color: colorScheme.primary,
+                ),
+                title: const Text('RGShare 主题包'),
+                subtitle: const Text('导入 .rgshare 轻量主题包并按兼容规则转换'),
+                onTap:
+                    () => Navigator.of(
+                      sheetContext,
+                    ).pop(_ThemeImportPackageKind.rgshare),
+              ),
               const SizedBox(height: 4),
             ],
           ),
@@ -553,12 +590,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  Future<void> _showRedImportSupportHelp(BuildContext context) {
+  Future<void> _showThemeImportSupportHelp(BuildContext context) {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Red 导入说明'),
+          title: const Text('兼容导入说明'),
           content: const Text(
             '当前 Red 兼容导入支持：\n'
             '1. 主题名称\n'
@@ -568,7 +605,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             '5. 底栏图标包\n'
             '6. 阅读器背景图\n'
             '7. 阅读器背景不透明度与图片适配\n\n'
-            '暂不支持完整还原Reeden的阅读器排版、字体、页眉页脚模板和交互行为。',
+            '当前 RGShare 兼容导入支持：\n'
+            '1. 主题名称\n'
+            '2. 浅色 / 深色壁纸\n'
+            '3. 部分颜色映射\n\n'
+            '两种兼容导入都不支持完整还原原应用的阅读器排版、字体、页眉页脚模板和交互行为。',
           ),
           actions: [
             TextButton(
@@ -586,6 +627,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     String? mimeType,
   }) async {
     final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
+    if (p.extension(path).trim().toLowerCase() == '.rgshare') {
+      return _ThemeImportPackageKind.rgshare;
+    }
     if (normalizedMime.contains('octet-stream') &&
         p.extension(path).trim().toLowerCase() == '.red') {
       return _ThemeImportPackageKind.red;

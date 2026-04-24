@@ -68,6 +68,7 @@
 				<string>public.json</string>
 				<string>public.zip-archive</string>
 				<string>com.jiangyan.selune.red-theme</string>
+				<string>com.jiangyan.selune.rgshare-theme</string>
 			</array>
 		</dict>
 		<dict>
@@ -197,6 +198,27 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>red</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/octet-stream</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.jiangyan.selune.rgshare-theme</string>
+			<key>UTTypeDescription</key>
+			<string>RGShare Theme Package</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>rgshare</string>
 				</array>
 				<key>public.mime-type</key>
 				<array>

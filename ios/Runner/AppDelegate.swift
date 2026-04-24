@@ -4,6 +4,12 @@ import MediaPlayer
 import UIKit
 import UniformTypeIdentifiers
 
+private struct ExternalImportSpec {
+  let type: String
+  let extensions: Set<String>
+  let mimeTypeToExtension: [String: String]
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private let sourceImportChannelName = "com.jiangyan.selune/source_import_intent"
@@ -30,6 +36,50 @@ import UniformTypeIdentifiers
   private weak var hiddenVolumeSlider: UISlider?
   private var suppressObservedVolumeChange = false
   private var lastObservedOutputVolume = AVAudioSession.sharedInstance().outputVolume
+
+  private lazy var scriptSourceImportSpec = ExternalImportSpec(
+    type: payloadTypeScriptSource,
+    extensions: ["js", "mjs", "txt"],
+    mimeTypeToExtension: [
+      "application/javascript": "js",
+      "text/javascript": "js",
+      "application/x-javascript": "js",
+      "text/plain": "txt",
+    ]
+  )
+
+  private lazy var localBookImportSpec = ExternalImportSpec(
+    type: payloadTypeLocalBook,
+    extensions: ["txt", "epub", "md", "markdown", "html", "htm", "pdf", "mobi", "azw", "azw3"],
+    mimeTypeToExtension: [
+      "application/epub+zip": "epub",
+      "text/markdown": "md",
+      "text/x-markdown": "md",
+      "text/html": "html",
+      "application/pdf": "pdf",
+      "application/x-mobipocket-ebook": "mobi",
+      "application/vnd.amazon.ebook": "azw",
+      "application/vnd.amazon.mobi8-ebook": "azw3",
+      "text/plain": "txt",
+      "application/octet-stream": "txt",
+    ]
+  )
+
+  private lazy var advancedThemeImportSpec = ExternalImportSpec(
+    type: payloadTypeAdvancedTheme,
+    extensions: ["json", "zip", "red", "rgshare"],
+    mimeTypeToExtension: [
+      "application/json": "json",
+      "application/zip": "zip",
+      "application/x-zip-compressed": "zip",
+    ]
+  )
+
+  private lazy var externalImportSpecs = [
+    advancedThemeImportSpec,
+    scriptSourceImportSpec,
+    localBookImportSpec,
+  ]
 
   private func logSourceImport(_ message: String) {
     NSLog("[SourceImport] %@", message)
@@ -315,43 +365,19 @@ import UniformTypeIdentifiers
     url: URL,
     mimeType: String?
   ) -> String? {
-    let extensionName = url.pathExtension.lowercased()
+    let extensionCandidates = Set([
+      normalizedExtension(from: url.pathExtension),
+      normalizedExtension(from: url.lastPathComponent),
+    ].filter { !$0.isEmpty })
     let normalizedMimeType = mimeType?.lowercased()
 
-    if extensionName == "json" ||
-      extensionName == "zip" ||
-      extensionName == "red" ||
-      normalizedMimeType == "application/json" ||
-      normalizedMimeType == "application/zip" ||
-      normalizedMimeType == "application/x-zip-compressed" {
-      return payloadTypeAdvancedTheme
-    }
-    if extensionName == "txt" ||
-      extensionName == "epub" ||
-      extensionName == "md" ||
-      extensionName == "markdown" ||
-      extensionName == "html" ||
-      extensionName == "htm" ||
-      extensionName == "pdf" ||
-      extensionName == "mobi" ||
-      extensionName == "azw" ||
-      extensionName == "azw3" ||
-      normalizedMimeType == "application/epub+zip" ||
-      normalizedMimeType == "text/plain" ||
-      normalizedMimeType == "text/markdown" ||
-      normalizedMimeType == "text/x-markdown" ||
-      normalizedMimeType == "text/html" ||
-      normalizedMimeType == "application/pdf" ||
-      normalizedMimeType == "application/x-mobipocket-ebook" ||
-      normalizedMimeType == "application/vnd.amazon.ebook" ||
-      normalizedMimeType == "application/vnd.amazon.mobi8-ebook" {
-      return payloadTypeLocalBook
-    }
-    if extensionName == "js" ||
-      extensionName == "mjs" ||
-      normalizedMimeType == "text/javascript" ||
-      normalizedMimeType == "application/javascript" {
-      return payloadTypeScriptSource
+    for spec in externalImportSpecs {
+      if extensionCandidates.contains(where: { spec.extensions.contains($0) }) {
+        return spec.type
+      }
+      if let normalizedMimeType, spec.mimeTypeToExtension[normalizedMimeType] != nil {
+        return spec.type
+      }
     }
     return nil
   }
@@ -384,10 +410,13 @@ import UniformTypeIdentifiers
     let rawLabel = (arguments["label"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let label = (rawLabel?.isEmpty == false) ? rawLabel! : resolvePayloadLabel(from: uri)
+    let type = (arguments["type"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     let rawMimeType = (arguments["mimeType"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let mimeType = (rawMimeType?.isEmpty == false) ? rawMimeType! : (resolveMimeType(from: uri) ?? "")
     guard let extensionName = resolveExternalImportExtension(
+      type: type,
       url: uri,
       label: label,
       mimeType: mimeType
@@ -460,139 +489,69 @@ import UniformTypeIdentifiers
   }
 
   private func resolveExternalImportExtension(
+    type: String?,
     url: URL,
     label: String,
     mimeType: String?
   ) -> String? {
-    let urlExtension = url.pathExtension
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-      .lowercased()
-    let lowerLabel = label.lowercased()
-    let normalizedMimeType = mimeType?.lowercased() ?? ""
-    if urlExtension == "txt" {
-      return ".txt"
+    let specs: [ExternalImportSpec]
+    switch type?.trimmingCharacters(in: .whitespacesAndNewlines) {
+    case payloadTypeScriptSource:
+      specs = [scriptSourceImportSpec]
+    case payloadTypeLocalBook:
+      specs = [localBookImportSpec]
+    case payloadTypeAdvancedTheme:
+      specs = [advancedThemeImportSpec]
+    default:
+      specs = externalImportSpecs
     }
-    if urlExtension == "epub" {
-      return ".epub"
+    return resolveImportExtension(
+      specs: specs,
+      url: url,
+      label: label,
+      mimeType: mimeType
+    )
+  }
+
+  private func resolveImportExtension(
+    specs: [ExternalImportSpec],
+    url: URL,
+    label: String,
+    mimeType: String?
+  ) -> String? {
+    let extensionCandidates = [
+      normalizedExtension(from: url.pathExtension),
+      normalizedExtension(from: url.lastPathComponent),
+      normalizedExtension(from: label),
+    ].filter { !$0.isEmpty }
+
+    for candidate in extensionCandidates {
+      for spec in specs where spec.extensions.contains(candidate) {
+        return ".\(candidate)"
+      }
     }
-    if urlExtension == "md" {
-      return ".md"
-    }
-    if urlExtension == "markdown" {
-      return ".markdown"
-    }
-    if urlExtension == "html" {
-      return ".html"
-    }
-    if urlExtension == "htm" {
-      return ".htm"
-    }
-    if urlExtension == "pdf" {
-      return ".pdf"
-    }
-    if urlExtension == "mobi" {
-      return ".mobi"
-    }
-    if urlExtension == "azw" {
-      return ".azw"
-    }
-    if urlExtension == "azw3" {
-      return ".azw3"
-    }
-    if urlExtension == "js" {
-      return ".js"
-    }
-    if urlExtension == "mjs" {
-      return ".mjs"
-    }
-    if urlExtension == "json" {
-      return ".json"
-    }
-    if urlExtension == "zip" {
-      return ".zip"
-    }
-    if urlExtension == "red" {
-      return ".red"
-    }
-    if lowerLabel.hasSuffix(".txt") {
-      return ".txt"
-    }
-    if lowerLabel.hasSuffix(".epub") {
-      return ".epub"
-    }
-    if lowerLabel.hasSuffix(".md") {
-      return ".md"
-    }
-    if lowerLabel.hasSuffix(".markdown") {
-      return ".markdown"
-    }
-    if lowerLabel.hasSuffix(".html") {
-      return ".html"
-    }
-    if lowerLabel.hasSuffix(".htm") {
-      return ".htm"
-    }
-    if lowerLabel.hasSuffix(".pdf") {
-      return ".pdf"
-    }
-    if lowerLabel.hasSuffix(".mobi") {
-      return ".mobi"
-    }
-    if lowerLabel.hasSuffix(".azw") {
-      return ".azw"
-    }
-    if lowerLabel.hasSuffix(".azw3") {
-      return ".azw3"
-    }
-    if lowerLabel.hasSuffix(".js") {
-      return ".js"
-    }
-    if lowerLabel.hasSuffix(".mjs") {
-      return ".mjs"
-    }
-    if lowerLabel.hasSuffix(".json") {
-      return ".json"
-    }
-    if lowerLabel.hasSuffix(".zip") {
-      return ".zip"
-    }
-    if lowerLabel.hasSuffix(".red") {
-      return ".red"
-    }
-    if normalizedMimeType == "application/epub+zip" {
-      return ".epub"
-    }
-    if normalizedMimeType == "text/markdown" || normalizedMimeType == "text/x-markdown" {
-      return ".md"
-    }
-    if normalizedMimeType == "text/html" {
-      return ".html"
-    }
-    if normalizedMimeType == "application/pdf" {
-      return ".pdf"
-    }
-    if normalizedMimeType == "application/x-mobipocket-ebook" {
-      return ".mobi"
-    }
-    if normalizedMimeType == "application/vnd.amazon.ebook" {
-      return ".azw"
-    }
-    if normalizedMimeType == "application/vnd.amazon.mobi8-ebook" {
-      return ".azw3"
-    }
-    if normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream" {
-      return ".txt"
-    }
-    if normalizedMimeType == "text/javascript" || normalizedMimeType == "application/javascript" {
-      return ".js"
-    }
-    if normalizedMimeType == "application/json" {
-      return ".json"
-    }
-    if normalizedMimeType == "application/zip" || normalizedMimeType == "application/x-zip-compressed" {
-      return ".zip"
+
+    if let normalizedMimeType = mimeType?.lowercased() {
+      for spec in specs {
+        if let resolved = spec.mimeTypeToExtension[normalizedMimeType] {
+          return ".\(resolved)"
+        }
+      }
     }
     return nil
+  }
+
+  private func normalizedExtension(from raw: String) -> String {
+    let normalized = raw
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+    if normalized.isEmpty {
+      return ""
+    }
+    if normalized.contains(".") {
+      return normalized.components(separatedBy: ".").last ?? ""
+    }
+    return normalized
   }
 
   private func sanitizeFileToken(_ value: String) -> String {

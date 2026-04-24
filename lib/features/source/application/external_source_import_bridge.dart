@@ -4,6 +4,8 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'external_import_diagnostics.dart';
+
 enum ExternalImportPayloadType { localBook, scriptSource, advancedTheme }
 
 class IncomingExternalImportPayload {
@@ -170,6 +172,7 @@ class ExternalImportBridge {
   }
 
   void _pushPayload(IncomingExternalImportPayload payload) {
+    ExternalImportDiagnostics.logPayloadQueued(payload);
     _pendingPayloads.addLast(payload);
     if (!_payloadController.isClosed) {
       _payloadController.add(payload);
@@ -178,6 +181,9 @@ class ExternalImportBridge {
 
   IncomingExternalImportPayload? _parsePayload(dynamic raw) {
     if (raw is! Map<Object?, Object?>) {
+      if (raw != null) {
+        ExternalImportDiagnostics.logPayloadMalformed(raw);
+      }
       return null;
     }
 
@@ -236,6 +242,7 @@ class ExternalImportBridge {
         mimeType: mimeType,
       );
     }
+    ExternalImportDiagnostics.logPayloadMalformed(raw);
     return null;
   }
 }
