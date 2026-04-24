@@ -8,6 +8,7 @@ import '../crypto/source_crypto.dart';
 import '../html/html_runtime.dart';
 import '../http/request_engine.dart';
 import '../session/session_manager.dart';
+import '../../features/source/application/source_login_state_service.dart';
 import 'source_contract.dart';
 import 'source_registry.dart';
 import 'source_result_models.dart';
@@ -19,12 +20,15 @@ class SourceExecutor {
     required CacheManager cacheManager,
     HtmlRuntime? htmlRuntime,
     BrowserRuntime? browserRuntime,
+    SourceLoginStateService? sourceLoginStateService,
     void Function(String message)? logger,
   }) : _requestEngine = requestEngine,
        _sessionManager = sessionManager,
        _cacheManager = cacheManager,
        _htmlRuntime = htmlRuntime ?? const DefaultHtmlRuntime(),
        _browserRuntime = browserRuntime ?? const UnsupportedBrowserRuntime(),
+       _sourceLoginStateService =
+           sourceLoginStateService ?? SourceLoginStateService(),
        _logger = logger;
 
   final RequestEngine _requestEngine;
@@ -32,6 +36,7 @@ class SourceExecutor {
   final CacheManager _cacheManager;
   final HtmlRuntime _htmlRuntime;
   final BrowserRuntime _browserRuntime;
+  final SourceLoginStateService _sourceLoginStateService;
   final void Function(String message)? _logger;
   static final _SourceColdStartGate _coldStartGate = _SourceColdStartGate();
 
@@ -330,9 +335,16 @@ class SourceExecutor {
     );
   }
 
-  SourceRuntimeContext _createContext(RegisteredSource source) {
+  SourceRuntimeContext _createContext(
+    RegisteredSource source, {
+    SourceUiContext ui = const SourceUiContext(),
+  }) {
     final runtime = source.runtime;
     final session = _sessionManager.sessionFor(runtime.id);
+    final sourceLogin = SourceLoginContext(
+      sourceId: runtime.id,
+      stateService: _sourceLoginStateService,
+    );
     return SourceRuntimeContext(
       source: runtime,
       http: SourceHttpContext(
@@ -340,7 +352,10 @@ class SourceExecutor {
         session: session,
         manifest: source.definition.manifest,
         browserRuntime: _browserRuntime,
+        sourceLogin: sourceLogin,
       ),
+      sourceLogin: sourceLogin,
+      bookState: SourceBookStateContext(stateService: _sourceLoginStateService),
       browser: SourceBrowserContext(
         browserRuntime: _browserRuntime,
         session: session,
@@ -354,11 +369,19 @@ class SourceExecutor {
       session: session,
       utils: SourceUtilsContext(),
       crypto: SourceCryptoContext(),
+      ui: ui,
       log: (String message) {
         appendDebugLog(session, message: message);
         _logger?.call('[${runtime.id}] $message');
       },
     );
+  }
+
+  SourceRuntimeContext createContext(
+    RegisteredSource source, {
+    SourceUiContext ui = const SourceUiContext(),
+  }) {
+    return _createContext(source, ui: ui);
   }
 
   String _runtimeBookCacheId(Book book) {

@@ -101,6 +101,13 @@ class ScriptSourceRuntimeService {
     _lastDebugArtifactsBySourceId.remove(normalized);
   }
 
+  SourceRuntimeContext createContext(
+    RegisteredSource source, {
+    SourceUiContext ui = const SourceUiContext(),
+  }) {
+    return _executor.createContext(source, ui: ui);
+  }
+
   void clearReadingFlow({
     required String sourceId,
     String detailUrl = '',

@@ -65,11 +65,12 @@ class BookDetailPrimaryActions extends StatelessWidget {
       );
     }
 
-    final isShelfLoading = isShelfStateLoading || isShelfActionLoading;
+    final showShelfProgress = isShelfActionLoading;
+    final isShelfUnavailable = isShelfStateLoading || isShelfActionLoading;
     final shelfButton = buildAction(
       key: const Key('book_detail_shelf_button'),
       icon:
-          isShelfLoading
+          showShelfProgress
               ? SizedBox(
                 width: 18,
                 height: 18,
@@ -86,7 +87,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
       label: '书架',
-      onPressed: isShelfLoading ? null : onToggleBookshelf,
+      onPressed: isShelfUnavailable ? null : onToggleBookshelf,
     );
     final catalogButton = buildAction(
       key: const Key('book_detail_catalog_button'),

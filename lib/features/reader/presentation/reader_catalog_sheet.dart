@@ -658,11 +658,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
     },
   );
 
-  scrollController.dispose();
-  searchController.dispose();
-  scrollThumbVisible.dispose();
   catalogSearchDebounceTimer?.cancel();
-  catalogSearchNotifier.dispose();
+  // These objects are still referenced by the bottom sheet route during the
+  // dismiss animation and pending callbacks. Let the route release them
+  // naturally instead of disposing immediately after await returns.
   return result;
 }
 

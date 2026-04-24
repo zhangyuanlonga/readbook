@@ -27,9 +27,11 @@ import '../application/external_import_catalog.dart';
 import '../application/external_import_diagnostics.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_health_action_policy_service.dart';
+import '../application/source_login_runtime_service.dart';
 import '../application/source_check_service.dart';
 import '../application/source_health_service.dart';
 import '../application/source_runtime_facade.dart';
+import 'source_login_page.dart';
 import 'script_source_debug_page.dart';
 
 enum _ScriptSourceSortOption { updatedDesc, nameAsc, nameDesc }
@@ -42,7 +44,7 @@ enum _SourcePageMenuAction {
   batchCheck,
 }
 
-enum _SourceItemMenuAction { debug, check, export, delete }
+enum _SourceItemMenuAction { login, debug, check, export, delete }
 
 enum _BatchCheckScope {
   selectedSources,
@@ -492,6 +494,8 @@ class _SourcePageState extends State<SourcePage> {
   late final TextEditingController _searchController;
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final MobileFeatureService _mobileFeatureService = MobileFeatureService();
+  final SourceLoginRuntimeService _sourceLoginRuntimeService =
+      SourceLoginRuntimeService();
   StreamSubscription<AuthEvent>? _authEventSub;
   List<ScriptSource> _lastRawSources = const <ScriptSource>[];
   List<ScriptSource> _lastVisibleSources = const <ScriptSource>[];
@@ -1517,25 +1521,31 @@ class _SourcePageState extends State<SourcePage> {
                 enabled: !busy,
                 onSelected:
                     (action) => _handleSourceItemMenuAction(source, action),
-                itemBuilder:
-                    (context) => const [
-                      PopupMenuItem(
-                        value: _SourceItemMenuAction.debug,
-                        child: Text('调试'),
+                itemBuilder: (context) {
+                  return <PopupMenuEntry<_SourceItemMenuAction>>[
+                    if (_supportsSourceLogin(source))
+                      const PopupMenuItem(
+                        value: _SourceItemMenuAction.login,
+                        child: Text('登录'),
                       ),
-                      PopupMenuItem(
-                        value: _SourceItemMenuAction.check,
-                        child: Text('检测'),
-                      ),
-                      PopupMenuItem(
-                        value: _SourceItemMenuAction.export,
-                        child: Text('导出'),
-                      ),
-                      PopupMenuItem(
-                        value: _SourceItemMenuAction.delete,
-                        child: Text('删除'),
-                      ),
-                    ],
+                    const PopupMenuItem(
+                      value: _SourceItemMenuAction.debug,
+                      child: Text('调试'),
+                    ),
+                    const PopupMenuItem(
+                      value: _SourceItemMenuAction.check,
+                      child: Text('检测'),
+                    ),
+                    const PopupMenuItem(
+                      value: _SourceItemMenuAction.export,
+                      child: Text('导出'),
+                    ),
+                    const PopupMenuItem(
+                      value: _SourceItemMenuAction.delete,
+                      child: Text('删除'),
+                    ),
+                  ];
+                },
               ),
             ],
           ),
@@ -1661,6 +1671,9 @@ class _SourcePageState extends State<SourcePage> {
     _SourceItemMenuAction action,
   ) {
     switch (action) {
+      case _SourceItemMenuAction.login:
+        unawaited(_openLoginPage(source));
+        break;
       case _SourceItemMenuAction.debug:
         unawaited(_openDebugPage(source));
         break;
@@ -1674,6 +1687,40 @@ class _SourcePageState extends State<SourcePage> {
         unawaited(_deleteScriptSource(source));
         break;
     }
+  }
+
+  bool _supportsSourceLogin(ScriptSource source) {
+    final code = source.sourceCode;
+    return code.contains('loginUi:') ||
+        code.contains('loginUrl:') ||
+        code.contains('async login(');
+  }
+
+  Future<void> _openLoginPage(ScriptSource source) async {
+    final supported = await _sourceLoginRuntimeService.supportsLogin(source.id);
+    if (!mounted) {
+      return;
+    }
+    if (!supported) {
+      _showMessage('当前书源未声明登录面板。');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.82,
+            child: SourceLoginPage(sourceId: source.id, embedded: true),
+          ),
+        );
+      },
+    );
   }
 
   List<ScriptSource> _resolveVisibleSources(List<ScriptSource> sources) {

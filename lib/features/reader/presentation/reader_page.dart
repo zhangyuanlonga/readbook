@@ -903,6 +903,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool get _showsReaderInfoBars => _isTextScrollViewport;
 
+  bool get _hasReaderInfoItems =>
+      _settings.infoShowProgress ||
+      _settings.infoShowTime ||
+      _settings.infoShowBattery;
+
+  bool get _showsReaderFooterInfoBar =>
+      _showsReaderInfoBars &&
+      (_settings.infoFooterEnabled ||
+          (!_settings.infoHeaderEnabled &&
+              !_settings.infoFooterEnabled &&
+              _hasReaderInfoItems));
+
   bool get _hasVisibleReaderContent =>
       _content.trim().isNotEmpty || !_document.isEmpty;
 
@@ -1014,24 +1026,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     BuildContext context,
     BoxConstraints constraints,
   ) {
-    final pagedInfoOverlayReserve = _resolvePagedInfoOverlayReserve(context);
-    final pagedBottomReserve = max(
-      _kBottomOverlayReserve,
-      pagedInfoOverlayReserve,
-    );
     return _layoutResolver.resolvePagedMetrics(
       settings: _settings,
       viewportSize: constraints.biggest,
       safeInsets: _readerSafeInsets(context),
       pinnedHeaderHeight: _pinnedHeaderTotalHeight(context),
-      bottomProgressReserve: pagedBottomReserve,
+      bottomProgressReserve: _resolvePagedBottomReserve(context),
     );
   }
 
   bool _hasPagedInfoOverlay() {
-    return _settings.infoShowProgress ||
-        _settings.infoShowTime ||
-        _settings.infoShowBattery;
+    return _hasReaderInfoItems;
   }
 
   double _resolvePagedInfoOverlayReserve(BuildContext context) {
@@ -1059,6 +1064,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         overlaySpacing +
         lineHeight +
         6;
+  }
+
+  double _resolvePagedBottomReserve(BuildContext context) {
+    return max(
+      _kBottomOverlayReserve,
+      _resolvePagedInfoOverlayReserve(context),
+    );
   }
 
   String _formatLayoutMarginValue(double value) {
@@ -1675,7 +1687,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         if (_showsReaderInfoBars && _settings.infoHeaderEnabled)
           _buildReaderInfoBar(colors, isHeader: true),
         Expanded(child: _buildBody(colors)),
-        if (_showsReaderInfoBars && _settings.infoFooterEnabled)
+        if (_showsReaderFooterInfoBar)
           _buildReaderInfoBar(colors, isHeader: false),
       ],
     );
@@ -4941,10 +4953,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       bottomInset,
       _effectiveBottomSafeInset(context),
     );
-    final effectiveBottomReserve = max(
-      safeBottomInset,
-      _showOverlayControls ? _kBottomOverlayReserve : 0.0,
-    );
     final footerPadding = _layoutResolver.resolveInfoBarPadding(
       _settings,
       isHeader: false,
@@ -4956,10 +4964,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ReaderSettings.maxInfoBarPadding,
             )
             .toDouble();
-    final collapsedTextBottomPadding =
-        effectiveBottomReserve +
+    final overlaySpacing = max(4.0, innerPadding * 0.5);
+    final anchoredBottomPadding =
+        safeBottomInset +
+        footerPadding.top +
         footerPadding.bottom +
-        max(4.0, innerPadding * 0.5);
+        overlaySpacing;
 
     final rightItems = <String>[];
     if (showTime) {
@@ -4984,47 +4994,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
 
         return Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
+          left: horizontalPadding,
+          right: horizontalPadding,
+          bottom: anchoredBottomPadding,
           child: IgnorePointer(
             child: Opacity(
-              opacity: lerpDouble(1.0, 0.84, overlayFade)!,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  footerPadding.top,
-                  horizontalPadding,
-                  collapsedTextBottomPadding,
-                ),
-                child: SizedBox.expand(
-                  child: Stack(
-                    children: [
-                      if (showProgress)
-                        Align(
-                          alignment: Alignment.bottomLeft,
-                          child: _buildPageIndexBadge(
-                            colors: colors,
-                            index: index,
-                            total: total,
-                          ),
+              opacity: lerpDouble(1.0, 0.0, overlayFade)!,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (showProgress)
+                    _buildPageIndexBadge(
+                      colors: colors,
+                      index: index,
+                      total: total,
+                    ),
+                  if (rightLabel.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        rightLabel,
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: colors.meta.withValues(alpha: 0.9),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
                         ),
-                      if (rightLabel.isNotEmpty)
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Text(
-                            rightLabel,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: colors.meta.withValues(alpha: 0.9),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                ],
               ),
             ),
           ),
@@ -10511,7 +10510,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     } else {
       _overlayControlsController.reverse();
     }
-    _syncSystemUiVisibility(visible: visible);
+    // Keep the platform system bars stable while the in-reader shell toggles.
+    // Otherwise MediaQuery insets change and paged chapters get repaginated.
   }
 
   void _syncSystemUiVisibility({bool force = false, bool? visible}) {

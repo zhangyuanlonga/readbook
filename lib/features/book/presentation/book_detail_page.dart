@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -60,6 +59,7 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
+import '../application/custom_cover_storage_service.dart';
 import '../application/book_detail_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
 import 'book_detail_switch_source_helper.dart';
@@ -187,25 +187,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
       ValueNotifier<_BookDetailAuxiliaryState>(
         const _BookDetailAuxiliaryState(),
       );
+  late final Listenable _detailStateListenable = Listenable.merge(<Listenable>[
+    _presentationStateNotifier,
+    _auxiliaryStateNotifier,
+  ]);
 
-  bool _isLoading = false;
   bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
-  bool _isInBookshelf = false;
-  bool _showLocalAdvancedOptions = false;
   bool _isEditingMetadata = false;
   bool _isSavingMetadata = false;
   String? _metadataInlineNotice;
   int _detailLoadRequestToken = 0;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
-  String? _errorText;
-  String? _tocWarningText;
   String? _activeSourceId;
   String? _activeDetailUrl;
   String _activeBookId = '';
   String? _displayTitle;
-  BookDetailLoadResult? _result;
-  LocalBook? _localBookMeta;
   BookMetadataOverride? _metadataOverride;
   StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
@@ -232,6 +229,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final ReadingRecordService _readingRecordService = ReadingRecordService();
   final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
+  final CustomCoverStorageService _customCoverStorageService =
+      const CustomCoverStorageService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   final SourceRuntimeTaskConflictService _taskConflictService =
@@ -314,25 +313,24 @@ class _BookDetailPageState extends State<BookDetailPage> {
   _BookDetailAuxiliaryState get _auxiliaryState =>
       _auxiliaryStateNotifier.value;
 
-  void _updatePresentationState(
-    _BookDetailPresentationState nextState, {
-    bool syncLegacyFields = true,
-  }) {
+  bool get _isLoading => _presentationState.isLoading;
+
+  String? get _errorText => _presentationState.errorText;
+
+  String? get _tocWarningText => _presentationState.tocWarningText;
+
+  BookDetailLoadResult? get _result => _presentationState.result;
+
+  bool get _isInBookshelf => _auxiliaryState.isInBookshelf;
+
+  LocalBook? get _localBookMeta => _auxiliaryState.localBookMeta;
+
+  void _updatePresentationState(_BookDetailPresentationState nextState) {
     _presentationStateNotifier.value = nextState;
-    if (!syncLegacyFields) {
-      return;
-    }
-    _isLoading = nextState.isLoading;
-    _errorText = nextState.errorText;
-    _tocWarningText = nextState.tocWarningText;
-    _result = nextState.result;
   }
 
   void _updateAuxiliaryState(_BookDetailAuxiliaryState nextState) {
     _auxiliaryStateNotifier.value = nextState;
-    _isInBookshelf = nextState.isInBookshelf;
-    _localBookMeta = nextState.localBookMeta;
-    _showLocalAdvancedOptions = nextState.showLocalAdvancedOptions;
   }
 
   BookMetadataPresentation _resolvePresentedMetadata({
@@ -599,15 +597,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: ValueListenableBuilder<
-                        _BookDetailPresentationState
-                      >(
-                        valueListenable: _presentationStateNotifier,
-                        builder: (context, presentationState, _) {
+                      child: AnimatedBuilder(
+                        animation: _detailStateListenable,
+                        builder: (context, _) {
+                          final presentationState = _presentationState;
+                          final auxiliaryState = _auxiliaryState;
                           final result = presentationState.result;
                           final errorText = presentationState.errorText;
-                          final tocWarningText =
-                              presentationState.tocWarningText;
                           return RefreshIndicator(
                             onRefresh: () => _load(forceRefresh: true),
                             child: ListView(
@@ -658,80 +654,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     ],
                                   )
                                 else if (result != null) ...[
-                                  if (presentationState.isLoading) ...[
-                                    _buildInlineRefreshNotice(),
-                                    const SizedBox(height: 12),
-                                  ],
-                                  _isEditingMetadata
-                                      ? _buildEditingDetailCard(result)
-                                      : _buildDetailCard(result),
-                                  const SizedBox(height: 12),
-                                  if (_isEditingMetadata)
-                                    _buildEditingActionCard(result),
-                                  _isEditingMetadata
-                                      ? _buildEditingIntroCard(result)
-                                      : Builder(
-                                        builder: (context) {
-                                          final presentedIntro = _resolveIntro(
-                                            _resolvePresentedMetadata(
-                                              result: result,
-                                            ).displayIntro,
-                                          );
-                                          if (presentedIntro == null) {
-                                            return const SizedBox.shrink();
-                                          }
-                                          return Column(
-                                            children: [
-                                              BookDetailIntroCard(
-                                                intro: presentedIntro,
-                                              ),
-                                              const SizedBox(height: 12),
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                  if (_isEditingMetadata)
-                                    _buildEditingLocalOptionsCard()
-                                  else ...[
-                                    ValueListenableBuilder<
-                                      _BookDetailAuxiliaryState
-                                    >(
-                                      valueListenable: _auxiliaryStateNotifier,
-                                      builder: (context, auxiliaryState, _) {
-                                        return _buildQuickActionsCard(
-                                          result,
-                                          auxiliaryState: auxiliaryState,
-                                        );
-                                      },
-                                    ),
-                                    ValueListenableBuilder<
-                                      _BookDetailAuxiliaryState
-                                    >(
-                                      valueListenable: _auxiliaryStateNotifier,
-                                      builder: (context, auxiliaryState, _) {
-                                        final localBookMeta =
-                                            auxiliaryState.localBookMeta;
-                                        if (!_isLocalContent ||
-                                            localBookMeta == null ||
-                                            localBookMeta.indexStatus ==
-                                                LocalBookIndexStatus.ready) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return Column(
-                                          children: [
-                                            const SizedBox(height: 12),
-                                            _buildLocalIndexStatusCard(
-                                              localBookMeta,
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                  if (tocWarningText != null) ...[
-                                    const SizedBox(height: 12),
-                                    _buildTocWarningCard(tocWarningText),
-                                  ],
+                                  ..._buildLoadedContentSections(
+                                    presentationState: presentationState,
+                                    auxiliaryState: auxiliaryState,
+                                    result: result,
+                                  ),
                                 ] else if (presentationState.isLoading) ...[
                                   _buildInitialLoadingContent(),
                                 ],
@@ -778,12 +705,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return false;
     }
 
-    _result = cached;
     _activeBookId = cached.detail.id.trim();
     _activeSourceId = cached.detail.sourceId.trim();
     _activeDetailUrl = cached.detail.detailUrl.trim();
     _displayTitle = cached.detail.title.trim();
-    _tocWarningText = null;
     _updatePresentationState(
       _presentationState.copyWith(
         result: cached,
@@ -795,7 +720,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _loadSupplementaryState(
         result: cached,
         loadRequestToken: _detailLoadRequestToken,
-        updatePresentationAfterSync: true,
       ),
     );
     return true;
@@ -832,9 +756,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   bool get _isLocalContent => _contentCapabilities.canReindexLocal;
-
-  bool get _isLocalTxtContent =>
-      _isLocalContent && _localBookMeta?.format == LocalBookFormat.txt;
 
   bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
 
@@ -930,6 +851,66 @@ class _BookDetailPageState extends State<BookDetailPage> {
         },
       ),
     );
+  }
+
+  Widget? _buildPresentedIntroCard(BookDetailLoadResult result) {
+    final presentedIntro = _resolveIntro(
+      _resolvePresentedMetadata(result: result).displayIntro,
+    );
+    if (presentedIntro == null) {
+      return null;
+    }
+    return BookDetailIntroCard(intro: presentedIntro);
+  }
+
+  List<Widget> _buildLoadedContentSections({
+    required _BookDetailPresentationState presentationState,
+    required _BookDetailAuxiliaryState auxiliaryState,
+    required BookDetailLoadResult result,
+  }) {
+    final sections = <Widget>[
+      if (presentationState.isLoading) ...[
+        _buildInlineRefreshNotice(),
+        const SizedBox(height: 12),
+      ],
+    ];
+
+    if (_isEditingMetadata) {
+      sections.addAll(<Widget>[
+        _buildEditingDetailCard(result),
+        const SizedBox(height: 12),
+        _buildEditingActionCard(result),
+        const SizedBox(height: 12),
+        _buildEditingIntroCard(result),
+        _buildEditingLocalOptionsCard(),
+      ]);
+    } else {
+      final introCard = _buildPresentedIntroCard(result);
+      final localBookMeta = auxiliaryState.localBookMeta;
+      final shouldShowLocalIndexStatus =
+          _isLocalContent &&
+          localBookMeta != null &&
+          localBookMeta.indexStatus != LocalBookIndexStatus.ready;
+
+      sections.addAll(<Widget>[
+        _buildDetailCard(result),
+        const SizedBox(height: 12),
+        _buildQuickActionsCard(result, auxiliaryState: auxiliaryState),
+        if (introCard != null) ...[const SizedBox(height: 12), introCard],
+        if (shouldShowLocalIndexStatus) ...[
+          const SizedBox(height: 12),
+          _buildLocalIndexStatusCard(localBookMeta),
+        ],
+      ]);
+    }
+
+    if (presentationState.tocWarningText != null) {
+      sections.addAll(<Widget>[
+        const SizedBox(height: 12),
+        _buildTocWarningCard(presentationState.tocWarningText!),
+      ]);
+    }
+    return sections;
   }
 
   Widget _buildEditingDetailCard(BookDetailLoadResult result) {
@@ -1464,7 +1445,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (!mounted || picked == null) {
       return null;
     }
-    final storedCoverUri = await _persistCustomCover(result, picked);
+    final storedCoverUri = await _customCoverStorageService.persistForBook(
+      sourceId: result.detail.sourceId,
+      detailUrl: result.detail.detailUrl,
+      picked: picked,
+    );
     if (storedCoverUri == null) {
       return null;
     }
@@ -2867,10 +2852,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _activeDetailUrl = result.detail.detailUrl.trim();
       _displayTitle = result.detail.title.trim();
 
+      _updatePresentationState(
+        _presentationState.copyWith(
+          isLoading: false,
+          clearErrorText: true,
+          result: result,
+          tocWarningText: _toTocWarningText(result.tocError),
+        ),
+      );
       await _loadSupplementaryState(
         result: result,
         loadRequestToken: requestToken,
-        updatePresentationAfterSync: true,
       );
       return true;
     } on AppException catch (error) {
@@ -2964,7 +2956,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Future<void> _loadSupplementaryState({
     required BookDetailLoadResult result,
     int? loadRequestToken,
-    bool updatePresentationAfterSync = false,
   }) async {
     if (loadRequestToken != null &&
         !_isActiveDetailLoadRequest(loadRequestToken)) {
@@ -2997,8 +2988,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
             ? _isActiveDetailLoadRequest(loadRequestToken)
             : mounted;
     if (!isActive) {
-      _localBookMeta = localBook;
-      _metadataOverride = metadataOverride;
       return;
     }
 
@@ -3013,14 +3002,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         ),
       ),
     );
-    if (updatePresentationAfterSync) {
-      _updatePresentationState(
-        _presentationState.copyWith(
-          result: result,
-          tocWarningText: _toTocWarningText(result.tocError),
-        ),
-      );
-    }
 
     final isInBookshelf = await bookshelfStateFuture;
     final isStillActive =
@@ -3063,7 +3044,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
       bookId: _activeBookId,
     );
     if (!mounted) {
-      _localBookMeta = localBook;
       return localBook;
     }
 
@@ -3140,7 +3120,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (!mounted ||
         (loadRequestToken != null &&
             !_isActiveDetailLoadRequest(loadRequestToken))) {
-      _localBookMeta = localBook;
       return;
     }
     _updateAuxiliaryState(
@@ -3271,246 +3250,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         (localBook.lastError?.trim().isNotEmpty ?? false);
   }
 
-  // ignore: unused_element
-  Widget _buildLocalDiagnosticsPanel() {
-    final localBook = _localBookMeta;
-    if (!_isLocalContent || localBook == null) {
-      return const SizedBox.shrink();
-    }
-
-    return FutureBuilder<_LocalBookDiagnosticsSnapshot>(
-      future: _loadLocalDiagnosticsSnapshot(localBook),
-      builder: (context, snapshot) {
-        final diagnostics = snapshot.data;
-        final colorScheme = Theme.of(context).colorScheme;
-        final hasIssue = _hasLocalRepairIssue(localBook);
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    hasIssue
-                        ? Icons.auto_fix_high_rounded
-                        : Icons.health_and_safety_outlined,
-                    size: 18,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      hasIssue ? '这本书识别不太理想' : '本地图书诊断',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                hasIssue
-                    ? '当前本地图书目录或索引状态异常，建议先重新索引。'
-                    : '当前本地图书看起来正常。只有遇到识别问题时，才需要使用高级选项。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      _updateAuxiliaryState(
-                        _auxiliaryState.copyWith(
-                          showLocalAdvancedOptions:
-                              !_auxiliaryState.showLocalAdvancedOptions,
-                        ),
-                      );
-                    },
-                    icon: Icon(
-                      _showLocalAdvancedOptions
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                      size: 18,
-                    ),
-                    label: Text(_showLocalAdvancedOptions ? '收起高级选项' : '高级选项'),
-                  ),
-                ],
-              ),
-              if (_showLocalAdvancedOptions) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    BookDetailMetaChip(
-                      label: '格式',
-                      value: localBook.format.name.toUpperCase(),
-                    ),
-                    BookDetailMetaChip(
-                      label: '编码',
-                      value: _normalizeSingleLineText(
-                        localBook.charset?.trim().isNotEmpty ?? false
-                            ? localBook.charset!.trim()
-                            : '未探测',
-                      ),
-                    ),
-                    BookDetailMetaChip(
-                      label: '索引',
-                      value: _localIndexStatusText(localBook.indexStatus),
-                    ),
-                    BookDetailMetaChip(
-                      label: '章节',
-                      value: '${localBook.chapterCount}',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed:
-                          _isLoading ? null : () => _load(forceRefresh: true),
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('重新索引'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed:
-                          _isLoading
-                              ? null
-                              : () => _showLocalCharsetSheet(localBook),
-                      icon: const Icon(Icons.translate_rounded, size: 18),
-                      label: const Text('修正编码'),
-                    ),
-                    TextButton.icon(
-                      onPressed:
-                          () => _copyLocalDiagnostics(
-                            localBook,
-                            diagnostics: diagnostics,
-                          ),
-                      icon: const Icon(Icons.copy_rounded, size: 16),
-                      label: const Text('复制诊断信息'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildLocalDiagnosticLine(
-                  context,
-                  label: '原文件',
-                  value:
-                      diagnostics == null
-                          ? _localFileName(localBook.sourcePath)
-                          : '${_localFileName(localBook.sourcePath)} · ${diagnostics.sourceFileExists ? '已找到' : '缺失'}',
-                ),
-                _buildLocalDiagnosticLine(
-                  context,
-                  label: '应用副本',
-                  value:
-                      diagnostics == null
-                          ? _localFileName(localBook.storagePath)
-                          : '${_localFileName(localBook.storagePath)} · ${diagnostics.storageFileExists ? '已找到' : '缺失'}',
-                ),
-                _buildLocalDiagnosticLine(
-                  context,
-                  label: '文件变化',
-                  value:
-                      diagnostics == null
-                          ? '检查中…'
-                          : diagnostics.sourcePath.isEmpty
-                          ? '未记录原文件路径'
-                          : diagnostics.sourceFileChanged
-                          ? '检测到原文件变化，建议重新导入或重新索引'
-                          : '与上次导入记录一致',
-                  emphasize: diagnostics?.sourceFileChanged ?? false,
-                ),
-                _buildLocalDiagnosticLine(
-                  context,
-                  label: '长章节拆分',
-                  value:
-                      diagnostics == null
-                          ? '读取中…'
-                          : diagnostics.globalSplitLongChapterEnabled
-                          ? diagnostics.splitSettingNeedsReindex
-                              ? '系统默认开启（当前书需重新索引生效）'
-                              : '系统默认开启'
-                          : diagnostics.splitSettingNeedsReindex
-                          ? '系统默认关闭（当前书需重新索引生效）'
-                          : '系统默认关闭',
-                  emphasize: diagnostics?.splitSettingNeedsReindex ?? false,
-                ),
-                if ((localBook.lastError?.trim().isNotEmpty ?? false)) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '最近错误：${localBook.lastError!.trim()}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onErrorContainer,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLocalDiagnosticLine(
-    BuildContext context, {
-    required String label,
-    required String value,
-    bool emphasize = false,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textColor =
-        emphasize ? colorScheme.error : colorScheme.onSurfaceVariant;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: '$label：',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            TextSpan(
-              text: value,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: textColor, height: 1.4),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<_LocalBookDiagnosticsSnapshot> _loadLocalDiagnosticsSnapshot(
     LocalBook book,
   ) async {
@@ -3574,150 +3313,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _showMessage('已复制本地图书诊断信息。');
   }
 
-  Future<void> _showLocalCharsetSheet(LocalBook book) async {
-    if (!_isLocalTxtContent || _isLoading || !mounted) {
-      return;
-    }
-
-    final selected = await showModalBottomSheet<_LocalCharsetOption>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final option in _kLocalCharsetOptions)
-                ListTile(
-                  leading: Icon(
-                    option.charset == null
-                        ? Icons.auto_fix_high_rounded
-                        : Icons.text_fields_rounded,
-                  ),
-                  title: Text(option.label),
-                  subtitle: Text(
-                    option.charset == null ? '恢复自动识别' : option.charset!,
-                  ),
-                  onTap: () => Navigator.of(context).pop(option),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-    if (!mounted || selected == null) {
-      return;
-    }
-    await _applyLocalCharset(book, preferredCharset: selected.charset);
-  }
-
-  Future<void> _applyLocalCharset(
-    LocalBook book, {
-    required String? preferredCharset,
-  }) async {
-    final normalizedPreferredCharset = preferredCharset?.trim().toLowerCase();
-    final originalSourcePath = book.sourcePath?.trim() ?? '';
-    final resolvedStoragePath = await _localBookStorageService
-        .resolveStoragePath(book.storagePath);
-
-    String effectiveSourcePath = '';
-    if (originalSourcePath.isNotEmpty) {
-      final originalFile = File(originalSourcePath);
-      if (await originalFile.exists()) {
-        effectiveSourcePath = originalSourcePath;
-      }
-    }
-    if (effectiveSourcePath.isEmpty) {
-      final storageFile = File(resolvedStoragePath);
-      if (await storageFile.exists()) {
-        effectiveSourcePath = resolvedStoragePath;
-      }
-    }
-    if (effectiveSourcePath.isEmpty) {
-      _showMessage('当前没有可用的源文件或存储副本，无法修正编码。');
-      return;
-    }
-
-    final sourceFile = File(effectiveSourcePath);
-    if (!await sourceFile.exists()) {
-      _showMessage('用于修正编码的文件不存在。');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final storageResult = await _localBookStorageService.copyIntoStorage(
-        sourceFile: sourceFile,
-        targetFile: File(resolvedStoragePath),
-        format: book.format,
-        sourcePath: effectiveSourcePath,
-        bookId: book.id,
-        preferredCharset: normalizedPreferredCharset,
-      );
-      final sourceStat = await sourceFile.stat();
-      final now = DateTime.now();
-      final updatedBook = book.copyWith(
-        charset: storageResult.normalizedCharset,
-        clearCharset: storageResult.normalizedCharset == null,
-        fileSize: storageResult.storageStat.size,
-        sourceFileSize: sourceStat.size,
-        sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
-        storageFileLastModifiedMs:
-            storageResult.storageStat.modified.millisecondsSinceEpoch,
-        indexStatus: LocalBookIndexStatus.pending,
-        chapterCount: 0,
-        updatedAt: now,
-        clearLastError: true,
-      );
-
-      await AppDatabase.instance.upsertLocalBook(updatedBook);
-      await AppDatabase.instance.replaceLocalChapters(
-        bookId: updatedBook.id,
-        chapters: const [],
-      );
-      await AppDatabase.instance.updateLocalBookIndexState(
-        bookId: updatedBook.id,
-        status: LocalBookIndexStatus.pending,
-        chapterCount: 0,
-        clearLastError: true,
-      );
-
-      await LocalBookIndexService(
-        storageService: _localBookStorageService,
-      ).ensureIndexed(bookId: updatedBook.id, force: true);
-
-      if (!mounted) {
-        return;
-      }
-      final feedback =
-          normalizedPreferredCharset == null
-              ? '已恢复自动识别并重新索引。'
-              : '已按 ${normalizedPreferredCharset.toUpperCase()} 重建并重新索引。';
-      _showMessage(feedback);
-      await _load(forceRefresh: true);
-    } on AppException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage(_toUserReadableError(error));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('修正编码失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
   Future<void> _copyLocalDiagnosticsFromError() async {
     final book =
         _localBookMeta ??
@@ -3753,7 +3348,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return;
       }
 
-      final storedCoverUri = await _persistCustomCover(detailResult, picked);
+      final storedCoverUri = await _customCoverStorageService.persistForBook(
+        sourceId: detailResult.detail.sourceId,
+        detailUrl: detailResult.detail.detailUrl,
+        picked: picked,
+      );
       if (storedCoverUri == null) {
         _showMessage('封面保存失败，请重试。');
         return;
@@ -3796,63 +3395,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     } catch (_) {
       _showMessage('设置自定义封面失败，请重试。');
     }
-  }
-
-  Future<Uri?> _persistCustomCover(
-    BookDetailLoadResult detailResult,
-    PickedImageData picked,
-  ) async {
-    final bytes = picked.bytes;
-    if (bytes.isEmpty) {
-      return null;
-    }
-
-    final baseDir = await getApplicationSupportDirectory();
-    final coverDir = Directory(
-      p.join(baseDir.path, 'shuxiang_reading_next', 'custom_covers'),
-    );
-    if (!await coverDir.exists()) {
-      await coverDir.create(recursive: true);
-    }
-
-    final detail = detailResult.detail;
-    final bookKey = '${detail.sourceId.trim()}::${detail.detailUrl.trim()}'
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
-    final sourceExtension = p.extension(picked.name).toLowerCase();
-    final extension =
-        const [
-              '.jpg',
-              '.jpeg',
-              '.png',
-              '.webp',
-              '.gif',
-            ].contains(sourceExtension)
-            ? sourceExtension
-            : '.jpg';
-
-    await for (final entity in coverDir.list(followLinks: false)) {
-      if (entity is! File) {
-        continue;
-      }
-      final name = p.basename(entity.path);
-      if (!name.startsWith('${bookKey}_')) {
-        continue;
-      }
-      try {
-        await entity.delete();
-      } catch (_) {
-        // Ignore stale cleanup failure.
-      }
-    }
-
-    final targetFile = File(
-      p.join(
-        coverDir.path,
-        '${bookKey}_${DateTime.now().millisecondsSinceEpoch}$extension',
-      ),
-    );
-    await targetFile.writeAsBytes(bytes, flush: true);
-    return targetFile.uri;
   }
 
   String _buildLocalDiagnosticsText(

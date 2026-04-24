@@ -104,6 +104,122 @@ void main() {
       expect(books, hasLength(1));
       expect(books.single.title, '97,98,99|abc|YWJj');
     });
+
+    test('source login and book state bridges are available', () async {
+      final definition = await compiler.compile(_sourceWithLoginStateHelpers);
+      final context = _buildRuntimeContext();
+
+      final books = await definition.search(context, '任意');
+      expect(books.single.title, '{"token":"abc"}|{"账号":"foo"}|{"tab":"小说"}');
+
+      final detailed = await definition.detail(context, books.single);
+      expect(detailed.extra['customBefore'], '');
+      expect(detailed.extra['customAfter'], '{"mode":"vip"}');
+
+      final content = await definition.content(
+        context,
+        detailed,
+        const Chapter(title: '第一章', url: 'https://chapter/1', index: 0),
+      );
+      expect(content.content, '{"mode":"vip"}');
+    });
+
+    test('ui bridges are available to source scripts', () async {
+      final definition = await compiler.compile(_sourceWithUiHelpers);
+      final events = <String>[];
+      final context = _buildRuntimeContext(
+        ui: SourceUiContext(
+          toastHandler: (message) async => events.add('toast:$message'),
+          longToastHandler: (message) async => events.add('long:$message'),
+          openBrowserAwaitHandler: ({
+            required String url,
+            String? title,
+            bool refetchAfterSuccess = true,
+          }) async {
+            events.add('browser:$url|$title|$refetchAfterSuccess');
+            return <String, Object?>{
+              'statusCode': 200,
+              'body': 'browser-body',
+              'finalUrl': url,
+            };
+          },
+          verificationCodeHandler: (imageUrl) async {
+            events.add('verify:$imageUrl');
+            return '7788';
+          },
+        ),
+      );
+
+      final books = await definition.search(context, '任意');
+      expect(books.single.title, '7788');
+      expect(
+        events,
+        containsAll(<String>[
+          'toast:hello',
+          'long:world',
+          'browser:https://example.com/login|登录|false',
+          'verify:https://example.com/code.png',
+        ]),
+      );
+    });
+
+    test('convenience helper apis are available to source scripts', () async {
+      final definition = await compiler.compile(_sourceWithConvenienceHelpers);
+
+      final books = await definition.search(_buildRuntimeContext(), '任意');
+
+      expect(
+        books.single.title,
+        '39470278_53e7dd36e624ed3cda64ff5fe095a3da|foo|小说|小说|1|2|done|picked|39470278_53e7dd36e624ed3cda64ff5fe095a3da|abc',
+      );
+    });
+
+    test('extended login and ui helper apis are available to source scripts', () async {
+      final definition = await compiler.compile(_sourceWithExtendedHelpers);
+      final events = <String>[];
+      final context = _buildRuntimeContext(
+        ui: SourceUiContext(
+          openUrlHandler: ({required String url, String? title}) async {
+            events.add('open:$url|$title');
+          },
+          confirmHandler: ({
+            required String message,
+            String? title,
+            String? confirmText,
+            String? cancelText,
+          }) async {
+            events.add('confirm:$message|$title|$confirmText|$cancelText');
+            return true;
+          },
+          promptHandler: ({
+            required String message,
+            String? title,
+            String? initialValue,
+            String? confirmText,
+            String? cancelText,
+            bool obscureText = false,
+          }) async {
+            events.add('prompt:$message|$title|$initialValue|$confirmText|$cancelText|$obscureText');
+            return 'typed';
+          },
+        ),
+      );
+
+      final books = await definition.search(context, '任意');
+
+      expect(
+        books.single.title,
+        'bar|小说|vip|typed',
+      );
+      expect(
+        events,
+        containsAll(<String>[
+          'open:https://example.com/help|帮助',
+          'confirm:确认清空？|提示|确认|取消',
+          'prompt:请输入验证码|验证码|1234|确定|返回|false',
+        ]),
+      );
+    });
   });
 
   group('SourceScriptCompiler runtime isolation', () {
@@ -190,6 +306,14 @@ void main() {
       );
       expect(
         factory.lastInstalledBootstrapSource,
+        contains('var book = undefined;'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('var chapter = undefined;'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
         contains(
           'function sanitizeForHost(value, depth, seen, stats, rootMethodName)',
         ),
@@ -226,6 +350,14 @@ void main() {
       expect(factory.lastRunSnippet, contains('globalThis.source = __source;'));
       expect(
         factory.lastRunSnippet,
+        contains('globalThis.book = __currentBook;'),
+      );
+      expect(
+        factory.lastRunSnippet,
+        contains('globalThis.chapter = __currentChapter;'),
+      );
+      expect(
+        factory.lastRunSnippet,
         contains(
           "return globalThis.__appreadEncodeHostSuccess(__rawResult, 'search');",
         ),
@@ -236,6 +368,8 @@ void main() {
       );
       expect(factory.lastRunSnippet, contains('ctx = undefined;'));
       expect(factory.lastRunSnippet, contains('source = undefined;'));
+      expect(factory.lastRunSnippet, contains('book = undefined;'));
+      expect(factory.lastRunSnippet, contains('chapter = undefined;'));
     });
 
     test('unwraps runtime error envelope into compile exception', () async {
@@ -267,7 +401,9 @@ void main() {
   });
 }
 
-SourceRuntimeContext _buildRuntimeContext() {
+SourceRuntimeContext _buildRuntimeContext({
+  SourceUiContext ui = const SourceUiContext(),
+}) {
   final session = SourceSession(sourceId: 'test_source');
   final manifest = const SourceManifest(
     name: '测试源',
@@ -275,6 +411,7 @@ SourceRuntimeContext _buildRuntimeContext() {
     author: 'tester',
     description: '',
   );
+  final sourceLogin = SourceLoginContext(sourceId: 'test_source');
 
   return SourceRuntimeContext(
     source: const SourceRuntimeInfo(
@@ -288,7 +425,10 @@ SourceRuntimeContext _buildRuntimeContext() {
       session: session,
       manifest: manifest,
       browserRuntime: const UnsupportedBrowserRuntime(),
+      sourceLogin: sourceLogin,
     ),
+    sourceLogin: sourceLogin,
+    bookState: SourceBookStateContext(),
     browser: SourceBrowserContext(
       browserRuntime: const UnsupportedBrowserRuntime(),
       session: session,
@@ -302,6 +442,7 @@ SourceRuntimeContext _buildRuntimeContext() {
     session: session,
     utils: SourceUtilsContext(),
     crypto: SourceCryptoContext(),
+    ui: ui,
     log: (_) {},
   );
 }
@@ -395,6 +536,181 @@ export default {
     const text = ctx.crypto.base64Decode('YWJj', { output: 'string' });
     const encoded = ctx.crypto.base64Encode(bytes);
     return [{ title: Array.from(bytes).join(',') + '|' + text + '|' + encoded, detailUrl: 'https://book' }];
+  },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''';
+
+const String _sourceWithLoginStateHelpers = '''
+export default {
+  meta: {
+    name: '登录态桥接测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  async search(ctx, keyword) {
+    await ctx.sourceLogin.putHeader('{"token":"abc"}');
+    await ctx.sourceLogin.putInfo('{"账号":"foo"}');
+    await ctx.sourceLogin.setVariable('{"tab":"小说"}');
+    return [{
+      title: await ctx.sourceLogin.getHeader() + '|' + await ctx.sourceLogin.getInfo() + '|' + await ctx.sourceLogin.getVariable(),
+      author: '',
+      detailUrl: 'https://book/1',
+      sourceId: ctx.source.id,
+      extra: { bookId: 'book_1' },
+    }];
+  },
+  async detail(ctx, book) {
+    const customBefore = await ctx.bookState.getCustom();
+    await ctx.bookState.setCustom('{"mode":"vip"}');
+    return {
+      ...book,
+      extra: {
+        ...book.extra,
+        customBefore,
+        customAfter: await ctx.bookState.getCustom(book),
+      },
+    };
+  },
+  async chapters(ctx, book) {
+    return [];
+  },
+  async content(ctx, book, chapter) {
+    return {
+      title: chapter.title,
+      content: await ctx.bookState.getCustom(),
+    };
+  },
+};
+''';
+
+const String _sourceWithUiHelpers = '''
+export default {
+  meta: {
+    name: 'UI桥接测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  async search(ctx, keyword) {
+    await ctx.ui.toast('hello');
+    await ctx.ui.longToast('world');
+    const browser = await ctx.ui.openBrowserAwait({
+      url: 'https://example.com/login',
+      title: '登录',
+      refetchAfterSuccess: false,
+    });
+    const code = await ctx.ui.getVerificationCode('https://example.com/code.png');
+    return [{ title: code, detailUrl: browser.finalUrl }];
+  },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''';
+
+const String _sourceWithConvenienceHelpers = '''
+export default {
+  meta: {
+    name: '便捷辅助测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  async search(ctx, keyword) {
+    await ctx.sourceLogin.putHeader('{"authorization":"Bearer 39470278_53e7dd36e624ed3cda64ff5fe095a3da"}');
+    await ctx.sourceLogin.putInfo('{"账号":"foo"}');
+    await ctx.sourceLogin.setVariable('{"tab":"小说","token":"variable-token"}');
+    const variableMap = await ctx.sourceLogin.getVariableMap();
+    const token = await ctx.sourceLogin.getToken();
+    const account = await ctx.sourceLogin.getField('账号');
+    const category = await ctx.sourceLogin.getFirstField(['missing', 'tab'], { sources: ['variable'] });
+    const parsed = ctx.utils.safeJsonParse('{"ok":1}', { ok: 0 });
+    const invalidParsed = ctx.utils.safeJsonParse('not-json', { ok: 2 });
+    const first = ctx.utils.firstNonEmpty(['', '  ', 'done']);
+    const picked = ctx.utils.pickField('{"a":"","b":"picked"}', ['a', 'b'], 'fallback');
+    const normalized = ctx.utils.normalizeToken('Bearer token=39470278_53e7dd36e624ed3cda64ff5fe095a3da&foo=1');
+    const plain = ctx.crypto.decryptPipeline('YWJj', [
+      { method: 'base64Decode', output: 'string' },
+    ]);
+    return [{
+      title: [
+        token,
+        account,
+        category,
+        variableMap.tab,
+        String(parsed.ok),
+        String(invalidParsed.ok),
+        first,
+        picked,
+        normalized,
+        plain,
+      ].join('|'),
+      detailUrl: 'https://book/helper',
+    }];
+  },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''';
+
+const String _sourceWithExtendedHelpers = '''
+export default {
+  meta: {
+    name: '扩展登录能力测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  async search(ctx, keyword) {
+    await ctx.sourceLogin.patchInfo({ 账号: 'foo' });
+    await ctx.sourceLogin.patchInfo('{"密钥":"bar"}');
+    await ctx.sourceLogin.putVariable('tab', '小说');
+    await ctx.bookState.patchCustom({ mode: 'vip' }, {
+      title: '测试书',
+      detailUrl: 'https://book/1',
+      sourceId: ctx.source.id,
+      extra: { bookId: 'book_1' },
+    });
+    await ctx.ui.openUrl('https://example.com/help', '帮助');
+    await ctx.ui.confirm({
+      message: '确认清空？',
+      title: '提示',
+      confirmText: '确认',
+      cancelText: '取消',
+    });
+    const prompt = await ctx.ui.prompt({
+      message: '请输入验证码',
+      title: '验证码',
+      initialValue: '1234',
+      confirmText: '确定',
+      cancelText: '返回',
+      obscureText: false,
+    });
+    return [{
+      title: [
+        await ctx.sourceLogin.getField('密钥'),
+        await ctx.sourceLogin.getVariableValue('tab'),
+        await ctx.bookState.getCustomValue('mode', {
+          title: '测试书',
+          detailUrl: 'https://book/1',
+          sourceId: ctx.source.id,
+          extra: { bookId: 'book_1' },
+        }),
+        prompt,
+      ].join('|'),
+      detailUrl: 'https://book/1',
+      sourceId: ctx.source.id,
+      extra: { bookId: 'book_1' },
+    }];
   },
   async detail(ctx, book) { return book; },
   async chapters(ctx, book) { return []; },

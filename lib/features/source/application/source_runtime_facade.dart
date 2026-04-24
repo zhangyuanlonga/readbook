@@ -12,12 +12,14 @@ import '../../../domain/entities/script_source.dart';
 import '../../../domain/repositories/script_source_repository.dart';
 import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
+import '../../../runtime/sources/source_contract.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../../domain/entities/source_health.dart';
 import '../../../core/logging/app_logger.dart';
 import 'source_site_cluster_service.dart';
 import 'script_source_runtime_service.dart';
 import 'source_health_service.dart';
+import 'source_login_state_service.dart';
 import 'source_runtime_diagnostic_execution_container.dart';
 import 'source_runtime_execution_policy_service.dart';
 import 'source_runtime_warm_state_service.dart';
@@ -61,6 +63,7 @@ class SourceRuntimeFacade {
     SourceHealthService? sourceHealthService,
     SourceRuntimeExecutionPolicyService? executionPolicyService,
     SourceRuntimeWarmStateService? warmStateService,
+    SourceLoginStateService? sourceLoginStateService,
     AppLogger? logger,
     Uuid? uuid,
   }) : _scriptSourceRepository = scriptSourceRepository,
@@ -75,6 +78,8 @@ class SourceRuntimeFacade {
            SourceRuntimeExecutionPolicyService.instance,
        _warmStateService =
            warmStateService ?? SourceRuntimeWarmStateService.instance,
+       _sourceLoginStateService =
+           sourceLoginStateService ?? SourceLoginStateService(),
        _logger = logger ?? AppLogger.instance,
        _uuid = uuid ?? const Uuid();
 
@@ -84,6 +89,7 @@ class SourceRuntimeFacade {
   final SourceHealthService _sourceHealthService;
   final SourceRuntimeExecutionPolicyService _executionPolicyService;
   final SourceRuntimeWarmStateService _warmStateService;
+  final SourceLoginStateService _sourceLoginStateService;
   final AppLogger _logger;
   final Uuid _uuid;
 
@@ -276,6 +282,8 @@ class SourceRuntimeFacade {
   Future<void> deleteScriptSource(String id) async {
     _warmStateService.clearSource(id);
     await _scriptSourceRepository.deleteById(id);
+    await _sourceLoginStateService.removeSourceLoginState(id);
+    await _sourceLoginStateService.removeBookCustomStatesForSource(id);
     _scriptRuntimeService.removeRegisteredSource(id);
   }
 
@@ -329,6 +337,13 @@ class SourceRuntimeFacade {
 
   RegisteredSource? registeredScriptSourceById(String sourceId) {
     return _scriptRuntimeService.sourceById(sourceId);
+  }
+
+  SourceRuntimeContext createRuntimeContext(
+    RegisteredSource source, {
+    SourceUiContext ui = const SourceUiContext(),
+  }) {
+    return _scriptRuntimeService.createContext(source, ui: ui);
   }
 
   Future<RegisteredSource?> ensureRegisteredScriptSourceById(

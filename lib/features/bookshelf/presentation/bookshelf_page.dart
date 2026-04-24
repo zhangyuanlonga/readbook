@@ -15,7 +15,9 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../data/repositories/book_metadata_override_repository_impl.dart';
 import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -24,6 +26,7 @@ import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
+import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
@@ -33,6 +36,7 @@ import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/application/book_detail_service.dart';
+import '../../book/application/custom_cover_storage_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
@@ -50,7 +54,13 @@ import 'widgets/bookshelf_page_sections.dart';
 
 enum _BookshelfFilter { all, local, novel, manga, custom }
 
-enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
+enum _BookshelfMoreAction {
+  selectBooks,
+  batchEditCover,
+  sortBooks,
+  settings,
+  importLocal,
+}
 
 enum _BookshelfSortMode {
   defaultOrder,
@@ -64,6 +74,43 @@ enum _BookshelfSortMode {
 enum _BookshelfViewKind { base, tag, category }
 
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
+
+enum _BookshelfBatchAction { delete, updateCover }
+
+class _BookshelfSelectionState {
+  const _BookshelfSelectionState({
+    this.enabled = false,
+    this.selectedKeys = const <String>{},
+    this.activeAction,
+  });
+
+  final bool enabled;
+  final Set<String> selectedKeys;
+  final _BookshelfBatchAction? activeAction;
+
+  bool get isBusy => activeAction != null;
+  bool get isDeleting => activeAction == _BookshelfBatchAction.delete;
+  bool get isUpdatingCover => activeAction == _BookshelfBatchAction.updateCover;
+  int get selectedCount => selectedKeys.length;
+
+  _BookshelfSelectionState copyWith({
+    bool? enabled,
+    Set<String>? selectedKeys,
+    bool clearSelectedKeys = false,
+    _BookshelfBatchAction? activeAction,
+    bool clearActiveAction = false,
+  }) {
+    return _BookshelfSelectionState(
+      enabled: enabled ?? this.enabled,
+      selectedKeys:
+          clearSelectedKeys
+              ? const <String>{}
+              : Set<String>.unmodifiable(selectedKeys ?? this.selectedKeys),
+      activeAction:
+          clearActiveAction ? null : (activeAction ?? this.activeAction),
+    );
+  }
+}
 
 List<String> mergeBookshelfTaxonomyNames({
   required Map<String, int> counts,
@@ -220,6 +267,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final LocalBookRepositoryImpl _localBookRepository = LocalBookRepositoryImpl(
     AppDatabase.instance,
   );
+  final BookMetadataOverrideRepository _bookMetadataOverrideRepository =
+      BookMetadataOverrideRepositoryImpl(AppDatabase.instance);
+  final ImageSelectionService _imageSelectionService = ImageSelectionService();
+  final CustomCoverStorageService _customCoverStorageService =
+      const CustomCoverStorageService();
   final AnnouncementService _announcementService = AnnouncementService();
   final AnnouncementReadStateService _announcementReadStateService =
       AnnouncementReadStateService();
@@ -284,10 +336,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   String? _openingBookId;
   String? _loadErrorText;
   bool _isConsumingExternalImportPayloads = false;
-  bool _isSelectionMode = false;
-  bool _isBatchDeleting = false;
   bool _isImportingLocal = false;
-  final Set<String> _selectedBookKeys = <String>{};
+  _BookshelfSelectionState _selectionState = const _BookshelfSelectionState();
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
   RouteInformationProvider? _routeInformationProvider;
@@ -462,7 +512,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 : _buildBookshelfViewTitle(),
         actions: [
           if (_isSelectionMode)
-            if (_isBatchDeleting)
+            if (_isBatchDeleting || _isBatchUpdatingCovers)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
                 child: Center(
@@ -507,6 +557,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           Icon(Icons.checklist_rounded, size: 18),
                           SizedBox(width: 10),
                           Text('选择书籍'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<_BookshelfMoreAction>(
+                      value: _BookshelfMoreAction.batchEditCover,
+                      enabled: !_isLoading && _filteredBooks.isNotEmpty,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.collections_outlined, size: 18),
+                          SizedBox(width: 10),
+                          Text('批量修改封面'),
                         ],
                       ),
                     ),
@@ -617,6 +678,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         navigationBottomInset + _kContinueReadingDockGap + platformExtraGap,
     };
   }
+
+  bool get _isSelectionMode => _selectionState.enabled;
+
+  bool get _isBatchDeleting => _selectionState.isDeleting;
+
+  bool get _isBatchUpdatingCovers => _selectionState.isUpdatingCover;
+
+  Set<String> get _selectedBookKeys => _selectionState.selectedKeys;
 
   @override
   bool get wantKeepAlive => true;
@@ -894,6 +963,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     switch (action) {
       case _BookshelfMoreAction.selectBooks:
         _startSelectionMode();
+        break;
+      case _BookshelfMoreAction.batchEditCover:
+        _startSelectionMode();
+        if (_isSelectionMode) {
+          _showMessage('已进入选择模式，选择书籍后点击底部“修改封面”。');
+        }
         break;
       case _BookshelfMoreAction.sortBooks:
         unawaited(_showSortModeSheet());
@@ -2625,6 +2700,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }) {
     final palette = _resolvedPalette(context);
     final selectedCount = _selectedBookKeys.length;
+    final isSelectionActionBusy = _isBatchDeleting || _isBatchUpdatingCovers;
 
     return SafeArea(
       top: false,
@@ -2673,7 +2749,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed:
-                            _isBatchDeleting || filteredBooks.isEmpty
+                            isSelectionActionBusy || filteredBooks.isEmpty
                                 ? null
                                 : _selectAllBooks,
                         style: OutlinedButton.styleFrom(
@@ -2688,9 +2764,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ),
                     const SizedBox(width: 10),
                     Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed:
+                            isSelectionActionBusy || _selectedBookKeys.isEmpty
+                                ? null
+                                : _editSelectedBooksCover,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 42),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.image_outlined),
+                        label: const Text('修改封面'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: FilledButton.icon(
                         onPressed:
-                            _isBatchDeleting || _selectedBookKeys.isEmpty
+                            isSelectionActionBusy || _selectedBookKeys.isEmpty
                                 ? null
                                 : _deleteSelectedBooks,
                         style: FilledButton.styleFrom(
@@ -3640,8 +3733,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     setState(() {
       _activeView = view;
       if (_isSelectionMode) {
-        _isSelectionMode = false;
-        _selectedBookKeys.clear();
+        _clearSelectionState();
       }
     });
     unawaited(_persistViewSelection(view));
@@ -3726,6 +3818,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return file.existsSync();
   }
 
+  void _updateSelectionState(_BookshelfSelectionState nextState) {
+    _selectionState = nextState;
+  }
+
+  void _clearSelectionState() {
+    _updateSelectionState(const _BookshelfSelectionState());
+  }
+
+  void _setSelectionEnabled(bool enabled, {Set<String>? selectedKeys}) {
+    _updateSelectionState(
+      _selectionState.copyWith(
+        enabled: enabled,
+        selectedKeys: selectedKeys,
+        clearSelectedKeys: !enabled && selectedKeys == null,
+        clearActiveAction: !enabled,
+      ),
+    );
+  }
+
+  void _setSelectionAction(_BookshelfBatchAction? action) {
+    _updateSelectionState(
+      _selectionState.copyWith(
+        activeAction: action,
+        clearActiveAction: action == null,
+      ),
+    );
+  }
+
   void _ensureFilterStillValid() {
     if ((_activeView.isTag || _activeView.isCategory) &&
         !_bookshelfMetadataReady) {
@@ -3742,64 +3862,57 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (shouldReset) {
       _activeView = const _BookshelfViewSelection.base(_BookshelfFilter.all);
       if (_isSelectionMode) {
-        _isSelectionMode = false;
-        _selectedBookKeys.clear();
+        _clearSelectionState();
       }
     }
   }
 
   void _startSelectionMode() {
-    if (_isBatchDeleting || _filteredBooks.isEmpty) {
+    if (_isBatchDeleting || _isBatchUpdatingCovers || _filteredBooks.isEmpty) {
       return;
     }
-    setState(() {
-      _isSelectionMode = true;
-      _selectedBookKeys.clear();
-    });
+    setState(() => _setSelectionEnabled(true, selectedKeys: const <String>{}));
   }
 
   void _toggleBookSelection(BookshelfBook book) {
-    if (!_isSelectionMode || _isBatchDeleting) {
+    if (!_isSelectionMode || _isBatchDeleting || _isBatchUpdatingCovers) {
       return;
     }
 
     final key = _bookKey(book);
     setState(() {
-      if (_selectedBookKeys.contains(key)) {
-        _selectedBookKeys.remove(key);
+      final nextSelectedKeys = Set<String>.from(_selectedBookKeys);
+      if (nextSelectedKeys.contains(key)) {
+        nextSelectedKeys.remove(key);
       } else {
-        _selectedBookKeys.add(key);
+        nextSelectedKeys.add(key);
       }
-
-      if (_selectedBookKeys.isEmpty) {
-        _isSelectionMode = false;
-      }
+      _setSelectionEnabled(
+        nextSelectedKeys.isNotEmpty,
+        selectedKeys: nextSelectedKeys,
+      );
     });
   }
 
   void _selectAllBooks() {
     final visibleBooks = _filteredBooks;
-    if (visibleBooks.isEmpty || _isBatchDeleting) {
+    if (visibleBooks.isEmpty || _isBatchDeleting || _isBatchUpdatingCovers) {
       return;
     }
 
-    setState(() {
-      _isSelectionMode = true;
-      _selectedBookKeys
-        ..clear()
-        ..addAll(visibleBooks.map(_bookKey));
-    });
+    setState(
+      () => _setSelectionEnabled(
+        true,
+        selectedKeys: visibleBooks.map(_bookKey).toSet(),
+      ),
+    );
   }
 
   void _exitSelectionMode() {
-    if (_isBatchDeleting) {
+    if (_isBatchDeleting || _isBatchUpdatingCovers) {
       return;
     }
-
-    setState(() {
-      _isSelectionMode = false;
-      _selectedBookKeys.clear();
-    });
+    setState(_clearSelectionState);
   }
 
   void _syncSelectionWithBooks() {
@@ -3821,12 +3934,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     setState(() {
-      _selectedBookKeys
-        ..clear()
-        ..addAll(nextSelected);
-      if (_selectedBookKeys.isEmpty) {
-        _isSelectionMode = false;
-      }
+      _setSelectionEnabled(nextSelected.isNotEmpty, selectedKeys: nextSelected);
     });
   }
 
@@ -3858,7 +3966,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       exitSelectionMode: true,
     );
     setState(() {
-      _isBatchDeleting = true;
+      _setSelectionAction(_BookshelfBatchAction.delete);
     });
 
     var removedCount = 0;
@@ -3881,9 +3989,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     setState(() {
-      _isBatchDeleting = false;
-      _isSelectionMode = false;
-      _selectedBookKeys.clear();
+      _clearSelectionState();
     });
 
     if (failureCount > 0) {
@@ -3891,6 +3997,141 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
     _showMessage('已删除 $removedCount 本书。');
+  }
+
+  Future<void> _editSelectedBooksCover() async {
+    if (_selectedBookKeys.isEmpty ||
+        _isBatchDeleting ||
+        _isBatchUpdatingCovers) {
+      return;
+    }
+
+    final selected = _books
+        .where((book) => _selectedBookKeys.contains(_bookKey(book)))
+        .toList(growable: false);
+    if (selected.isEmpty) {
+      _exitSelectionMode();
+      return;
+    }
+
+    try {
+      final pickedImages = await _imageSelectionService.pickImages(
+        confirmButtonText: '选择封面',
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+      );
+      if (!mounted || pickedImages.isEmpty) {
+        return;
+      }
+      if (pickedImages.length != 1 && pickedImages.length != selected.length) {
+        _showMessage('请选择 1 张封面，或选择与书籍数量一致的封面。');
+        return;
+      }
+
+      setState(() {
+        _setSelectionAction(_BookshelfBatchAction.updateCover);
+      });
+
+      var successCount = 0;
+      var failureCount = 0;
+      for (var index = 0; index < selected.length; index += 1) {
+        final book = selected[index];
+        final picked =
+            pickedImages.length == 1 ? pickedImages.first : pickedImages[index];
+        try {
+          await _applyCustomCoverToBook(book: book, picked: picked);
+          successCount += 1;
+        } catch (_) {
+          failureCount += 1;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _clearSelectionState();
+      });
+      if (failureCount > 0) {
+        _showMessage('已更新 $successCount 本封面，失败 $failureCount 本。');
+        return;
+      }
+      _showMessage('已更新 $successCount 本书的封面。');
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
+    } finally {
+      if (mounted && _isBatchUpdatingCovers) {
+        setState(() => _setSelectionAction(null));
+      }
+    }
+  }
+
+  Future<void> _applyCustomCoverToBook({
+    required BookshelfBook book,
+    required PickedImageData picked,
+  }) async {
+    final storedCoverUri = await _customCoverStorageService.persistForBook(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      picked: picked,
+    );
+    if (storedCoverUri == null) {
+      throw StateError('custom cover persist failed');
+    }
+    final coverPath = storedCoverUri.toFilePath();
+
+    if (book.sourceId == _kLocalBookSourceId) {
+      final existingLocalBook =
+          _localBooksById[book.bookId.trim()] ??
+          await _localBookRepository.getBookById(book.bookId.trim());
+      if (existingLocalBook == null) {
+        throw StateError('local book not found');
+      }
+      final updatedLocalBook = existingLocalBook.copyWith(
+        coverPath: coverPath,
+        clearCoverPath: false,
+        updatedAt: DateTime.now(),
+      );
+      await _localBookRepository.upsertBook(updatedLocalBook);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _localBooksById = Map<String, LocalBook>.from(_localBooksById)
+          ..[updatedLocalBook.id.trim()] = updatedLocalBook;
+      });
+      return;
+    }
+
+    final targetKey = BookMetadataOverride.remoteTargetKey(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+    );
+    final existingOverride =
+        _metadataOverridesByTargetKey[targetKey] ??
+        await _bookMetadataOverrideRepository.getByRemoteBook(
+          sourceId: book.sourceId,
+          detailUrl: book.detailUrl,
+        );
+    final updatedOverride =
+        existingOverride?.copyWith(
+          coverPath: coverPath,
+          clearCoverPath: false,
+          updatedAt: DateTime.now(),
+        ) ??
+        BookMetadataOverride.forRemote(
+          sourceId: book.sourceId,
+          detailUrl: book.detailUrl,
+          coverPath: coverPath,
+        );
+    await _bookMetadataOverrideRepository.upsert(updatedOverride);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _metadataOverridesByTargetKey = Map<String, BookMetadataOverride>.from(
+        _metadataOverridesByTargetKey,
+      )..[updatedOverride.targetKey] = updatedOverride;
+    });
   }
 
   void _removeBooksFromLocalState(
@@ -3951,14 +4192,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           (entry) => !removedLocalIds.contains(entry.key),
         ),
       );
+      final nextSelectedKeys = Set<String>.from(_selectedBookKeys);
       if (clearSelection) {
-        _selectedBookKeys.clear();
+        nextSelectedKeys.clear();
       } else {
-        _selectedBookKeys.removeWhere(removedKeys.contains);
+        nextSelectedKeys.removeWhere(removedKeys.contains);
       }
-      if (exitSelectionMode || _selectedBookKeys.isEmpty) {
-        _isSelectionMode = false;
-      }
+      _setSelectionEnabled(
+        !(exitSelectionMode || nextSelectedKeys.isEmpty),
+        selectedKeys: nextSelectedKeys,
+      );
       if (_continueReadingRecord != null &&
           removedRecordKeys.contains(
             '${_continueReadingRecord!.bookId.trim()}::${_continueReadingRecord!.sourceId.trim()}::${_continueReadingRecord!.detailUrl.trim()}',
@@ -5921,7 +6164,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       bookId: book.bookId,
       byScene: SourceRuntimeConflictScene.detail,
     );
-    if (_isBatchDeleting) {
+    if (_isBatchDeleting || _isBatchUpdatingCovers) {
       return;
     }
 

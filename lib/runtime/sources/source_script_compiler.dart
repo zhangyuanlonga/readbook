@@ -147,6 +147,42 @@ class SourceScriptCompiler {
         );
         return _decodeContent(result, fallbackSourceId: ctx.source.id);
       },
+      supportsLogin:
+          inspection.hasLogin ||
+          inspection.hasLoginUi ||
+          inspection.hasLoginUrlProperty,
+      loginUi:
+          inspection.hasLoginUi || inspection.hasLoginUrlProperty
+              ? (
+                SourceRuntimeContext ctx,
+                Map<String, String> formData, {
+                Book? book,
+                Chapter? chapter,
+              }) async => await runner.runLoginUi(
+                ctx: ctx,
+                formData: formData,
+                book: book,
+                chapter: chapter,
+              )
+              : null,
+      loginAction:
+          inspection.hasLogin || inspection.hasLoginUrlProperty
+              ? (
+                SourceRuntimeContext ctx,
+                Map<String, String> formData, {
+                Book? book,
+                Chapter? chapter,
+                String? actionCode,
+                bool isLongClick = false,
+              }) async => await runner.runLoginAction(
+                ctx: ctx,
+                formData: formData,
+                book: book,
+                chapter: chapter,
+                actionCode: actionCode,
+                isLongClick: isLongClick,
+              )
+              : null,
       dispose: runner.dispose,
     );
   }
@@ -181,6 +217,9 @@ const __inspection = {
   hasDetail: typeof __source?.detail === 'function',
   hasChapters: typeof __source?.chapters === 'function',
   hasContent: typeof __source?.content === 'function',
+  hasLogin: typeof __source?.login === 'function',
+  hasLoginUi: typeof __source?.loginUi !== 'undefined',
+  hasLoginUrlProperty: typeof __source?.loginUrl !== 'undefined',
 };
 return globalThis.__appreadEncodeHostSuccess(__inspection);
 ''');
@@ -311,6 +350,7 @@ class SourceScriptDebugService {
     final runner = _SourceScriptRunner(
       _buildDebugWrappedSource(sourceCode, trimmedCommand),
     );
+    final sourceLogin = SourceLoginContext(sourceId: runtimeId);
     final context = SourceRuntimeContext(
       source: const SourceRuntimeInfo(
         id: '__script_debug__',
@@ -328,7 +368,10 @@ class SourceScriptDebugService {
           description: '',
         ),
         browserRuntime: _browserRuntime,
+        sourceLogin: sourceLogin,
       ),
+      sourceLogin: sourceLogin,
+      bookState: SourceBookStateContext(),
       browser: SourceBrowserContext(
         browserRuntime: _browserRuntime,
         session: session,
@@ -342,6 +385,7 @@ class SourceScriptDebugService {
       session: session,
       utils: SourceUtilsContext(),
       crypto: SourceCryptoContext(),
+      ui: const SourceUiContext(),
       log: (String message) {
         appendDebugLog(session, message: message);
         logs.add(
@@ -463,10 +507,19 @@ class _SourceScriptRunner {
         final result = await runtime.runSnippet('''
 const __ctx = globalThis.__createSourceCtx(${jsonEncode(_sourceInfoToMap(ctx.source))});
 const __source = globalThis.__sourceDefinition;
+const __currentBook =
+  '$methodName' === 'detail' || '$methodName' === 'chapters' || '$methodName' === 'content'
+    ? (${jsonEncode(args)}[0] ?? null)
+    : null;
+const __currentChapter = '$methodName' === 'content' ? (${jsonEncode(args)}[1] ?? null) : null;
 ctx = __ctx;
 source = __source;
+book = __currentBook;
+chapter = __currentChapter;
 globalThis.ctx = __ctx;
 globalThis.source = __source;
+globalThis.book = __currentBook;
+globalThis.chapter = __currentChapter;
 const __args = ${jsonEncode(args)};
 const __fn = __source?.['$methodName'];
 if (typeof __fn !== 'function') {
@@ -480,8 +533,12 @@ try {
 } finally {
   ctx = undefined;
   source = undefined;
+  book = undefined;
+  chapter = undefined;
   globalThis.ctx = undefined;
   globalThis.source = undefined;
+  globalThis.book = undefined;
+  globalThis.chapter = undefined;
 }
 ''');
 
@@ -612,6 +669,81 @@ try {
       return <String, Object?>{'ok': true};
     });
     runtime.registerBridge('__ctx_session_cookies', (_) => ctx.session.cookies);
+    runtime.registerBridge('__ctx_source_login_get_header', (_) async {
+      return await ctx.sourceLogin.getHeader();
+    });
+    runtime.registerBridge('__ctx_source_login_get_header_map', (_) async {
+      return await ctx.sourceLogin.getHeaderMap();
+    });
+    runtime.registerBridge('__ctx_source_login_put_header', (
+      dynamic args,
+    ) async {
+      final payload = _asMap(args);
+      await ctx.sourceLogin.putHeader(payload['value']?.toString() ?? '');
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_source_login_remove_header', (_) async {
+      await ctx.sourceLogin.removeHeader();
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_source_login_get_info', (_) async {
+      return await ctx.sourceLogin.getInfo();
+    });
+    runtime.registerBridge('__ctx_source_login_get_info_map', (_) async {
+      return await ctx.sourceLogin.getInfoMap();
+    });
+    runtime.registerBridge('__ctx_source_login_put_info', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.sourceLogin.putInfo(payload['value']?.toString() ?? '');
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_source_login_remove_info', (_) async {
+      await ctx.sourceLogin.removeInfo();
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_source_login_get_variable', (_) async {
+      return await ctx.sourceLogin.getVariable();
+    });
+    runtime.registerBridge('__ctx_source_login_set_variable', (
+      dynamic args,
+    ) async {
+      final payload = _asMap(args);
+      await ctx.sourceLogin.setVariable(payload['value']?.toString() ?? '');
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_source_login_remove_variable', (_) async {
+      await ctx.sourceLogin.removeVariable();
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_book_state_get_custom', (dynamic args) async {
+      final payload = _asMap(args);
+      return await ctx.bookState.getCustom(
+        bookId: payload['bookId']?.toString() ?? '',
+        sourceId: payload['sourceId']?.toString() ?? ctx.source.id,
+        detailUrl: payload['detailUrl']?.toString() ?? '',
+      );
+    });
+    runtime.registerBridge('__ctx_book_state_set_custom', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.bookState.setCustom(
+        bookId: payload['bookId']?.toString() ?? '',
+        sourceId: payload['sourceId']?.toString() ?? ctx.source.id,
+        detailUrl: payload['detailUrl']?.toString() ?? '',
+        value: payload['value']?.toString() ?? '',
+      );
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_book_state_clear_custom', (
+      dynamic args,
+    ) async {
+      final payload = _asMap(args);
+      await ctx.bookState.clearCustom(
+        bookId: payload['bookId']?.toString() ?? '',
+        sourceId: payload['sourceId']?.toString() ?? ctx.source.id,
+        detailUrl: payload['detailUrl']?.toString() ?? '',
+      );
+      return <String, Object?>{'ok': true};
+    });
     runtime.registerBridge('__ctx_cookie_get', (dynamic args) {
       final payload = _asMap(args);
       return ctx.cookie.get(payload['name']?.toString() ?? '');
@@ -848,6 +980,60 @@ try {
     });
     runtime.registerBridge('__ctx_utils_get_user_id', (_) async {
       return await ctx.utils.getUserId();
+    });
+    runtime.registerBridge('__ctx_ui_toast', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.ui.toast(payload['message']?.toString() ?? '');
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_ui_long_toast', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.ui.longToast(payload['message']?.toString() ?? '');
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_ui_open_url', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.ui.openUrl(
+        url: payload['url']?.toString() ?? '',
+        title: payload['title']?.toString(),
+      );
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_ui_confirm', (dynamic args) async {
+      final payload = _asMap(args);
+      return await ctx.ui.confirm(
+        message: payload['message']?.toString() ?? '',
+        title: payload['title']?.toString(),
+        confirmText: payload['confirmText']?.toString(),
+        cancelText: payload['cancelText']?.toString(),
+      );
+    });
+    runtime.registerBridge('__ctx_ui_prompt', (dynamic args) async {
+      final payload = _asMap(args);
+      return await ctx.ui.prompt(
+        message: payload['message']?.toString() ?? '',
+        title: payload['title']?.toString(),
+        initialValue: payload['initialValue']?.toString(),
+        confirmText: payload['confirmText']?.toString(),
+        cancelText: payload['cancelText']?.toString(),
+        obscureText: payload['obscureText'] == true,
+      );
+    });
+    runtime.registerBridge('__ctx_ui_open_browser_await', (dynamic args) async {
+      final payload = _asMap(args);
+      return await ctx.ui.openBrowserAwait(
+        url: payload['url']?.toString() ?? '',
+        title: payload['title']?.toString(),
+        refetchAfterSuccess: payload['refetchAfterSuccess'] != false,
+      );
+    });
+    runtime.registerBridge('__ctx_ui_get_verification_code', (
+      dynamic args,
+    ) async {
+      final payload = _asMap(args);
+      return await ctx.ui.getVerificationCode(
+        payload['imageUrl']?.toString() ?? '',
+      );
     });
     runtime.registerBridge('__ctx_crypto_md5', (dynamic args) {
       final payload = _asMap(args);
@@ -1135,6 +1321,134 @@ try {
     await run(methodName: methodName, ctx: ctx, args: args);
   }
 
+  Future<Object?> runLoginUi({
+    required SourceRuntimeContext ctx,
+    required Map<String, String> formData,
+    Book? book,
+    Chapter? chapter,
+  }) {
+    return _runCustomSnippet(
+      ctx: ctx,
+      methodName: '__login_ui__',
+      formData: formData,
+      book: book,
+      chapter: chapter,
+      body: '''
+let __rawResult = null;
+if (typeof __source?.loginUi === 'function') {
+  __rawResult = await __source.loginUi.apply(__source, [__ctx, __result, __currentBook, __currentChapter]);
+} else {
+  const __loginUiValue = __source?.loginUi;
+  const __script = __resolveScriptProperty(__loginUiValue);
+  if (__script != null) {
+    __rawResult = await __runPropertyScript(__script, __result, __currentBook, __currentChapter, false);
+  } else {
+    __rawResult = __loginUiValue;
+  }
+}
+return globalThis.__appreadEncodeHostSuccess(__rawResult, '__login_ui__');
+''',
+    );
+  }
+
+  Future<Object?> runLoginAction({
+    required SourceRuntimeContext ctx,
+    required Map<String, String> formData,
+    Book? book,
+    Chapter? chapter,
+    String? actionCode,
+    required bool isLongClick,
+  }) {
+    final encodedActionCode = jsonEncode(actionCode);
+    return _runCustomSnippet(
+      ctx: ctx,
+      methodName: '__login_action__',
+      formData: formData,
+      book: book,
+      chapter: chapter,
+      body: '''
+const __actionCode = $encodedActionCode;
+let __rawResult = null;
+if (__actionCode != null && __actionCode !== '') {
+  __rawResult = await __runPropertyScript(__actionCode, __result, __currentBook, __currentChapter, ${isLongClick ? 'true' : 'false'});
+} else if (typeof __source?.login === 'function') {
+  __rawResult = await __source.login.apply(__source, [__ctx, __result, __currentBook, __currentChapter]);
+} else {
+  const __loginUrlValue = __source?.loginUrl;
+  const __script = __resolveScriptProperty(__loginUrlValue);
+  if (__script != null) {
+    __rawResult = await __runPropertyScript(__script, __result, __currentBook, __currentChapter, ${isLongClick ? 'true' : 'false'});
+    if (typeof login === 'function') {
+      __rawResult = await login.apply(__source, [__ctx, __result, __currentBook, __currentChapter]);
+    }
+  } else {
+    __rawResult = __loginUrlValue;
+  }
+}
+return globalThis.__appreadEncodeHostSuccess(__rawResult, '__login_action__');
+''',
+    );
+  }
+
+  Future<Object?> _runCustomSnippet({
+    required SourceRuntimeContext ctx,
+    required String methodName,
+    required Map<String, String> formData,
+    required String body,
+    Book? book,
+    Chapter? chapter,
+  }) async {
+    final runtime = await _ensureRuntime();
+    final htmlHandleStore = _HtmlHandleStore();
+    _registerBridges(runtime, ctx, htmlHandleStore);
+    final encodedFormData = jsonEncode(formData);
+    final encodedBook = jsonEncode(book == null ? null : _bookToMap(book));
+    final encodedChapter = jsonEncode(
+      chapter == null ? null : _chapterToMap(chapter),
+    );
+    final result = await runtime.runSnippet('''
+const __ctx = globalThis.__createSourceCtx(${jsonEncode(_sourceInfoToMap(ctx.source))});
+const __source = globalThis.__sourceDefinition;
+const __result = $encodedFormData;
+const __currentBook = $encodedBook;
+const __currentChapter = $encodedChapter;
+ctx = __ctx;
+source = __source;
+book = __currentBook;
+chapter = __currentChapter;
+globalThis.ctx = __ctx;
+globalThis.source = __source;
+globalThis.book = __currentBook;
+globalThis.chapter = __currentChapter;
+try {
+  $body
+} catch (error) {
+  return globalThis.__appreadEncodeHostFailure(error);
+} finally {
+  ctx = undefined;
+  source = undefined;
+  book = undefined;
+  chapter = undefined;
+  globalThis.ctx = undefined;
+  globalThis.source = undefined;
+  globalThis.book = undefined;
+  globalThis.chapter = undefined;
+}
+''');
+
+    if (result.isError) {
+      throw SourceScriptCompileException(result.output);
+    }
+    final envelope = _decodeRuntimeEnvelope(result.output);
+    if (envelope != null) {
+      if (!envelope.ok) {
+        throw SourceScriptCompileException(envelope.error ?? '脚本执行失败。');
+      }
+      return envelope.value;
+    }
+    return _decodePossiblyNestedDynamic(result.output);
+  }
+
   void dispose() {
     _runtime?.dispose();
     _runtime = null;
@@ -1152,6 +1466,9 @@ class _SourceInspection {
     required this.hasDetail,
     required this.hasChapters,
     required this.hasContent,
+    required this.hasLogin,
+    required this.hasLoginUi,
+    required this.hasLoginUrlProperty,
   });
 
   final Map<String, dynamic> meta;
@@ -1162,6 +1479,9 @@ class _SourceInspection {
   final bool hasDetail;
   final bool hasChapters;
   final bool hasContent;
+  final bool hasLogin;
+  final bool hasLoginUi;
+  final bool hasLoginUrlProperty;
 
   factory _SourceInspection.fromMap(Map<String, dynamic> map) {
     return _SourceInspection(
@@ -1173,6 +1493,9 @@ class _SourceInspection {
       hasDetail: map['hasDetail'] == true,
       hasChapters: map['hasChapters'] == true,
       hasContent: map['hasContent'] == true,
+      hasLogin: map['hasLogin'] == true,
+      hasLoginUi: map['hasLoginUi'] == true,
+      hasLoginUrlProperty: map['hasLoginUrlProperty'] == true,
     );
   }
 }
@@ -1657,6 +1980,8 @@ Map<String, Object?> _chapterToMap(Chapter chapter) {
 const String _sourceRuntimeBootstrap = r'''
 var ctx = undefined;
 var source = undefined;
+var book = undefined;
+var chapter = undefined;
 
 (function() {
   const __appreadOmit = Symbol('appread.omit');
@@ -1853,6 +2178,218 @@ var source = undefined;
 
   function hostCall(channel, payload) {
     return sendMessage(channel, encodePayload(payload));
+  }
+
+  function __resolveScriptProperty(value) {
+    if (typeof value !== 'string') {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (trimmed.startsWith('@js:')) {
+      return trimmed.slice(4);
+    }
+    if (trimmed.startsWith('<js>')) {
+      const endIndex = trimmed.lastIndexOf('<');
+      if (endIndex > 4) {
+        return trimmed.slice(4, endIndex);
+      }
+      return trimmed.slice(4);
+    }
+    return null;
+  }
+
+  async function __runPropertyScript(script, resultValue, currentBook, currentChapter, isLongClick = false) {
+    const __runner = new Function(
+      '__ctx',
+      '__source',
+      '__result',
+      '__book',
+      '__chapter',
+      '__isLongClick',
+      `
+        return (async function() {
+          var ctx = __ctx;
+          var source = __source;
+          var result = __result;
+          var book = __book;
+          var chapter = __chapter;
+          var isLongClick = __isLongClick;
+          ${script}
+          return typeof result === 'undefined' ? null : result;
+        }).call(__source);
+      `
+    );
+    return await __runner(globalThis.ctx, globalThis.source, resultValue, currentBook, currentChapter, isLongClick);
+  }
+
+  function normalizeBookIdentity(target) {
+    const sourceId =
+      String(
+        target?.sourceId ??
+        target?.extra?.sourceId ??
+        globalThis.ctx?.source?.id ??
+        ''
+      ).trim();
+    const detailUrl = String(target?.detailUrl ?? '').trim();
+    const fallbackBookIdentity =
+      String(
+        target?.title ??
+        target?.name ??
+        ''
+      ).trim();
+    const bookId = String(
+      target?.bookId ??
+      target?.extra?.bookId ??
+      target?.extra?.novelId ??
+      target?.extra?.book_id ??
+      (detailUrl !== '' ? detailUrl : fallbackBookIdentity)
+    ).trim();
+    return {
+      bookId,
+      sourceId,
+      detailUrl,
+    };
+  }
+
+  function parseJsonSafely(value, fallbackValue = null) {
+    if (value === null || value === undefined) {
+      return fallbackValue;
+    }
+    if (typeof value === 'object') {
+      return value;
+    }
+    const text = String(value).trim();
+    if (text === '') {
+      return fallbackValue;
+    }
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return fallbackValue;
+    }
+  }
+
+  function resolveFirstNonEmpty(values, options = {}) {
+    const trim = options.trim !== false;
+    const fallbackValue =
+      Object.prototype.hasOwnProperty.call(options, 'fallback')
+        ? options.fallback
+        : '';
+    const list = Array.isArray(values) ? values : [values];
+    for (const item of list) {
+      if (item === null || item === undefined) {
+        continue;
+      }
+      if (typeof item === 'string') {
+        const normalized = trim ? item.trim() : item;
+        if (normalized !== '') {
+          return normalized;
+        }
+        continue;
+      }
+      return item;
+    }
+    return fallbackValue;
+  }
+
+  function pickMapValue(value, keys, fallbackValue = null) {
+    const normalizedKeys = Array.isArray(keys) ? keys : [keys];
+    if (normalizedKeys.length === 0) {
+      return fallbackValue;
+    }
+    const candidate =
+      typeof value === 'string'
+        ? parseJsonSafely(value, fallbackValue)
+        : value;
+    if (!candidate || typeof candidate !== 'object') {
+      return fallbackValue;
+    }
+    const collected = [];
+    for (const key of normalizedKeys) {
+      if (key === null || key === undefined) {
+        continue;
+      }
+      const normalizedKey = String(key);
+      if (Object.prototype.hasOwnProperty.call(candidate, normalizedKey)) {
+        collected.push(candidate[normalizedKey]);
+      }
+    }
+    return resolveFirstNonEmpty(collected, { fallback: fallbackValue });
+  }
+
+  function normalizeTokenValue(value, options = {}) {
+    const fallbackValue =
+      Object.prototype.hasOwnProperty.call(options, 'fallback')
+        ? options.fallback
+        : '';
+    const raw = String(value ?? '').trim();
+    if (raw === '') {
+      return fallbackValue;
+    }
+    const withoutBearer = raw.replace(/^Bearer\s+/i, '').trim();
+    const normalized = withoutBearer.replace(/^token=/i, '').trim();
+    const pattern =
+      options.pattern instanceof RegExp
+        ? options.pattern
+        : /\d+_[a-z\d]{16,}/i;
+    const matched = normalized.match(pattern);
+    if (matched && matched[0]) {
+      return matched[0];
+    }
+    return normalized.split('&')[0].trim() || fallbackValue;
+  }
+
+  function runCryptoPipeline(cryptoApi, initialValue, steps) {
+    const pipeline = Array.isArray(steps) ? steps : [];
+    let current = initialValue;
+    for (const step of pipeline) {
+      if (!step || typeof step !== 'object') {
+        continue;
+      }
+      const method = String(step.method || '').trim();
+      if (method === '') {
+        continue;
+      }
+      const normalizedMethod =
+        method === '3desEncrypt'
+          ? 'tripleDesEncrypt'
+          : method === '3desDecrypt'
+            ? 'tripleDesDecrypt'
+            : method;
+      const options = Object.assign({}, step);
+      delete options.method;
+      switch (normalizedMethod) {
+        case 'hexEncode':
+        case 'hexDecode':
+        case 'base64Encode':
+        case 'base64Decode':
+        case 'md5':
+        case 'sha1':
+        case 'sha256':
+        case 'sha512':
+        case 'sm3':
+          current = cryptoApi[normalizedMethod](current, options);
+          break;
+        case 'aesEncrypt':
+        case 'aesDecrypt':
+        case 'desEncrypt':
+        case 'desDecrypt':
+        case 'rc4Encrypt':
+        case 'rc4Decrypt':
+        case 'tripleDesEncrypt':
+        case 'tripleDesDecrypt':
+        case 'symmetricEncrypt':
+        case 'symmetricDecrypt':
+          if (!Object.prototype.hasOwnProperty.call(options, 'data')) {
+            options.data = current;
+          }
+          current = cryptoApi[normalizedMethod](options);
+          break;
+        default:
+          throw new Error(`Unsupported crypto pipeline method: ${method}`);
+      }
+    }
+    return current;
   }
 
   globalThis.__appreadSafeStringify = safeStringify;
@@ -2294,6 +2831,239 @@ var source = undefined;
           return hostCall('__ctx_session_cookies', {});
         }
       },
+      sourceLogin: {
+        getHeader() {
+          return hostCall('__ctx_source_login_get_header', {});
+        },
+        getHeaderMap() {
+          return hostCall('__ctx_source_login_get_header_map', {});
+        },
+        putHeader(value) {
+          return hostCall('__ctx_source_login_put_header', { value });
+        },
+        removeHeader() {
+          return hostCall('__ctx_source_login_remove_header', {});
+        },
+        getInfo() {
+          return hostCall('__ctx_source_login_get_info', {});
+        },
+        getInfoMap() {
+          return hostCall('__ctx_source_login_get_info_map', {});
+        },
+        putInfo(value) {
+          return hostCall('__ctx_source_login_put_info', { value });
+        },
+        removeInfo() {
+          return hostCall('__ctx_source_login_remove_info', {});
+        },
+        async patchInfo(patch = {}) {
+          const current = await this.getInfoMap();
+          const nextPatch = typeof patch === 'string'
+            ? parseJsonSafely(patch, {})
+            : (patch || {});
+          const next = { ...current, ...nextPatch };
+          await this.putInfo(JSON.stringify(next));
+          return next;
+        },
+        getVariable() {
+          return hostCall('__ctx_source_login_get_variable', {});
+        },
+        async getVariableMap(fallbackValue = {}) {
+          return parseJsonSafely(await this.getVariable(), fallbackValue);
+        },
+        setVariable(value) {
+          return hostCall('__ctx_source_login_set_variable', { value });
+        },
+        async putVariable(key, value = null) {
+          if (arguments.length === 1 && typeof key === 'string' && key.trim().startsWith('{')) {
+            return this.setVariable(key);
+          }
+          const current = await this.getVariableMap({});
+          if (value === null || value === undefined || String(value).trim() === '') {
+            delete current[String(key)];
+          } else {
+            current[String(key)] = String(value);
+          }
+          const next = JSON.stringify(current);
+          await this.setVariable(next);
+          return current;
+        },
+        async getVariableValue(key, fallbackValue = '') {
+          const current = await this.getVariableMap({});
+          return resolveFirstNonEmpty([current[String(key)]], {
+            fallback: fallbackValue,
+          });
+        },
+        async patchVariable(patch = {}) {
+          const current = await this.getVariableMap({});
+          const nextPatch = typeof patch === 'string'
+            ? parseJsonSafely(patch, {})
+            : (patch || {});
+          const next = { ...current, ...nextPatch };
+          await this.setVariable(JSON.stringify(next));
+          return next;
+        },
+        removeVariable() {
+          return hostCall('__ctx_source_login_remove_variable', {});
+        },
+        async getField(name, options = {}) {
+          return this.getFirstField([name], options);
+        },
+        async getFirstField(names, options = {}) {
+          const normalizedNames = Array.isArray(names) ? names : [names];
+          const sources = Array.isArray(options.sources)
+            ? options.sources
+            : [options.source || 'info'];
+          const fallbackValue =
+            Object.prototype.hasOwnProperty.call(options, 'fallback')
+              ? options.fallback
+              : '';
+          const trim = options.trim !== false;
+          for (const sourceName of sources) {
+            let mapValue = {};
+            switch (String(sourceName || '').trim()) {
+              case 'header':
+                mapValue = await this.getHeaderMap();
+                break;
+              case 'info':
+                mapValue = await this.getInfoMap();
+                break;
+              case 'variable':
+                mapValue = await this.getVariableMap({});
+                break;
+              default:
+                mapValue = {};
+                break;
+            }
+            const picked = pickMapValue(mapValue, normalizedNames, undefined);
+            const resolved = resolveFirstNonEmpty(picked, {
+              trim,
+              fallback: undefined
+            });
+            if (resolved !== undefined && resolved !== null && resolved !== '') {
+              return resolved;
+            }
+          }
+          return fallbackValue;
+        },
+        async getToken(options = {}) {
+          const headerKeys = Array.isArray(options.headerKeys)
+            ? options.headerKeys
+            : ['token', 'Token', 'authorization', 'Authorization'];
+          const infoKeys = Array.isArray(options.infoKeys)
+            ? options.infoKeys
+            : ['token', 'Token'];
+          const variableKeys = Array.isArray(options.variableKeys)
+            ? options.variableKeys
+            : [];
+          const fallbackValue =
+            Object.prototype.hasOwnProperty.call(options, 'fallback')
+              ? options.fallback
+              : '';
+          const sources = Array.isArray(options.sources)
+            ? options.sources
+            : ['header', 'info', ...(variableKeys.length > 0 ? ['variable'] : [])];
+          const namesBySource = {
+            header: headerKeys,
+            info: infoKeys,
+            variable: variableKeys,
+          };
+          for (const sourceName of sources) {
+            const keys = namesBySource[sourceName] || [];
+            if (!Array.isArray(keys) || keys.length === 0) {
+              continue;
+            }
+            const rawValue = await this.getFirstField(keys, {
+              source: sourceName,
+              fallback: '',
+            });
+            const normalized = options.normalize === false
+              ? rawValue
+              : normalizeTokenValue(rawValue, options);
+            if (String(normalized ?? '').trim() !== '') {
+              return normalized;
+            }
+          }
+          return fallbackValue;
+        }
+      },
+      bookState: {
+        getCustom(target = globalThis.book) {
+          const identity = normalizeBookIdentity(target);
+          return hostCall('__ctx_book_state_get_custom', identity);
+        },
+        async getCustomMap(target = globalThis.book, fallbackValue = {}) {
+          return parseJsonSafely(await this.getCustom(target), fallbackValue);
+        },
+        setCustom(value, target = globalThis.book) {
+          const identity = normalizeBookIdentity(target);
+          return hostCall('__ctx_book_state_set_custom', {
+            ...identity,
+            value,
+          });
+        },
+        async putCustom(key, value = null, target = globalThis.book) {
+          if (arguments.length >= 2 && (typeof key !== 'string' || !String(key).trim().startsWith('{'))) {
+            const current = await this.getCustomMap(target, {});
+            if (value === null || value === undefined || String(value).trim() === '') {
+              delete current[String(key)];
+            } else {
+              current[String(key)] = String(value);
+            }
+            await this.setCustom(JSON.stringify(current), target);
+            return current;
+          }
+          return this.setCustom(key, target);
+        },
+        async getCustomValue(key, target = globalThis.book, fallbackValue = '') {
+          const current = await this.getCustomMap(target, {});
+          return resolveFirstNonEmpty([current[String(key)]], {
+            fallback: fallbackValue,
+          });
+        },
+        async patchCustom(patch = {}, target = globalThis.book) {
+          const current = await this.getCustomMap(target, {});
+          const nextPatch = typeof patch === 'string'
+            ? parseJsonSafely(patch, {})
+            : (patch || {});
+          const next = { ...current, ...nextPatch };
+          await this.setCustom(JSON.stringify(next), target);
+          return next;
+        },
+        clearCustom(target = globalThis.book) {
+          const identity = normalizeBookIdentity(target);
+          return hostCall('__ctx_book_state_clear_custom', identity);
+        }
+      },
+      ui: {
+        toast(message) {
+          return hostCall('__ctx_ui_toast', { message });
+        },
+        longToast(message) {
+          return hostCall('__ctx_ui_long_toast', { message });
+        },
+        openUrl(url, title = null) {
+          return hostCall('__ctx_ui_open_url', { url, title });
+        },
+        confirm(options = {}) {
+          if (typeof options === 'string') {
+            return hostCall('__ctx_ui_confirm', { message: options });
+          }
+          return hostCall('__ctx_ui_confirm', options || {});
+        },
+        prompt(options = {}) {
+          if (typeof options === 'string') {
+            return hostCall('__ctx_ui_prompt', { message: options });
+          }
+          return hostCall('__ctx_ui_prompt', options || {});
+        },
+        openBrowserAwait(options = {}) {
+          return hostCall('__ctx_ui_open_browser_await', options || {});
+        },
+        getVerificationCode(imageUrl) {
+          return hostCall('__ctx_ui_get_verification_code', { imageUrl });
+        }
+      },
       utils: {
         absoluteUrl(base, relative) {
           return hostCall('__ctx_utils_absolute_url', { base, relative });
@@ -2303,6 +3073,18 @@ var source = undefined;
         },
         pick(value, fallback) {
           return value ?? fallback;
+        },
+        firstNonEmpty(values, options = {}) {
+          return resolveFirstNonEmpty(values, options);
+        },
+        safeJsonParse(value, fallbackValue = null) {
+          return parseJsonSafely(value, fallbackValue);
+        },
+        pickField(value, keys, fallbackValue = null) {
+          return pickMapValue(value, keys, fallbackValue);
+        },
+        normalizeToken(value, options = {}) {
+          return normalizeTokenValue(value, options);
         },
         normalizeText(value) {
           return hostCall('__ctx_utils_normalize_text', { value });
@@ -2507,6 +3289,9 @@ var source = undefined;
           return hostCall('__ctx_crypto_timestamp', {
             unit: options.unit
           });
+        },
+        decryptPipeline(initialValue, steps = []) {
+          return runCryptoPipeline(this, initialValue, steps);
         },
         symmetricCrypto(key, iv, algorithm, data) {
           return createCryptoChain({

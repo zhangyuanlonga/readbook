@@ -1750,7 +1750,267 @@ const cookies = ctx.session.cookies();
 - `session` 更适合放“当前源是否还能继续执行”的状态
 - 减少重复请求的数据优先放 `cache`
 
-## 15. `ctx.utils`
+## 15. `ctx.sourceLogin`
+
+`ctx.sourceLogin` 用于读写书源登录态。它适合保存：
+
+- 登录头，例如 `token / authorization / cookie`
+- 登录表单信息
+- 书源级变量配置
+
+底层数据会按书源持久化，不依赖当前一次执行。
+
+### 15.1 原始读写方法
+
+支持：
+
+- `await ctx.sourceLogin.getHeader()`
+- `await ctx.sourceLogin.getHeaderMap()`
+- `await ctx.sourceLogin.putHeader(value)`
+- `await ctx.sourceLogin.removeHeader()`
+- `await ctx.sourceLogin.getInfo()`
+- `await ctx.sourceLogin.getInfoMap()`
+- `await ctx.sourceLogin.putInfo(value)`
+- `await ctx.sourceLogin.removeInfo()`
+- `await ctx.sourceLogin.getVariable()`
+- `await ctx.sourceLogin.getVariableMap(fallback?)`
+- `await ctx.sourceLogin.setVariable(value)`
+- `await ctx.sourceLogin.removeVariable()`
+
+示例：
+
+```js
+await ctx.sourceLogin.putHeader(JSON.stringify({
+  authorization: 'Bearer abc',
+}));
+
+await ctx.sourceLogin.putInfo(JSON.stringify({
+  '账号': 'demo@example.com',
+}));
+
+await ctx.sourceLogin.setVariable(JSON.stringify({
+  tab: '小说',
+}));
+
+const headerMap = await ctx.sourceLogin.getHeaderMap();
+const infoMap = await ctx.sourceLogin.getInfoMap();
+const variableMap = await ctx.sourceLogin.getVariableMap({});
+```
+
+### 15.2 便捷查询方法
+
+支持：
+
+- `await ctx.sourceLogin.getField(name, options?)`
+- `await ctx.sourceLogin.getFirstField(names, options?)`
+- `await ctx.sourceLogin.getToken(options?)`
+- `await ctx.sourceLogin.patchInfo(patch)`
+- `await ctx.sourceLogin.putVariable(key, value?)`
+- `await ctx.sourceLogin.getVariableValue(key, fallback?)`
+- `await ctx.sourceLogin.patchVariable(patch)`
+
+#### 方法：`ctx.sourceLogin.getField(name, options?)`
+
+从指定登录态来源里取单个字段。
+
+```js
+await ctx.sourceLogin.getField(name, options?)
+```
+
+参数：
+
+- `name`：字段名
+- `options.source`：默认 `info`，支持 `info / header / variable`
+- `options.fallback`：未命中时返回值，默认空字符串
+- `options.trim`：默认 `true`
+
+示例：
+
+```js
+const account = await ctx.sourceLogin.getField('账号');
+const token = await ctx.sourceLogin.getField('authorization', {
+  source: 'header',
+});
+```
+
+#### 方法：`ctx.sourceLogin.getFirstField(names, options?)`
+
+按顺序查找多个字段名，适合兼容旧源/新源不同命名。
+
+```js
+await ctx.sourceLogin.getFirstField(names, options?)
+```
+
+参数：
+
+- `names`：字符串数组
+- `options.sources`：默认 `['info']`，可传 `['header', 'info', 'variable']`
+- `options.fallback`
+- `options.trim`
+
+示例：
+
+```js
+const category = await ctx.sourceLogin.getFirstField(
+  ['分类', 'tab', 'channel'],
+  { sources: ['variable', 'info'] },
+);
+```
+
+#### 方法：`ctx.sourceLogin.getToken(options?)`
+
+按常见 token 字段优先级自动读取并做标准化。
+
+```js
+await ctx.sourceLogin.getToken(options?)
+```
+
+默认行为：
+
+- 先查 header：`token / Token / authorization / Authorization`
+- 再查 info：`token / Token`
+- 去掉 `Bearer ` 前缀
+- 去掉 `token=` 前缀
+- 命中形如 `12345_xxx` 的 token 时优先返回匹配值
+
+参数：
+
+- `options.headerKeys`
+- `options.infoKeys`
+- `options.variableKeys`
+- `options.sources`
+- `options.normalize`：默认 `true`
+- `options.pattern`：自定义 token 正则
+- `options.fallback`
+
+示例：
+
+```js
+const token = await ctx.sourceLogin.getToken();
+
+const customToken = await ctx.sourceLogin.getToken({
+  headerKeys: ['x-access-token'],
+  infoKeys: ['登录Token'],
+  variableKeys: ['token'],
+});
+```
+
+#### 注意事项
+
+- `putHeader/putInfo/setVariable` 建议统一写 JSON 字符串
+- `getVariableMap()` 内部会自动 JSON 解析；解析失败时返回 fallback
+- `getToken()` 适合读 token，不适合直接读 cookie 全串
+- `patchInfo/patchVariable` 适合控制台源做增量更新
+- `putVariable(key, value)` 适合兼容阅读 MD3 风格的源变量写法
+
+### 15.3 增量更新与变量快捷方法
+
+#### 方法：`ctx.sourceLogin.patchInfo(patch)`
+
+合并更新登录表单信息。
+
+```js
+await ctx.sourceLogin.patchInfo({
+  '账号': 'demo@example.com',
+  '验证码': '1234',
+});
+```
+
+#### 方法：`ctx.sourceLogin.putVariable(key, value?)`
+
+按 key/value 写入单个源变量。
+
+```js
+await ctx.sourceLogin.putVariable('tab', '小说');
+await ctx.sourceLogin.putVariable('source_type', '男频');
+```
+
+当 `value` 为空字符串、`null` 或 `undefined` 时，会删除该键。
+
+#### 方法：`ctx.sourceLogin.getVariableValue(key, fallback?)`
+
+读取单个源变量。
+
+```js
+const tab = await ctx.sourceLogin.getVariableValue('tab', '小说');
+```
+
+#### 方法：`ctx.sourceLogin.patchVariable(patch)`
+
+合并更新源变量。
+
+```js
+await ctx.sourceLogin.patchVariable({
+  tab: '小说',
+  source_type: '男频',
+});
+```
+
+### 15.4 登录控制台常用字段类型
+
+当前登录面板支持：
+
+- `text`
+- `password`
+- `select`
+- `button`
+- `toggle`
+- `textarea`
+- `note`
+- `divider`
+
+说明：
+
+- `toggle` 适合开关类配置
+- `textarea` 适合多行说明、自定义规则输入
+- `note` 适合说明文字
+- `divider` 适合在复杂控制台里做分区标题
+
+字段还支持：
+
+- `action`
+- `viewName`
+- `style.layout_flexGrow`
+- `style.layout_flexBasisPercent`
+- `style.layout_justifySelf`
+
+### 15.5 `ctx.bookState`
+
+`ctx.bookState` 用于保存书级自定义状态，典型场景：
+
+- 章节正文模式
+- 购买开关
+- 段评参数
+- 某本书独有的用户配置
+
+支持：
+
+- `await ctx.bookState.getCustom(target?)`
+- `await ctx.bookState.getCustomMap(target?, fallback?)`
+- `await ctx.bookState.setCustom(value, target?)`
+- `await ctx.bookState.putCustom(key, value?, target?)`
+- `await ctx.bookState.getCustomValue(key, target?, fallback?)`
+- `await ctx.bookState.patchCustom(patch, target?)`
+- `await ctx.bookState.clearCustom(target?)`
+
+示例：
+
+```js
+await ctx.bookState.patchCustom(
+  { mode: 'vip', para: 'on' },
+  book,
+);
+
+const mode = await ctx.bookState.getCustomValue('mode', book, 'normal');
+```
+
+说明：
+
+- `target` 默认是当前 `book`
+- `putCustom(key, value)` 和 `patchCustom(...)` 更适合兼容阅读 MD3 中 `book.getVariable("custom")` 一类写法
+- 如果你本来就维护整串 JSON，也可以继续使用 `setCustom(...)`
+
+## 16. `ctx.utils`
 
 ### 方法：`ctx.utils.absoluteUrl(base, relative)`
 
@@ -1830,6 +2090,88 @@ ctx.utils.pick(value, fallback)
 
 ```js
 const title = ctx.utils.pick(ctx.html.text(doc.querySelector('.title')), '未知书名');
+```
+
+### 方法：`ctx.utils.firstNonEmpty(values, options?)`
+
+从数组里取第一个非空值。
+
+```js
+ctx.utils.firstNonEmpty(values, options?)
+```
+
+参数：
+
+- `values`：任意值数组
+- `options.trim`：默认 `true`
+- `options.fallback`：默认空字符串
+
+示例：
+
+```js
+const title = ctx.utils.firstNonEmpty([
+  item.title,
+  item.bookName,
+  item.name,
+  '未知书名',
+]);
+```
+
+### 方法：`ctx.utils.safeJsonParse(value, fallback?)`
+
+安全解析 JSON，解析失败时返回 fallback。
+
+```js
+ctx.utils.safeJsonParse(value, fallback?)
+```
+
+示例：
+
+```js
+const payload = ctx.utils.safeJsonParse(response.text, {});
+const config = ctx.utils.safeJsonParse(await ctx.sourceLogin.getVariable(), {
+  tab: '默认',
+});
+```
+
+### 方法：`ctx.utils.pickField(value, keys, fallback?)`
+
+从对象或 JSON 字符串中按顺序取第一个非空字段。
+
+```js
+ctx.utils.pickField(value, keys, fallback?)
+```
+
+示例：
+
+```js
+const cover = ctx.utils.pickField(item, [
+  'cover',
+  'coverUrl',
+  'pic',
+], '');
+```
+
+### 方法：`ctx.utils.normalizeToken(value, options?)`
+
+规范化 token 字符串，适合清洗表单输入或响应头值。
+
+```js
+ctx.utils.normalizeToken(value, options?)
+```
+
+默认行为：
+
+- 去掉 `Bearer `
+- 去掉 `token=`
+- 优先提取形如 `12345_xxx` 的 token
+
+示例：
+
+```js
+const token = ctx.utils.normalizeToken(
+  'Bearer token=39470278_53e7dd36e624ed3cda64ff5fe095a3da&foo=1',
+);
 ```
 
 ### 方法：`ctx.utils.normalizeText(text)`
@@ -2177,11 +2519,11 @@ const cacheKey = userId ? `feed:${userId}` : 'feed:guest';
 
 - 这是宿主用户 ID，不是目标站点用户 ID
 
-## 16. `ctx.crypto`
+## 17. `ctx.crypto`
 
 `ctx.crypto` 用于摘要、HMAC、加解密、签名验签、随机数、时间戳，以及签名常用的字节编码转换。
 
-### 16.1 编码与字节工具
+### 17.1 编码与字节工具
 
 这组能力里有两类来源：
 
@@ -2258,7 +2600,7 @@ const text = ctx.crypto.base64Decode('YWJj', { output: 'string' });
 const b64 = ctx.crypto.base64Encode(new Uint8Array([0x61, 0x62, 0x63]));
 ```
 
-### 16.2 摘要方法
+### 17.2 摘要方法
 
 支持：
 
@@ -2280,7 +2622,7 @@ const digestBase64 = ctx.crypto.sha256('hello', { outputEncoding: 'base64' });
 - `options.inputEncoding`：默认 `utf8`，也支持 `base64 / hex`
 - `options.outputEncoding`：默认 `hex`，也支持 `base64 / utf8`
 
-### 16.3 HMAC 方法
+### 17.3 HMAC 方法
 
 支持：
 
@@ -2301,7 +2643,7 @@ const signBytes = ctx.crypto.hexDecode(sign);
 - `options.keyEncoding`
 - `options.outputEncoding`
 
-### 16.4 对称加解密
+### 17.4 对称加解密
 
 支持：
 
@@ -2338,6 +2680,79 @@ const plain = ctx.crypto.aesDecrypt({
 });
 ```
 
+### 17.5 组合式解密流水线
+
+支持：
+
+- `ctx.crypto.decryptPipeline(initialValue, steps)`
+
+适合处理“多段解密/转码”的正文链路，例如：
+
+- Base64 -> DES
+- 响应头派生 key/iv -> DES -> 再解 `content`
+
+#### 签名
+
+```js
+ctx.crypto.decryptPipeline(initialValue, steps)
+```
+
+#### 步骤格式
+
+每个步骤使用：
+
+```js
+{ method: 'desDecrypt', ...options }
+```
+
+当前支持的 `method`：
+
+- `hexEncode`
+- `hexDecode`
+- `base64Encode`
+- `base64Decode`
+- `md5`
+- `sha1`
+- `sha256`
+- `sha512`
+- `sm3`
+- `aesEncrypt`
+- `aesDecrypt`
+- `desEncrypt`
+- `desDecrypt`
+- `tripleDesEncrypt`
+- `tripleDesDecrypt`
+- `rc4Encrypt`
+- `rc4Decrypt`
+- `symmetricEncrypt`
+- `symmetricDecrypt`
+
+说明：
+
+- 对于 `md5 / base64Decode` 这类方法，当前值会作为第一个参数传入
+- 对于 `desDecrypt / aesDecrypt` 这类方法，如果步骤里没写 `data`，会自动把当前值填入 `data`
+
+#### 示例
+
+```js
+const plain = ctx.crypto.decryptPipeline('YWJj', [
+  { method: 'base64Decode', output: 'string' },
+]);
+```
+
+```js
+const envelope = ctx.crypto.decryptPipeline(rawBody, [
+  {
+    method: 'desDecrypt',
+    key,
+    iv,
+    mode: 'cbc',
+    inputEncoding: 'base64',
+    outputEncoding: 'utf8',
+  },
+]);
+```
+
 通用算法示例：
 
 ```js
@@ -2359,7 +2774,7 @@ const encrypted = ctx.crypto
   .base64();
 ```
 
-### 16.5 非对称加解密与签名
+### 17.6 非对称加解密与签名
 
 支持：
 
@@ -2394,7 +2809,7 @@ const ok = ctx.crypto.rsaVerify({
 });
 ```
 
-### 16.6 随机数与时间
+### 17.7 随机数与时间
 
 支持：
 
@@ -2411,7 +2826,7 @@ const timestampMs = ctx.crypto.timestamp();
 const timestampSeconds = ctx.crypto.timestamp({ unit: 's' });
 ```
 
-### 16.7 使用建议
+### 17.8 使用建议
 
 - 字符串级编码转换可以用 `ctx.utils`
 - 涉及签名、异或、字节数组时优先用 `ctx.crypto.hexDecode/base64Decode`
@@ -2419,7 +2834,83 @@ const timestampSeconds = ctx.crypto.timestamp({ unit: 's' });
 - 算法由站点动态下发时，再考虑 `symmetricEncrypt/asymmetricEncrypt` 或链式 API
 - `symmetricCrypto / asymmetricCrypto` 属于链式 helper，也属于当前可直接使用的作者 API
 
-## 17. `ctx.log`
+## 18. `ctx.ui`
+
+`ctx.ui` 用于登录控制台和需要用户交互的脚本场景。
+
+支持：
+
+- `await ctx.ui.toast(message)`
+- `await ctx.ui.longToast(message)`
+- `await ctx.ui.openUrl(url, title?)`
+- `await ctx.ui.confirm(options)`
+- `await ctx.ui.prompt(options)`
+- `await ctx.ui.openBrowserAwait(options)`
+- `await ctx.ui.getVerificationCode(imageUrl)`
+
+### 18.1 方法：`ctx.ui.openUrl(url, title?)`
+
+打开页面，但不等待结果返回。
+
+```js
+await ctx.ui.openUrl('https://example.com/help', '帮助');
+```
+
+### 18.2 方法：`ctx.ui.confirm(options)`
+
+弹出确认框，返回 `true / false`。
+
+```js
+const ok = await ctx.ui.confirm({
+  title: '确认操作',
+  message: '确定清空当前设置吗？',
+  confirmText: '确认',
+  cancelText: '取消',
+});
+```
+
+### 18.3 方法：`ctx.ui.prompt(options)`
+
+弹出输入框，返回用户输入结果或 `null`。
+
+```js
+const token = await ctx.ui.prompt({
+  title: '输入 Token',
+  message: '请粘贴抓包 token',
+  initialValue: '',
+  confirmText: '确定',
+  cancelText: '返回',
+  obscureText: false,
+});
+```
+
+### 18.4 方法：`ctx.ui.openBrowserAwait(options)`
+
+使用宿主浏览器打开页面，并等待结果返回。
+
+```js
+const response = await ctx.ui.openBrowserAwait({
+  url: 'https://example.com/login',
+  title: '登录',
+  refetchAfterSuccess: true,
+});
+```
+
+### 18.5 方法：`ctx.ui.getVerificationCode(imageUrl)`
+
+打开验证码输入对话框并返回用户输入内容。
+
+```js
+const code = await ctx.ui.getVerificationCode('https://example.com/code.png');
+```
+
+#### 注意事项
+
+- `openUrl` 适合帮助页、注册页、充值页、后台页
+- `openBrowserAwait` 适合扫码登录、网页登录、验证页面
+- `confirm / prompt` 很适合登录控制台按钮动作
+
+## 19. `ctx.log`
 
 ### 方法：`ctx.log(message)`
 
@@ -2452,11 +2943,11 @@ ctx.log(`search keyword=${keyword}`);
 - 适合记录关键阶段信息
 - 不要在高频循环里无节制打印大量日志
 
-## 18. 标准对象
+## 20. 标准对象
 
 书源方法返回值必须尽量靠近标准对象结构。宿主会做一定兼容和归一化，但不要依赖宿主猜测字段。
 
-### 18.1 `DiscoverCategory`
+### 20.1 `DiscoverCategory`
 
 用于发现页分类，由 `discoverCategories(ctx)` 返回。
 
@@ -2484,7 +2975,7 @@ ctx.log(`search keyword=${keyword}`);
 - 宿主会兼容读取 `name / label` 作为标题、`href / link` 作为地址，但新书源仍建议统一写 `title / url`
 - 不要把大量列表数据塞进分类对象
 
-### 18.2 `Book`
+### 20.2 `Book`
 
 用于搜索、发现和详情阶段。
 
@@ -2525,7 +3016,7 @@ ctx.log(`search keyword=${keyword}`);
 - 宿主会兼容读取 `catalogUrl` 作为 `tocUrl`，但新书源建议统一返回 `tocUrl`
 - 搜索阶段不要为了补全所有字段而做大量额外请求
 
-### 18.3 `Chapter`
+### 20.3 `Chapter`
 
 用于目录阶段，由 `chapters(ctx, book)` 返回。
 
@@ -2557,7 +3048,7 @@ ctx.log(`search keyword=${keyword}`);
 - `vip` 和 `isVip` 都能被宿主识别，但新书源建议统一写 `isVip`
 - 建议按站点目录顺序返回完整数组
 
-### 18.4 `Content`
+### 20.4 `Content`
 
 用于正文阶段，由 `content(ctx, book, chapter)` 返回。
 
@@ -2585,7 +3076,7 @@ ctx.log(`search keyword=${keyword}`);
 - 正文里如果本来就有少量插图，优先保留在 `content` 的可读文本流程里；只有纯图片章节再返回 `images`
 - 不要把 HTML 原文直接当正文返回，建议清洗成可读文本
 
-### 18.5 `extra`
+### 20.5 `extra`
 
 `extra` 用于跨阶段传递业务字段，例如接口需要的 `bookId`、`chapterId`、签名参数、分页 key。
 
@@ -2607,7 +3098,7 @@ return {
 - `extra` 应保持可 JSON 序列化
 - 不要放函数、DOM 节点、循环引用或过大的响应原文
 
-### 18.6 `debug`
+### 20.6 `debug`
 
 `debug` 用于调试辅助，不建议业务强依赖。
 
@@ -2630,11 +3121,11 @@ return {
 - 发布前可以保留少量有价值信息
 - 不要放敏感 Cookie、Token 或完整加密密钥
 
-## 19. 网页调试服务
+## 21. 网页调试服务
 
 网页调试服务用于在浏览器中连接 App 本地服务，编辑书源并执行单步或完整链路调试。
 
-### 19.1 连接方式
+### 21.1 连接方式
 
 App 侧启动“书源网页调试服务”后，会提供类似这样的地址：
 
@@ -2650,7 +3141,7 @@ GET /api/debug/ping
 
 成功后即可加载书源列表、编辑代码、保存和运行调试。
 
-### 19.2 调试接口
+### 21.2 调试接口
 
 统一响应结构：
 
@@ -2696,7 +3187,7 @@ GET /api/debug/ping
 - `POST /api/debug/content`
 - `POST /api/debug/full-run`
 
-### 19.3 `logs`、`traces`、`stages`
+### 21.3 `logs`、`traces`、`stages`
 
 调试接口会尽量返回结构化信息：
 
@@ -2729,7 +3220,7 @@ GET /api/debug/ping
 }
 ```
 
-### 19.4 推荐调试顺序
+### 21.4 推荐调试顺序
 
 推荐在网页调试台中分别验证：
 
@@ -2741,7 +3232,7 @@ GET /api/debug/ping
 
 不要只跑 `full-run`。单步调试能更快定位是入参、网络、解析还是返回对象的问题。
 
-### 19.5 常见错误
+### 21.5 常见错误
 
 `SourceScriptCompileException: not a function` 通常表示脚本调用了不存在的方法，或导出对象里的对应步骤不是函数。
 
@@ -2753,13 +3244,13 @@ GET /api/debug/ping
 4. 检查当前阶段调用的 `ctx.*` API 是否存在
 5. 检查返回对象是否是可序列化普通对象
 
-## 20. 运行时边界与维护原则
+## 22. 运行时边界与维护原则
 
-### 20.1 当前只支持脚本源
+### 22.1 当前只支持脚本源
 
 当前 App 只执行 JavaScript 脚本源，不再导入或执行旧规则 JSON。旧规则可以作为迁移参考，但不能直接作为运行时格式。
 
-### 20.2 执行链路
+### 22.2 执行链路
 
 标准链路是：
 
@@ -2773,7 +3264,7 @@ search -> detail -> chapters -> content
 discoverCategories -> discoverBooks -> detail -> chapters -> content
 ```
 
-### 20.3 阶段职责
+### 22.3 阶段职责
 
 - `search`：只负责找书，返回候选 `Book[]`
 - `detail`：补齐书籍详情、目录地址或跨阶段字段
@@ -2782,11 +3273,11 @@ discoverCategories -> discoverBooks -> detail -> chapters -> content
 - `discoverCategories`：返回发现页分类
 - `discoverBooks`：返回分类分页书籍
 
-### 20.4 运行时隔离
+### 22.4 运行时隔离
 
 宿主会根据场景选择普通容器或隔离容器执行脚本。书源作者不应该依赖全局变量长期保活；需要跨阶段传递的数据应放在 `book.extra`、`chapter.extra`、`ctx.cache` 或 `ctx.session`。
 
-### 20.5 返回值序列化
+### 22.5 返回值序列化
 
 返回值必须可 JSON 序列化。
 
@@ -2798,7 +3289,7 @@ discoverCategories -> discoverBooks -> detail -> chapters -> content
 - 循环引用对象
 - 超大原始响应体
 
-### 20.6 错误处理
+### 22.6 错误处理
 
 脚本里可以抛出普通 `Error`，宿主会归一化为阶段错误。建议错误信息包含关键上下文，但不要包含敏感信息。
 
@@ -2810,7 +3301,7 @@ if (!response.ok) {
 }
 ```
 
-### 20.7 当前未开放给脚本作者的宿主内部能力
+### 22.7 当前未开放给脚本作者的宿主内部能力
 
 下面这些能力存在于宿主实现里，但当前不属于书源作者 API：
 
@@ -2820,7 +3311,7 @@ if (!response.ok) {
 
 这类能力如果未来决定开放，应先补桥接，再更新本文档；在那之前不要把它们当成可用脚本 API。
 
-## 21. 发布前检查
+## 23. 发布前检查
 
 发布前至少检查：
 
@@ -2832,7 +3323,7 @@ if (!response.ok) {
 6. `checkKeyword` 合理
 7. Challenge 场景可继续
 
-## 22. 维护说明
+## 24. 维护说明
 
 本目录只保留这一份书源编写文档。需要新增书源规范、运行时 API、调试台行为、对象字段说明时，都直接更新本文档。
 

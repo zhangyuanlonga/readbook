@@ -36,6 +36,7 @@ import '../features/reader/presentation/reader_page.dart';
 import '../features/reader/presentation/reader_route.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
+import '../features/source/presentation/source_login_page.dart';
 import '../features/source/presentation/script_source_editor_page.dart';
 import '../features/source/presentation/script_source_paste_import_page.dart';
 import '../features/reader/presentation/reading_records_page.dart';
@@ -268,6 +269,14 @@ final GoRouter appRouter = GoRouter(
       path: '/source',
       name: 'source',
       builder: (context, state) => const SourcePage(),
+    ),
+    GoRoute(
+      path: '/source/login',
+      name: 'script-source-login',
+      builder: (context, state) {
+        final sourceId = state.uri.queryParameters['id'] ?? '';
+        return SourceLoginPage(sourceId: sourceId);
+      },
     ),
     GoRoute(
       path: '/source/script-editor',

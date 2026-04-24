@@ -4,6 +4,9 @@ import 'dart:typed_data';
 
 import '../../core/auth/auth_session_store.dart';
 import '../../core/device/device_identity_service.dart';
+import '../../domain/entities/book_custom_state.dart';
+import '../../domain/entities/source_login_state.dart';
+import '../../features/source/application/source_login_state_service.dart';
 import '../crypto/source_crypto.dart';
 import '../browser/browser_runtime.dart';
 import '../cache/cache_manager.dart';
@@ -52,12 +55,14 @@ class SourceHttpContext {
     required SourceSession session,
     required SourceManifest manifest,
     required BrowserRuntime browserRuntime,
+    SourceLoginContext? sourceLogin,
     DateTime Function()? now,
     Future<void> Function(Duration duration)? sleep,
   }) : _requestEngine = requestEngine,
        _session = session,
        _manifest = manifest,
        _browserRuntime = browserRuntime,
+       _sourceLogin = sourceLogin,
        _now = now ?? DateTime.now,
        _sleep = sleep ?? Future<void>.delayed;
 
@@ -65,44 +70,54 @@ class SourceHttpContext {
   final SourceSession _session;
   final SourceManifest _manifest;
   final BrowserRuntime _browserRuntime;
+  final SourceLoginContext? _sourceLogin;
   final DateTime Function() _now;
   final Future<void> Function(Duration duration) _sleep;
 
   Future<RuntimeHttpResponse> request(RuntimeHttpRequest request) async {
     final startedAt = DateTime.now();
+    final mergedRequest = request.copyWith(
+      headers: <String, String>{
+        ...?await _sourceLogin?.getHeaderMap(),
+        ...request.headers,
+      },
+    );
     try {
-      if (request.execution == RuntimeRequestExecution.browser) {
-        final response = await _requestInBrowser(request);
+      if (mergedRequest.execution == RuntimeRequestExecution.browser) {
+        final response = await _requestInBrowser(mergedRequest);
         appendDebugTrace(_session, <String, Object?>{
           'kind': 'http',
           'execution': 'browser',
           'startedAt': startedAt.toIso8601String(),
-          'method': request.method.name.toUpperCase(),
-          'url': request.resolvedUri.toString(),
-          'headers': request.headers,
-          'query': request.query,
-          'body': request.body,
-          'bodyType': request.bodyType.name,
-          'charset': request.charset,
+          'method': mergedRequest.method.name.toUpperCase(),
+          'url': mergedRequest.resolvedUri.toString(),
+          'headers': mergedRequest.headers,
+          'query': mergedRequest.query,
+          'body': mergedRequest.body,
+          'bodyType': mergedRequest.bodyType.name,
+          'charset': mergedRequest.charset,
           'status': response.status,
           'responseHeaders': response.headers,
           'responseText': _previewText(response.text),
         });
         return response;
       }
-      await _applyRateLimitIfNeeded(request.resolvedUri);
-      final response = await _requestEngine.request(request, session: _session);
+      await _applyRateLimitIfNeeded(mergedRequest.resolvedUri);
+      final response = await _requestEngine.request(
+        mergedRequest,
+        session: _session,
+      );
       appendDebugTrace(_session, <String, Object?>{
         'kind': 'http',
         'execution': 'http',
         'startedAt': startedAt.toIso8601String(),
-        'method': request.method.name.toUpperCase(),
-        'url': request.resolvedUri.toString(),
-        'headers': request.headers,
-        'query': request.query,
-        'body': request.body,
-        'bodyType': request.bodyType.name,
-        'charset': request.charset,
+        'method': mergedRequest.method.name.toUpperCase(),
+        'url': mergedRequest.resolvedUri.toString(),
+        'headers': mergedRequest.headers,
+        'query': mergedRequest.query,
+        'body': mergedRequest.body,
+        'bodyType': mergedRequest.bodyType.name,
+        'charset': mergedRequest.charset,
         'status': response.status,
         'responseHeaders': response.headers,
         'responseText': _previewText(response.text),
@@ -112,15 +127,15 @@ class SourceHttpContext {
     } catch (error) {
       appendDebugTrace(_session, <String, Object?>{
         'kind': 'http',
-        'execution': request.execution.name,
+        'execution': mergedRequest.execution.name,
         'startedAt': startedAt.toIso8601String(),
-        'method': request.method.name.toUpperCase(),
-        'url': request.resolvedUri.toString(),
-        'headers': request.headers,
-        'query': request.query,
-        'body': request.body,
-        'bodyType': request.bodyType.name,
-        'charset': request.charset,
+        'method': mergedRequest.method.name.toUpperCase(),
+        'url': mergedRequest.resolvedUri.toString(),
+        'headers': mergedRequest.headers,
+        'query': mergedRequest.query,
+        'body': mergedRequest.body,
+        'bodyType': mergedRequest.bodyType.name,
+        'charset': mergedRequest.charset,
         'error': error.toString(),
       });
       rethrow;
@@ -597,10 +612,423 @@ class SourceCacheContext {
   }
 }
 
+class SourceLoginContext {
+  SourceLoginContext({
+    required String sourceId,
+    SourceLoginStateService? stateService,
+  }) : _sourceId = sourceId.trim(),
+       _stateService = stateService ?? SourceLoginStateService();
+
+  final String _sourceId;
+  final SourceLoginStateService _stateService;
+
+  Future<String> getHeader() async {
+    return (await _stateService.loadSourceLoginState(
+          _sourceId,
+        ))?.loginHeaderJson ??
+        '';
+  }
+
+  Future<Map<String, String>> getHeaderMap() async {
+    return _decodeStringMap(await getHeader());
+  }
+
+  Future<void> putHeader(String headerJson) async {
+    await _update(
+      (current) => current.copyWith(
+        loginHeaderJson: headerJson,
+        clearLoginHeaderJson: headerJson.trim().isEmpty,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> removeHeader() async {
+    await _update(
+      (current) => current.copyWith(
+        clearLoginHeaderJson: true,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<String> getInfo() async {
+    return (await _stateService.loadSourceLoginState(
+          _sourceId,
+        ))?.loginInfoJson ??
+        '';
+  }
+
+  Future<Map<String, String>> getInfoMap() async {
+    return _decodeStringMap(await getInfo());
+  }
+
+  Future<void> putInfo(String infoJson) async {
+    await _update(
+      (current) => current.copyWith(
+        loginInfoJson: infoJson,
+        clearLoginInfoJson: infoJson.trim().isEmpty,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> removeInfo() async {
+    await _update(
+      (current) =>
+          current.copyWith(clearLoginInfoJson: true, updatedAt: DateTime.now()),
+    );
+  }
+
+  Future<void> patchInfo(Map<String, String> patch) async {
+    final current = await getInfoMap();
+    await putInfo(jsonEncode(<String, String>{...current, ...patch}));
+  }
+
+  Future<String> getVariable() async {
+    return (await _stateService.loadSourceLoginState(
+          _sourceId,
+        ))?.sourceVariableJson ??
+        '';
+  }
+
+  Future<Map<String, String>> getVariableMap() async {
+    return _decodeStringMap(await getVariable());
+  }
+
+  Future<void> setVariable(String value) async {
+    await _update(
+      (current) => current.copyWith(
+        sourceVariableJson: value,
+        clearSourceVariableJson: value.trim().isEmpty,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> putVariable(String key, String? value) async {
+    final current = await getVariableMap();
+    if ((value ?? '').trim().isEmpty) {
+      current.remove(key);
+    } else {
+      current[key] = value ?? '';
+    }
+    await setVariable(jsonEncode(current));
+  }
+
+  Future<String> getVariableValue(String key, {String fallback = ''}) async {
+    final current = await getVariableMap();
+    final value = current[key]?.trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  Future<void> patchVariable(Map<String, String> patch) async {
+    final current = await getVariableMap();
+    await setVariable(jsonEncode(<String, String>{...current, ...patch}));
+  }
+
+  Future<void> removeVariable() async {
+    await _update(
+      (current) => current.copyWith(
+        clearSourceVariableJson: true,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> _update(
+    SourceLoginState Function(SourceLoginState current) mapper,
+  ) async {
+    final current =
+        await _stateService.loadSourceLoginState(_sourceId) ??
+        SourceLoginState(sourceId: _sourceId, updatedAt: DateTime.now());
+    await _stateService.saveSourceLoginState(mapper(current));
+  }
+
+  Map<String, String> _decodeStringMap(String raw) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) {
+      return const <String, String>{};
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return const <String, String>{};
+      }
+      return <String, String>{
+        for (final entry in decoded.entries)
+          entry.key.toString(): entry.value?.toString() ?? '',
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+}
+
+class SourceBookStateContext {
+  SourceBookStateContext({SourceLoginStateService? stateService})
+    : _stateService = stateService ?? SourceLoginStateService();
+
+  final SourceLoginStateService _stateService;
+
+  Future<String> getCustom({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    return (await _stateService.loadBookCustomState(
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        ))?.customVariableJson ??
+        '';
+  }
+
+  Future<void> setCustom({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String value,
+  }) async {
+    final current = await _stateService.loadBookCustomState(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    final next = (current ??
+            BookCustomState(
+              bookId: bookId,
+              sourceId: sourceId,
+              detailUrl: detailUrl,
+              updatedAt: DateTime.now(),
+            ))
+        .copyWith(
+          customVariableJson: value,
+          clearCustomVariableJson: value.trim().isEmpty,
+          updatedAt: DateTime.now(),
+        );
+    await _stateService.saveBookCustomState(next);
+  }
+
+  Future<void> clearCustom({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    await _stateService.removeBookCustomState(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+  }
+
+  Future<Map<String, String>> getCustomMap({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    final raw = await getCustom(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    final normalized = raw.trim();
+    if (normalized.isEmpty) {
+      return const <String, String>{};
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return const <String, String>{};
+      }
+      return <String, String>{
+        for (final entry in decoded.entries)
+          entry.key.toString(): entry.value?.toString() ?? '',
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+
+  Future<void> putCustom({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String key,
+    String? value,
+  }) async {
+    final current = await getCustomMap(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    if ((value ?? '').trim().isEmpty) {
+      current.remove(key);
+    } else {
+      current[key] = value ?? '';
+    }
+    await setCustom(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      value: jsonEncode(current),
+    );
+  }
+
+  Future<String> getCustomValue({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String key,
+    String fallback = '',
+  }) async {
+    final current = await getCustomMap(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    final value = current[key]?.trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  Future<void> patchCustom({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required Map<String, String> patch,
+  }) async {
+    final current = await getCustomMap(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    await setCustom(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      value: jsonEncode(<String, String>{...current, ...patch}),
+    );
+  }
+}
+
+class SourceUiContext {
+  const SourceUiContext({
+    this.toastHandler,
+    this.longToastHandler,
+    this.openUrlHandler,
+    this.confirmHandler,
+    this.promptHandler,
+    this.openBrowserAwaitHandler,
+    this.verificationCodeHandler,
+  });
+
+  final Future<void> Function(String message)? toastHandler;
+  final Future<void> Function(String message)? longToastHandler;
+  final Future<void> Function({required String url, String? title})?
+  openUrlHandler;
+  final Future<bool> Function({
+    required String message,
+    String? title,
+    String? confirmText,
+    String? cancelText,
+  })?
+  confirmHandler;
+  final Future<String?> Function({
+    required String message,
+    String? title,
+    String? initialValue,
+    String? confirmText,
+    String? cancelText,
+    bool obscureText,
+  })?
+  promptHandler;
+  final Future<Map<String, Object?>> Function({
+    required String url,
+    String? title,
+    bool refetchAfterSuccess,
+  })?
+  openBrowserAwaitHandler;
+  final Future<String> Function(String imageUrl)? verificationCodeHandler;
+
+  Future<void> toast(String message) async {
+    await toastHandler?.call(message);
+  }
+
+  Future<void> longToast(String message) async {
+    await longToastHandler?.call(message);
+  }
+
+  Future<void> openUrl({required String url, String? title}) async {
+    await openUrlHandler?.call(url: url, title: title);
+  }
+
+  Future<bool> confirm({
+    required String message,
+    String? title,
+    String? confirmText,
+    String? cancelText,
+  }) async {
+    if (confirmHandler == null) {
+      return true;
+    }
+    return await confirmHandler!(
+      message: message,
+      title: title,
+      confirmText: confirmText,
+      cancelText: cancelText,
+    );
+  }
+
+  Future<String?> prompt({
+    required String message,
+    String? title,
+    String? initialValue,
+    String? confirmText,
+    String? cancelText,
+    bool obscureText = false,
+  }) async {
+    if (promptHandler == null) {
+      return initialValue;
+    }
+    return await promptHandler!(
+      message: message,
+      title: title,
+      initialValue: initialValue,
+      confirmText: confirmText,
+      cancelText: cancelText,
+      obscureText: obscureText,
+    );
+  }
+
+  Future<Map<String, Object?>> openBrowserAwait({
+    required String url,
+    String? title,
+    bool refetchAfterSuccess = true,
+  }) async {
+    if (openBrowserAwaitHandler == null) {
+      return <String, Object?>{'statusCode': 0, 'body': '', 'finalUrl': url};
+    }
+    return await openBrowserAwaitHandler!(
+      url: url,
+      title: title,
+      refetchAfterSuccess: refetchAfterSuccess,
+    );
+  }
+
+  Future<String> getVerificationCode(String imageUrl) async {
+    if (verificationCodeHandler == null) {
+      return '';
+    }
+    return await verificationCodeHandler!(imageUrl);
+  }
+}
+
 class SourceRuntimeContext {
   const SourceRuntimeContext({
     required this.source,
     required this.http,
+    required this.sourceLogin,
+    required this.bookState,
     required this.browser,
     required this.cookie,
     required this.cache,
@@ -608,11 +1036,14 @@ class SourceRuntimeContext {
     required this.session,
     required this.utils,
     required this.crypto,
+    required this.ui,
     required this.log,
   });
 
   final SourceRuntimeInfo source;
   final SourceHttpContext http;
+  final SourceLoginContext sourceLogin;
+  final SourceBookStateContext bookState;
   final SourceBrowserContext browser;
   final SourceCookieContext cookie;
   final SourceCacheContext cache;
@@ -620,6 +1051,7 @@ class SourceRuntimeContext {
   final SourceSession session;
   final SourceUtilsContext utils;
   final SourceCryptoContext crypto;
+  final SourceUiContext ui;
   final void Function(String message) log;
 }
 
@@ -646,6 +1078,22 @@ typedef SourceContentHandler =
       Book book,
       Chapter chapter,
     );
+typedef SourceLoginUiHandler =
+    FutureOr<Object?> Function(
+      SourceRuntimeContext ctx,
+      Map<String, String> formData, {
+      Book? book,
+      Chapter? chapter,
+    });
+typedef SourceLoginActionHandler =
+    FutureOr<Object?> Function(
+      SourceRuntimeContext ctx,
+      Map<String, String> formData, {
+      Book? book,
+      Chapter? chapter,
+      String? actionCode,
+      bool isLongClick,
+    });
 
 class RuntimeSourceDefinition {
   const RuntimeSourceDefinition({
@@ -657,6 +1105,9 @@ class RuntimeSourceDefinition {
     this.init,
     this.discoverCategories,
     this.discoverBooks,
+    this.supportsLogin = false,
+    this.loginUi,
+    this.loginAction,
     this.dispose,
   });
 
@@ -668,6 +1119,9 @@ class RuntimeSourceDefinition {
   final SourceDetailHandler detail;
   final SourceChaptersHandler chapters;
   final SourceContentHandler content;
+  final bool supportsLogin;
+  final SourceLoginUiHandler? loginUi;
+  final SourceLoginActionHandler? loginAction;
   final void Function()? dispose;
 }
 

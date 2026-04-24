@@ -18,6 +18,7 @@ import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
+import '../../source/application/source_login_state_service.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -55,6 +56,7 @@ class LocalBookImportService {
     LocalBookIndexService? localBookIndexService,
     LocalBookStorageService? localBookStorageService,
     AppLogger? logger,
+    SourceLoginStateService? sourceLoginStateService,
     Future<Directory> Function()? supportDirectoryProvider,
     Duration warmUpDelay = const Duration(milliseconds: 350),
   }) : this._(
@@ -72,6 +74,8 @@ class LocalBookImportService {
              ),
          localBookIndexService: localBookIndexService,
          logger: logger ?? AppLogger.instance,
+         sourceLoginStateService:
+             sourceLoginStateService ?? SourceLoginStateService(),
          warmUpDelay: warmUpDelay,
        );
 
@@ -81,6 +85,7 @@ class LocalBookImportService {
     required ReaderSystemSettingsService readerSystemSettingsService,
     required LocalBookStorageService localBookStorageService,
     required AppLogger logger,
+    required SourceLoginStateService sourceLoginStateService,
     required Duration warmUpDelay,
     LocalBookIndexService? localBookIndexService,
   }) : _localBookRepository = localBookRepository,
@@ -95,6 +100,7 @@ class LocalBookImportService {
              storageService: localBookStorageService,
              logger: logger,
            ),
+       _sourceLoginStateService = sourceLoginStateService,
        _logger = logger,
        _warmUpDelay = warmUpDelay;
 
@@ -104,6 +110,7 @@ class LocalBookImportService {
   final BookshelfService _bookshelfService;
   final ReaderSystemSettingsService _readerSystemSettingsService;
   final LocalBookIndexService _localBookIndexService;
+  final SourceLoginStateService _sourceLoginStateService;
   final AppLogger _logger;
   final LocalBookStorageService _localBookStorageService;
   final Duration _warmUpDelay;
@@ -421,6 +428,9 @@ class LocalBookImportService {
     }
 
     await _localBookRepository.deleteBook(normalizedBookId);
+    await _sourceLoginStateService.removeBookCustomStatesForBook(
+      normalizedBookId,
+    );
     await _bookshelfService.remove(
       sourceId: localBookSourceId,
       detailUrl: normalizedDetailUrl,

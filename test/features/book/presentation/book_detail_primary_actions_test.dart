@@ -95,7 +95,7 @@ void main() {
     expect(cacheButton.onTap, isNull);
   });
 
-  testWidgets('shows progress indicator while shelf state is loading', (
+  testWidgets('keeps shelf icon stable while shelf state is loading', (
     tester,
   ) async {
     await _pumpPrimaryActions(
@@ -106,11 +106,26 @@ void main() {
       isShelfActionLoading: false,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
     final shelfButton = tester.widget<InkWell>(
       find.byKey(const Key('book_detail_shelf_button')),
     );
     expect(shelfButton.onTap, isNull);
+  });
+
+  testWidgets('shows progress indicator only while shelf action is running', (
+    tester,
+  ) async {
+    await _pumpPrimaryActions(
+      tester,
+      width: 300,
+      isInBookshelf: true,
+      isShelfStateLoading: false,
+      isShelfActionLoading: true,
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }
 
