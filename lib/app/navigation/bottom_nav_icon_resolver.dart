@@ -107,6 +107,8 @@ BottomNavIconAssetRef? _resolveGalleryAsset({
 
 IconData _cupertinoFallbackIconFor(AppShellTab tab, {required bool selected}) {
   return switch (tab) {
+    AppShellTab.home =>
+      selected ? CupertinoIcons.house_fill : CupertinoIcons.house,
     AppShellTab.bookshelf =>
       selected ? CupertinoIcons.book_fill : CupertinoIcons.book,
     AppShellTab.discover =>

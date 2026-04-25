@@ -1717,6 +1717,18 @@ class AdvancedThemeService {
 
     final filenameMap =
         <String, (BottomNavIconGalleryTab, BottomNavIconVariantSlot)>{
+          'featured_normal.png': (
+            BottomNavIconGalleryTab.home,
+            isDark
+                ? BottomNavIconVariantSlot.darkUnselected
+                : BottomNavIconVariantSlot.lightUnselected,
+          ),
+          'featured_selected.png': (
+            BottomNavIconGalleryTab.home,
+            isDark
+                ? BottomNavIconVariantSlot.darkSelected
+                : BottomNavIconVariantSlot.lightSelected,
+          ),
           'bookshelf_normal.png': (
             BottomNavIconGalleryTab.bookshelf,
             isDark
@@ -1787,6 +1799,7 @@ class AdvancedThemeService {
 
   BottomNavIconGalleryTab? _bottomNavTabFromName(String raw) {
     return switch (raw.trim()) {
+      'home' => BottomNavIconGalleryTab.home,
       'bookshelf' => BottomNavIconGalleryTab.bookshelf,
       'discover' => BottomNavIconGalleryTab.discover,
       'stats' => BottomNavIconGalleryTab.stats,

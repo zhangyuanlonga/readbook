@@ -1,4 +1,4 @@
-enum BottomNavIconGalleryTab { bookshelf, discover, stats, mine }
+enum BottomNavIconGalleryTab { home, bookshelf, discover, stats, mine }
 
 enum BottomNavIconAssetFormat { svg, png }
 
@@ -105,7 +105,9 @@ class BottomNavIconSet {
   }) {
     return BottomNavIconSet(
       lightUnselected:
-          clearLightUnselected ? null : (lightUnselected ?? this.lightUnselected),
+          clearLightUnselected
+              ? null
+              : (lightUnselected ?? this.lightUnselected),
       lightSelected:
           clearLightSelected ? null : (lightSelected ?? this.lightSelected),
       darkUnselected:
@@ -219,6 +221,7 @@ class BottomNavIconGallery {
     final items = <BottomNavIconGalleryTab, BottomNavIconSet>{};
     for (final entry in rawItems.entries) {
       final tab = switch (entry.key.toString().trim()) {
+        'home' => BottomNavIconGalleryTab.home,
         'bookshelf' => BottomNavIconGalleryTab.bookshelf,
         'discover' => BottomNavIconGalleryTab.discover,
         'stats' => BottomNavIconGalleryTab.stats,

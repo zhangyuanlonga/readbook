@@ -11,6 +11,7 @@ final BottomNavIconGallery defaultBottomNavIconGallery = BottomNavIconGallery(
   isEditable: false,
   isDeletable: false,
   items: const {
+    BottomNavIconGalleryTab.home: BottomNavIconSet(),
     BottomNavIconGalleryTab.bookshelf: BottomNavIconSet(),
     BottomNavIconGalleryTab.discover: BottomNavIconSet(),
     BottomNavIconGalleryTab.stats: BottomNavIconSet(),

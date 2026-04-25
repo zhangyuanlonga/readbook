@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppShellTab { bookshelf, discover, stats, mine }
+enum AppShellTab { home, bookshelf, discover, stats, mine }
 
 class AppShellDestination {
   const AppShellDestination({
@@ -21,6 +21,13 @@ class AppShellDestination {
 }
 
 const List<AppShellDestination> appShellDestinations = [
+  AppShellDestination(
+    tab: AppShellTab.home,
+    location: '/home',
+    label: '首页',
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home_rounded,
+  ),
   AppShellDestination(
     tab: AppShellTab.bookshelf,
     location: '/bookshelf',
@@ -78,6 +85,7 @@ class AppShellNavigationState {
 
   bool isTabVisible(AppShellTab tab) {
     return switch (tab) {
+      AppShellTab.home => true,
       AppShellTab.bookshelf => showBookshelf,
       AppShellTab.discover => showDiscover,
       AppShellTab.stats => showStats,
@@ -86,7 +94,7 @@ class AppShellNavigationState {
   }
 
   int get visibleTabCount {
-    return configurableVisibleCount + 1;
+    return configurableVisibleCount + 2;
   }
 
   AppShellNavigationState copyWith({
@@ -169,12 +177,13 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> setTabVisible(AppShellTab tab, bool visible) async {
-    if (tab == AppShellTab.mine) {
+    if (tab == AppShellTab.home || tab == AppShellTab.mine) {
       return;
     }
 
     final previous = state;
     final changed = switch (tab) {
+      AppShellTab.home => state,
       AppShellTab.bookshelf => state.copyWith(showBookshelf: visible),
       AppShellTab.discover => state.copyWith(showDiscover: visible),
       AppShellTab.stats => state.copyWith(showStats: visible),

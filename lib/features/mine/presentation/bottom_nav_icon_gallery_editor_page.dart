@@ -580,6 +580,7 @@ class _BottomNavIconGalleryEditorPageState
             : Brightness.light;
     final fallback = resolveCupertinoBottomNavIcon(
       tab: switch (tab) {
+        BottomNavIconGalleryTab.home => AppShellTab.home,
         BottomNavIconGalleryTab.bookshelf => AppShellTab.bookshelf,
         BottomNavIconGalleryTab.discover => AppShellTab.discover,
         BottomNavIconGalleryTab.stats => AppShellTab.stats,
@@ -687,6 +688,7 @@ class _BottomNavIconGalleryEditorPageState
 
   String _tabLabel(BottomNavIconGalleryTab tab) {
     return switch (tab) {
+      BottomNavIconGalleryTab.home => '首页',
       BottomNavIconGalleryTab.bookshelf => '书架',
       BottomNavIconGalleryTab.discover => '发现',
       BottomNavIconGalleryTab.stats => '统计',

@@ -8,6 +8,7 @@ import '../features/bookshelf/application/local_book_import_service.dart';
 import '../features/bookshelf/presentation/bookshelf_page.dart';
 import '../features/bookshelf/presentation/local_library_page.dart';
 import '../features/discover/presentation/discover_page.dart';
+import '../features/home/presentation/home_page.dart';
 import '../features/announcement/presentation/announcement_detail_page.dart';
 import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
@@ -48,7 +49,7 @@ GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: globalRootNavigatorKey,
-  initialLocation: '/bookshelf',
+  initialLocation: '/home',
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
@@ -58,6 +59,15 @@ final GoRouter appRouter = GoRouter(
         );
       },
       branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/home',
+              name: 'home',
+              builder: (context, state) => const HomePage(),
+            ),
+          ],
+        ),
         StatefulShellBranch(
           routes: [
             GoRoute(
