@@ -113,8 +113,10 @@ import 'paged_animation/paged_animation_renderer_registry.dart';
 import 'reader_catalog_sheet.dart';
 import 'reader_annotated_text.dart';
 import 'reader_annotation_interaction.dart';
+import 'reader_body_region.dart';
 import 'reader_chrome_widgets.dart';
 import 'reader_manga_view.dart';
+import 'reader_selection_state.dart';
 import 'reader_settings_sheet.dart';
 import 'reader_shell.dart';
 import 'reader_text_offset_mapper.dart' as text_offset_mapper;
@@ -296,20 +298,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const <int, ReaderRenderTextItem>{};
   List<String> _chapterImageUrls = const [];
   Map<String, String> _chapterImageHeaders = const {};
-  bool _isTextSelectionActive = false;
   bool _isEditingBookmarkNote = false;
-  SelectedContentRange? _selectionRange;
-  SelectionStatus _selectionStatus = SelectionStatus.none;
-  int _selectionStartOffset = 0;
-  int _selectionEndOffset = 0;
-  String _selectedSnippet = '';
+  ReaderSelectionState _selectionState = const ReaderSelectionState();
   List<Bookmark> _chapterBookmarks = const [];
   Map<int, List<_BookmarkRange>> _bookmarkRangesByParagraph =
       const <int, List<_BookmarkRange>>{};
-  bool _selectionBold = false;
-  bool _selectionUnderline = true;
-  bool _selectionWavy = false;
-  bool _selectionHighlight = false;
   List<ReaderCustomFontEntry> _customFonts = const [];
   final Map<String, int> _mangaImageRetryNonce = <String, int>{};
   int _mangaPageIndex = 0;
@@ -920,6 +913,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
 
   bool get _supportsAutoRead => _readerModeCapabilities.canAutoRead;
+
+  bool get _isTextSelectionActive => _selectionState.isActive;
+  set _isTextSelectionActive(bool value) {
+    _selectionState = _selectionState.copyWith(isActive: value);
+  }
+
+  SelectedContentRange? get _selectionRange => _selectionState.range;
+  set _selectionRange(SelectedContentRange? value) {
+    _selectionState = _selectionState.copyWith(range: value);
+  }
+
+  SelectionStatus get _selectionStatus => _selectionState.status;
+  set _selectionStatus(SelectionStatus value) {
+    _selectionState = _selectionState.copyWith(status: value);
+  }
+
+  int get _selectionStartOffset => _selectionState.startOffset;
+  set _selectionStartOffset(int value) {
+    _selectionState = _selectionState.copyWith(startOffset: value);
+  }
+
+  int get _selectionEndOffset => _selectionState.endOffset;
+  set _selectionEndOffset(int value) {
+    _selectionState = _selectionState.copyWith(endOffset: value);
+  }
+
+  String get _selectedSnippet => _selectionState.snippet;
+  set _selectedSnippet(String value) {
+    _selectionState = _selectionState.copyWith(snippet: value);
+  }
+
+  bool get _selectionHighlight => _selectionState.highlight;
+  set _selectionHighlight(bool value) {
+    _selectionState = _selectionState.copyWith(highlight: value);
+  }
+
+  bool get _selectionBold => _selectionState.bold;
+  set _selectionBold(bool value) {
+    _selectionState = _selectionState.copyWith(bold: value);
+  }
+
+  bool get _selectionUnderline => _selectionState.underline;
+  set _selectionUnderline(bool value) {
+    _selectionState = _selectionState.copyWith(underline: value);
+  }
+
+  bool get _selectionWavy => _selectionState.wavy;
+  set _selectionWavy(bool value) {
+    _selectionState = _selectionState.copyWith(wavy: value);
+  }
 
   bool _showsOuterPinnedChapterHeaderFor(_ReaderViewportKind viewportKind) {
     return viewportKind != _ReaderViewportKind.textPaged;
@@ -2140,91 +2183,123 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBody(_ReaderThemeColors colors) {
+    final palette = ReaderBodyRegionPalette(
+      textColor: colors.text,
+      metaColor: colors.meta,
+      overlayColor: colors.overlay,
+      dividerColor: colors.divider,
+    );
     if (_shouldShowBlockingReaderLoading) {
       return _buildTapAwareBody(
-        child: _buildReaderStateCard(
-          colors: colors,
-          title: '正在加载正文',
-          message: '请稍候，马上为你展开章节内容。',
-          icon: const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+        child: ReaderBodyRegion(
+          model: const ReaderBodyRegionModel.stateCard(
+            stateCard: ReaderBodyRegionStateCard(
+              title: '正在加载正文',
+              message: '请稍候，马上为你展开章节内容。',
+              icon: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           ),
+          palette: palette,
         ),
       );
     }
 
     if ((_isBootstrapping || _isLoadingContent) && !_hasVisibleReaderContent) {
-      return const SizedBox.expand();
+      return ReaderBodyRegion(
+        model: const ReaderBodyRegionModel.hidden(),
+        palette: palette,
+      );
     }
 
     if (_errorText != null) {
       final canSwitchSource = _canSwitchSource;
       return _buildTapAwareBody(
-        child: _buildReaderStateCard(
-          colors: colors,
-          title: '加载失败',
-          message: _errorText!,
-          icon: Icon(Icons.warning_amber_rounded, color: colors.meta, size: 20),
-          action: Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              FilledButton.tonal(
-                onPressed:
-                    _isSwitchSourceLoading
-                        ? null
-                        : () => _loadCurrentChapter(initialScrollRatio: null),
-                child: const Text('重试'),
+        child: ReaderBodyRegion(
+          model: ReaderBodyRegionModel.stateCard(
+            stateCard: ReaderBodyRegionStateCard(
+              title: '加载失败',
+              message: _errorText!,
+              icon: Icon(
+                Icons.warning_amber_rounded,
+                color: colors.meta,
+                size: 20,
               ),
-              if (_isLocalContent)
-                OutlinedButton.icon(
-                  onPressed: _copyLocalReaderDiagnostics,
-                  icon: const Icon(Icons.copy_rounded, size: 16),
-                  label: const Text('复制诊断信息'),
-                ),
-              if (canSwitchSource)
-                OutlinedButton.icon(
-                  onPressed:
-                      _isSwitchSourceLoading
-                          ? null
-                          : () => unawaited(_showSwitchSourceSheet()),
-                  icon:
-                      _isSwitchSourceLoading
-                          ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Icon(Icons.swap_horiz_rounded),
-                  label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
-                ),
-            ],
+              action: Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  FilledButton.tonal(
+                    onPressed:
+                        _isSwitchSourceLoading
+                            ? null
+                            : () =>
+                                _loadCurrentChapter(initialScrollRatio: null),
+                    child: const Text('重试'),
+                  ),
+                  if (_isLocalContent)
+                    OutlinedButton.icon(
+                      onPressed: _copyLocalReaderDiagnostics,
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('复制诊断信息'),
+                    ),
+                  if (canSwitchSource)
+                    OutlinedButton.icon(
+                      onPressed:
+                          _isSwitchSourceLoading
+                              ? null
+                              : () => unawaited(_showSwitchSourceSheet()),
+                      icon:
+                          _isSwitchSourceLoading
+                              ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.swap_horiz_rounded),
+                      label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
+                    ),
+                ],
+              ),
+            ),
           ),
+          palette: palette,
         ),
       );
     }
 
     if (_content.trim().isEmpty && _chapterImageUrls.isEmpty) {
       return _buildTapAwareBody(
-        child: _buildReaderStateCard(
-          colors: colors,
-          title: '暂无正文',
-          message: '当前章节没有可展示的内容。',
-          icon: Icon(Icons.article_outlined, color: colors.meta, size: 20),
+        child: ReaderBodyRegion(
+          model: ReaderBodyRegionModel.stateCard(
+            stateCard: ReaderBodyRegionStateCard(
+              title: '暂无正文',
+              message: '当前章节没有可展示的内容。',
+              icon: Icon(Icons.article_outlined, color: colors.meta, size: 20),
+            ),
+          ),
+          palette: palette,
         ),
       );
     }
 
     return _buildTapAwareBody(
-      child: switch (_currentViewportKind) {
-        _ReaderViewportKind.mangaPaged ||
-        _ReaderViewportKind.mangaContinuous => _buildMangaReader(colors),
-        _ReaderViewportKind.textPaged => _buildPagedReader(colors),
-        _ReaderViewportKind.textScroll => _buildReaderList(colors),
-      },
+      child: ReaderBodyRegion(
+        model: const ReaderBodyRegionModel.content(),
+        palette: palette,
+        child: switch (_currentViewportKind) {
+          _ReaderViewportKind.mangaPaged ||
+          _ReaderViewportKind.mangaContinuous => _buildMangaReader(colors),
+          _ReaderViewportKind.textPaged => _buildPagedReader(colors),
+          _ReaderViewportKind.textScroll => _buildReaderList(colors),
+        },
+      ),
     );
   }
 
@@ -3022,14 +3097,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required bool isWavy,
   }) {
     setState(() {
-      _isTextSelectionActive = true;
-      _selectionStartOffset = startOffset;
-      _selectionEndOffset = endOffset;
-      _selectedSnippet = snippet;
-      _selectionHighlight = hasHighlight;
-      _selectionBold = isBold;
-      _selectionUnderline = isUnderline && !isWavy;
-      _selectionWavy = isWavy;
+      _selectionState = _selectionState.activate(
+        startOffset: startOffset,
+        endOffset: endOffset,
+        snippet: snippet,
+        highlight: hasHighlight,
+        bold: isBold,
+        underline: isUnderline && !isWavy,
+        wavy: isWavy,
+      );
     });
     unawaited(_syncVolumeKeyPageInterception());
     _showBookmarkToolbar();
@@ -3040,12 +3116,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _syncSelectionState();
   }
 
-  _SelectionStyle _resolveSelectionStyleByOverlap({
+  ReaderSelectionStyle _resolveSelectionStyleByOverlap({
     required int startOffset,
     required int endOffset,
   }) {
     if (_chapterBookmarks.isEmpty) {
-      return const _SelectionStyle(
+      return const ReaderSelectionStyle(
         highlight: false,
         bold: false,
         underline: false,
@@ -3084,7 +3160,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       hasUnderline = false;
     }
 
-    return _SelectionStyle(
+    return ReaderSelectionStyle(
       highlight: hasHighlight,
       bold: hasBold,
       underline: hasUnderline,
@@ -3165,13 +3241,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final wasActive = _isTextSelectionActive;
     setState(() {
-      _isTextSelectionActive = true;
-      _selectionStartOffset = safeStart;
-      _selectionEndOffset = safeEnd;
-      _selectionHighlight = overlapStyle.highlight;
-      _selectionBold = nextBold;
-      _selectionUnderline = nextUnderline;
-      _selectionWavy = nextWavy;
+      _selectionState = _selectionState.activate(
+        startOffset: safeStart,
+        endOffset: safeEnd,
+        snippet: _selectedSnippet,
+        highlight: overlapStyle.highlight,
+        bold: nextBold,
+        underline: nextUnderline,
+        wavy: nextWavy,
+      );
     });
     unawaited(_syncVolumeKeyPageInterception());
 
@@ -3184,23 +3262,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _clearSelectionState() {
-    if (!_isTextSelectionActive && _selectedSnippet.isEmpty) {
-      _selectionRange = null;
-      _selectionStatus = SelectionStatus.none;
+    if (!_isTextSelectionActive && !_selectionState.hasSnippet) {
+      _selectionState = _selectionState.copyWith(
+        range: null,
+        status: SelectionStatus.none,
+      );
       return;
     }
 
     setState(() {
-      _isTextSelectionActive = false;
-      _selectionStartOffset = 0;
-      _selectionEndOffset = 0;
-      _selectedSnippet = '';
-      _selectionHighlight = false;
+      _selectionState = _selectionState.clear();
     });
     unawaited(_syncVolumeKeyPageInterception());
     _hideBookmarkToolbar();
-    _selectionRange = null;
-    _selectionStatus = SelectionStatus.none;
   }
 
   void _showBookmarkToolbar() {
@@ -3674,7 +3748,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     SelectableRegionState? clearSelectionState,
     bool? forceHighlight,
     String? note,
-    _ReaderSelectionSnapshot? selectionSnapshot,
+    ReaderSelectionSnapshot? selectionSnapshot,
     bool clearSystemSelection = true,
   }) async {
     final selection = selectionSnapshot ?? _captureSelectionSnapshot();
@@ -3719,38 +3793,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
-  _ReaderSelectionSnapshot? _captureSelectionSnapshot() {
-    final snippet = _selectedSnippet.trim();
-    if (!_isTextSelectionActive || snippet.isEmpty) {
-      return null;
-    }
-    return _ReaderSelectionSnapshot(
-      startOffset: _selectionStartOffset,
-      endOffset: _selectionEndOffset,
-      snippet: snippet,
-      hasHighlight: _selectionHighlight,
-      isBold: _selectionBold,
-      isUnderline: _selectionUnderline,
-      isWavy: _selectionWavy,
-    );
+  ReaderSelectionSnapshot? _captureSelectionSnapshot() {
+    return _selectionState.snapshot();
   }
 
   void _restoreSelectionSnapshot(
-    _ReaderSelectionSnapshot snapshot, {
+    ReaderSelectionSnapshot snapshot, {
     bool showToolbar = false,
   }) {
     if (!mounted) {
       return;
     }
     setState(() {
-      _isTextSelectionActive = true;
-      _selectionStartOffset = snapshot.startOffset;
-      _selectionEndOffset = snapshot.endOffset;
-      _selectedSnippet = snapshot.snippet;
-      _selectionHighlight = snapshot.hasHighlight;
-      _selectionBold = snapshot.isBold;
-      _selectionUnderline = snapshot.isUnderline;
-      _selectionWavy = snapshot.isWavy;
+      _selectionState = _selectionState.restore(snapshot);
     });
     if (showToolbar) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4444,17 +4499,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               Expanded(
                 child: Padding(
                   padding: layoutMetrics.effectivePagePadding,
-                  child: _buildReaderStateCard(
-                    colors: colors,
-                    title: "正在分页",
-                    message:
-                        paragraphs.length <= 1
-                            ? "正在为你生成阅读页面..."
-                            : "正在生成 ${paragraphs.length} 段正文的分页...",
-                    icon: const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                  child: ReaderBodyRegion(
+                    model: ReaderBodyRegionModel.stateCard(
+                      stateCard: ReaderBodyRegionStateCard(
+                        title: '正在分页',
+                        message:
+                            paragraphs.length <= 1
+                                ? '正在为你生成阅读页面...'
+                                : '正在生成 ${paragraphs.length} 段正文的分页...',
+                        icon: const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+                    palette: ReaderBodyRegionPalette(
+                      textColor: colors.text,
+                      metaColor: colors.meta,
+                      overlayColor: colors.overlay,
+                      dividerColor: colors.divider,
                     ),
                   ),
                 ),
@@ -5334,44 +5398,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     _scheduleProgressSave();
-  }
-
-  Widget _buildReaderStateCard({
-    required _ReaderThemeColors colors,
-    required String title,
-    required String message,
-    required Widget icon,
-    Widget? action,
-  }) {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: colors.overlay.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.divider),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            icon,
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              style: TextStyle(color: colors.meta),
-              textAlign: TextAlign.center,
-            ),
-            if (action != null) ...[const SizedBox(height: 12), action],
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildTapAwareBody({required Widget child}) {
@@ -8474,49 +8500,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _jumpToBookmark(Bookmark bookmark) async {
-    final targetIndex = _navigationEntryResolver.resolveBookmarkChapterIndex(
+    final request = _navigationEntryResolver.resolveBookmarkSelection(
       bookmark: bookmark,
       chapters: _chapters,
     );
-    if (targetIndex == null ||
-        targetIndex < 0 ||
-        targetIndex >= _chapters.length) {
+    if (request == null) {
       _showMessage('未找到灵感所在章节。');
       return;
     }
-
-    await _jumpTo(targetIndex, initialScrollRatio: 0);
-    if (!mounted) {
-      return;
-    }
-    if (_content.trim().isEmpty) {
-      _showMessage('章节内容为空，无法定位灵感。');
-      return;
-    }
-
-    final restorePlan = _jumpFacade.resolveBookmarkRestorePlan(
-      bookmark: bookmark,
-      document: _document,
-      currentChapterIndex: _currentIndex,
-      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
-      currentPageIndex: _currentPageIndex,
-      chapterContent: _content,
-    );
-    if (restorePlan.logicalPosition != null) {
-      final ratio = _resolveDocumentRestoreRatio(
-        logicalPosition: restorePlan.logicalPosition,
-      );
-      _restoreScrollPosition(ratio);
-      return;
-    }
-
-    final fallbackRatio = restorePlan.fallbackRatio;
-    if (fallbackRatio != null) {
-      _restoreScrollPosition(fallbackRatio);
-      return;
-    }
-
-    _showMessage('未找到灵感位置，已定位到章节开头。');
+    await _executeNavigationRequest(request);
   }
 
   Bookmark? _currentSelectionBookmark() {
@@ -10041,6 +10033,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           initialScrollRatio: request.initialScrollRatio,
           initialLogicalPosition: request.initialLogicalPosition,
         );
+        return;
+      case ReaderNavigationRequestType.jumpBookmark:
+        await _jumpTo(request.targetChapterIndex!, initialScrollRatio: 0);
+        if (!mounted) {
+          return;
+        }
+        final bookmark = request.bookmark!;
+        if (_content.trim().isEmpty) {
+          _showMessage('章节内容为空，无法定位灵感。');
+          return;
+        }
+        final restorePlan = _jumpFacade.resolveBookmarkRestorePlan(
+          bookmark: bookmark,
+          document: _document,
+          currentChapterIndex: _currentIndex,
+          isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+          currentPageIndex: _currentPageIndex,
+          chapterContent: _content,
+        );
+        if (restorePlan.logicalPosition != null) {
+          await _executeNavigationRequest(
+            ReaderNavigationRequest.restoreCurrent(
+              logicalPosition: restorePlan.logicalPosition,
+            ),
+          );
+          return;
+        }
+        if (restorePlan.fallbackRatio != null) {
+          await _executeNavigationRequest(
+            ReaderNavigationRequest.restoreCurrent(
+              scrollRatio: restorePlan.fallbackRatio,
+            ),
+          );
+          return;
+        }
+        _showMessage('未找到灵感位置，已定位到章节开头。');
         return;
     }
   }
@@ -17143,20 +17171,6 @@ class _BookmarkRange {
   final bool isWavy;
 }
 
-class _SelectionStyle {
-  const _SelectionStyle({
-    required this.highlight,
-    required this.bold,
-    required this.underline,
-    required this.wavy,
-  });
-
-  final bool highlight;
-  final bool bold;
-  final bool underline;
-  final bool wavy;
-}
-
 class _ReaderInspirationSelectionState {
   const _ReaderInspirationSelectionState({
     required this.hasSelection,
@@ -17175,26 +17189,6 @@ class _ReaderInspirationSelectionState {
   final bool isWavy;
 
   bool get hasExistingBookmark => existingBookmark != null;
-}
-
-class _ReaderSelectionSnapshot {
-  const _ReaderSelectionSnapshot({
-    required this.startOffset,
-    required this.endOffset,
-    required this.snippet,
-    required this.hasHighlight,
-    required this.isBold,
-    required this.isUnderline,
-    required this.isWavy,
-  });
-
-  final int startOffset;
-  final int endOffset;
-  final String snippet;
-  final bool hasHighlight;
-  final bool isBold;
-  final bool isUnderline;
-  final bool isWavy;
 }
 
 class _ReaderInspirationActionItem {
