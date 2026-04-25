@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/rendering.dart';
 
 import '../../../domain/entities/reader_settings.dart';
-import 'reader_layout_metrics.dart';
+import 'reader_surface_metrics.dart';
 
 class ReaderLayoutResolver {
   const ReaderLayoutResolver();
@@ -49,41 +49,82 @@ class ReaderLayoutResolver {
     required EdgeInsets safeInsets,
     required double extraBottomPadding,
   }) {
-    final bodyPadding = resolveBodyPadding(settings);
-    return bodyPadding.copyWith(
-      bottom: bodyPadding.bottom + safeInsets.bottom + extraBottomPadding,
-    );
+    return resolveSurfaceMetrics(
+      settings: settings,
+      viewportSize: Size.zero,
+      safeInsets: safeInsets,
+      pinnedHeaderHeight: 0,
+      scrollBottomReserve: extraBottomPadding,
+      pagedBottomReserve: 0,
+    ).scrollBodyPadding;
   }
 
-  ReaderLayoutMetrics resolvePagedMetrics({
+  ReaderSurfaceMetrics resolveSurfaceMetrics({
     required ReaderSettings settings,
     required Size viewportSize,
     required EdgeInsets safeInsets,
     required double pinnedHeaderHeight,
-    required double bottomProgressReserve,
+    double pagedHeaderReserve = 0,
+    required double scrollBottomReserve,
+    required double pagedBottomReserve,
   }) {
     final bodyPadding = resolveBodyPadding(settings);
-    final effectivePagePadding = bodyPadding.copyWith(
-      bottom: bodyPadding.bottom + safeInsets.bottom + bottomProgressReserve,
+    final scrollBodyPadding = bodyPadding.copyWith(
+      bottom: bodyPadding.bottom + safeInsets.bottom + scrollBottomReserve,
     );
+    final effectivePagePadding = bodyPadding;
     final contentWidth = max(
       0.0,
       viewportSize.width - effectivePagePadding.horizontal,
     );
+    final pagedFooterReserve = safeInsets.bottom + pagedBottomReserve;
     final contentHeight = max(
       0.0,
-      viewportSize.height - pinnedHeaderHeight - effectivePagePadding.vertical,
+      viewportSize.height -
+          pinnedHeaderHeight -
+          pagedHeaderReserve -
+          pagedFooterReserve -
+          effectivePagePadding.vertical,
     );
-    return ReaderLayoutMetrics(
+    return ReaderSurfaceMetrics(
+      viewportSize: viewportSize,
       safeInsets: safeInsets,
       bodyPadding: bodyPadding,
       headerPadding: resolveInfoBarPadding(settings, isHeader: true),
       footerPadding: resolveInfoBarPadding(settings, isHeader: false),
-      bottomProgressReserve: bottomProgressReserve,
+      scrollBodyPadding: scrollBodyPadding,
       pinnedHeaderHeight: pinnedHeaderHeight,
+      pagedHeaderReserve: pagedHeaderReserve,
+      pagedFooterReserve: pagedFooterReserve,
+      bottomProgressReserve: pagedBottomReserve,
       effectivePagePadding: effectivePagePadding,
+      contentRect: Rect.fromLTWH(
+        effectivePagePadding.left,
+        pinnedHeaderHeight + pagedHeaderReserve + effectivePagePadding.top,
+        contentWidth,
+        contentHeight,
+      ),
       contentWidth: contentWidth,
       contentHeight: contentHeight,
+    );
+  }
+
+  ReaderSurfaceMetrics resolvePagedMetrics({
+    required ReaderSettings settings,
+    required Size viewportSize,
+    required EdgeInsets safeInsets,
+    required double pinnedHeaderHeight,
+    double pagedHeaderReserve = 0,
+    required double bottomProgressReserve,
+  }) {
+    return resolveSurfaceMetrics(
+      settings: settings,
+      viewportSize: viewportSize,
+      safeInsets: safeInsets,
+      pinnedHeaderHeight: pinnedHeaderHeight,
+      pagedHeaderReserve: pagedHeaderReserve,
+      scrollBottomReserve: 0,
+      pagedBottomReserve: bottomProgressReserve,
     );
   }
 

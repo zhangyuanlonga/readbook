@@ -116,3 +116,15 @@ List<ReaderRenderBlockItem> buildReaderRenderBlockItems(
 
   return List<ReaderRenderBlockItem>.unmodifiable(items);
 }
+
+Map<int, ReaderRenderTextItem> buildReaderRenderTextItemIndex(
+  Iterable<ReaderRenderBlockItem> items,
+) {
+  final index = <int, ReaderRenderTextItem>{};
+  for (final item in items) {
+    if (item is ReaderRenderTextItem && item.paragraphIndex != null) {
+      index[item.paragraphIndex!] = item;
+    }
+  }
+  return Map<int, ReaderRenderTextItem>.unmodifiable(index);
+}

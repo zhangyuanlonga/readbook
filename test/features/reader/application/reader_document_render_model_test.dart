@@ -51,5 +51,24 @@ void main() {
       expect(items[6], isA<ReaderRenderImageItem>());
       expect(items[6].paragraphIndex, isNull);
     });
+
+    test('builds text item index by paragraph index', () {
+      final document = ReaderDocument(
+        blocks: const <ReaderBlock>[
+          ReaderTitleBlock(text: '第一章'),
+          ReaderTextBlock(text: '正文段落'),
+          ReaderImageBlock(imageUrl: 'file:///tmp/p1.jpg'),
+          ReaderFootnoteBlock(text: '脚注'),
+        ],
+      );
+
+      final items = buildReaderRenderBlockItems(document);
+      final index = buildReaderRenderTextItemIndex(items);
+
+      expect(index.length, 3);
+      expect(index[0]?.kind, ReaderRenderTextKind.title);
+      expect(index[1]?.kind, ReaderRenderTextKind.paragraph);
+      expect(index[2]?.kind, ReaderRenderTextKind.footnote);
+    });
   });
 }
