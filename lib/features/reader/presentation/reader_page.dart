@@ -80,6 +80,7 @@ import '../application/reader_font_registry_service.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
+import '../application/reader_navigation_entry_resolver.dart';
 import '../application/reader_pagination_cache_service.dart';
 import '../application/reader_pagination_engine.dart';
 import '../application/reader_pagination_models.dart';
@@ -111,10 +112,12 @@ import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'paged_animation/paged_animation_renderer_registry.dart';
 import 'reader_catalog_sheet.dart';
 import 'reader_annotated_text.dart';
+import 'reader_annotation_interaction.dart';
 import 'reader_chrome_widgets.dart';
 import 'reader_manga_view.dart';
 import 'reader_settings_sheet.dart';
 import 'reader_shell.dart';
+import 'reader_text_offset_mapper.dart' as text_offset_mapper;
 import 'reader_text_block_presentation.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_text_scroll_view.dart';
@@ -185,6 +188,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderChapterNavigation();
   final ReaderJumpFacade _jumpFacade = const ReaderJumpFacade();
   final ReaderJumpPlanner _jumpPlanner = const ReaderJumpPlanner();
+  final ReaderNavigationEntryResolver _navigationEntryResolver =
+      const ReaderNavigationEntryResolver();
   final ReaderLayoutResolver _layoutResolver = const ReaderLayoutResolver();
   final ReaderPaginationEngine _paginationEngine =
       const ReaderPaginationEngine();
@@ -2413,13 +2418,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return RepaintBoundary(
       child: Padding(
         padding: EdgeInsets.only(bottom: paddingBottom),
-        child: Text.rich(
-          _buildParagraphDisplayTextSpan(
-            displayText: _applyParagraphIndent(paragraph),
-            indentLength: _paragraphIndentLength(),
-            baseStyle: textStyle,
-          ),
+        child: ReaderAnnotatedText(
+          displayText: _applyParagraphIndent(paragraph),
+          indentLength: _paragraphIndentLength(),
+          baseStyle: textStyle,
           textAlign: _paragraphTextAlign(_settings),
+          textDirection: Directionality.of(context),
+          highlightColor: colors.text,
+          wavyColor: colors.text.withValues(alpha: 0.7),
         ),
       ),
     );
@@ -2486,13 +2492,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         padding: EdgeInsets.only(
           bottom: _readerBlockSpacing(item, isLast: isLast),
         ),
-        child: Text.rich(
-          _buildParagraphDisplayTextSpan(
-            displayText: displayText,
-            indentLength: indentLength,
-            baseStyle: textStyle,
-          ),
+        child: ReaderAnnotatedText(
+          displayText: displayText,
+          indentLength: indentLength,
+          baseStyle: textStyle,
           textAlign: _textAlignForRenderItem(item),
+          textDirection: Directionality.of(context),
+          highlightColor: colors.text,
+          wavyColor: colors.text.withValues(alpha: 0.7),
         ),
       ),
     );
@@ -2558,12 +2565,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             final maxWidth =
                 renderBox is RenderBox ? renderBox.size.width : 0.0;
             final handled = _handleBookmarkTap(
-              paragraphContext: context,
               paragraphIndex: item.paragraphIndex ?? 0,
               paragraphText: item.text,
               localPosition: details.localPosition,
               maxWidth: maxWidth,
               textStyle: textStyle,
+              textAlign: _textAlignForRenderItem(item),
             );
             if (handled) {
               _suppressNextReaderTap = true;
@@ -2632,12 +2639,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             final maxWidth =
                 renderBox is RenderBox ? renderBox.size.width : 0.0;
             final handled = _handleBookmarkTap(
-              paragraphContext: context,
               paragraphIndex: paragraphIndex,
               paragraphText: paragraph,
               localPosition: details.localPosition,
               maxWidth: maxWidth,
               textStyle: textStyle,
+              textAlign: _paragraphTextAlign(_settings),
             );
             if (handled) {
               _suppressNextReaderTap = true;
@@ -2719,21 +2726,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  TextPainter _buildParagraphPainter({
-    required String displayText,
-    required TextStyle textStyle,
-    required double maxWidth,
-    required TextDirection textDirection,
-  }) {
-    final painter = TextPainter(
-      text: TextSpan(text: displayText, style: textStyle),
-      textAlign: _paragraphTextAlign(_settings),
-      textDirection: textDirection,
-    );
-    painter.layout(maxWidth: maxWidth);
-    return painter;
-  }
-
   Widget _buildInlineImageParagraphItem({
     required String imageUrl,
     required bool isLast,
@@ -2786,35 +2778,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return value;
   }
 
-  TextStyle _paragraphIndentTextStyle(TextStyle baseStyle) {
-    return baseStyle.copyWith(
-      decoration: TextDecoration.none,
-      decorationStyle: TextDecorationStyle.solid,
-      decorationColor: null,
-      decorationThickness: null,
-    );
-  }
-
-  TextSpan _buildParagraphDisplayTextSpan({
-    required String displayText,
-    required int indentLength,
-    required TextStyle baseStyle,
-  }) {
-    if (indentLength <= 0 || indentLength >= displayText.length) {
-      return TextSpan(text: displayText, style: baseStyle);
-    }
-    return TextSpan(
-      style: baseStyle,
-      children: [
-        TextSpan(
-          text: displayText.substring(0, indentLength),
-          style: _paragraphIndentTextStyle(baseStyle),
-        ),
-        TextSpan(text: displayText.substring(indentLength)),
-      ],
-    );
-  }
-
   int _paragraphIndentLength() {
     final indentCount = _settings.paragraphIndent.round();
     return indentCount <= 0 ? 0 : indentCount;
@@ -2833,99 +2796,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int _resolveChapterOffsetFromDisplayOffset(int displayOffset) {
-    if (_isTextPagedViewport && _pagedPages.isNotEmpty) {
-      return _resolveChapterOffsetFromPagedDisplayOffset(displayOffset);
-    }
-
     final paragraphs =
         _paragraphs.isEmpty
             ? <String>[_content.trim()]
             : _paragraphs.toList(growable: false);
-    if (paragraphs.isEmpty) {
-      return displayOffset;
-    }
-
-    final indentLength = _paragraphIndentLength();
-    // Selection offsets are based on concatenated selectable text without
-    // paragraph separators, so map back to chapter offsets with +2 gaps.
-    final totalDisplayLength = paragraphs.fold<int>(
-      0,
-      (sum, item) => sum + item.length + indentLength,
+    return text_offset_mapper.resolveChapterOffsetFromDisplayOffset(
+      paragraphs: paragraphs,
+      pagedPages: _pagedPages,
+      currentPageIndex: _currentPageIndex,
+      paragraphIndentLength: _paragraphIndentLength(),
+      displayOffset: displayOffset,
     );
-    var remaining = _clampInt(displayOffset, 0, totalDisplayLength);
-    var chapterOffset = 0;
-    for (var i = 0; i < paragraphs.length; i++) {
-      final rawLength = paragraphs[i].length;
-      final displayLength = rawLength + indentLength;
-      if (remaining <= displayLength) {
-        final localDisplay = remaining;
-        final localRaw = _clampInt(localDisplay - indentLength, 0, rawLength);
-        return chapterOffset + localRaw;
-      }
-      remaining -= displayLength;
-      chapterOffset += rawLength + 2;
-    }
-
-    final last = paragraphs.last;
-    return max(0, chapterOffset - 2 + last.length);
-  }
-
-  int _resolveChapterOffsetFromPagedDisplayOffset(int displayOffset) {
-    final paragraphs =
-        _paragraphs.isEmpty
-            ? <String>[_content.trim()]
-            : _paragraphs.toList(growable: false);
-    if (paragraphs.isEmpty || _pagedPages.isEmpty) {
-      return displayOffset;
-    }
-
-    final pageIndex = _currentPageIndex.clamp(0, _pagedPages.length - 1);
-    final page = _pagedPages[pageIndex];
-    if (page.isEmpty) {
-      return displayOffset;
-    }
-
-    final starts = <int>[];
-    var offset = 0;
-    for (final paragraph in paragraphs) {
-      starts.add(offset);
-      offset += paragraph.length + 2;
-    }
-
-    final indentLength = _paragraphIndentLength();
-    var totalDisplayLength = 0;
-    for (final slice in page) {
-      final sliceIndent = slice.start == 0 ? indentLength : 0;
-      totalDisplayLength += (slice.end - slice.start) + sliceIndent;
-    }
-
-    var remaining = _clampInt(displayOffset, 0, totalDisplayLength);
-    for (final slice in page) {
-      final paragraphIndex = slice.paragraphIndex;
-      if (paragraphIndex < 0 || paragraphIndex >= paragraphs.length) {
-        continue;
-      }
-
-      final sliceIndent = slice.start == 0 ? indentLength : 0;
-      final sliceDisplayLength = (slice.end - slice.start) + sliceIndent;
-      if (remaining <= sliceDisplayLength) {
-        final localDisplay = remaining;
-        final localRaw = _clampInt(
-          localDisplay - sliceIndent,
-          0,
-          slice.end - slice.start,
-        );
-        return starts[paragraphIndex] + slice.start + localRaw;
-      }
-      remaining -= sliceDisplayLength;
-    }
-
-    final lastSlice = page.last;
-    final safeParagraphIndex = lastSlice.paragraphIndex.clamp(
-      0,
-      paragraphs.length - 1,
-    );
-    return starts[safeParagraphIndex] + lastSlice.end;
   }
 
   int _resolveChapterOffsetFromParagraph({
@@ -2936,17 +2817,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _paragraphs.isEmpty
             ? <String>[_content.trim()]
             : _paragraphs.toList(growable: false);
-    if (paragraphs.isEmpty) {
-      return paragraphOffset;
-    }
-
-    final safeIndex = _clampInt(paragraphIndex, 0, paragraphs.length - 1);
-    var offset = 0;
-    for (var i = 0; i < safeIndex; i++) {
-      offset += paragraphs[i].length + 2;
-    }
-    offset += _clampInt(paragraphOffset, 0, paragraphs[safeIndex].length);
-    return offset;
+    return text_offset_mapper.resolveChapterOffsetFromParagraph(
+      paragraphs: paragraphs,
+      paragraphIndex: paragraphIndex,
+      paragraphOffset: paragraphOffset,
+    );
   }
 
   Widget _wrapSelectionArea({required Widget child}) {
@@ -2970,12 +2845,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _handleBookmarkTap({
-    required BuildContext paragraphContext,
     required int paragraphIndex,
     required String paragraphText,
     required Offset localPosition,
     required double maxWidth,
     required TextStyle textStyle,
+    required TextAlign textAlign,
   }) {
     final ranges = _bookmarkRangesByParagraph[paragraphIndex];
     if (ranges == null || ranges.isEmpty) {
@@ -2986,30 +2861,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (displayText.isEmpty) {
       return false;
     }
-    final indentLength = displayText.length - paragraphText.length;
-    final painter = _buildParagraphPainter(
+    final hitRange = resolveTappedAnnotationRange(
+      ranges: ranges
+          .map(
+            (range) => ReaderTextAnnotationRange(
+              range.start,
+              range.end,
+              hasHighlight: range.hasHighlight,
+              isBold: range.isBold,
+              isUnderline: range.isUnderline,
+              isWavy: range.isWavy,
+            ),
+          )
+          .toList(growable: false),
       displayText: displayText,
-      textStyle: textStyle,
+      indentLength: displayText.length - paragraphText.length,
+      rawTextLength: paragraphText.length,
+      localPosition: localPosition,
       maxWidth: maxWidth,
+      textStyle: textStyle,
       textDirection: Directionality.of(context),
+      textAlign: textAlign,
     );
-    final position = painter.getPositionForOffset(localPosition);
-    final displayIndex = _clampInt(position.offset, 0, displayText.length);
-    final rawIndex = _clampInt(
-      displayIndex - indentLength,
-      0,
-      paragraphText.length,
-    );
-
-    _BookmarkRange? hitRange;
-    for (final range in ranges) {
-      if (rawIndex >= range.start && rawIndex <= range.end) {
-        if (hitRange == null ||
-            (range.end - range.start) < (hitRange.end - hitRange.start)) {
-          hitRange = range;
-        }
-      }
-    }
     final resolvedRange = hitRange;
     if (resolvedRange == null) {
       return false;
@@ -3034,7 +2907,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       startOffset: startOffset,
       endOffset: endOffset,
       snippet: snippet,
-      range: resolvedRange,
+      hasHighlight: resolvedRange.hasHighlight,
+      isBold: resolvedRange.isBold,
+      isUnderline: resolvedRange.isUnderline,
+      isWavy: resolvedRange.isWavy,
     );
     return true;
   }
@@ -3042,10 +2918,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _handleBookmarkTapInSlice({
     required ReaderPagedSlice slice,
     required String paragraphText,
-    required BuildContext paragraphContext,
     required Offset localPosition,
     required double maxWidth,
     required TextStyle textStyle,
+    required TextAlign textAlign,
   }) {
     final ranges = _bookmarkRangesByParagraph[slice.paragraphIndex];
     if (ranges == null || ranges.isEmpty) {
@@ -3058,31 +2934,52 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (displayText.isEmpty) {
       return false;
     }
-    final indentLength = displayText.length - rawText.length;
-    final painter = _buildParagraphPainter(
+    final localRange = resolveTappedAnnotationRange(
+      ranges: ranges
+          .map(
+            (range) => ReaderTextAnnotationRange(
+              range.start - slice.start,
+              range.end - slice.start,
+              hasHighlight: range.hasHighlight,
+              isBold: range.isBold,
+              isUnderline: range.isUnderline,
+              isWavy: range.isWavy,
+            ),
+          )
+          .where(
+            (range) => range.end > 0 && range.start < (slice.end - slice.start),
+          )
+          .map(
+            (range) => ReaderTextAnnotationRange(
+              _clampInt(range.start, 0, slice.end - slice.start),
+              _clampInt(range.end, 0, slice.end - slice.start),
+              hasHighlight: range.hasHighlight,
+              isBold: range.isBold,
+              isUnderline: range.isUnderline,
+              isWavy: range.isWavy,
+            ),
+          )
+          .toList(growable: false),
       displayText: displayText,
-      textStyle: textStyle,
+      indentLength: slice.start == 0 ? displayText.length - rawText.length : 0,
+      rawTextLength: slice.end - slice.start,
+      localPosition: localPosition,
       maxWidth: maxWidth,
+      textStyle: textStyle,
       textDirection: Directionality.of(context),
+      textAlign: textAlign,
     );
-    final position = painter.getPositionForOffset(localPosition);
-    final displayIndex = _clampInt(position.offset, 0, displayText.length);
-    final localRaw = _clampInt(
-      displayIndex - (slice.start == 0 ? indentLength : 0),
-      0,
-      slice.end - slice.start,
-    );
-    final rawIndex = slice.start + localRaw;
-
-    _BookmarkRange? hitRange;
-    for (final range in ranges) {
-      if (rawIndex >= range.start && rawIndex <= range.end) {
-        if (hitRange == null ||
-            (range.end - range.start) < (hitRange.end - hitRange.start)) {
-          hitRange = range;
-        }
-      }
-    }
+    final hitRange =
+        localRange == null
+            ? null
+            : _BookmarkRange(
+              localRange.start + slice.start,
+              localRange.end + slice.start,
+              hasHighlight: localRange.hasHighlight,
+              isBold: localRange.isBold,
+              isUnderline: localRange.isUnderline,
+              isWavy: localRange.isWavy,
+            );
     final resolvedRange = hitRange;
     if (resolvedRange == null) {
       return false;
@@ -3107,7 +3004,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       startOffset: startOffset,
       endOffset: endOffset,
       snippet: snippet,
-      range: resolvedRange,
+      hasHighlight: resolvedRange.hasHighlight,
+      isBold: resolvedRange.isBold,
+      isUnderline: resolvedRange.isUnderline,
+      isWavy: resolvedRange.isWavy,
     );
     return true;
   }
@@ -3116,17 +3016,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int startOffset,
     required int endOffset,
     required String snippet,
-    required _BookmarkRange range,
+    required bool hasHighlight,
+    required bool isBold,
+    required bool isUnderline,
+    required bool isWavy,
   }) {
     setState(() {
       _isTextSelectionActive = true;
       _selectionStartOffset = startOffset;
       _selectionEndOffset = endOffset;
       _selectedSnippet = snippet;
-      _selectionHighlight = range.hasHighlight;
-      _selectionBold = range.isBold;
-      _selectionUnderline = range.isUnderline && !range.isWavy;
-      _selectionWavy = range.isWavy;
+      _selectionHighlight = hasHighlight;
+      _selectionBold = isBold;
+      _selectionUnderline = isUnderline && !isWavy;
+      _selectionWavy = isWavy;
     });
     unawaited(_syncVolumeKeyPageInterception());
     _showBookmarkToolbar();
@@ -4947,10 +4850,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         final handled = _handleBookmarkTapInSlice(
           slice: slice.slice,
           paragraphText: paragraph,
-          paragraphContext: context,
           localPosition: details.localPosition,
           maxWidth: maxWidth,
           textStyle: slice.textStyle,
+          textAlign: slice.textAlign,
         );
         if (handled) {
           _suppressNextReaderTap = true;
@@ -7352,7 +7255,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         setState(() {
                           _bottomOverlayDraftProgressRatio = null;
                         });
-                        _restoreScrollPosition(value);
+                        final request = _navigationEntryResolver
+                            .resolveProgressSelection(scrollRatio: value);
+                        _restoreScrollPosition(
+                          request.initialScrollRatio ?? value,
+                        );
                         _syncActiveReadingRecordSessionProgress(ratio: value);
                         _scheduleProgressSave();
                       }
@@ -8567,7 +8474,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _jumpToBookmark(Bookmark bookmark) async {
-    final targetIndex = _jumpFacade.resolveBookmarkChapterIndex(
+    final targetIndex = _navigationEntryResolver.resolveBookmarkChapterIndex(
       bookmark: bookmark,
       chapters: _chapters,
     );
@@ -10103,6 +10010,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await _showCatalogSheet();
   }
 
+  Future<void> _executeNavigationRequest(
+    ReaderNavigationRequest request, {
+    bool resumeAutoReadOnRestore = false,
+  }) async {
+    switch (request.type) {
+      case ReaderNavigationRequestType.resumeAutoRead:
+        if (resumeAutoReadOnRestore) {
+          _scheduleAutoReadResume();
+        }
+        return;
+      case ReaderNavigationRequestType.restoreCurrent:
+        if (request.initialLogicalPosition != null) {
+          final ratio = _resolveDocumentRestoreRatio(
+            logicalPosition: request.initialLogicalPosition,
+          );
+          _restoreScrollPosition(ratio);
+        } else if (request.initialScrollRatio != null) {
+          _restoreScrollPosition(request.initialScrollRatio!);
+        }
+        if (resumeAutoReadOnRestore) {
+          _scheduleAutoReadResume();
+        } else {
+          _scheduleProgressSave();
+        }
+        return;
+      case ReaderNavigationRequestType.jumpChapter:
+        await _jumpTo(
+          request.targetChapterIndex!,
+          initialScrollRatio: request.initialScrollRatio,
+          initialLogicalPosition: request.initialLogicalPosition,
+        );
+        return;
+    }
+  }
+
   Future<void> _openMangaPositionSheet() async {
     if (!_isMangaViewport) {
       return;
@@ -10197,8 +10139,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    _restoreScrollPosition(selectedRatio);
-    _scheduleProgressSave();
+    await _executeNavigationRequest(
+      _navigationEntryResolver.resolveProgressSelection(
+        scrollRatio: selectedRatio,
+      ),
+    );
   }
 
   Future<void> _showCatalogSheet() async {
@@ -10245,36 +10190,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final selection = result?.selection;
 
-    final selectionDecision = _jumpFacade.resolveCatalogSelection(
+    final request = _navigationEntryResolver.resolveCatalogSelection(
       selectedIndex: selection?.chapterIndex,
       chapters: _chapters,
       currentChapterIndex: _currentIndex,
       selectedScrollRatio: selection?.scrollRatio,
       selectedLogicalPosition: selection?.logicalPosition,
     );
-    switch (selectionDecision.type) {
-      case ReaderCatalogSelectionDecisionType.resumeAutoRead:
-        _scheduleAutoReadResume();
-        return;
-      case ReaderCatalogSelectionDecisionType.restoreCurrent:
-        if (selectionDecision.initialLogicalPosition != null) {
-          final ratio = _resolveDocumentRestoreRatio(
-            logicalPosition: selectionDecision.initialLogicalPosition,
-          );
-          _restoreScrollPosition(ratio);
-        } else if (selectionDecision.initialScrollRatio != null) {
-          _restoreScrollPosition(selectionDecision.initialScrollRatio!);
-        }
-        _scheduleAutoReadResume();
-        return;
-      case ReaderCatalogSelectionDecisionType.jumpChapter:
-        await _jumpTo(
-          selectionDecision.targetChapterIndex!,
-          initialScrollRatio: selectionDecision.initialScrollRatio,
-          initialLogicalPosition: selectionDecision.initialLogicalPosition,
-        );
-        return;
-    }
+    await _executeNavigationRequest(request, resumeAutoReadOnRestore: true);
   }
 
   Future<String?> _resolveCurrentBookCustomCoverPath() async {
@@ -10333,16 +10256,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int? _resolveCatalogSearchEntryTargetIndex(ReaderCatalogSearchEntry entry) {
-    final candidateIndex =
-        entry.isContent
-            ? entry.chapterIndex
-            : (entry.targetChapterIndex ??
-                (entry.isVolume ? null : entry.chapterIndex));
-    return _jumpFacade.resolveReadableChapterTargetIndex(
+    final request = _navigationEntryResolver.resolveCatalogSearchEntry(
+      entry: ReaderCatalogSearchEntryAdapter(
+        chapterIndex: entry.chapterIndex,
+        targetChapterIndex: entry.targetChapterIndex,
+        isVolume: entry.isVolume,
+        isContent: entry.isContent,
+      ),
       chapters: _chapters,
-      chapterIndex: candidateIndex,
-      preferForward: true,
     );
+    return request?.targetChapterIndex;
   }
 
   Future<void> _toggleAutoReadSession() async {
