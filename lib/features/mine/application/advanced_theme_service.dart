@@ -1741,13 +1741,27 @@ class AdvancedThemeService {
                 ? BottomNavIconVariantSlot.darkSelected
                 : BottomNavIconVariantSlot.lightSelected,
           ),
+          // Legacy bundles often use `home_*` for the first tab icon.
           'home_normal.png': (
-            BottomNavIconGalleryTab.discover,
+            BottomNavIconGalleryTab.home,
             isDark
                 ? BottomNavIconVariantSlot.darkUnselected
                 : BottomNavIconVariantSlot.lightUnselected,
           ),
           'home_selected.png': (
+            BottomNavIconGalleryTab.home,
+            isDark
+                ? BottomNavIconVariantSlot.darkSelected
+                : BottomNavIconVariantSlot.lightSelected,
+          ),
+          // Some bundles still use `discover_*` to describe the explore tab.
+          'discover_normal.png': (
+            BottomNavIconGalleryTab.discover,
+            isDark
+                ? BottomNavIconVariantSlot.darkUnselected
+                : BottomNavIconVariantSlot.lightUnselected,
+          ),
+          'discover_selected.png': (
             BottomNavIconGalleryTab.discover,
             isDark
                 ? BottomNavIconVariantSlot.darkSelected
