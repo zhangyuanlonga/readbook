@@ -19,10 +19,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('测试登录源'), findsNWidgets(2));
+    expect(find.text('测试登录源'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(2));
     expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-    expect(find.byType(SegmentedButton<String>), findsOneWidget);
+    expect(find.text('关闭'), findsOneWidget);
+    expect(find.text('开启'), findsOneWidget);
     expect(find.text('发送验证码'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, '账号'), 'alice');

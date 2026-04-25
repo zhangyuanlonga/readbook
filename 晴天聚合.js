@@ -23,11 +23,18 @@ const DEFAULT_SETTINGS = {
   disabled_sources: '0',
   proxy: '服务器',
   close_img: 'off',
+  fqpara: 'on',
+  reading: '0',
+  info: 'on',
+  pstyle: '0',
+  plcolor: '#000000',
+  controlUrl: '',
 };
 
 const SOURCE_OPTIONS = ['全部', '番茄', '七猫', '书旗', '塔读', 'QQ阅读', '酷我小说'];
 const TAB_OPTIONS = ['小说', '听书', '漫画', '短剧'];
 const CHANNEL_OPTIONS = ['男频', '女频'];
+const LOCAL_VERSION = '5.4.23';
 
 function createDiscoverCategory(partial = {}) {
   return {
@@ -159,8 +166,27 @@ async function saveSettingsFromForm(ctx, formData = {}) {
     tab: normalizeText(formData['当前模式']) || current.tab,
     sources: customSource || selectSource || current.sources,
     source_type: normalizeText(formData['男/女频道']) || current.source_type,
+    proxy: normalizeText(formData['阅读代理']) || current.proxy,
+    close_img: normalizeText(formData['关闭图片']) || current.close_img,
+    disabled_sources:
+      normalizeText(formData['搜索全部来源']) || current.disabled_sources,
+    fqpara: normalizeText(formData['段评开关']) || current.fqpara,
+    reading: normalizeText(formData['同步书架']) || current.reading,
+    info: normalizeText(formData['完整简介']) || current.info,
+    plcolor: normalizeText(formData['自定义评论颜色(可不填)']) || current.plcolor,
+    pstyle: normalizeText(formData['段评气泡样式(0-4)']) || current.pstyle,
   };
   await ctx.sourceLogin.setVariable(JSON.stringify(next));
+  return next;
+}
+
+async function patchSettings(ctx, patch = {}) {
+  const current = await getSettings(ctx);
+  const next = {
+    ...current,
+    ...(patch || {}),
+  };
+  await ctx.sourceLogin.patchVariable(next);
   return next;
 }
 
@@ -207,6 +233,42 @@ async function saveAuthState(ctx, qttoken, deviceId, extraInfo = {}) {
   );
 }
 
+async function getAuthState(ctx) {
+  const header = await ctx.sourceLogin.getHeaderMap();
+  const info = await ctx.sourceLogin.getInfoMap();
+  const qttoken = normalizeText(
+    ctx.utils.firstNonEmpty([
+      header.qttoken,
+      ctx.utils.pickField(header.cookie || '', ['qttoken'], ''),
+      info.密钥,
+    ]),
+  );
+  const cookie = normalizeText(
+    ctx.utils.firstNonEmpty([header.cookie, buildCookieHeader(qttoken, header.deviceId)]),
+  );
+  return {
+    qttoken,
+    cookie,
+    deviceId: normalizeText(header.deviceId),
+  };
+}
+
+async function requestWithAuth(ctx, url, { method = 'GET', query, body, bodyType } = {}) {
+  const auth = await getAuthState(ctx);
+  if (!auth.cookie) {
+    throw new Error('请先登录晴天聚合账号');
+  }
+  return await requestJson(ctx, url, {
+    method,
+    query,
+    body,
+    bodyType,
+    headers: {
+      cookie: auth.cookie,
+    },
+  });
+}
+
 async function validateKeyLogin(ctx, baseUrl, qttoken) {
   const deviceId = await getDeviceId(ctx);
   const cookie = buildCookieHeader(qttoken, deviceId);
@@ -247,6 +309,17 @@ async function loginWithEmail(ctx, baseUrl, email, password) {
     邮箱: email,
     密钥: normalizeText(payload.key),
   });
+  return payload;
+}
+
+async function fetchCurrentUser(ctx, settings) {
+  const response = await requestWithAuth(ctx, `${settings.server}/user_api`, {
+    method: 'POST',
+  });
+  const payload = response.json || {};
+  if (payload?.id == null && !normalizeText(payload?.email)) {
+    throw new Error(normalizeText(payload?.msg) || '登录状态无效');
+  }
   return payload;
 }
 
@@ -420,6 +493,436 @@ async function logoutAction(ctx) {
   return '已退出登录';
 }
 
+async function checkStatusAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const user = await fetchCurrentUser(ctx, settings);
+  await ctx.sourceLogin.patchInfo({
+    邮箱: normalizeText(user.email),
+    密钥: normalizeText(user.user_key),
+  });
+  const nickname = normalizeText(user.nickname) || '未设置';
+  const email = normalizeText(user.email);
+  const deviceCount = (() => {
+    try {
+      const value = ctx.utils.safeJsonParse(user.device, {});
+      return String(Object.keys(value || {}).length);
+    } catch (_) {
+      return normalizeText(user.device) ? '1' : '0';
+    }
+  })();
+  const isVip = user.is_vips ? '已开通' : '未开通';
+  const banned = user.is_banned ? '已封禁' : '正常';
+  const registerAt = user.register_time
+    ? ctx.utils.timeFormat(Number(user.register_time) * 1000, 'yyyy-MM-dd HH:mm:ss')
+    : '未知';
+  const lastReadAt = user.last_read_time
+    ? ctx.utils.timeFormat(Number(user.last_read_time) * 1000, 'yyyy-MM-dd HH:mm:ss')
+    : '未阅读';
+  return [
+    `昵称：${nickname}`,
+    `邮箱：${email}`,
+    `密钥：${normalizeText(user.user_key).slice(0, 4)}***${normalizeText(user.user_key).slice(-4)}`,
+    `注册时间：${registerAt}`,
+    `累计阅读：${normalizeText(user.all_read_count) || '0'}`,
+    `最后阅读：${lastReadAt}`,
+    `在线设备：${deviceCount}`,
+    `会员状态：${isVip}`,
+    `封禁状态：${banned}`,
+  ].join('\n');
+}
+
+async function clearDeviceAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const ok = await ctx.ui.confirm({
+    title: '清空设备',
+    message: '确认清空当前晴天聚合在线设备记录吗？',
+    confirmText: '清空',
+    cancelText: '取消',
+  });
+  if (!ok) {
+    return '已取消';
+  }
+  const response = await requestWithAuth(ctx, `${settings.server}/clear`, {
+    method: 'POST',
+  });
+  const payload = response.json || {};
+  return String(payload.code) === '0'
+    ? '设备清除成功'
+    : (normalizeText(payload.msg) || '设备清除失败');
+}
+
+async function openUserCenterAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const auth = await getAuthState(ctx);
+  if (!auth.qttoken) {
+    return '请先登录';
+  }
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/user`,
+    title: '晴天聚合后台',
+    refetchAfterSuccess: false,
+  });
+  return '已打开用户后台';
+}
+
+async function registerAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/register`,
+    title: '晴天聚合注册',
+    refetchAfterSuccess: false,
+  });
+  return '已打开注册页面';
+}
+
+async function vipAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const auth = await getAuthState(ctx);
+  if (!auth.qttoken) {
+    return '请先登录';
+  }
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/coffee`,
+    title: '晴天聚合会员',
+    refetchAfterSuccess: false,
+  });
+  return '已打开会员页面';
+}
+
+async function versionAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/version?id=${encodeURIComponent(LOCAL_VERSION)}`,
+    title: '晴天聚合更新',
+    refetchAfterSuccess: false,
+  });
+  const response = await requestJson(
+    ctx,
+    `${settings.server}/version`,
+    {
+      query: { id: LOCAL_VERSION },
+    },
+  );
+  const payload = response.json || {};
+  const latest = normalizeText(payload.rssVersion3);
+  const updatedAt = normalizeText(payload.last_updated);
+  const logs = payload.update_log || {};
+  const lines = [`当前版本：${LOCAL_VERSION}`];
+  if (latest) {
+    lines.push(`最新版本：${latest}`);
+  }
+  if (updatedAt) {
+    lines.push(`更新时间：${updatedAt}`);
+  }
+  const recentEntries = Object.entries(logs).slice(0, 6);
+  if (recentEntries.length > 0) {
+    lines.push('', '更新日志：');
+    for (const [version, text] of recentEntries) {
+      lines.push(`${version} - ${normalizeText(text)}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+async function tutorialAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/help`,
+    title: '使用说明',
+    refetchAfterSuccess: false,
+  });
+  return [
+    '搜索：直接搜全部来源，或用 书名@来源 精准搜索。',
+    '模式：支持 小说 / 听书 / 漫画 / 短剧。',
+    '设置：先在登录页里保存服务器、来源和模式，再进入发现页刷新。',
+    '登录：当前首版优先支持晴天后台账号/密钥登录。',
+  ].join('\n');
+}
+
+function currentModeLabel(settings) {
+  return `${settings.sources} / ${settings.tab} / ${settings.source_type}`;
+}
+
+async function toggleInfoAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const nextValue = settings.info === 'off' ? 'on' : 'off';
+  const next = await patchSettings(ctx, { info: nextValue });
+  return JSON.stringify({
+    完整简介: next.info,
+    message: nextValue === 'off' ? '已精简详情页简介' : '已恢复详情页详细简介',
+  });
+}
+
+async function toggleParagraphAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const nextValue = settings.fqpara === 'on' ? 'off' : 'on';
+  const next = await patchSettings(ctx, { fqpara: nextValue });
+  return JSON.stringify({
+    段评开关: next.fqpara,
+    message:
+      nextValue === 'on'
+        ? '段评已开启'
+        : '段评已关闭',
+  });
+}
+
+async function toggleReadingSyncAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const nextValue = settings.reading === '1' ? '0' : '1';
+  const next = await patchSettings(ctx, { reading: nextValue });
+  return JSON.stringify({
+    同步书架: next.reading,
+    message:
+      nextValue === '1'
+        ? '晴天书架同步已开启'
+        : '晴天书架同步已关闭',
+  });
+}
+
+async function toggleSourceTypeAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const nextValue = settings.source_type === '女频' ? '男频' : '女频';
+  const next = await patchSettings(ctx, { source_type: nextValue });
+  return JSON.stringify({
+    '男/女频道': next.source_type,
+    message: `发现页已设置为：${nextValue}`,
+  });
+}
+
+async function toggleDisabledSourcesAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const nextValue = settings.disabled_sources === '1' ? '0' : '1';
+  const next = await patchSettings(ctx, {
+    disabled_sources: nextValue,
+    ...(nextValue === '1' ? { sources: '全部' } : {}),
+  });
+  return JSON.stringify({
+    来源: next.sources,
+    搜索全部来源: next.disabled_sources,
+    message:
+      nextValue === '1'
+        ? '强制搜索禁用源已开启，搜索会变慢'
+        : '强制搜索禁用源已关闭',
+  });
+}
+
+async function toggleCloseImageAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const nextValue = settings.close_img === 'on' ? 'off' : 'on';
+  const next = await patchSettings(ctx, { close_img: nextValue });
+  return JSON.stringify({
+    关闭图片: next.close_img,
+    message: nextValue === 'on' ? '图片显示已关闭' : '图片显示已开启',
+  });
+}
+
+async function getMediaAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  return [
+    `当前服务器：${settings.server}`,
+    `当前来源：${settings.sources}`,
+    `当前模式：${settings.tab}`,
+    `当前频道：${settings.source_type}`,
+  ].join('\n');
+}
+
+async function setMediaAction(ctx, result, media) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const allowMap = {
+    喜马拉雅: ['听书'],
+    番茄: '*',
+    七猫: ['小说', '听书', '短剧'],
+    全部: '*',
+    默认: ['小说'],
+  };
+  const allow = allowMap[settings.sources] || allowMap.默认;
+  const nextMedia =
+    allow === '*' || (Array.isArray(allow) && allow.includes(media))
+      ? media
+      : Array.isArray(allow)
+        ? allow[0]
+        : '小说';
+  const next = await patchSettings(ctx, { tab: nextMedia });
+  return JSON.stringify({
+    当前模式: next.tab,
+    message:
+      nextMedia == media
+        ? `已切换至：${nextMedia}`
+        : `当前来源不支持 ${media}，已自动切换至：${nextMedia}`,
+  });
+}
+
+async function cycleServerAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const customServer = normalizeBaseUrl(result?.['自定义服务器(可不填)']);
+  if (customServer) {
+    const next = await patchSettings(ctx, { server: customServer });
+    return JSON.stringify({
+      服务器: next.server,
+      message: `已切换到自定义服务器：${next.server}`,
+    });
+  }
+  const currentIndex = HOSTS.indexOf(settings.server);
+  const nextServer = HOSTS[(currentIndex + 1 + HOSTS.length) % HOSTS.length];
+  const next = await patchSettings(ctx, { server: nextServer });
+  return JSON.stringify({
+    服务器: next.server,
+    message: `已切换服务器：${next.server}`,
+  });
+}
+
+async function checkServerAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const startedAt = Date.now();
+  const response = await ctx.http.request({
+    url: `${settings.server}/health`,
+    timeoutMs: 8000,
+    responseType: 'json',
+    headers: DEFAULT_HEADERS,
+  });
+  const elapsed = Date.now() - startedAt;
+  const payload = response.json || {};
+  const healthy = normalizeText(payload.status) === 'healthy';
+  return healthy
+    ? `服务器可用\n地址：${settings.server}\n耗时：${elapsed}ms`
+    : `服务器异常\n地址：${settings.server}\n耗时：${elapsed}ms`;
+}
+
+async function openHomeAction() {
+  await ctx.ui.openBrowserAwait({
+    url: 'http://vip.gyks.cf',
+    title: '晴天发布页',
+    refetchAfterSuccess: false,
+  });
+  return '已打开发布页';
+}
+
+async function openBookStoreAction() {
+  await ctx.ui.openBrowserAwait({
+    url: 'https://sk.gyks.cf',
+    title: '晴天书库',
+    refetchAfterSuccess: false,
+  });
+  return '已打开晴天书库';
+}
+
+async function openRecommendAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/put_book`,
+    title: '我来推荐',
+    refetchAfterSuccess: false,
+  });
+  return '已打开推荐页面';
+}
+
+async function openControlAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  await patchSettings(ctx, { controlUrl: settings.server });
+  await ctx.ui.openBrowserAwait({
+    url: `${settings.server}/control`,
+    title: '晴天设置中心',
+    refetchAfterSuccess: false,
+  });
+  const cookieMap = ctx.cookie.getForUrl(settings.server) || {};
+  const patch = {};
+  const knownKeys = [
+    'server',
+    'proxy',
+    'tab',
+    'source_type',
+    'sources',
+    'fqpara',
+    'disabled_sources',
+    'reading',
+    'info',
+    'close_img',
+    'plcolor',
+    'pstyle',
+  ];
+  for (const key of knownKeys) {
+    const value = normalizeText(cookieMap[key]);
+    if (value) {
+      patch[key] = value;
+    }
+  }
+  if (Object.keys(patch).length > 0) {
+    const next = await patchSettings(ctx, patch);
+    return JSON.stringify({
+      服务器: next.server,
+      来源: next.sources,
+      当前模式: next.tab,
+      '男/女频道': next.source_type,
+      阅读代理: next.proxy,
+      message: '已同步网页版控制台设置',
+    });
+  }
+  return '网页控制台已关闭，未检测到新的设置变更。';
+}
+
+async function syncBrowserSettingsAction(ctx, result) {
+  return await openControlAction(ctx, result);
+}
+
+async function clearBrowserSettingsAction(ctx, result) {
+  const settings = await saveSettingsFromForm(ctx, result || {});
+  const next = await patchSettings(ctx, {
+    server: HOSTS[0],
+    proxy: DEFAULT_SETTINGS.proxy,
+    tab: DEFAULT_SETTINGS.tab,
+    source_type: DEFAULT_SETTINGS.source_type,
+    sources: DEFAULT_SETTINGS.sources,
+    fqpara: DEFAULT_SETTINGS.fqpara,
+    disabled_sources: DEFAULT_SETTINGS.disabled_sources,
+    reading: DEFAULT_SETTINGS.reading,
+    info: DEFAULT_SETTINGS.info,
+  });
+  return JSON.stringify({
+    服务器: next.server,
+    来源: next.sources,
+    当前模式: next.tab,
+    '男/女频道': next.source_type,
+    段评开关: next.fqpara,
+    搜索全部来源: next.disabled_sources,
+    同步书架: next.reading,
+    完整简介: next.info,
+    message: '已重置控制台设置到默认值',
+  });
+}
+
+async function fanqieLoginAction(ctx, result) {
+  await saveSettingsFromForm(ctx, result || {});
+  await ctx.ui.openBrowserAwait({
+    url: 'https://fanqienovel.com/',
+    title: '番茄登录',
+    refetchAfterSuccess: false,
+  });
+  const sessionId = normalizeText(
+    ctx.cookie.getForUrl('https://fanqienovel.com/', 'sessionid'),
+  );
+  if (sessionId) {
+    const token = `sessionid=${sessionId}`;
+    await ctx.sourceLogin.patchInfo({
+      '手动填写番茄token(可不填)': token,
+    });
+    return '番茄登录成功，已同步 sessionid';
+  }
+  const token = await ctx.ui.prompt({
+    title: '番茄登录 Token',
+    message: '未自动检测到 sessionid。若网页登录已完成，请手动粘贴 token 或 sessionid。',
+    initialValue: result?.['手动填写番茄token(可不填)'] || '',
+    confirmText: '保存',
+    cancelText: '跳过',
+  });
+  if (token == null) {
+    return '已打开番茄网页登录';
+  }
+  await ctx.sourceLogin.patchInfo({
+    '手动填写番茄token(可不填)': normalizeText(token),
+  });
+  return '已保存番茄 token';
+}
+
 export default {
   meta: {
     name: '晴天聚合',
@@ -437,6 +940,14 @@ export default {
     const info = await ctx.sourceLogin.getInfoMap();
     const settings = await getSettings(ctx);
     return [
+      {
+        name: '晴天聚合控制台',
+        type: 'divider',
+      },
+      {
+        name: `当前配置：${currentModeLabel(settings)}`,
+        type: 'note',
+      },
       {
         name: '服务器',
         type: 'select',
@@ -487,29 +998,327 @@ export default {
         default: settings.source_type,
       },
       {
+        name: '阅读代理',
+        type: 'toggle',
+        chars: ['服务器', '本地'],
+        default: settings.proxy,
+      },
+      {
+        name: '关闭图片',
+        type: 'toggle',
+        chars: ['off', 'on'],
+        default: settings.close_img,
+      },
+      {
+        name: '段评开关',
+        type: 'toggle',
+        chars: ['off', 'on'],
+        default: settings.fqpara,
+      },
+      {
+        name: '同步书架',
+        type: 'toggle',
+        chars: ['0', '1'],
+        default: settings.reading,
+      },
+      {
+        name: '完整简介',
+        type: 'toggle',
+        chars: ['on', 'off'],
+        default: settings.info,
+      },
+      {
+        name: '搜索全部来源',
+        type: 'toggle',
+        chars: ['0', '1'],
+        default: settings.disabled_sources,
+      },
+      {
+        name: '自定义评论颜色(可不填)',
+        type: 'text',
+        default: settings.plcolor,
+      },
+      {
+        name: '段评气泡样式(0-4)',
+        type: 'text',
+        default: settings.pstyle,
+      },
+      {
+        name: '手动填写番茄token(可不填)',
+        type: 'password',
+        default: info['手动填写番茄token(可不填)'] || '',
+      },
+      {
+        name: '设置动作',
+        type: 'divider',
+      },
+      {
         name: '♥登录书源',
         type: 'button',
         action: 'result = await source.login(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
       },
       {
         name: '✨应用设置',
         type: 'button',
         action: 'result = await applySettingsAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🔮检测登录',
+        type: 'button',
+        action: 'result = await checkStatusAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
       },
       {
         name: '🔚 退出登录',
         type: 'button',
         action: 'result = await logoutAction(ctx);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
       },
       {
         name: '⛔️清空设置',
         type: 'button',
         action: 'result = await clearSettingsAction(ctx);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🗑清除设备',
+        type: 'button',
+        action: 'result = await clearDeviceAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '页面入口',
+        type: 'divider',
+      },
+      {
+        name: '🏝用户后台',
+        type: 'button',
+        action: 'result = await openUserCenterAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🔐注册书源',
+        type: 'button',
+        action: 'result = await registerAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '☕打赏享福利',
+        type: 'button',
+        action: 'result = await vipAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '❇️ 更新书源',
+        type: 'button',
+        action: 'result = await versionAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
       },
       {
         name: '📐 使用说明',
         type: 'button',
-        action: "await ctx.ui.longToast('晴天聚合首版当前优先支持后台登录、搜索、发现、详情、目录与正文。复杂控制台、本地代理、评论与同步能力后续补充。');",
+        action: 'result = await tutorialAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 1,
+        },
+      },
+      {
+        name: '兼容动作',
+        type: 'divider',
+      },
+      {
+        name: '⚙️书源设置',
+        type: 'button',
+        action: 'result = await openControlAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '✨同步网页设置',
+        type: 'button',
+        action: 'result = await syncBrowserSettingsAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '⛔️重置网页设置',
+        type: 'button',
+        action: 'result = await clearBrowserSettingsAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '📝段评开关',
+        type: 'button',
+        action: 'result = await toggleParagraphAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '📚同步书架',
+        type: 'button',
+        action: 'result = await toggleReadingSyncAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '♋️男/女频道',
+        type: 'button',
+        action: 'result = await toggleSourceTypeAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '💢强制搜索全部',
+        type: 'button',
+        action: 'result = await toggleDisabledSourcesAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🍅番茄登录',
+        type: 'button',
+        action: 'result = await fanqieLoginAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '➿️图片显示',
+        type: 'button',
+        action: 'result = await toggleCloseImageAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🗂当前模式',
+        type: 'button',
+        action: 'result = await getMediaAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 1,
+        },
+      },
+      {
+        name: '📖小说模式',
+        type: 'button',
+        action: "result = await setMediaAction(ctx, result, '小说');",
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🔊听书模式',
+        type: 'button',
+        action: "result = await setMediaAction(ctx, result, '听书');",
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🏞漫画模式',
+        type: 'button',
+        action: "result = await setMediaAction(ctx, result, '漫画');",
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🖲短剧模式',
+        type: 'button',
+        action: "result = await setMediaAction(ctx, result, '短剧');",
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '🎚切换服务器',
+        type: 'button',
+        action: 'result = await cycleServerAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '♻️检测当前服务器',
+        type: 'button',
+        action: 'result = await checkServerAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '⚕️本地/服务器',
+        type: 'button',
+        action: "result = await applySettingsAction(ctx, { ...result, '阅读代理': (result['阅读代理'] === '本地' ? '服务器' : '本地') });",
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '📌永久发布页📌',
+        type: 'button',
+        action: 'result = await openHomeAction();',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '📤我来上传',
+        type: 'button',
+        action: 'result = await openBookStoreAction();',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '💖我来推荐',
+        type: 'button',
+        action: 'result = await openRecommendAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '📑更少简介',
+        type: 'button',
+        action: 'result = await toggleInfoAction(ctx, result);',
+        style: {
+          layout_flexBasisPercent: 0.45,
+        },
+      },
+      {
+        name: '番茄网页登录、本地代理、评论与书架同步仍在后续迁移范围内。',
+        type: 'note',
       },
     ];
   },

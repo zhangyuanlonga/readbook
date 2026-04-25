@@ -1409,7 +1409,7 @@ class _BookmarkGroupSection extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              bookmark.snippet,
+                              bookmark.displaySnippet,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.bodyMedium?.copyWith(
@@ -1418,6 +1418,18 @@ class _BookmarkGroupSection extends StatelessWidget {
                                 fontSize: 13,
                               ),
                             ),
+                            if (bookmark.hasNote) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                bookmark.note!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 2),
                             Text(
                               timeLabel(bookmark.createdAt),

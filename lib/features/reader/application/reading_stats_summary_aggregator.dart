@@ -3,9 +3,15 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import 'reading_stats_models.dart';
+import 'reading_stats_work_identity_service.dart';
 
 class ReadingStatsSummaryAggregator {
-  const ReadingStatsSummaryAggregator();
+  const ReadingStatsSummaryAggregator({
+    ReadingStatsWorkIdentityService workIdentityService =
+        const ReadingStatsWorkIdentityService(),
+  }) : _workIdentityService = workIdentityService;
+
+  final ReadingStatsWorkIdentityService _workIdentityService;
 
   ReadingRecordsSummary buildSummary({
     required List<ReadingRecord> latestRecords,
@@ -25,28 +31,29 @@ class ReadingStatsSummaryAggregator {
               filteredSessions: filteredSessions,
               fallbackRecords: filteredLatestRecords,
             );
-    final activeBookIds =
-        periodRange.isAll
-            ? latestRecords.map((item) => item.bookId).toSet()
-            : <String>{
-              for (final item in filteredDailyRecords) item.bookId,
-              for (final item in filteredSessions) item.bookId,
-            };
-    final totalBooks =
-        periodRange.isAll ? latestRecords.length : activeBookIds.length;
+    final workGroups = _workIdentityService.groupItems(
+      items: recordsForSummary,
+      titleOf: (item) => item.bookTitle,
+      authorOf: (item) => item.bookAuthor,
+      fallbackIdOf: (item) => item.bookId,
+    );
+    final totalBooks = workGroups.length;
     final totalDays =
         periodRange.isAll
             ? dailyRecords.map((item) => item.dateKey).toSet().length
             : filteredDailyRecords.map((item) => item.dateKey).toSet().length;
     final completedBookCount =
-        activeBookIds
+        workGroups.values
             .where(
-              (bookId) =>
-                  resolvedStatusesByBookId[bookId]?.isCompleted ?? false,
+              (records) => records.any(
+                (record) =>
+                    resolvedStatusesByBookId[record.bookId]?.isCompleted ??
+                    false,
+              ),
             )
             .length;
     final readingBookCount =
-        activeBookIds.isEmpty ? 0 : activeBookIds.length - completedBookCount;
+        totalBooks == 0 ? 0 : totalBooks - completedBookCount;
     final totalReadMillis =
         periodRange.isAll
             ? recordsForSummary.fold<int>(
@@ -88,7 +95,7 @@ class ReadingStatsSummaryAggregator {
       totalReadChars: totalReadChars,
       readCharsPerMinute: readCharsPerMinute,
       chapterCount: chapterCount,
-      coverRecords: recordsForSummary,
+      coverRecords: _resolveRepresentativeRecords(workGroups),
     );
   }
 
@@ -120,5 +127,32 @@ class ReadingStatsSummaryAggregator {
     return latestRecords
         .where((item) => activeBookIds.contains(item.bookId))
         .toList(growable: false);
+  }
+
+  List<ReadingRecord> _resolveRepresentativeRecords(
+    Map<String, List<ReadingRecord>> workGroups,
+  ) {
+    final records = workGroups.values
+        .map(_resolveRepresentativeRecord)
+        .toList(growable: false);
+    final sorted = [...records]
+      ..sort((a, b) => b.lastReadAt.compareTo(a.lastReadAt));
+    return List<ReadingRecord>.unmodifiable(sorted);
+  }
+
+  ReadingRecord _resolveRepresentativeRecord(List<ReadingRecord> records) {
+    var best = records.first;
+    for (final item in records.skip(1)) {
+      if (item.lastReadAt.isAfter(best.lastReadAt)) {
+        best = item;
+        continue;
+      }
+      final bestCover = best.coverUrl?.trim() ?? '';
+      final itemCover = item.coverUrl?.trim() ?? '';
+      if (bestCover.isEmpty && itemCover.isNotEmpty) {
+        best = item;
+      }
+    }
+    return best;
   }
 }

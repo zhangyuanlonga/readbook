@@ -2524,6 +2524,15 @@ class $StoredBookmarksTable extends StoredBookmarks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isBoldMeta = const VerificationMeta('isBold');
   @override
   late final GeneratedColumn<bool> isBold = GeneratedColumn<bool>(
@@ -2607,6 +2616,7 @@ class $StoredBookmarksTable extends StoredBookmarks
     startOffset,
     endOffset,
     snippet,
+    note,
     isBold,
     isUnderline,
     isWavy,
@@ -2684,6 +2694,12 @@ class $StoredBookmarksTable extends StoredBookmarks
       );
     } else if (isInserting) {
       context.missing(_snippetMeta);
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
     }
     if (data.containsKey('is_bold')) {
       context.handle(
@@ -2768,6 +2784,10 @@ class $StoredBookmarksTable extends StoredBookmarks
             DriftSqlType.string,
             data['${effectivePrefix}snippet'],
           )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
       isBold:
           attachedDatabase.typeMapping.read(
             DriftSqlType.bool,
@@ -2814,6 +2834,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
   final int startOffset;
   final int endOffset;
   final String snippet;
+  final String? note;
   final bool isBold;
   final bool isUnderline;
   final bool isWavy;
@@ -2828,6 +2849,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
     required this.startOffset,
     required this.endOffset,
     required this.snippet,
+    this.note,
     required this.isBold,
     required this.isUnderline,
     required this.isWavy,
@@ -2845,6 +2867,9 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
     map['start_offset'] = Variable<int>(startOffset);
     map['end_offset'] = Variable<int>(endOffset);
     map['snippet'] = Variable<String>(snippet);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
     map['is_bold'] = Variable<bool>(isBold);
     map['is_underline'] = Variable<bool>(isUnderline);
     map['is_wavy'] = Variable<bool>(isWavy);
@@ -2865,6 +2890,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
       startOffset: Value(startOffset),
       endOffset: Value(endOffset),
       snippet: Value(snippet),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       isBold: Value(isBold),
       isUnderline: Value(isUnderline),
       isWavy: Value(isWavy),
@@ -2888,6 +2914,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
       startOffset: serializer.fromJson<int>(json['startOffset']),
       endOffset: serializer.fromJson<int>(json['endOffset']),
       snippet: serializer.fromJson<String>(json['snippet']),
+      note: serializer.fromJson<String?>(json['note']),
       isBold: serializer.fromJson<bool>(json['isBold']),
       isUnderline: serializer.fromJson<bool>(json['isUnderline']),
       isWavy: serializer.fromJson<bool>(json['isWavy']),
@@ -2907,6 +2934,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
       'startOffset': serializer.toJson<int>(startOffset),
       'endOffset': serializer.toJson<int>(endOffset),
       'snippet': serializer.toJson<String>(snippet),
+      'note': serializer.toJson<String?>(note),
       'isBold': serializer.toJson<bool>(isBold),
       'isUnderline': serializer.toJson<bool>(isUnderline),
       'isWavy': serializer.toJson<bool>(isWavy),
@@ -2924,6 +2952,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
     int? startOffset,
     int? endOffset,
     String? snippet,
+    Value<String?> note = const Value.absent(),
     bool? isBold,
     bool? isUnderline,
     bool? isWavy,
@@ -2938,6 +2967,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
     startOffset: startOffset ?? this.startOffset,
     endOffset: endOffset ?? this.endOffset,
     snippet: snippet ?? this.snippet,
+    note: note.present ? note.value : this.note,
     isBold: isBold ?? this.isBold,
     isUnderline: isUnderline ?? this.isUnderline,
     isWavy: isWavy ?? this.isWavy,
@@ -2958,6 +2988,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
           data.startOffset.present ? data.startOffset.value : this.startOffset,
       endOffset: data.endOffset.present ? data.endOffset.value : this.endOffset,
       snippet: data.snippet.present ? data.snippet.value : this.snippet,
+      note: data.note.present ? data.note.value : this.note,
       isBold: data.isBold.present ? data.isBold.value : this.isBold,
       isUnderline:
           data.isUnderline.present ? data.isUnderline.value : this.isUnderline,
@@ -2978,6 +3009,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
           ..write('startOffset: $startOffset, ')
           ..write('endOffset: $endOffset, ')
           ..write('snippet: $snippet, ')
+          ..write('note: $note, ')
           ..write('isBold: $isBold, ')
           ..write('isUnderline: $isUnderline, ')
           ..write('isWavy: $isWavy, ')
@@ -2997,6 +3029,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
     startOffset,
     endOffset,
     snippet,
+    note,
     isBold,
     isUnderline,
     isWavy,
@@ -3015,6 +3048,7 @@ class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
           other.startOffset == this.startOffset &&
           other.endOffset == this.endOffset &&
           other.snippet == this.snippet &&
+          other.note == this.note &&
           other.isBold == this.isBold &&
           other.isUnderline == this.isUnderline &&
           other.isWavy == this.isWavy &&
@@ -3031,6 +3065,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
   final Value<int> startOffset;
   final Value<int> endOffset;
   final Value<String> snippet;
+  final Value<String?> note;
   final Value<bool> isBold;
   final Value<bool> isUnderline;
   final Value<bool> isWavy;
@@ -3046,6 +3081,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
     this.startOffset = const Value.absent(),
     this.endOffset = const Value.absent(),
     this.snippet = const Value.absent(),
+    this.note = const Value.absent(),
     this.isBold = const Value.absent(),
     this.isUnderline = const Value.absent(),
     this.isWavy = const Value.absent(),
@@ -3062,6 +3098,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
     required int startOffset,
     required int endOffset,
     required String snippet,
+    this.note = const Value.absent(),
     this.isBold = const Value.absent(),
     this.isUnderline = const Value.absent(),
     this.isWavy = const Value.absent(),
@@ -3084,6 +3121,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
     Expression<int>? startOffset,
     Expression<int>? endOffset,
     Expression<String>? snippet,
+    Expression<String>? note,
     Expression<bool>? isBold,
     Expression<bool>? isUnderline,
     Expression<bool>? isWavy,
@@ -3100,6 +3138,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
       if (startOffset != null) 'start_offset': startOffset,
       if (endOffset != null) 'end_offset': endOffset,
       if (snippet != null) 'snippet': snippet,
+      if (note != null) 'note': note,
       if (isBold != null) 'is_bold': isBold,
       if (isUnderline != null) 'is_underline': isUnderline,
       if (isWavy != null) 'is_wavy': isWavy,
@@ -3118,6 +3157,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
     Value<int>? startOffset,
     Value<int>? endOffset,
     Value<String>? snippet,
+    Value<String?>? note,
     Value<bool>? isBold,
     Value<bool>? isUnderline,
     Value<bool>? isWavy,
@@ -3134,6 +3174,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
       startOffset: startOffset ?? this.startOffset,
       endOffset: endOffset ?? this.endOffset,
       snippet: snippet ?? this.snippet,
+      note: note ?? this.note,
       isBold: isBold ?? this.isBold,
       isUnderline: isUnderline ?? this.isUnderline,
       isWavy: isWavy ?? this.isWavy,
@@ -3167,6 +3208,9 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
     }
     if (snippet.present) {
       map['snippet'] = Variable<String>(snippet.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
     }
     if (isBold.present) {
       map['is_bold'] = Variable<bool>(isBold.value);
@@ -3202,6 +3246,7 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
           ..write('startOffset: $startOffset, ')
           ..write('endOffset: $endOffset, ')
           ..write('snippet: $snippet, ')
+          ..write('note: $note, ')
           ..write('isBold: $isBold, ')
           ..write('isUnderline: $isUnderline, ')
           ..write('isWavy: $isWavy, ')
@@ -9452,6 +9497,7 @@ typedef $$StoredBookmarksTableCreateCompanionBuilder =
       required int startOffset,
       required int endOffset,
       required String snippet,
+      Value<String?> note,
       Value<bool> isBold,
       Value<bool> isUnderline,
       Value<bool> isWavy,
@@ -9469,6 +9515,7 @@ typedef $$StoredBookmarksTableUpdateCompanionBuilder =
       Value<int> startOffset,
       Value<int> endOffset,
       Value<String> snippet,
+      Value<String?> note,
       Value<bool> isBold,
       Value<bool> isUnderline,
       Value<bool> isWavy,
@@ -9519,6 +9566,11 @@ class $$StoredBookmarksTableFilterComposer
 
   ColumnFilters<String> get snippet => $composableBuilder(
     column: $table.snippet,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9597,6 +9649,11 @@ class $$StoredBookmarksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isBold => $composableBuilder(
     column: $table.isBold,
     builder: (column) => ColumnOrderings(column),
@@ -9661,6 +9718,9 @@ class $$StoredBookmarksTableAnnotationComposer
 
   GeneratedColumn<String> get snippet =>
       $composableBuilder(column: $table.snippet, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
 
   GeneratedColumn<bool> get isBold =>
       $composableBuilder(column: $table.isBold, builder: (column) => column);
@@ -9734,6 +9794,7 @@ class $$StoredBookmarksTableTableManager
                 Value<int> startOffset = const Value.absent(),
                 Value<int> endOffset = const Value.absent(),
                 Value<String> snippet = const Value.absent(),
+                Value<String?> note = const Value.absent(),
                 Value<bool> isBold = const Value.absent(),
                 Value<bool> isUnderline = const Value.absent(),
                 Value<bool> isWavy = const Value.absent(),
@@ -9749,6 +9810,7 @@ class $$StoredBookmarksTableTableManager
                 startOffset: startOffset,
                 endOffset: endOffset,
                 snippet: snippet,
+                note: note,
                 isBold: isBold,
                 isUnderline: isUnderline,
                 isWavy: isWavy,
@@ -9766,6 +9828,7 @@ class $$StoredBookmarksTableTableManager
                 required int startOffset,
                 required int endOffset,
                 required String snippet,
+                Value<String?> note = const Value.absent(),
                 Value<bool> isBold = const Value.absent(),
                 Value<bool> isUnderline = const Value.absent(),
                 Value<bool> isWavy = const Value.absent(),
@@ -9781,6 +9844,7 @@ class $$StoredBookmarksTableTableManager
                 startOffset: startOffset,
                 endOffset: endOffset,
                 snippet: snippet,
+                note: note,
                 isBold: isBold,
                 isUnderline: isUnderline,
                 isWavy: isWavy,

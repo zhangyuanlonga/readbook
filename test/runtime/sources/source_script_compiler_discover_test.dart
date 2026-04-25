@@ -135,6 +135,7 @@ void main() {
             required String url,
             String? title,
             bool refetchAfterSuccess = true,
+            String? html,
           }) async {
             events.add('browser:$url|$title|$refetchAfterSuccess');
             return <String, Object?>{

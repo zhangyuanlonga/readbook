@@ -110,7 +110,7 @@ class ReaderJumpFacade {
     required String chapterContent,
   }) {
     return _resolveBookmarkScrollRatio(bookmark, chapterContent) ??
-        _findSnippetScrollRatio(bookmark.snippet, chapterContent);
+        _findSnippetScrollRatio(bookmark.displaySnippet, chapterContent);
   }
 
   ReaderLogicalPosition? resolveBookmarkLogicalPosition({

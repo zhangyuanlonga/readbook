@@ -19,6 +19,7 @@ void main() {
         isUnderline: true,
         isWavy: true,
         color: '#FFCC00',
+        note: '额外笔记',
       );
 
       final restored = Bookmark.fromJson(bookmark.toJson());
@@ -36,6 +37,7 @@ void main() {
       expect(restored.isUnderline, isTrue);
       expect(restored.isWavy, isTrue);
       expect(restored.color, bookmark.color);
+      expect(restored.note, bookmark.note);
     });
 
     test('defaults style flags to false when missing', () {
@@ -54,6 +56,44 @@ void main() {
       expect(restored.isBold, isFalse);
       expect(restored.isUnderline, isFalse);
       expect(restored.isWavy, isFalse);
+      expect(restored.note, isNull);
+    });
+
+    test('supports quote plus note payload without changing legacy field', () {
+      final snippet = Bookmark.buildSnippetPayload(quote: '原文摘录', note: '我的笔记');
+      final bookmark = Bookmark(
+        id: 'bm_note',
+        bookId: 'book_1',
+        chapterId: 'chapter_1',
+        chapterIndex: 0,
+        startOffset: 1,
+        endOffset: 4,
+        snippet: snippet,
+        createdAt: DateTime.parse('2026-03-14T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-03-14T00:00:00.000Z'),
+      );
+
+      expect(bookmark.displaySnippet, '原文摘录');
+      expect(bookmark.note, '我的笔记');
+      expect(bookmark.hasNote, isTrue);
+    });
+
+    test('prefers explicit note field over legacy payload note', () {
+      final bookmark = Bookmark(
+        id: 'bm_note_field',
+        bookId: 'book_1',
+        chapterId: 'chapter_1',
+        chapterIndex: 0,
+        startOffset: 1,
+        endOffset: 4,
+        snippet: Bookmark.buildSnippetPayload(quote: '原文摘录', note: '旧笔记'),
+        note: '新笔记',
+        createdAt: DateTime.parse('2026-03-14T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-03-14T00:00:00.000Z'),
+      );
+
+      expect(bookmark.displaySnippet, '原文摘录');
+      expect(bookmark.note, '新笔记');
     });
   });
 }

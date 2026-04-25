@@ -1,37 +1,41 @@
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import 'reading_stats_models.dart';
+import 'reading_stats_work_identity_service.dart';
 
 class ReadingStatsRankingAggregator {
-  const ReadingStatsRankingAggregator();
+  const ReadingStatsRankingAggregator({
+    ReadingStatsWorkIdentityService workIdentityService =
+        const ReadingStatsWorkIdentityService(),
+  }) : _workIdentityService = workIdentityService;
+
+  final ReadingStatsWorkIdentityService _workIdentityService;
 
   List<ReadingDurationRankingItem> buildDurationRankings({
     required List<ReadingRecord> latestRecords,
     required List<ReadingRecordDay> filteredDailyRecords,
     required ReadingRecordsPeriodRange periodRange,
   }) {
-    final latestCoverByBookId = <String, ReadingRecordDay>{};
-    for (final day in filteredDailyRecords) {
-      final coverUrl = day.coverUrl?.trim() ?? '';
-      if (coverUrl.isEmpty) {
-        continue;
-      }
-      final current = latestCoverByBookId[day.bookId];
-      if (current == null || day.lastReadAt.isAfter(current.lastReadAt)) {
-        latestCoverByBookId[day.bookId] = day;
-      }
-    }
+    final recordGroups = _workIdentityService.groupItems(
+      items: latestRecords,
+      titleOf: (item) => item.bookTitle,
+      authorOf: (item) => item.bookAuthor,
+      fallbackIdOf: (item) => item.bookId,
+    );
 
     if (periodRange.isAll) {
-      final items = latestRecords
+      final items = recordGroups.values
           .map(
-            (record) => ReadingDurationRankingItem(
-              record: _resolveRecordCover(
-                record,
-                latestCoverByBookId[record.bookId]?.coverUrl,
+            (records) => ReadingDurationRankingItem(
+              record: _resolveRepresentativeRecord(records),
+              readMillis: records.fold<int>(
+                0,
+                (sum, item) => sum + item.totalReadMillis,
               ),
-              readMillis: record.totalReadMillis,
-              readChars: record.totalReadChars,
+              readChars: records.fold<int>(
+                0,
+                (sum, item) => sum + item.totalReadChars,
+              ),
               readDays: 0,
             ),
           )
@@ -40,36 +44,35 @@ class ReadingStatsRankingAggregator {
       return _sortRankings(items);
     }
 
-    final recordByBookId = <String, ReadingRecord>{
-      for (final record in latestRecords) record.bookId: record,
-    };
-    final millisByBookId = <String, int>{};
-    final charsByBookId = <String, int>{};
-    final daysByBookId = <String, Set<String>>{};
-
-    for (final item in filteredDailyRecords) {
-      millisByBookId[item.bookId] =
-          (millisByBookId[item.bookId] ?? 0) + item.readMillis;
-      charsByBookId[item.bookId] =
-          (charsByBookId[item.bookId] ?? 0) + item.readChars;
-      daysByBookId.putIfAbsent(item.bookId, () => <String>{}).add(item.dateKey);
-    }
+    final dayGroups = _workIdentityService.groupItems(
+      items: filteredDailyRecords,
+      titleOf: (item) => item.bookTitle,
+      authorOf: (item) => item.bookAuthor,
+      fallbackIdOf: (item) => item.bookId,
+    );
 
     final items = <ReadingDurationRankingItem>[];
-    for (final entry in millisByBookId.entries) {
-      final record = recordByBookId[entry.key];
-      if (record == null || entry.value <= 0) {
+    for (final entry in dayGroups.entries) {
+      final representativeRecords = recordGroups[entry.key];
+      if (representativeRecords == null || representativeRecords.isEmpty) {
+        continue;
+      }
+      final readMillis = entry.value.fold<int>(
+        0,
+        (sum, item) => sum + item.readMillis,
+      );
+      if (readMillis <= 0) {
         continue;
       }
       items.add(
         ReadingDurationRankingItem(
-          record: _resolveRecordCover(
-            record,
-            latestCoverByBookId[entry.key]?.coverUrl,
+          record: _resolveRepresentativeRecord(representativeRecords),
+          readMillis: readMillis,
+          readChars: entry.value.fold<int>(
+            0,
+            (sum, item) => sum + item.readChars,
           ),
-          readMillis: entry.value,
-          readChars: charsByBookId[entry.key] ?? 0,
-          readDays: daysByBookId[entry.key]?.length ?? 0,
+          readDays: entry.value.map((item) => item.dateKey).toSet().length,
         ),
       );
     }
@@ -94,30 +97,19 @@ class ReadingStatsRankingAggregator {
     return List<ReadingDurationRankingItem>.unmodifiable(mutable);
   }
 
-  ReadingRecord _resolveRecordCover(
-    ReadingRecord record,
-    String? fallbackCover,
-  ) {
-    final currentCover = record.coverUrl?.trim() ?? '';
-    final nextCover = fallbackCover?.trim() ?? '';
-    if (currentCover.isNotEmpty || nextCover.isEmpty) {
-      return record;
+  ReadingRecord _resolveRepresentativeRecord(List<ReadingRecord> records) {
+    var best = records.first;
+    for (final item in records.skip(1)) {
+      if (item.lastReadAt.isAfter(best.lastReadAt)) {
+        best = item;
+        continue;
+      }
+      final bestCover = best.coverUrl?.trim() ?? '';
+      final itemCover = item.coverUrl?.trim() ?? '';
+      if (bestCover.isEmpty && itemCover.isNotEmpty) {
+        best = item;
+      }
     }
-    return ReadingRecord(
-      bookId: record.bookId,
-      sourceId: record.sourceId,
-      detailUrl: record.detailUrl,
-      bookTitle: record.bookTitle,
-      bookAuthor: record.bookAuthor,
-      coverUrl: nextCover,
-      lastChapterId: record.lastChapterId,
-      lastChapterTitle: record.lastChapterTitle,
-      lastChapterIndex: record.lastChapterIndex,
-      lastChapterUrl: record.lastChapterUrl,
-      lastPositionRatio: record.lastPositionRatio,
-      totalReadMillis: record.totalReadMillis,
-      totalReadChars: record.totalReadChars,
-      lastReadAt: record.lastReadAt,
-    );
+    return best;
   }
 }

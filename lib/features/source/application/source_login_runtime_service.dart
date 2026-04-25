@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import '../../../runtime/host/appread_browser_runtime.dart';
 import '../../../runtime/sources/source_contract.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
@@ -114,6 +116,8 @@ class SourceLoginRuntimeService {
           sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
 
   final SourceRuntimeFacade _sourceRuntimeFacade;
+  final BrowserCookieSynchronizer _cookieSynchronizer =
+      const InAppWebViewCookieSynchronizer();
 
   Future<bool> supportsLogin(String sourceId) async {
     final registered = await _sourceRuntimeFacade
@@ -133,10 +137,7 @@ class SourceLoginRuntimeService {
       return null;
     }
 
-    final context = _sourceRuntimeFacade.createRuntimeContext(
-      registered,
-      ui: ui,
-    );
+    final context = _createBoundContext(registered, ui: ui);
     final initialFormData = await context.sourceLogin.getInfoMap();
     final fields = await _resolveFields(
       registered: registered,
@@ -175,10 +176,7 @@ class SourceLoginRuntimeService {
     bool isLongClick = false,
   }) async {
     final registered = await _requireRegistered(sourceId);
-    final context = _sourceRuntimeFacade.createRuntimeContext(
-      registered,
-      ui: ui,
-    );
+    final context = _createBoundContext(registered, ui: ui);
     final mergedFormData = <String, String>{...formData};
     await context.sourceLogin.putInfo(_encodeFormData(mergedFormData));
 
@@ -473,6 +471,195 @@ class SourceLoginRuntimeService {
     return jsonEncode(formData);
   }
 
+  SourceRuntimeContext _createBoundContext(
+    RegisteredSource registered, {
+    required SourceUiContext ui,
+  }) {
+    final base = _sourceRuntimeFacade.createRuntimeContext(registered);
+    unawaited(_hydratePersistedBrowserCookies(base));
+    final boundUi = SourceUiContext(
+      toastHandler: ui.toastHandler,
+      longToastHandler: ui.longToastHandler,
+      confirmHandler: ui.confirmHandler,
+      promptHandler: ui.promptHandler,
+      verificationCodeHandler: ui.verificationCodeHandler,
+      openUrlHandler: ({
+        required String url,
+        String? title,
+      }) async {
+        final normalized = url.trim();
+        if (normalized.isEmpty) {
+          return;
+        }
+        final parsed = _resolveBrowserRequest(normalized);
+        try {
+          await _syncSessionCookiesToBrowser(base, parsed.uri);
+          await ui.openUrl(
+            url: normalized,
+            title: title,
+          );
+        } catch (_) {
+          await ui.openUrl(url: normalized, title: title);
+        }
+      },
+      openBrowserAwaitHandler: ({
+        required String url,
+        String? title,
+        bool refetchAfterSuccess = true,
+        String? html,
+      }) async {
+        final normalized = url.trim();
+        final parsed = _resolveBrowserRequest(normalized, html: html);
+        try {
+          await _syncSessionCookiesToBrowser(base, parsed.uri);
+          final response = await ui.openBrowserAwait(
+            url: normalized,
+            title: title,
+            refetchAfterSuccess: refetchAfterSuccess,
+            html: parsed.html,
+          );
+          final finalUrl =
+              (response['finalUrl']?.toString() ?? '').trim().isNotEmpty
+                  ? response['finalUrl']!.toString().trim()
+                  : parsed.uri.toString();
+          final finalUri = Uri.tryParse(finalUrl) ?? parsed.uri;
+          await _syncBrowserCookiesFromBrowser(base, finalUri);
+          await _persistBrowserCookies(
+            context: base,
+            uri: finalUri,
+          );
+          return response;
+        } catch (_) {
+          return await ui.openBrowserAwait(
+            url: normalized,
+            title: title,
+            refetchAfterSuccess: refetchAfterSuccess,
+            html: html,
+          );
+        }
+      },
+    );
+    return SourceRuntimeContext(
+      source: base.source,
+      http: base.http,
+      sourceLogin: base.sourceLogin,
+      bookState: base.bookState,
+      browser: base.browser,
+      cookie: base.cookie,
+      cache: base.cache,
+      html: base.html,
+      session: base.session,
+      utils: base.utils,
+      crypto: base.crypto,
+      ui: boundUi,
+      log: base.log,
+    );
+  }
+
+  _ResolvedBrowserRequest _resolveBrowserRequest(String url, {String? html}) {
+    if (html != null && html.trim().isNotEmpty) {
+      return _ResolvedBrowserRequest(uri: Uri.parse('about:blank'), html: html);
+    }
+    final dataHtml = _htmlFromDataUrl(url);
+    if (dataHtml != null) {
+      return _ResolvedBrowserRequest(
+        uri: Uri.parse('about:blank'),
+        html: dataHtml,
+      );
+    }
+    return _ResolvedBrowserRequest(uri: Uri.parse(url));
+  }
+
+  String? _htmlFromDataUrl(String value) {
+    final trimmed = value.trim();
+    if (!trimmed.startsWith('data:text/html')) {
+      return null;
+    }
+    final commaIndex = trimmed.indexOf(',');
+    if (commaIndex < 0) {
+      return null;
+    }
+    final meta = trimmed.substring(0, commaIndex).toLowerCase();
+    final payload = trimmed.substring(commaIndex + 1);
+    if (meta.endsWith(';base64')) {
+      return utf8.decode(base64Decode(payload));
+    }
+    return Uri.decodeComponent(payload);
+  }
+
+  Future<void> _hydratePersistedBrowserCookies(
+    SourceRuntimeContext context,
+  ) async {
+    final info = await context.sourceLogin.getInfoMap();
+    for (final entry in info.entries) {
+      if (!entry.key.startsWith('__cookie__:')) {
+        continue;
+      }
+      final host = entry.key.substring('__cookie__:'.length).trim();
+      final cookieHeader = entry.value.trim();
+      if (host.isEmpty || cookieHeader.isEmpty) {
+        continue;
+      }
+      final uri = Uri.tryParse('https://$host/');
+      if (uri == null) {
+        continue;
+      }
+      for (final segment in cookieHeader.split(';')) {
+        final normalized = segment.trim();
+        final separator = normalized.indexOf('=');
+        if (separator <= 0) {
+          continue;
+        }
+        final name = normalized.substring(0, separator).trim();
+        final value = normalized.substring(separator + 1).trim();
+        if (name.isEmpty) {
+          continue;
+        }
+        context.session.setCookie(name, value, uri: uri, hostOnly: true);
+      }
+    }
+  }
+
+  Future<void> _syncSessionCookiesToBrowser(
+    SourceRuntimeContext context,
+    Uri uri,
+  ) async {
+    if (uri.host.trim().isEmpty) {
+      return;
+    }
+    await _cookieSynchronizer.syncSessionToBrowser(
+      uri: uri,
+      session: context.session,
+    );
+  }
+
+  Future<void> _syncBrowserCookiesFromBrowser(
+    SourceRuntimeContext context,
+    Uri uri,
+  ) async {
+    if (uri.host.trim().isEmpty) {
+      return;
+    }
+    await _cookieSynchronizer.syncBrowserToSession(
+      uri: uri,
+      session: context.session,
+    );
+  }
+
+  Future<void> _persistBrowserCookies({
+    required SourceRuntimeContext context,
+    required Uri uri,
+  }) async {
+    if (uri.host.trim().isEmpty) {
+      return;
+    }
+    final cookieHeader = context.session.cookieHeaderForUri(uri)?.trim();
+    if (cookieHeader == null || cookieHeader.isEmpty) {
+      return;
+    }
+    await context.sourceLogin.setCookieHeaderForHost(uri.host, cookieHeader);
+  }
+
   String? _coerceMessage(Object? raw) {
     if (raw is Map) {
       final message =
@@ -553,4 +740,11 @@ class SourceLoginRuntimeService {
         normalized.startsWith('https://') ||
         normalized.startsWith('data:text/html');
   }
+}
+
+class _ResolvedBrowserRequest {
+  const _ResolvedBrowserRequest({required this.uri, this.html});
+
+  final Uri uri;
+  final String? html;
 }

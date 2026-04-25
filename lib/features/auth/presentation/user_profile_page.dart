@@ -48,6 +48,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _loadProfile() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isLoadingProfile = true;
     });
@@ -60,13 +63,29 @@ class _UserProfilePageState extends State<UserProfilePage> {
         _profile = profile;
       });
     } catch (_) {
-      // Keep the current page usable with locally cached session data.
+      // Keep the page available with local session data.
     } finally {
       if (mounted) {
         setState(() {
           _isLoadingProfile = false;
         });
       }
+    }
+  }
+
+  Future<void> _refreshPage() async {
+    final session = await _sessionStore.getSession();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _session = session;
+      if (session == null) {
+        _profile = null;
+      }
+    });
+    if (session != null) {
+      await _loadProfile();
     }
   }
 
@@ -116,7 +135,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       horizontal,
                       12,
                       horizontal,
-                      16 + bottomSafe,
+                      20 + bottomSafe,
                     ),
                     children: _buildContent(context),
                   ),
@@ -129,59 +148,49 @@ class _UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
-  Future<void> _refreshPage() async {
-    final session = await _sessionStore.getSession();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _session = session;
-      if (session == null) {
-        _profile = null;
-      }
-    });
-    if (session != null) {
-      await _loadProfile();
-    }
-  }
-
   List<Widget> _buildContent(BuildContext context) {
     final session = _session;
     final colorScheme = Theme.of(context).colorScheme;
 
     if (_isLoading) {
-      return [
-        const SizedBox(height: 40),
-        Center(child: CircularProgressIndicator(color: colorScheme.primary)),
+      return const [
+        SizedBox(height: 64),
+        Center(child: CircularProgressIndicator()),
       ];
     }
 
     if (session == null) {
       return [
-        const SizedBox(height: 12),
-        Icon(
-          Icons.person_off_outlined,
-          size: 34,
-          color: colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '当前未登录',
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '登录后可同步阅读进度，并查看账号与会员状态。',
-          textAlign: TextAlign.center,
-          style: _sectionDescriptionTextStyle(context),
-        ),
-        const SizedBox(height: 16),
-        FilledButton(
-          onPressed: () => context.push('/auth'),
-          child: const Text('去登录'),
+        _buildGuestHero(context),
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '登录后可查看',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '账号资料、注册时间、会员状态以及后续更多个人偏好入口都会集中在这里。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  onPressed: () => context.push('/auth'),
+                  child: const Text('去登录'),
+                ),
+              ],
+            ),
+          ),
         ),
       ];
     }
@@ -189,236 +198,343 @@ class _UserProfilePageState extends State<UserProfilePage> {
     final profile = _profile;
     final displayName =
         profile?.username ?? session.username ?? session.userId ?? '用户';
-    final roleText = _describeRole(profile?.role);
-    final featureList = profile?.features ?? const <String>[];
+    final userId = profile?.userId ?? session.userId ?? '-';
+    final membershipLabel = _resolveMembershipLabel(profile);
+    final membershipHint = _resolveMembershipHint(profile);
 
     return [
-      _buildAccountHero(context, displayName: displayName, roleText: roleText),
-      if (_isLoadingProfile) ...[
-        const SizedBox(height: 10),
-        Text('正在同步最新账号信息...', style: _sectionDescriptionTextStyle(context)),
-      ],
-      const SizedBox(height: 22),
-      _buildInfoCardSection(
+      _buildProfileHero(
         context,
-        title: '账号信息',
-        description: '当前登录账号与基础资料。',
-        child: _buildListBlock(
-          context,
-          children: [
-            _buildListRow(
-              context,
-              label: '用户名',
-              value: profile?.username ?? session.username ?? '-',
-            ),
-            _buildListRow(context, label: '角色', value: roleText),
-            _buildListRow(
-              context,
-              label: '注册时间',
-              value: _formatTime(profile?.createdAt),
-            ),
-          ],
-        ),
+        displayName: displayName,
+        userId: userId,
+        membershipLabel: membershipLabel,
+        membershipHint: membershipHint,
       ),
-      if (_hasMembershipInfo(profile)) ...[
-        const SizedBox(height: 22),
-        _buildInfoCardSection(
-          context,
-          title: '会员信息',
-          description: '当前账号已开通的会员权益与时效。',
-          child: _buildListBlock(
-            context,
+      if (_isLoadingProfile)
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Text(
+            '正在同步最新账号信息...',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      const SizedBox(height: 14),
+      _buildInfoCard(
+        context,
+        title: '个人资料',
+        description: '账号的基础身份信息。',
+        rows: [
+          _ProfileRow(
+            label: '用户名',
+            value: profile?.username ?? session.username ?? '-',
+          ),
+          _ProfileRow(label: '用户 ID', value: userId),
+          _ProfileRow(label: '注册时间', value: _formatTime(profile?.createdAt)),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _buildInfoCard(
+        context,
+        title: '账号状态',
+        description: '当前登录态与会员状态。',
+        rows: [
+          _ProfileRow(
+            label: '会员状态',
+            value: _describeVipStatus(profile?.vipStatus),
+          ),
+          _ProfileRow(
+            label: '会员等级',
+            value: _describeVipLevel(profile?.vipLevel),
+          ),
+          _ProfileRow(label: '会员到期', value: _formatTime(profile?.vipExpireAt)),
+          _ProfileRow(
+            label: 'Access 有效期',
+            value: _formatTime(session.accessExpiresAt),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildListRow(
-                context,
-                label: 'VIP 等级',
-                value: _describeVipLevel(profile?.vipLevel),
+              Text(
+                '账号操作',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
-              _buildListRow(
-                context,
-                label: '会员计划',
-                value: _describePlanType(profile?.planType),
+              const SizedBox(height: 6),
+              Text(
+                '这里保留刷新和退出登录，后续可以继续扩展安全设置、设备管理等个人中心能力。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.45,
+                ),
               ),
-              _buildListRow(
-                context,
-                label: '会员状态',
-                value: _describeVipStatus(profile?.vipStatus),
-              ),
-              _buildListRow(
-                context,
-                label: '会员到期',
-                value: _formatTime(profile?.vipExpireAt),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoadingProfile ? null : _refreshPage,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('刷新资料'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isLoggingOut ? null : _handleLogout,
+                      icon:
+                          _isLoggingOut
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Icon(Icons.logout_rounded),
+                      label: Text(_isLoggingOut ? '退出中...' : '退出登录'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colorScheme.error,
+                        foregroundColor: colorScheme.onError,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ),
-      ],
-      if (featureList.isNotEmpty) ...[
-        const SizedBox(height: 22),
-        _buildSection(
-          context,
-          title: '已开通功能',
-          description: '当前账号可用的功能能力。',
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: featureList
-                .map(
-                  (feature) => Chip(
-                    label: Text(_describeFeature(feature)),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ),
-      ],
-      const SizedBox(height: 24),
-      FilledButton.icon(
-        onPressed: _isLoggingOut ? null : _handleLogout,
-        icon:
-            _isLoggingOut
-                ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-                : const Icon(Icons.logout_rounded),
-        label: Text(_isLoggingOut ? '退出中...' : '退出登录'),
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.error,
-          foregroundColor: colorScheme.onError,
         ),
       ),
     ];
   }
 
-  Widget _buildAccountHero(
+  Widget _buildGuestHero(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primaryContainer,
+            colorScheme.surfaceContainerHighest,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: colorScheme.surface.withValues(alpha: 0.72),
+            child: Icon(Icons.person_outline, color: colorScheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '当前未登录',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '登录后这里会变成更完整的个人资料页。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileHero(
     BuildContext context, {
     required String displayName,
-    required String roleText,
+    required String userId,
+    required String membershipLabel,
+    required String membershipHint,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final initial = displayName.trim().isEmpty ? 'U' : displayName.trim()[0];
 
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: colorScheme.primaryContainer,
-          child: Icon(
-            Icons.person_outline,
-            color: colorScheme.onPrimaryContainer,
-            size: 22,
-          ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colorScheme.primaryContainer, colorScheme.tertiaryContainer],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
+        borderRadius: BorderRadius.circular(26),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                displayName,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: colorScheme.surface.withValues(alpha: 0.84),
+                child: Text(
+                  initial,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.primary,
+                  ),
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '当前角色：$roleText',
-                style: _sectionDescriptionTextStyle(context),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'ID: $userId',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surface.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  membershipLabel,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  membershipHint,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildSection(
+  Widget _buildInfoCard(
     BuildContext context, {
     required String title,
     required String description,
-    required Widget child,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: _sectionTitleTextStyle(context)),
-        const SizedBox(height: 4),
-        Text(description, style: _sectionDescriptionTextStyle(context)),
-        const SizedBox(height: 8),
-        child,
-      ],
-    );
-  }
-
-  Widget _buildInfoCardSection(
-    BuildContext context, {
-    required String title,
-    required String description,
-    required Widget child,
+    required List<_ProfileRow> rows,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return Card(
-      elevation: 0,
-      color: colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: _sectionTitleTextStyle(context)),
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 4),
-            Text(description, style: _sectionDescriptionTextStyle(context)),
+            Text(
+              description,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 12),
-            child,
+            for (var index = 0; index < rows.length; index++) ...[
+              if (index > 0)
+                Divider(
+                  height: 16,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      rows[index].label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      rows[index].value,
+                      textAlign: TextAlign.right,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildListBlock(
-    BuildContext context, {
-    required List<Widget> children,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final dividerColor = colorScheme.outlineVariant.withValues(alpha: 0.55);
-
-    return Column(
-      children: [
-        for (var index = 0; index < children.length; index++) ...[
-          if (index > 0) Container(height: 1, color: dividerColor),
-          children[index],
-        ],
-      ],
-    );
+  String _resolveMembershipLabel(UserProfile? profile) {
+    final status = _describeVipStatus(profile?.vipStatus);
+    final level = _describeVipLevel(profile?.vipLevel);
+    if (level == '未开通' && status == '-') {
+      return '普通账号';
+    }
+    return '$level · $status';
   }
 
-  String _describeRole(String? raw) {
-    final normalized = _normalizeEnumValue(raw);
-    switch (normalized) {
-      case '':
-        return '-';
-      case 'user':
-        return '普通用户';
-      case 'admin':
-        return '管理员';
-      case 'super_admin':
-      case 'superadmin':
-        return '超级管理员';
-      case 'vip':
-        return '会员用户';
-      case 'guest':
-        return '游客';
-      default:
-        return raw!.trim();
+  String _resolveMembershipHint(UserProfile? profile) {
+    final expireAt = _formatTime(profile?.vipExpireAt);
+    if (expireAt == '-') {
+      return '当前未返回明确的会员到期时间，后续可在这里补齐更多权益说明。';
     }
+    return '会员有效期至 $expireAt。后续可以继续把权益说明、续费入口和设备管理整合进来。';
   }
 
   String _describeVipLevel(String? raw) {
@@ -437,31 +553,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
         return 'SVIP';
       case 'premium':
         return '高级会员';
-      default:
-        return raw!.trim();
-    }
-  }
-
-  String _describePlanType(String? raw) {
-    final normalized = _normalizeEnumValue(raw);
-    switch (normalized) {
-      case '':
-        return '-';
-      case 'month':
-      case 'monthly':
-        return '包月';
-      case 'quarter':
-      case 'quarterly':
-        return '包季';
-      case 'year':
-      case 'yearly':
-      case 'annual':
-        return '包年';
-      case 'lifetime':
-      case 'permanent':
-        return '永久';
-      case 'trial':
-        return '试用';
       default:
         return raw!.trim();
     }
@@ -490,91 +581,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
   }
 
-  String _describeFeature(String raw) {
-    final normalized = _normalizeEnumValue(raw);
-    switch (normalized) {
-      case 'theme_custom':
-        return '自定义主题';
-      case 'online_service':
-        return '在线服务';
-      case 'cloud_sync':
-      case 'sync':
-        return '云端同步';
-      case 'backup_restore':
-        return '备份恢复';
-      case 'ad_free':
-        return '去广告';
-      case 'priority_support':
-        return '优先支持';
-      case 'advanced_reader':
-        return '高级阅读功能';
-      case 'offline_download':
-        return '离线下载';
-      default:
-        return raw.trim();
-    }
-  }
-
   String _normalizeEnumValue(String? raw) {
     return raw?.trim().toLowerCase() ?? '';
-  }
-
-  Widget _buildListRow(
-    BuildContext context, {
-    required String label,
-    required String value,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  bool _hasMembershipInfo(UserProfile? profile) {
-    return profile?.vipLevel != null ||
-        profile?.planType != null ||
-        profile?.vipStatus != null ||
-        profile?.vipExpireAt != null;
-  }
-
-  TextStyle? _sectionTitleTextStyle(BuildContext context) {
-    return Theme.of(context).textTheme.titleSmall?.copyWith(
-      fontSize: 14.5,
-      height: 1.2,
-      fontWeight: FontWeight.w700,
-    );
-  }
-
-  TextStyle? _sectionDescriptionTextStyle(BuildContext context) {
-    return Theme.of(context).textTheme.bodySmall?.copyWith(
-      fontSize: 12.5,
-      height: 1.45,
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
   }
 
   String _formatTime(DateTime? time) {
@@ -643,4 +651,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
       }
     }
   }
+}
+
+class _ProfileRow {
+  const _ProfileRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
 }

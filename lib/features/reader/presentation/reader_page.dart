@@ -265,6 +265,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   List<String> _chapterImageUrls = const [];
   Map<String, String> _chapterImageHeaders = const {};
   bool _isTextSelectionActive = false;
+  bool _isEditingBookmarkNote = false;
   SelectedContentRange? _selectionRange;
   SelectionStatus _selectionStatus = SelectionStatus.none;
   int _selectionStartOffset = 0;
@@ -1019,6 +1020,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       settings: _settings,
       safeInsets: _readerSafeInsets(context),
       extraBottomPadding: extraBottomPadding,
+    );
+  }
+
+  double _resolveScrollBottomReserve(BuildContext context) {
+    if (_showsReaderFooterInfoBar) {
+      return 0;
+    }
+    return max(
+      _kBottomProgressReserve,
+      min(20.0, _effectiveBottomSafeInset(context) * 0.6),
+    );
+  }
+
+  Widget _buildFloatingReaderSettingsSheet({
+    required BuildContext context,
+    required ThemeData readerModalTheme,
+    required double keyboardInset,
+    required double safeBottom,
+    required double sheetHorizontal,
+    required double maxWidth,
+    required double heightFactor,
+    required Widget child,
+  }) {
+    final floatingColor = readerModalTheme.colorScheme.surface.withValues(
+      alpha: 0.9,
+    );
+    final borderColor = readerModalTheme.colorScheme.outlineVariant.withValues(
+      alpha: 0.35,
+    );
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(
+        left: sheetHorizontal,
+        right: sheetHorizontal,
+        top: 48,
+        bottom: keyboardInset + max(12.0, safeBottom * 0.55),
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: FractionallySizedBox(
+          heightFactor: heightFactor,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: floatingColor,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: borderColor),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 28,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: child,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2108,7 +2177,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final bodyPadding = _resolveScrollBodyPadding(
       context,
-      extraBottomPadding: 96,
+      extraBottomPadding: _resolveScrollBottomReserve(context),
     );
 
     final listView = NotificationListener<ScrollNotification>(
@@ -2149,7 +2218,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildContinuousTextReader(_ReaderThemeColors colors) {
     final bodyPadding = _resolveScrollBodyPadding(
       context,
-      extraBottomPadding: 96,
+      extraBottomPadding: _resolveScrollBottomReserve(context),
     );
 
     final listView = NotificationListener<ScrollNotification>(
@@ -3266,6 +3335,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     final details = _selectionNotifier.selection;
     _selectionStatus = details.status;
+    if (_isEditingBookmarkNote &&
+        _selectionStatus != SelectionStatus.uncollapsed) {
+      return;
+    }
     if (_selectionStatus != SelectionStatus.uncollapsed) {
       _clearSelectionState();
       return;
@@ -3290,6 +3363,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         hasSnippet;
 
     if (!isActive) {
+      if (_isEditingBookmarkNote) {
+        return;
+      }
       if (_isTextSelectionActive &&
           (_selectionStatus != SelectionStatus.uncollapsed ||
               !hasRange ||
@@ -3370,7 +3446,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     _hideBookmarkToolbar();
 
-    _bookmarkToolbarEntry = OverlayEntry(
+    final entry = OverlayEntry(
       builder: (context) {
         final fallbackAnchor = Offset(
           MediaQuery.sizeOf(context).width / 2,
@@ -3391,9 +3467,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       },
     );
-
-    final overlay = Overlay.of(context, rootOverlay: true);
-    overlay.insert(_bookmarkToolbarEntry!);
+    _bookmarkToolbarEntry = entry;
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      _bookmarkToolbarEntry = null;
+      return;
+    }
+    overlay.insert(entry);
   }
 
   void _hideBookmarkToolbar() {
@@ -3467,6 +3547,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           }
           unawaited(
             _onSaveBookmarkPressed(clearSelectionState: clearSelectionState),
+          );
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon: Icons.edit_note_rounded,
+        label:
+            selectionState.existingBookmark?.hasNote == true ? '编辑笔记' : '记笔记',
+        onPressed: () {
+          _isEditingBookmarkNote = true;
+          hideToolbar?.call();
+          _hideBookmarkToolbar();
+          unawaited(
+            _onEditBookmarkNotePressed(
+              clearSelectionState: clearSelectionState,
+            ),
           );
         },
       ),
@@ -3761,6 +3856,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     clearSelectionState?.clearSelection();
   }
 
+  Future<void> _onEditBookmarkNotePressed({
+    SelectableRegionState? clearSelectionState,
+  }) async {
+    if (!_isTextSelectionActive || _selectedSnippet.isEmpty || !mounted) {
+      _isEditingBookmarkNote = false;
+      return;
+    }
+    final snapshot = _captureSelectionSnapshot();
+    if (snapshot == null) {
+      _isEditingBookmarkNote = false;
+      return;
+    }
+    final existing = _currentSelectionBookmark();
+    try {
+      final note = await _showBookmarkNoteEditor(initialNote: existing?.note);
+      _restoreSelectionSnapshot(snapshot);
+      if (note == null) {
+        return;
+      }
+      await _saveSelectionBookmark(
+        existing: existing,
+        clearSelectionState: clearSelectionState,
+        note: note,
+        selectionSnapshot: snapshot,
+        clearSystemSelection: false,
+      );
+      if (!mounted) {
+        return;
+      }
+      _showMessage(note.isEmpty ? '已保存灵感' : '已保存笔记');
+      _restoreSelectionSnapshot(snapshot, showToolbar: true);
+    } finally {
+      _isEditingBookmarkNote = false;
+    }
+  }
+
   Future<void> _persistSelectionStyleForSelection({
     required String createdMessage,
   }) async {
@@ -3779,20 +3910,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     Bookmark? existing,
     SelectableRegionState? clearSelectionState,
     bool? forceHighlight,
+    String? note,
+    _ReaderSelectionSnapshot? selectionSnapshot,
+    bool clearSystemSelection = true,
   }) async {
-    if (!_isTextSelectionActive || _selectedSnippet.isEmpty) {
+    final selection = selectionSnapshot ?? _captureSelectionSnapshot();
+    if (selection == null) {
       return;
     }
     final now = DateTime.now();
-    final startOffset = _selectionStartOffset;
-    final endOffset = _selectionEndOffset;
+    final startOffset = selection.startOffset;
+    final endOffset = selection.endOffset;
     if (startOffset == endOffset) {
       return;
     }
 
-    final isWavy = _selectionWavy;
-    final isUnderline = isWavy ? false : _selectionUnderline;
-    final hasHighlight = forceHighlight ?? _selectionHighlight;
+    final isWavy = selection.isWavy;
+    final isUnderline = isWavy ? false : selection.isUnderline;
+    final hasHighlight = forceHighlight ?? selection.hasHighlight;
+    final effectiveNote = note ?? existing?.note;
     final bookmark = Bookmark(
       id: existing?.id ?? _uuid.v4().replaceAll('-', ''),
       bookId: _currentBookId,
@@ -3800,10 +3936,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterIndex: _currentIndex ?? 0,
       startOffset: startOffset,
       endOffset: endOffset,
-      snippet: _selectedSnippet,
+      snippet: selection.snippet,
+      note: effectiveNote,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
-      isBold: _selectionBold,
+      isBold: selection.isBold,
       isUnderline: isUnderline,
       isWavy: isWavy,
       color:
@@ -3814,7 +3951,126 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await _bookmarkRepository.addBookmark(bookmark);
     unawaited(_refreshChapterBookmarks());
-    clearSelectionState?.clearSelection();
+    if (clearSystemSelection) {
+      clearSelectionState?.clearSelection();
+    }
+  }
+
+  _ReaderSelectionSnapshot? _captureSelectionSnapshot() {
+    final snippet = _selectedSnippet.trim();
+    if (!_isTextSelectionActive || snippet.isEmpty) {
+      return null;
+    }
+    return _ReaderSelectionSnapshot(
+      startOffset: _selectionStartOffset,
+      endOffset: _selectionEndOffset,
+      snippet: snippet,
+      hasHighlight: _selectionHighlight,
+      isBold: _selectionBold,
+      isUnderline: _selectionUnderline,
+      isWavy: _selectionWavy,
+    );
+  }
+
+  void _restoreSelectionSnapshot(
+    _ReaderSelectionSnapshot snapshot, {
+    bool showToolbar = false,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isTextSelectionActive = true;
+      _selectionStartOffset = snapshot.startOffset;
+      _selectionEndOffset = snapshot.endOffset;
+      _selectedSnippet = snapshot.snippet;
+      _selectionHighlight = snapshot.hasHighlight;
+      _selectionBold = snapshot.isBold;
+      _selectionUnderline = snapshot.isUnderline;
+      _selectionWavy = snapshot.isWavy;
+    });
+    if (showToolbar) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isTextSelectionActive) {
+          return;
+        }
+        _showBookmarkToolbar();
+      });
+    }
+  }
+
+  Future<String?> _showBookmarkNoteEditor({String? initialNote}) {
+    final controller = TextEditingController(text: initialNote ?? '');
+    return showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final colorScheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '记笔记',
+                style: Theme.of(
+                  sheetContext,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '会和当前灵感一起保存，后续可在灵感列表和书内灵感里查看。',
+                style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                minLines: 4,
+                maxLines: 8,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  hintText: '写下此刻想到的内容',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(''),
+                    child: const Text('清空笔记'),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed:
+                        () => Navigator.of(
+                          sheetContext,
+                        ).pop(controller.text.trim()),
+                    child: const Text('保存'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
@@ -11305,9 +11561,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: readerModalTheme.colorScheme.surface,
+      showDragHandle: false,
+      useSafeArea: false,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.04),
       builder: (context) {
         return Theme(
           data: readerModalTheme,
@@ -15122,79 +15379,71 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   maxWidth: 760,
                 );
 
-                return AnimatedPadding(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
-                  child: SafeArea(
-                    child: FractionallySizedBox(
-                      heightFactor: _adaptiveReaderSheetHeightFactor(
-                        context,
-                        compact: 0.84,
-                        regular: 0.76,
-                        large: 0.7,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: textSheetMaxWidth,
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              sheetHorizontal,
-                              8,
-                              sheetHorizontal,
-                              14,
-                            ),
-                            child: Column(
-                              children: [
-                                SizedBox(
-                                  height: 40,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      if (activeSettingsGroupKey != null)
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            onPressed: () {
-                                              setModalState(() {
-                                                activeSettingsGroupKey = null;
-                                              });
-                                            },
-                                            icon: const Icon(
-                                              Icons.arrow_back_rounded,
-                                            ),
-                                          ),
-                                        ),
-                                      Center(
-                                        child: Text(
-                                          sheetTitle,
-                                          textAlign: TextAlign.center,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Expanded(
-                                  child: ListView(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    children: selectedCards,
-                                  ),
-                                ),
-                              ],
-                            ),
+                return _buildFloatingReaderSettingsSheet(
+                  context: context,
+                  readerModalTheme: readerModalTheme,
+                  keyboardInset: keyboardInset,
+                  safeBottom: safeBottom,
+                  sheetHorizontal: sheetHorizontal,
+                  maxWidth: textSheetMaxWidth,
+                  heightFactor: _adaptiveReaderSheetHeightFactor(
+                    context,
+                    compact: 0.66,
+                    regular: 0.6,
+                    large: 0.56,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.outlineVariant.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                         ),
-                      ),
+                        SizedBox(
+                          height: 40,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              if (activeSettingsGroupKey != null)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () {
+                                      setModalState(() {
+                                        activeSettingsGroupKey = null;
+                                      });
+                                    },
+                                    icon: const Icon(Icons.arrow_back_rounded),
+                                  ),
+                                ),
+                              Center(
+                                child: Text(
+                                  sheetTitle,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            children: selectedCards,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -17900,6 +18149,26 @@ class _ReaderInspirationSelectionState {
   final bool isWavy;
 
   bool get hasExistingBookmark => existingBookmark != null;
+}
+
+class _ReaderSelectionSnapshot {
+  const _ReaderSelectionSnapshot({
+    required this.startOffset,
+    required this.endOffset,
+    required this.snippet,
+    required this.hasHighlight,
+    required this.isBold,
+    required this.isUnderline,
+    required this.isWavy,
+  });
+
+  final int startOffset;
+  final int endOffset;
+  final String snippet;
+  final bool hasHighlight;
+  final bool isBold;
+  final bool isUnderline;
+  final bool isWavy;
 }
 
 class _ReaderInspirationActionItem {

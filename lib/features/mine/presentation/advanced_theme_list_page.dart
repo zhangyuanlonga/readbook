@@ -310,7 +310,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     String? clipboardText,
   }) async {
     try {
-      await Share.shareXFiles([XFile(file.path)], text: text, subject: subject);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: text,
+        subject: subject,
+        sharePositionOrigin: _resolveSharePositionOrigin(),
+      );
     } on MissingPluginException {
       final fallbackText = clipboardText;
       if (fallbackText != null && fallbackText.isNotEmpty) {
@@ -325,6 +330,18 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             : '当前安装包暂不支持系统分享，已复制主题内容，请完整重启 App 后重试。',
       );
     }
+  }
+
+  Rect? _resolveSharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final size = renderObject.size;
+    if (size.isEmpty) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero) & size;
   }
 
   Future<void> _importTheme() async {

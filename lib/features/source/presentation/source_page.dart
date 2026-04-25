@@ -1714,9 +1714,20 @@ class _SourcePageState extends State<SourcePage> {
         final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
         return Padding(
           padding: EdgeInsets.only(bottom: bottomInset),
-          child: SizedBox(
-            height: MediaQuery.sizeOf(sheetContext).height * 0.82,
-            child: SourceLoginPage(sourceId: source.id, embedded: true),
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.82,
+            minChildSize: 0.55,
+            maxChildSize: 1.0,
+            snap: true,
+            snapSizes: const <double>[0.82, 1.0],
+            builder: (context, scrollController) {
+              return SourceLoginPage(
+                sourceId: source.id,
+                embedded: true,
+                parentScrollController: scrollController,
+              );
+            },
           ),
         );
       },
@@ -2072,10 +2083,12 @@ class _SourcePageState extends State<SourcePage> {
         final file = File('${tempDir.path}/$fileName');
         await file.writeAsString(source.sourceCode, flush: true);
         try {
+          final sharePositionOrigin = _resolveSharePositionOrigin();
           await Share.shareXFiles(
             [XFile(file.path)],
             text: '分享书源：${source.name}',
             subject: source.name,
+            sharePositionOrigin: sharePositionOrigin,
           );
         } on MissingPluginException {
           await Clipboard.setData(ClipboardData(text: source.sourceCode));
@@ -2101,6 +2114,19 @@ class _SourcePageState extends State<SourcePage> {
   String _normalizedSourceFileName(String raw) {
     final normalized = raw.trim().replaceAll(RegExp(r'[\\\\/:*?\"<>|]+'), '_');
     return normalized.isEmpty ? 'script_source' : normalized;
+  }
+
+  Rect? _resolveSharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final size = renderObject.size;
+    if (size.isEmpty) {
+      return null;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    return origin & size;
   }
 
   Future<void> _importLocalScriptSources() async {

@@ -49,6 +49,7 @@ class AppReadBrowserRuntime implements BrowserRuntime {
             stage: defaultStage,
             sourceId: session?.sourceId,
             timeout: request.timeout,
+            html: request.html,
           ),
         );
         _throwIfCancelled(session);
@@ -81,10 +82,11 @@ class AppReadBrowserRuntime implements BrowserRuntime {
             stage: defaultStage,
             sourceId: session?.sourceId,
             timeout: request.timeout,
+            html: request.html,
           ),
           awaitUserResult: true,
           title: request.reason,
-          refetchAfterSuccess: true,
+          refetchAfterSuccess: request.refetchAfterSuccess,
         );
         _throwIfCancelled(session);
         await _syncBrowserCookiesToSession(response.finalUrl, session);
@@ -188,6 +190,7 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     }
 
     session.set('lastBrowserUrl', response.finalUrl);
+    session.set('lastBrowserStatusCode', response.statusCode);
     session.set('lastBrowserHtml', response.body);
     session.set('lastBrowserMatchedResourceUrl', response.matchedResourceUrl);
     session.set('lastBrowserMatchedOverrideUrl', response.matchedOverrideUrl);

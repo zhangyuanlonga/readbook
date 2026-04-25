@@ -17,11 +17,13 @@ class SourceLoginPage extends StatefulWidget {
     required this.sourceId,
     this.sourceLoginRuntimeService,
     this.embedded = false,
+    this.parentScrollController,
   });
 
   final String sourceId;
   final SourceLoginRuntimeService? sourceLoginRuntimeService;
   final bool embedded;
+  final ScrollController? parentScrollController;
 
   @override
   State<SourceLoginPage> createState() => _SourceLoginPageState();
@@ -273,6 +275,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                 _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : ListView(
+                      controller: widget.parentScrollController,
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
                         16,
@@ -280,8 +283,6 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                         24,
                       ),
                       children: [
-                        _buildHeaderCard(context),
-                        const SizedBox(height: 12),
                         if (_errorText != null)
                           _buildMessageCard(
                             context,
@@ -295,13 +296,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                               _statusText!,
                               tone: _statusTone,
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 16),
                           ],
-                          _buildMessageCard(
-                            context,
-                            '当前登录面板已支持 text/password/select/button/toggle、字段联动 action、长按按钮与浏览器交互。',
-                          ),
-                          const SizedBox(height: 12),
                           _buildFieldGrid(context),
                         ],
                       ],
@@ -409,9 +405,10 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         required String url,
         String? title,
         bool refetchAfterSuccess = true,
+        String? html,
       }) async {
         final normalizedUrl = url.trim();
-        final htmlData = _htmlFromDataUrl(normalizedUrl);
+        final htmlData = html ?? _htmlFromDataUrl(normalizedUrl);
         final response = await InteractiveVerificationBrowserExecutor.instance
             .open(
               request: WebViewRequestPayload(
@@ -660,10 +657,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         focusNode: _focusNodes[field.name],
         enabled: !_isSubmitting,
         onEditingComplete: () => _handleTextFieldCommit(field),
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+        decoration: _buildInputDecoration(context, label: label),
       ),
       SourceLoginFieldType.password => TextField(
         controller: _controllers[field.name],
@@ -671,10 +665,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         enabled: !_isSubmitting,
         obscureText: true,
         onEditingComplete: () => _handleTextFieldCommit(field),
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+        decoration: _buildInputDecoration(context, label: label),
       ),
       SourceLoginFieldType.textarea => TextField(
         controller: _controllers[field.name],
@@ -683,18 +674,15 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         minLines: 4,
         maxLines: 8,
         onEditingComplete: () => _handleTextFieldCommit(field),
-        decoration: InputDecoration(
-          labelText: label,
+        decoration: _buildInputDecoration(
+          context,
+          label: label,
           alignLabelWithHint: true,
-          border: const OutlineInputBorder(),
         ),
       ),
       SourceLoginFieldType.select => DropdownButtonFormField<String>(
         initialValue: _selectValues[field.name],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+        decoration: _buildInputDecoration(context, label: label),
         items: field.options
             .map(
               (option) => DropdownMenuItem<String>(
@@ -719,15 +707,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       SourceLoginFieldType.toggle => _buildToggleField(context, field, label),
       SourceLoginFieldType.note => _buildNoteField(context, label),
       SourceLoginFieldType.divider => _buildDividerField(context, label),
-      SourceLoginFieldType.button => FilledButton.tonal(
-        onPressed:
-            _isSubmitting ? null : () => _submit(actionCode: field.action),
-        onLongPress:
-            _isSubmitting
-                ? null
-                : () => _submit(actionCode: field.action, isLongClick: true),
-        child: Text(label),
-      ),
+      SourceLoginFieldType.button => _buildActionButton(context, field, label),
     };
   }
 
@@ -752,11 +732,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                 );
                 final child = SizedBox(
                   width: width,
-                  child: _buildFieldShell(
-                    context,
-                    field,
-                    child: _buildField(context, field),
-                  ),
+                  child: _buildFieldShell(context, field, child: _buildField(context, field)),
                 );
                 return child;
               }).toList(growable: false),
@@ -765,94 +741,31 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     );
   }
 
-  Widget _buildHeaderCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final fieldCount = _presentation?.fields.length ?? 0;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            colorScheme.surfaceContainerHighest,
-            colorScheme.surfaceContainer,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _presentation?.sourceName ?? '书源登录',
-            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '已支持 text / password / select / button / toggle，字段动作、长按按钮和浏览器回传都可以在这里跑通。',
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildHeaderChip(context, '字段 $fieldCount'),
-              _buildHeaderChip(context, _isSubmitting ? '执行中' : '就绪'),
-              _buildHeaderChip(context, widget.embedded ? '弹层模式' : '页面模式'),
-              _buildHeaderChip(context, '控制台布局'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderChip(BuildContext context, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
   Widget _buildFieldShell(
     BuildContext context,
     SourceLoginField field, {
     required Widget child,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final alignment = _fieldAlignment(field.style.layoutJustifySelf);
+    if (field.type == SourceLoginFieldType.divider ||
+        field.type == SourceLoginFieldType.note) {
+      return Align(alignment: alignment, child: child);
+    }
+    final colorScheme = Theme.of(context).colorScheme;
     return Align(
       alignment: alignment,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color:
-              field.type == SourceLoginFieldType.button
-                  ? colorScheme.surfaceContainerHigh
-                  : colorScheme.surfaceContainerLowest,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colorScheme.outlineVariant),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: EdgeInsets.all(
+            field.type == SourceLoginFieldType.button ? 4 : 0,
+          ),
           child: child,
         ),
       ),
@@ -894,18 +807,13 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
 
   Widget _buildNoteField(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: colorScheme.onSurfaceVariant,
-          height: 1.4,
+          height: 1.45,
         ),
       ),
     );
@@ -932,11 +840,44 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     );
   }
 
+  InputDecoration _buildInputDecoration(
+    BuildContext context, {
+    required String label,
+    bool alignLabelWithHint = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InputDecoration(
+      labelText: label,
+      alignLabelWithHint: alignLabelWithHint,
+      filled: true,
+      fillColor: colorScheme.surfaceContainerLow,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(
+          color: colorScheme.primary.withValues(alpha: 0.75),
+          width: 1.4,
+        ),
+      ),
+    );
+  }
+
   Widget _buildToggleField(
     BuildContext context,
     SourceLoginField field,
     String label,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
     final value =
         _toggleValues[field.name]?.trim().isNotEmpty == true
             ? _toggleValues[field.name]!
@@ -952,41 +893,107 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge,
           ),
         ),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments:
-              options
-                  .map(
-                    (option) => ButtonSegment<String>(
-                      value: option.value,
-                      label: Text(option.label),
-                    ),
-                  )
-                  .toList(growable: false),
-          selected: <String>{value},
-          onSelectionChanged:
-              _isSubmitting
-                  ? null
-                  : (selection) async {
-                    final next = selection.isNotEmpty
-                        ? selection.first
-                        : _toggleDefaultValue(field);
-                    setState(() {
-                      _toggleValues[field.name] = next;
-                      _baselineValues[field.name] = next;
-                    });
-                    if ((field.action ?? '').trim().isNotEmpty) {
-                      await _submit(actionCode: field.action);
-                    }
-                  },
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Row(
+              children:
+                  options.map((option) {
+                    final selected = option.value == value;
+                    return Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap:
+                            _isSubmitting
+                                ? null
+                                : () async {
+                                  final next = option.value;
+                                  setState(() {
+                                    _toggleValues[field.name] = next;
+                                    _baselineValues[field.name] = next;
+                                  });
+                                  if ((field.action ?? '').trim().isNotEmpty) {
+                                    await _submit(actionCode: field.action);
+                                  }
+                                },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOutCubic,
+                          margin: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color:
+                                selected
+                                    ? colorScheme.primaryContainer
+                                    : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            option.label,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color:
+                                  selected
+                                      ? colorScheme.onPrimaryContainer
+                                      : colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(growable: false),
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActionButton(
+    BuildContext context,
+    SourceLoginField field,
+    String label,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap:
+            _isSubmitting ? null : () => _submit(actionCode: field.action),
+        onLongPress:
+            _isSubmitting
+                ? null
+                : () => _submit(actionCode: field.action, isLongClick: true),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

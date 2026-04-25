@@ -1683,7 +1683,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     ];
     final text = lines.join('\n');
     try {
-      await Share.share(text, subject: title.isEmpty ? '书籍详情' : title);
+      await Share.share(
+        text,
+        subject: title.isEmpty ? '书籍详情' : title,
+        sharePositionOrigin: _resolveSharePositionOrigin(),
+      );
     } on MissingPluginException {
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) {
@@ -1696,6 +1700,18 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       _showMessage('分享失败：$error');
     }
+  }
+
+  Rect? _resolveSharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final size = renderObject.size;
+    if (size.isEmpty) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero) & size;
   }
 
   Future<void> _showMoreActionsSheet() async {

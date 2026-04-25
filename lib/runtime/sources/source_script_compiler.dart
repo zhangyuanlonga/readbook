@@ -1025,6 +1025,7 @@ try {
         url: payload['url']?.toString() ?? '',
         title: payload['title']?.toString(),
         refetchAfterSuccess: payload['refetchAfterSuccess'] != false,
+        html: payload['html']?.toString(),
       );
     });
     runtime.registerBridge('__ctx_ui_get_verification_code', (

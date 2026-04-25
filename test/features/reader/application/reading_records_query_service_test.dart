@@ -145,5 +145,75 @@ void main() {
       expect(day.sessionCount, 2);
       expect(day.readMillis, const Duration(minutes: 45).inMilliseconds);
     });
+
+    test('dedupes same work re-imported under different book ids', () {
+      final latestRecords = <ReadingRecord>[
+        ReadingRecord(
+          bookId: 'book_a_1',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/a-1',
+          bookTitle: '作品 A',
+          bookAuthor: '作者甲',
+          totalReadMillis: const Duration(minutes: 20).inMilliseconds,
+          totalReadChars: 2400,
+          lastReadAt: DateTime.parse('2026-04-04T10:30:00.000Z'),
+        ),
+        ReadingRecord(
+          bookId: 'book_a_2',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/a-2',
+          bookTitle: '作品 A',
+          bookAuthor: '作者甲',
+          totalReadMillis: const Duration(minutes: 10).inMilliseconds,
+          totalReadChars: 800,
+          lastReadAt: DateTime.parse('2026-04-05T10:30:00.000Z'),
+        ),
+      ];
+      final dailyRecords = <ReadingRecordDay>[
+        ReadingRecordDay(
+          bookId: 'book_a_1',
+          dateKey: '2026-04-04',
+          bookTitle: '作品 A',
+          bookAuthor: '作者甲',
+          readMillis: const Duration(minutes: 20).inMilliseconds,
+          readChars: 2400,
+          firstReadAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
+          lastReadAt: DateTime.parse('2026-04-04T10:20:00.000Z'),
+        ),
+        ReadingRecordDay(
+          bookId: 'book_a_2',
+          dateKey: '2026-04-05',
+          bookTitle: '作品 A',
+          bookAuthor: '作者甲',
+          readMillis: const Duration(minutes: 10).inMilliseconds,
+          readChars: 800,
+          firstReadAt: DateTime.parse('2026-04-05T10:00:00.000Z'),
+          lastReadAt: DateTime.parse('2026-04-05T10:10:00.000Z'),
+        ),
+      ];
+
+      final view = service.buildQueryView(
+        latestRecords: latestRecords,
+        dailyRecords: dailyRecords,
+        sessions: const <ReadingRecordSession>[],
+        period: ReadingRecordsPeriod.all,
+        anchor: DateTime.parse('2026-04-05T00:00:00.000Z'),
+        resolvedStatusesByBookId: const <String, ReadingBookResolvedStatus>{},
+      );
+      final heatmap = service.buildHeatmapStats(
+        dailyRecords,
+        sessions: const <ReadingRecordSession>[],
+      );
+
+      expect(view.summary.totalBooks, 1);
+      expect(view.summary.coverRecords, hasLength(1));
+      expect(view.rankings, hasLength(1));
+      expect(
+        view.rankings.first.readMillis,
+        const Duration(minutes: 30).inMilliseconds,
+      );
+      expect(heatmap['2026-04-04']!.workCount, 1);
+      expect(heatmap['2026-04-05']!.workCount, 1);
+    });
   });
 }

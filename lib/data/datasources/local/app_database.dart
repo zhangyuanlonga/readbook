@@ -101,6 +101,7 @@ class StoredBookmarks extends Table {
   IntColumn get startOffset => integer()();
   IntColumn get endOffset => integer()();
   TextColumn get snippet => text()();
+  TextColumn get note => text().nullable()();
   BoolColumn get isBold => boolean().withDefault(const Constant(false))();
   BoolColumn get isUnderline => boolean().withDefault(const Constant(false))();
   BoolColumn get isWavy => boolean().withDefault(const Constant(false))();
@@ -318,7 +319,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration {
@@ -478,6 +479,15 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 23) {
           await migrator.createTable(storedBookMetadataOverrides);
+        }
+        if (from < 24) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedBookmarks.tableName,
+            columnName: 'note',
+            addColumn:
+                () => migrator.addColumn(storedBookmarks, storedBookmarks.note),
+          );
         }
         if (from < 13) {
           await _addColumnIfMissing(
@@ -1608,6 +1618,7 @@ class AppDatabase extends _$AppDatabase {
         startOffset: Value(safeStartOffset),
         endOffset: Value(safeEndOffset),
         snippet: Value(normalizedSnippet),
+        note: Value(_nullableString(bookmark.note)),
         isBold: Value(bookmark.isBold),
         isUnderline: Value(bookmark.isUnderline),
         isWavy: Value(bookmark.isWavy),
@@ -2277,6 +2288,7 @@ class AppDatabase extends _$AppDatabase {
       startOffset: row.startOffset,
       endOffset: row.endOffset,
       snippet: row.snippet,
+      note: _nullableString(row.note),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       isBold: row.isBold,

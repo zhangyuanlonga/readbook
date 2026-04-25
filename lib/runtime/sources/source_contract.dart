@@ -76,11 +76,23 @@ class SourceHttpContext {
 
   Future<RuntimeHttpResponse> request(RuntimeHttpRequest request) async {
     final startedAt = DateTime.now();
+    final resolvedUri = request.resolvedUri;
+    final sourceHeaders = await _sourceLogin?.getHeaderMap() ??
+        const <String, String>{};
+    final mergedHeaders = <String, String>{
+      ...sourceHeaders,
+      ...request.headers,
+    };
+    final domainCookie = await _sourceLogin?.getCookieHeaderForHost(
+      resolvedUri.host,
+    );
+    if (domainCookie != null &&
+        domainCookie.trim().isNotEmpty &&
+        !request.headers.keys.any((key) => key.toLowerCase() == 'cookie')) {
+      mergedHeaders['cookie'] = domainCookie.trim();
+    }
     final mergedRequest = request.copyWith(
-      headers: <String, String>{
-        ...?await _sourceLogin?.getHeaderMap(),
-        ...request.headers,
-      },
+      headers: mergedHeaders,
     );
     try {
       if (mergedRequest.execution == RuntimeRequestExecution.browser) {
@@ -663,6 +675,32 @@ class SourceLoginContext {
     return _decodeStringMap(await getInfo());
   }
 
+  Future<String?> getCookieHeaderForHost(String host) async {
+    final normalizedHost = host.trim().toLowerCase();
+    if (normalizedHost.isEmpty) {
+      return null;
+    }
+    final info = await getInfoMap();
+    final value = info['__cookie__:$normalizedHost']?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  Future<void> setCookieHeaderForHost(String host, String cookieHeader) async {
+    final normalizedHost = host.trim().toLowerCase();
+    if (normalizedHost.isEmpty) {
+      return;
+    }
+    final info = await getInfoMap();
+    final next = <String, String>{...info};
+    final normalizedCookie = cookieHeader.trim();
+    if (normalizedCookie.isEmpty) {
+      next.remove('__cookie__:$normalizedHost');
+    } else {
+      next['__cookie__:$normalizedHost'] = normalizedCookie;
+    }
+    await putInfo(jsonEncode(next));
+  }
+
   Future<void> putInfo(String infoJson) async {
     await _update(
       (current) => current.copyWith(
@@ -946,6 +984,7 @@ class SourceUiContext {
     required String url,
     String? title,
     bool refetchAfterSuccess,
+    String? html,
   })?
   openBrowserAwaitHandler;
   final Future<String> Function(String imageUrl)? verificationCodeHandler;
@@ -1004,6 +1043,7 @@ class SourceUiContext {
     required String url,
     String? title,
     bool refetchAfterSuccess = true,
+    String? html,
   }) async {
     if (openBrowserAwaitHandler == null) {
       return <String, Object?>{'statusCode': 0, 'body': '', 'finalUrl': url};
@@ -1012,6 +1052,7 @@ class SourceUiContext {
       url: url,
       title: title,
       refetchAfterSuccess: refetchAfterSuccess,
+      html: html,
     );
   }
 

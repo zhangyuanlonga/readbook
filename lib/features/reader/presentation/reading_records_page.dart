@@ -29,6 +29,7 @@ import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reading_records_query_service.dart';
 import '../application/reading_record_service.dart';
+import '../application/reading_stats_work_identity_service.dart';
 import '../application/reader_system_settings_service.dart';
 
 enum _HeatmapRangeMode { threeMonths, sixMonths, oneYear, all }
@@ -70,6 +71,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   late final Stream<bool> _readRecordEnabledStream;
   final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
       const BookMetadataPresentationResolver();
+  final ReadingStatsWorkIdentityService _workIdentityService =
+      const ReadingStatsWorkIdentityService();
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
       const <String, BookMetadataOverride>{};
@@ -1428,19 +1431,18 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   }) {
     final totalReadMillisByDate = <String, int>{};
     final totalReadCharsByDate = <String, int>{};
-    final workIdsByDate = <String, Set<String>>{};
-    final bookSummaryByDate =
-        <String, Map<String, _ReadingCalendarBookDetail>>{};
+    final daysByDate = <String, List<ReadingRecordDay>>{};
+    final sessionsByDate = <String, List<ReadingRecordSession>>{};
 
     for (final day in dailyRecords) {
       if (!allowedDateKeys.contains(day.dateKey)) {
         continue;
       }
+      daysByDate.putIfAbsent(day.dateKey, () => <ReadingRecordDay>[]).add(day);
       totalReadMillisByDate[day.dateKey] =
           (totalReadMillisByDate[day.dateKey] ?? 0) + day.readMillis;
       totalReadCharsByDate[day.dateKey] =
           (totalReadCharsByDate[day.dateKey] ?? 0) + day.readChars;
-      workIdsByDate.putIfAbsent(day.dateKey, () => <String>{}).add(day.bookId);
     }
 
     final sessionCountByDate = <String, int>{};
@@ -1449,45 +1451,78 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       if (!allowedDateKeys.contains(dateKey)) {
         continue;
       }
+      sessionsByDate
+          .putIfAbsent(dateKey, () => <ReadingRecordSession>[])
+          .add(session);
       sessionCountByDate[dateKey] = (sessionCountByDate[dateKey] ?? 0) + 1;
-      final byBook = bookSummaryByDate.putIfAbsent(
-        dateKey,
-        () => <String, _ReadingCalendarBookDetail>{},
-      );
-      final current = byBook[session.bookId];
-      final nextDuration = (current?.readMillis ?? 0) + session.durationMillis;
-      final nextChars = (current?.readChars ?? 0) + session.readChars;
-      final chapterTitle =
-          session.chapterTitle?.trim().isNotEmpty == true
-              ? session.chapterTitle!.trim()
-              : current?.chapterTitle;
-      byBook[session.bookId] = _ReadingCalendarBookDetail(
-        bookId: session.bookId,
-        title: session.bookTitle,
-        author: session.bookAuthor,
-        coverUrl: session.coverUrl,
-        readMillis: nextDuration,
-        readChars: nextChars,
-        chapterTitle: chapterTitle,
-      );
     }
 
     final details = <String, _ReadingCalendarDayDetail>{};
     for (final dateKey in allowedDateKeys) {
-      final books =
-          (bookSummaryByDate[dateKey]?.values.toList(growable: true) ??
-                <_ReadingCalendarBookDetail>[])
-            ..sort((a, b) => b.readMillis.compareTo(a.readMillis));
+      final books = _buildReadingCalendarBooksForDate(
+        sessionsByDate[dateKey] ?? const <ReadingRecordSession>[],
+      );
       details[dateKey] = _ReadingCalendarDayDetail(
         dateKey: dateKey,
         readMillis: totalReadMillisByDate[dateKey] ?? 0,
         readChars: totalReadCharsByDate[dateKey] ?? 0,
         sessionCount: sessionCountByDate[dateKey] ?? 0,
-        workCount: workIdsByDate[dateKey]?.length ?? books.length,
+        workCount: math.max(
+          _workIdentityService.countDistinctWorks(
+            items: daysByDate[dateKey] ?? const <ReadingRecordDay>[],
+            titleOf: (item) => item.bookTitle,
+            authorOf: (item) => item.bookAuthor,
+            fallbackIdOf: (item) => item.bookId,
+          ),
+          books.length,
+        ),
         books: books,
       );
     }
     return details;
+  }
+
+  List<_ReadingCalendarBookDetail> _buildReadingCalendarBooksForDate(
+    List<ReadingRecordSession> sessions,
+  ) {
+    final groups = _workIdentityService.groupItems(
+      items: sessions,
+      titleOf: (item) => item.bookTitle,
+      authorOf: (item) => item.bookAuthor,
+      fallbackIdOf: (item) => item.bookId,
+    );
+    final books = groups.values
+        .map((items) {
+          final latest = _latestSession(items);
+          final preferredChapter = items
+              .map((item) => item.chapterTitle?.trim() ?? '')
+              .firstWhere((item) => item.isNotEmpty, orElse: () => '');
+          return _ReadingCalendarBookDetail(
+            bookId: latest.bookId,
+            title: latest.bookTitle,
+            author: latest.bookAuthor,
+            coverUrl: latest.coverUrl,
+            readMillis: items.fold<int>(
+              0,
+              (sum, item) => sum + item.durationMillis,
+            ),
+            readChars: items.fold<int>(0, (sum, item) => sum + item.readChars),
+            chapterTitle: preferredChapter.isEmpty ? null : preferredChapter,
+          );
+        })
+        .toList(growable: true);
+    books.sort((a, b) => b.readMillis.compareTo(a.readMillis));
+    return books;
+  }
+
+  ReadingRecordSession _latestSession(List<ReadingRecordSession> sessions) {
+    var latest = sessions.first;
+    for (final session in sessions.skip(1)) {
+      if (session.endAt.isAfter(latest.endAt)) {
+        latest = session;
+      }
+    }
+    return latest;
   }
 
   DateTime _resolveReadingCalendarSelectedDate({

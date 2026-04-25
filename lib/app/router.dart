@@ -24,7 +24,7 @@ import '../features/mine/presentation/bottom_nav_icon_gallery_editor_page.dart';
 import '../features/mine/presentation/cover_gallery_editor_page.dart';
 import '../features/mine/presentation/cover_gallery_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
-import '../features/mine/presentation/feature_placeholder_page.dart';
+import '../features/mine/presentation/font_management_page.dart';
 import '../features/mine/presentation/launch_image_gallery_editor_page.dart';
 import '../features/mine/presentation/launch_image_gallery_page.dart';
 import '../features/mine/presentation/reader_background_page.dart';
@@ -240,10 +240,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/font-management',
       name: 'font-management',
-      builder:
-          (context, state) => const FeaturePlaceholderPage(
-            kind: FeaturePlaceholderKind.fontManagement,
-          ),
+      builder: (context, state) => const FontManagementPage(),
     ),
     GoRoute(
       path: '/auth',
