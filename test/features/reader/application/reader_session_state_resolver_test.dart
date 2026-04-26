@@ -88,5 +88,48 @@ void main() {
       expect(state.isChapterTransitioning, isTrue);
       expect(state.rendererKind, TextReaderRendererKind.scroll);
     });
+
+    test(
+      'keeps chapter context and logical position stable across renderer kinds',
+      () {
+        final paged = resolver.resolve(
+          chapterIndex: 3,
+          chapterId: 'chapter_3',
+          chapterUrl: 'https://example.com/3',
+          chapterTitle: '第三章',
+          logicalPosition: logicalPosition,
+          rendererKind: TextReaderRendererKind.paged,
+          metrics: const ReaderRenderMetrics(pageCount: 9, currentPageIndex: 4),
+          isAutoReading: false,
+          isChapterTransitioning: false,
+        );
+        final scroll = resolver.resolve(
+          chapterIndex: 3,
+          chapterId: 'chapter_3',
+          chapterUrl: 'https://example.com/3',
+          chapterTitle: '第三章',
+          logicalPosition: logicalPosition,
+          rendererKind: TextReaderRendererKind.scroll,
+          metrics: const ReaderRenderMetrics(
+            hasScrollClients: true,
+            scrollOffset: 240,
+            maxScrollExtent: 820,
+          ),
+          isAutoReading: false,
+          isChapterTransitioning: false,
+        );
+
+        expect(paged, isNotNull);
+        expect(scroll, isNotNull);
+        expect(scroll!.currentChapterIndex, paged!.currentChapterIndex);
+        expect(scroll.currentChapterId, paged.currentChapterId);
+        expect(scroll.currentChapterUrl, paged.currentChapterUrl);
+        expect(scroll.currentChapterTitle, paged.currentChapterTitle);
+        expect(scroll.logicalPosition, same(logicalPosition));
+        expect(paged.logicalPosition, same(logicalPosition));
+        expect(scroll.rendererKind, TextReaderRendererKind.scroll);
+        expect(paged.rendererKind, TextReaderRendererKind.paged);
+      },
+    );
   });
 }

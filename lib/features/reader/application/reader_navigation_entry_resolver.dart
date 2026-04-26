@@ -3,7 +3,12 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_logical_position.dart';
 import 'reader_jump_facade.dart';
 
-enum ReaderNavigationRequestType { resumeAutoRead, restoreCurrent, jumpChapter }
+enum ReaderNavigationRequestType {
+  resumeAutoRead,
+  restoreCurrent,
+  jumpChapter,
+  jumpBookmark,
+}
 
 class ReaderNavigationRequest {
   const ReaderNavigationRequest._({
@@ -11,6 +16,7 @@ class ReaderNavigationRequest {
     this.targetChapterIndex,
     this.initialScrollRatio,
     this.initialLogicalPosition,
+    this.bookmark,
   });
 
   const ReaderNavigationRequest.resumeAutoRead()
@@ -36,10 +42,20 @@ class ReaderNavigationRequest {
          initialLogicalPosition: initialLogicalPosition,
        );
 
+  const ReaderNavigationRequest.jumpBookmark({
+    required Bookmark bookmark,
+    required int targetChapterIndex,
+  }) : this._(
+         type: ReaderNavigationRequestType.jumpBookmark,
+         targetChapterIndex: targetChapterIndex,
+         bookmark: bookmark,
+       );
+
   final ReaderNavigationRequestType type;
   final int? targetChapterIndex;
   final double? initialScrollRatio;
   final ReaderLogicalPosition? initialLogicalPosition;
+  final Bookmark? bookmark;
 }
 
 class ReaderNavigationEntryResolver {
@@ -113,6 +129,23 @@ class ReaderNavigationEntryResolver {
     return _jumpFacade.resolveBookmarkChapterIndex(
       bookmark: bookmark,
       chapters: chapters,
+    );
+  }
+
+  ReaderNavigationRequest? resolveBookmarkSelection({
+    required Bookmark bookmark,
+    required List<Chapter> chapters,
+  }) {
+    final targetIndex = resolveBookmarkChapterIndex(
+      bookmark: bookmark,
+      chapters: chapters,
+    );
+    if (targetIndex == null) {
+      return null;
+    }
+    return ReaderNavigationRequest.jumpBookmark(
+      bookmark: bookmark,
+      targetChapterIndex: targetIndex,
     );
   }
 }

@@ -40,10 +40,10 @@ void main() {
     final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
 
     expect(decoded['type'], 'advanced_theme_colors');
-    expect(decoded['version'], 1);
+    expect(decoded['version'], 2);
     expect(decoded['name'], '护眼绿');
-    expect(decoded['lightColors'], isA<Map>());
-    expect(decoded['darkColors'], isA<Map>());
+    expect(decoded['lightConfig'], isA<Map>());
+    expect(decoded['darkConfig'], isA<Map>());
     expect(decoded.containsKey('coverGalleryId'), isFalse);
     expect(decoded.containsKey('launchImageGalleryId'), isFalse);
     expect(decoded.containsKey('bottomNavGalleryId'), isFalse);

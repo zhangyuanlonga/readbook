@@ -49,6 +49,35 @@ enum ReaderChromeRole {
   pagedIndexOverlay,
 }
 
+enum ReaderInfoBarItemKind { text, battery }
+
+enum ReaderInfoBarTextRole { primary, meta }
+
+class ReaderInfoBarItemData {
+  const ReaderInfoBarItemData.text(
+    this.text, {
+    this.role = ReaderInfoBarTextRole.meta,
+    this.expand = false,
+  }) : kind = ReaderInfoBarItemKind.text,
+       batteryLevel = null,
+       batteryReadFailed = false;
+
+  const ReaderInfoBarItemData.battery({
+    required this.batteryLevel,
+    required this.batteryReadFailed,
+  }) : kind = ReaderInfoBarItemKind.battery,
+       text = null,
+       role = ReaderInfoBarTextRole.meta,
+       expand = false;
+
+  final ReaderInfoBarItemKind kind;
+  final String? text;
+  final ReaderInfoBarTextRole role;
+  final bool expand;
+  final int? batteryLevel;
+  final bool batteryReadFailed;
+}
+
 class ReaderPinnedChapterHeaderModel {
   const ReaderPinnedChapterHeaderModel({
     required this.title,
@@ -183,15 +212,15 @@ class ReaderPinnedChapterHeader extends StatelessWidget {
 
 class ReaderInfoBarModel {
   const ReaderInfoBarModel({
-    required this.items,
+    required this.leadingItems,
+    required this.centerItems,
+    required this.trailingItems,
     required this.placement,
     required this.role,
     required this.outerPadding,
     required this.innerHorizontalPadding,
     required this.showDivider,
     this.verticalPadding = 3,
-    this.separator = '·',
-    this.separatorSpacing = 6,
   });
 
   factory ReaderInfoBarModel.fromSettings({
@@ -199,7 +228,10 @@ class ReaderInfoBarModel {
     required ReaderLayoutResolver layoutResolver,
     required ReaderInfoBarPlacement placement,
     required ReaderChromeRole role,
-    required List<String> items,
+    List<ReaderInfoBarItemData> leadingItems = const <ReaderInfoBarItemData>[],
+    List<ReaderInfoBarItemData> centerItems = const <ReaderInfoBarItemData>[],
+    List<ReaderInfoBarItemData> trailingItems = const <ReaderInfoBarItemData>[],
+    EdgeInsets extraOuterPadding = EdgeInsets.zero,
   }) {
     final isHeader = placement == ReaderInfoBarPlacement.header;
     final innerHorizontalPadding =
@@ -211,13 +243,14 @@ class ReaderInfoBarModel {
             .toDouble();
 
     return ReaderInfoBarModel(
-      items: items,
+      leadingItems: leadingItems,
+      centerItems: centerItems,
+      trailingItems: trailingItems,
       placement: placement,
       role: role,
-      outerPadding: layoutResolver.resolveInfoBarPadding(
-        settings,
-        isHeader: isHeader,
-      ),
+      outerPadding:
+          layoutResolver.resolveInfoBarPadding(settings, isHeader: isHeader) +
+          extraOuterPadding,
       innerHorizontalPadding: innerHorizontalPadding,
       showDivider:
           isHeader
@@ -226,18 +259,21 @@ class ReaderInfoBarModel {
     );
   }
 
-  final List<String> items;
+  final List<ReaderInfoBarItemData> leadingItems;
+  final List<ReaderInfoBarItemData> centerItems;
+  final List<ReaderInfoBarItemData> trailingItems;
   final ReaderInfoBarPlacement placement;
   final ReaderChromeRole role;
   final EdgeInsets outerPadding;
   final double innerHorizontalPadding;
   final bool showDivider;
   final double verticalPadding;
-  final String separator;
-  final double separatorSpacing;
 
   bool get isHeader => placement == ReaderInfoBarPlacement.header;
-  bool get hasContent => items.isNotEmpty;
+  bool get hasContent =>
+      leadingItems.isNotEmpty ||
+      centerItems.isNotEmpty ||
+      trailingItems.isNotEmpty;
 }
 
 class ReaderInfoBar extends StatelessWidget {
@@ -280,47 +316,214 @@ class ReaderInfoBar extends StatelessWidget {
             horizontal: model.innerHorizontalPadding,
             vertical: model.verticalPadding,
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: <Widget>[
-                for (
-                  var index = 0;
-                  index < model.items.length;
-                  index++
-                ) ...<Widget>[
-                  if (index > 0)
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: model.separatorSpacing,
-                      ),
-                      child: Text(
-                        model.separator,
-                        style:
-                            separatorTextStyle ??
-                            TextStyle(
-                              color: palette.meta.withValues(alpha: 0.8),
-                              fontSize: 11,
-                            ),
-                      ),
-                    ),
-                  Text(
-                    model.items[index],
-                    style:
-                        itemTextStyle ??
-                        TextStyle(
-                          color: palette.meta,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                        ),
-                  ),
-                ],
-              ],
-            ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                flex: 4,
+                child: _ReaderInfoBarSection(
+                  items: model.leadingItems,
+                  alignment: Alignment.centerLeft,
+                  palette: palette,
+                  itemTextStyle: itemTextStyle,
+                  separatorTextStyle: separatorTextStyle,
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: _ReaderInfoBarSection(
+                  items: model.centerItems,
+                  alignment: Alignment.center,
+                  palette: palette,
+                  itemTextStyle: itemTextStyle,
+                  separatorTextStyle: separatorTextStyle,
+                ),
+              ),
+              Expanded(
+                flex: 4,
+                child: _ReaderInfoBarSection(
+                  items: model.trailingItems,
+                  alignment: Alignment.centerRight,
+                  palette: palette,
+                  itemTextStyle: itemTextStyle,
+                  separatorTextStyle: separatorTextStyle,
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _ReaderInfoBarSection extends StatelessWidget {
+  const _ReaderInfoBarSection({
+    required this.items,
+    required this.alignment,
+    required this.palette,
+    this.itemTextStyle,
+    this.separatorTextStyle,
+  });
+
+  final List<ReaderInfoBarItemData> items;
+  final Alignment alignment;
+  final ReaderChromePalette palette;
+  final TextStyle? itemTextStyle;
+  final TextStyle? separatorTextStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final mainAxisAlignment = switch (alignment) {
+      Alignment.centerLeft => MainAxisAlignment.start,
+      Alignment.centerRight => MainAxisAlignment.end,
+      _ => MainAxisAlignment.center,
+    };
+
+    return Align(
+      alignment: alignment,
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: mainAxisAlignment,
+        children: <Widget>[
+          for (var index = 0; index < items.length; index += 1) ...<Widget>[
+            if (index > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  '·',
+                  style:
+                      separatorTextStyle ??
+                      TextStyle(
+                        color: palette.meta.withValues(alpha: 0.8),
+                        fontSize: 11,
+                      ),
+                ),
+              ),
+            _ReaderInfoBarItem(
+              item: items[index],
+              palette: palette,
+              itemTextStyle: itemTextStyle,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReaderInfoBarItem extends StatelessWidget {
+  const _ReaderInfoBarItem({
+    required this.item,
+    required this.palette,
+    this.itemTextStyle,
+  });
+
+  final ReaderInfoBarItemData item;
+  final ReaderChromePalette palette;
+  final TextStyle? itemTextStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = switch (item.kind) {
+      ReaderInfoBarItemKind.text => _buildTextItem(),
+      ReaderInfoBarItemKind.battery => _ReaderInfoBarBattery(
+        level: item.batteryLevel,
+        readFailed: item.batteryReadFailed,
+        palette: palette,
+      ),
+    };
+    if (!item.expand) {
+      return child;
+    }
+    return Flexible(child: child);
+  }
+
+  Widget _buildTextItem() {
+    final baseStyle =
+        itemTextStyle ??
+        TextStyle(
+          color:
+              item.role == ReaderInfoBarTextRole.primary
+                  ? palette.text
+                  : palette.meta,
+          fontSize: 11.5,
+          fontWeight:
+              item.role == ReaderInfoBarTextRole.primary
+                  ? FontWeight.w500
+                  : FontWeight.w400,
+        );
+    return Text(
+      item.text ?? '',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: baseStyle,
+    );
+  }
+}
+
+class _ReaderInfoBarBattery extends StatelessWidget {
+  const _ReaderInfoBarBattery({
+    required this.level,
+    required this.readFailed,
+    required this.palette,
+  });
+
+  final int? level;
+  final bool readFailed;
+  final ReaderChromePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _batteryIcon();
+    final label = readFailed ? 'N/A' : '${(level ?? 0).clamp(0, 100)}%';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: palette.meta.withValues(alpha: 0.92)),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: palette.meta,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _batteryIcon() {
+    if (readFailed || level == null) {
+      return Icons.battery_unknown_rounded;
+    }
+    final safeLevel = level!.clamp(0, 100);
+    if (safeLevel >= 96) {
+      return Icons.battery_full_rounded;
+    }
+    if (safeLevel >= 80) {
+      return Icons.battery_6_bar_rounded;
+    }
+    if (safeLevel >= 60) {
+      return Icons.battery_5_bar_rounded;
+    }
+    if (safeLevel >= 40) {
+      return Icons.battery_4_bar_rounded;
+    }
+    if (safeLevel >= 25) {
+      return Icons.battery_3_bar_rounded;
+    }
+    if (safeLevel >= 10) {
+      return Icons.battery_2_bar_rounded;
+    }
+    return Icons.battery_alert_rounded;
   }
 }
 

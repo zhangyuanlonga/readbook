@@ -60,17 +60,22 @@ const List<AppShellDestination> appShellDestinations = [
 
 class AppShellNavigationState {
   const AppShellNavigationState({
+    this.showHome = true,
     this.showBookshelf = true,
     this.showDiscover = false,
     this.showStats = true,
   });
 
+  final bool showHome;
   final bool showBookshelf;
   final bool showDiscover;
   final bool showStats;
 
   int get configurableVisibleCount {
     var count = 0;
+    if (showHome) {
+      count += 1;
+    }
     if (showBookshelf) {
       count += 1;
     }
@@ -85,7 +90,7 @@ class AppShellNavigationState {
 
   bool isTabVisible(AppShellTab tab) {
     return switch (tab) {
-      AppShellTab.home => true,
+      AppShellTab.home => showHome,
       AppShellTab.bookshelf => showBookshelf,
       AppShellTab.discover => showDiscover,
       AppShellTab.stats => showStats,
@@ -94,15 +99,17 @@ class AppShellNavigationState {
   }
 
   int get visibleTabCount {
-    return configurableVisibleCount + 2;
+    return configurableVisibleCount + 1;
   }
 
   AppShellNavigationState copyWith({
+    bool? showHome,
     bool? showBookshelf,
     bool? showDiscover,
     bool? showStats,
   }) {
     return AppShellNavigationState(
+      showHome: showHome ?? this.showHome,
       showBookshelf: showBookshelf ?? this.showBookshelf,
       showDiscover: showDiscover ?? this.showDiscover,
       showStats: showStats ?? this.showStats,
@@ -112,13 +119,15 @@ class AppShellNavigationState {
   @override
   bool operator ==(Object other) {
     return other is AppShellNavigationState &&
+        other.showHome == showHome &&
         other.showBookshelf == showBookshelf &&
         other.showDiscover == showDiscover &&
         other.showStats == showStats;
   }
 
   @override
-  int get hashCode => Object.hash(showBookshelf, showDiscover, showStats);
+  int get hashCode =>
+      Object.hash(showHome, showBookshelf, showDiscover, showStats);
 }
 
 List<AppShellDestination> visibleAppShellDestinations(
@@ -135,6 +144,7 @@ final appShellNavigationProvider =
     );
 
 class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
+  static const String _homeVisibleKey = 'app.shell.navigation.home';
   static const String _bookshelfVisibleKey = 'app.shell.navigation.bookshelf';
   static const String _discoverVisibleKey = 'app.shell.navigation.discover';
   static const String _statsVisibleKey = 'app.shell.navigation.stats';
@@ -156,6 +166,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final loaded = AppShellNavigationState(
+      showHome: prefs.getBool(_homeVisibleKey) ?? true,
       showBookshelf: prefs.getBool(_bookshelfVisibleKey) ?? true,
       showDiscover: prefs.getBool(_discoverVisibleKey) ?? false,
       showStats: prefs.getBool(_statsVisibleKey) ?? true,
@@ -177,13 +188,13 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> setTabVisible(AppShellTab tab, bool visible) async {
-    if (tab == AppShellTab.home || tab == AppShellTab.mine) {
+    if (tab == AppShellTab.mine) {
       return;
     }
 
     final previous = state;
     final changed = switch (tab) {
-      AppShellTab.home => state,
+      AppShellTab.home => state.copyWith(showHome: visible),
       AppShellTab.bookshelf => state.copyWith(showBookshelf: visible),
       AppShellTab.discover => state.copyWith(showDiscover: visible),
       AppShellTab.stats => state.copyWith(showStats: visible),
@@ -213,13 +224,14 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     if (input.configurableVisibleCount > 0) {
       return input;
     }
-    return input.copyWith(showBookshelf: true);
+    return input.copyWith(showHome: true);
   }
 
   Future<void> _persistState(
     SharedPreferences prefs,
     AppShellNavigationState state,
   ) async {
+    await prefs.setBool(_homeVisibleKey, state.showHome);
     await prefs.setBool(_bookshelfVisibleKey, state.showBookshelf);
     await prefs.setBool(_discoverVisibleKey, state.showDiscover);
     await prefs.setBool(_statsVisibleKey, state.showStats);

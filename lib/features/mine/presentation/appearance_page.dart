@@ -1495,44 +1495,60 @@ class _AppearanceNavigationVisibilityPanelState
   @override
   Widget build(BuildContext context) {
     final navigationState = ref.watch(appShellNavigationProvider);
+    final tabs = <
+      ({AppShellTab tab, String label, IconData icon, bool active, bool locked})
+    >[
+      (
+        tab: AppShellTab.home,
+        label: '首页',
+        icon: Icons.home_outlined,
+        active: navigationState.showHome,
+        locked: false,
+      ),
+      (
+        tab: AppShellTab.bookshelf,
+        label: '书架',
+        icon: Icons.auto_stories_outlined,
+        active: navigationState.showBookshelf,
+        locked: false,
+      ),
+      (
+        tab: AppShellTab.discover,
+        label: '发现',
+        icon: Icons.explore_outlined,
+        active: navigationState.showDiscover,
+        locked: false,
+      ),
+      (
+        tab: AppShellTab.stats,
+        label: '统计',
+        icon: Icons.bar_chart_outlined,
+        active: navigationState.showStats,
+        locked: false,
+      ),
+      (
+        tab: AppShellTab.mine,
+        label: '我的',
+        icon: Icons.person_outline,
+        active: true,
+        locked: true,
+      ),
+    ];
 
     return Row(
       children: [
-        _buildThemeModeStyleTab(
-          context,
-          tab: AppShellTab.bookshelf,
-          label: '书架',
-          icon: Icons.auto_stories_outlined,
-          active: navigationState.showBookshelf,
-          locked: false,
-        ),
-        const SizedBox(width: 6),
-        _buildThemeModeStyleTab(
-          context,
-          tab: AppShellTab.discover,
-          label: '发现',
-          icon: Icons.explore_outlined,
-          active: navigationState.showDiscover,
-          locked: false,
-        ),
-        const SizedBox(width: 6),
-        _buildThemeModeStyleTab(
-          context,
-          tab: AppShellTab.stats,
-          label: '统计',
-          icon: Icons.bar_chart_outlined,
-          active: navigationState.showStats,
-          locked: false,
-        ),
-        const SizedBox(width: 6),
-        _buildThemeModeStyleTab(
-          context,
-          tab: AppShellTab.mine,
-          label: '我的',
-          icon: Icons.person_outline,
-          active: true,
-          locked: true,
-        ),
+        for (var index = 0; index < tabs.length; index++) ...[
+          _buildThemeModeStyleTab(
+            context,
+            tab: tabs[index].tab,
+            label: tabs[index].label,
+            icon: tabs[index].icon,
+            active: tabs[index].active,
+            locked: tabs[index].locked,
+            isLast: index == tabs.length - 1,
+          ),
+          if (index != tabs.length - 1) const SizedBox(width: 6),
+        ],
       ],
     );
   }
@@ -1544,12 +1560,13 @@ class _AppearanceNavigationVisibilityPanelState
     required IconData icon,
     required bool active,
     required bool locked,
+    required bool isLast,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Expanded(
       child: Padding(
-        padding: EdgeInsets.only(right: tab == AppShellTab.mine ? 0 : 6),
+        padding: EdgeInsets.only(right: isLast ? 0 : 0),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: locked || _isSaving ? null : () => _toggle(tab, !active),

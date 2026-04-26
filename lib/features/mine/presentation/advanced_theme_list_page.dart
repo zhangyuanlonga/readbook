@@ -21,6 +21,7 @@ import '../../../core/auth/auth_session_store.dart';
 import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
+import '../application/advanced_theme_export_error_formatter.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_import_catalog.dart';
@@ -192,6 +193,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final service = ref.read(advancedThemeServiceProvider);
       final fileName = '${_normalizedFileName(theme.name)}.json';
       final content = service.encodeThemeColorJson(theme);
+      var completed = false;
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
           acceptedTypeGroups: const <XTypeGroup>[
@@ -205,31 +207,27 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         }
         final file = File(location.path);
         await file.writeAsString(content, flush: true);
+        completed = true;
       } else {
         final tempDir = await getTemporaryDirectory();
         final file = File('${tempDir.path}/$fileName');
         await file.writeAsString(content, flush: true);
-        await _shareExportedThemeFile(
+        completed = await _shareExportedThemeFile(
           file: file,
           text: '分享颜色主题：${theme.name}',
           subject: theme.name,
           clipboardText: content,
         );
       }
-      if (!mounted) {
+      if (!completed || !mounted) {
         return;
       }
       _showMessage('已导出颜色配置「${theme.name}」');
-    } on FormatException catch (error) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      _showMessage(error.message);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('导出失败，请重试。');
+      _showMessage('导出失败：${formatAdvancedThemeExportError(error)}');
     } finally {
       if (mounted) {
         setState(() {
@@ -250,6 +248,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final service = ref.read(advancedThemeServiceProvider);
       final fileName = '${_normalizedFileName(theme.name)}.zip';
       final bytes = await service.encodeThemeBundleZip(theme);
+      var completed = false;
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
           acceptedTypeGroups: const <XTypeGroup>[
@@ -263,30 +262,26 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         }
         final file = File(location.path);
         await file.writeAsBytes(bytes, flush: true);
+        completed = true;
       } else {
         final tempDir = await getTemporaryDirectory();
         final file = File('${tempDir.path}/$fileName');
         await file.writeAsBytes(bytes, flush: true);
-        await _shareExportedThemeFile(
+        completed = await _shareExportedThemeFile(
           file: file,
           text: '分享主题包：${theme.name}',
           subject: theme.name,
         );
       }
-      if (!mounted) {
+      if (!completed || !mounted) {
         return;
       }
       _showMessage('已导出主题包「${theme.name}」');
-    } on FormatException catch (error) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      _showMessage(error.message);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('导出主题包失败，请重试。');
+      _showMessage('导出主题包失败：${formatAdvancedThemeExportError(error)}');
     } finally {
       if (mounted) {
         setState(() {
@@ -303,19 +298,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         defaultTargetPlatform == TargetPlatform.linux;
   }
 
-  Future<void> _shareExportedThemeFile({
+  Future<bool> _shareExportedThemeFile({
     required File file,
     required String text,
     required String subject,
     String? clipboardText,
   }) async {
     try {
-      await Share.shareXFiles(
+      final result = await Share.shareXFiles(
         [XFile(file.path)],
         text: text,
         subject: subject,
         sharePositionOrigin: _resolveSharePositionOrigin(),
       );
+      return result.status != ShareResultStatus.dismissed;
     } on MissingPluginException {
       final fallbackText = clipboardText;
       if (fallbackText != null && fallbackText.isNotEmpty) {
@@ -329,6 +325,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             ? '当前安装包暂不支持系统分享，请完整重启 App 后重试。'
             : '当前安装包暂不支持系统分享，已复制主题内容，请完整重启 App 后重试。',
       );
+      return false;
     }
   }
 

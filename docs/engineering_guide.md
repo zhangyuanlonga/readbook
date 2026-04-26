@@ -8,6 +8,7 @@
 - 以脚本源运行时作为唯一在线书源执行链
 - 将脚本执行复杂度与阅读业务复杂度分离
 - 支持后续扩展更多内容类型和规则能力
+- 后续新增代码统一按 `docs/development_architecture_guardrails.md` 收口
 
 ## 2. 技术栈
 
@@ -61,6 +62,8 @@
 - `domain` 不依赖 `data`
 - `data` 实现 `domain` 仓库接口
 - `core` 不依赖具体业务 feature
+- 页面不得直接依赖 `AppDatabase`、`RepositoryImpl`、平台通道
+- 具体依赖方向、Riverpod DI、路由和原生边界约束见 `docs/development_architecture_guardrails.md`
 
 ## 7. 状态管理与错误处理
 
@@ -86,6 +89,7 @@
 
 - 项目定位和需求变化：更新 `docs/product_guide.md`
 - 架构变化：更新 `docs/engineering_guide.md`
+- 开发约束或 code review 口径变化：更新 `docs/development_architecture_guardrails.md`
 - 专题变化：更新对应专题文档
 - 不再围绕旧兼容体系新增平行规划文档
 

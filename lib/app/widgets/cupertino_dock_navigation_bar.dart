@@ -28,7 +28,7 @@ class DockThemePalette {
 }
 
 class CupertinoDockNavigationBar extends StatelessWidget {
-  static const double _kDockHeightWithLabels = 78;
+  static const double _kDockHeightWithLabels = 74;
   static const double _kDockHeightIconOnly = 64;
   static const double _kDockGap = 10;
   static const double _kDockBottomMinimum = 10;
@@ -74,11 +74,11 @@ class CupertinoDockNavigationBar extends StatelessWidget {
       minimum: const EdgeInsets.fromLTRB(12, 8, 16, 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final searchWidth = dockHeight;
-          final searchHeight = dockHeight;
+          final searchWidth = showLabels ? 68.0 : dockHeight;
+          final searchHeight = showLabels ? 68.0 : dockHeight;
           final preferredDockWidth =
               showLabels
-                  ? (destinations.length * 82.0) + 28
+                  ? (destinations.length * 78.0) + 30
                   : (destinations.length * 66.0) + 24;
           final maxDockWidth = constraints.maxWidth - searchWidth - _kDockGap;
           final dockWidth =
@@ -98,7 +98,12 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                   child: SizedBox(
                     height: dockHeight,
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(8, showLabels ? 6 : 5, 8, 5),
+                      padding: EdgeInsets.fromLTRB(
+                        9,
+                        showLabels ? 5 : 5,
+                        9,
+                        showLabels ? 4 : 5,
+                      ),
                       child: Row(
                         children: [
                           for (
@@ -157,9 +162,9 @@ class _DockSurface extends StatelessWidget {
         border: Border.all(color: palette.borderColor, width: 0.8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.035),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.028),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -212,8 +217,8 @@ class _DockItem extends StatelessWidget {
             onTap: onTap,
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: showLabel ? 4 : 2,
-                vertical: showLabel ? 3 : 2,
+                horizontal: showLabel ? 3 : 2,
+                vertical: showLabel ? 2 : 2,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -221,8 +226,8 @@ class _DockItem extends StatelessWidget {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    width: showLabel ? 50 : 44,
-                    height: 34,
+                    width: showLabel ? 46 : 44,
+                    height: showLabel ? 30 : 34,
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
@@ -234,32 +239,32 @@ class _DockItem extends StatelessWidget {
                         scale: selected ? 1 : 0.96,
                         child: BottomNavIconView(
                           icon: resolvedIcon,
-                          size: 21,
+                          size: showLabel ? 20 : 21,
                           fallbackColor: iconColor,
                         ),
                       ),
                     ),
                   ),
                   if (showLabel) ...[
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
                       style:
                           theme.textTheme.labelSmall?.copyWith(
                             fontWeight:
-                                selected ? FontWeight.w800 : FontWeight.w600,
-                            fontSize: 10,
-                            height: 1,
-                            letterSpacing: 0.02,
+                                selected ? FontWeight.w700 : FontWeight.w500,
+                            fontSize: 10.5,
+                            height: 1.02,
+                            letterSpacing: -0.06,
                             color: labelColor,
                           ) ??
                           TextStyle(
                             fontWeight:
-                                selected ? FontWeight.w800 : FontWeight.w600,
-                            fontSize: 10,
-                            height: 1,
-                            letterSpacing: 0.02,
+                                selected ? FontWeight.w700 : FontWeight.w500,
+                            fontSize: 10.5,
+                            height: 1.02,
+                            letterSpacing: -0.06,
                             color: labelColor,
                           ),
                       child: Text(
@@ -319,11 +324,18 @@ class _SearchIconButton extends StatelessWidget {
                   color: palette.containerColor,
                   borderRadius: BorderRadius.circular(radius),
                   border: Border.all(color: palette.borderColor, width: 0.8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Icon(
                     CupertinoIcons.search,
-                    size: 21,
+                    size: showLabel ? 20 : 21,
                     color: palette.unselectedIconColor,
                   ),
                 ),

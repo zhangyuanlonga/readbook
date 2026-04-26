@@ -76,6 +76,10 @@ void main() {
         infoFooterMarginBottom: 3,
         infoFooterMarginLeft: 15,
         infoFooterMarginRight: 17,
+        bodyMarginMode: ReaderBodyMarginMode.custom,
+        bodyMarginPreset: ReaderBodyMarginPreset.immersive,
+        pinnedChapterHeaderOffsetX: 0.42,
+        pinnedChapterHeaderOffsetY: 24,
       );
 
       await service.saveSettings(settings);
@@ -140,10 +144,14 @@ void main() {
       expect(restored.bodyMarginBottom, 11);
       expect(restored.bodyMarginLeft, 19);
       expect(restored.bodyMarginRight, 21);
+      expect(restored.bodyMarginMode, ReaderBodyMarginMode.custom);
+      expect(restored.bodyMarginPreset, ReaderBodyMarginPreset.immersive);
       expect(restored.infoFooterMarginTop, 7);
       expect(restored.infoFooterMarginBottom, 3);
       expect(restored.infoFooterMarginLeft, 15);
       expect(restored.infoFooterMarginRight, 17);
+      expect(restored.pinnedChapterHeaderOffsetX, closeTo(0.42, 0.0001));
+      expect(restored.pinnedChapterHeaderOffsetY, 24);
     });
 
     test('saves and loads reading progress', () async {

@@ -784,7 +784,7 @@ class ReaderContentSession {
 - [ ] 手工验证漫画主路径
 - [ ] 为未来听书模式预留的接口完成代码级占位
 - [ ] 更新 `docs/product_experience_guide.md`
-- [ ] 更新 `docs/reader_refactor_task_plan.md`
+- [ ] 如需追溯旧阅读器拆解方案，检查 `docs/archive/reader_refactor_task_plan.md`
 
 ## 13. 最终判断
 

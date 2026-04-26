@@ -1,6 +1,8 @@
 PODS:
   - battery_plus (1.0.0):
     - Flutter
+  - charset_converter (0.0.1):
+    - Flutter
   - device_info_plus (0.0.1):
     - Flutter
   - file_selector_ios (0.0.1):
@@ -38,6 +40,7 @@ PODS:
 
 DEPENDENCIES:
   - battery_plus (from `.symlinks/plugins/battery_plus/ios`)
+  - charset_converter (from `.symlinks/plugins/charset_converter/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - file_selector_ios (from `.symlinks/plugins/file_selector_ios/ios`)
   - Flutter (from `Flutter`)
@@ -60,6 +63,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   battery_plus:
     :path: ".symlinks/plugins/battery_plus/ios"
+  charset_converter:
+    :path: ".symlinks/plugins/charset_converter/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
   file_selector_ios:
@@ -91,6 +96,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   battery_plus: b42253f6d2dde71712f8c36fef456d99121c5977
+  charset_converter: 82bc1d2e3c70dcb51bf769e9772e3ae5b2571695
   device_info_plus: 71ffc6ab7634ade6267c7a93088ed7e4f74e5896
   file_selector_ios: ec57ec07954363dd730b642e765e58f199bb621a
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467

@@ -67,5 +67,20 @@ void main() {
       expect(style.decorationColor, const Color(0xFF3366CC));
       expect(style.decorationThickness, 3.5);
     });
+
+    test('emits line height and letter spacing from typography settings', () {
+      final style = resolver.resolveBodyStyle(
+        settings: const ReaderSettings(
+          fontSize: 20,
+          lineHeight: 1.95,
+          letterSpacing: 0.18,
+        ),
+        color: Colors.black,
+      );
+
+      expect(style.fontSize, 20);
+      expect(style.height, 1.95);
+      expect(style.letterSpacing, closeTo(0.18, 0.0001));
+    });
   });
 }

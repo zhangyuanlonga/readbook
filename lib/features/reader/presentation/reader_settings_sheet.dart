@@ -188,8 +188,7 @@ class ReaderSettingsSheetState {
       activeGroupKey: activeGroupKey,
       activeTab: activeTab,
       currentFontLabel: currentFontLabel,
-      presetSelection:
-          presetSelection ?? _inferPresetSelection(settings),
+      presetSelection: presetSelection ?? _inferPresetSelection(settings),
       groupDescriptors: groupDescriptors,
       extensionSections: extensionSections,
       activeExtensionId: activeExtensionId,
@@ -316,31 +315,27 @@ class ReaderSettingsSheetState {
   ) {
     final service = const ReaderSettingsPresetService();
     return ReaderSettingsSheetPresetSelection(
-      typography: _firstMatchingOrNull(
-        ReaderTypographyPreset.values,
-        (preset) {
-          final applied = service.applyTypographyPreset(settings, preset);
-          return applied.fontSize == settings.fontSize &&
-              applied.lineHeight == settings.lineHeight &&
-              applied.letterSpacing == settings.letterSpacing &&
-              applied.textFullJustifyEnabled == settings.textFullJustifyEnabled;
-        },
-      ),
+      typography: _firstMatchingOrNull(ReaderTypographyPreset.values, (preset) {
+        final applied = service.applyTypographyPreset(settings, preset);
+        return applied.fontSize == settings.fontSize &&
+            applied.lineHeight == settings.lineHeight &&
+            applied.letterSpacing == settings.letterSpacing &&
+            applied.textFullJustifyEnabled == settings.textFullJustifyEnabled;
+      }),
       spacing: _firstMatchingOrNull(ReaderSpacingPreset.values, (preset) {
         final applied = service.applySpacingPreset(settings, preset);
         return applied.paragraphSpacing == settings.paragraphSpacing &&
             applied.paragraphIndent == settings.paragraphIndent;
       }),
-      chapterHeader: _firstMatchingOrNull(
-        ReaderChapterHeaderPreset.values,
-        (preset) {
-          final applied = service.applyChapterHeaderPreset(settings, preset);
-          return applied.pinnedChapterHeaderOffsetX ==
-                  settings.pinnedChapterHeaderOffsetX &&
-              applied.pinnedChapterHeaderOffsetY ==
-                  settings.pinnedChapterHeaderOffsetY;
-        },
-      ),
+      chapterHeader: _firstMatchingOrNull(ReaderChapterHeaderPreset.values, (
+        preset,
+      ) {
+        final applied = service.applyChapterHeaderPreset(settings, preset);
+        return applied.pinnedChapterHeaderOffsetX ==
+                settings.pinnedChapterHeaderOffsetX &&
+            applied.pinnedChapterHeaderOffsetY ==
+                settings.pinnedChapterHeaderOffsetY;
+      }),
       infoStyle: _firstMatchingOrNull(ReaderInfoStylePreset.values, (preset) {
         final applied = service.applyInfoStylePreset(settings, preset);
         return applied.infoHeaderEnabled == settings.infoHeaderEnabled &&
@@ -380,6 +375,8 @@ class ReaderSettingsSheetCallbacks {
     this.onAdvancedGroupChanged,
     this.onAdvancedExtensionChanged,
     this.onSettingsChanged,
+    this.onOpenFontPickerRequested,
+    this.onOpenFontWeightPickerRequested,
     this.onTypographyPresetSelected,
     this.onSpacingPresetSelected,
     this.onChapterHeaderPresetSelected,
@@ -393,6 +390,8 @@ class ReaderSettingsSheetCallbacks {
   final ValueChanged<ReaderSettingsSheetGroupKey?>? onAdvancedGroupChanged;
   final ValueChanged<String?>? onAdvancedExtensionChanged;
   final ValueChanged<ReaderSettings>? onSettingsChanged;
+  final VoidCallback? onOpenFontPickerRequested;
+  final VoidCallback? onOpenFontWeightPickerRequested;
   final ValueChanged<ReaderTypographyPreset>? onTypographyPresetSelected;
   final ValueChanged<ReaderSpacingPreset>? onSpacingPresetSelected;
   final ValueChanged<ReaderChapterHeaderPreset>? onChapterHeaderPresetSelected;
@@ -686,7 +685,8 @@ class _ReaderSettingsSheetBasicSkeleton extends StatelessWidget {
                     selected: presetInput.selection.infoStyle == preset,
                     showCheckmark: false,
                     onSelected:
-                        (_) => callbacks.onInfoStylePresetSelected?.call(preset),
+                        (_) =>
+                            callbacks.onInfoStylePresetSelected?.call(preset),
                   ),
                 )
                 .toList(growable: false),
@@ -787,7 +787,9 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
         context,
       ),
       ReaderSettingsSheetGroupKey.infoBar => _buildInfoBarGroup(context),
-      ReaderSettingsSheetGroupKey.visualDecoration => _buildVisualGroup(context),
+      ReaderSettingsSheetGroupKey.visualDecoration => _buildVisualGroup(
+        context,
+      ),
     };
   }
 
@@ -800,6 +802,16 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
           subtitle: '字距、段距、缩进等低频项下沉到高级设置。',
           child: Column(
             children: [
+              _ReaderSettingsActionRow(
+                label: '字体',
+                value: state.currentFontLabel,
+                onTap: callbacks.onOpenFontPickerRequested,
+              ),
+              _ReaderSettingsActionRow(
+                label: '字重',
+                value: _fontWeightValueLabel(settings),
+                onTap: callbacks.onOpenFontWeightPickerRequested,
+              ),
               _ReaderSettingsSliderRow(
                 label: '字号',
                 value: settings.fontSize,
@@ -1014,12 +1026,12 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                     .map(
                       (preset) => ChoiceChip(
                         label: Text(_chapterHeaderPresetLabel(preset)),
-                        selected: state.presetInput.selection.chapterHeader == preset,
+                        selected:
+                            state.presetInput.selection.chapterHeader == preset,
                         showCheckmark: false,
                         onSelected:
-                            (_) => callbacks.onChapterHeaderPresetSelected?.call(
-                              preset,
-                            ),
+                            (_) => callbacks.onChapterHeaderPresetSelected
+                                ?.call(preset),
                       ),
                     )
                     .toList(growable: false),
@@ -1112,6 +1124,34 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                       settings.copyWith(infoShowProgress: value),
                     ),
               ),
+              _ReaderSettingsToggleRow(
+                label: '章节',
+                value: settings.infoShowChapter,
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(infoShowChapter: value),
+                    ),
+              ),
+              _ReaderSettingsToggleRow(
+                label: '页眉分隔线',
+                value: settings.infoHeaderDividerEnabled,
+                onChanged:
+                    settings.infoHeaderEnabled
+                        ? (value) => callbacks.onSettingsChanged?.call(
+                          settings.copyWith(infoHeaderDividerEnabled: value),
+                        )
+                        : null,
+              ),
+              _ReaderSettingsToggleRow(
+                label: '页脚分隔线',
+                value: settings.infoFooterDividerEnabled,
+                onChanged:
+                    settings.infoFooterEnabled
+                        ? (value) => callbacks.onSettingsChanged?.call(
+                          settings.copyWith(infoFooterDividerEnabled: value),
+                        )
+                        : null,
+              ),
               const SizedBox(height: 8),
               _ReaderSettingsSliderRow(
                 label: '页眉内边距',
@@ -1135,6 +1175,54 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
                       settings.copyWith(infoFooterPadding: value),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '页眉上边距',
+                value: settings.infoHeaderMarginTop,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.infoHeaderMarginTop.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(infoHeaderMarginTop: value),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '页眉下边距',
+                value: settings.infoHeaderMarginBottom,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.infoHeaderMarginBottom.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(infoHeaderMarginBottom: value),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '页眉左边距',
+                value: settings.infoHeaderMarginLeft,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.infoHeaderMarginLeft.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(infoHeaderMarginLeft: value),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '页眉右边距',
+                value: settings.infoHeaderMarginRight,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.infoHeaderMarginRight.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(infoHeaderMarginRight: value),
                     ),
               ),
               _ReaderSettingsSliderRow(
@@ -1317,6 +1405,30 @@ class _ReaderSettingsToggleRow extends StatelessWidget {
   }
 }
 
+class _ReaderSettingsActionRow extends StatelessWidget {
+  const _ReaderSettingsActionRow({
+    required this.label,
+    required this.value,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(label),
+      subtitle: Text(value),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    );
+  }
+}
+
 class _ReaderSettingsSliderRow extends StatelessWidget {
   const _ReaderSettingsSliderRow({
     required this.label,
@@ -1442,6 +1554,17 @@ String _fontPresetLabel(ReaderFontPreset preset) {
     ReaderFontPreset.systemSerif => '衬线',
     ReaderFontPreset.systemMonospace => '等宽',
   };
+}
+
+String _fontWeightValueLabel(ReaderSettings settings) {
+  final value =
+      settings.fontWeightValue ??
+      switch (settings.fontWeightLevel) {
+        ReaderFontWeightLevel.light => 400,
+        ReaderFontWeightLevel.regular => 500,
+        ReaderFontWeightLevel.medium => 600,
+      };
+  return '$value';
 }
 
 String _chapterHeaderPresetLabel(ReaderChapterHeaderPreset preset) {

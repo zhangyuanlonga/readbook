@@ -1,32 +1,26 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-import '../core/analytics/analytics_service.dart';
 import '../core/app_update/app_update_dialog.dart';
-import '../core/app_update/app_update_service.dart';
+import '../core/app_update/app_update_release.dart';
 import '../core/auth/auth_event_bus.dart';
-import '../core/auth/auth_token_refresher_impl.dart';
-import '../core/device/device_identity_service.dart';
-import '../core/device/device_heartbeat_service.dart';
 import '../core/logging/app_logger.dart';
-import '../core/network/api_client.dart';
 import '../domain/entities/announcement.dart';
-import '../features/announcement/application/announcement_read_state_service.dart';
-import '../features/announcement/application/announcement_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/source/application/external_import_catalog.dart';
 import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
-import '../features/source/application/source_runtime_facade.dart';
+import 'lifecycle/app_lifecycle_coordinator.dart';
 import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
 import 'router.dart';
+import 'startup/app_announcement_coordinator.dart';
+import 'startup/app_startup_coordinator.dart';
 import 'startup_artwork_store.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
@@ -124,33 +118,19 @@ class _SystemUiOverlayWrapper extends StatefulWidget {
 
 class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     with WidgetsBindingObserver {
-  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
-  StreamSubscription<AuthEvent>? _authEventSub;
   Brightness? _lastBrightness;
-  bool _hasShownStartupAnnouncement = false;
-  bool _startupAnnouncementScheduled = false;
-  int _startupAnnouncementRetryCount = 0;
   bool _isStartupReady = false;
-  Timer? _startupDelayTimer;
-  Timer? _startupDeferredTasksTimer;
-  bool _startupDeferredTasksScheduled = false;
-  final AnnouncementService _announcementService = AnnouncementService();
-  final AnnouncementReadStateService _announcementReadStateService =
-      AnnouncementReadStateService();
-  final AppUpdateService _appUpdateService = AppUpdateService();
-  final DeviceIdentityService _deviceIdentityService = DeviceIdentityService();
-  late final AuthTokenRefresherImpl _authTokenRefresher =
-      AuthTokenRefresherImpl();
-  late final DeviceHeartbeatService _deviceHeartbeatService =
-      DeviceHeartbeatService(identityService: _deviceIdentityService);
-  late final AnalyticsService _analyticsService = AnalyticsService(
-    identityService: _deviceIdentityService,
+  late final AppLifecycleCoordinator _lifecycleCoordinator =
+      AppLifecycleCoordinator();
+  late final AppAnnouncementCoordinator _announcementCoordinator =
+      AppAnnouncementCoordinator();
+  late final AppStartupCoordinator _startupCoordinator = AppStartupCoordinator(
+    sendHeartbeat: _lifecycleCoordinator.sendHeartbeat,
+    sendVisitEvent: _lifecycleCoordinator.sendVisitEvent,
+    showStartupAnnouncementIfNeeded: _showStartupAnnouncementIfNeeded,
+    resolveDialogContext: _resolveStartupDialogContext,
+    showUpdateDialog: _showUpdateReleaseDialog,
   );
-  bool _isHeartbeatInFlight = false;
-  bool _isVisitInFlight = false;
-  bool _isStartupUpdateInFlight = false;
-  bool _hasCheckedStartupUpdate = false;
-  DateTime? _lastHeartbeatAt;
   static const List<String> _dialogFontFallback = [
     'STKaiti',
     'Kaiti SC',
@@ -160,84 +140,29 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     'serif',
   ];
 
-  static const Duration _kStartupMinDuration = Duration(milliseconds: 250);
-  static const Duration _kStartupDeferredTasksDelay = Duration(
-    milliseconds: 1800,
-  );
-  static const Duration _kStartupTaskGap = Duration(milliseconds: 320);
-  static const Duration _kStartupAnnouncementDelay = Duration(
-    milliseconds: 480,
-  );
-  static const Duration _kHeartbeatThrottle = Duration(minutes: 2);
-  final Stopwatch _startupStopwatch = Stopwatch()..start();
-  bool _firstFrameMetricsLogged = false;
-  final Completer<void> _startupFirstFrameCompleter = Completer<void>();
-
   @override
   void initState() {
     super.initState();
     AppLogger.instance.info('Startup init begin');
-    ApiClient.defaultAuthTokenRefresher ??= _authTokenRefresher;
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addTimingsCallback(_onFrameTimings);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_startupFirstFrameCompleter.isCompleted) {
-        _startupFirstFrameCompleter.complete();
-      }
-      AppLogger.instance.info(
-        'Startup first frame callback',
-        context: <String, Object?>{
-          'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-        },
-      );
-    });
-    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen(
-      _onIncomingExternalImportPayload,
-    );
-    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
-    unawaited(ExternalImportBridge.instance.initialize());
-    unawaited(_prepareStartup());
-  }
-
-  Future<void> _prepareStartup() async {
-    await _startupFirstFrameCompleter.future;
-    final remainingDelay = _kStartupMinDuration - _startupStopwatch.elapsed;
-    await _waitStartupDelay(remainingDelay);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isStartupReady = true;
-    });
-    AppLogger.instance.info(
-      'Startup ready',
-      context: <String, Object?>{
-        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-      },
+    WidgetsBinding.instance.addTimingsCallback(
+      _startupCoordinator.onFrameTimings,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_warmupLocalDatabase());
-      _scheduleStartupDeferredTasks();
+      _startupCoordinator.notifyFirstFrameCallback();
     });
-  }
-
-  Future<void> _warmupLocalDatabase() async {
-    final stopwatch = Stopwatch()..start();
-    try {
-      await SourceRuntimeFacade.instance.listScriptSources();
-    } catch (_) {
-      // Ignore warmup failures to avoid affecting app startup or first frame.
-    } finally {
-      AppLogger.instance.info(
-        'Startup warmup local database',
-        context: <String, Object?>{
-          'costMs': stopwatch.elapsedMilliseconds,
-          'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-        },
-      );
-    }
+    unawaited(
+      _lifecycleCoordinator.initialize(
+        onIncomingExternalImportPayload: _onIncomingExternalImportPayload,
+        onAuthEvent: _handleAuthEvent,
+      ),
+    );
+    unawaited(
+      _startupCoordinator.prepareStartup(
+        isMounted: () => mounted,
+        markStartupReady: _markStartupReady,
+      ),
+    );
   }
 
   Future<BuildContext?> _resolveStartupDialogContext() async {
@@ -251,180 +176,20 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     return appRootNavigatorKey.currentContext;
   }
 
-  Future<void> _checkStartupUpdateIfNeeded() async {
-    if (_hasCheckedStartupUpdate || _isStartupUpdateInFlight) {
-      return;
-    }
-    _isStartupUpdateInFlight = true;
-    try {
-      final result = await _appUpdateService.checkUpdate();
-      _hasCheckedStartupUpdate = true;
-      final release = result.release;
-      if (!mounted || !result.hasUpdate || release == null) {
-        return;
-      }
-      final dialogContext = await _resolveStartupDialogContext();
-      if (!mounted || dialogContext == null || !dialogContext.mounted) {
-        return;
-      }
-      await AppUpdateDialog.showUpdateDialog(dialogContext, release);
-    } catch (_) {
-      _hasCheckedStartupUpdate = true;
-    } finally {
-      _isStartupUpdateInFlight = false;
-    }
-  }
-
-  Future<void> _waitStartupDelay(Duration delay) {
-    if (delay <= Duration.zero) {
-      return Future<void>.value();
-    }
-
-    final completer = Completer<void>();
-    _startupDelayTimer?.cancel();
-    _startupDelayTimer = Timer(delay, () {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    });
-
-    return completer.future;
-  }
-
-  void _scheduleStartupDeferredTasks() {
-    if (_startupDeferredTasksScheduled) {
-      return;
-    }
-    _startupDeferredTasksScheduled = true;
-    _startupDeferredTasksTimer?.cancel();
-    _startupDeferredTasksTimer = Timer(_kStartupDeferredTasksDelay, () {
-      unawaited(_runStartupDeferredTasks());
-    });
-  }
-
-  Future<void> _runStartupDeferredTasks() async {
-    if (!mounted) {
-      return;
-    }
-    AppLogger.instance.info(
-      'Startup deferred tasks begin',
-      context: <String, Object?>{
-        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-      },
-    );
-    _showStartupAnnouncementIfNeeded();
-    await _waitDeferredGap(_kStartupAnnouncementDelay);
-    if (!mounted) {
-      return;
-    }
-    await _runStartupDeferredTask(name: 'heartbeat', task: _sendHeartbeat);
-    await _waitDeferredGap(_kStartupTaskGap);
-    await _runStartupDeferredTask(name: 'visit', task: _sendVisitEvent);
-    await _waitDeferredGap(_kStartupTaskGap);
-    await _runStartupDeferredTask(
-      name: 'updateCheck',
-      task: _checkStartupUpdateIfNeeded,
-    );
-    AppLogger.instance.info(
-      'Startup deferred tasks complete',
-      context: <String, Object?>{
-        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-      },
-    );
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_sendHeartbeat());
-      unawaited(_sendVisitEvent());
-    }
-  }
-
-  Future<void> _sendHeartbeat() async {
-    if (_isHeartbeatInFlight) {
-      return;
-    }
-    final now = DateTime.now();
-    final last = _lastHeartbeatAt;
-    if (last != null && now.difference(last) < _kHeartbeatThrottle) {
-      return;
-    }
-    _isHeartbeatInFlight = true;
-    try {
-      await _deviceHeartbeatService.sendHeartbeat();
-      _lastHeartbeatAt = now;
-    } catch (_) {
-      // Ignore heartbeat failures to avoid blocking startup or resume.
-    } finally {
-      _isHeartbeatInFlight = false;
-    }
-  }
-
-  Future<void> _sendVisitEvent() async {
-    if (_isVisitInFlight) {
-      return;
-    }
-    _isVisitInFlight = true;
-    try {
-      await _analyticsService.trackVisit(visitCount: 1, visitSeconds: 0);
-    } catch (_) {
-      // Ignore analytics failures to avoid blocking startup or resume.
-    } finally {
-      _isVisitInFlight = false;
-    }
+    _lifecycleCoordinator.handleAppLifecycleState(state);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    WidgetsBinding.instance.removeTimingsCallback(_onFrameTimings);
-    _incomingImportSub?.cancel();
-    _authEventSub?.cancel();
-    _startupDelayTimer?.cancel();
-    _startupDeferredTasksTimer?.cancel();
+    WidgetsBinding.instance.removeTimingsCallback(
+      _startupCoordinator.onFrameTimings,
+    );
+    _startupCoordinator.dispose();
+    _lifecycleCoordinator.dispose();
     super.dispose();
-  }
-
-  Future<void> _runStartupDeferredTask({
-    required String name,
-    required Future<void> Function() task,
-  }) async {
-    final stopwatch = Stopwatch()..start();
-    await task();
-    AppLogger.instance.info(
-      'Startup deferred task complete',
-      context: <String, Object?>{
-        'task': name,
-        'costMs': stopwatch.elapsedMilliseconds,
-        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-      },
-    );
-  }
-
-  Future<void> _waitDeferredGap(Duration duration) async {
-    if (!mounted || duration <= Duration.zero) {
-      return;
-    }
-    await Future<void>.delayed(duration);
-  }
-
-  void _onFrameTimings(List<FrameTiming> timings) {
-    if (_firstFrameMetricsLogged || timings.isEmpty) {
-      return;
-    }
-    _firstFrameMetricsLogged = true;
-    final frame = timings.first;
-    AppLogger.instance.info(
-      'Startup first frame timing',
-      context: <String, Object?>{
-        'buildMs': frame.buildDuration.inMilliseconds,
-        'rasterMs': frame.rasterDuration.inMilliseconds,
-        'totalMs': frame.totalSpan.inMilliseconds,
-        'vsyncOverheadMs': frame.vsyncOverhead.inMilliseconds,
-        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
-      },
-    );
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -480,73 +245,42 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     SystemChrome.setSystemUIOverlayStyle(style);
   }
 
-  void _showStartupAnnouncementIfNeeded() {
-    if (!_isStartupReady ||
-        _hasShownStartupAnnouncement ||
-        _startupAnnouncementScheduled) {
-      return;
-    }
-
-    _startupAnnouncementScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startupAnnouncementScheduled = false;
-      if (!mounted || _hasShownStartupAnnouncement) {
-        return;
-      }
-
-      final navigatorContext = appRootNavigatorKey.currentContext;
-      if (navigatorContext == null) {
-        if (_startupAnnouncementRetryCount < 10) {
-          _startupAnnouncementRetryCount += 1;
-          _showStartupAnnouncementIfNeeded();
-        }
-        return;
-      }
-
-      _startupAnnouncementRetryCount = 0;
-      unawaited(_tryShowLatestAnnouncement());
-    });
-  }
-
-  Future<void> _tryShowLatestAnnouncement() async {
-    Announcement? latest;
-    try {
-      latest = await _announcementService.fetchLatestAnnouncement();
-    } catch (_) {
-      return;
-    }
-
+  void _markStartupReady() {
     if (!mounted) {
       return;
     }
+    setState(() {
+      _isStartupReady = true;
+    });
+  }
 
-    final announcement = latest;
-    if (announcement == null) {
-      return;
-    }
+  void _showStartupAnnouncementIfNeeded() {
+    _announcementCoordinator.showStartupAnnouncementIfNeeded(
+      isStartupReady: _isStartupReady,
+      isMounted: () => mounted,
+      currentNavigatorContext: () => appRootNavigatorKey.currentContext,
+      presentAnnouncement: _presentStartupAnnouncement,
+    );
+  }
 
-    final active = announcement.isActiveAt(DateTime.now().toUtc());
-    if (!active) {
-      return;
-    }
-
-    final isRead = await _announcementReadStateService.isRead(announcement.id);
-    if (isRead) {
-      return;
-    }
-
+  void _presentStartupAnnouncement(Announcement announcement) {
     final dialogContext = appRootNavigatorKey.currentContext;
     if (!mounted || dialogContext == null || !dialogContext.mounted) {
       return;
     }
-
-    _hasShownStartupAnnouncement = true;
     showDialog<void>(
       context: dialogContext,
       builder: (context) {
         return _buildAnnouncementDialog(context, announcement);
       },
     );
+  }
+
+  Future<void> _showUpdateReleaseDialog(
+    BuildContext context,
+    AppUpdateRelease release,
+  ) {
+    return AppUpdateDialog.showUpdateDialog(context, release);
   }
 
   Widget _buildAnnouncementDialog(
@@ -765,7 +499,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
                               onPressed: () {
                                 Navigator.of(context).pop();
                                 unawaited(
-                                  _announcementReadStateService.markRead(
+                                  _announcementCoordinator.markRead(
                                     announcement.id,
                                   ),
                                 );
