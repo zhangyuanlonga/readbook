@@ -52,6 +52,7 @@
 - `lib/features/reader/presentation/reader_page_settings.dart`
 - `lib/features/reader/presentation/reader_page_overlay.dart`
 - `lib/features/reader/presentation/reader_page_source_switch.dart`
+- `lib/features/reader/presentation/reader_page_bootstrap.dart`
 - `lib/features/reader/application/reader_dependencies_provider.dart`
 - `lib/features/reader/application/reader_cached_chapter_store.dart`
 
@@ -116,15 +117,15 @@
 
 可打勾任务：
 
-- [ ] 抽出 `_bootstrap`
-- [ ] 抽出 `_tryHydrateTocSnapshot`
-- [ ] 抽出 `_persistTocSnapshot`
-- [ ] 抽出 `_applyPresentedBookMetadata`
-- [ ] 抽出 `_resolveCurrentBookCustomCoverPath`
-- [ ] 抽出 `_copyLocalReaderDiagnostics`
-- [ ] 抽出 `_loadIsIosSimulator`
-- [ ] 抽出 `_shouldSkipBatteryRead`
-- [ ] 抽出 `_refreshReaderInfoSnapshot`
+- [x] 抽出 `_bootstrap`
+- [x] 抽出 `_tryHydrateTocSnapshot`
+- [x] 抽出 `_persistTocSnapshot`
+- [x] 抽出 `_applyPresentedBookMetadata`
+- [x] 抽出 `_resolveCurrentBookCustomCoverPath`
+- [x] 抽出 `_copyLocalReaderDiagnostics`
+- [x] 抽出 `_loadIsIosSimulator`
+- [x] 抽出 `_shouldSkipBatteryRead`
+- [x] 抽出 `_refreshReaderInfoSnapshot`
 
 完成标准：
 
