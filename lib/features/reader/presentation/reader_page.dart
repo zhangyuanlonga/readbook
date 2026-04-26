@@ -1029,12 +1029,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
     final useEdgeToEdgeSheet = MediaQuery.sizeOf(context).width < 840;
     final radius = useEdgeToEdgeSheet ? 24.0 : 28.0;
+    final horizontalInset = useEdgeToEdgeSheet ? 8.0 : sheetHorizontal;
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       padding: EdgeInsets.only(
-        left: useEdgeToEdgeSheet ? 0 : sheetHorizontal,
-        right: useEdgeToEdgeSheet ? 0 : sheetHorizontal,
+        left: horizontalInset,
+        right: horizontalInset,
         top: useEdgeToEdgeSheet ? 0 : 48,
         bottom:
             keyboardInset +
@@ -6621,8 +6622,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
       schedulePersistDraft();
+      final currentFingerprint = fingerprint(_settings);
+      final draftFingerprint = fingerprint(draft);
+      if (currentFingerprint == draftFingerprint) {
+        return;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
+        if (!mounted || fingerprint(_settings) == fingerprint(draft)) {
           return;
         }
         _applyReaderSettingsWithModeRestore(nextSettings: draft);
@@ -6875,10 +6881,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: false,
-      useSafeArea: false,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.04),
+      showDragHandle: true,
+      useSafeArea: true,
+      backgroundColor: readerModalTheme.colorScheme.surface,
       builder: (context) {
         return Theme(
           data: readerModalTheme,
@@ -6959,16 +6964,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 }
 
                 schedulePersistDraft();
-                if (identical(_settings, draft)) {
+                final currentFingerprint = fingerprint(_settings);
+                final draftFingerprint = fingerprint(draft);
+                if (currentFingerprint == draftFingerprint) {
                   return;
                 }
 
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted || identical(_settings, draft)) {
+                  if (!mounted ||
+                      fingerprint(_settings) == fingerprint(draft)) {
                     return;
                   }
                   _applyReaderSettingsWithModeRestore(nextSettings: draft);
                 });
+              }
+
+              void updateDraft(ReaderSettings next) {
+                setModalState(() {
+                  draft = next;
+                });
+                previewDraftSettings();
               }
 
               Future<void> persistBackgroundDraftNow(
@@ -6997,12 +7012,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ..removeWhere((entry) => entry == storedPath)
                       ..add(storedPath);
 
+                updateDraft(draft.copyWith(backgroundImageBase64: storedPath));
                 setModalState(() {
-                  draft = draft.copyWith(backgroundImageBase64: storedPath);
                   _customBackgroundImages = nextCustoms;
                 });
                 updateCustomBackgrounds(nextCustoms);
-                await persistBackgroundDraftNow(draft);
               }
 
               Future<void> applyStoredCustomBackground(String source) async {
@@ -7010,10 +7024,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 if (normalized.isEmpty) {
                   return;
                 }
-                setModalState(() {
-                  draft = draft.copyWith(backgroundImageBase64: normalized);
-                });
-                await persistBackgroundDraftNow(draft);
+                updateDraft(draft.copyWith(backgroundImageBase64: normalized));
               }
 
               Future<void> removeActiveBackground() async {
@@ -7023,10 +7034,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     active.isNotEmpty &&
                     _isPresetBackgroundValue(active);
 
-                setModalState(() {
-                  draft = draft.copyWith(clearBackgroundImage: true);
-                });
-                await persistBackgroundDraftNow(draft);
+                updateDraft(draft.copyWith(clearBackgroundImage: true));
 
                 if (active != null &&
                     active.isNotEmpty &&
@@ -8168,12 +8176,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       showLabel: false,
                       scale: presetTileScale,
                       onTap: () {
-                        setModalState(() {
-                          draft = draft.copyWith(
+                        updateDraft(
+                          draft.copyWith(
                             backgroundImageBase64: preset.assetPath,
-                          );
-                        });
-                        unawaited(persistBackgroundDraftNow(draft));
+                          ),
+                        );
                       },
                     ),
                   ),
@@ -9424,11 +9431,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       backgroundStyle: option.backgroundStyle,
                                       backgroundTone: option.backgroundTone,
                                       scale: compactSheetScale,
-                                      onChanged: (next) {
-                                        setModalState(() {
-                                          draft = next;
-                                        });
-                                      },
+                                      onChanged: updateDraft,
                                     ),
                                   )
                                   .toList(growable: false),
@@ -9451,13 +9454,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     icon: Icons.hide_image_outlined,
                                     scale: compactSheetScale,
                                     onTap: () {
-                                      setModalState(() {
-                                        draft = draft.copyWith(
+                                      updateDraft(
+                                        draft.copyWith(
                                           clearBackgroundImage: true,
-                                        );
-                                      });
-                                      unawaited(
-                                        persistBackgroundDraftNow(draft),
+                                        ),
                                       );
                                     },
                                   ),
@@ -10340,75 +10340,80 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   context,
                   maxWidth: 760,
                 );
-                final settingsSheetState =
-                    ReaderSettingsSheetState.fromSettings(
-                      settings: draft,
-                      showInterfaceSettings: showInterfaceSettings,
-                      currentFontLabel: currentFontLabel(),
-                      activeGroupKey: activeSettingsGroupKey,
-                      activeTab: activeSettingsTab,
-                      showsPinnedChapterHeader: _showsPinnedChapterHeader,
-                      showsBatteryWarning: draft.infoShowBattery,
-                    );
-                final settingsSheetCallbacks = ReaderSettingsSheetCallbacks(
-                  onBack: () {
-                    setModalState(() {
-                      activeSettingsGroupKey = null;
-                    });
-                  },
-                  onTabChanged: (tab) {
-                    setModalState(() {
-                      activeSettingsTab = tab;
-                      activeSettingsGroupKey = null;
-                    });
-                  },
-                  onOpenFontPickerRequested:
-                      () => unawaited(openFontPickerSheet()),
-                  onOpenFontWeightPickerRequested:
-                      () => unawaited(openFontWeightTabSheet()),
-                );
 
-                return _buildFloatingReaderSettingsSheet(
-                  context: context,
-                  readerModalTheme: readerModalTheme,
-                  keyboardInset: keyboardInset,
-                  safeBottom: safeBottom,
-                  sheetHorizontal: sheetHorizontal,
-                  maxWidth: textSheetMaxWidth,
-                  heightFactor: _adaptiveReaderSheetHeightFactor(
-                    context,
-                    compact: 0.66,
-                    regular: 0.6,
-                    large: 0.56,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(999),
+                return AnimatedPadding(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
+                  child: SafeArea(
+                    child: FractionallySizedBox(
+                      heightFactor: _adaptiveReaderSheetHeightFactor(
+                        context,
+                        compact: 0.84,
+                        regular: 0.76,
+                        large: 0.7,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: textSheetMaxWidth,
                           ),
-                        ),
-                        Expanded(
-                          child: ReaderSettingsSheet(
-                            title: sheetTitle,
-                            state: settingsSheetState,
-                            callbacks: settingsSheetCallbacks,
-                            content: ListView(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              children: selectedCards,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              sheetHorizontal,
+                              8,
+                              sheetHorizontal,
+                              14,
                             ),
-                            onBack: settingsSheetCallbacks.onBack,
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  height: 40,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      if (activeSettingsGroupKey != null)
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            onPressed: () {
+                                              setModalState(() {
+                                                activeSettingsGroupKey = null;
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.arrow_back_rounded,
+                                            ),
+                                          ),
+                                        ),
+                                      Center(
+                                        child: Text(
+                                          sheetTitle,
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Expanded(
+                                  child: ListView(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    children: selectedCards,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 );

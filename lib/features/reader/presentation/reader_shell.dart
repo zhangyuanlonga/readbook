@@ -121,6 +121,10 @@ class ReaderShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = Padding(padding: model.contentPadding, child: child);
+    final contentSurfaceColor =
+        model.background == null
+            ? model.palette.surfaceColor
+            : Colors.transparent;
 
     final stackedContent = Stack(
       clipBehavior: model.clipBehavior,
@@ -137,7 +141,7 @@ class ReaderShell extends StatelessWidget {
           ),
         Positioned.fill(
           child: DecoratedBox(
-            decoration: BoxDecoration(color: model.palette.surfaceColor),
+            decoration: BoxDecoration(color: contentSurfaceColor),
             child: content,
           ),
         ),
