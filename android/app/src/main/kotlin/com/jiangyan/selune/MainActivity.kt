@@ -34,6 +34,9 @@ class MainActivity : FlutterActivity() {
         private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys"
         private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys/events"
         private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
+        private const val READER_SCREEN_BRIGHTNESS_CHANNEL_NAME = "com.jiangyan.selune/reader_screen_brightness"
+        private const val METHOD_SET_READER_BRIGHTNESS = "setReaderBrightness"
+        private const val METHOD_RESET_READER_BRIGHTNESS = "resetReaderBrightness"
         private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
         private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
@@ -95,6 +98,7 @@ class MainActivity : FlutterActivity() {
     private var readerVolumeKeyMethodChannel: MethodChannel? = null
     private var readerVolumeKeyEventChannel: EventChannel? = null
     private var readerVolumeKeyEventSink: EventChannel.EventSink? = null
+    private var readerScreenBrightnessMethodChannel: MethodChannel? = null
     private var pendingInitialPayload: Map<String, Any>? = null
     private var interceptReaderVolumeKeys = false
 
@@ -169,6 +173,32 @@ class MainActivity : FlutterActivity() {
             )
         }
 
+        readerScreenBrightnessMethodChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            READER_SCREEN_BRIGHTNESS_CHANNEL_NAME
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    METHOD_SET_READER_BRIGHTNESS -> {
+                        val brightness = (call.arguments as? Number)?.toFloat()
+                        if (brightness == null) {
+                            result.success(null)
+                        } else {
+                            applyReaderBrightness(brightness)
+                            result.success(null)
+                        }
+                    }
+
+                    METHOD_RESET_READER_BRIGHTNESS -> {
+                        resetReaderBrightness()
+                        result.success(null)
+                    }
+
+                    else -> result.notImplemented()
+                }
+            }
+        }
+
         if (pendingInitialPayload == null) {
             pendingInitialPayload = extractPayloadFromIntent(intent)
         }
@@ -191,8 +221,22 @@ class MainActivity : FlutterActivity() {
         readerVolumeKeyEventChannel?.setStreamHandler(null)
         readerVolumeKeyEventChannel = null
         readerVolumeKeyEventSink = null
+        readerScreenBrightnessMethodChannel?.setMethodCallHandler(null)
+        readerScreenBrightnessMethodChannel = null
         interceptReaderVolumeKeys = false
         super.onDestroy()
+    }
+
+    private fun applyReaderBrightness(rawBrightness: Float) {
+        val params = window.attributes
+        params.screenBrightness = rawBrightness.coerceIn(0f, 1f)
+        window.attributes = params
+    }
+
+    private fun resetReaderBrightness() {
+        val params = window.attributes
+        params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        window.attributes = params
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

@@ -455,14 +455,15 @@ class ReaderSettingsSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: callbacks.onCloseRequested,
-                  icon: const Icon(Icons.close_rounded),
+              if (callbacks.onCloseRequested != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: callbacks.onCloseRequested,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1085,14 +1086,6 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
           child: Column(
             children: [
               _ReaderSettingsToggleRow(
-                label: '显示页眉',
-                value: settings.infoHeaderEnabled,
-                onChanged:
-                    (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(infoHeaderEnabled: value),
-                    ),
-              ),
-              _ReaderSettingsToggleRow(
                 label: '显示页脚',
                 value: settings.infoFooterEnabled,
                 onChanged:
@@ -1133,16 +1126,6 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                     ),
               ),
               _ReaderSettingsToggleRow(
-                label: '页眉分隔线',
-                value: settings.infoHeaderDividerEnabled,
-                onChanged:
-                    settings.infoHeaderEnabled
-                        ? (value) => callbacks.onSettingsChanged?.call(
-                          settings.copyWith(infoHeaderDividerEnabled: value),
-                        )
-                        : null,
-              ),
-              _ReaderSettingsToggleRow(
                 label: '页脚分隔线',
                 value: settings.infoFooterDividerEnabled,
                 onChanged:
@@ -1154,18 +1137,6 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _ReaderSettingsSliderRow(
-                label: '页眉内边距',
-                value: settings.infoHeaderPadding,
-                min: ReaderSettings.minInfoBarPadding,
-                max: ReaderSettings.maxInfoBarPadding,
-                divisions: 24,
-                valueLabel: settings.infoHeaderPadding.toStringAsFixed(0),
-                onChanged:
-                    (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(infoHeaderPadding: value),
-                    ),
-              ),
-              _ReaderSettingsSliderRow(
                 label: '页脚内边距',
                 value: settings.infoFooterPadding,
                 min: ReaderSettings.minInfoBarPadding,
@@ -1175,54 +1146,6 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
                       settings.copyWith(infoFooterPadding: value),
-                    ),
-              ),
-              _ReaderSettingsSliderRow(
-                label: '页眉上边距',
-                value: settings.infoHeaderMarginTop,
-                min: ReaderSettings.minLayoutMargin,
-                max: ReaderSettings.maxLayoutMargin,
-                divisions: 20,
-                valueLabel: settings.infoHeaderMarginTop.toStringAsFixed(0),
-                onChanged:
-                    (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(infoHeaderMarginTop: value),
-                    ),
-              ),
-              _ReaderSettingsSliderRow(
-                label: '页眉下边距',
-                value: settings.infoHeaderMarginBottom,
-                min: ReaderSettings.minLayoutMargin,
-                max: ReaderSettings.maxLayoutMargin,
-                divisions: 20,
-                valueLabel: settings.infoHeaderMarginBottom.toStringAsFixed(0),
-                onChanged:
-                    (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(infoHeaderMarginBottom: value),
-                    ),
-              ),
-              _ReaderSettingsSliderRow(
-                label: '页眉左边距',
-                value: settings.infoHeaderMarginLeft,
-                min: ReaderSettings.minLayoutMargin,
-                max: ReaderSettings.maxLayoutMargin,
-                divisions: 20,
-                valueLabel: settings.infoHeaderMarginLeft.toStringAsFixed(0),
-                onChanged:
-                    (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(infoHeaderMarginLeft: value),
-                    ),
-              ),
-              _ReaderSettingsSliderRow(
-                label: '页眉右边距',
-                value: settings.infoHeaderMarginRight,
-                min: ReaderSettings.minLayoutMargin,
-                max: ReaderSettings.maxLayoutMargin,
-                divisions: 20,
-                valueLabel: settings.infoHeaderMarginRight.toStringAsFixed(0),
-                onChanged:
-                    (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(infoHeaderMarginRight: value),
                     ),
               ),
               _ReaderSettingsSliderRow(

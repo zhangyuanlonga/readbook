@@ -19,6 +19,9 @@ private struct ExternalImportSpec {
   private let readerVolumeKeyChannelName = "com.jiangyan.selune/reader_volume_keys"
   private let readerVolumeKeyEventChannelName = "com.jiangyan.selune/reader_volume_keys/events"
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
+  private let readerScreenBrightnessChannelName = "com.jiangyan.selune/reader_screen_brightness"
+  private let methodSetReaderBrightness = "setReaderBrightness"
+  private let methodResetReaderBrightness = "resetReaderBrightness"
   private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
   private let payloadTypeScriptSource = "scriptSource"
@@ -28,6 +31,7 @@ private struct ExternalImportSpec {
   private var sourceImportMethodChannel: FlutterMethodChannel?
   private var readerVolumeKeyMethodChannel: FlutterMethodChannel?
   private var readerVolumeKeyEventChannel: FlutterEventChannel?
+  private var readerScreenBrightnessMethodChannel: FlutterMethodChannel?
   private let readerVolumeKeyStreamHandler = ReaderVolumeKeyStreamHandler()
   private var pendingInitialPayload: [String: Any]?
   private var interceptReaderVolumeKeys = false
@@ -36,6 +40,7 @@ private struct ExternalImportSpec {
   private weak var hiddenVolumeSlider: UISlider?
   private var suppressObservedVolumeChange = false
   private var lastObservedOutputVolume = AVAudioSession.sharedInstance().outputVolume
+  private var previousReaderBrightness: CGFloat?
 
   private lazy var scriptSourceImportSpec = ExternalImportSpec(
     type: payloadTypeScriptSource,
@@ -96,6 +101,7 @@ private struct ExternalImportSpec {
     GeneratedPluginRegistrant.register(with: self)
     setupSourceImportMethodChannel()
     setupReaderVolumeKeyBridge()
+    setupReaderScreenBrightnessBridge()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -175,6 +181,51 @@ private struct ExternalImportSpec {
       binaryMessenger: registrar.messenger())
     eventChannel.setStreamHandler(readerVolumeKeyStreamHandler)
     readerVolumeKeyEventChannel = eventChannel
+  }
+
+  private func setupReaderScreenBrightnessBridge() {
+    guard let registrar = self.registrar(forPlugin: "ReaderScreenBrightnessBridge") else {
+      return
+    }
+
+    let methodChannel = FlutterMethodChannel(
+      name: readerScreenBrightnessChannelName,
+      binaryMessenger: registrar.messenger())
+    methodChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(nil)
+        return
+      }
+
+      switch call.method {
+      case self.methodSetReaderBrightness:
+        if let value = call.arguments as? Double {
+          self.applyReaderBrightness(CGFloat(max(0, min(1, value))))
+        }
+        result(nil)
+      case self.methodResetReaderBrightness:
+        self.resetReaderBrightness()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    readerScreenBrightnessMethodChannel = methodChannel
+  }
+
+  private func applyReaderBrightness(_ brightness: CGFloat) {
+    if previousReaderBrightness == nil {
+      previousReaderBrightness = UIScreen.main.brightness
+    }
+    UIScreen.main.brightness = brightness
+  }
+
+  private func resetReaderBrightness() {
+    guard let previousReaderBrightness else {
+      return
+    }
+    UIScreen.main.brightness = previousReaderBrightness
+    self.previousReaderBrightness = nil
   }
 
   private func updateReaderVolumeKeyInterception() {

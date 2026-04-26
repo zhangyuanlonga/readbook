@@ -202,6 +202,13 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         );
         infoSettingsChanged = true;
       }
+      if (normalizedSettings.infoHeaderEnabled) {
+        normalizedSettings = normalizedSettings.copyWith(
+          infoHeaderEnabled: false,
+          infoHeaderDividerEnabled: false,
+        );
+        infoSettingsChanged = true;
+      }
       if (!normalizedSettings.infoHeaderEnabled &&
           normalizedSettings.infoHeaderDividerEnabled) {
         normalizedSettings = normalizedSettings.copyWith(
@@ -234,12 +241,14 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           _customBackgroundImages = storedCustomBackgrounds;
         });
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
+        unawaited(_applySystemReaderBrightness(bootSettings.brightness));
         unawaited(_syncVolumeKeyPageInterception());
       } else {
         _settings = bootSettings;
         _customFonts = availableCustomFonts;
         _customBackgroundImages = storedCustomBackgrounds;
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
+        unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
       await _syncReaderThemeModeWithAppTheme(
         ref.read(appThemeModeProvider),

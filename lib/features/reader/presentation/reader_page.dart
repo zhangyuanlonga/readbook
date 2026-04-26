@@ -93,6 +93,7 @@ import '../application/reader_session_state_resolver.dart';
 import '../application/reader_source_switch_coordinator.dart';
 import '../application/reader_source_switch_target_resolver.dart';
 import '../application/reader_reading_record_coordinator.dart';
+import '../application/reader_screen_brightness_bridge.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
@@ -218,6 +219,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderCatalogSearchService();
   final ReaderReadingRecordCoordinator _readingRecordCoordinator =
       const ReaderReadingRecordCoordinator();
+  final ReaderScreenBrightnessBridge _screenBrightnessBridge =
+      ReaderScreenBrightnessBridge.instance;
   final ReaderContentSessionResolver _contentSessionResolver =
       const ReaderContentSessionResolver();
   final ReaderSessionStateResolver _sessionStateResolver =
@@ -324,6 +327,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   DateTime _readerInfoNow = DateTime.now();
   int? _readerBatteryLevel;
   bool _readerBatteryReadFailed = false;
+  bool _isSystemBrightnessOverrideActive = false;
   Future<bool>? _iosSimulatorCheck;
   int _autoReadTaskToken = 0;
   int _chapterContentRequestToken = 0;
@@ -799,9 +803,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _showsPagedHeaderInfoBarFor(_ReaderViewportKind viewportKind) {
-    return viewportKind == _ReaderViewportKind.textPaged &&
-        _settings.infoHeaderEnabled &&
-        _hasReaderInfoItems;
+    return false;
   }
 
   bool get _hasReaderInfoItems =>
@@ -825,8 +827,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool get _showsPinnedChapterHeader =>
       _showsOuterPinnedChapterHeaderFor(_currentViewportKind);
-
-  bool get _showsReaderInfoBars => _showsOuterInfoBarsFor(_currentViewportKind);
 
   bool get _showsReaderFooterInfoBar =>
       _showsOuterFooterInfoBarFor(_currentViewportKind);
@@ -1238,6 +1238,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     _commitReadingRecordSession();
     _syncSystemUiVisibility(force: true, visible: true);
+    unawaited(_restoreSystemReaderBrightness());
     _overlayControlsController.stop();
     _pagedTransitionController.stop();
     _curlAutoTurnController.stop();
@@ -1357,6 +1358,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _readerBrightnessOverlayAlpha() {
+    if (_isSystemBrightnessOverrideActive) {
+      return 0;
+    }
     final alpha = (1 - _settings.brightness) * 0.6;
     final hasBackgroundImage =
         _settings.backgroundImageBase64?.trim().isNotEmpty ?? false;
@@ -1397,14 +1401,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       unawaited(_setVolumeKeyPageInterceptionEnabled(false));
+      unawaited(_restoreSystemReaderBrightness());
       _commitReadingRecordSession();
       return;
     }
 
     if (state == AppLifecycleState.resumed) {
       unawaited(_syncVolumeKeyPageInterception());
+      unawaited(_applySystemReaderBrightness());
       _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
     }
+  }
+
+  Future<void> _applySystemReaderBrightness([double? brightness]) async {
+    final applied = await _screenBrightnessBridge.setReaderBrightness(
+      brightness ?? _settings.brightness,
+    );
+    if (!mounted) {
+      _isSystemBrightnessOverrideActive = applied;
+      return;
+    }
+    if (_isSystemBrightnessOverrideActive == applied) {
+      return;
+    }
+    setState(() {
+      _isSystemBrightnessOverrideActive = applied;
+    });
+  }
+
+  Future<void> _restoreSystemReaderBrightness() async {
+    await _screenBrightnessBridge.resetReaderBrightness();
+    _isSystemBrightnessOverrideActive = false;
   }
 
   void _updateReaderState(VoidCallback mutation) {
@@ -1720,8 +1747,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return Column(
       children: [
         if (_showsPinnedChapterHeader) _buildPinnedChapterHeader(colors),
-        if (_showsReaderInfoBars && _settings.infoHeaderEnabled)
-          _buildReaderInfoBar(colors, isHeader: true),
         Expanded(child: _buildBody(colors)),
         if (_showsReaderFooterInfoBar)
           _buildReaderInfoBar(colors, isHeader: false),
@@ -3432,13 +3457,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _ReaderThemeColors colors,
     ReaderSurfaceMetrics layoutMetrics,
   ) {
-    return SizedBox(
-      height: layoutMetrics.pagedHeaderReserve,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: _buildReaderInfoBar(colors, isHeader: true),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildPagedFooterSection({
@@ -6255,6 +6274,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (syncVolumeKeyPageInterception) {
       unawaited(_syncVolumeKeyPageInterception());
     }
+    unawaited(_applySystemReaderBrightness(nextSettings.brightness));
   }
 
   void _applyProgressFallback(ReadingProgress progress) {
@@ -6633,6 +6653,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       showDragHandle: false,
       useSafeArea: false,
       backgroundColor: Colors.transparent,
@@ -6675,7 +6697,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     activeSettingsGroupKey = null;
                   });
                 },
-                onCloseRequested: () => Navigator.of(sheetContext).pop(),
                 onTabChanged: (tab) {
                   setModalState(() {
                     activeSettingsTab = tab;
@@ -6797,7 +6818,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     String? activeSettingsGroupKey;
     Timer? persistDraftTimer;
     const settingsGroupingService = ReaderSettingsGroupingService();
-    const settingsPresetService = ReaderSettingsPresetService();
 
     String fingerprint(ReaderSettings settings) {
       return jsonEncode(settings.copyWith(autoReadEnabled: false).toJson());
@@ -7090,86 +7110,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
               ReaderSettingsGroups semanticGroups() =>
                   settingsGroupingService.split(draft);
-
-              String typographyPresetLabel(ReaderTypographyPreset preset) {
-                return switch (preset) {
-                  ReaderTypographyPreset.md3Balanced => '均衡',
-                  ReaderTypographyPreset.md3Compact => '紧凑',
-                  ReaderTypographyPreset.md3Comfortable => '舒展',
-                };
-              }
-
-              String spacingPresetLabel(ReaderSpacingPreset preset) {
-                return switch (preset) {
-                  ReaderSpacingPreset.compact => '紧凑',
-                  ReaderSpacingPreset.balanced => '均衡',
-                  ReaderSpacingPreset.relaxed => '舒展',
-                };
-              }
-
-              String fontPresetLabel(ReaderFontPreset preset) {
-                return switch (preset) {
-                  ReaderFontPreset.systemSans => '系统默认',
-                  ReaderFontPreset.systemSerif => '衬线',
-                  ReaderFontPreset.systemMonospace => '等宽',
-                };
-              }
-
-              void applyTypographyPreset(ReaderTypographyPreset preset) {
-                setModalState(() {
-                  draft = settingsPresetService.applyTypographyPreset(
-                    draft,
-                    preset,
-                  );
-                });
-              }
-
-              void applySpacingPreset(ReaderSpacingPreset preset) {
-                setModalState(() {
-                  draft = settingsPresetService.applySpacingPreset(
-                    draft,
-                    preset,
-                  );
-                });
-              }
-
-              void applyFontPreset(ReaderFontPreset preset) {
-                setModalState(() {
-                  draft = settingsPresetService.applyFontPreset(draft, preset);
-                });
-              }
-
-              bool matchesTypographyPreset(ReaderTypographyPreset preset) {
-                final applied = settingsPresetService.applyTypographyPreset(
-                  draft,
-                  preset,
-                );
-                return applied.fontSize == draft.fontSize &&
-                    applied.lineHeight == draft.lineHeight &&
-                    applied.letterSpacing == draft.letterSpacing &&
-                    applied.textFullJustifyEnabled ==
-                        draft.textFullJustifyEnabled &&
-                    applied.fontWeightLevel == draft.fontWeightLevel;
-              }
-
-              bool matchesSpacingPreset(ReaderSpacingPreset preset) {
-                final applied = settingsPresetService.applySpacingPreset(
-                  draft,
-                  preset,
-                );
-                return applied.paragraphSpacing == draft.paragraphSpacing &&
-                    applied.paragraphIndent == draft.paragraphIndent;
-              }
-
-              bool matchesFontPreset(ReaderFontPreset preset) {
-                final applied = settingsPresetService.applyFontPreset(
-                  draft,
-                  preset,
-                );
-                return applied.fontSource == draft.fontSource &&
-                    applied.systemFontPreset == draft.systemFontPreset &&
-                    applied.fontFamilyKey == draft.fontFamilyKey;
-              }
 
               Future<void> openFontPickerSheet() async {
                 if (!context.mounted) {
@@ -7999,64 +7939,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           Expanded(
                             child: ListView(
                               children: [
-                                buildSectionTitle(
-                                  title: '页眉',
-                                  dividerEnabled:
-                                      draft.infoHeaderDividerEnabled,
-                                  dividerInteractive: draft.infoHeaderEnabled,
-                                  onDividerChanged: (selected) {
-                                    updatePaddingSettings(
-                                      draft.copyWith(
-                                        infoHeaderDividerEnabled: selected,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                buildMarginControlRow(
-                                  label: '上边距',
-                                  value: draft.infoHeaderMarginTop,
-                                  onChanged: (value) {
-                                    updatePaddingSettings(
-                                      draft.copyWith(
-                                        infoHeaderMarginTop: value,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                buildMarginControlRow(
-                                  label: '下边距',
-                                  value: draft.infoHeaderMarginBottom,
-                                  onChanged: (value) {
-                                    updatePaddingSettings(
-                                      draft.copyWith(
-                                        infoHeaderMarginBottom: value,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                buildMarginControlRow(
-                                  label: '左边距',
-                                  value: draft.infoHeaderMarginLeft,
-                                  onChanged: (value) {
-                                    updatePaddingSettings(
-                                      draft.copyWith(
-                                        infoHeaderMarginLeft: value,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                buildMarginControlRow(
-                                  label: '右边距',
-                                  value: draft.infoHeaderMarginRight,
-                                  onChanged: (value) {
-                                    updatePaddingSettings(
-                                      draft.copyWith(
-                                        infoHeaderMarginRight: value,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(height: 8),
                                 buildSectionTitle(title: '正文边距'),
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -9658,65 +9540,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ],
                   'quick_margins' => buildQuickMarginCards(),
                   'typography' => <Widget>[
-                    buildCompactSectionTitle('MD3 字体方案'),
-                    const SizedBox(height: 10),
-                    Text(
-                      '当前：${draft.fontSize.toStringAsFixed(0)}号 / 行距 ${draft.lineHeight.toStringAsFixed(2)} / 段距 ${draft.paragraphSpacing.toStringAsFixed(0)} / 缩进 ${draft.paragraphIndent.toStringAsFixed(0)} / 字距 ${draft.letterSpacing.toStringAsFixed(2)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ReaderTypographyPreset.values
-                          .map(
-                            (preset) => ChoiceChip(
-                              label: Text(typographyPresetLabel(preset)),
-                              selected: matchesTypographyPreset(preset),
-                              showCheckmark: false,
-                              onSelected: (_) => applyTypographyPreset(preset),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                    const SizedBox(height: 10),
-                    buildCompactSectionTitle('MD3 间距方案'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ReaderSpacingPreset.values
-                          .map(
-                            (preset) => ChoiceChip(
-                              label: Text(spacingPresetLabel(preset)),
-                              selected: matchesSpacingPreset(preset),
-                              showCheckmark: false,
-                              onSelected: (_) => applySpacingPreset(preset),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                    const SizedBox(height: 10),
-                    buildCompactSectionTitle('字体族'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ReaderFontPreset.values
-                          .map(
-                            (preset) => ChoiceChip(
-                              label: Text(fontPresetLabel(preset)),
-                              selected: matchesFontPreset(preset),
-                              showCheckmark: false,
-                              onSelected: (_) => applyFontPreset(preset),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                    buildSectionDivider(),
                     buildCompactSectionTitle('当前字体与字重'),
                     const SizedBox(height: 10),
                     Row(
@@ -10240,21 +10063,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       buildCompactSectionTitle('信息位'),
                       const SizedBox(height: 10),
                       buildCompactToggleRow(
-                        label: '显示页眉',
-                        value: draft.infoHeaderEnabled,
-                        onChanged: (enabled) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              infoHeaderEnabled: enabled,
-                              infoHeaderDividerEnabled:
-                                  enabled
-                                      ? draft.infoHeaderDividerEnabled
-                                      : false,
-                            );
-                          });
-                        },
-                      ),
-                      buildCompactToggleRow(
                         label: '显示页脚',
                         value: draft.infoFooterEnabled,
                         onChanged: (enabled) {
@@ -10338,29 +10146,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ],
                       ),
                       const SizedBox(height: 12),
-                      buildCompactSectionTitle('页眉页脚样式'),
+                      buildCompactSectionTitle('页脚样式'),
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          FilterChip(
-                            label: const Text('页眉分隔线'),
-                            selected:
-                                draft.infoHeaderEnabled &&
-                                draft.infoHeaderDividerEnabled,
-                            showCheckmark: false,
-                            onSelected:
-                                draft.infoHeaderEnabled
-                                    ? (selected) {
-                                      setModalState(() {
-                                        draft = draft.copyWith(
-                                          infoHeaderDividerEnabled: selected,
-                                        );
-                                      });
-                                    }
-                                    : null,
-                          ),
                           FilterChip(
                             label: const Text('页脚分隔线'),
                             selected:
@@ -10379,20 +10170,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     : null,
                           ),
                         ],
-                      ),
-                      buildTypographySliderRow(
-                        label: '页眉内距',
-                        min: ReaderSettings.minInfoBarPadding,
-                        max: ReaderSettings.maxInfoBarPadding,
-                        divisions: 24,
-                        value: draft.infoHeaderPadding,
-                        step: 1,
-                        valueLabel: draft.infoHeaderPadding.round().toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(infoHeaderPadding: value);
-                          });
-                        },
                       ),
                       buildTypographySliderRow(
                         label: '页脚内距',
@@ -10414,7 +10191,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           onPressed:
                               () => unawaited(openHorizontalPaddingTabSheet()),
                           icon: const Icon(Icons.tune_rounded, size: 16),
-                          label: const Text('页眉页脚精调'),
+                          label: const Text('页脚与正文边距'),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -10579,7 +10356,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       activeSettingsGroupKey = null;
                     });
                   },
-                  onCloseRequested: () => Navigator.of(context).pop(),
                   onTabChanged: (tab) {
                     setModalState(() {
                       activeSettingsTab = tab;
