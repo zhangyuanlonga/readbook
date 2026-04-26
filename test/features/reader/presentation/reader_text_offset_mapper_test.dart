@@ -22,8 +22,8 @@ void main() {
         paragraphs: const <String>['第一段正文', '第二段正文'],
         pagedPages: const <List<ReaderPagedSlice>>[
           <ReaderPagedSlice>[
-            ReaderPagedSlice(paragraphIndex: 0, start: 0, end: 2),
-            ReaderPagedSlice(paragraphIndex: 1, start: 0, end: 2),
+            ReaderPagedSlice(paragraphIndex: 0, start: 0, end: 2, height: 12),
+            ReaderPagedSlice(paragraphIndex: 1, start: 0, end: 2, height: 12),
           ],
         ],
         currentPageIndex: 0,

@@ -318,7 +318,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         await Clipboard.setData(ClipboardData(text: fallbackText));
       }
       if (!mounted) {
-        return;
+        return false;
       }
       _showMessage(
         fallbackText == null || fallbackText.isEmpty
