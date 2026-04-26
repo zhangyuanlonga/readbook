@@ -3,17 +3,20 @@ class ReaderPagedSlice {
     required this.paragraphIndex,
     required this.start,
     required this.end,
+    required this.height,
   });
 
   final int paragraphIndex;
   final int start;
   final int end;
+  final double height;
 
-  Map<String, int> toJson() {
-    return <String, int>{
+  Map<String, Object> toJson() {
+    return <String, Object>{
       'paragraphIndex': paragraphIndex,
       'start': start,
       'end': end,
+      'height': height,
     };
   }
 
@@ -22,6 +25,7 @@ class ReaderPagedSlice {
       paragraphIndex: (json['paragraphIndex'] as num?)?.toInt() ?? 0,
       start: (json['start'] as num?)?.toInt() ?? 0,
       end: (json['end'] as num?)?.toInt() ?? 0,
+      height: (json['height'] as num?)?.toDouble() ?? 0,
     );
   }
 }

@@ -48,7 +48,7 @@ void main() {
         footerLineHeightFactor: 1.3,
       );
 
-      expect(policy.pagedInfoOverlayReserve, closeTo(40.6, 0.001));
+      expect(policy.pagedInfoOverlayReserve, closeTo(61.6, 0.001));
       expect(
         policy.pagedBottomReserve,
         greaterThanOrEqualTo(policy.pagedInfoOverlayReserve),
@@ -103,7 +103,7 @@ void main() {
         footerLineHeightFactor: 1.2,
       );
 
-      expect(policy.pagedHeaderReserve, closeTo(36.6, 0.001));
+      expect(policy.pagedHeaderReserve, closeTo(41.6, 0.001));
     });
   });
 }

@@ -17,6 +17,8 @@ class ReaderSurfacePolicy {
 class ReaderSurfacePolicyResolver {
   const ReaderSurfacePolicyResolver();
 
+  static const double _kPagedFooterSafetyBuffer = 6.0;
+
   ReaderSurfacePolicy resolve({
     required bool showsReaderFooterInfoBar,
     required bool showsPagedHeaderInfoBar,
@@ -48,17 +50,19 @@ class ReaderSurfacePolicyResolver {
             ? 0.0
             : headerMarginTop +
                 headerMarginBottom +
-                max(4.0, infoHeaderPadding * 0.5) +
+                infoHeaderPadding +
                 (headerFontSize * headerLineHeightFactor) +
                 6;
 
     final pagedInfoOverlayReserve =
         !hasPagedInfoOverlay
             ? bottomProgressReserve
-            : footerMarginBottom +
-                max(4.0, infoFooterPadding * 0.5) +
+            : footerMarginTop +
+                footerMarginBottom +
+                infoFooterPadding +
                 (footerFontSize * footerLineHeightFactor) +
-                6;
+                6 +
+                _kPagedFooterSafetyBuffer;
 
     final pagedBottomReserve =
         hasPagedInfoOverlay

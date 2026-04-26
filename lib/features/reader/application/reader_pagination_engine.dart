@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
 
@@ -115,12 +116,14 @@ class ReaderPaginationParagraph {
   const ReaderPaginationParagraph({
     required this.text,
     required this.paragraphStyle,
+    this.textAlign = TextAlign.start,
     this.firstLinePrefix = '',
     this.spacingAfter = 0,
   });
 
   final String text;
   final TextStyle paragraphStyle;
+  final TextAlign textAlign;
   final String firstLinePrefix;
   final double spacingAfter;
 }
@@ -134,6 +137,8 @@ class ReaderPaginationResult {
 
 class ReaderPaginationEngine {
   const ReaderPaginationEngine();
+
+  static const double _kPageTailSafetyBuffer = 4.0;
 
   ReaderPaginationEnsurePlan buildEnsurePlan(
     ReaderPaginationEnsureRequest request,
@@ -213,6 +218,7 @@ class ReaderPaginationEngine {
     }) {
       final displayText =
           includePrefix ? '${paragraph.firstLinePrefix}$text' : text;
+      painter.textAlign = paragraph.textAlign;
       painter.text = TextSpan(
         text: displayText,
         style: paragraph.paragraphStyle,
@@ -226,7 +232,11 @@ class ReaderPaginationEngine {
       int start,
       double availableHeight,
     ) {
-      if (availableHeight <= 0) {
+      final effectiveAvailableHeight = math.max(
+        0.0,
+        availableHeight - _kPageTailSafetyBuffer,
+      );
+      if (effectiveAvailableHeight <= 0) {
         return 0;
       }
 
@@ -234,13 +244,14 @@ class ReaderPaginationEngine {
       final remaining = paragraph.text.substring(start);
       final displayText = '$prefix$remaining';
 
+      painter.textAlign = paragraph.textAlign;
       painter.text = TextSpan(
         text: displayText,
         style: paragraph.paragraphStyle,
       );
       painter.layout(maxWidth: maxWidth);
 
-      if (painter.height <= availableHeight) {
+      if (painter.height <= effectiveAvailableHeight) {
         return remaining.length;
       }
 
@@ -249,7 +260,7 @@ class ReaderPaginationEngine {
 
       for (final line in lines) {
         final bottom = line.baseline + line.descent;
-        if (bottom <= availableHeight) {
+        if (bottom <= effectiveAvailableHeight) {
           lastLineBottom = bottom;
           continue;
         }
@@ -265,7 +276,7 @@ class ReaderPaginationEngine {
               .getPositionForOffset(
                 Offset(
                   (maxWidth - 1).clamp(0.0, maxWidth),
-                  (lastLineBottom - 0.1).clamp(0.0, availableHeight),
+                  (lastLineBottom - 0.1).clamp(0.0, effectiveAvailableHeight),
                 ),
               )
               .offset;
@@ -299,7 +310,7 @@ class ReaderPaginationEngine {
         }
 
         if (currentPage.isNotEmpty) {
-          if (remainingHeight <= lastSpacingAfter) {
+          if (remainingHeight <= lastSpacingAfter + _kPageTailSafetyBuffer) {
             pages.add(currentPage);
             currentPage = <ReaderPagedSlice>[];
             remainingHeight = maxHeight;
@@ -332,6 +343,11 @@ class ReaderPaginationEngine {
               paragraphIndex: paragraphIndex,
               start: offset,
               end: end,
+              height: measureHeight(
+                paragraph,
+                text,
+                includePrefix: offset == 0,
+              ),
             ),
           );
           lastSpacingAfter = paragraph.spacingAfter;
@@ -355,6 +371,11 @@ class ReaderPaginationEngine {
             paragraphIndex: paragraphIndex,
             start: offset,
             end: end,
+            height: measureHeight(
+              paragraph,
+              segment,
+              includePrefix: offset == 0,
+            ),
           ),
         );
         lastSpacingAfter = paragraph.spacingAfter;
@@ -403,6 +424,7 @@ class ReaderPaginationEngine {
         (paragraph) => ReaderPaginationParagraph(
           text: paragraph,
           paragraphStyle: request.paragraphStyle,
+          textAlign: request.textAlign,
           firstLinePrefix: indentPrefix,
           spacingAfter: request.spec.paragraphSpacing,
         ),

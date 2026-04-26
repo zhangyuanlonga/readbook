@@ -1080,6 +1080,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double _pinnedHeaderTotalHeight(BuildContext context) {
     return _topSafeInset(context) +
         _kPinnedHeaderTopPadding +
+        _clampPinnedChapterHeaderOffsetY(_settings.pinnedChapterHeaderOffsetY) +
         _kPinnedHeaderHeight;
   }
 
@@ -4787,14 +4788,65 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (layoutMetrics.pagedFooterReserve <= 0) {
       return const SizedBox.shrink();
     }
+    final overlayModel = ReaderPageIndexOverlayModel.fromSettings(
+      settings: _settings,
+      layoutResolver: _layoutResolver,
+      index: index,
+      total: total,
+      bottomInset: 0,
+      safeBottomInset: 0,
+      fadeProgress: _overlayControlsFadeProgress,
+      rightItems: <String>[
+        if (_settings.infoShowTime) _formatReaderInfoTime(_readerInfoNow),
+        if (_settings.infoShowBattery) _readerBatteryLabel(),
+      ],
+    );
+    final footerTopPadding =
+        layoutMetrics.footerPadding.top +
+        _settings.infoFooterPadding
+            .clamp(
+              ReaderSettings.minInfoBarPadding,
+              ReaderSettings.maxInfoBarPadding,
+            )
+            .toDouble();
+    final footerBottomPadding =
+        layoutMetrics.safeInsets.bottom + layoutMetrics.footerPadding.bottom;
     final footer = SizedBox(
       height: layoutMetrics.pagedFooterReserve,
-      child: _buildPageIndexOverlay(
-        colors: colors,
-        index: index,
-        total: total,
-        bottomInset: 0,
-        safeBottomInset: layoutMetrics.safeInsets.bottom,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          overlayModel.horizontalPadding,
+          footerTopPadding,
+          overlayModel.horizontalPadding,
+          footerBottomPadding,
+        ),
+        child: Opacity(
+          opacity: overlayModel.opacity,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (overlayModel.showProgress)
+                ReaderPageIndexBadge(
+                  model: overlayModel.badge,
+                  palette: _chromePalette(colors),
+                ),
+              if (overlayModel.rightLabel.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    overlayModel.rightLabel,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: colors.meta.withValues(alpha: 0.9),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+            ],
+          ),
+        ),
       ),
     );
     if (!_settings.infoFooterDividerEnabled) {
@@ -4877,52 +4929,62 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
 
-    return ReaderAnnotatedText(
-      displayText: slice.displayText,
-      indentLength: slice.indentLength,
-      baseStyle: slice.textStyle,
-      textAlign: slice.textAlign,
-      textDirection: Directionality.of(context),
-      highlightColor: colors.text,
-      wavyColor: colors.text.withValues(alpha: 0.7),
-      annotationRanges: localRanges
-          .map(
-            (range) => ReaderTextAnnotationRange(
-              range.start,
-              range.end,
-              hasHighlight: range.hasHighlight,
-              isBold: range.isBold,
-              isUnderline: range.isUnderline,
-              isWavy: range.isWavy,
+    return Padding(
+      padding: EdgeInsets.only(bottom: slice.spacingAfter),
+      child: SizedBox(
+        height: slice.measuredHeight > 0 ? slice.measuredHeight : null,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: ReaderAnnotatedText(
+            displayText: slice.displayText,
+            indentLength: slice.indentLength,
+            baseStyle: slice.textStyle,
+            textAlign: slice.textAlign,
+            textDirection: Directionality.of(context),
+            highlightColor: colors.text,
+            wavyColor: colors.text.withValues(alpha: 0.7),
+            annotationRanges: localRanges
+                .map(
+                  (range) => ReaderTextAnnotationRange(
+                    range.start,
+                    range.end,
+                    hasHighlight: range.hasHighlight,
+                    isBold: range.isBold,
+                    isUnderline: range.isUnderline,
+                    isWavy: range.isWavy,
+                  ),
+                )
+                .toList(growable: false),
+            bodyDecorationEnabled:
+                _settings.bodyTextDecorationStyle !=
+                ReaderBodyTextDecorationStyle.none,
+            bodyDecorationColor: Color(
+              _settings.bodyTextDecorationColorValue ?? colors.text.toARGB32(),
             ),
-          )
-          .toList(growable: false),
-      bodyDecorationEnabled:
-          _settings.bodyTextDecorationStyle !=
-          ReaderBodyTextDecorationStyle.none,
-      bodyDecorationColor: Color(
-        _settings.bodyTextDecorationColorValue ?? colors.text.toARGB32(),
+            bodyDecorationStyle: _settings.bodyTextDecorationStyle,
+            bodyDecorationThickness: _settings.bodyTextUnderlineThickness,
+            bodyDecorationGap: _settings.bodyTextUnderlineGap,
+            bodyDecorationDashLength: _settings.bodyTextUnderlineDashLength,
+            bodyDecorationDashGapRatio: _settings.bodyTextUnderlineDashGapRatio,
+            onTapUp: (details) {
+              final renderBox = context.findRenderObject();
+              final maxWidth =
+                  renderBox is RenderBox ? renderBox.size.width : 0.0;
+              final handled = _handleBookmarkTapInSlice(
+                slice: slice.slice,
+                paragraphText: paragraph,
+                localPosition: details.localPosition,
+                maxWidth: maxWidth,
+                textStyle: slice.textStyle,
+                textAlign: slice.textAlign,
+              );
+              if (handled) {
+                _suppressNextReaderTap = true;
+              }
+            },
+          ),
+        ),
       ),
-      bodyDecorationStyle: _settings.bodyTextDecorationStyle,
-      bodyDecorationThickness: _settings.bodyTextUnderlineThickness,
-      bodyDecorationGap: _settings.bodyTextUnderlineGap,
-      bodyDecorationDashLength: _settings.bodyTextUnderlineDashLength,
-      bodyDecorationDashGapRatio: _settings.bodyTextUnderlineDashGapRatio,
-      onTapUp: (details) {
-        final renderBox = context.findRenderObject();
-        final maxWidth = renderBox is RenderBox ? renderBox.size.width : 0.0;
-        final handled = _handleBookmarkTapInSlice(
-          slice: slice.slice,
-          paragraphText: paragraph,
-          localPosition: details.localPosition,
-          maxWidth: maxWidth,
-          textStyle: slice.textStyle,
-          textAlign: slice.textAlign,
-        );
-        if (handled) {
-          _suppressNextReaderTap = true;
-        }
-      },
     );
   }
 
@@ -5331,6 +5393,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return ReaderPaginationParagraph(
         text: paragraphs[index],
         paragraphStyle: style,
+        textAlign: resolved.textAlign,
         firstLinePrefix: firstLinePrefix,
         spacingAfter: resolved.spacingAfter,
       );
@@ -14434,6 +14497,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     buildCompactSettingsCard([
                       buildCompactSectionTitle('信息位'),
                       const SizedBox(height: 10),
+                      buildCompactToggleRow(
+                        label: '显示页眉',
+                        value: draft.infoHeaderEnabled,
+                        onChanged: (enabled) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              infoHeaderEnabled: enabled,
+                              infoHeaderDividerEnabled:
+                                  enabled
+                                      ? draft.infoHeaderDividerEnabled
+                                      : false,
+                            );
+                          });
+                        },
+                      ),
+                      buildCompactToggleRow(
+                        label: '显示页脚',
+                        value: draft.infoFooterEnabled,
+                        onChanged: (enabled) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              infoFooterEnabled: enabled,
+                              infoFooterDividerEnabled:
+                                  enabled
+                                      ? draft.infoFooterDividerEnabled
+                                      : false,
+                            );
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -14488,7 +14582,98 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               });
                             },
                           ),
+                          FilterChip(
+                            label: const Text('章节'),
+                            selected: draft.infoShowChapter,
+                            onSelected: (selected) {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  infoShowChapter: selected,
+                                );
+                              });
+                            },
+                          ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      buildCompactSectionTitle('页眉页脚样式'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('页眉分隔线'),
+                            selected:
+                                draft.infoHeaderEnabled &&
+                                draft.infoHeaderDividerEnabled,
+                            showCheckmark: false,
+                            onSelected:
+                                draft.infoHeaderEnabled
+                                    ? (selected) {
+                                      setModalState(() {
+                                        draft = draft.copyWith(
+                                          infoHeaderDividerEnabled: selected,
+                                        );
+                                      });
+                                    }
+                                    : null,
+                          ),
+                          FilterChip(
+                            label: const Text('页脚分隔线'),
+                            selected:
+                                draft.infoFooterEnabled &&
+                                draft.infoFooterDividerEnabled,
+                            showCheckmark: false,
+                            onSelected:
+                                draft.infoFooterEnabled
+                                    ? (selected) {
+                                      setModalState(() {
+                                        draft = draft.copyWith(
+                                          infoFooterDividerEnabled: selected,
+                                        );
+                                      });
+                                    }
+                                    : null,
+                          ),
+                        ],
+                      ),
+                      buildTypographySliderRow(
+                        label: '页眉内距',
+                        min: ReaderSettings.minInfoBarPadding,
+                        max: ReaderSettings.maxInfoBarPadding,
+                        divisions: 24,
+                        value: draft.infoHeaderPadding,
+                        step: 1,
+                        valueLabel: draft.infoHeaderPadding.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(infoHeaderPadding: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '页脚内距',
+                        min: ReaderSettings.minInfoBarPadding,
+                        max: ReaderSettings.maxInfoBarPadding,
+                        divisions: 24,
+                        value: draft.infoFooterPadding,
+                        step: 1,
+                        valueLabel: draft.infoFooterPadding.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(infoFooterPadding: value);
+                          });
+                        },
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed:
+                              () => unawaited(openHorizontalPaddingTabSheet()),
+                          icon: const Icon(Icons.tune_rounded, size: 16),
+                          label: const Text('页眉页脚精调'),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -14659,6 +14844,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       activeSettingsGroupKey = null;
                     });
                   },
+                  onOpenFontPickerRequested:
+                      () => unawaited(openFontPickerSheet()),
+                  onOpenFontWeightPickerRequested:
+                      () => unawaited(openFontWeightTabSheet()),
                 );
 
                 return _buildFloatingReaderSettingsSheet(

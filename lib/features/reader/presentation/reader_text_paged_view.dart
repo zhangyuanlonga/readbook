@@ -140,6 +140,7 @@ class ReaderPagedResolvedSlice {
     required this.textAlign,
     required this.spacingAfter,
     required this.kind,
+    required this.measuredHeight,
     this.paragraphIndex,
     this.renderItem,
   });
@@ -157,6 +158,7 @@ class ReaderPagedResolvedSlice {
   final TextStyle textStyle;
   final TextAlign textAlign;
   final double spacingAfter;
+  final double measuredHeight;
 }
 
 class ReaderTextPagedView extends StatelessWidget {
@@ -294,23 +296,29 @@ class ReaderPagedPageContent extends StatelessWidget {
     if (page.slices.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Align(
-      alignment: Alignment.topLeft,
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final slice in page.slices)
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        var dy = 0.0;
+        final children = <Widget>[];
+        for (final slice in page.slices) {
+          final child =
               resolvedSliceBuilder?.call(
-                    context,
-                    slice,
-                    _buildDefaultSlice(context, slice),
-                  ) ??
-                  _buildDefaultSlice(context, slice),
-          ],
-        ),
-      ),
+                context,
+                slice,
+                _buildDefaultSlice(context, slice),
+              ) ??
+              _buildDefaultSlice(context, slice);
+          children.add(Positioned(top: dy, left: 0, right: 0, child: child));
+          dy += slice.measuredHeight + slice.spacingAfter;
+        }
+        return ClipRect(
+          child: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: Stack(children: children),
+          ),
+        );
+      },
     );
   }
 
@@ -328,7 +336,10 @@ class ReaderPagedPageContent extends StatelessWidget {
     return RepaintBoundary(
       child: Padding(
         padding: EdgeInsets.only(bottom: slice.spacingAfter),
-        child: textWidget,
+        child: SizedBox(
+          height: slice.measuredHeight > 0 ? slice.measuredHeight : null,
+          child: Align(alignment: Alignment.topLeft, child: textWidget),
+        ),
       ),
     );
   }
@@ -369,6 +380,7 @@ ReaderPagedResolvedSlice _resolveReaderPagedSlice({
     textStyle: resolved.textStyle,
     textAlign: resolved.textAlign,
     spacingAfter: sliceIndex == totalSlices - 1 ? 0 : resolved.spacingAfter,
+    measuredHeight: slice.height,
   );
 }
 

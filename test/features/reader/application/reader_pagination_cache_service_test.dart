@@ -11,7 +11,9 @@ void main() {
     late ReaderPaginationCacheService service;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('reader-pagination-cache');
+      tempDir = await Directory.systemTemp.createTemp(
+        'reader-pagination-cache',
+      );
       service = ReaderPaginationCacheService(
         directoryProvider: () async => tempDir,
         maxMemoryEntries: 2,
@@ -29,7 +31,7 @@ void main() {
         paragraphs: <String>['正文一', '正文二'],
         pagedPages: <List<ReaderPagedSlice>>[
           <ReaderPagedSlice>[
-            ReaderPagedSlice(paragraphIndex: 0, start: 0, end: 2),
+            ReaderPagedSlice(paragraphIndex: 0, start: 0, end: 2, height: 24),
           ],
         ],
         paginationSignature: 'chapter-a|sig',

@@ -51,6 +51,7 @@ class ReaderPaginationSpec {
 
 class ReaderPaginationSpecResolver {
   const ReaderPaginationSpecResolver();
+  static const String _kPaginationLayoutVersion = 'paged_layout_v7';
 
   ReaderPaginationSpec resolve({
     required ReaderSettings settings,
@@ -86,6 +87,7 @@ class ReaderPaginationSpecResolver {
     required ReaderPaginationSpec spec,
   }) {
     return [
+      _kPaginationLayoutVersion,
       chapterId,
       spec.contentWidth.toStringAsFixed(1),
       spec.contentHeight.toStringAsFixed(1),
