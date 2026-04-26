@@ -53,6 +53,9 @@
 - `lib/features/reader/presentation/reader_page_overlay.dart`
 - `lib/features/reader/presentation/reader_page_source_switch.dart`
 - `lib/features/reader/presentation/reader_page_bootstrap.dart`
+- `lib/features/reader/presentation/reader_page_runtime.dart`
+- `lib/features/reader/presentation/reader_page_navigation.dart`
+- `lib/features/reader/presentation/reader_page_shell.dart`
 - `lib/features/reader/application/reader_dependencies_provider.dart`
 - `lib/features/reader/application/reader_cached_chapter_store.dart`
 
@@ -156,47 +159,47 @@
 
 可打勾任务：
 
-- [ ] 抽出 `_scheduleReadingRecordSessionStart`
-- [ ] 抽出 `_setContent`
-- [ ] 抽出 `_loadContinuousTextChapter`
-- [ ] 抽出 `_loadAdjacentContinuousTextChapter`
-- [ ] 抽出 `_isContinuousTextChapterActive`
-- [ ] 抽出 `_continuousTextChapterScrollRatioFor`
-- [ ] 抽出 `_activateContinuousTextChapter`
-- [ ] 抽出 `_syncActiveContinuousTextChapterFromScroll`
-- [ ] 抽出 `_syncContinuousTextFlowAfterSettingsApplied`
-- [ ] 抽出 `_resetCatalogSearchCache`
-- [ ] 抽出 `_storePrecomputedChapterLayout`
-- [ ] 抽出 `_loadPrecomputedChapterLayout`
-- [ ] 抽出 `_disposeMangaTransformControllers`
-- [ ] 抽出 `_restoreScrollPosition`
-- [ ] 抽出 `_canRunAutoReadNow`
-- [ ] 抽出 `_autoReadProgressRatio`
-- [ ] 抽出 `_refreshChapterBookmarks`
-- [ ] 抽出 `_consumePendingBookmarkJump`
-- [ ] 抽出 `_jumpToBookmark`
-- [ ] 抽出 `_isAutoReadAtChapterEnd`
-- [ ] 抽出 `_scheduleAutoReadResume`
-- [ ] 抽出 `_reconcileAutoRead`
-- [ ] 抽出 `_startAutoReadIfNeeded`
-- [ ] 抽出 `_runAutoReadLoop`
-- [ ] 抽出 `_tryAutoReadAdvanceChapter`
-- [ ] 抽出 `_stopAutoRead`
-- [ ] 抽出 `_onScrollChanged`
-- [ ] 抽出 `_maybePrefetchContinuousTextNeighbors`
-- [ ] 抽出 `_scheduleProgressSave`
-- [ ] 抽出 `_maybeStartReadingRecordSession`
-- [ ] 抽出 `_syncActiveReadingRecordSessionProgress`
-- [ ] 抽出 `_scheduleReadingRecordAutoCommit`
-- [ ] 抽出 `_commitReadingRecordSession`
-- [ ] 抽出 `_saveProgress`
-- [ ] 抽出 `_showChapterSwitchFailedSnackbar`
-- [ ] 抽出 `_scheduleBlockingLoadingCard`
-- [ ] 抽出 `_clearDelayedLoadingUi`
-- [ ] 抽出 `_scheduleChapterLoadingIndicator`
-- [ ] 抽出 `_turnPagedTextPage`
-- [ ] 抽出 `_startPagedPageTransition`
-- [ ] 抽出 `_onPagedTransitionStatus`
+- [x] 抽出 `_scheduleReadingRecordSessionStart`
+- [x] 抽出 `_setContent`
+- [x] 抽出 `_loadContinuousTextChapter`
+- [x] 抽出 `_loadAdjacentContinuousTextChapter`
+- [x] 抽出 `_isContinuousTextChapterActive`
+- [x] 抽出 `_continuousTextChapterScrollRatioFor`
+- [x] 抽出 `_activateContinuousTextChapter`
+- [x] 抽出 `_syncActiveContinuousTextChapterFromScroll`
+- [x] 抽出 `_syncContinuousTextFlowAfterSettingsApplied`
+- [x] 抽出 `_resetCatalogSearchCache`
+- [x] 抽出 `_storePrecomputedChapterLayout`
+- [x] 抽出 `_loadPrecomputedChapterLayout`
+- [x] 抽出 `_disposeMangaTransformControllers`
+- [x] 抽出 `_restoreScrollPosition`
+- [x] 抽出 `_canRunAutoReadNow`
+- [x] 抽出 `_autoReadProgressRatio`
+- [x] 抽出 `_refreshChapterBookmarks`
+- [x] 抽出 `_consumePendingBookmarkJump`
+- [x] 抽出 `_jumpToBookmark`
+- [x] 抽出 `_isAutoReadAtChapterEnd`
+- [x] 抽出 `_scheduleAutoReadResume`
+- [x] 抽出 `_reconcileAutoRead`
+- [x] 抽出 `_startAutoReadIfNeeded`
+- [x] 抽出 `_runAutoReadLoop`
+- [x] 抽出 `_tryAutoReadAdvanceChapter`
+- [x] 抽出 `_stopAutoRead`
+- [x] 抽出 `_onScrollChanged`
+- [x] 抽出 `_maybePrefetchContinuousTextNeighbors`
+- [x] 抽出 `_scheduleProgressSave`
+- [x] 抽出 `_maybeStartReadingRecordSession`
+- [x] 抽出 `_syncActiveReadingRecordSessionProgress`
+- [x] 抽出 `_scheduleReadingRecordAutoCommit`
+- [x] 抽出 `_commitReadingRecordSession`
+- [x] 抽出 `_saveProgress`
+- [x] 抽出 `_showChapterSwitchFailedSnackbar`
+- [x] 抽出 `_scheduleBlockingLoadingCard`
+- [x] 抽出 `_clearDelayedLoadingUi`
+- [x] 抽出 `_scheduleChapterLoadingIndicator`
+- [x] 抽出 `_turnPagedTextPage`
+- [x] 抽出 `_startPagedPageTransition`
+- [x] 抽出 `_onPagedTransitionStatus`
 
 完成标准：
 
@@ -225,13 +228,13 @@
 
 可打勾任务：
 
-- [ ] 抽出 `_jumpToAdjacentReadableChapter`
-- [ ] 抽出 `_jumpTo`
-- [ ] 抽出 `_openCatalogSheetFromOverlay`
-- [ ] 抽出 `_executeNavigationRequest`
-- [ ] 抽出 `_openMangaPositionSheet`
-- [ ] 抽出 `_showCatalogSheet`
-- [ ] 抽出 `_lookupCatalogSearchEntries`
+- [x] 抽出 `_jumpToAdjacentReadableChapter`
+- [x] 抽出 `_jumpTo`
+- [x] 抽出 `_openCatalogSheetFromOverlay`
+- [x] 抽出 `_executeNavigationRequest`
+- [x] 抽出 `_openMangaPositionSheet`
+- [x] 抽出 `_showCatalogSheet`
+- [x] 抽出 `_lookupCatalogSearchEntries`
 
 完成标准：
 
@@ -259,24 +262,24 @@
 
 可打勾任务：
 
-- [ ] 抽出 `_syncVolumeKeyPageInterception`
-- [ ] 抽出 `_setVolumeKeyPageInterceptionEnabled`
-- [ ] 抽出 `_handleVolumeKeyEvent`
-- [ ] 抽出 `_turnReaderByDirection`
-- [ ] 抽出 `_advanceScrollReaderByStep`
-- [ ] 抽出 `_turnMangaPage`
-- [ ] 抽出 `_handleBackNavigation`
-- [ ] 抽出 `_markBackNavigationTriggered`
-- [ ] 抽出 `_buildOverlayScrim`
-- [ ] 抽出 `_buildBackgroundLayer`
-- [ ] 抽出 `_buildChapterLoadingIndicator`
-- [ ] 抽出 `_hideOverlayControls`
-- [ ] 抽出 `_setOverlayControlsVisibility`
-- [ ] 抽出 `_syncSystemUiVisibility`
-- [ ] 抽出 `_onReaderTap`
-- [ ] 抽出 `_toggleAutoReadSession`
-- [ ] 抽出 `_startAutoReadSession`
-- [ ] 抽出 `_stopAutoReadSession`
+- [x] 抽出 `_syncVolumeKeyPageInterception`
+- [x] 抽出 `_setVolumeKeyPageInterceptionEnabled`
+- [x] 抽出 `_handleVolumeKeyEvent`
+- [x] 抽出 `_turnReaderByDirection`
+- [x] 抽出 `_advanceScrollReaderByStep`
+- [x] 抽出 `_turnMangaPage`
+- [x] 抽出 `_handleBackNavigation`
+- [x] 抽出 `_markBackNavigationTriggered`
+- [x] 抽出 `_buildOverlayScrim`
+- [x] 抽出 `_buildBackgroundLayer`
+- [x] 抽出 `_buildChapterLoadingIndicator`
+- [x] 抽出 `_hideOverlayControls`
+- [x] 抽出 `_setOverlayControlsVisibility`
+- [x] 抽出 `_syncSystemUiVisibility`
+- [x] 抽出 `_onReaderTap`
+- [x] 抽出 `_toggleAutoReadSession`
+- [x] 抽出 `_startAutoReadSession`
+- [x] 抽出 `_stopAutoReadSession`
 - [ ] 抽出 `_toggleDayNightMode`
 - [ ] 抽出 `_showMessage`
 - [ ] 抽出 `_showChapterBoundaryHint`
