@@ -51,6 +51,7 @@
 - `lib/features/reader/presentation/reader_page_selection.dart`
 - `lib/features/reader/presentation/reader_page_settings.dart`
 - `lib/features/reader/presentation/reader_page_overlay.dart`
+- `lib/features/reader/presentation/reader_page_source_switch.dart`
 - `lib/features/reader/application/reader_dependencies_provider.dart`
 - `lib/features/reader/application/reader_cached_chapter_store.dart`
 
@@ -70,21 +71,21 @@
 
 可打勾任务：
 
-- [ ] 抽出 `_showSwitchSourceSheet`
-- [ ] 抽出 `_buildSwitchSourceScope`
-- [ ] 抽出 `_loadSwitchSourceCandidatesProgressively`
-- [ ] 抽出 `_loadSwitchSourceScoreStoreSafely`
-- [ ] 抽出 `_buildSwitchSourceCandidates`
-- [ ] 抽出 `_resolveSwitchSourceSearchKeyword`
-- [ ] 抽出 `_showSwitchSourceCandidateSheet`
-- [ ] 抽出 `_applySwitchSourceScoreAction`
-- [ ] 抽出 `_canAutoSwitchSourceOnFailure`
-- [ ] 抽出 `_tryAutoSwitchSourceOnFailure`
-- [ ] 抽出 `_applySwitchSourceCandidate`
-- [ ] 抽出 `_syncBookshelfAfterSourceSwitch`
-- [ ] 抽出 `_syncReadingStateAfterSourceSwitch`
-- [ ] 抽出 `_confirmSwitchSourceCoverage`
-- [ ] 抽出 `_restoreSourceSnapshot`
+- [x] 抽出 `_showSwitchSourceSheet`
+- [x] 抽出 `_buildSwitchSourceScope`
+- [x] 抽出 `_loadSwitchSourceCandidatesProgressively`
+- [x] 抽出 `_loadSwitchSourceScoreStoreSafely`
+- [x] 抽出 `_buildSwitchSourceCandidates`
+- [x] 抽出 `_resolveSwitchSourceSearchKeyword`
+- [x] 抽出 `_showSwitchSourceCandidateSheet`
+- [x] 抽出 `_applySwitchSourceScoreAction`
+- [x] 抽出 `_canAutoSwitchSourceOnFailure`
+- [x] 抽出 `_tryAutoSwitchSourceOnFailure`
+- [x] 抽出 `_applySwitchSourceCandidate`
+- [x] 抽出 `_syncBookshelfAfterSourceSwitch`
+- [x] 抽出 `_syncReadingStateAfterSourceSwitch`
+- [x] 抽出 `_confirmSwitchSourceCoverage`
+- [x] 抽出 `_restoreSourceSnapshot`
 
 完成标准：
 
