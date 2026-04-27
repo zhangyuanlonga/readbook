@@ -811,9 +811,9 @@ class LocalTextEncodingDetector {
         htmlAware: htmlAware,
       );
       score += switch (candidate.source) {
-        _AsyncDecodeSource.plugin => 220,
-        _AsyncDecodeSource.preferred => 120,
-        _AsyncDecodeSource.fallback => 0,
+        _AsyncDecodeSource.plugin => 0,
+        _AsyncDecodeSource.preferred => 80,
+        _AsyncDecodeSource.fallback => 40,
       };
       if (best == null || score > bestScore) {
         best = candidate;

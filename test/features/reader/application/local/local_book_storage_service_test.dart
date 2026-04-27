@@ -87,5 +87,58 @@ void main() {
         expect(result.convertedToUtf8, isFalse);
       },
     );
+
+    test(
+      'keeps small utf16le txt raw bytes and freezes detected charset',
+      () async {
+        const content = '第1章 开始\n正文内容。';
+        final rawBytes = _encodeUtf16(
+          content,
+          littleEndian: true,
+          withBom: true,
+        );
+        final sourceFile = File('${tempDir.path}/source_utf16le.txt');
+        await sourceFile.writeAsBytes(rawBytes, flush: true);
+        final targetFile = File('${tempDir.path}/copy_utf16le.txt');
+
+        final result = await storageService.copyIntoStorage(
+          sourceFile: sourceFile,
+          targetFile: targetFile,
+          format: LocalBookFormat.txt,
+          sourcePath: sourceFile.path,
+          bookId: 'local_storage_utf16le',
+        );
+
+        expect(await targetFile.readAsBytes(), rawBytes);
+        expect(result.normalizedCharset, 'utf-16le');
+        expect(result.originalCharset, 'utf-16le');
+        expect(result.convertedToUtf8, isFalse);
+      },
+    );
   });
+}
+
+List<int> _encodeUtf16(
+  String value, {
+  required bool littleEndian,
+  bool withBom = false,
+}) {
+  final bytes = <int>[];
+  if (withBom) {
+    if (littleEndian) {
+      bytes.addAll(const <int>[0xFF, 0xFE]);
+    } else {
+      bytes.addAll(const <int>[0xFE, 0xFF]);
+    }
+  }
+  for (final unit in value.codeUnits) {
+    if (littleEndian) {
+      bytes.add(unit & 0xFF);
+      bytes.add((unit >> 8) & 0xFF);
+    } else {
+      bytes.add((unit >> 8) & 0xFF);
+      bytes.add(unit & 0xFF);
+    }
+  }
+  return bytes;
 }

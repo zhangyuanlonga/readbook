@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -125,10 +124,11 @@ class LocalBookStorageService {
   }) async {
     File effectiveSourceFile = sourceFile;
     File? tempSourceFile;
-    final sourcePath = sourceFile.path;
+    final normalizedSourcePath =
+        sourcePath.trim().isEmpty ? sourceFile.path : sourcePath.trim();
     final targetPath = targetFile.path;
     final isSamePath = p.equals(
-      p.normalize(sourcePath),
+      p.normalize(normalizedSourcePath),
       p.normalize(targetPath),
     );
 
@@ -169,9 +169,10 @@ class LocalBookStorageService {
       final normalizedPreferredCharset =
           LocalTextEncodingDetector.normalizeCharsetName(preferredCharset);
       if (normalizedPreferredCharset != null) {
-        await _ensureParentDir(targetFile);
-        await effectiveSourceFile.copy(targetFile.path);
-        final copiedStat = await targetFile.stat();
+        final copiedStat = await _copyTxtRawBytesIntoStorage(
+          sourceFile: effectiveSourceFile,
+          targetFile: targetFile,
+        );
         return LocalBookStorageWriteResult(
           storageStat: copiedStat,
           normalizedCharset: normalizedPreferredCharset,
@@ -187,66 +188,37 @@ class LocalBookStorageService {
           leadingSample?.charsetName == 'utf-8'
               ? leadingSample
               : await _detectEncodingFromSamples(effectiveSourceFile);
-      if (fileLength >= _largeTxtRawCopyThresholdBytes && sample != null) {
-        await _ensureParentDir(targetFile);
-        await effectiveSourceFile.copy(targetFile.path);
-        final copiedStat = await targetFile.stat();
+      try {
+        final detectedCharset = await _resolveStoredTxtCharset(
+          file: effectiveSourceFile,
+          fileLength: fileLength,
+          leadingSample: leadingSample,
+          sampledResult: sample,
+        );
+        final copiedStat = await _copyTxtRawBytesIntoStorage(
+          sourceFile: effectiveSourceFile,
+          targetFile: targetFile,
+        );
         return LocalBookStorageWriteResult(
           storageStat: copiedStat,
-          normalizedCharset: sample.charsetName,
-          originalCharset: sample.charsetName,
+          normalizedCharset: detectedCharset,
+          originalCharset: detectedCharset,
           convertedToUtf8: false,
-        );
-      }
-
-      final bytes = await effectiveSourceFile.readAsBytes();
-      try {
-        final decoded = await _textEncodingDetector.decodeBestEffortAsync(
-          bytes,
-        );
-        await _ensureParentDir(targetFile);
-        final canKeepOriginalBytes =
-            decoded.charsetName == 'utf-8' &&
-            decoded.bomLength == 0 &&
-            !decoded.fallbackUsed &&
-            !decoded.text.startsWith('\uFEFF');
-        if (canKeepOriginalBytes) {
-          await effectiveSourceFile.copy(targetFile.path);
-          final copiedStat = await targetFile.stat();
-          return LocalBookStorageWriteResult(
-            storageStat: copiedStat,
-            normalizedCharset: 'utf-8',
-            originalCharset: decoded.charsetName,
-            convertedToUtf8: false,
-          );
-        }
-
-        final normalizedText = decoded.text.replaceFirst('\uFEFF', '');
-        final normalizedBytes = utf8.encode(normalizedText);
-        await targetFile.writeAsBytes(normalizedBytes, flush: true);
-        final normalizedStat = await targetFile.stat();
-        return LocalBookStorageWriteResult(
-          storageStat: normalizedStat,
-          normalizedCharset: 'utf-8',
-          originalCharset: decoded.charsetName,
-          convertedToUtf8:
-              decoded.charsetName != 'utf-8' ||
-              decoded.bomLength > 0 ||
-              decoded.fallbackUsed,
         );
       } catch (error) {
         _logger.warn(
-          'Normalize local txt encoding failed, fallback to raw copy',
+          'Resolve local txt charset failed, fallback to raw copy',
           context: <String, Object?>{
             'bookId': bookId,
-            'sourcePath': sourcePath,
+            'sourcePath': normalizedSourcePath,
             'targetPath': targetFile.path,
             'error': error.toString(),
           },
         );
-        await _ensureParentDir(targetFile);
-        await effectiveSourceFile.copy(targetFile.path);
-        final copiedStat = await targetFile.stat();
+        final copiedStat = await _copyTxtRawBytesIntoStorage(
+          sourceFile: effectiveSourceFile,
+          targetFile: targetFile,
+        );
         return LocalBookStorageWriteResult(storageStat: copiedStat);
       }
     } finally {
@@ -258,6 +230,53 @@ class LocalBookStorageService {
         }
       }
     }
+  }
+
+  Future<FileStat> _copyTxtRawBytesIntoStorage({
+    required File sourceFile,
+    required File targetFile,
+  }) async {
+    await _ensureParentDir(targetFile);
+    await sourceFile.copy(targetFile.path);
+    return targetFile.stat();
+  }
+
+  Future<String?> _resolveStoredTxtCharset({
+    required File file,
+    required int fileLength,
+    required LocalTextDecodeResult? leadingSample,
+    required LocalTextDecodeResult? sampledResult,
+  }) async {
+    final leadingCharset = leadingSample?.charsetName;
+    if (leadingCharset != null && leadingCharset.isNotEmpty) {
+      return leadingCharset;
+    }
+
+    final sampledCharset = sampledResult?.charsetName;
+    if (sampledCharset != null && sampledCharset.isNotEmpty) {
+      return sampledCharset;
+    }
+
+    if (fileLength >= _largeTxtRawCopyThresholdBytes) {
+      return null;
+    }
+
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      return 'utf-8';
+    }
+
+    final decoded = _textEncodingDetector.decodeBestEffort(bytes);
+    final charset = decoded.charsetName.trim();
+    if (charset.isNotEmpty) {
+      return charset;
+    }
+
+    final asyncDecoded = await _textEncodingDetector.decodeBestEffortAsync(
+      bytes,
+    );
+    final asyncCharset = asyncDecoded.charsetName.trim();
+    return asyncCharset.isEmpty ? null : asyncCharset;
   }
 
   Future<List<_EncodingSampleChunk>> _readEncodingSamples(File file) async {
@@ -313,10 +332,15 @@ class LocalBookStorageService {
     final scoredResults = <_ScoredEncodingSample>[];
     final fileLength = await file.length();
     for (final chunk in sampleChunks) {
-      final decoded = await _textEncodingDetector.decodeSampleBestEffortAsync(
-        chunk.bytes,
-        htmlAware: false,
-      );
+      final decoded =
+          _textEncodingDetector.decodeSampleBestEffort(
+            chunk.bytes,
+            htmlAware: false,
+          ) ??
+          await _textEncodingDetector.decodeSampleBestEffortAsync(
+            chunk.bytes,
+            htmlAware: false,
+          );
       if (decoded == null || decoded.text.trim().isEmpty) {
         continue;
       }
@@ -379,19 +403,33 @@ class LocalBookStorageService {
     if (bytes.isEmpty) {
       return null;
     }
-    final decoded = await _textEncodingDetector.decodeSampleBestEffortAsync(
-      bytes,
-      htmlAware: false,
-    );
+    final decoded =
+        _textEncodingDetector.decodeSampleBestEffort(bytes, htmlAware: false) ??
+        await _textEncodingDetector.decodeSampleBestEffortAsync(
+          bytes,
+          htmlAware: false,
+        );
     if (decoded == null || decoded.text.trim().isEmpty) {
       return null;
     }
-    if (decoded.charsetName == 'utf-8' &&
-        !decoded.fallbackUsed &&
-        _looksLikeMeaningfulUtf8LeadSample(decoded.text)) {
+    if (_isTrustworthyLeadingSample(decoded)) {
       return decoded;
     }
     return null;
+  }
+
+  bool _isTrustworthyLeadingSample(LocalTextDecodeResult decoded) {
+    final charsetName = decoded.charsetName;
+    if (charsetName == 'utf-8') {
+      return !decoded.fallbackUsed &&
+          _looksLikeMeaningfulUtf8LeadSample(decoded.text);
+    }
+    if (charsetName == 'utf-16' ||
+        charsetName == 'utf-16le' ||
+        charsetName == 'utf-16be') {
+      return true;
+    }
+    return _looksLikeMeaningfulMultibyteLeadSample(decoded.text);
   }
 
   bool _looksLikeMeaningfulUtf8LeadSample(String text) {
@@ -409,6 +447,20 @@ class LocalBookStorageService {
       return true;
     }
     return false;
+  }
+
+  bool _looksLikeMeaningfulMultibyteLeadSample(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    final hanCount =
+        trimmed.runes.where((rune) => rune >= 0x4E00 && rune <= 0x9FFF).length;
+    final punctuationCount =
+        trimmed.runes
+            .where((rune) => '，。！？；：“”‘’《》、（）【】'.runes.contains(rune))
+            .length;
+    return hanCount > 0 || punctuationCount > 0;
   }
 
   int _scoreEncodingSample({

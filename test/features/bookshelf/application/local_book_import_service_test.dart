@@ -103,30 +103,33 @@ void main() {
       expect(bookshelf.first.detailUrl, 'local://book/${result.localBook.id}');
     });
 
-    test('imports utf-16le txt and normalizes content to utf-8', () async {
-      final sourceFile = File('${tempDir.path}/utf16le_bom.txt');
-      const sourceText = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
-      await sourceFile.writeAsBytes(
-        _encodeUtf16(sourceText, littleEndian: true, withBom: true),
-        flush: true,
-      );
+    test(
+      'imports utf-16le txt with raw bytes preserved and charset frozen',
+      () async {
+        final sourceFile = File('${tempDir.path}/utf16le_bom.txt');
+        const sourceText = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+        final rawBytes = _encodeUtf16(
+          sourceText,
+          littleEndian: true,
+          withBom: true,
+        );
+        await sourceFile.writeAsBytes(rawBytes, flush: true);
 
-      final prefs = await SharedPreferences.getInstance();
-      final service = buildService(preferences: prefs);
+        final prefs = await SharedPreferences.getInstance();
+        final service = buildService(preferences: prefs);
 
-      final result = await service.importFromFile(
-        filePath: sourceFile.path,
-        displayName: 'utf16le_bom.txt',
-      );
+        final result = await service.importFromFile(
+          filePath: sourceFile.path,
+          displayName: 'utf16le_bom.txt',
+        );
 
-      final resolvedStoragePath = await storageService.resolveStoragePath(
-        result.localBook.storagePath,
-      );
-      final storageText = await File(resolvedStoragePath).readAsString();
-      expect(storageText, contains('第1章 开始'));
-      expect(storageText, contains('第二章内容'));
-      expect(result.localBook.charset, 'utf-8');
-    });
+        final resolvedStoragePath = await storageService.resolveStoragePath(
+          result.localBook.storagePath,
+        );
+        expect(await File(resolvedStoragePath).readAsBytes(), rawBytes);
+        expect(result.localBook.charset, 'utf-16le');
+      },
+    );
 
     test(
       'keeps large non-utf8 txt as raw bytes with detected charset',
