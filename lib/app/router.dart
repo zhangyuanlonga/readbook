@@ -9,6 +9,7 @@ import '../features/bookshelf/routes.dart';
 import '../features/discover/routes.dart';
 import '../features/home/routes.dart';
 import '../features/mine/routes.dart';
+import '../features/mine/providers.dart';
 import '../features/reader/routes.dart';
 import '../features/search/routes.dart';
 import '../features/source/routes.dart';
@@ -18,8 +19,12 @@ GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: globalRootNavigatorKey,
-  initialLocation: '/home',
+  initialLocation: '/',
   routes: [
+    GoRoute(
+      path: '/',
+      redirect: (context, state) => resolveMinePageStartupLocation(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return ShellScaffold(

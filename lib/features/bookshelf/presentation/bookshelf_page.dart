@@ -1829,7 +1829,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           await _localBookImportService.importFromFile(
             filePath: filePath,
             displayName: displayName,
-            waitForIndexing: true,
+            waitForIndexing:
+                LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
           );
           successCount += 1;
         } on AppException catch (error) {
@@ -1852,7 +1853,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           LocalBookWorkflowPolicy.importSuccessMessage(
             successCount: successCount,
             failureCount: failureCount,
-            directoryReady: true,
+            directoryReady:
+                LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
           ),
         );
         return;
@@ -1922,7 +1924,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       await _localBookImportService.importFromFile(
         filePath: cached.path,
         displayName: cached.label,
-        waitForIndexing: true,
+        waitForIndexing:
+            LocalBookWorkflowPolicy.externalImportShouldWaitForIndexing,
       );
       await _loadBookshelf(force: true);
       if (!mounted) {

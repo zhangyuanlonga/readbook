@@ -86,18 +86,29 @@ class EpubLocalBookParser implements LocalBookParser {
     final chapters = <LocalParsedChapter>[];
     var index = 0;
 
-    for (final entry in chapterCandidates) {
-      final html = _readArchiveEntryAsText(entry);
+    for (final candidate in chapterCandidates) {
+      final archiveEntry = _findArchiveFile(
+        loadedArchive.archiveFileIndex,
+        candidate.archivePath,
+      );
+      if (archiveEntry == null) {
+        continue;
+      }
+      final html = _readArchiveEntryAsText(archiveEntry);
       if (html.trim().isEmpty) {
         continue;
       }
 
       final document = html_parser.parse(html);
-      final normalizedEntryPath = _normalizeArchivePath(entry.name);
+      final normalizedEntryPath = _normalizeArchivePath(archiveEntry.name);
       final preview = _buildChapterCandidatePreview(
         document: document,
         entryPath: normalizedEntryPath,
         index: index + 1,
+      );
+      final resolvedTitle = _resolveCandidateTitle(
+        candidate: candidate,
+        fallbackTitle: preview.title,
       );
       if (preview.category != _EpubDocumentCategory.body) {
         continue;
@@ -109,13 +120,15 @@ class EpubLocalBookParser implements LocalBookParser {
       final extraction = await _extractChapterContent(
         book: book,
         documentHtml: html,
-        chapterEntryName: entry.name,
+        chapterEntryName: archiveEntry.name,
         archiveFileIndex: loadedArchive.archiveFileIndex,
         assetRootDir: assetDir,
+        startFragmentId: candidate.startFragmentId,
+        endFragmentId: candidate.endFragmentId,
       );
       final structuredDocument = _withFallbackChapterTitle(
         extraction.document,
-        chapterTitle: preview.title,
+        chapterTitle: resolvedTitle,
       );
       if (structuredDocument.compatibilityContent.trim().isEmpty &&
           structuredDocument.imageUrls.isEmpty) {
@@ -124,10 +137,10 @@ class EpubLocalBookParser implements LocalBookParser {
 
       chapters.add(
         LocalParsedChapter(
-          title: preview.title,
+          title: resolvedTitle,
           content: structuredDocument.compatibilityContent,
           imageUrls: structuredDocument.imageUrls,
-          sourceRef: _normalizeArchivePath(entry.name),
+          sourceRef: _encodeChapterSourceRef(candidate),
           document: structuredDocument,
         ),
       );
@@ -163,10 +176,11 @@ class EpubLocalBookParser implements LocalBookParser {
       );
     }
 
+    final resolvedSourceRef = _decodeChapterSourceRef(sourceRef);
     final loadedArchive = await _loadArchive(book);
     final archiveEntry = _findArchiveFile(
       loadedArchive.archiveFileIndex,
-      sourceRef,
+      resolvedSourceRef.archivePath,
     );
     if (archiveEntry == null) {
       throw AppException(
@@ -184,6 +198,8 @@ class EpubLocalBookParser implements LocalBookParser {
       chapterEntryName: archiveEntry.name,
       archiveFileIndex: loadedArchive.archiveFileIndex,
       assetRootDir: assetDir,
+      startFragmentId: resolvedSourceRef.startFragmentId,
+      endFragmentId: resolvedSourceRef.endFragmentId,
     );
     final normalized = _normalizeText(extraction.content);
     if (normalized.isEmpty && extraction.imageUrls.isEmpty) {
@@ -347,11 +363,18 @@ class EpubLocalBookParser implements LocalBookParser {
     );
   }
 
-  List<ArchiveFile> _resolveChapterCandidates({
+  List<_EpubChapterCandidate> _resolveChapterCandidates({
     required Archive archive,
     required Map<String, ArchiveFile> archiveFileIndex,
     required _EpubPackageDocument? packageDocument,
   }) {
+    final navigationCandidates = _resolveNavigationChapterCandidates(
+      archiveFileIndex: archiveFileIndex,
+      packageDocument: packageDocument,
+    );
+    if (navigationCandidates.isNotEmpty) {
+      return navigationCandidates;
+    }
     final spineCandidates = _resolveSpineChapterCandidates(
       archiveFileIndex: archiveFileIndex,
       packageDocument: packageDocument,
@@ -362,12 +385,12 @@ class EpubLocalBookParser implements LocalBookParser {
     return _resolveFallbackChapterCandidates(archive);
   }
 
-  List<ArchiveFile> _resolveSpineChapterCandidates({
+  List<_EpubChapterCandidate> _resolveSpineChapterCandidates({
     required Map<String, ArchiveFile> archiveFileIndex,
     required _EpubPackageDocument? packageDocument,
   }) {
     if (packageDocument == null) {
-      return const <ArchiveFile>[];
+      return const <_EpubChapterCandidate>[];
     }
 
     final manifestItems = packageDocument.document
@@ -375,10 +398,10 @@ class EpubLocalBookParser implements LocalBookParser {
         .where((element) => (element.localName ?? '').toLowerCase() == 'item')
         .toList(growable: false);
     if (manifestItems.isEmpty) {
-      return const <ArchiveFile>[];
+      return const <_EpubChapterCandidate>[];
     }
 
-    final chapters = <ArchiveFile>[];
+    final chapters = <_EpubChapterCandidate>[];
     final seenPaths = <String>{};
 
     for (final itemRef in packageDocument.document.querySelectorAll('*')) {
@@ -448,13 +471,17 @@ class EpubLocalBookParser implements LocalBookParser {
         continue;
       }
 
-      chapters.add(archiveEntry);
+      chapters.add(
+        _EpubChapterCandidate(archivePath: normalizedEntryPath, title: null),
+      );
     }
 
     return chapters;
   }
 
-  List<ArchiveFile> _resolveFallbackChapterCandidates(Archive archive) {
+  List<_EpubChapterCandidate> _resolveFallbackChapterCandidates(
+    Archive archive,
+  ) {
     final chapterCandidates = archive.files
         .where((entry) {
           if (!entry.isFile) {
@@ -468,7 +495,310 @@ class EpubLocalBookParser implements LocalBookParser {
         })
         .toList(growable: false)
       ..sort((left, right) => left.name.compareTo(right.name));
-    return chapterCandidates;
+    return chapterCandidates
+        .map(
+          (entry) => _EpubChapterCandidate(
+            archivePath: _normalizeArchivePath(entry.name),
+            title: null,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<_EpubChapterCandidate> _resolveNavigationChapterCandidates({
+    required Map<String, ArchiveFile> archiveFileIndex,
+    required _EpubPackageDocument? packageDocument,
+  }) {
+    if (packageDocument == null) {
+      return const <_EpubChapterCandidate>[];
+    }
+
+    final manifestItems = packageDocument.document
+        .querySelectorAll('*')
+        .where((element) => (element.localName ?? '').toLowerCase() == 'item')
+        .toList(growable: false);
+    if (manifestItems.isEmpty) {
+      return const <_EpubChapterCandidate>[];
+    }
+
+    final htmlCandidates = _resolveHtmlNavigationChapterCandidates(
+      manifestItems: manifestItems,
+      archiveFileIndex: archiveFileIndex,
+      packagePath: packageDocument.packagePath,
+    );
+    if (htmlCandidates.isNotEmpty) {
+      return htmlCandidates;
+    }
+
+    return _resolveNcxNavigationChapterCandidates(
+      manifestItems: manifestItems,
+      archiveFileIndex: archiveFileIndex,
+      packagePath: packageDocument.packagePath,
+    );
+  }
+
+  List<_EpubChapterCandidate> _resolveHtmlNavigationChapterCandidates({
+    required List<dom.Element> manifestItems,
+    required Map<String, ArchiveFile> archiveFileIndex,
+    required String packagePath,
+  }) {
+    for (final item in manifestItems) {
+      final properties =
+          _readAttribute(
+            item,
+            keys: const <String>{'properties'},
+          )?.toLowerCase() ??
+          '';
+      final href = _readAttribute(
+        item,
+        keys: const <String>{'href', 'xlink:href'},
+      );
+      final mediaType =
+          _readAttribute(
+            item,
+            keys: const <String>{'media-type'},
+          )?.toLowerCase() ??
+          '';
+      if (!properties.contains('nav') &&
+          !_isLikelyHtmlNavigationHref(href) &&
+          !_isLikelyHtmlNavigationMediaType(mediaType)) {
+        continue;
+      }
+
+      final resolvedPath = _resolveArchivePathRelativeTo(
+        baseEntryPath: packagePath,
+        rawSource: href,
+      );
+      if (resolvedPath == null) {
+        continue;
+      }
+      final archiveEntry = _findArchiveFile(archiveFileIndex, resolvedPath);
+      if (archiveEntry == null) {
+        continue;
+      }
+
+      final navDocument = html_parser.parse(
+        _readArchiveEntryAsText(archiveEntry),
+      );
+      final navCandidates = _buildNavigationChapterCandidatesFromHtml(
+        document: navDocument,
+        baseEntryPath: resolvedPath,
+        packagePath: packagePath,
+        manifestItems: manifestItems,
+      );
+      if (navCandidates.isNotEmpty) {
+        return navCandidates;
+      }
+    }
+
+    return const <_EpubChapterCandidate>[];
+  }
+
+  List<_EpubChapterCandidate> _resolveNcxNavigationChapterCandidates({
+    required List<dom.Element> manifestItems,
+    required Map<String, ArchiveFile> archiveFileIndex,
+    required String packagePath,
+  }) {
+    for (final item in manifestItems) {
+      final mediaType =
+          _readAttribute(
+            item,
+            keys: const <String>{'media-type'},
+          )?.toLowerCase() ??
+          '';
+      final href = _readAttribute(
+        item,
+        keys: const <String>{'href', 'xlink:href'},
+      );
+      if (mediaType != 'application/x-dtbncx+xml' &&
+          !(href?.toLowerCase().endsWith('.ncx') ?? false)) {
+        continue;
+      }
+
+      final resolvedPath = _resolveArchivePathRelativeTo(
+        baseEntryPath: packagePath,
+        rawSource: href,
+      );
+      if (resolvedPath == null) {
+        continue;
+      }
+      final archiveEntry = _findArchiveFile(archiveFileIndex, resolvedPath);
+      if (archiveEntry == null) {
+        continue;
+      }
+
+      final navDocument = html_parser.parse(
+        _readArchiveEntryAsText(archiveEntry),
+      );
+      final navCandidates = _buildNavigationChapterCandidatesFromNcx(
+        document: navDocument,
+        baseEntryPath: resolvedPath,
+        packagePath: packagePath,
+        manifestItems: manifestItems,
+      );
+      if (navCandidates.isNotEmpty) {
+        return navCandidates;
+      }
+    }
+
+    return const <_EpubChapterCandidate>[];
+  }
+
+  List<_EpubChapterCandidate> _buildNavigationChapterCandidatesFromHtml({
+    required dom.Document document,
+    required String baseEntryPath,
+    required String packagePath,
+    required List<dom.Element> manifestItems,
+  }) {
+    final output = <_EpubChapterCandidate>[];
+    final seen = <String>{};
+    final navElements = document.querySelectorAll('nav');
+    final tocNavs = navElements
+        .where((nav) {
+          final epubType =
+              _readAttribute(
+                nav,
+                keys: const <String>{'epub:type', 'type'},
+              )?.toLowerCase() ??
+              '';
+          return epubType.contains('toc') || navElements.length == 1;
+        })
+        .toList(growable: false);
+    final scopes =
+        tocNavs.isEmpty
+            ? document.querySelectorAll('body').cast<dom.Element>()
+            : tocNavs;
+
+    for (final scope in scopes) {
+      for (final anchor in scope.querySelectorAll('a[href]')) {
+        final candidate = _buildNavigationChapterCandidateFromHref(
+          href: anchor.attributes['href'],
+          title: anchor.text,
+          baseEntryPath: baseEntryPath,
+          packagePath: packagePath,
+          manifestItems: manifestItems,
+        );
+        if (candidate == null) {
+          continue;
+        }
+        final key =
+            '${candidate.archivePath}#${candidate.startFragmentId ?? ''}';
+        if (!seen.add(key)) {
+          continue;
+        }
+        output.add(candidate);
+      }
+    }
+
+    return _applyNavigationRangeBoundaries(output);
+  }
+
+  List<_EpubChapterCandidate> _buildNavigationChapterCandidatesFromNcx({
+    required dom.Document document,
+    required String baseEntryPath,
+    required String packagePath,
+    required List<dom.Element> manifestItems,
+  }) {
+    final output = <_EpubChapterCandidate>[];
+    final seen = <String>{};
+
+    for (final navPoint in document.querySelectorAll('*')) {
+      if ((navPoint.localName ?? '').toLowerCase() != 'navpoint') {
+        continue;
+      }
+      final titleElement = navPoint.querySelector('text');
+      final contentElement = navPoint.querySelector('content');
+      final candidate = _buildNavigationChapterCandidateFromHref(
+        href: contentElement?.attributes['src'],
+        title: titleElement?.text,
+        baseEntryPath: baseEntryPath,
+        packagePath: packagePath,
+        manifestItems: manifestItems,
+      );
+      if (candidate == null) {
+        continue;
+      }
+      final key = '${candidate.archivePath}#${candidate.startFragmentId ?? ''}';
+      if (!seen.add(key)) {
+        continue;
+      }
+      output.add(candidate);
+    }
+
+    return _applyNavigationRangeBoundaries(output);
+  }
+
+  _EpubChapterCandidate? _buildNavigationChapterCandidateFromHref({
+    required String? href,
+    required String? title,
+    required String baseEntryPath,
+    required String packagePath,
+    required List<dom.Element> manifestItems,
+  }) {
+    final normalizedHref = href?.trim() ?? '';
+    if (normalizedHref.isEmpty) {
+      return null;
+    }
+
+    final fragmentId = _extractFragmentId(normalizedHref);
+    final resolvedPath = _resolveArchivePathRelativeTo(
+      baseEntryPath: baseEntryPath,
+      rawSource: normalizedHref,
+    );
+    if (resolvedPath == null) {
+      return null;
+    }
+    final manifestItem = _findManifestItemByResolvedPath(
+      manifestItems: manifestItems,
+      packagePath: packagePath,
+      resolvedPath: resolvedPath,
+    );
+    final mediaType =
+        manifestItem == null
+            ? ''
+            : (_readAttribute(
+                  manifestItem,
+                  keys: const <String>{'media-type'},
+                )?.toLowerCase() ??
+                '');
+    if (!_isSupportedChapterEntry(
+      entryPath: resolvedPath,
+      mediaType: mediaType,
+    )) {
+      return null;
+    }
+
+    return _EpubChapterCandidate(
+      archivePath: resolvedPath,
+      title: _normalizeInlineText(title ?? ''),
+      startFragmentId: fragmentId,
+    );
+  }
+
+  List<_EpubChapterCandidate> _applyNavigationRangeBoundaries(
+    List<_EpubChapterCandidate> candidates,
+  ) {
+    if (candidates.isEmpty) {
+      return const <_EpubChapterCandidate>[];
+    }
+
+    final output = <_EpubChapterCandidate>[];
+    for (var index = 0; index < candidates.length; index += 1) {
+      final current = candidates[index];
+      final next = index + 1 < candidates.length ? candidates[index + 1] : null;
+      output.add(
+        current.copyWith(
+          endFragmentId:
+              next != null &&
+                      next.archivePath == current.archivePath &&
+                      next.startFragmentId != null &&
+                      next.startFragmentId!.isNotEmpty
+                  ? next.startFragmentId
+                  : null,
+        ),
+      );
+    }
+    return output;
   }
 
   String? _resolvePackageDocumentPath(
@@ -937,6 +1267,192 @@ class EpubLocalBookParser implements LocalBookParser {
     return normalizedText.length <= 400;
   }
 
+  bool _isLikelyHtmlNavigationHref(String? href) {
+    final value = href?.trim().toLowerCase() ?? '';
+    if (value.isEmpty) {
+      return false;
+    }
+    return value.endsWith('nav.xhtml') ||
+        value.endsWith('nav.html') ||
+        value.endsWith('toc.xhtml') ||
+        value.endsWith('toc.html');
+  }
+
+  bool _isLikelyHtmlNavigationMediaType(String mediaType) {
+    return mediaType == 'application/xhtml+xml' || mediaType == 'text/html';
+  }
+
+  String? _extractFragmentId(String href) {
+    final fragmentIndex = href.indexOf('#');
+    if (fragmentIndex < 0 || fragmentIndex + 1 >= href.length) {
+      return null;
+    }
+    final fragment = Uri.decodeFull(href.substring(fragmentIndex + 1)).trim();
+    return fragment.isEmpty ? null : fragment;
+  }
+
+  dom.Element? _findManifestItemByResolvedPath({
+    required List<dom.Element> manifestItems,
+    required String packagePath,
+    required String resolvedPath,
+  }) {
+    final normalizedTarget = _normalizeArchivePath(resolvedPath);
+    for (final item in manifestItems) {
+      final href = _readAttribute(
+        item,
+        keys: const <String>{'href', 'xlink:href'},
+      );
+      final itemResolvedPath = _resolveArchivePathRelativeTo(
+        baseEntryPath: packagePath,
+        rawSource: href,
+      );
+      if (itemResolvedPath == normalizedTarget) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  String _resolveCandidateTitle({
+    required _EpubChapterCandidate candidate,
+    required String fallbackTitle,
+  }) {
+    final normalizedCandidateTitle = _normalizeInlineText(
+      candidate.title ?? '',
+    );
+    if (normalizedCandidateTitle.isNotEmpty) {
+      return normalizedCandidateTitle;
+    }
+    return fallbackTitle;
+  }
+
+  String _encodeChapterSourceRef(_EpubChapterCandidate candidate) {
+    if ((candidate.startFragmentId?.trim().isEmpty ?? true) &&
+        (candidate.endFragmentId?.trim().isEmpty ?? true)) {
+      return candidate.archivePath;
+    }
+    return Uri(
+      scheme: 'epub-ref',
+      host: 'chapter',
+      queryParameters: <String, String>{
+        'path': candidate.archivePath,
+        if (candidate.startFragmentId?.trim().isNotEmpty ?? false)
+          'start': candidate.startFragmentId!.trim(),
+        if (candidate.endFragmentId?.trim().isNotEmpty ?? false)
+          'end': candidate.endFragmentId!.trim(),
+      },
+    ).toString();
+  }
+
+  _ResolvedEpubChapterSourceRef _decodeChapterSourceRef(String sourceRef) {
+    final uri = Uri.tryParse(sourceRef);
+    if (uri != null &&
+        uri.scheme == 'epub-ref' &&
+        uri.host == 'chapter' &&
+        (uri.queryParameters['path']?.trim().isNotEmpty ?? false)) {
+      return _ResolvedEpubChapterSourceRef(
+        archivePath: _normalizeArchivePath(uri.queryParameters['path']!.trim()),
+        startFragmentId: _normalizeOptionalFragmentId(
+          uri.queryParameters['start'],
+        ),
+        endFragmentId: _normalizeOptionalFragmentId(uri.queryParameters['end']),
+      );
+    }
+    return _ResolvedEpubChapterSourceRef(
+      archivePath: _normalizeArchivePath(sourceRef),
+      startFragmentId: null,
+      endFragmentId: null,
+    );
+  }
+
+  String? _normalizeOptionalFragmentId(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  dom.Element? _resolveFragmentScopedRoot(
+    dom.Document document, {
+    String? startFragmentId,
+    String? endFragmentId,
+  }) {
+    final root = document.body ?? document.documentElement;
+    if (root == null) {
+      return null;
+    }
+
+    final normalizedStart = _normalizeOptionalFragmentId(startFragmentId);
+    final normalizedEnd = _normalizeOptionalFragmentId(endFragmentId);
+    if (normalizedStart == null && normalizedEnd == null) {
+      return root;
+    }
+
+    final scopedHtml = _sliceFragmentScopedHtml(
+      root: root,
+      startFragmentId: normalizedStart,
+      endFragmentId: normalizedEnd,
+    );
+    if (scopedHtml == null || scopedHtml.trim().isEmpty) {
+      return root;
+    }
+
+    final scopedDocument = html_parser.parse(
+      '<html><body>$scopedHtml</body></html>',
+    );
+    return scopedDocument.body ?? root;
+  }
+
+  String? _sliceFragmentScopedHtml({
+    required dom.Element root,
+    required String? startFragmentId,
+    required String? endFragmentId,
+  }) {
+    var scopedHtml = root.innerHtml;
+    var changed = false;
+
+    if (startFragmentId != null) {
+      final startElement = _findElementById(root, startFragmentId);
+      final marker = startElement?.outerHtml;
+      if (marker != null && marker.isNotEmpty) {
+        final index = scopedHtml.indexOf(marker);
+        if (index >= 0) {
+          scopedHtml = scopedHtml.substring(index);
+          changed = true;
+        }
+      }
+    }
+
+    if (endFragmentId != null) {
+      final endElement = _findElementById(root, endFragmentId);
+      final marker = endElement?.outerHtml;
+      if (marker != null && marker.isNotEmpty) {
+        final index = scopedHtml.indexOf(marker);
+        if (index >= 0) {
+          scopedHtml = scopedHtml.substring(0, index);
+          changed = true;
+        }
+      }
+    }
+
+    return changed ? scopedHtml : null;
+  }
+
+  dom.Element? _findElementById(dom.Element root, String fragmentId) {
+    final target = fragmentId.trim();
+    if (target.isEmpty) {
+      return null;
+    }
+    for (final element in root.querySelectorAll('*')) {
+      final id = _readAttribute(element, keys: const <String>{'id'})?.trim();
+      if (id == target) {
+        return element;
+      }
+    }
+    return null;
+  }
+
   String? _resolveArchivePathRelativeTo({
     required String baseEntryPath,
     required String? rawSource,
@@ -1080,9 +1596,15 @@ class EpubLocalBookParser implements LocalBookParser {
     required String chapterEntryName,
     required Map<String, ArchiveFile> archiveFileIndex,
     required Directory assetRootDir,
+    String? startFragmentId,
+    String? endFragmentId,
   }) async {
     final document = html_parser.parse(documentHtml);
-    final root = document.body ?? document.documentElement;
+    final root = _resolveFragmentScopedRoot(
+      document,
+      startFragmentId: startFragmentId,
+      endFragmentId: endFragmentId,
+    );
     if (root == null) {
       return _EpubChapterExtraction(
         content: '',
@@ -1525,6 +2047,57 @@ class _EpubChapterExtraction {
   final List<String> imageUrls;
   final ReaderDocument document;
 }
+
+class _EpubChapterCandidate {
+  const _EpubChapterCandidate({
+    required this.archivePath,
+    required this.title,
+    this.startFragmentId,
+    this.endFragmentId,
+  });
+
+  final String archivePath;
+  final String? title;
+  final String? startFragmentId;
+  final String? endFragmentId;
+
+  _EpubChapterCandidate copyWith({
+    String? archivePath,
+    Object? title = _epubCandidateSentinel,
+    Object? startFragmentId = _epubCandidateSentinel,
+    Object? endFragmentId = _epubCandidateSentinel,
+  }) {
+    return _EpubChapterCandidate(
+      archivePath: archivePath ?? this.archivePath,
+      title:
+          identical(title, _epubCandidateSentinel)
+              ? this.title
+              : title as String?,
+      startFragmentId:
+          identical(startFragmentId, _epubCandidateSentinel)
+              ? this.startFragmentId
+              : startFragmentId as String?,
+      endFragmentId:
+          identical(endFragmentId, _epubCandidateSentinel)
+              ? this.endFragmentId
+              : endFragmentId as String?,
+    );
+  }
+}
+
+class _ResolvedEpubChapterSourceRef {
+  const _ResolvedEpubChapterSourceRef({
+    required this.archivePath,
+    required this.startFragmentId,
+    required this.endFragmentId,
+  });
+
+  final String archivePath;
+  final String? startFragmentId;
+  final String? endFragmentId;
+}
+
+const Object _epubCandidateSentinel = Object();
 
 enum _EpubDocumentCategory { body, navigation, cover, metadata, resource }
 

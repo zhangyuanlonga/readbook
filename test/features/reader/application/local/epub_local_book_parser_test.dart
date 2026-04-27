@@ -248,6 +248,127 @@ void main() {
     });
 
     test(
+      'splits same xhtml into fragment-aware chapters from nav toc',
+      () async {
+        final archive =
+            Archive()
+              ..addFile(
+                ArchiveFile(
+                  'META-INF/container.xml',
+                  0,
+                  utf8.encode('''
+<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>
+'''),
+                ),
+              )
+              ..addFile(
+                ArchiveFile(
+                  'OPS/content.opf',
+                  0,
+                  utf8.encode('''
+<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="nav"/>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>
+'''),
+                ),
+              )
+              ..addFile(
+                ArchiveFile(
+                  'OPS/nav.xhtml',
+                  0,
+                  utf8.encode('''
+<html>
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="chapter1.xhtml#part1">第一节</a></li>
+        <li><a href="chapter1.xhtml#part2">第二节</a></li>
+      </ol>
+    </nav>
+  </body>
+</html>
+'''),
+                ),
+              )
+              ..addFile(
+                ArchiveFile(
+                  'OPS/chapter1.xhtml',
+                  0,
+                  utf8.encode('''
+<html>
+  <body>
+    <h1 id="part1">第一节</h1>
+    <p>第一节内容第一节内容第一节内容。</p>
+    <h1 id="part2">第二节</h1>
+    <p>第二节内容第二节内容第二节内容。</p>
+  </body>
+</html>
+'''),
+                ),
+              );
+
+        final encoded = ZipEncoder().encode(archive);
+        expect(encoded, isNotNull);
+
+        final file = File('${tempDir.path}/fragment_nav.epub');
+        await file.writeAsBytes(encoded);
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final book = LocalBook(
+          id: 'local_epub_fragment_1',
+          title: 'fragment 测试',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        );
+        final result = await parser.parse(book);
+
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '第一节');
+        expect(result.chapters.first.content, contains('第一节内容'));
+        expect(result.chapters.first.content, isNot(contains('第二节内容')));
+        expect(result.chapters.last.title, '第二节');
+        expect(result.chapters.last.content, contains('第二节内容'));
+        expect(result.chapters.last.content, isNot(contains('第一节内容')));
+        expect(
+          result.chapters.first.sourceRef,
+          startsWith('epub-ref://chapter?'),
+        );
+
+        final parsedChapter = await parser.parseChapter(
+          book: book,
+          chapter: LocalChapter(
+            id: 'fragment_chapter_1',
+            bookId: book.id,
+            chapterIndex: 0,
+            title: result.chapters.first.title,
+            content: '',
+            sourceRef: result.chapters.first.sourceRef,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        expect(parsedChapter.content, contains('第一节内容'));
+        expect(parsedChapter.content, isNot(contains('第二节内容')));
+      },
+    );
+
+    test(
       'keeps very short body chapters instead of filtering them out',
       () async {
         final archive =

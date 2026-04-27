@@ -22,6 +22,7 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_provider.dart';
+import 'widgets/appearance_other_settings_card.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import '../providers.dart';
 
@@ -400,6 +401,8 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       );
       sections.add(const SizedBox(height: 10));
       sections.add(_buildFontSection(context));
+      sections.add(const SizedBox(height: 10));
+      sections.add(const AppearanceOtherSettingsCard());
     }
 
     if (widget.section == AppearanceSection.tabBar) {

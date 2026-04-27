@@ -34,6 +34,7 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/launch_image_gallery_provider.dart';
 import '../application/mine_page_flow_coordinator.dart';
+import '../application/mine_page_preferences_service.dart';
 import '../providers.dart';
 
 class MinePage extends ConsumerStatefulWidget {
@@ -151,6 +152,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
+    final visibilityState = ref.watch(minePageVisibilityProvider);
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final toggleTooltip =
         _layoutMode == _MineLayoutMode.grid ? '切换为列表' : '切换为网格';
@@ -158,6 +160,28 @@ class _MinePageState extends ConsumerState<MinePage> {
         _layoutMode == _MineLayoutMode.grid
             ? Icons.view_list_rounded
             : Icons.grid_view_rounded;
+    final appearanceActions = _buildAppearanceActions(
+      context,
+      visibilityState: visibilityState,
+      seedColor: seedColor,
+      themeMode: themeMode,
+      navigationPreference: navigationPreference,
+      activeAdvancedTheme: activeAdvancedTheme,
+      activeBottomNavIconGallery: activeBottomNavIconGallery,
+      launchImageGalleries: launchImageGalleries,
+    );
+    final configurationActions = _buildConfigurationActions(
+      context,
+      visibilityState: visibilityState,
+    );
+    final dataActions = _buildDataActions(
+      context,
+      visibilityState: visibilityState,
+    );
+    final otherActions = _buildOtherActions(
+      context,
+      visibilityState: visibilityState,
+    );
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -200,233 +224,15 @@ class _MinePageState extends ConsumerState<MinePage> {
                       right: horizontal,
                       bottom: 24,
                     ),
-                    children: [
-                      _buildPageEntrance(
-                        index: 0,
-                        child: _buildProfileCard(
-                          context,
-                          palette: advancedPalette,
-                        ),
-                      ),
-                      SizedBox(height: _primarySectionGap),
-                      _buildQuickAccessCards(context, palette: advancedPalette),
-                      SizedBox(height: _primarySectionGap),
-                      _buildPageEntrance(
-                        index: 1,
-                        child: _buildActionSection(
-                          context,
-                          palette: advancedPalette,
-                          title: '外观',
-                          actions: [
-                            _MineActionItem(
-                              icon: Icons.palette_outlined,
-                              label: '应用外观',
-                              subtitle:
-                                  '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
-                              colorDot: seedColor,
-                              onTap:
-                                  () => context.push(
-                                    '/appearance?section=appearance',
-                                  ),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.auto_awesome_outlined,
-                              label: '高级主题',
-                              subtitle: activeAdvancedTheme.when(
-                                data: (theme) {
-                                  final base =
-                                      theme == null
-                                          ? '未启用'
-                                          : '当前：${theme.name}';
-                                  return _hasThemeCustom
-                                      ? base
-                                      : '$base · 开通会员可用';
-                                },
-                                loading:
-                                    () => _hasThemeCustom ? '读取中' : 'VIP 专属',
-                                error:
-                                    (_, _) =>
-                                        _hasThemeCustom ? '未启用' : 'VIP 专属',
-                              ),
-                              tagText: 'VIP',
-                              onTap: _handleAdvancedThemeTap,
-                            ),
-                            _MineActionItem(
-                              icon: Icons.dashboard_outlined,
-                              label: '底栏图集',
-                              subtitle: activeBottomNavIconGallery.when(
-                                data:
-                                    (gallery) =>
-                                        gallery?.name.trim().isNotEmpty == true
-                                            ? gallery!.name
-                                            : null,
-                                loading: () => null,
-                                error: (_, _) => null,
-                              ),
-                              onTap:
-                                  () => context.push(
-                                    '/bottom-nav-icon-galleries',
-                                  ),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.photo_library_outlined,
-                              label: '封面图集',
-                              onTap: () => context.push('/cover-galleries'),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.wallpaper_outlined,
-                              label: '应用背景',
-                              onTap:
-                                  () => context.push(
-                                    '/appearance?section=background',
-                                  ),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.auto_stories_outlined,
-                              label: '阅读背景',
-                              onTap:
-                                  () => context.push(
-                                    '/appearance/reader-background',
-                                  ),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.rocket_launch_outlined,
-                              label: '启动图集',
-                              subtitle: activeAdvancedTheme.when(
-                                data: (theme) {
-                                  final galleryId =
-                                      theme?.launchImageGalleryId?.trim() ?? '';
-                                  if (galleryId.isEmpty) {
-                                    return null;
-                                  }
-                                  for (final gallery in launchImageGalleries) {
-                                    if (gallery.id == galleryId &&
-                                        gallery.name.trim().isNotEmpty) {
-                                      return gallery.name;
-                                    }
-                                  }
-                                  return '当前主题已绑定';
-                                },
-                                loading: () => null,
-                                error: (_, _) => null,
-                              ),
-                              onTap:
-                                  () =>
-                                      context.push('/appearance/launch-image'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: _secondarySectionGap),
-                      _buildPageEntrance(
-                        index: 2,
-                        child: _buildActionSection(
-                          context,
-                          palette: advancedPalette,
-                          title: '配置',
-                          padding:
-                              _isListMode
-                                  ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
-                                  : null,
-                          actions: [
-                            _MineActionItem(
-                              icon: Icons.sell_outlined,
-                              label: '标签管理',
-                              onTap: () => context.push('/mine/tags'),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.folder_copy_outlined,
-                              label: '分类管理',
-                              onTap: () => context.push('/mine/categories'),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.rule_rounded,
-                              label: '分章规则',
-                              onTap: () => context.push('/mine/chapter-rules'),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.cleaning_services_outlined,
-                              label: '正文净化',
-                              onTap:
-                                  () => context.push('/mine/content-cleanup'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: _secondarySectionGap),
-                      _buildPageEntrance(
-                        index: 3,
-                        child: _buildActionSection(
-                          context,
-                          palette: advancedPalette,
-                          title: '数据',
-                          actions: [
-                            _MineActionItem(
-                              icon: Icons.font_download_outlined,
-                              label: '字体管理',
-                              onTap: () => context.push('/font-management'),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.tune_rounded,
-                              label: '系统',
-                              onTap: () => context.push('/system-settings'),
-                            ),
-                            if (_showSourceEntry)
-                              _MineActionItem(
-                                icon: Icons.menu_book_rounded,
-                                label: '书源管理',
-                                subtitle: _buildSourceSubtitle(),
-                                onTap: _handleSourceTap,
-                              ),
-                            _MineActionItem(
-                              icon: Icons.lan_outlined,
-                              label: '网页调试服务',
-                              subtitle: '为网站调试台提供局域网本地接口',
-                              onTap:
-                                  () => context.push(
-                                    '/mine/source-debug-service',
-                                  ),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.cloud_outlined,
-                              label: '书籍缓存',
-                              onTap: () => context.push('/cache'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: _secondarySectionGap),
-                      _buildPageEntrance(
-                        index: 4,
-                        child: _buildActionSection(
-                          context,
-                          palette: advancedPalette,
-                          title: '其他',
-                          actions: [
-                            _MineActionItem(
-                              icon: Icons.rate_review_outlined,
-                              label: '问题反馈',
-                              onTap: () => context.push('/feedback'),
-                            ),
-                            _MineActionItem(
-                              icon: Icons.feedback_outlined,
-                              label: '官方 Q 群',
-                              onTap: _openSourceFeedback,
-                            ),
-                            _MineActionItem(
-                              icon: Icons.system_update_alt,
-                              label: '检查更新',
-                              onTap: _checkUpdateFromMine,
-                            ),
-                            _MineActionItem(
-                              icon: Icons.info_outline,
-                              label: '关于我们',
-                              onTap: () => context.push('/about'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    children: _buildPageChildren(
+                      context,
+                      palette: advancedPalette,
+                      visibilityState: visibilityState,
+                      appearanceActions: appearanceActions,
+                      configurationActions: configurationActions,
+                      dataActions: dataActions,
+                      otherActions: otherActions,
+                    ),
                   ),
                 ),
               ),
@@ -464,41 +270,369 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
+  List<Widget> _buildPageChildren(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+    required MinePageVisibilityState visibilityState,
+    required List<_MineActionItem> appearanceActions,
+    required List<_MineActionItem> configurationActions,
+    required List<_MineActionItem> dataActions,
+    required List<_MineActionItem> otherActions,
+  }) {
+    final children = <Widget>[
+      _buildPageEntrance(
+        index: 0,
+        child: _buildProfileCard(context, palette: palette),
+      ),
+      SizedBox(height: _primarySectionGap),
+      _buildQuickAccessCards(
+        context,
+        palette: palette,
+        visibilityState: visibilityState,
+      ),
+    ];
+
+    var sectionIndex = 1;
+    void appendSection(
+      String title,
+      List<_MineActionItem> actions, {
+      EdgeInsetsGeometry? padding,
+      double? gap,
+    }) {
+      if (actions.isEmpty) {
+        return;
+      }
+      children.add(SizedBox(height: gap ?? _secondarySectionGap));
+      children.add(
+        _buildPageEntrance(
+          index: sectionIndex,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: title,
+            actions: actions,
+            padding: padding,
+          ),
+        ),
+      );
+      sectionIndex += 1;
+    }
+
+    appendSection('外观', appearanceActions, gap: _primarySectionGap);
+    appendSection(
+      '配置',
+      configurationActions,
+      padding: _isListMode ? const EdgeInsets.fromLTRB(10, 2, 10, 2) : null,
+    );
+    appendSection('数据', dataActions);
+    appendSection('其他', otherActions);
+    return children;
+  }
+
   Widget _buildQuickAccessCards(
     BuildContext context, {
     required _MineResolvedPalette palette,
+    required MinePageVisibilityState visibilityState,
   }) {
+    final quickCards = <Widget>[
+      if (visibilityState.isVisible(MinePageItemId.sync))
+        _buildQuickCard(
+          context,
+          palette: palette,
+          icon: Icons.sync_rounded,
+          label: _isLoadingSession ? '同步中' : '同步',
+          tagText: 'VIP',
+          onTap: _handleSyncTap,
+        ),
+      if (visibilityState.isVisible(MinePageItemId.inspiration))
+        _buildQuickCard(
+          context,
+          palette: palette,
+          icon: Icons.auto_awesome_outlined,
+          label: '灵感',
+          onTap: () => context.push('/bookmarks'),
+        ),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildMembershipQuickCard(context, palette: palette),
-        SizedBox(height: _quickAccessInnerGap),
-        Row(
-          children: [
-            Expanded(
-              child: _buildQuickCard(
-                context,
-                palette: palette,
-                icon: Icons.sync_rounded,
-                label: _isLoadingSession ? '同步中' : '同步',
-                tagText: 'VIP',
-                onTap: _handleSyncTap,
-              ),
+        if (quickCards.isNotEmpty) ...[
+          SizedBox(height: _quickAccessInnerGap),
+          if (quickCards.length == 1)
+            quickCards.single
+          else
+            Row(
+              children: [
+                Expanded(child: quickCards[0]),
+                SizedBox(width: _quickAccessInnerGap),
+                Expanded(child: quickCards[1]),
+              ],
             ),
-            SizedBox(width: _quickAccessInnerGap),
-            Expanded(
-              child: _buildQuickCard(
-                context,
-                palette: palette,
-                icon: Icons.auto_awesome_outlined,
-                label: '灵感',
-                onTap: () => context.push('/bookmarks'),
-              ),
-            ),
-          ],
-        ),
+        ],
       ],
     );
+  }
+
+  List<_MineActionItem> _buildAppearanceActions(
+    BuildContext context, {
+    required MinePageVisibilityState visibilityState,
+    required Color seedColor,
+    required ThemeMode themeMode,
+    required AppNavigationStylePreference navigationPreference,
+    required AsyncValue<AppAdvancedTheme?> activeAdvancedTheme,
+    required AsyncValue<dynamic> activeBottomNavIconGallery,
+    required List<dynamic> launchImageGalleries,
+  }) {
+    final actions = <_MineActionItem>[];
+
+    if (visibilityState.isVisible(MinePageItemId.appAppearance)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.palette_outlined,
+          label: '应用外观',
+          subtitle:
+              '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
+          colorDot: seedColor,
+          onTap: () => context.push('/appearance?section=appearance'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.advancedTheme)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.auto_awesome_outlined,
+          label: '高级主题',
+          subtitle: activeAdvancedTheme.when(
+            data: (theme) {
+              final base = theme == null ? '未启用' : '当前：${theme.name}';
+              return _hasThemeCustom ? base : '$base · 开通会员可用';
+            },
+            loading: () => _hasThemeCustom ? '读取中' : 'VIP 专属',
+            error: (_, _) => _hasThemeCustom ? '未启用' : 'VIP 专属',
+          ),
+          tagText: 'VIP',
+          onTap: _handleAdvancedThemeTap,
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.bottomNavGallery)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.dashboard_outlined,
+          label: '底栏图集',
+          subtitle: activeBottomNavIconGallery.when(
+            data:
+                (gallery) =>
+                    gallery?.name.trim().isNotEmpty == true
+                        ? gallery!.name
+                        : null,
+            loading: () => null,
+            error: (_, _) => null,
+          ),
+          onTap: () => context.push('/bottom-nav-icon-galleries'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.coverGallery)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.photo_library_outlined,
+          label: '封面图集',
+          onTap: () => context.push('/cover-galleries'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.appBackground)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.wallpaper_outlined,
+          label: '应用背景',
+          onTap: () => context.push('/appearance?section=background'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.readerBackground)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.auto_stories_outlined,
+          label: '阅读背景',
+          onTap: () => context.push('/appearance/reader-background'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.launchGallery)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.rocket_launch_outlined,
+          label: '启动图集',
+          subtitle: activeAdvancedTheme.when(
+            data: (theme) {
+              final galleryId = theme?.launchImageGalleryId?.trim() ?? '';
+              if (galleryId.isEmpty) {
+                return null;
+              }
+              for (final gallery in launchImageGalleries) {
+                if (gallery.id == galleryId && gallery.name.trim().isNotEmpty) {
+                  return gallery.name as String;
+                }
+              }
+              return '当前主题已绑定';
+            },
+            loading: () => null,
+            error: (_, _) => null,
+          ),
+          onTap: () => context.push('/appearance/launch-image'),
+        ),
+      );
+    }
+
+    return actions;
+  }
+
+  List<_MineActionItem> _buildConfigurationActions(
+    BuildContext context, {
+    required MinePageVisibilityState visibilityState,
+  }) {
+    final actions = <_MineActionItem>[];
+    if (visibilityState.isVisible(MinePageItemId.tagManagement)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.sell_outlined,
+          label: '标签管理',
+          onTap: () => context.push('/mine/tags'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.categoryManagement)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.folder_copy_outlined,
+          label: '分类管理',
+          onTap: () => context.push('/mine/categories'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.chapterRule)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.rule_rounded,
+          label: '分章规则',
+          onTap: () => context.push('/mine/chapter-rules'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.contentCleanup)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.cleaning_services_outlined,
+          label: '正文净化',
+          onTap: () => context.push('/mine/content-cleanup'),
+        ),
+      );
+    }
+    return actions;
+  }
+
+  List<_MineActionItem> _buildDataActions(
+    BuildContext context, {
+    required MinePageVisibilityState visibilityState,
+  }) {
+    final actions = <_MineActionItem>[];
+    if (visibilityState.isVisible(MinePageItemId.fontManagement)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.font_download_outlined,
+          label: '字体管理',
+          onTap: () => context.push('/font-management'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.systemSettings)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.tune_rounded,
+          label: '系统',
+          onTap: () => context.push('/system-settings'),
+        ),
+      );
+    }
+    if (_showSourceEntry &&
+        visibilityState.isVisible(MinePageItemId.sourceManagement)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.menu_book_rounded,
+          label: '书源管理',
+          subtitle: _buildSourceSubtitle(),
+          onTap: _handleSourceTap,
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.sourceDebugService)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.lan_outlined,
+          label: '网页调试服务',
+          subtitle: '为网站调试台提供局域网本地接口',
+          onTap: () => context.push('/mine/source-debug-service'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.cacheManagement)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.cloud_outlined,
+          label: '书籍缓存',
+          onTap: () => context.push('/cache'),
+        ),
+      );
+    }
+    return actions;
+  }
+
+  List<_MineActionItem> _buildOtherActions(
+    BuildContext context, {
+    required MinePageVisibilityState visibilityState,
+  }) {
+    final actions = <_MineActionItem>[];
+    if (visibilityState.isVisible(MinePageItemId.feedback)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.rate_review_outlined,
+          label: '问题反馈',
+          onTap: () => context.push('/feedback'),
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.officialGroup)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.feedback_outlined,
+          label: '官方 Q 群',
+          onTap: _openSourceFeedback,
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.checkUpdate)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.system_update_alt,
+          label: '检查更新',
+          onTap: _checkUpdateFromMine,
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.about)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.info_outline,
+          label: '关于我们',
+          onTap: () => context.push('/about'),
+        ),
+      );
+    }
+    return actions;
   }
 
   Widget _buildMembershipQuickCard(

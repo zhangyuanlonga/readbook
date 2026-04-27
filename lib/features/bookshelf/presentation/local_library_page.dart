@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../application/local_book_import_service.dart';
 import '../providers.dart';
@@ -99,7 +100,8 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         await _localBookImportService.importFromFile(
           filePath: filePath,
           displayName: displayName,
-          waitForIndexing: true,
+          waitForIndexing:
+              LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
         );
         successCount += 1;
       } on AppException catch (error) {
@@ -130,13 +132,12 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
 
     if (successCount > 0) {
       final failureCount = failedBooks.length;
-      if (failureCount > 0) {
-        _showMessage(
-          '已导入 $successCount 本书并加入书架，失败 $failureCount 本。成功导入的图书目录已建立，可直接阅读。',
-        );
-      } else {
-        _showMessage('已导入 $successCount 本书并加入书架，目录已建立，可直接阅读。');
-      }
+      _showMessage(
+        LocalBookWorkflowPolicy.localLibraryImportSuccessMessage(
+          successCount: successCount,
+          failureCount: failureCount,
+        ),
+      );
       _returnToBookshelf();
       return;
     }

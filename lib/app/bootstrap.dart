@@ -14,6 +14,7 @@ import 'startup_artwork_store.dart';
 import '../features/source/application/source_health_service.dart';
 import '../features/source/application/source_runtime_diagnostics_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/mine/providers.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
 import '../core/logging/app_logger.dart';
 import 'navigation/app_navigation_style_provider.dart';
@@ -35,6 +36,8 @@ Future<void> bootstrap() async {
   AppInterfaceFontSettingsNotifier.prime(prefs);
   AppInterfaceTextScaleNotifier.prime(prefs);
   AppInterfaceFontWeightNotifier.prime(prefs);
+  MinePageVisibilityNotifier.prime(prefs);
+  MinePageStartupDestinationNotifier.prime(prefs);
   await Future.wait<void>([
     ReaderFontRegistryService().restoreRegisteredFonts(),
     StartupArtworkStore.prime(preferences: prefs),

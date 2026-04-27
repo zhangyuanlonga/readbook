@@ -40,8 +40,8 @@
 - [x] 阶段 1：重做 TXT 导入与编码冻结
 - [x] 阶段 2：统一 TXT 索引与正文读取
 - [x] 阶段 3：收紧本地导入与索引时序
-- [ ] 阶段 4：补齐 EPUB `fragment` 级目录解析
-- [ ] 阶段 5：依赖注入收口与残留清理
+- [x] 阶段 4：补齐 EPUB `fragment` 级目录解析
+- [x] 阶段 5：依赖注入收口与残留清理
 - [ ] 阶段 6：测试、回归与文档验收
 
 规则：
@@ -153,17 +153,17 @@
 
 执行清单：
 
-- [ ] 梳理 `EpubLocalBookParser` 当前目录候选选择逻辑
-- [ ] 引入 `toc/nav + fragment` 级章节定位能力
-- [ ] 为同一 `xhtml/html` 内多个逻辑章节保留切分信息
-- [ ] 对封面、卷首、前言、导航页保持稳定过滤
-- [ ] 保持当前 `ReaderDocument` 结构化正文输出，不另起 EPUB 阅读链路
-- [ ] 校验图片资源、相对路径、章节标题回填在新粒度下不回退
+- [x] 梳理 `EpubLocalBookParser` 当前目录候选选择逻辑
+- [x] 引入 `toc/nav + fragment` 级章节定位能力
+- [x] 为同一 `xhtml/html` 内多个逻辑章节保留切分信息
+- [x] 对封面、卷首、前言、导航页保持稳定过滤
+- [x] 保持当前 `ReaderDocument` 结构化正文输出，不另起 EPUB 阅读链路
+- [x] 校验图片资源、相对路径、章节标题回填在新粒度下不回退
 
 阶段完成定义：
 
-- [ ] 复杂 EPUB 的目录粒度优于当前实现
-- [ ] EPUB 仍继续复用当前统一阅读器正文链路
+- [x] 复杂 EPUB 的目录粒度优于当前实现
+- [x] EPUB 仍继续复用当前统一阅读器正文链路
 
 ---
 
@@ -175,17 +175,17 @@
 
 执行清单：
 
-- [ ] 将新增 service / coordinator / resolver 优先放到 `lib/features/reader/application/`
-- [ ] 将新增依赖统一放到 `lib/features/reader/providers.dart` 或 reader feature 组合根
-- [ ] 不在页面层直接 new 本地解析 service
-- [ ] 不在页面层直接访问数据库或平台通道
-- [ ] 清理本轮范围内新增的默认兜底构造与隐藏单例
-- [ ] 若出现跨 feature 共享的稳定能力，再评估是否提升到全局层
+- [x] 将新增 service / coordinator / resolver 优先放到 `lib/features/reader/application/`
+- [x] 将新增依赖统一放到 `lib/features/reader/providers.dart` 或 reader feature 组合根
+- [x] 不在页面层直接 new 本地解析 service
+- [x] 不在页面层直接访问数据库或平台通道
+- [x] 清理本轮范围内新增的默认兜底构造与隐藏单例
+- [x] 若出现跨 feature 共享的稳定能力，再评估是否提升到全局层
 
 阶段完成定义：
 
-- [ ] 本轮新增逻辑没有违反开发约束文档中的一票否决项
-- [ ] reader 本地阅读新增能力的依赖图可由 provider 清晰表达
+- [x] 本轮新增逻辑没有违反开发约束文档中的一票否决项
+- [x] reader 本地阅读新增能力的依赖图可由 provider 清晰表达
 
 ---
 
@@ -244,7 +244,7 @@ TXT 编码样本最小集合：
 - [ ] [local_book_index_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_index_service.dart)
 - [ ] [local_book_import_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/bookshelf/application/local_book_import_service.dart)
 - [ ] [local_content_provider.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local_content_provider.dart)
-- [ ] [epub_local_book_parser.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/epub_local_book_parser.dart)
+- [x] [epub_local_book_parser.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/epub_local_book_parser.dart)
 - [x] [local_book_preview_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_preview_service.dart)
 - [x] [local_book_workflow_policy.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_workflow_policy.dart)
 - [x] [local_library_page.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/bookshelf/presentation/local_library_page.dart)
@@ -293,15 +293,15 @@ TXT 编码样本最小集合：
 
 ### 阶段 4
 
-- 状态：`未完成`
-- 完成日期：
-- 备注：
+- 状态：`已完成`
+- 完成日期：`2026-04-27`
+- 备注：`EpubLocalBookParser` 已引入 `nav / ncx + fragment` 级章节候选解析；同一 `xhtml` 内多个带 `id` 的逻辑章节现在可以被切分成独立目录项，并通过编码后的 `sourceRef` 在阅读阶段稳定回放，且未破坏现有图片、脚注、结构化文档输出链路。
 
 ### 阶段 5
 
-- 状态：`未完成`
-- 完成日期：
-- 备注：
+- 状态：`已完成`
+- 完成日期：`2026-04-27`
+- 备注：本轮没有新增需要页面层直接持有的解析依赖；手动导入/外部导入的等待索引策略和成功提示文案已继续收口到 `LocalBookWorkflowPolicy`；对 `epub_local_book_parser.dart`、`local_library_page.dart`、`bookshelf_page.dart` 的定向 `dart analyze` 已通过。
 
 ### 阶段 6
 

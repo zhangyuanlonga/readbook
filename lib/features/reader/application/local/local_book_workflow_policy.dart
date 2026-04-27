@@ -5,6 +5,9 @@ enum LocalBookImportExecutionMode { backgroundIndex, immediateIndex }
 class LocalBookWorkflowPolicy {
   const LocalBookWorkflowPolicy._();
 
+  static const bool directImportShouldWaitForIndexing = true;
+  static const bool externalImportShouldWaitForIndexing = true;
+
   static LocalBookImportExecutionMode resolveImportExecutionMode({
     required LocalBookFormat format,
     required bool waitForIndexingRequested,
@@ -30,6 +33,17 @@ class LocalBookWorkflowPolicy {
       return '已导入 $successCount 本书并加入书架，失败 $failureCount 本。后台会继续解析成功导入的图书。';
     }
     return '已导入 $successCount 本书并加入书架。后台会继续解析。';
+  }
+
+  static String localLibraryImportSuccessMessage({
+    required int successCount,
+    required int failureCount,
+  }) {
+    return importSuccessMessage(
+      successCount: successCount,
+      failureCount: failureCount,
+      directoryReady: true,
+    );
   }
 
   static String statusLabel(LocalBookIndexStatus status) => switch (status) {
