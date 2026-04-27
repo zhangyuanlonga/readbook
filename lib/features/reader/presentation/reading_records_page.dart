@@ -2607,8 +2607,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       coverUrl: realCoverUrl,
     );
     final resolvedCover = resolveBookCover(
-      realCoverUrl: presentation.realCoverUrl,
-      customCoverPath: presentation.customCoverPath,
+      realCoverUrl: presentation.displayCover,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: bookId,

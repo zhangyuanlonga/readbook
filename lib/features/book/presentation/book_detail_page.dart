@@ -56,10 +56,11 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
-import '../application/custom_cover_storage_service.dart';
 import '../application/book_detail_service.dart';
 import '../application/book_local_metadata_service.dart';
+import '../application/book_metadata_edit_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
+import '../application/book_presentation_sync_service.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
@@ -209,8 +210,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       SourceSwitchScoreService();
   late final BookmarkRepository _bookmarkRepository;
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
-  late final LocalBookRepository _localBookRepository;
   late final BookLocalMetadataService _localMetadataService;
+  late final BookMetadataEditService _bookMetadataEditService;
+  late final BookPresentationSyncService _bookPresentationSyncService;
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
       const BookMetadataPresentationResolver();
@@ -221,8 +223,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final ReaderPreferencesService _readerPreferencesService;
   late final ReadingRecordService _readingRecordService;
   late final LocalBookIndexService _localBookIndexService;
-  late final ImageSelectionService _imageSelectionService;
-  late final CustomCoverStorageService _customCoverStorageService;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   late final SourceRuntimeTaskConflictService _taskConflictService;
@@ -246,8 +246,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _bookMetadataOverrideRepository = ref.read(
       bookMetadataOverrideRepositoryProvider,
     );
-    _localBookRepository = ref.read(bookLocalBookRepositoryProvider);
     _localMetadataService = ref.read(bookLocalMetadataServiceProvider);
+    _bookMetadataEditService = dependencies.bookMetadataEditService;
+    _bookPresentationSyncService = dependencies.bookPresentationSyncService;
     _sourceRuntimeFacade = ref.read(bookSourceRuntimeFacadeProvider);
     _taskConflictService = ref.read(bookTaskConflictServiceProvider);
     _taskScheduler = ref.read(bookTaskSchedulerProvider);
@@ -257,8 +258,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _readerPreferencesService = dependencies.readerPreferencesService;
     _readingRecordService = dependencies.readingRecordService;
     _localBookIndexService = dependencies.localBookIndexService;
-    _imageSelectionService = dependencies.imageSelectionService;
-    _customCoverStorageService = dependencies.customCoverStorageService;
     final detailService =
         widget.bookDetailService ?? dependencies.bookDetailService;
     _sourceContentProvider = SourceContentProvider(
@@ -1454,62 +1453,23 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   Future<String?> _pickEditableCoverPath(BookDetailLoadResult result) async {
-    final picked = await _imageSelectionService.pickImage(
-      confirmButtonText: '选择封面',
-      allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+    return _bookMetadataEditService.pickAndPersistCustomCover(
+      detail: result.detail,
     );
-    if (!mounted || picked == null) {
-      return null;
-    }
-    final storedCoverUri = await _customCoverStorageService.persistForBook(
-      sourceId: result.detail.sourceId,
-      detailUrl: result.detail.detailUrl,
-      picked: picked,
-    );
-    if (storedCoverUri == null) {
-      return null;
-    }
-    return storedCoverUri.toFilePath();
   }
 
   Future<void> _saveRemoteBookMetadata({
     required BookDetailLoadResult result,
     required _BookMetadataEditDraft draft,
   }) async {
-    final detail = result.detail;
-    final normalizedTitle = draft.title.trim();
-    final normalizedAuthor = _normalizeOptionalText(draft.author);
-    final normalizedIntro = _normalizeOptionalText(draft.intro);
-    final normalizedCoverPath = _normalizeOptionalText(draft.customCoverPath);
-
-    final rawTitle = detail.title.trim();
-    final rawAuthor = _normalizeOptionalText(detail.author);
-    final rawIntro = _normalizeOptionalText(detail.intro);
-
-    final noDiff =
-        normalizedTitle == rawTitle &&
-        normalizedAuthor == rawAuthor &&
-        normalizedIntro == rawIntro &&
-        normalizedCoverPath == null;
-
-    if (noDiff) {
-      await _bookMetadataOverrideRepository.deleteByRemoteBook(
-        sourceId: detail.sourceId,
-        detailUrl: detail.detailUrl,
-      );
-      _metadataOverride = null;
-    } else {
-      final nextOverride = BookMetadataOverride.forRemote(
-        sourceId: detail.sourceId,
-        detailUrl: detail.detailUrl,
-        title: normalizedTitle,
-        author: normalizedAuthor,
-        intro: normalizedIntro,
-        coverPath: normalizedCoverPath,
-      );
-      await _bookMetadataOverrideRepository.upsert(nextOverride);
-      _metadataOverride = nextOverride;
-    }
+    final saveResult = await _bookMetadataEditService.saveRemoteBookMetadata(
+      detail: result.detail,
+      title: draft.title,
+      author: draft.author,
+      intro: draft.intro,
+      customCoverPath: draft.customCoverPath,
+    );
+    _metadataOverride = saveResult.metadataOverride;
 
     await _refreshPresentedMetadata(result: result, message: '已保存书籍信息。');
   }
@@ -1520,39 +1480,22 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required _BookMetadataEditDraft draft,
     required bool defaultSplitLongChapterEnabled,
   }) async {
-    final normalizedTitle = draft.title.trim();
-    final normalizedAuthor = _normalizeOptionalText(draft.author);
-    final normalizedIntro = _normalizeOptionalText(draft.intro);
-    final normalizedCoverPath = _normalizeOptionalText(draft.customCoverPath);
-    final normalizedCharset = _normalizeOptionalText(draft.charset);
-
-    final nextLocalBook = localBook.copyWith(
-      title: normalizedTitle,
-      author: normalizedAuthor,
-      clearAuthor: normalizedAuthor == null,
-      description: normalizedIntro,
-      clearDescription: normalizedIntro == null,
-      coverPath: normalizedCoverPath,
-      clearCoverPath: normalizedCoverPath == null,
-      charset: normalizedCharset,
-      clearCharset: normalizedCharset == null,
+    final saveResult = await _bookMetadataEditService.saveLocalBookMetadata(
+      localBook: localBook,
+      title: draft.title,
+      author: draft.author,
+      intro: draft.intro,
+      customCoverPath: draft.customCoverPath,
+      charset: draft.charset,
       splitLongChapter: draft.splitLongChapter,
-      updatedAt: DateTime.now(),
     );
-
-    await _localBookRepository.upsertBook(nextLocalBook);
     _updateAuxiliaryState(
-      _auxiliaryState.copyWith(localBookMeta: nextLocalBook),
+      _auxiliaryState.copyWith(localBookMeta: saveResult.localBook),
     );
-
-    final needsReindex =
-        (localBook.charset?.trim() ?? '') !=
-            (nextLocalBook.charset?.trim() ?? '') ||
-        localBook.splitLongChapter != nextLocalBook.splitLongChapter;
 
     await _refreshPresentedMetadata(result: result, message: '已保存本地图书信息。');
 
-    if (needsReindex && mounted) {
+    if (saveResult.needsReindex && mounted) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) {
@@ -1589,10 +1532,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   Future<void> _resetRemoteBookMetadata({
     required BookDetailLoadResult result,
   }) async {
-    final detail = result.detail;
-    await _bookMetadataOverrideRepository.deleteByRemoteBook(
-      sourceId: detail.sourceId,
-      detailUrl: detail.detailUrl,
+    await _bookMetadataEditService.resetRemoteBookMetadata(
+      detail: result.detail,
     );
     _metadataOverride = null;
     await _refreshPresentedMetadata(result: result, message: '已恢复默认展示。');
@@ -1603,23 +1544,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required LocalBook localBook,
     required bool defaultSplitLongChapterEnabled,
   }) async {
-    final detail = result.detail;
-    final fallbackTitle =
-        detail.title.trim().isNotEmpty ? detail.title.trim() : localBook.title;
-    final fallbackAuthor = _normalizeOptionalText(detail.author);
-    final fallbackIntro = _normalizeOptionalText(detail.intro);
-    final nextLocalBook = localBook.copyWith(
-      title: fallbackTitle,
-      author: fallbackAuthor,
-      clearAuthor: fallbackAuthor == null,
-      description: fallbackIntro,
-      clearDescription: fallbackIntro == null,
-      clearCoverPath: true,
-      clearCharset: true,
-      splitLongChapter: defaultSplitLongChapterEnabled,
-      updatedAt: DateTime.now(),
+    final nextLocalBook = await _bookMetadataEditService.resetLocalBookMetadata(
+      detail: result.detail,
+      localBook: localBook,
+      defaultSplitLongChapterEnabled: defaultSplitLongChapterEnabled,
     );
-    await _localBookRepository.upsertBook(nextLocalBook);
     _updateAuxiliaryState(
       _auxiliaryState.copyWith(localBookMeta: nextLocalBook),
     );
@@ -1633,42 +1562,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final presentation = _resolvePresentedMetadata(result: result);
     _displayTitle = presentation.displayTitle;
     _updatePresentationState(_presentationState.copyWith(result: result));
-    try {
-      await _readerPreferencesService.saveTocSnapshot(
-        ReaderTocSnapshot(
-          bookId: result.detail.id,
-          sourceId: result.detail.sourceId,
-          detailUrl: result.detail.detailUrl,
-          title: presentation.displayTitle,
-          author: presentation.displayAuthor,
-          coverUrl: presentation.displayCover,
-          chapters: result.chapters,
-          updatedAt: DateTime.now(),
-        ),
-      );
-    } catch (_) {
-      // Ignore toc snapshot persistence failures when refreshing presentation.
-    }
-    await _readingRecordService.syncBookPresentation(
-      bookId: result.detail.id,
-      bookTitle: presentation.displayTitle,
-      bookAuthor: presentation.displayAuthor,
-      coverUrl: presentation.displayCover,
+    await _bookPresentationSyncService.syncPresentation(
+      detail: result.detail,
+      chapters: result.chapters,
+      presentation: presentation,
+      isInBookshelf: _auxiliaryState.isInBookshelf,
+      latestChapterTitle: _resolveLatestChapter(result)?.title,
     );
-    if (_auxiliaryState.isInBookshelf) {
-      await _bookshelfService.upsert(
-        BookshelfBook(
-          bookId: result.detail.id,
-          sourceId: result.detail.sourceId,
-          title: presentation.displayTitle,
-          detailUrl: result.detail.detailUrl,
-          author: presentation.displayAuthor,
-          coverUrl: presentation.displayCover,
-          latestChapter: _resolveLatestChapter(result)?.title,
-          addedAt: DateTime.now(),
-        ),
-      );
-    }
     _showMetadataInlineNotice(message);
     if (mounted) {
       _showMessage(message);
@@ -3375,24 +3275,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     BookDetailLoadResult detailResult,
   ) async {
     try {
-      final picked = await _imageSelectionService.pickImage(
-        confirmButtonText: '选择封面',
-        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
-      );
-      if (!mounted || picked == null) {
+      final coverPath = await _bookMetadataEditService
+          .pickAndPersistCustomCover(detail: detailResult.detail);
+      if (!mounted || coverPath == null) {
         return;
       }
-
-      final storedCoverUri = await _customCoverStorageService.persistForBook(
-        sourceId: detailResult.detail.sourceId,
-        detailUrl: detailResult.detail.detailUrl,
-        picked: picked,
-      );
-      if (storedCoverUri == null) {
-        _showMessage('封面保存失败，请重试。');
-        return;
-      }
-      final coverPath = storedCoverUri.toFilePath();
       final localBook =
           _isLocalContent
               ? await _ensureEditableLocalBookMeta()

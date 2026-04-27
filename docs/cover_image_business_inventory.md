@@ -272,6 +272,11 @@
 
 - 不同页面传参方式仍有差异
 - 但最终渲染口径已经统一，不再出现“同一页面链路里真实封面压过自定义封面”的问题
+- 当前展示态还新增了显式封面来源类型，可区分：
+  - `overrideCustom`
+  - `localManaged`
+  - `remote`
+  - `none`
 
 ---
 
@@ -465,6 +470,12 @@
 1. 抽出 `BookCoverMutationService` 或 `BookMetadataEditCoordinator`
 2. 页面只触发“设置封面 / 移除封面 / 保存编辑”
 3. provider 负责注入依赖
+
+当前进度：
+
+- [x] 已抽出 `BookMetadataEditService`
+- [x] 已抽出 `BookPresentationSyncService`
+- [x] 详情页的封面保存、metadata 写回、快照同步已下沉到 application service
 
 ### 第三阶段：把 application 对 data 的直连改成 repository/service
 

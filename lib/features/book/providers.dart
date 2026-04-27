@@ -18,6 +18,8 @@ import '../source/application/source_runtime_scheduler_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/book_detail_service.dart';
 import 'application/book_local_metadata_service.dart';
+import 'application/book_metadata_edit_service.dart';
+import 'application/book_presentation_sync_service.dart';
 import 'application/custom_cover_storage_service.dart';
 import 'application/local_book_detail_service.dart';
 
@@ -32,8 +34,8 @@ class BookDetailDependencies {
     required this.readerPreferencesService,
     required this.readingRecordService,
     required this.localBookIndexService,
-    required this.imageSelectionService,
-    required this.customCoverStorageService,
+    required this.bookMetadataEditService,
+    required this.bookPresentationSyncService,
   });
 
   final BookDetailService bookDetailService;
@@ -45,8 +47,8 @@ class BookDetailDependencies {
   final ReaderPreferencesService readerPreferencesService;
   final ReadingRecordService readingRecordService;
   final LocalBookIndexService localBookIndexService;
-  final ImageSelectionService imageSelectionService;
-  final CustomCoverStorageService customCoverStorageService;
+  final BookMetadataEditService bookMetadataEditService;
+  final BookPresentationSyncService bookPresentationSyncService;
 }
 
 final bookBookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
@@ -128,6 +130,32 @@ final bookDetailCustomCoverStorageServiceProvider =
       return const CustomCoverStorageService();
     });
 
+final bookMetadataEditServiceProvider = Provider<BookMetadataEditService>((
+  ref,
+) {
+  return BookMetadataEditService(
+    bookMetadataOverrideRepository: ref.watch(
+      bookMetadataOverrideRepositoryProvider,
+    ),
+    localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+    imageSelectionService: ref.watch(bookDetailImageSelectionServiceProvider),
+    customCoverStorageService: ref.watch(
+      bookDetailCustomCoverStorageServiceProvider,
+    ),
+  );
+});
+
+final bookPresentationSyncServiceProvider =
+    Provider<BookPresentationSyncService>((ref) {
+      return BookPresentationSyncService(
+        readerPreferencesService: ref.watch(
+          bookDetailReaderPreferencesServiceProvider,
+        ),
+        readingRecordService: ref.watch(bookDetailReadingRecordServiceProvider),
+        bookshelfService: ref.watch(bookDetailBookshelfServiceProvider),
+      );
+    });
+
 final bookTaskConflictServiceProvider =
     Provider<SourceRuntimeTaskConflictService>((ref) {
       return SourceRuntimeTaskConflictService.instance;
@@ -175,9 +203,7 @@ final bookDetailDependenciesProvider = Provider<BookDetailDependencies>((ref) {
     ),
     readingRecordService: ref.watch(bookDetailReadingRecordServiceProvider),
     localBookIndexService: ref.watch(bookDetailLocalBookIndexServiceProvider),
-    imageSelectionService: ref.watch(bookDetailImageSelectionServiceProvider),
-    customCoverStorageService: ref.watch(
-      bookDetailCustomCoverStorageServiceProvider,
-    ),
+    bookMetadataEditService: ref.watch(bookMetadataEditServiceProvider),
+    bookPresentationSyncService: ref.watch(bookPresentationSyncServiceProvider),
   );
 });

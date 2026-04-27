@@ -57,6 +57,10 @@ class SearchBookCard extends ConsumerWidget {
             presentation.displayIntro?.trim().isNotEmpty == true
                 ? presentation.displayIntro!.trim()
                 : normalizedIntro;
+        final displayCover =
+            presentation.displayCover?.trim().isNotEmpty == true
+                ? presentation.displayCover!.trim()
+                : book.coverUrl;
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
           clipBehavior: Clip.antiAlias,
@@ -68,8 +72,7 @@ class SearchBookCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _CoverPreview(
-                    coverUrl: presentation.realCoverUrl ?? book.coverUrl,
-                    customCoverPath: presentation.customCoverPath,
+                    coverUrl: displayCover,
                     title: displayTitle,
                     author: displayAuthor,
                     heroTag: heroTag,
@@ -189,7 +192,6 @@ class SearchBookCard extends ConsumerWidget {
 class _CoverPreview extends StatelessWidget {
   const _CoverPreview({
     required this.coverUrl,
-    this.customCoverPath,
     required this.title,
     required this.heroTag,
     this.author,
@@ -199,7 +201,6 @@ class _CoverPreview extends StatelessWidget {
   });
 
   final String? coverUrl;
-  final String? customCoverPath;
   final String title;
   final String? author;
   final String heroTag;
@@ -215,7 +216,6 @@ class _CoverPreview extends StatelessWidget {
         ref.watch(coverGalleriesProvider);
         final resolvedCover = resolveBookCover(
           realCoverUrl: coverUrl,
-          customCoverPath: customCoverPath,
           activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
           galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
           bookId: bookId,

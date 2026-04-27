@@ -15,6 +15,7 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../application/home_engagement_service.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
@@ -47,6 +48,8 @@ class _HomePageState extends ConsumerState<HomePage>
   late final HomeEngagementService _engagementService;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
+  final BookMetadataPresentationResolver _bookPresentationResolver =
+      const BookMetadataPresentationResolver();
 
   HomeEngagementState _engagementState = const HomeEngagementState();
   bool _isEngagementLoading = true;
@@ -493,8 +496,11 @@ class _HomePageState extends ConsumerState<HomePage>
   Widget _buildContinueReadingCard(ReadingRecord record) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final presentation = _bookPresentationResolver.resolveReadingRecord(
+      record: record,
+    );
     final cover = resolveBookCover(
-      realCoverUrl: record.coverUrl,
+      realCoverUrl: presentation.displayCover,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: record.bookId,
@@ -521,8 +527,8 @@ class _HomePageState extends ConsumerState<HomePage>
             children: [
               ResolvedBookCoverView(
                 cover: cover,
-                title: record.bookTitle,
-                author: record.bookAuthor,
+                title: presentation.displayTitle,
+                author: presentation.displayAuthor,
                 width: 124,
                 height: 124,
                 borderRadius: BorderRadius.circular(18),

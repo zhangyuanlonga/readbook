@@ -2683,7 +2683,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           builder: (context, constraints) {
                             return _buildCover(
                               realCoverUrl: book.coverUrl,
-                              customCoverPath: localBook?.coverPath,
                               title: displayTitle,
                               author: displayAuthor,
                               bookId: book.bookId,
@@ -2939,7 +2938,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       Positioned.fill(
                         child: _buildCover(
                           realCoverUrl: book.coverUrl,
-                          customCoverPath: localBook?.coverPath,
                           title: displayTitle,
                           author: displayAuthor,
                           bookId: book.bookId,
@@ -3916,7 +3914,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Widget _buildCover({
     String? realCoverUrl,
-    String? customCoverPath,
     String? title,
     String? author,
     String? bookId,
@@ -3948,8 +3945,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       metadataOverride: override,
     );
     final resolvedCover = resolveBookCover(
-      realCoverUrl: presentation.realCoverUrl,
-      customCoverPath: presentation.customCoverPath ?? customCoverPath,
+      realCoverUrl: presentation.displayCover,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: bookId,

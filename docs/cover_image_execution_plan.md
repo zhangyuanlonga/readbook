@@ -35,14 +35,20 @@
 
 任务：
 
-- [ ] 明确唯一展示模型：标题、作者、简介、封面统一从同一 presentation 对象输出
-- [ ] 盘点所有仍直接传 `realCoverUrl + customCoverPath` 的页面
-- [ ] 搜索页统一改为消费同一种封面展示态
-- [ ] 发现页统一改为消费同一种封面展示态
-- [ ] 书架页统一改为消费同一种封面展示态
-- [ ] 阅读记录页统一改为消费同一种封面展示态
-- [ ] 书签页、缓存管理页、首页继续阅读入口统一改为消费同一种封面展示态
-- [ ] 补页面级回归测试，验证自定义封面在各页面显示一致
+- [x] 明确唯一展示模型：标题、作者、简介、封面统一从同一 presentation 对象输出
+- [x] 盘点所有仍直接传 `realCoverUrl + customCoverPath` 的页面
+- [x] 搜索页统一改为消费同一种封面展示态
+- [x] 发现页统一改为消费同一种封面展示态
+- [x] 书架页统一改为消费同一种封面展示态
+- [x] 阅读记录页统一改为消费同一种封面展示态
+- [x] 书签页、缓存管理页、首页继续阅读入口统一改为消费同一种封面展示态
+- [x] 补页面级回归测试，验证自定义封面在各页面显示一致
+
+当前说明：
+
+- 当前统一展示模型沿用 `BookMetadataPresentation`
+- 最终渲染入口统一读取 `presentation.displayCover`
+- `resolveBookCover()` 只负责“图片来源最终落点 + 主题兜底”，不再承担页面层优先级分歧
 
 验收标准：
 
@@ -59,13 +65,23 @@
 
 任务：
 
-- [ ] 提炼统一 `BookPresentation` / `BookDisplayState` 模型
-- [ ] 收口远程书展示态查询入口
-- [ ] 收口本地图书展示态查询入口
-- [ ] 收口书架快照展示态查询入口
-- [ ] 收口阅读记录展示态查询入口
-- [ ] 页面不再自己拼 `title/author/cover` 优先级
-- [ ] 补 application/service 层测试
+- [x] 提炼统一 `BookPresentation` / `BookDisplayState` 模型
+- [x] 收口远程书展示态查询入口
+- [x] 收口本地图书展示态查询入口
+- [x] 收口书架快照展示态查询入口
+- [x] 收口阅读记录展示态查询入口
+- [x] 页面不再自己拼 `title/author/cover` 优先级
+- [x] 补 application/service 层测试
+
+当前说明：
+
+- 当前统一模型使用现有 `BookMetadataPresentation`
+- `BookMetadataPresentationResolver` 已新增：
+  - `resolveRemoteBook()`
+  - `resolveBookshelfBook()`
+  - `resolveReadingRecord()`
+- `BookPresentationQueryService` 继续负责远程书的 override 查询
+- 书架/阅读记录/快照类页面已统一按 presentation 消费封面展示态
 
 验收标准：
 
@@ -82,14 +98,24 @@
 
 任务：
 
-- [ ] 明确区分 4 类封面来源
-- [ ] 远程真实封面
-- [ ] 本地索引封面
-- [ ] 用户自定义封面
-- [ ] 主题图库兜底封面
-- [ ] 展示态里显式保留“当前命中的封面来源类型”
-- [ ] 避免把主题图库继续当作书籍事实封面
-- [ ] 补来源优先级测试
+- [x] 明确区分 4 类封面来源
+- [x] 远程真实封面
+- [x] 本地索引封面
+- [x] 用户自定义封面
+- [x] 主题图库兜底封面
+- [x] 展示态里显式保留“当前命中的封面来源类型”
+- [x] 避免把主题图库继续当作书籍事实封面
+- [x] 补来源优先级测试
+
+当前说明：
+
+- `BookMetadataPresentation` 已新增 `displayCoverSource`
+- 当前来源类型：
+  - `overrideCustom`
+  - `localManaged`
+  - `remote`
+  - `none`
+- 主题图库仍只在 `resolveBookCover()` 中作为 UI fallback，不回写到展示态事实层
 
 验收标准：
 
@@ -106,14 +132,25 @@
 
 任务：
 
-- [ ] 从 `book_detail_page.dart` 抽离封面变更编排
-- [ ] 抽离“选择图片并持久化”能力
-- [ ] 抽离“远程书 override 保存”能力
-- [ ] 抽离“本地图书 metadata 保存”能力
-- [ ] 抽离“书架快照同步”能力
-- [ ] 抽离“阅读记录展示态同步”能力
-- [ ] 页面只保留交互分发和状态订阅
-- [ ] 补详情页交互回归测试
+- [x] 从 `book_detail_page.dart` 抽离封面变更编排
+- [x] 抽离“选择图片并持久化”能力
+- [x] 抽离“远程书 override 保存”能力
+- [x] 抽离“本地图书 metadata 保存”能力
+- [x] 抽离“书架快照同步”能力
+- [x] 抽离“阅读记录展示态同步”能力
+- [x] 页面只保留交互分发和状态订阅
+- [x] 补详情页交互回归测试
+
+当前说明：
+
+- 已新增：
+  - `lib/features/book/application/book_metadata_edit_service.dart`
+  - `lib/features/book/application/book_presentation_sync_service.dart`
+- `book_detail_page.dart` 已改为通过 application service 执行：
+  - 选图并持久化
+  - 远程 metadata 保存/重置
+  - 本地 metadata 保存/重置
+  - toc snapshot / 阅读记录 / 书架快照同步
 
 验收标准：
 
@@ -204,4 +241,3 @@
 
 - `Phase 3` 的来源分层可以稍后做，因为当前最紧急的问题是页面展示结果不一致和页面编排过重。
 - 如果希望先快速稳定用户可见行为，应优先完成 `Phase 1` 和 `Phase 2`。
-

@@ -12,6 +12,7 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/bookmarks_query_service.dart';
@@ -31,6 +32,8 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   late final BookmarkRepository _bookmarkRepository;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
+  final BookMetadataPresentationResolver _bookPresentationResolver =
+      const BookMetadataPresentationResolver();
 
   bool _isLoading = true;
   String? _errorText;
@@ -331,8 +334,18 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final book = group.book;
-    final title = _resolvedTitle(book, fallbackBookmarks: group.bookmarks);
-    final author = _resolvedAuthor(book, fallbackBookmarks: group.bookmarks);
+    final presentation =
+        book == null
+            ? null
+            : _bookPresentationResolver.resolveBookshelfBook(book: book);
+    final title =
+        presentation?.displayTitle.trim().isNotEmpty == true
+            ? presentation!.displayTitle
+            : _resolvedTitle(book, fallbackBookmarks: group.bookmarks);
+    final author =
+        presentation?.displayAuthor?.trim().isNotEmpty == true
+            ? presentation!.displayAuthor!.trim()
+            : _resolvedAuthor(book, fallbackBookmarks: group.bookmarks);
     final noteCount = group.bookmarks.where((item) => item.hasNote).length;
 
     return Card(
@@ -344,7 +357,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
           child: Row(
             children: [
               _buildCover(
-                realCoverUrl: book?.coverUrl,
+                realCoverUrl: presentation?.displayCover ?? book?.coverUrl,
                 title: title,
                 author: author,
                 bookId: book?.bookId,

@@ -21,13 +21,7 @@ class BookPresentationQueryService {
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
     );
-    return _resolver.resolve(
-      fallbackTitle: book.title,
-      fallbackAuthor: book.author,
-      fallbackIntro: book.intro,
-      realCoverUrl: book.coverUrl,
-      metadataOverride: override,
-    );
+    return _resolver.resolveRemoteBook(book: book, metadataOverride: override);
   }
 
   Future<Map<String, BookMetadataOverride>> loadMetadataOverrideMapForBooks(

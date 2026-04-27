@@ -1,7 +1,17 @@
 import 'dart:io';
 
+import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
+import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
+import '../../../domain/entities/reading_record.dart';
+
+enum BookMetadataPresentationCoverSource {
+  overrideCustom,
+  localManaged,
+  remote,
+  none,
+}
 
 class BookMetadataPresentation {
   const BookMetadataPresentation({
@@ -11,6 +21,7 @@ class BookMetadataPresentation {
     this.displayCover,
     this.realCoverUrl,
     this.customCoverPath,
+    this.displayCoverSource = BookMetadataPresentationCoverSource.none,
     this.overrideUsed = false,
     this.localMetadataUsed = false,
   });
@@ -21,12 +32,54 @@ class BookMetadataPresentation {
   final String? displayCover;
   final String? realCoverUrl;
   final String? customCoverPath;
+  final BookMetadataPresentationCoverSource displayCoverSource;
   final bool overrideUsed;
   final bool localMetadataUsed;
 }
 
 class BookMetadataPresentationResolver {
   const BookMetadataPresentationResolver();
+
+  BookMetadataPresentation resolveRemoteBook({
+    required Book book,
+    BookMetadataOverride? metadataOverride,
+  }) {
+    return resolve(
+      fallbackTitle: book.title,
+      fallbackAuthor: book.author,
+      fallbackIntro: book.intro,
+      realCoverUrl: book.coverUrl,
+      metadataOverride: metadataOverride,
+    );
+  }
+
+  BookMetadataPresentation resolveBookshelfBook({
+    required BookshelfBook book,
+    LocalBook? localBook,
+    BookMetadataOverride? metadataOverride,
+  }) {
+    return resolve(
+      fallbackTitle: book.title,
+      fallbackAuthor: book.author,
+      realCoverUrl: book.coverUrl,
+      localBook: localBook,
+      metadataOverride: metadataOverride,
+    );
+  }
+
+  BookMetadataPresentation resolveReadingRecord({
+    required ReadingRecord record,
+    LocalBook? localBook,
+    BookMetadataOverride? metadataOverride,
+  }) {
+    return resolve(
+      fallbackTitle: record.bookTitle,
+      fallbackAuthor: record.bookAuthor,
+      realCoverUrl: record.coverUrl,
+      localBook: localBook,
+      metadataOverride: metadataOverride,
+    );
+  }
 
   BookMetadataPresentation resolve({
     required String? fallbackTitle,
@@ -71,6 +124,11 @@ class BookMetadataPresentationResolver {
       customCoverPath: preferredCustomCoverPath,
       realCoverUrl: normalizedRealCoverUrl,
     );
+    final displayCoverSource = _resolveDisplayCoverSource(
+      overrideCoverPath: normalizedOverrideCoverPath,
+      localCoverPath: normalizedLocalCoverPath,
+      realCoverUrl: normalizedRealCoverUrl,
+    );
 
     return BookMetadataPresentation(
       displayTitle: displayTitle,
@@ -79,6 +137,7 @@ class BookMetadataPresentationResolver {
       displayCover: displayCover,
       realCoverUrl: normalizedRealCoverUrl,
       customCoverPath: preferredCustomCoverPath,
+      displayCoverSource: displayCoverSource,
       overrideUsed:
           normalizedOverrideTitle != null ||
           normalizedOverrideAuthor != null ||
@@ -101,6 +160,23 @@ class BookMetadataPresentationResolver {
       return Uri.file(customCoverPath).toString();
     }
     return realCoverUrl;
+  }
+
+  BookMetadataPresentationCoverSource _resolveDisplayCoverSource({
+    required String? overrideCoverPath,
+    required String? localCoverPath,
+    required String? realCoverUrl,
+  }) {
+    if (overrideCoverPath != null && File(overrideCoverPath).existsSync()) {
+      return BookMetadataPresentationCoverSource.overrideCustom;
+    }
+    if (localCoverPath != null && File(localCoverPath).existsSync()) {
+      return BookMetadataPresentationCoverSource.localManaged;
+    }
+    if (realCoverUrl != null) {
+      return BookMetadataPresentationCoverSource.remote;
+    }
+    return BookMetadataPresentationCoverSource.none;
   }
 
   String? _normalize(String? value) {
