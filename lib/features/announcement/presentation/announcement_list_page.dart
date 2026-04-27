@@ -11,8 +11,9 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
 import '../../mine/application/advanced_theme_provider.dart';
-import '../application/announcement_service.dart';
 import '../application/announcement_read_state_service.dart';
+import '../application/announcement_service.dart';
+import '../providers.dart';
 
 class AnnouncementListPage extends ConsumerStatefulWidget {
   const AnnouncementListPage({super.key});
@@ -23,9 +24,8 @@ class AnnouncementListPage extends ConsumerStatefulWidget {
 }
 
 class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
-  final AnnouncementService _service = AnnouncementService();
-  final AnnouncementReadStateService _readStateService =
-      AnnouncementReadStateService();
+  late final AnnouncementService _service;
+  late final AnnouncementReadStateService _readStateService;
   final ScrollController _scrollController = ScrollController();
 
   bool _isLoading = true;
@@ -42,6 +42,8 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(announcementServiceProvider);
+    _readStateService = ref.read(announcementReadStateServiceProvider);
     _scrollController.addListener(_handleScroll);
     unawaited(_loadInitial());
   }

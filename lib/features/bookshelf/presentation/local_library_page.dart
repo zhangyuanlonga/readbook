@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -9,17 +10,17 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../application/local_book_import_service.dart';
+import '../providers.dart';
 
-class LocalLibraryPage extends StatefulWidget {
+class LocalLibraryPage extends ConsumerStatefulWidget {
   const LocalLibraryPage({super.key});
 
   @override
-  State<LocalLibraryPage> createState() => _LocalLibraryPageState();
+  ConsumerState<LocalLibraryPage> createState() => _LocalLibraryPageState();
 }
 
-class _LocalLibraryPageState extends State<LocalLibraryPage> {
-  final LocalBookImportService _localBookImportService =
-      LocalBookImportService();
+class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
+  late final LocalBookImportService _localBookImportService;
 
   bool _isImporting = false;
   int _importTotal = 0;
@@ -32,6 +33,12 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       return null;
     }
     return (_importCompleted / _importTotal).clamp(0, 1).toDouble();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _localBookImportService = ref.read(localBookImportServiceProvider);
   }
 
   String get _importProgressText {

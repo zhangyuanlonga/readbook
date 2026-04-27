@@ -33,6 +33,8 @@ import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/launch_image_gallery_provider.dart';
+import '../application/mine_page_flow_coordinator.dart';
+import '../providers.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -53,12 +55,12 @@ class _MinePageState extends ConsumerState<MinePage> {
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
 
-  final AuthSessionStore _authSessionStore = AuthSessionStore();
-  final AppUpdateService _updateService = AppUpdateService();
-  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
-  final MembershipService _membershipService = MembershipService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
-  StreamSubscription<AuthEvent>? _authEventSub;
+  late final AuthSessionStore _authSessionStore;
+  late final AppUpdateService _updateService;
+  late final MobileFeatureService _mobileFeatureService;
+  late final MembershipService _membershipService;
+  late final ImageSelectionService _imageSelectionService;
+  late final MinePageFlowCoordinator _pageFlowCoordinator;
   String? _userId;
   String? _username;
   String? _localAvatarPath;
@@ -101,14 +103,20 @@ class _MinePageState extends ConsumerState<MinePage> {
   @override
   void initState() {
     super.initState();
-    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
+    _authSessionStore = ref.read(mineAuthSessionStoreProvider);
+    _updateService = ref.read(mineUpdateServiceProvider);
+    _mobileFeatureService = ref.read(mineMobileFeatureServiceProvider);
+    _membershipService = ref.read(mineMembershipServiceProvider);
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
+    _pageFlowCoordinator = ref.read(minePageFlowCoordinatorProvider)();
+    _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
     _restoreLayoutMode();
     _loadSession();
   }
 
   @override
   void dispose() {
-    _authEventSub?.cancel();
+    unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }
 

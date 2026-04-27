@@ -1,372 +1,499 @@
-# 非阅读器功能架构整改计划
+# 非阅读器功能架构整改文档
 
 更新时间：2026-04-27  
-用途：基于 `docs/development_architecture_guardrails.md`，对阅读器之外的 feature 进行第二轮架构收口，输出可执行、可打勾、可验收的整改任务清单。
+用途：基于 `docs/development_architecture_guardrails.md`，对阅读器之外的页面和功能进行当前状态盘点，并输出可执行的整改方案与统一封装方向。
 
 ## 0. 结论先行
 
-当前阅读器拆分已先行落地，但阅读器之外仍存在以下共性问题：
+阅读器之外的模块，当前主要问题不是“没有分层”，而是**分层入口已经存在，但依赖图仍大量散落在页面和默认构造器里**。
 
-- `presentation` 直接构造 `RepositoryImpl`
-- `presentation` 直接访问 `AppDatabase`
-- `presentation` 直接依赖 `SourceRuntimeFacade`、`ExternalImportBridge`、`AuthEventBus`、交互浏览器执行器等运行时或桥接能力
-- feature 缺少 `providers.dart`，依赖图仍散落在页面 `State` 中
-- 多个页面已重新膨胀为“超大综合页”
+共性表现：
+
+- 页面直接 `new Service()`、`new Store()`、使用 `xxx.instance`
+- application 默认构造器里直接绑定 `AppDatabase.instance` 或 `RepositoryImpl`
+- feature 已有 `providers.dart`，但覆盖面不完整，页面仍在自行组装依赖
+- 多个 feature 已出现重复查询逻辑，适合提炼为统一 query service
+- `App` 根 widget 仍承担启动编排，而不只是壳层
 
 一句话总结：
 
-- **先收依赖边界**
-- **再拆页面职责**
-- **最后补齐 provider 与测试口径**
+- **先统一依赖入口**
+- **再清页面组装职责**
+- **最后合并重复查询能力**
 
 ---
 
-## 1. 本轮整改范围
+## 1. 本轮范围
 
-纳入本轮整改：
+纳入本轮：
 
+- `app`
 - `bookshelf`
 - `book`
-- `source`
-- `mine` 中与缓存、书签、外部导入相关页面
+- `mine`
+- `search`
 - `discover`
-- `search` 中直接访问数据库的 UI 片段
+- `source`
+- `auth`
+- `announcement`
 
-暂不纳入本轮：
+不纳入本轮：
 
 - `reader`
-- 已稳定的全局主题基础设施
-- 原生宿主层新增调整
 
 ---
 
-## 2. 整改目标
+## 2. 盘点口径
 
-本轮完成后，目标口径如下：
+本文件关注以下问题：
 
-- 页面只负责渲染、交互分发、局部 UI 状态
-- feature 依赖统一经 `providers.dart` 或 feature application service 暴露
-- 页面不再直接触碰 `AppDatabase`
-- 页面不再直接构造 `RepositoryImpl`
-- 页面不再直接消费 bridge / runtime 单例
-- 大页面至少完成第一轮“依赖图外提 + 查询逻辑下沉 + 桥接流程下沉”
+- 页面是否直接构造 service / store / facade
+- 页面是否直接依赖 runtime 单例或事件总线
+- application 是否通过默认构造器偷偷绑定 `AppDatabase.instance`
+- feature 是否已具备稳定的 `providers.dart`
+- 是否存在跨 feature 的重复逻辑，适合统一封装
 
----
+优先级定义：
 
-## 3. 已确认问题清单
-
-### 3.1 P1
-
-- [ ] `lib/features/bookshelf/presentation/bookshelf_page.dart`
-  - 页面直接构造 `LocalBookRepositoryImpl`、`BookMetadataOverrideRepositoryImpl`
-  - 页面直接访问 `AppDatabase`
-  - 页面直接消费 `ExternalImportBridge`
-
-- [ ] `lib/features/book/presentation/book_detail_page.dart`
-  - 页面直接构造 `BookmarkRepositoryImpl`、`BookMetadataOverrideRepositoryImpl`、`LocalBookRepositoryImpl`
-  - 页面直接访问 `AppDatabase`
-  - 页面直接依赖 `SourceRuntimeFacade.instance`
-
-- [ ] `lib/features/source/presentation/source_page.dart`
-  - 页面直接监听 `ExternalImportBridge`
-  - 页面直接监听 `AuthEventBus`
-  - 页面内直接消费外部导入 payload
-
-- [ ] `lib/features/mine/presentation/cache_management_page.dart`
-  - 页面直接查询 `AppDatabase`
-  - 页面直接订阅数据库 stream
-  - 页面直接执行缓存清理
-
-### 3.2 P2
-
-- [ ] `lib/features/source/presentation/source_login_page.dart`
-  - 页面直接调用交互浏览器执行器
-
-- [ ] `lib/features/discover/presentation/discover_page.dart`
-  - 页面直接查询 `AppDatabase` 获取书籍元数据覆盖
-
-- [ ] `lib/features/mine/presentation/bookmarks_page.dart`
-  - 页面直接构造 `BookmarkRepositoryImpl`
-
-- [ ] `lib/features/search/presentation/widgets/search_book_card.dart`
-  - widget 直接查询 `AppDatabase`
-
-- [ ] `lib/features/mine/presentation/advanced_theme_list_page.dart`
-  - 页面直接监听 `ExternalImportBridge`
-  - 页面直接监听 `AuthEventBus`
-  - 页面直接消费外部导入 payload
+- `P1`：违反 guardrails 主约束，优先整改
+- `P2`：当前可运行，但维护成本高，建议近期收口
+- `P3`：结构可优化项，排在后续
 
 ---
 
-## 4. 阶段任务
+## 3. 当前状态总览
+
+### 3.1 已相对符合的部分
+
+- `lib/app/router.dart` 已基本收敛为 feature route 聚合器
+- `lib/features/source/providers.dart`、`lib/features/book/providers.dart`、`lib/features/bookshelf/providers.dart`、`lib/features/mine/providers.dart`、`lib/features/search/providers.dart`、`lib/features/discover/providers.dart` 已存在 provider 落点
+- `source` 主页面已开始使用 provider 读取部分依赖，方向正确
+
+### 3.2 当前主要问题
+
+- `App` 根部仍自行 new coordinator 并直接编排启动流程
+- `bookshelf`、`book`、`mine`、`search`、`auth`、`announcement` 等页面仍在 `State` 中直接组装依赖
+- `search`、`discover`、`bookshelf` 存在重复的书籍展示态查询逻辑
+- 多个 application service 仍保留“默认构造器自动绑数据库/仓库实现”的旧模式
+- `source` feature 只有主页面部分 provider 化，子页面未统一
+
+---
+
+## 4. 阶段任务清单
 
 当前进度：
 
 - 阶段 0：已完成，完成日期 `2026-04-27`
 - 阶段 1：已完成，完成日期 `2026-04-27`
 - 阶段 2：已完成，完成日期 `2026-04-27`
-- 阶段 3：已完成，完成日期 `2026-04-27`
-- 阶段 4：已完成，完成日期 `2026-04-27`
-- 备注：目标范围 `flutter analyze` 已通过；全量 `flutter analyze` 仍有阅读器既有 warning；已执行 `flutter test`，但当前存在与本轮整改无关的既有失败，集中在 `test/app/layout/adaptive_breakpoints_test.dart`
-- 阶段 2 验证备注：`flutter analyze lib/features/source lib/features/discover lib/features/mine lib/features/search` 已通过；`test/features/source/presentation/source_login_page_test.dart` 与 `test/features/search/presentation/search_book_card_test.dart` 已通过；`test/features/discover/presentation/discover_page_test.dart` 仍存在 `shows cached discover sources and categories before refresh completes` 的 pending timer 失败，需后续单独处理
-- 阶段 3 验证备注：已将 `discover_page.dart` 的 source/category picker 组件拆至 `discover_page_pickers.dart`，将 `source_page.dart` 的检测弹层与请求对话框拆至 `source_page_dialogs.dart`，将 `bookshelf_page.dart` 的书架内容/搜索筛选区拆至 `bookshelf_page_sections.dart`，并将 `book_detail_page.dart` 的本地诊断/编辑辅助模型拆至 `book_detail_page_models.dart`；`flutter analyze lib/features/bookshelf lib/features/book lib/features/source lib/features/discover` 已通过；`test/features/bookshelf/presentation/bookshelf_grid_sliver_test.dart`、`test/features/book/presentation/book_detail_primary_actions_test.dart`、`test/features/book/presentation/book_detail_switch_source_test.dart` 已通过
-- 阶段 4 验证备注：已新增 `bookshelf_presentation_query_service_test.dart`、`book_local_metadata_service_test.dart`、`discover_book_presentation_service_test.dart`、`search_book_presentation_service_test.dart`、`cache_management_service_test.dart`、`bookmarks_query_service_test.dart` 以及 provider smoke tests；阶段 4 测试集已通过；全量 `flutter analyze` 仍有阅读器既有 warning：`reader_page.dart` 中 `_viewportBuilder` / `_pagedViewportTransitionResolver` 未使用
+- 阶段 3：未开始
+- 阶段 4：未开始
+- 阶段 5：未开始
+- 阶段 6：未开始
 
 回填规则：
 
 - 状态：`未开始 / 进行中 / 已完成 / 已阻塞`
 - 完成日期：`YYYY-MM-DD`
-- 备注：只写阻塞原因或特殊决策
+- 备注：只写阻塞原因或关键决策
 
-### 阶段 0：建立整改骨架
+### 阶段 0：建立整改基线
 
-目标：先把后续整改所需的 provider 落点、命名口径、验收口径统一起来，避免边改边散。
+目标：
 
-- [x] 为 `bookshelf` 新增 `lib/features/bookshelf/providers.dart`
-- [x] 为 `book` 新增 `lib/features/book/providers.dart`
-- [x] 为 `source` 新增 `lib/features/source/providers.dart`
-- [x] 为 `discover` 新增 `lib/features/discover/providers.dart`
-- [x] 为 `mine` 新增面向“缓存/书签/外部导入”的 provider 落点
-- [x] 统一约定 feature provider 命名
-  - 仓库接口 provider
-  - 查询 service provider
-  - action / coordinator provider
-  - page state provider 或 controller provider
-- [x] 在本文件完成后续阶段的负责人、状态、日期回填规则
+- 先统一命名、范围和共享依赖入口，避免边改边散
+
+任务：
+
+- [x] 确认本文件作为非阅读器整改唯一跟踪文档
+- [x] 新增或补齐 app-level composition 文件
+- [x] 明确共享 provider 命名口径
+- [x] 明确 feature-level `DependenciesProvider` / `ControllerProvider` 命名口径
+- [x] 明确本轮测试与验收口径
+
+建议产出：
+
+- app-level composition provider 文件
+- feature provider 命名约定
+- 测试清单基线
+
+---
+
+### 阶段 1：统一共享依赖与 composition
+
+目标：
+
+- 收口共享数据库、仓库、runtime facade 的创建入口
+
+任务：
+
+- [x] 新增 `appDatabaseProvider`
+- [x] 新增 `bookmarkRepositoryProvider`
+- [x] 新增 `bookMetadataOverrideRepositoryProvider`
+- [x] 新增 `localBookRepositoryProvider`
+- [x] 新增 `scriptSourceRepositoryProvider`
+- [x] 将 `book/providers.dart` 中重复的数据库/仓库创建改为复用 app-level provider
+- [x] 将 `bookshelf/providers.dart` 中重复的数据库/仓库创建改为复用 app-level provider
+- [x] 将 `mine/providers.dart` 中重复的数据库/仓库创建改为复用 app-level provider
+- [x] 将 `SourceRuntimeFacade.instance` 的创建迁移到 provider/composition
+- [x] 清理 feature 内直接暴露 `AppDatabase.instance` 的 provider
+
+影响模块：
+
+- `app`
+- `book`
+- `bookshelf`
+- `mine`
+- `source`
 
 阶段完成标准：
 
-- 每个待整改 feature 至少有一个明确的 provider 入口文件
-- 不再新增页面内直接 new 仓库实现的代码
+- feature 不再各自包一层 `AppDatabase.instance`
+- `SourceRuntimeFacade` 有唯一的 provider 创建入口
 
 ---
 
-### 阶段 1：优先清理 P1 越界依赖
+### 阶段 2：清理 P1 页面组装层
 
-目标：先解决 guardrails 中“一票否决项”级别的问题。
+目标：
 
-### 4.1 `bookshelf`
+- 优先解决页面直接 `new Service()`、直接读单例、直接监听事件总线的问题
 
-- [x] 把 `bookshelf_page.dart` 中的仓库实现构造移入 feature provider
-- [x] 把书架元数据覆盖查询移入 application/query service
-- [x] 把最新缓存章节查询移入 application/query service
-- [x] 把缓存章节数量查询移入 application/query service
-- [x] 把“继续阅读提示”依赖的阅读记录查询移入 application/query service
-- [x] 把外部本地图书导入 payload 消费流程移入 application coordinator
-- [x] 页面只保留 provider 订阅、滚动控制、交互分发
+任务：`app`
 
-### 4.2 `book`
+- [x] 为 `AppLifecycleCoordinator` 建立 app-level provider factory
+- [x] 为 `AppStartupCoordinator` 建立 app-level provider factory
+- [x] 为 `AppAnnouncementCoordinator` 建立 app-level provider factory
+- [x] 将 `lib/app/app.dart` 中 coordinator 的直接构造迁出根 widget
+- [x] 让 `App` 根 widget 只保留壳层和生命周期绑定
 
-- [x] 把 `book_detail_page.dart` 中的 `BookmarkRepositoryImpl` 构造移入 provider
-- [x] 把 `BookMetadataOverrideRepositoryImpl` 构造移入 provider
-- [x] 把 `LocalBookRepositoryImpl` 构造移入 provider
-- [x] 把本地图书元数据查询移入 application service
-- [x] 把 `SourceRuntimeFacade` 依赖改为通过 provider 注入
-- [x] 页面释放阅读流、切源辅助等逻辑改为依赖注入后的稳定 service
+任务：`bookshelf`
 
-### 4.3 `source`
+- [x] 新增 `bookshelfPageDependenciesProvider`
+- [x] 新增 `localBookImportServiceProvider`
+- [x] 将 `bookshelf_page.dart` 中直接构造的 service 全部迁出页面
+- [x] 将 `local_library_page.dart` 中直接构造的 `LocalBookImportService` 迁出页面
 
-- [x] 将 `source_page.dart` 的外部导入监听移入 feature application coordinator
-- [x] 将 `AuthEventBus` 监听移入 feature application coordinator 或 app-level listener
-- [x] 将 payload 消费、缓存、导入结果提示拆为独立 service
-- [x] 页面只保留“加载状态 + 列表交互 + 调用 action”
+任务：`book`
 
-### 4.4 `mine/cache`
+- [x] 新增 `bookDetailDependenciesProvider`
+- [x] 将 `book_detail_page.dart` 中直接构造的 service 全部迁出页面
+- [x] 将切源辅助和本地元数据流程收口到 provider 或 application service
 
-- [x] 为缓存管理建立 query service
-- [x] 为缓存清理建立 action service
-- [x] 将页面里的 `AppDatabase` 查询全部迁出
-- [x] 将数据库 stream 订阅迁为 provider 暴露
-- [x] 将封面缓存清理与章节缓存清理解耦成稳定用例接口
+任务：`mine`
+
+- [x] 新增 `mineAuthSessionProvider`
+- [x] 新增 `mineUpdateServiceProvider`
+- [x] 新增 `mineMobileFeatureServiceProvider`
+- [x] 新增 `mineImageSelectionServiceProvider`
+- [x] 新增 `minePageFlowCoordinatorProvider`
+- [x] 将 `mine_page.dart` 中的 `AuthEventBus.instance` 监听迁出页面
+- [x] 将 `mine_page.dart` 中直接构造的 service 全部迁出页面
+
+任务：`search`
+
+- [x] 新增 `searchServiceProvider`
+- [x] 新增 `searchHistoryServiceProvider`
+- [x] 新增 `searchSystemSettingsServiceProvider`
+- [x] 评估后暂不新增 `searchPageControllerProvider`，当前先以 service provider 收口
+- [x] 将 `search_page.dart` 中 `SourceRuntimeFacade.instance` 和 service 直接构造迁出页面
+
+任务：`auth`
+
+- [x] 新增 `lib/features/auth/providers.dart`
+- [x] 新增 `authServiceProvider`
+- [x] 新增 `authSessionStoreProvider`
+- [x] 新增 `userProfileServiceProvider`
+- [x] 将 `auth_page.dart` 中直接构造的 `AuthService` 迁出页面
+- [x] 将 `user_profile_page.dart` 中直接构造的 store/service 迁出页面
+
+任务：`announcement`
+
+- [x] 新增 `lib/features/announcement/providers.dart`
+- [x] 新增 `announcementServiceProvider`
+- [x] 新增 `announcementReadStateServiceProvider`
+- [x] 评估后暂不新增 `announcementListControllerProvider`，当前先以 service provider 收口
+- [x] 将 `announcement_list_page.dart` 中直接构造的 service 迁出页面
+- [x] 将 `announcement_detail_page.dart` 中直接构造的 service 迁出页面
 
 阶段完成标准：
 
-- `presentation -> AppDatabase` 直接依赖在上述 4 个范围内清零
-- `presentation -> RepositoryImpl` 直接依赖在上述 4 个范围内清零
-- `presentation -> bridge/runtime 单例` 在上述 4 个范围内完成第一轮下沉
+- 上述页面不再直接 `new Service()`、`new Store()`、`xxx.instance`
+- `App` 根 widget 不再直接承担启动业务编排
 
 ---
 
-### 阶段 2：处理 P2 越界与散点技术债
+### 阶段 3：清理 application 默认兜底依赖
 
-目标：补齐中等优先级越界点，避免问题重新扩散。
+目标：
 
-### 4.5 `source_login`
+- 去掉 application 默认构造器里对 `AppDatabase.instance` 和 `RepositoryImpl` 的隐藏绑定
 
-- [x] 把交互浏览器打开流程提取为 `SourceLoginBrowserService` 或同类 application service
-- [x] 页面只保留登录表单、验证码输入、提示展示
-- [x] 将浏览器返回协议封装为稳定模型，而非页面直接拼装 map
+任务：`bookshelf`
 
-### 4.6 `discover`
+- [ ] 将 `LocalBookImportService` 改为纯注入式
+- [ ] 将 `BookshelfPresentationQueryService` 改为纯注入式
 
-- [x] 将书籍展示元数据覆盖查询移入 query service
-- [x] 将 `SourceHealthService`、任务冲突服务、任务调度服务改为 provider 注入
-- [x] 页面保留分类、列表、分页、滚动与交互
+任务：`book`
 
-### 4.7 `mine/bookmarks`
+- [ ] 将 `LocalBookDetailService` 改为纯注入式
 
-- [x] 将 `BookmarkRepositoryImpl` 迁出页面
-- [x] 建立书签列表 query service
-- [x] 建立书签跳转 action service 或复用现有 route resolver provider
+任务：`search`
 
-### 4.8 `search`
+- [ ] 将 `SearchBookPresentationService` 改为纯注入式
 
-- [x] 将 `search_book_card.dart` 中元数据覆盖查询迁出 widget
-- [x] 将展示态解析统一走 search feature query/presentation resolver
+任务：`discover`
 
-### 4.9 `mine/advanced_theme_list`
+- [ ] 将 `DiscoverBookPresentationService` 改为纯注入式
 
-- [x] 将外部导入监听迁出页面
-- [x] 将 `AuthEventBus` 监听迁出页面
-- [x] 将 payload 消费和缓存流程迁移到 application service
+任务：`source`
+
+- [ ] 清理 `SourceRuntimeFacade` 中直接绑定 `ScriptSourceRepositoryImpl(AppDatabase.instance)` 的默认入口
+- [ ] 统一 `SourceLoginRuntimeService` 的 provider 注入方式
 
 阶段完成标准：
 
-- 已知 P2 越界点全部有对应 provider 或 application service 承接
-- 页面中不再出现新的桥接事件消费逻辑
+- application 层默认构造器不再偷偷绑定数据库或仓库实现
+- 页面和 application 只依赖显式注入的 provider/service
 
 ---
 
-### 阶段 3：超大页面拆薄
+### 阶段 4：统一 source 子页面和 mine 子页面风格
 
-目标：在完成依赖收口后，开始处理维护性问题，避免再次形成“页面即系统”。
+目标：
 
-优先关注文件：
+- 让已经半收口的 feature 完成统一 provider 化，避免主页面和子页面口径不一致
 
-- [x] `lib/features/bookshelf/presentation/bookshelf_page.dart` 约 6200+ 行
-  - 已拆出 `bookshelf_page_sections.dart`
-- [x] `lib/features/book/presentation/book_detail_page.dart` 约 3600+ 行
-  - 已拆出 `book_detail_page_models.dart`
-- [x] `lib/features/source/presentation/source_page.dart` 约 2900+ 行
-  - 已拆出 `source_page_dialogs.dart`
-- [x] `lib/features/discover/presentation/discover_page.dart` 约 2800+ 行
-  - 已拆出 `discover_page_pickers.dart`
+任务：`source`
 
-拆分要求：
+- [ ] 将 `script_source_editor_page.dart` 中直接构造的 `AuthSessionStore`、`MobileFeatureService` 迁出页面
+- [ ] 将 `script_source_paste_import_page.dart` 中直接构造的 `AuthSessionStore`、`MobileFeatureService` 迁出页面
+- [ ] 将 `source_login_page.dart` 默认 `SourceLoginRuntimeService()` 改为 provider 注入
+- [ ] 统一 `source` 全部页面只通过 `source/providers.dart` 取依赖
 
-- [x] 按“页面壳 / widgets / controllers / application actions”拆层
-  - 已完成首轮物理拆分，主页面开始回收到页面壳与编排
-- [x] 不再新增超大 `StatefulWidget` 文件
-- [x] 列表卡片、筛选条、批量操作、导入面板、诊断面板等拆到 `presentation/widgets`
-- [x] 与页面状态强绑定但不直接渲染的流程优先拆到 controller 或 presenter
-- [x] 拆分过程中不把业务逻辑倒灌回 widget helper
+任务：`mine`
+
+- [ ] 将 `appearance_page.dart` 直连的图片选择能力迁出页面
+- [ ] 将 `reader_background_page.dart` 直连的 service 迁出页面
+- [ ] 将 `advanced_theme_editor_page.dart` 直连的 service 迁出页面
+- [ ] 将 `membership_center_page.dart` 直连的 store/service 迁出页面
 
 阶段完成标准：
 
-- 上述页面至少完成第一轮结构化拆分
-- 主页面文件职责收敛为页面壳、布局、交互绑定
+- `source` 与 `mine` 的子页面依赖获取方式统一
+- 不再存在“主页面 provider 化、子页面继续手动 new”的混合风格
 
 ---
 
-### 阶段 4：测试与评审口径补齐
+### 阶段 5：合并重复查询能力
 
-目标：让整改结果可守住，不靠人工记忆维持。
+目标：
 
-- [x] 为 `bookshelf` provider / query service 补测试
-- [x] 为 `book detail` provider / application service 补测试
-- [x] 为 `source` 外部导入 coordinator 补测试
-- [x] 为 `cache management` 查询与清理 service 补测试
-- [x] 为 `discover` 展示态解析 query service 补测试
-- [x] 为 `bookmarks` 查询 service 补测试
-- [x] 为 `source_login` 浏览器交互 service 补测试
-- [x] 补充对应 widget smoke test 或 route smoke test
-- [x] 代码评审时强制检查本文件第 7 节清单
+- 清理 `search / discover / bookshelf` 的重复展示查询逻辑
+
+任务：
+
+- [ ] 新建共享 `BookPresentationQueryService`
+- [ ] 收口 remote/local target key 规则
+- [ ] 收口 metadata override 查询逻辑
+- [ ] 收口标题、作者、简介、封面展示态解析逻辑
+- [ ] 将 `SearchBookPresentationService` 迁移到共享 query service
+- [ ] 将 `DiscoverBookPresentationService` 迁移到共享 query service
+- [ ] 将 `BookshelfPresentationQueryService` 中重复的 metadata 展示逻辑迁移到共享 query service
 
 阶段完成标准：
 
-- 每个被整改的 feature 至少补上一层有效测试
-- 不再出现“只移动代码、不补测试”的整改提交
+- `search`、`discover`、`bookshelf` 不再各自维护一套展示态查询
 
 ---
 
-## 5. 推荐落地顺序
+### 阶段 6：补测试与验收
 
-建议顺序如下：
+目标：
 
-1. `bookshelf`
-2. `book`
-3. `mine/cache`
-4. `source`
-5. `discover`
-6. `mine/bookmarks`
-7. `search`
-8. `source_login`
-9. `mine/advanced_theme_list`
+- 为新边界建立回归保护，避免后续再次倒灌
 
-原因：
+任务：
 
-- `bookshelf` 和 `book` 的页面越界最集中，且对主流程影响最大
-- `mine/cache` 有直接数据库读写与删除动作，风险较高
-- `source` 涉及桥接与导入编排，应该尽快从页面层迁出
-- `discover/search/bookmarks` 可以在基础 provider 口径成形后跟进
+- [ ] 为 app-level composition provider 补 smoke test
+- [ ] 为 `auth/providers.dart` 补 provider smoke test
+- [ ] 为 `announcement/providers.dart` 补 provider smoke test
+- [ ] 为 `bookshelfPageDependenciesProvider` 补 provider smoke test
+- [ ] 为 `bookDetailDependenciesProvider` 补 provider smoke test
+- [ ] 为 `search` 新增 provider/controller 补 smoke test
+- [ ] 为 `BookPresentationQueryService` 补 application service test
+- [ ] 为 `LocalBookImportService`、`LocalBookDetailService` 的注入式重构补测试
+- [ ] 为 `AuthPage`、`AnnouncementListPage`、`UserProfilePage` 补 widget smoke test
+- [ ] 跑一次目标范围 `flutter analyze`
+- [ ] 跑一次目标范围 `flutter test`
 
----
+阶段完成标准：
 
-## 6. 每阶段交付物
-
-每完成一个阶段，至少应交付：
-
-- [ ] 代码改动
-- [ ] 对应测试
-- [ ] 文档状态回填
-- [ ] 一次 `flutter analyze`
-- [ ] 一次 `flutter test`
-
-建议回填格式：
-
-- 状态：`未开始 / 进行中 / 已完成 / 已阻塞`
-- 完成日期：`YYYY-MM-DD`
-- 备注：只写阻塞原因或特殊决策
+- 新增 provider、service、页面有对应测试覆盖
+- 本轮整改范围的 analyze / test 结果可复现
 
 ---
 
-## 7. 评审检查清单
+## 5. 模块映射表
 
-后续每个整改 PR 必查：
+### 5.1 `app`
 
-- [ ] 页面里是否仍直接 `new RepositoryImpl`
-- [ ] 页面里是否仍直接依赖 `AppDatabase`
-- [ ] 页面里是否仍直接依赖 bridge / runtime 单例
-- [ ] feature 是否新增了自己的 `providers.dart` 或等价 provider 落点
-- [ ] application service 是否承担了查询、导入、缓存清理、桥接编排职责
-- [ ] 页面主文件是否继续膨胀
-- [ ] 本次整改是否补了至少一层测试
-- [ ] 是否又引入新的静态单例
+功能：
 
-任一项回答为“是”的处理规则：
+- 应用根 widget
+- 启动时序
+- 生命周期
+- 启动公告
+- 更新弹窗
+- 外部导入监听接线
 
-- `new RepositoryImpl`
-- `AppDatabase`
-- 直接 bridge / runtime 单例
+重点任务归属：
 
-默认视为不通过。
+- 阶段 1
+- 阶段 2
+
+### 5.2 `bookshelf`
+
+功能：
+
+- 书架列表
+- 搜索和筛选
+- 本地图书导入
+- 封面与元数据展示
+- 阅读记录与缓存章节展示
+
+重点任务归属：
+
+- 阶段 1
+- 阶段 2
+- 阶段 3
+- 阶段 5
+
+### 5.3 `book`
+
+功能：
+
+- 书籍详情展示
+- 元数据编辑
+- 本地图书章节索引状态管理
+- 切换来源辅助
+
+重点任务归属：
+
+- 阶段 1
+- 阶段 2
+- 阶段 3
+
+### 5.4 `mine`
+
+功能：
+
+- 我的首页
+- 会员信息
+- 更新检查
+- 头像与图片选择
+- 外观与主题编辑
+- 阅读背景管理
+
+重点任务归属：
+
+- 阶段 1
+- 阶段 2
+- 阶段 4
+
+### 5.5 `search`
+
+功能：
+
+- 搜索输入
+- 搜索执行
+- 来源筛选
+- 搜索历史
+- 结果展示
+
+重点任务归属：
+
+- 阶段 2
+- 阶段 3
+- 阶段 5
+
+### 5.6 `discover`
+
+功能：
+
+- 发现页探索
+- 来源与分类选择
+- 列表渲染
+
+重点任务归属：
+
+- 阶段 3
+- 阶段 5
+
+### 5.7 `source`
+
+功能：
+
+- 书源列表管理
+- 书源脚本编辑
+- 粘贴导入
+- 登录页
+- 书源运行时访问
+
+重点任务归属：
+
+- 阶段 1
+- 阶段 3
+- 阶段 4
+
+### 5.8 `auth`
+
+功能：
+
+- 登录与注册
+- 用户信息
+- 退出登录
+
+重点任务归属：
+
+- 阶段 2
+- 阶段 6
+
+### 5.9 `announcement`
+
+功能：
+
+- 公告列表
+- 公告分页
+- 公告详情
+- 已读状态
+
+重点任务归属：
+
+- 阶段 2
+- 阶段 6
 
 ---
 
-## 8. 里程碑勾选区
+## 6. 最终验收标准
 
-### M1：依赖边界止血
+完成本轮整改后，应满足：
 
-- [x] 阶段 0 完成
-- [x] 阶段 1 完成
-
-### M2：中优先级越界清零
-
-- [x] 阶段 2 完成
-
-### M3：结构可维护
-
-- [x] 阶段 3 完成
-
-### M4：长期可守
-
-- [x] 阶段 4 完成
+- 页面不再直接 `new Service()`、`new RepositoryImpl()`、`new Store()`
+- 页面不再直接依赖 `AppDatabase.instance`
+- 页面不再直接读取 `SourceRuntimeFacade.instance`
+- `auth`、`announcement` 具备自己的 `providers.dart`
+- `search`、`discover`、`bookshelf` 的书籍展示态查询能力完成统一收口
+- `App` 根 widget 不再直接承担启动业务编排
+- 本轮整改范围有对应 provider / application / widget 级测试保护
 
 ---
 
-## 9. 文档维护规则
+## 7. 文档联动
 
-- 本文件用于跟踪“阅读器之外的架构整改”
-- 若发现新的非阅读器 feature 越界点，优先补到本文件，再安排实施
-- 若某项整改已经由其他文档承接，需在本文件中注明迁移去向
-- 若 `docs/development_architecture_guardrails.md` 更新，本文件需同步校准
+相关文档：
+
+- `docs/development_architecture_guardrails.md`
+- `docs/engineering_guide.md`
+
+若后续整改过程中实际目录、provider 命名或阶段顺序发生变化，应优先更新本文件，再进行代码迁移，避免文档与实现再次脱节。

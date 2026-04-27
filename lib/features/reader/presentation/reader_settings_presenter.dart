@@ -72,8 +72,8 @@ class ReaderSettingsPresenter {
       ReaderPageAnimationStyle.curl => '仿真',
       ReaderPageAnimationStyle.fade => '淡入淡出',
       ReaderPageAnimationStyle.cover => '覆盖',
-      ReaderPageAnimationStyle.translate => '平移',
-      ReaderPageAnimationStyle.vertical => '上下',
+      ReaderPageAnimationStyle.translate => '滑动',
+      ReaderPageAnimationStyle.vertical => '滑动',
       ReaderPageAnimationStyle.none => '无动画',
     };
   }

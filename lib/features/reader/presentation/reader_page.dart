@@ -110,8 +110,6 @@ import '../application/local/local_book_storage_service.dart';
 import '../application/reader_cached_chapter_store.dart';
 import '../application/reader_dependencies_provider.dart';
 import 'chapter_cache_sheets.dart';
-import 'paged_animation/curl_paged_animation_renderer.dart';
-import 'paged_animation/paged_animation_renderer_registry.dart';
 import 'reader_catalog_sheet.dart';
 import 'reader_annotated_text.dart';
 import 'reader_annotation_interaction.dart';
@@ -119,7 +117,6 @@ import 'reader_body_region.dart';
 import 'reader_chrome_widgets.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
-import 'reader_manga_view.dart';
 import 'reader_selection_state.dart';
 import 'reader_settings_sheet.dart';
 import 'reader_shell.dart';
@@ -129,7 +126,6 @@ import 'reader_text_block_presentation.dart';
 import 'reader_paged_viewport_support.dart';
 import 'reader_presentation_resolver.dart';
 import 'reader_text_paged_view.dart';
-import 'reader_text_scroll_view.dart';
 import 'reader_viewport_builder.dart';
 
 part 'reader_page_content_loading.dart';
@@ -221,13 +217,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSurfacePolicyResolver();
   final PagedTransitionController _pagedTransitionLogic =
       const PagedTransitionController();
-  final ReaderPagedViewportTransitionResolver
-  _pagedViewportTransitionResolver =
+  final ReaderPagedViewportTransitionResolver _pagedViewportTransitionResolver =
       const ReaderPagedViewportTransitionResolver();
-  final PagedAnimationRendererRegistry _pagedAnimationRendererRegistry =
-      const PagedAnimationRendererRegistry();
-  final CurlPagedAnimationRenderer _curlPagedAnimationRenderer =
-      const CurlPagedAnimationRenderer();
   final ReaderCatalogSearchService _catalogSearchService =
       const ReaderCatalogSearchService();
   final ReaderReadingRecordCoordinator _readingRecordCoordinator =
@@ -624,7 +615,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderPresentationPalette _presentationPalette(BuildContext context) {
-    return ReaderPresentationPalette.fromColorScheme(Theme.of(context).colorScheme);
+    return ReaderPresentationPalette.fromColorScheme(
+      Theme.of(context).colorScheme,
+    );
   }
 
   ReaderPresentationViewportKind get _presentationViewportKind {
@@ -1838,7 +1831,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       state: ReaderViewportBodyState(
         showBlockingLoading: _shouldShowBlockingReaderLoading,
         showHiddenLoading:
-            (_isBootstrapping || _isLoadingContent) && !_hasVisibleReaderContent,
+            (_isBootstrapping || _isLoadingContent) &&
+            !_hasVisibleReaderContent,
         hasRenderableContent:
             _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty,
         errorText: _errorText,
@@ -1847,12 +1841,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ),
       palette: palette,
       tapAwareBuilder: ({required child}) => _buildTapAwareBody(child: child),
-      contentBuilder: () => switch (_currentViewportKind) {
-        ReaderModeViewportKind.imagePaged ||
-        ReaderModeViewportKind.imageScroll => _buildMangaReader(colors),
-        ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
-        ReaderModeViewportKind.textScroll => _buildReaderList(colors),
-      },
+      contentBuilder:
+          () => switch (_currentViewportKind) {
+            ReaderModeViewportKind.imagePaged ||
+            ReaderModeViewportKind.imageScroll => _buildMangaReader(colors),
+            ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
+            ReaderModeViewportKind.textScroll => _buildReaderList(colors),
+          },
       onRetry: () => unawaited(_loadCurrentChapter(initialScrollRatio: null)),
       onCopyDiagnostics: _copyLocalReaderDiagnostics,
       onSwitchSource: () => unawaited(_showSwitchSourceSheet()),
@@ -1885,8 +1880,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       selectionWrapper: ({required child}) => _wrapSelectionArea(child: child),
       onScrollNotification: _onReaderScrollNotification,
       imageBuilder:
-          (_, item) =>
-              _buildInlineReaderImageCard(imageUrl: item.imageUrl, colors: colors),
+          (_, item) => _buildInlineReaderImageCard(
+            imageUrl: item.imageUrl,
+            colors: colors,
+          ),
       blockWrapper: (context, item, isLast, child) {
         if (item is ReaderRenderTextItem) {
           return _buildSelectableReaderBlockItem(
@@ -1904,7 +1901,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
         return child;
       },
-      overlay: _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
+      overlay:
+          _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
     );
   }
 
@@ -1951,7 +1949,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         surfaceMetrics: surfaceMetrics,
         palette: _presentationPalette(context),
       ),
-      overlay: _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
+      overlay:
+          _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
     );
   }
 
@@ -2989,36 +2988,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final paragraphs =
         _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    return _viewportBuilder.buildPagedViewport(
+      builder: (context, constraints, palette) {
         final layoutMetrics = _resolvePagedLayoutMetrics(context, constraints);
         final paginationSpec = _resolvePaginationSpec(
           surfaceMetrics: layoutMetrics,
         );
         _lastPaginationSpec = paginationSpec;
-        final pagedViewModel = ReaderTextPagedViewModel(
-          contentSession:
-              _currentContentSession() ??
-              ReaderContentSession(
-                contentMode: _currentContentMode,
-                bookId: _activeBookId,
-                sourceId: _sourceId ?? '',
-                detailUrl: _detailUrl ?? '',
-                bookTitle: _bookTitle,
-                bookAuthor: _bookAuthor,
-                bookCoverUrl: _bookCoverUrl,
-                chapterId: _chapterId,
-                chapterUrl: _chapterUrl,
-                chapterTitle: _chapterTitle,
-                chapterIndex: _currentIndex,
-                chapters: _chapters,
-              ),
+        final pagedViewModel = _presentationResolver.buildTextPagedModel(
+          contentSession: _resolvedContentSession(),
           settings: _settings,
           surfaceMetrics: layoutMetrics,
           paginationSpec: paginationSpec,
-          palette: ReaderPresentationPalette.fromColorScheme(
-            Theme.of(context).colorScheme,
-          ),
+          palette: palette,
           pageCount: _pagedPages.length,
           currentPageIndex: _currentPageIndex,
           document: _document,
@@ -3076,174 +3058,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
 
         final pageCount = _pagedPages.length;
-        final safeIndex = _currentPageIndex.clamp(
-          0,
-          _safePageUpperBound(pageCount),
+        final motion = _pagedTextRenderer.motionSpecForStyle(
+          _currentPagedAnimationStyle(),
         );
-        final pagedSize = constraints.biggest;
-
-        final animationStyle = _currentPagedAnimationStyle();
-        final motion = _pagedTextRenderer.motionSpecForStyle(animationStyle);
-
-        final pageStack = _buildPagedTransitionStack(
-          colors: colors,
-          animationStyle: animationStyle,
+        final transitionPlan = _pagedViewportTransitionResolver.resolve(
+          requestedAnimationStyle: _currentPagedAnimationStyle(),
           pageCount: pageCount,
-          safeIndex: safeIndex,
-          pagedSize: pagedSize,
-          pagedViewModel: pagedViewModel,
-          switchDuration: motion.duration,
+          currentPageIndex: _currentPageIndex,
+          pagedTransition: _pagedTransition,
+          curlState: ReaderPagedViewportCurlState(
+            isAnimating: _isCurlAutoTurning,
+            isPreview: _isCurlPreviewActive,
+            direction: _curlAutoDirection,
+            fromIndex: _curlAnimationFromIndex,
+            toIndex: _curlAnimationToIndex,
+            previewProgress: _curlPreviewProgress,
+            touchYFactor: _curlTouchYFactor,
+            commitOnAnimationEnd: _curlCommitOnAnimationEnd,
+          ),
+        );
+        final pageSize = constraints.biggest;
+        final pageStack = ReaderPagedViewportTransitionStack(
+          plan: transitionPlan,
+          pageBuilder:
+              ({
+                required int pageIndex,
+                required bool includeBackgroundDecoration,
+              }) => _buildPagedPageContainer(
+                colors: colors,
+                pageIndex: pageIndex,
+                total: pageCount,
+                pageSize: pageSize,
+                pagedViewModel: pagedViewModel,
+                includeBackgroundDecoration: includeBackgroundDecoration,
+              ),
+          pagedTransitionAnimation: _pagedTransitionController,
+          curlAnimation: _curlAutoTurnController,
           switchInCurve: motion.switchInCurve,
-          switchOutCurve: motion.switchOutCurve,
+          selectionWrapper: (child) => _wrapSelectionArea(child: child),
+          disabledSelectionWrapper:
+              (child) => SelectionContainer.disabled(child: child),
         );
         return ReaderTextPagedView(model: pagedViewModel, content: pageStack);
-      },
-    );
-  }
-
-  Widget _buildPagedTransitionStack({
-    required _ReaderThemeColors colors,
-    required ReaderPageAnimationStyle animationStyle,
-    required int pageCount,
-    required int safeIndex,
-    required Size pagedSize,
-    required ReaderTextPagedViewModel pagedViewModel,
-    required Duration switchDuration,
-    required Curve switchInCurve,
-    required Curve switchOutCurve,
-  }) {
-    final renderedAnimationStyle =
-        _isPagedTransitionAnimating ? _pagedTransition.style : animationStyle;
-    final pageStack = switch (renderedAnimationStyle) {
-      ReaderPageAnimationStyle.curl => _buildCustomCurlPageStack(
-        colors: colors,
-        pageCount: pageCount,
-        safeIndex: safeIndex,
-        pagedSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-      ),
-      ReaderPageAnimationStyle.none => _buildStaticPagedPage(
-        colors: colors,
-        pageIndex: safeIndex,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        total: pageCount,
-      ),
-      _ => _buildAnimatedPagedPageTransition(
-        colors: colors,
-        animationStyle: renderedAnimationStyle,
-        safeIndex: safeIndex,
-        pagedSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        total: pageCount,
-        switchDuration: switchDuration,
-        switchInCurve: switchInCurve,
-        switchOutCurve: switchOutCurve,
-      ),
-    };
-
-    if (renderedAnimationStyle == ReaderPageAnimationStyle.curl &&
-        (_isCurlAutoTurning || _isCurlPreviewActive)) {
-      return SelectionContainer.disabled(child: pageStack);
-    }
-    return _wrapSelectionArea(child: pageStack);
-  }
-
-  Widget _buildStaticPagedPage({
-    required _ReaderThemeColors colors,
-    required int pageIndex,
-    required Size pageSize,
-    required ReaderTextPagedViewModel pagedViewModel,
-    required int total,
-    bool includeBackgroundDecoration = false,
-  }) {
-    return KeyedSubtree(
-      key: ValueKey<int>(pageIndex),
-      child: _buildPagedPageContainer(
-        colors: colors,
-        pageIndex: pageIndex,
-        total: total,
-        pageSize: pageSize,
-        pagedViewModel: pagedViewModel,
-        includeBackgroundDecoration: includeBackgroundDecoration,
-      ),
-    );
-  }
-
-  Widget _buildAnimatedPagedPageTransition({
-    required _ReaderThemeColors colors,
-    required ReaderPageAnimationStyle animationStyle,
-    required int safeIndex,
-    required Size pagedSize,
-    required ReaderTextPagedViewModel pagedViewModel,
-    required int total,
-    required Duration switchDuration,
-    required Curve switchInCurve,
-    required Curve switchOutCurve,
-  }) {
-    if (!_isPagedTransitionAnimating ||
-        _pagedTransition.style != animationStyle ||
-        _pagedTransition.fromIndex == _pagedTransition.toIndex) {
-      return _buildStaticPagedPage(
-        colors: colors,
-        pageIndex: safeIndex,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        total: total,
-        includeBackgroundDecoration: true,
-      );
-    }
-
-    if (_pagedTransition.fromIndex < 0 ||
-        _pagedTransition.fromIndex >= _pagedPages.length ||
-        _pagedTransition.toIndex < 0 ||
-        _pagedTransition.toIndex >= _pagedPages.length) {
-      return _buildStaticPagedPage(
-        colors: colors,
-        pageIndex: safeIndex,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        total: total,
-        includeBackgroundDecoration: true,
-      );
-    }
-
-    final fromPage = SelectionContainer.disabled(
-      child: _buildStaticPagedPage(
-        colors: colors,
-        pageIndex: _pagedTransition.fromIndex,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        total: total,
-        includeBackgroundDecoration: true,
-      ),
-    );
-    final toPage = SelectionContainer.disabled(
-      child: _buildStaticPagedPage(
-        colors: colors,
-        pageIndex: _pagedTransition.toIndex,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        total: total,
-        includeBackgroundDecoration: true,
-      ),
-    );
-    final effectRenderer = _pagedAnimationRendererRegistry.resolve(
-      animationStyle,
-    );
-
-    return AnimatedBuilder(
-      animation: _pagedTransitionController,
-      builder: (context, _) {
-        final progress = switchInCurve.transform(
-          _pagedTransitionController.value.clamp(0.0, 1.0),
-        );
-        return effectRenderer.build(
-          fromPage: fromPage,
-          toPage: toPage,
-          progress: progress,
-          direction: _pagedTransition.direction.toDouble(),
-        );
       },
     );
   }
@@ -3262,49 +3118,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const SizedBox.shrink();
     }
 
-    final content = Column(
-      children: [
-        if (_showsPagedPinnedChapterHeaderFor(_currentViewportKind))
-          SelectionContainer.disabled(child: _buildPinnedChapterHeader(colors)),
-        if (layoutMetrics.pagedHeaderReserve > 0)
-          SelectionContainer.disabled(
-            child: _buildPagedHeaderSection(colors, layoutMetrics),
-          ),
-        Expanded(
-          child: ReaderPagedPageContent(
-            model: pagedViewModel,
-            pageIndex: pageIndex,
-            paddingResolver: (_) => layoutMetrics.effectivePagePadding,
-            resolvedSliceBuilder:
-                (context, slice, defaultSlice) =>
-                    _buildPagedResolvedSliceContent(
-                      context: context,
-                      slice: slice,
-                      colors: colors,
-                    ),
-          ),
-        ),
-        SelectionContainer.disabled(
-          child: _buildPagedFooterSection(
-            colors: colors,
-            index: pageIndex,
-            total: total,
-            layoutMetrics: layoutMetrics,
-          ),
-        ),
-      ],
-    );
-
-    return SizedBox(
-      width: pageSize.width,
-      height: pageSize.height,
-      child:
-          includeBackgroundDecoration
-              ? DecoratedBox(
-                decoration: _buildReaderBackgroundDecoration(colors),
-                child: content,
+    return ReaderPagedPageFrame(
+      pageSize: pageSize,
+      includeBackgroundDecoration: includeBackgroundDecoration,
+      backgroundDecoration: _buildReaderBackgroundDecoration(colors),
+      pinnedHeader:
+          _showsPagedPinnedChapterHeaderFor(_currentViewportKind)
+              ? SelectionContainer.disabled(
+                child: _buildPinnedChapterHeader(colors),
               )
-              : content,
+              : null,
+      header:
+          layoutMetrics.pagedHeaderReserve > 0
+              ? SelectionContainer.disabled(
+                child: _buildPagedHeaderSection(colors, layoutMetrics),
+              )
+              : null,
+      body: ReaderPagedPageContent(
+        model: pagedViewModel,
+        pageIndex: pageIndex,
+        paddingResolver: (_) => layoutMetrics.effectivePagePadding,
+        resolvedSliceBuilder:
+            (context, slice, defaultSlice) => _buildPagedResolvedSliceContent(
+              context: context,
+              slice: slice,
+              colors: colors,
+            ),
+      ),
+      footer: SelectionContainer.disabled(
+        child: _buildPagedFooterSection(
+          colors: colors,
+          index: pageIndex,
+          total: total,
+          layoutMetrics: layoutMetrics,
+        ),
+      ),
     );
   }
 
@@ -3521,140 +3369,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCurlPageWidget({
-    required _ReaderThemeColors colors,
-    required int pageIndex,
-    required int total,
-    required Size pageSize,
-    required ReaderTextPagedViewModel pagedViewModel,
-    bool includeBackgroundDecoration = false,
-  }) {
-    final pages = pagedViewModel.pagedPages;
-    final layoutMetrics = pagedViewModel.surfaceMetrics;
-    if (pageIndex < 0 || pageIndex >= pages.length) {
-      return const SizedBox.shrink();
-    }
-
-    final content = Column(
-      children: [
-        SelectionContainer.disabled(child: _buildPinnedChapterHeader(colors)),
-        if (layoutMetrics.pagedHeaderReserve > 0)
-          SelectionContainer.disabled(
-            child: _buildPagedHeaderSection(colors, layoutMetrics),
-          ),
-        Expanded(
-          child: ReaderPagedPageContent(
-            model: pagedViewModel,
-            pageIndex: pageIndex,
-            paddingResolver: (_) => layoutMetrics.effectivePagePadding,
-            resolvedSliceBuilder:
-                (context, slice, defaultSlice) =>
-                    _buildPagedResolvedSliceContent(
-                      context: context,
-                      slice: slice,
-                      colors: colors,
-                    ),
-          ),
-        ),
-        SelectionContainer.disabled(
-          child: _buildPagedFooterSection(
-            colors: colors,
-            index: pageIndex,
-            total: total,
-            layoutMetrics: layoutMetrics,
-          ),
-        ),
-      ],
-    );
-
-    return SizedBox(
-      width: pageSize.width,
-      height: pageSize.height,
-      child:
-          includeBackgroundDecoration
-              ? DecoratedBox(
-                decoration: _buildReaderBackgroundDecoration(colors),
-                child: content,
-              )
-              : content,
-    );
-  }
-
-  Widget _buildCustomCurlPageStack({
-    required _ReaderThemeColors colors,
-    required int pageCount,
-    required int safeIndex,
-    required Size pagedSize,
-    required ReaderTextPagedViewModel pagedViewModel,
-  }) {
-    final hasActiveCurlTarget =
-        (_isCurlPreviewActive || _isCurlAutoTurning) &&
-        pageCount > 0 &&
-        _curlAnimationFromIndex >= 0 &&
-        _curlAnimationFromIndex < pageCount &&
-        _curlAnimationToIndex >= 0 &&
-        _curlAnimationToIndex < pageCount &&
-        _curlAnimationFromIndex != _curlAnimationToIndex;
-
-    if (!hasActiveCurlTarget) {
-      return _buildCurlPageWidget(
-        colors: colors,
-        pageIndex: safeIndex,
-        total: pageCount,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-      );
-    }
-
-    final targetPage = SelectionContainer.disabled(
-      child: _buildCurlPageWidget(
-        colors: colors,
-        pageIndex: _curlAnimationToIndex,
-        total: pageCount,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        includeBackgroundDecoration: true,
-      ),
-    );
-    final currentPage = SelectionContainer.disabled(
-      child: _buildCurlPageWidget(
-        colors: colors,
-        pageIndex: _curlAnimationFromIndex,
-        total: pageCount,
-        pageSize: pagedSize,
-        pagedViewModel: pagedViewModel,
-        includeBackgroundDecoration: true,
-      ),
-    );
-
-    return AnimatedBuilder(
-      animation: _curlAutoTurnController,
-      child: targetPage,
-      builder: (context, child) {
-        final activeProgress =
-            _isCurlPreviewActive
-                ? _curlPreviewProgress
-                : _curlAutoTurnController.value;
-        if (activeProgress <= 0) {
-          return currentPage;
-        }
-        final progress = activeProgress.clamp(0.0, 1.0).toDouble();
-        return _curlPagedAnimationRenderer.build(
-          currentPage: currentPage,
-          targetPage: child ?? targetPage,
-          progress: progress,
-          direction: _curlAutoDirection,
-          touchYFactor: _curlTouchYFactor,
-          colors: CurlRendererColors(
-            backgroundColor: colors.background,
-            dividerColor: colors.divider,
-            overlayColor: colors.overlay,
-          ),
-        );
-      },
     );
   }
 
@@ -6536,6 +6250,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
               final settingsSheetState = ReaderSettingsSheetState.fromSettings(
                 settings: draft,
+                contentKind: _currentReaderMode.contentKind,
+                layoutMode: _currentReaderMode.layoutMode,
                 showInterfaceSettings:
                     activeSettingsTab == ReaderSettingsSheetTab.basic,
                 currentFontLabel: currentFontLabel(),
@@ -8015,7 +7731,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ReaderPageAnimationStyle.curl,
                           ReaderPageAnimationStyle.cover,
                           ReaderPageAnimationStyle.translate,
-                          ReaderPageAnimationStyle.vertical,
                           ReaderPageAnimationStyle.fade,
                           ReaderPageAnimationStyle.none,
                         ]
@@ -12209,8 +11924,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderPageAnimationStyle.curl => '仿真',
       ReaderPageAnimationStyle.fade => '淡入淡出',
       ReaderPageAnimationStyle.cover => '覆盖',
-      ReaderPageAnimationStyle.translate => '平移',
-      ReaderPageAnimationStyle.vertical => '上下',
+      ReaderPageAnimationStyle.translate => '滑动',
+      ReaderPageAnimationStyle.vertical => '滑动',
       ReaderPageAnimationStyle.none => '无动画',
     };
   }

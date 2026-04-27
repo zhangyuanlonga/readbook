@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'composition/app_providers.dart' as app_providers;
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_release.dart';
 import '../core/auth/auth_event_bus.dart';
@@ -106,31 +107,24 @@ class App extends ConsumerWidget {
   }
 }
 
-class _SystemUiOverlayWrapper extends StatefulWidget {
+class _SystemUiOverlayWrapper extends ConsumerStatefulWidget {
   const _SystemUiOverlayWrapper({required this.child});
 
   final Widget child;
 
   @override
-  State<_SystemUiOverlayWrapper> createState() =>
+  ConsumerState<_SystemUiOverlayWrapper> createState() =>
       _SystemUiOverlayWrapperState();
 }
 
-class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
+class _SystemUiOverlayWrapperState
+    extends ConsumerState<_SystemUiOverlayWrapper>
     with WidgetsBindingObserver {
   Brightness? _lastBrightness;
   bool _isStartupReady = false;
-  late final AppLifecycleCoordinator _lifecycleCoordinator =
-      AppLifecycleCoordinator();
-  late final AppAnnouncementCoordinator _announcementCoordinator =
-      AppAnnouncementCoordinator();
-  late final AppStartupCoordinator _startupCoordinator = AppStartupCoordinator(
-    sendHeartbeat: _lifecycleCoordinator.sendHeartbeat,
-    sendVisitEvent: _lifecycleCoordinator.sendVisitEvent,
-    showStartupAnnouncementIfNeeded: _showStartupAnnouncementIfNeeded,
-    resolveDialogContext: _resolveStartupDialogContext,
-    showUpdateDialog: _showUpdateReleaseDialog,
-  );
+  late final AppLifecycleCoordinator _lifecycleCoordinator;
+  late final AppAnnouncementCoordinator _announcementCoordinator;
+  late final AppStartupCoordinator _startupCoordinator;
   static const List<String> _dialogFontFallback = [
     'STKaiti',
     'Kaiti SC',
@@ -143,6 +137,19 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
   @override
   void initState() {
     super.initState();
+    _lifecycleCoordinator =
+        ref.read(app_providers.appLifecycleCoordinatorFactoryProvider)();
+    _announcementCoordinator =
+        ref.read(app_providers.appAnnouncementCoordinatorFactoryProvider)();
+    _startupCoordinator = ref.read(
+      app_providers.appStartupCoordinatorFactoryProvider,
+    )(
+      sendHeartbeat: _lifecycleCoordinator.sendHeartbeat,
+      sendVisitEvent: _lifecycleCoordinator.sendVisitEvent,
+      showStartupAnnouncementIfNeeded: _showStartupAnnouncementIfNeeded,
+      resolveDialogContext: _resolveStartupDialogContext,
+      showUpdateDialog: _showUpdateReleaseDialog,
+    );
     AppLogger.instance.info('Startup init begin');
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addTimingsCallback(

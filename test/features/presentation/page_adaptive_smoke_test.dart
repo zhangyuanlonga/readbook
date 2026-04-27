@@ -35,6 +35,7 @@ void main() {
     await runAdaptivePageSmokeMatrix(
       tester,
       pageBuilder: () => const SearchPage(),
+      useProviderScope: true,
       pageName: 'SearchPage',
     );
   });

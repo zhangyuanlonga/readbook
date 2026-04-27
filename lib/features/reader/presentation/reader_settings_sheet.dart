@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/entities/reader_settings.dart';
+import '../application/reader_mode_model.dart';
 import '../application/reader_settings_groups.dart';
 import '../application/reader_settings_preset_service.dart';
 import '../application/reader_typography_metrics_resolver.dart';
@@ -13,6 +14,7 @@ enum ReaderSettingsSheetGroupKey {
   chapterHeader,
   infoBar,
   visualDecoration,
+  manga,
 }
 
 typedef ReaderSettingsSheetBodyBuilder =
@@ -152,6 +154,8 @@ class ReaderSettingsSheetState {
   ReaderSettingsSheetState({
     required this.settings,
     required this.groups,
+    required this.contentKind,
+    required this.layoutMode,
     required this.showInterfaceSettings,
     this.activeGroupKey,
     this.activeTab = ReaderSettingsSheetTab.basic,
@@ -168,6 +172,8 @@ class ReaderSettingsSheetState {
 
   factory ReaderSettingsSheetState.fromSettings({
     required ReaderSettings settings,
+    ReaderContentKind contentKind = ReaderContentKind.text,
+    ReaderLayoutMode layoutMode = ReaderLayoutMode.paged,
     required bool showInterfaceSettings,
     String currentFontLabel = '系统默认',
     String? activeGroupKey,
@@ -185,12 +191,15 @@ class ReaderSettingsSheetState {
     return ReaderSettingsSheetState(
       settings: settings,
       groups: groupingService.split(settings),
+      contentKind: contentKind,
+      layoutMode: layoutMode,
       showInterfaceSettings: showInterfaceSettings,
       activeGroupKey: activeGroupKey,
       activeTab: activeTab,
       currentFontLabel: currentFontLabel,
       presetSelection: presetSelection ?? _inferPresetSelection(settings),
-      groupDescriptors: groupDescriptors,
+      groupDescriptors:
+          groupDescriptors ?? _groupDescriptorsFor(contentKind: contentKind),
       extensionSections: extensionSections,
       activeExtensionId: activeExtensionId,
       showsPinnedChapterHeader: showsPinnedChapterHeader,
@@ -200,6 +209,8 @@ class ReaderSettingsSheetState {
 
   final ReaderSettings settings;
   final ReaderSettingsGroups groups;
+  final ReaderContentKind contentKind;
+  final ReaderLayoutMode layoutMode;
   final bool showInterfaceSettings;
   final String? activeGroupKey;
   final ReaderSettingsSheetTab activeTab;
@@ -210,6 +221,12 @@ class ReaderSettingsSheetState {
   final String? activeExtensionId;
   final bool showsPinnedChapterHeader;
   final bool showsBatteryWarning;
+
+  bool get isTextContent => contentKind == ReaderContentKind.text;
+  bool get isImageContent => contentKind == ReaderContentKind.image;
+  bool get showsPageAnimationControls =>
+      isTextContent && layoutMode == ReaderLayoutMode.paged;
+  bool get showsMangaControls => isImageContent;
 
   ReaderSettingsSheetPresetInput get presetInput =>
       ReaderSettingsSheetPresetInput(
@@ -366,6 +383,21 @@ class ReaderSettingsSheetState {
       }
     }
     return null;
+  }
+
+  static List<ReaderSettingsSheetGroupDescriptor> _groupDescriptorsFor({
+    required ReaderContentKind contentKind,
+  }) {
+    if (contentKind == ReaderContentKind.image) {
+      return const <ReaderSettingsSheetGroupDescriptor>[
+        ReaderSettingsSheetGroupDescriptor(
+          key: ReaderSettingsSheetGroupKey.manga,
+          title: '漫画',
+          subtitle: '阅读方式、图片间距、图片留白与加载策略。',
+        ),
+      ];
+    }
+    return _defaultGroupDescriptors;
   }
 }
 
@@ -691,7 +723,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
       children: [
         _ReaderSettingsCard(
           title: '语义分组',
-          subtitle: '主线程后续可以把旧 UI 一组一组迁进来，而不是继续堆在 reader_page.dart 里。',
+          subtitle: '分组显隐由当前阅读内容能力决定。',
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -764,6 +796,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
       ReaderSettingsSheetGroupKey.visualDecoration => _buildVisualGroup(
         context,
       ),
+      ReaderSettingsSheetGroupKey.manga => _buildMangaGroup(context),
     };
   }
 
@@ -1022,6 +1055,66 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                     label: const Text('恢复默认'),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMangaGroup(BuildContext context) {
+    final settings = state.settings;
+    return ListView(
+      children: [
+        _ReaderSettingsCard(
+          title: '漫画',
+          subtitle: '只展示图片阅读相关设置。',
+          child: Column(
+            children: [
+              _ReaderSettingsChoiceWrap<ReaderMangaReadMode>(
+                label: '阅读方式',
+                value: settings.mangaReadMode,
+                options: ReaderMangaReadMode.values,
+                labelBuilder: _mangaReadModeLabel,
+                onSelected:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(mangaReadMode: value),
+                    ),
+              ),
+              _ReaderSettingsChoiceWrap<ReaderMangaLoadStrategy>(
+                label: '加载策略',
+                value: settings.mangaLoadStrategy,
+                options: ReaderMangaLoadStrategy.values,
+                labelBuilder: _mangaLoadStrategyLabel,
+                onSelected:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(mangaLoadStrategy: value),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '图片间距',
+                value: settings.mangaImageSpacing,
+                min: 0,
+                max: 24,
+                divisions: 24,
+                valueLabel: settings.mangaImageSpacing.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(mangaImageSpacing: value),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '图片留白',
+                value: settings.mangaImagePadding,
+                min: 0,
+                max: 24,
+                divisions: 24,
+                valueLabel: settings.mangaImagePadding.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(mangaImagePadding: value),
+                    ),
               ),
             ],
           ),
@@ -1306,6 +1399,55 @@ class _ReaderSettingsActionRow extends StatelessWidget {
   }
 }
 
+class _ReaderSettingsChoiceWrap<T> extends StatelessWidget {
+  const _ReaderSettingsChoiceWrap({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.labelBuilder,
+    required this.onSelected,
+  });
+
+  final String label;
+  final T value;
+  final List<T> options;
+  final String Function(T value) labelBuilder;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options
+                .map(
+                  (option) => ChoiceChip(
+                    label: Text(labelBuilder(option)),
+                    selected: option == value,
+                    showCheckmark: false,
+                    onSelected: (_) => onSelected(option),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReaderSettingsSliderRow extends StatelessWidget {
   const _ReaderSettingsSliderRow({
     required this.label,
@@ -1366,17 +1508,17 @@ const List<ReaderSettingsSheetGroupDescriptor> _defaultGroupDescriptors = [
   ReaderSettingsSheetGroupDescriptor(
     key: ReaderSettingsSheetGroupKey.bodyLayout,
     title: '正文版面',
-    subtitle: '正文边距、留白与 margin preset/custom。',
+    subtitle: '正文边距与留白。',
   ),
   ReaderSettingsSheetGroupDescriptor(
     key: ReaderSettingsSheetGroupKey.chapterHeader,
     title: '章节头',
-    subtitle: '章节头对齐方式与上下留白。',
+    subtitle: '章节头开关与横纵偏移。',
   ),
   ReaderSettingsSheetGroupDescriptor(
     key: ReaderSettingsSheetGroupKey.infoBar,
     title: '信息栏',
-    subtitle: '页眉页脚信息项、padding、margin 与 divider。',
+    subtitle: '页眉页脚信息项、边距与分隔线。',
   ),
   ReaderSettingsSheetGroupDescriptor(
     key: ReaderSettingsSheetGroupKey.visualDecoration,
@@ -1398,6 +1540,7 @@ String readerSettingsSheetGroupStorageKey(ReaderSettingsSheetGroupKey key) {
     ReaderSettingsSheetGroupKey.chapterHeader => 'chapter_header',
     ReaderSettingsSheetGroupKey.infoBar => 'info_bar',
     ReaderSettingsSheetGroupKey.visualDecoration => 'visual_decoration',
+    ReaderSettingsSheetGroupKey.manga => 'manga',
   };
 }
 
@@ -1449,5 +1592,21 @@ String _infoStylePresetLabel(ReaderInfoStylePreset preset) {
     ReaderInfoStylePreset.minimalFooter => '极简页脚',
     ReaderInfoStylePreset.balanced => '上下平衡',
     ReaderInfoStylePreset.readingFocused => '专注阅读',
+  };
+}
+
+String _mangaReadModeLabel(ReaderMangaReadMode mode) {
+  return switch (mode) {
+    ReaderMangaReadMode.continuous => '连续长图',
+    ReaderMangaReadMode.paged => '分页图',
+    ReaderMangaReadMode.horizontal => '横向翻页',
+  };
+}
+
+String _mangaLoadStrategyLabel(ReaderMangaLoadStrategy strategy) {
+  return switch (strategy) {
+    ReaderMangaLoadStrategy.balanced => '平衡',
+    ReaderMangaLoadStrategy.smooth => '流畅优先',
+    ReaderMangaLoadStrategy.saveData => '省流量',
   };
 }

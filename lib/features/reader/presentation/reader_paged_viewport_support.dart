@@ -99,13 +99,10 @@ class ReaderPagedViewportTransitionResolver {
     required int pageCount,
     required int currentPageIndex,
     required PagedTransitionState pagedTransition,
-    ReaderPagedViewportCurlState curlState =
-        ReaderPagedViewportCurlState.idle,
+    ReaderPagedViewportCurlState curlState = ReaderPagedViewportCurlState.idle,
   }) {
-    final safePageIndex = currentPageIndex.clamp(
-      0,
-      math.max(0, pageCount - 1),
-    ).toInt();
+    final safePageIndex =
+        currentPageIndex.clamp(0, math.max(0, pageCount - 1)).toInt();
     final renderedAnimationStyle =
         pagedTransition.isAnimating
             ? pagedTransition.style
@@ -223,10 +220,7 @@ class ReaderPagedPageFrame extends StatelessWidget {
       height: pageSize.height,
       child:
           includeBackgroundDecoration && backgroundDecoration != null
-              ? DecoratedBox(
-                decoration: backgroundDecoration!,
-                child: content,
-              )
+              ? DecoratedBox(decoration: backgroundDecoration!, child: content)
               : content,
     );
   }
@@ -302,16 +296,10 @@ class ReaderPagedViewportTransitionStack extends StatelessWidget {
     }
 
     final fromPage = disabledSelectionWrapper(
-      pageBuilder(
-        pageIndex: fromPageIndex,
-        includeBackgroundDecoration: true,
-      ),
+      pageBuilder(pageIndex: fromPageIndex, includeBackgroundDecoration: true),
     );
     final toPage = disabledSelectionWrapper(
-      pageBuilder(
-        pageIndex: toPageIndex,
-        includeBackgroundDecoration: true,
-      ),
+      pageBuilder(pageIndex: toPageIndex, includeBackgroundDecoration: true),
     );
     final effectRenderer = animationRendererRegistry.resolve(
       plan.renderedAnimationStyle,
@@ -341,16 +329,10 @@ class ReaderPagedViewportTransitionStack extends StatelessWidget {
     }
 
     final targetPage = disabledSelectionWrapper(
-      pageBuilder(
-        pageIndex: toPageIndex,
-        includeBackgroundDecoration: true,
-      ),
+      pageBuilder(pageIndex: toPageIndex, includeBackgroundDecoration: true),
     );
     final currentPage = disabledSelectionWrapper(
-      pageBuilder(
-        pageIndex: fromPageIndex,
-        includeBackgroundDecoration: true,
-      ),
+      pageBuilder(pageIndex: fromPageIndex, includeBackgroundDecoration: true),
     );
 
     return AnimatedBuilder(

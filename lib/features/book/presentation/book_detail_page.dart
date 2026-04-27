@@ -204,7 +204,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   String? _displayTitle;
   BookMetadataOverride? _metadataOverride;
   StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
-  final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
+  late final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
   late final BookmarkRepository _bookmarkRepository;
@@ -216,17 +216,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       const BookMetadataPresentationResolver();
   final ReaderCatalogSearchService _catalogSearchService =
       const ReaderCatalogSearchService();
-  final ReaderSystemSettingsService _readerSystemSettingsService =
-      ReaderSystemSettingsService();
-  final LocalBookStorageService _localBookStorageService =
-      LocalBookStorageService();
-  final ReaderPreferencesService _readerPreferencesService =
-      ReaderPreferencesService();
-  final ReadingRecordService _readingRecordService = ReadingRecordService();
-  final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
-  final CustomCoverStorageService _customCoverStorageService =
-      const CustomCoverStorageService();
+  late final ReaderSystemSettingsService _readerSystemSettingsService;
+  late final LocalBookStorageService _localBookStorageService;
+  late final ReaderPreferencesService _readerPreferencesService;
+  late final ReadingRecordService _readingRecordService;
+  late final LocalBookIndexService _localBookIndexService;
+  late final ImageSelectionService _imageSelectionService;
+  late final CustomCoverStorageService _customCoverStorageService;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   late final SourceRuntimeTaskConflictService _taskConflictService;
@@ -245,6 +241,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   @override
   void initState() {
     super.initState();
+    final dependencies = ref.read(bookDetailDependenciesProvider);
     _bookmarkRepository = ref.read(bookBookmarkRepositoryProvider);
     _bookMetadataOverrideRepository = ref.read(
       bookMetadataOverrideRepositoryProvider,
@@ -254,16 +251,27 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _sourceRuntimeFacade = ref.read(bookSourceRuntimeFacadeProvider);
     _taskConflictService = ref.read(bookTaskConflictServiceProvider);
     _taskScheduler = ref.read(bookTaskSchedulerProvider);
-    final detailService = widget.bookDetailService ?? BookDetailService();
+    _searchHitCacheService = dependencies.searchHitCacheService;
+    _readerSystemSettingsService = dependencies.readerSystemSettingsService;
+    _localBookStorageService = dependencies.localBookStorageService;
+    _readerPreferencesService = dependencies.readerPreferencesService;
+    _readingRecordService = dependencies.readingRecordService;
+    _localBookIndexService = dependencies.localBookIndexService;
+    _imageSelectionService = dependencies.imageSelectionService;
+    _customCoverStorageService = dependencies.customCoverStorageService;
+    final detailService =
+        widget.bookDetailService ?? dependencies.bookDetailService;
     _sourceContentProvider = SourceContentProvider(
       detailService: detailService,
     );
     _contentProviderRegistry = ContentProviderRegistry(
       providers: [LocalContentProvider(), _sourceContentProvider],
     );
-    _bookshelfService = widget.bookshelfService ?? BookshelfService();
+    _bookshelfService =
+        widget.bookshelfService ?? dependencies.bookshelfService;
     _switchSourceSearchService =
-        widget.switchSourceSearchService ?? SearchService();
+        widget.switchSourceSearchService ??
+        dependencies.switchSourceSearchService;
     _switchSourceHelper = BookDetailSwitchSourceHelper(
       switchSourceSearchService: _switchSourceSearchService,
       searchHitCacheService: _searchHitCacheService,

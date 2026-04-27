@@ -116,10 +116,10 @@
 
 - [x] 阶段 1：阅读模式模型重构
 - [x] 阶段 2：统一设置模型
-- [ ] 阶段 3：统一正文布局
+- [x] 阶段 3：统一正文布局
 - [ ] 阶段 4：重做分页动画系统
-- [ ] 阶段 5：设置界面重组
-- [ ] 阶段 6：兼容清理
+- [x] 阶段 5：设置界面重组
+- [x] 阶段 6：兼容清理
 
 ---
 
@@ -185,16 +185,16 @@
 
 执行清单：
 
-- [ ] 统一 `ReaderSurfaceMetrics`
-- [ ] 统一 `ReaderLayoutResolver`
-- [ ] 统一 `ReaderShell`
-- [ ] 统一顶部/底部 chrome
-- [ ] 让 `text` 与 `image` 共用布局容器
-- [ ] 让 `text` 与 `image` 共用 safe area 处理
-- [ ] 让 `text` 与 `image` 共用章节切换链路
-- [ ] 让 `text` 与 `image` 共用进度保存链路
-- [ ] 仅在正文 body 的 viewport builder 处分支 `text`
-- [ ] 仅在正文 body 的 viewport builder 处分支 `image`
+- [x] 统一 `ReaderSurfaceMetrics`
+- [x] 统一 `ReaderLayoutResolver`
+- [x] 统一 `ReaderShell`
+- [x] 统一顶部/底部 chrome
+- [x] 让 `text` 与 `image` 共用布局容器
+- [x] 让 `text` 与 `image` 共用 safe area 处理
+- [x] 让 `text` 与 `image` 共用章节切换链路
+- [x] 让 `text` 与 `image` 共用进度保存链路
+- [x] 仅在正文 body 的 viewport builder 处分支 `text`
+- [x] 仅在正文 body 的 viewport builder 处分支 `image`
 
 建议落点：
 
@@ -205,9 +205,9 @@
 
 阶段完成定义：
 
-- [ ] 壳层不再按小说/漫画复制逻辑
-- [ ] 正文边距、章节头、页脚信息统一由同一套 `surface metrics` 控制
-- [ ] 阶段 3 回归完成：surface metrics 与章节头显示回归
+- [x] 壳层不再按小说/漫画复制逻辑
+- [x] 正文边距、章节头、页脚信息统一由同一套 `surface metrics` 控制
+- [x] 阶段 3 回归完成：surface metrics 与章节头显示回归
 
 ---
 
@@ -217,15 +217,15 @@
 
 执行清单：
 
-- [ ] 统一 `PagedTransitionController`
-- [ ] 统一 `TextReaderRenderer`
-- [ ] 让 `simulation` 成为正式动画样式
-- [ ] 重做 curl/simulation 手势链中的角点逻辑
-- [ ] 重做 curl/simulation 手势链中的触点纵向因子逻辑
-- [ ] 重做 curl/simulation 手势链中的折页曲线逻辑
-- [ ] 重做 curl/simulation 手势链中的前后页阴影逻辑
-- [ ] 重做 curl/simulation 手势链中的回弹/提交阈值逻辑
-- [ ] 让 `cover`、`slide`、`fade`、`none` 与 `simulation` 同层管理
+- [x] 统一 `PagedTransitionController`
+- [x] 统一 `TextReaderRenderer`
+- [x] 让 `simulation` 成为正式动画样式
+- [x] 重做 curl/simulation 手势链中的角点逻辑
+- [x] 重做 curl/simulation 手势链中的触点纵向因子逻辑
+- [x] 重做 curl/simulation 手势链中的折页曲线逻辑
+- [x] 重做 curl/simulation 手势链中的前后页阴影逻辑
+- [x] 重做 curl/simulation 手势链中的回弹/提交阈值逻辑
+- [x] 让 `cover`、`slide`、`fade`、`none` 与 `simulation` 同层管理
 
 建议落点：
 
@@ -235,8 +235,8 @@
 
 阶段完成定义：
 
-- [ ] 动画选择对用户只暴露一个统一分页动画系统
-- [ ] `仿真` 不再是名字映射，而是正式实现
+- [x] 动画选择对用户只暴露一个统一分页动画系统
+- [x] `仿真` 不再是名字映射，而是正式实现
 - [ ] 阶段 4 手测完成：分页动画手测
 
 ---
@@ -247,20 +247,20 @@
 
 执行清单：
 
-- [ ] `字体` 分组只保留文本样式能力
-- [ ] `边距与排版` 分组只保留正文 padding 配置
-- [ ] `边距与排版` 分组只保留章节头配置
-- [ ] `边距与排版` 分组只保留排版细节配置
-- [ ] `信息` 分组只保留 info bar 配置
-- [ ] `翻页动画` 分组只在 `paged + text` 下展示完整动画项
-- [ ] 漫画模式设置只展示图片相关项
-- [ ] 设置项显隐统一交给 capability resolver 控制
+- [x] `字体` 分组只保留文本样式能力
+- [x] `边距与排版` 分组只保留正文 padding 配置
+- [x] `边距与排版` 分组只保留章节头配置
+- [x] `边距与排版` 分组只保留排版细节配置
+- [x] `信息` 分组只保留 info bar 配置
+- [x] `翻页动画` 分组只在 `paged + text` 下展示完整动画项
+- [x] 漫画模式设置只展示图片相关项
+- [x] 设置项显隐统一交给 capability resolver 控制
 
 阶段完成定义：
 
-- [ ] 设置项出现与否由 capability resolver 控制
-- [ ] 不再出现小说/漫画各自一套半重复设置
-- [ ] 阶段 5 回归完成：设置项显隐回归
+- [x] 设置项出现与否由 capability resolver 控制
+- [x] 不再出现小说/漫画各自一套半重复设置
+- [x] 阶段 5 回归完成：设置项显隐回归
 
 ---
 
@@ -270,18 +270,18 @@
 
 执行清单：
 
-- [ ] 删除旧 summary 对旧字段的主依赖
-- [ ] 删除旧 presenter 对旧字段的主依赖
-- [ ] 删除旧 test 对旧字段的主依赖
-- [ ] 旧字段只保留在 migration adapter
-- [ ] 补迁移测试
-- [ ] 补回归测试
+- [x] 删除旧 summary 对旧字段的主依赖
+- [x] 删除旧 presenter 对旧字段的主依赖
+- [x] 删除旧 test 对旧字段的主依赖
+- [x] 旧字段只保留在 migration adapter
+- [x] 补迁移测试
+- [x] 补回归测试
 
 阶段完成定义：
 
-- [ ] 新字段全面接管
-- [ ] 旧字段仅用于历史数据导入
-- [ ] 阶段 6 回归完成：老数据迁移回归
+- [x] 新字段全面接管
+- [x] 旧字段仅用于历史数据导入
+- [x] 阶段 6 回归完成：老数据迁移回归
 
 ---
 
@@ -291,10 +291,10 @@
 
 - [x] 阶段 1：模式推导单测
 - [x] 阶段 2：settings/prefs 迁移单测
-- [ ] 阶段 3：surface metrics 与章节头显示回归
+- [x] 阶段 3：surface metrics 与章节头显示回归
 - [ ] 阶段 4：分页动画手测
-- [ ] 阶段 5：设置项显隐回归
-- [ ] 阶段 6：老数据迁移回归
+- [x] 阶段 5：设置项显隐回归
+- [x] 阶段 6：老数据迁移回归
 
 重点手测场景：
 

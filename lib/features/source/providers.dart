@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/composition/app_providers.dart' as app_providers;
 import '../../core/auth/auth_session_store.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
 import 'application/source_check_service.dart';
@@ -9,7 +10,7 @@ import 'application/source_page_flow_coordinator.dart';
 import 'application/source_runtime_facade.dart';
 
 final sourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
-  return SourceRuntimeFacade.instance;
+  return ref.watch(app_providers.appSourceRuntimeFacadeProvider);
 });
 
 final sourceCheckServiceProvider = Provider<SourceCheckService>((ref) {

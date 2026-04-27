@@ -6,7 +6,6 @@ import 'package:shuxiang_reading_next/features/reader/presentation/paged_animati
 import 'package:shuxiang_reading_next/features/reader/presentation/paged_animation/fade_paged_animation_renderer.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/paged_animation/paged_animation_renderer_registry.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/paged_animation/translate_paged_animation_renderer.dart';
-import 'package:shuxiang_reading_next/features/reader/presentation/paged_animation/vertical_paged_animation_renderer.dart';
 
 void main() {
   group('PagedAnimationRendererRegistry', () {
@@ -23,7 +22,7 @@ void main() {
       );
       expect(
         registry.resolve(ReaderPageAnimationStyle.vertical),
-        isA<VerticalPagedAnimationRenderer>(),
+        isA<TranslatePagedAnimationRenderer>(),
       );
       expect(
         registry.resolve(ReaderPageAnimationStyle.fade),

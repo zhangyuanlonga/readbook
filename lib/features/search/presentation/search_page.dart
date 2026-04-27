@@ -22,6 +22,7 @@ import '../../source/application/source_runtime_facade.dart';
 import '../application/search_history_service.dart';
 import '../application/search_service.dart';
 import '../application/search_system_settings_service.dart';
+import '../providers.dart';
 import 'search_render_state_controller.dart';
 import 'widgets/search_book_card.dart';
 import 'widgets/search_empty_state.dart';
@@ -43,11 +44,10 @@ class SearchPage extends ConsumerStatefulWidget {
 class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final SourceRuntimeFacade _sourceRuntimeFacade = SourceRuntimeFacade.instance;
+  late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final SearchService _searchService;
-  final SearchHistoryService _historyService = SearchHistoryService();
-  final SearchSystemSettingsService _searchSystemSettingsService =
-      SearchSystemSettingsService();
+  late final SearchHistoryService _historyService;
+  late final SearchSystemSettingsService _searchSystemSettingsService;
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -97,7 +97,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   void initState() {
     super.initState();
-    _searchService = SearchService(sourceRuntimeFacade: _sourceRuntimeFacade);
+    _sourceRuntimeFacade = ref.read(searchSourceRuntimeFacadeProvider);
+    _searchService = ref.read(searchServiceProvider);
+    _historyService = ref.read(searchHistoryServiceProvider);
+    _searchSystemSettingsService = ref.read(
+      searchSystemSettingsServiceProvider,
+    );
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

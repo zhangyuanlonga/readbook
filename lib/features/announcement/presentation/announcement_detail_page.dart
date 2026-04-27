@@ -10,8 +10,9 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
 import '../../mine/application/advanced_theme_provider.dart';
-import '../application/announcement_service.dart';
 import '../application/announcement_read_state_service.dart';
+import '../application/announcement_service.dart';
+import '../providers.dart';
 
 class AnnouncementDetailPage extends ConsumerStatefulWidget {
   const AnnouncementDetailPage({super.key, required this.announcementId});
@@ -25,9 +26,8 @@ class AnnouncementDetailPage extends ConsumerStatefulWidget {
 
 class _AnnouncementDetailPageState
     extends ConsumerState<AnnouncementDetailPage> {
-  final AnnouncementService _service = AnnouncementService();
-  final AnnouncementReadStateService _readStateService =
-      AnnouncementReadStateService();
+  late final AnnouncementService _service;
+  late final AnnouncementReadStateService _readStateService;
 
   bool _isLoading = true;
   String? _errorText;
@@ -36,6 +36,8 @@ class _AnnouncementDetailPageState
   @override
   void initState() {
     super.initState();
+    _service = ref.read(announcementServiceProvider);
+    _readStateService = ref.read(announcementReadStateServiceProvider);
     unawaited(_loadDetail());
   }
 

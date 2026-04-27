@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -8,18 +9,19 @@ import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/user/user_profile.dart';
 import '../../../core/user/user_profile_service.dart';
+import '../providers.dart';
 
-class UserProfilePage extends StatefulWidget {
+class UserProfilePage extends ConsumerStatefulWidget {
   const UserProfilePage({super.key});
 
   @override
-  State<UserProfilePage> createState() => _UserProfilePageState();
+  ConsumerState<UserProfilePage> createState() => _UserProfilePageState();
 }
 
-class _UserProfilePageState extends State<UserProfilePage> {
-  final AuthSessionStore _sessionStore = AuthSessionStore();
-  final AuthService _authService = AuthService();
-  final UserProfileService _userProfileService = UserProfileService();
+class _UserProfilePageState extends ConsumerState<UserProfilePage> {
+  late final AuthSessionStore _sessionStore;
+  late final AuthService _authService;
+  late final UserProfileService _userProfileService;
 
   AuthSession? _session;
   UserProfile? _profile;
@@ -30,6 +32,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
   @override
   void initState() {
     super.initState();
+    _sessionStore = ref.read(authSessionStoreProvider);
+    _authService = ref.read(authServiceProvider);
+    _userProfileService = ref.read(userProfileServiceProvider);
     _loadSession();
   }
 

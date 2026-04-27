@@ -249,34 +249,28 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _BookshelfFilter.manga,
   ];
 
-  final BookshelfService _bookshelfService = BookshelfService();
-  final BookshelfSystemSettingsService _bookshelfSystemSettingsService =
-      BookshelfSystemSettingsService();
-  final ReaderPreferencesService _readerPreferencesService =
-      ReaderPreferencesService();
-  final ReaderEntryRouteResolver _readerEntryRouteResolver =
-      const ReaderEntryRouteResolver();
-  final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
+  late final BookshelfService _bookshelfService;
+  late final BookshelfSystemSettingsService _bookshelfSystemSettingsService;
+  late final ReaderPreferencesService _readerPreferencesService;
+  late final ReaderEntryRouteResolver _readerEntryRouteResolver;
+  late final LocalBookIndexService _localBookIndexService;
   final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
       const BookMetadataPresentationResolver();
-  final BookDetailService _bookDetailService = BookDetailService();
+  late final BookDetailService _bookDetailService;
   final TextEditingController _bookshelfSearchController =
       TextEditingController();
   final FocusNode _bookshelfSearchFocusNode = FocusNode();
   final ScrollController _bookshelfScrollController = ScrollController();
-  final LocalBookImportService _localBookImportService =
-      LocalBookImportService();
+  late final LocalBookImportService _localBookImportService;
   late final LocalBookRepository _localBookRepository;
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   late final BookshelfPresentationQueryService
   _bookshelfPresentationQueryService;
   late final BookshelfExternalImportCoordinator _externalImportCoordinator;
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
-  final CustomCoverStorageService _customCoverStorageService =
-      const CustomCoverStorageService();
-  final AnnouncementService _announcementService = AnnouncementService();
-  final AnnouncementReadStateService _announcementReadStateService =
-      AnnouncementReadStateService();
+  late final ImageSelectionService _imageSelectionService;
+  late final CustomCoverStorageService _customCoverStorageService;
+  late final AnnouncementService _announcementService;
+  late final AnnouncementReadStateService _announcementReadStateService;
   late final SourceRuntimeTaskConflictService _taskConflictService;
   StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
 
@@ -384,6 +378,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   void initState() {
     super.initState();
+    final dependencies = ref.read(bookshelfPageDependenciesProvider);
+    _bookshelfService = dependencies.bookshelfService;
+    _bookshelfSystemSettingsService = dependencies.systemSettingsService;
+    _readerPreferencesService = dependencies.readerPreferencesService;
+    _readerEntryRouteResolver = dependencies.readerEntryRouteResolver;
+    _localBookIndexService = dependencies.localBookIndexService;
+    _bookDetailService = dependencies.bookDetailService;
+    _localBookImportService = dependencies.localBookImportService;
+    _imageSelectionService = dependencies.imageSelectionService;
+    _customCoverStorageService = dependencies.customCoverStorageService;
+    _announcementService = dependencies.announcementService;
+    _announcementReadStateService = dependencies.announcementReadStateService;
     _localBookRepository = ref.read(bookshelfLocalBookRepositoryProvider);
     _bookMetadataOverrideRepository = ref.read(
       bookshelfMetadataOverrideRepositoryProvider,

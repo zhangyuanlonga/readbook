@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -6,21 +7,22 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../providers.dart';
 
-class AuthPage extends StatefulWidget {
+class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key});
 
   @override
-  State<AuthPage> createState() => _AuthPageState();
+  ConsumerState<AuthPage> createState() => _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _AuthPageState extends ConsumerState<AuthPage> {
   static const EdgeInsets _cardPadding = EdgeInsets.fromLTRB(16, 14, 16, 14);
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
 
   bool _isRegister = false;
   bool _isSubmitting = false;
@@ -33,6 +35,12 @@ class _AuthPageState extends State<AuthPage> {
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = ref.read(authServiceProvider);
   }
 
   @override
