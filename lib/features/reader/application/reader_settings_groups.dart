@@ -32,16 +32,12 @@ class ReaderTypographySettings {
 
 class ReaderBodyLayoutSettings {
   const ReaderBodyLayoutSettings({
-    required this.bodyMarginMode,
-    required this.bodyMarginPreset,
     required this.bodyMarginTop,
     required this.bodyMarginBottom,
     required this.bodyMarginLeft,
     required this.bodyMarginRight,
   });
 
-  final ReaderBodyMarginMode bodyMarginMode;
-  final ReaderBodyMarginPreset bodyMarginPreset;
   final double bodyMarginTop;
   final double bodyMarginBottom;
   final double bodyMarginLeft;
@@ -50,14 +46,14 @@ class ReaderBodyLayoutSettings {
 
 class ReaderChapterHeaderSettings {
   const ReaderChapterHeaderSettings({
-    required this.mode,
-    required this.topSpacing,
-    required this.bottomSpacing,
+    required this.showChapterHeader,
+    required this.horizontalOffset,
+    required this.verticalOffset,
   });
 
-  final ReaderChapterHeaderMode mode;
-  final double topSpacing;
-  final double bottomSpacing;
+  final bool showChapterHeader;
+  final double horizontalOffset;
+  final double verticalOffset;
 }
 
 class ReaderInfoBarSettings {
@@ -176,17 +172,15 @@ class ReaderSettingsGroupingService {
         customFontPath: settings.customFontPath,
       ),
       bodyLayout: ReaderBodyLayoutSettings(
-        bodyMarginMode: settings.bodyMarginMode,
-        bodyMarginPreset: settings.bodyMarginPreset,
         bodyMarginTop: settings.bodyMarginTop,
         bodyMarginBottom: settings.bodyMarginBottom,
         bodyMarginLeft: settings.bodyMarginLeft,
         bodyMarginRight: settings.bodyMarginRight,
       ),
       chapterHeader: ReaderChapterHeaderSettings(
-        mode: settings.chapterHeaderMode,
-        topSpacing: settings.chapterHeaderTopSpacing,
-        bottomSpacing: settings.chapterHeaderBottomSpacing,
+        showChapterHeader: settings.showChapterHeader,
+        horizontalOffset: settings.chapterHeaderHorizontalOffset,
+        verticalOffset: settings.chapterHeaderVerticalOffset,
       ),
       infoBar: ReaderInfoBarSettings(
         infoHeaderEnabled: settings.infoHeaderEnabled,
@@ -250,15 +244,13 @@ class ReaderSettingsGroupingService {
       systemFontPreset: typography?.systemFontPreset,
       fontFamilyKey: typography?.fontFamilyKey,
       customFontPath: typography?.customFontPath,
-      bodyMarginMode: bodyLayout?.bodyMarginMode,
-      bodyMarginPreset: bodyLayout?.bodyMarginPreset,
       bodyMarginTop: bodyLayout?.bodyMarginTop,
       bodyMarginBottom: bodyLayout?.bodyMarginBottom,
       bodyMarginLeft: bodyLayout?.bodyMarginLeft,
       bodyMarginRight: bodyLayout?.bodyMarginRight,
-      chapterHeaderMode: chapterHeader?.mode,
-      chapterHeaderTopSpacing: chapterHeader?.topSpacing,
-      chapterHeaderBottomSpacing: chapterHeader?.bottomSpacing,
+      showChapterHeader: chapterHeader?.showChapterHeader,
+      chapterHeaderHorizontalOffset: chapterHeader?.horizontalOffset,
+      chapterHeaderVerticalOffset: chapterHeader?.verticalOffset,
       infoHeaderEnabled: infoBar?.infoHeaderEnabled,
       infoFooterEnabled: infoBar?.infoFooterEnabled,
       infoShowTime: infoBar?.infoShowTime,

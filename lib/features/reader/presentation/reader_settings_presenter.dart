@@ -4,24 +4,6 @@ import '../application/reader_font_registry_service.dart';
 class ReaderSettingsPresenter {
   const ReaderSettingsPresenter();
 
-  String bodyMarginPresetLabel(ReaderBodyMarginPreset preset) {
-    return switch (preset) {
-      ReaderBodyMarginPreset.compact => '紧凑',
-      ReaderBodyMarginPreset.standard => '标准',
-      ReaderBodyMarginPreset.relaxed => '舒展',
-      ReaderBodyMarginPreset.immersive => '沉浸',
-    };
-  }
-
-  String bodyMarginPresetDescription(ReaderBodyMarginPreset preset) {
-    return switch (preset) {
-      ReaderBodyMarginPreset.compact => '更贴近屏幕边缘，单页内容更多。',
-      ReaderBodyMarginPreset.standard => '平衡留白与阅读密度。',
-      ReaderBodyMarginPreset.relaxed => '更宽松的留白，阅读压力更低。',
-      ReaderBodyMarginPreset.immersive => '缩窄正文宽度，聚焦内容区域。',
-    };
-  }
-
   String bodyMarginDisplayValue(ReaderSettings settings) {
     return '上${settings.bodyMarginTop.round()} 下${settings.bodyMarginBottom.round()} 左${settings.bodyMarginLeft.round()} 右${settings.bodyMarginRight.round()}';
   }

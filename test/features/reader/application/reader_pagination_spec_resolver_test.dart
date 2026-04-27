@@ -19,7 +19,6 @@ void main() {
         fontWeightLevel: ReaderFontWeightLevel.medium,
         fontSource: ReaderFontSource.custom,
         fontFamilyKey: 'reader_custom_font',
-        bodyMarginMode: ReaderBodyMarginMode.custom,
         bodyMarginTop: 18,
         bodyMarginBottom: 20,
         bodyMarginLeft: 16,
@@ -63,7 +62,6 @@ void main() {
       'builds signature from pagination spec and changes with surface metrics',
       () {
         const settings = ReaderSettings(
-          bodyMarginMode: ReaderBodyMarginMode.custom,
           bodyMarginTop: 18,
           bodyMarginBottom: 20,
           bodyMarginLeft: 16,

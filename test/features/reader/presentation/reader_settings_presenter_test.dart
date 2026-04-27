@@ -8,10 +8,17 @@ void main() {
 
     test('builds labels for presets and typography values', () {
       expect(
-        presenter.bodyMarginPresetLabel(ReaderBodyMarginPreset.standard),
-        '标准',
+        presenter.bodyMarginDisplayValue(
+          const ReaderSettings(
+            bodyMarginTop: 6,
+            bodyMarginBottom: 8,
+            bodyMarginLeft: 16,
+            bodyMarginRight: 20,
+          ),
+        ),
+        '上6 下8 左16 右20',
       );
-      expect(presenter.pageAnimationLabel(ReaderPageAnimationStyle.curl), '卷页');
+      expect(presenter.pageAnimationLabel(ReaderPageAnimationStyle.curl), '仿真');
       expect(
         presenter.fontSizeValueLabel(const ReaderSettings(fontSize: 20)),
         '20px',

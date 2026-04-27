@@ -13,14 +13,12 @@ void main() {
 
     test('background changes do not affect pagination spec content area', () {
       const baseSettings = ReaderSettings(
-        bodyMarginMode: ReaderBodyMarginMode.custom,
         bodyMarginTop: 18,
         bodyMarginBottom: 20,
         bodyMarginLeft: 16,
         bodyMarginRight: 24,
       );
       const themedSettings = ReaderSettings(
-        bodyMarginMode: ReaderBodyMarginMode.custom,
         bodyMarginTop: 18,
         bodyMarginBottom: 20,
         bodyMarginLeft: 16,

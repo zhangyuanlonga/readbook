@@ -640,8 +640,6 @@ class ReaderSettings {
       'infoHeaderMarginBottom': infoHeaderMarginBottom,
       'infoHeaderMarginLeft': infoHeaderMarginLeft,
       'infoHeaderMarginRight': infoHeaderMarginRight,
-      'bodyMarginMode': bodyMarginMode.name,
-      'bodyMarginPreset': bodyMarginPreset.name,
       'bodyMarginTop': bodyMarginTop,
       'bodyMarginBottom': bodyMarginBottom,
       'bodyMarginLeft': bodyMarginLeft,
@@ -653,11 +651,6 @@ class ReaderSettings {
       'showChapterHeader': showChapterHeader,
       'chapterHeaderHorizontalOffset': chapterHeaderHorizontalOffset,
       'chapterHeaderVerticalOffset': chapterHeaderVerticalOffset,
-      'chapterHeaderMode': chapterHeaderMode.name,
-      'chapterHeaderTopSpacing': chapterHeaderTopSpacing,
-      'chapterHeaderBottomSpacing': chapterHeaderBottomSpacing,
-      'pinnedChapterHeaderOffsetX': pinnedChapterHeaderOffsetX,
-      'pinnedChapterHeaderOffsetY': pinnedChapterHeaderOffsetY,
     };
   }
 
@@ -750,6 +743,7 @@ class ReaderSettings {
       (item) => item.name == bodyMarginPresetName,
       orElse: () => ReaderBodyMarginPreset.standard,
     );
+    final legacyBodyMargins = bodyMarginValuesForPreset(bodyMarginPreset);
     final chapterHeaderModeName = json['chapterHeaderMode']?.toString();
     final legacyPinnedHeaderOffsetX = _asDouble(
       json['pinnedChapterHeaderOffsetX'],
@@ -780,11 +774,17 @@ class ReaderSettings {
     final customFontPath = json['customFontPath']?.toString().trim();
     final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 16;
     final bodyMarginLeft =
-        (_asDouble(json['bodyMarginLeft']) ?? legacyHorizontalPadding)
+        (_asDouble(json['bodyMarginLeft']) ??
+                (bodyMarginMode == ReaderBodyMarginMode.preset
+                    ? legacyBodyMargins.left
+                    : legacyHorizontalPadding))
             .clamp(minLayoutMargin, maxLayoutMargin)
             .toDouble();
     final bodyMarginRight =
-        (_asDouble(json['bodyMarginRight']) ?? legacyHorizontalPadding)
+        (_asDouble(json['bodyMarginRight']) ??
+                (bodyMarginMode == ReaderBodyMarginMode.preset
+                    ? legacyBodyMargins.right
+                    : legacyHorizontalPadding))
             .clamp(minLayoutMargin, maxLayoutMargin)
             .toDouble();
 
@@ -898,14 +898,18 @@ class ReaderSettings {
           (_asDouble(json['infoHeaderMarginRight']) ?? legacyHorizontalPadding)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
-      bodyMarginMode: bodyMarginMode,
-      bodyMarginPreset: bodyMarginPreset,
       bodyMarginTop:
-          (_asDouble(json['bodyMarginTop']) ?? 6)
+          (_asDouble(json['bodyMarginTop']) ??
+                  (bodyMarginMode == ReaderBodyMarginMode.preset
+                      ? legacyBodyMargins.top
+                      : 6))
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginBottom:
-          (_asDouble(json['bodyMarginBottom']) ?? 6)
+          (_asDouble(json['bodyMarginBottom']) ??
+                  (bodyMarginMode == ReaderBodyMarginMode.preset
+                      ? legacyBodyMargins.bottom
+                      : 6))
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginLeft: bodyMarginLeft,
@@ -941,23 +945,6 @@ class ReaderSettings {
                   (_asDouble(json['chapterHeaderTopSpacing']) ??
                       (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8)))
               .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
-              .toDouble(),
-      chapterHeaderMode: legacyChapterHeaderMode,
-      chapterHeaderTopSpacing:
-          (_asDouble(json['chapterHeaderTopSpacing']) ??
-                  (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8))
-              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
-              .toDouble(),
-      chapterHeaderBottomSpacing:
-          (_asDouble(json['chapterHeaderBottomSpacing']) ?? 0)
-              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
-              .toDouble(),
-      pinnedChapterHeaderOffsetX: normalizePinnedChapterHeaderOffsetX(
-        _asDouble(json['pinnedChapterHeaderOffsetX']),
-      ),
-      pinnedChapterHeaderOffsetY:
-          (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8)
-              .clamp(minPinnedHeaderOffsetY, maxPinnedHeaderOffsetY)
               .toDouble(),
     );
   }

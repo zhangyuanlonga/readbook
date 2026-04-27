@@ -31,6 +31,7 @@ class ReaderPagedViewportCurlState {
     this.fromIndex = 0,
     this.toIndex = 0,
     this.previewProgress = 0,
+    this.touchYFactor = 0.82,
     this.commitOnAnimationEnd = true,
   });
 
@@ -42,6 +43,7 @@ class ReaderPagedViewportCurlState {
   final int fromIndex;
   final int toIndex;
   final double previewProgress;
+  final double touchYFactor;
   final bool commitOnAnimationEnd;
 
   bool get isActive => isAnimating || isPreview;
@@ -364,6 +366,7 @@ class ReaderPagedViewportTransitionStack extends StatelessWidget {
           targetPage: child ?? targetPage,
           progress: progress,
           direction: plan.direction,
+          touchYFactor: curlState.touchYFactor,
           colors: curlColors,
         );
       },

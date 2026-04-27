@@ -500,7 +500,6 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
       bodyTextUnderlineGap: defaults.bodyTextUnderlineGap,
       bodyTextUnderlineDashLength: defaults.bodyTextUnderlineDashLength,
       bodyTextUnderlineDashGapRatio: defaults.bodyTextUnderlineDashGapRatio,
-      bodyMarginMode: ReaderBodyMarginMode.custom,
       bodyMarginTop: defaults.bodyMarginTop,
       bodyMarginBottom: defaults.bodyMarginBottom,
       bodyMarginLeft: defaults.bodyMarginLeft,

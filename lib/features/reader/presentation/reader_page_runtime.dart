@@ -183,7 +183,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       }
 
       switch (_currentViewportKind) {
-        case _ReaderViewportKind.textPaged:
+        case ReaderModeViewportKind.textPaged:
           final plan = _activeTextRenderer.planRestore(
             ratio: normalized,
             metrics: _currentTextRenderMetrics(),
@@ -198,7 +198,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             _currentPageIndex = plan.pageIndex ?? 0;
           });
           return;
-        case _ReaderViewportKind.mangaPaged:
+        case ReaderModeViewportKind.imagePaged:
           final total = _chapterImageUrls.length;
           if (total <= 1) {
             setState(() {
@@ -215,8 +215,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             _mangaPageIndex = target;
           });
           return;
-        case _ReaderViewportKind.textScroll:
-        case _ReaderViewportKind.mangaContinuous:
+        case ReaderModeViewportKind.textScroll:
+        case ReaderModeViewportKind.imageScroll:
           if (!_scrollController.hasClients) {
             return;
           }
@@ -589,16 +589,16 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   double _currentScrollRatio() {
     switch (_currentViewportKind) {
-      case _ReaderViewportKind.textPaged:
+      case ReaderModeViewportKind.textPaged:
         return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
-      case _ReaderViewportKind.mangaPaged:
+      case ReaderModeViewportKind.imagePaged:
         final total = _chapterImageUrls.length;
         if (total <= 1) {
           return 0;
         }
         return (_mangaPageIndex / (total - 1)).clamp(0.0, 1.0);
-      case _ReaderViewportKind.textScroll:
-      case _ReaderViewportKind.mangaContinuous:
+      case ReaderModeViewportKind.textScroll:
+      case ReaderModeViewportKind.imageScroll:
         if (_shouldUseContinuousTextFlow) {
           final currentChapter = _findCurrentContinuousTextChapter();
           if (currentChapter != null) {

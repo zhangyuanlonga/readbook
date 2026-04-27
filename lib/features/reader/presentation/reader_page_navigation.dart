@@ -160,7 +160,8 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       return;
     }
 
-    final isPagedMode = _currentViewportKind == _ReaderViewportKind.mangaPaged;
+    final isPagedMode =
+        _currentViewportKind == ReaderModeViewportKind.imagePaged;
     double draftRatio = _currentScrollRatio();
     final readerModalTheme = _readerModalTheme();
 

@@ -73,20 +73,20 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     bool includeMangaPaged = true,
   }) async {
     switch (_currentViewportKind) {
-      case _ReaderViewportKind.mangaPaged:
+      case ReaderModeViewportKind.imagePaged:
         if (includeMangaPaged) {
           await _turnMangaPage(forward: forward);
         }
         return;
-      case _ReaderViewportKind.textPaged:
+      case ReaderModeViewportKind.textPaged:
         await _turnPagedTextPage(direction: forward ? 1 : -1);
         return;
-      case _ReaderViewportKind.textScroll:
-        if (_pageTurnUsesScroll(_settings.pageTurnMode)) {
+      case ReaderModeViewportKind.textScroll:
+        if (_settings.pageTurnMode.usesScrollLayout) {
           await _advanceScrollReaderByStep(forward: forward);
         }
         return;
-      case _ReaderViewportKind.mangaContinuous:
+      case ReaderModeViewportKind.imageScroll:
         return;
     }
   }
@@ -365,7 +365,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
-    if (!_pageTurnIncludesTap(_settings.pageTurnMode)) {
+    if (!_settings.pageTurnMode.tapEnabled) {
       return;
     }
 

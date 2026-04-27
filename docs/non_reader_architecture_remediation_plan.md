@@ -106,10 +106,11 @@
 - 阶段 1：已完成，完成日期 `2026-04-27`
 - 阶段 2：已完成，完成日期 `2026-04-27`
 - 阶段 3：已完成，完成日期 `2026-04-27`
-- 阶段 4：未开始
-- 备注：已执行 `flutter analyze` 并通过；已执行 `flutter test`，但当前存在与本轮整改无关的既有失败，集中在 `test/app/layout/adaptive_breakpoints_test.dart`
+- 阶段 4：已完成，完成日期 `2026-04-27`
+- 备注：目标范围 `flutter analyze` 已通过；全量 `flutter analyze` 仍有阅读器既有 warning；已执行 `flutter test`，但当前存在与本轮整改无关的既有失败，集中在 `test/app/layout/adaptive_breakpoints_test.dart`
 - 阶段 2 验证备注：`flutter analyze lib/features/source lib/features/discover lib/features/mine lib/features/search` 已通过；`test/features/source/presentation/source_login_page_test.dart` 与 `test/features/search/presentation/search_book_card_test.dart` 已通过；`test/features/discover/presentation/discover_page_test.dart` 仍存在 `shows cached discover sources and categories before refresh completes` 的 pending timer 失败，需后续单独处理
 - 阶段 3 验证备注：已将 `discover_page.dart` 的 source/category picker 组件拆至 `discover_page_pickers.dart`，将 `source_page.dart` 的检测弹层与请求对话框拆至 `source_page_dialogs.dart`，将 `bookshelf_page.dart` 的书架内容/搜索筛选区拆至 `bookshelf_page_sections.dart`，并将 `book_detail_page.dart` 的本地诊断/编辑辅助模型拆至 `book_detail_page_models.dart`；`flutter analyze lib/features/bookshelf lib/features/book lib/features/source lib/features/discover` 已通过；`test/features/bookshelf/presentation/bookshelf_grid_sliver_test.dart`、`test/features/book/presentation/book_detail_primary_actions_test.dart`、`test/features/book/presentation/book_detail_switch_source_test.dart` 已通过
+- 阶段 4 验证备注：已新增 `bookshelf_presentation_query_service_test.dart`、`book_local_metadata_service_test.dart`、`discover_book_presentation_service_test.dart`、`search_book_presentation_service_test.dart`、`cache_management_service_test.dart`、`bookmarks_query_service_test.dart` 以及 provider smoke tests；阶段 4 测试集已通过；全量 `flutter analyze` 仍有阅读器既有 warning：`reader_page.dart` 中 `_viewportBuilder` / `_pagedViewportTransitionResolver` 未使用
 
 回填规则：
 
@@ -261,15 +262,15 @@
 
 目标：让整改结果可守住，不靠人工记忆维持。
 
-- [ ] 为 `bookshelf` provider / query service 补测试
-- [ ] 为 `book detail` provider / application service 补测试
-- [ ] 为 `source` 外部导入 coordinator 补测试
-- [ ] 为 `cache management` 查询与清理 service 补测试
-- [ ] 为 `discover` 展示态解析 query service 补测试
-- [ ] 为 `bookmarks` 查询 service 补测试
-- [ ] 为 `source_login` 浏览器交互 service 补测试
-- [ ] 补充对应 widget smoke test 或 route smoke test
-- [ ] 代码评审时强制检查本文件第 7 节清单
+- [x] 为 `bookshelf` provider / query service 补测试
+- [x] 为 `book detail` provider / application service 补测试
+- [x] 为 `source` 外部导入 coordinator 补测试
+- [x] 为 `cache management` 查询与清理 service 补测试
+- [x] 为 `discover` 展示态解析 query service 补测试
+- [x] 为 `bookmarks` 查询 service 补测试
+- [x] 为 `source_login` 浏览器交互 service 补测试
+- [x] 补充对应 widget smoke test 或 route smoke test
+- [x] 代码评审时强制检查本文件第 7 节清单
 
 阶段完成标准：
 
@@ -359,7 +360,7 @@
 
 ### M4：长期可守
 
-- [ ] 阶段 4 完成
+- [x] 阶段 4 完成
 
 ---
 

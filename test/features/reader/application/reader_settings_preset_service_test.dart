@@ -38,9 +38,9 @@ void main() {
         ReaderChapterHeaderPreset.immersive,
       );
 
-      expect(next.chapterHeaderMode, ReaderChapterHeaderMode.center);
-      expect(next.chapterHeaderTopSpacing, 8);
-      expect(next.chapterHeaderBottomSpacing, 6);
+      expect(next.showChapterHeader, isTrue);
+      expect(next.chapterHeaderHorizontalOffset, 0.5);
+      expect(next.chapterHeaderVerticalOffset, 8);
     });
 
     test('applies info style preset to header and footer presentation', () {

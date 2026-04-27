@@ -6,7 +6,6 @@ import 'curl_paged_animation_renderer.dart';
 import 'fade_paged_animation_renderer.dart';
 import 'paged_animation_renderer.dart';
 import 'translate_paged_animation_renderer.dart';
-import 'vertical_paged_animation_renderer.dart';
 
 class PagedAnimationRendererRegistry {
   const PagedAnimationRendererRegistry();
@@ -17,8 +16,9 @@ class PagedAnimationRendererRegistry {
       ReaderPageAnimationStyle.cover => const CoverPagedAnimationRenderer(),
       ReaderPageAnimationStyle.translate =>
         const TranslatePagedAnimationRenderer(),
+      // Legacy vertical persists as a slide-style transition.
       ReaderPageAnimationStyle.vertical =>
-        const VerticalPagedAnimationRenderer(),
+        const TranslatePagedAnimationRenderer(),
       ReaderPageAnimationStyle.fade => const FadePagedAnimationRenderer(),
       ReaderPageAnimationStyle.none => const FadePagedAnimationRenderer(),
     };

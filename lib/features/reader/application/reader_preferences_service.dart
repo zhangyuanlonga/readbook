@@ -217,12 +217,12 @@ class ReaderPreferencesService {
       orElse: () => ReaderMangaLoadStrategy.balanced,
     );
     final bodyMarginModeName = prefs.getString(_bodyMarginModeKey);
-    final bodyMarginMode = ReaderBodyMarginMode.values.firstWhere(
+    final legacyBodyMarginMode = ReaderBodyMarginMode.values.firstWhere(
       (item) => item.name == bodyMarginModeName,
       orElse: () => ReaderBodyMarginMode.preset,
     );
     final bodyMarginPresetName = prefs.getString(_bodyMarginPresetKey);
-    final bodyMarginPreset = ReaderBodyMarginPreset.values.firstWhere(
+    final legacyBodyMarginPreset = ReaderBodyMarginPreset.values.firstWhere(
       (item) => item.name == bodyMarginPresetName,
       orElse: () => ReaderBodyMarginPreset.standard,
     );
@@ -237,20 +237,33 @@ class ReaderPreferencesService {
 
     final legacyHorizontalPadding =
         prefs.getDouble(_horizontalPaddingKey) ?? 16;
-    final bodyMarginLeft =
-        (prefs.getDouble(_bodyMarginLeftKey) ?? legacyHorizontalPadding)
-            .clamp(
-              ReaderSettings.minLayoutMargin,
-              ReaderSettings.maxLayoutMargin,
-            )
-            .toDouble();
-    final bodyMarginRight =
-        (prefs.getDouble(_bodyMarginRightKey) ?? legacyHorizontalPadding)
-            .clamp(
-              ReaderSettings.minLayoutMargin,
-              ReaderSettings.maxLayoutMargin,
-            )
-            .toDouble();
+    final legacyBodyMargins = ReaderSettings.bodyMarginValuesForPreset(
+      legacyBodyMarginPreset,
+    );
+    final bodyMarginTop = _clampLayoutMargin(
+      prefs.getDouble(_bodyMarginTopKey) ??
+          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
+              ? legacyBodyMargins.top
+              : 6),
+    );
+    final bodyMarginBottom = _clampLayoutMargin(
+      prefs.getDouble(_bodyMarginBottomKey) ??
+          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
+              ? legacyBodyMargins.bottom
+              : 6),
+    );
+    final bodyMarginLeft = _clampLayoutMargin(
+      prefs.getDouble(_bodyMarginLeftKey) ??
+          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
+              ? legacyBodyMargins.left
+              : legacyHorizontalPadding),
+    );
+    final bodyMarginRight = _clampLayoutMargin(
+      prefs.getDouble(_bodyMarginRightKey) ??
+          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
+              ? legacyBodyMargins.right
+              : legacyHorizontalPadding),
+    );
 
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
@@ -391,22 +404,8 @@ class ReaderPreferencesService {
                 ReaderSettings.maxLayoutMargin,
               )
               .toDouble(),
-      bodyMarginMode: bodyMarginMode,
-      bodyMarginPreset: bodyMarginPreset,
-      bodyMarginTop:
-          (prefs.getDouble(_bodyMarginTopKey) ?? 6)
-              .clamp(
-                ReaderSettings.minLayoutMargin,
-                ReaderSettings.maxLayoutMargin,
-              )
-              .toDouble(),
-      bodyMarginBottom:
-          (prefs.getDouble(_bodyMarginBottomKey) ?? 6)
-              .clamp(
-                ReaderSettings.minLayoutMargin,
-                ReaderSettings.maxLayoutMargin,
-              )
-              .toDouble(),
+      bodyMarginTop: bodyMarginTop,
+      bodyMarginBottom: bodyMarginBottom,
       bodyMarginLeft: bodyMarginLeft,
       bodyMarginRight: bodyMarginRight,
       infoFooterMarginTop:
@@ -460,33 +459,6 @@ class ReaderPreferencesService {
               .clamp(
                 ReaderSettings.minChapterHeaderSpacing,
                 ReaderSettings.maxChapterHeaderSpacing,
-              )
-              .toDouble(),
-      chapterHeaderMode: legacyChapterHeaderMode,
-      chapterHeaderTopSpacing:
-          (prefs.getDouble(_chapterHeaderTopSpacingKey) ??
-                  (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8))
-              .clamp(
-                ReaderSettings.minChapterHeaderSpacing,
-                ReaderSettings.maxChapterHeaderSpacing,
-              )
-              .toDouble(),
-      chapterHeaderBottomSpacing:
-          (prefs.getDouble(_chapterHeaderBottomSpacingKey) ?? 0)
-              .clamp(
-                ReaderSettings.minChapterHeaderSpacing,
-                ReaderSettings.maxChapterHeaderSpacing,
-              )
-              .toDouble(),
-      pinnedChapterHeaderOffsetX:
-          ReaderSettings.normalizePinnedChapterHeaderOffsetX(
-            prefs.getDouble(_pinnedChapterHeaderOffsetXKey) ?? 0,
-          ),
-      pinnedChapterHeaderOffsetY:
-          (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8)
-              .clamp(
-                ReaderSettings.minPinnedHeaderOffsetY,
-                ReaderSettings.maxPinnedHeaderOffsetY,
               )
               .toDouble(),
     );
@@ -633,12 +605,12 @@ class ReaderPreferencesService {
       _infoHeaderMarginRightKey,
       settings.infoHeaderMarginRight,
     );
-    await prefs.setString(_bodyMarginModeKey, settings.bodyMarginMode.name);
-    await prefs.setString(_bodyMarginPresetKey, settings.bodyMarginPreset.name);
     await prefs.setDouble(_bodyMarginTopKey, settings.bodyMarginTop);
     await prefs.setDouble(_bodyMarginBottomKey, settings.bodyMarginBottom);
     await prefs.setDouble(_bodyMarginLeftKey, settings.bodyMarginLeft);
     await prefs.setDouble(_bodyMarginRightKey, settings.bodyMarginRight);
+    await prefs.remove(_bodyMarginModeKey);
+    await prefs.remove(_bodyMarginPresetKey);
     await prefs.setDouble(
       _infoFooterMarginTopKey,
       settings.infoFooterMarginTop,
@@ -664,18 +636,11 @@ class ReaderPreferencesService {
       _chapterHeaderVerticalOffsetKey,
       settings.chapterHeaderVerticalOffset,
     );
-    await prefs.setString(
-      _chapterHeaderModeKey,
-      settings.chapterHeaderMode.name,
-    );
-    await prefs.setDouble(
-      _chapterHeaderTopSpacingKey,
-      settings.chapterHeaderTopSpacing,
-    );
-    await prefs.setDouble(
-      _chapterHeaderBottomSpacingKey,
-      settings.chapterHeaderBottomSpacing,
-    );
+    await prefs.remove(_chapterHeaderModeKey);
+    await prefs.remove(_chapterHeaderTopSpacingKey);
+    await prefs.remove(_chapterHeaderBottomSpacingKey);
+    await prefs.remove(_pinnedChapterHeaderOffsetXKey);
+    await prefs.remove(_pinnedChapterHeaderOffsetYKey);
     final backgroundImageBase64 = settings.backgroundImageBase64;
     if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {
       await prefs.remove(_backgroundImageBase64Key);
@@ -930,5 +895,11 @@ class ReaderPreferencesService {
       return null;
     }
     return '$_tocSnapshotPrefix$normalizedSourceId|$normalizedDetailUrl';
+  }
+
+  double _clampLayoutMargin(double value) {
+    return value
+        .clamp(ReaderSettings.minLayoutMargin, ReaderSettings.maxLayoutMargin)
+        .toDouble();
   }
 }

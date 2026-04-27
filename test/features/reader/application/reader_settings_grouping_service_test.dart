@@ -20,8 +20,6 @@ void main() {
         systemFontPreset: ReaderSystemFontPreset.serif,
         fontFamilyKey: 'reader_font',
         customFontPath: '/tmp/reader_font.ttf',
-        bodyMarginMode: ReaderBodyMarginMode.custom,
-        bodyMarginPreset: ReaderBodyMarginPreset.relaxed,
         bodyMarginTop: 10,
         bodyMarginBottom: 12,
         bodyMarginLeft: 14,
@@ -44,11 +42,9 @@ void main() {
         infoFooterMarginBottom: 6,
         infoFooterMarginLeft: 7,
         infoFooterMarginRight: 8,
-        chapterHeaderMode: ReaderChapterHeaderMode.center,
-        chapterHeaderTopSpacing: 22,
-        chapterHeaderBottomSpacing: 6,
-        pinnedChapterHeaderOffsetX: 0.3,
-        pinnedChapterHeaderOffsetY: 22,
+        showChapterHeader: true,
+        chapterHeaderHorizontalOffset: 0.3,
+        chapterHeaderVerticalOffset: 22,
         backgroundStyle: ReaderBackgroundStyle.warm,
         backgroundTone: ReaderBackgroundTone.amberGoldTint,
         backgroundImageBase64: 'bg',
@@ -73,11 +69,10 @@ void main() {
       expect(groups.typography.paragraphSpacing, 17);
       expect(groups.typography.letterSpacing, closeTo(0.16, 0.0001));
       expect(groups.typography.fontFamilyKey, 'reader_font');
-      expect(groups.bodyLayout.bodyMarginMode, ReaderBodyMarginMode.custom);
       expect(groups.bodyLayout.bodyMarginLeft, 14);
-      expect(groups.chapterHeader.mode, ReaderChapterHeaderMode.center);
-      expect(groups.chapterHeader.topSpacing, 22);
-      expect(groups.chapterHeader.bottomSpacing, 6);
+      expect(groups.chapterHeader.showChapterHeader, isTrue);
+      expect(groups.chapterHeader.horizontalOffset, 0.3);
+      expect(groups.chapterHeader.verticalOffset, 22);
       expect(groups.infoBar.infoHeaderEnabled, isTrue);
       expect(groups.infoBar.infoFooterMarginRight, 8);
       expect(
@@ -114,17 +109,15 @@ void main() {
           customFontPath: null,
         ),
         bodyLayout: const ReaderBodyLayoutSettings(
-          bodyMarginMode: ReaderBodyMarginMode.custom,
-          bodyMarginPreset: ReaderBodyMarginPreset.compact,
           bodyMarginTop: 8,
           bodyMarginBottom: 9,
           bodyMarginLeft: 10,
           bodyMarginRight: 11,
         ),
         chapterHeader: const ReaderChapterHeaderSettings(
-          mode: ReaderChapterHeaderMode.center,
-          topSpacing: 18,
-          bottomSpacing: 4,
+          showChapterHeader: true,
+          horizontalOffset: 0.5,
+          verticalOffset: 18,
         ),
       );
 
@@ -133,9 +126,9 @@ void main() {
       expect(merged.pageTurnMode, ReaderPageTurnMode.tapAndSwipe);
       expect(merged.fontSize, 20);
       expect(merged.bodyMarginRight, 11);
-      expect(merged.chapterHeaderMode, ReaderChapterHeaderMode.center);
-      expect(merged.chapterHeaderTopSpacing, 18);
-      expect(merged.chapterHeaderBottomSpacing, 4);
+      expect(merged.showChapterHeader, isTrue);
+      expect(merged.chapterHeaderHorizontalOffset, 0.5);
+      expect(merged.chapterHeaderVerticalOffset, 18);
     });
   });
 }

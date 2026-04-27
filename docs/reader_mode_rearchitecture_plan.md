@@ -114,8 +114,8 @@
 
 按下面顺序推进，并直接作为项目执行清单使用：
 
-- [ ] 阶段 1：阅读模式模型重构
-- [ ] 阶段 2：统一设置模型
+- [x] 阶段 1：阅读模式模型重构
+- [x] 阶段 2：统一设置模型
 - [ ] 阶段 3：统一正文布局
 - [ ] 阶段 4：重做分页动画系统
 - [ ] 阶段 5：设置界面重组
@@ -129,21 +129,21 @@
 
 执行清单：
 
-- [ ] 新增 `lib/features/reader/application/reader_mode_model.dart`
-- [ ] 新增 `lib/features/reader/application/reader_mode_resolver.dart`
-- [ ] 拆清当前 `ReaderPageTurnMode`、`_currentViewportKind`、`contentMode` 的职责边界
-- [ ] 明确统一模型中的 `contentKind`
-- [ ] 明确统一模型中的 `layoutMode`
-- [ ] 明确统一模型中的 `pageAnimationStyle`
-- [ ] 让 `paged` 默认支持点击翻页与滑动翻页
-- [ ] 让 `scroll` 仅表示滚动阅读布局
-- [ ] 页面层移除“小说分页/漫画连续”等自行拼装判断
+- [x] 新增 `lib/features/reader/application/reader_mode_model.dart`
+- [x] 新增 `lib/features/reader/application/reader_mode_resolver.dart`
+- [x] 拆清当前 `ReaderPageTurnMode`、`_currentViewportKind`、`contentMode` 的职责边界
+- [x] 明确统一模型中的 `contentKind`
+- [x] 明确统一模型中的 `layoutMode`
+- [x] 明确统一模型中的 `pageAnimationStyle`
+- [x] 让 `paged` 默认支持点击翻页与滑动翻页
+- [x] 让 `scroll` 仅表示滚动阅读布局
+- [x] 页面层移除“小说分页/漫画连续”等自行拼装判断
 
 阶段完成定义：
 
-- [ ] 页面不再自己拼“小说分页/漫画连续”判断
-- [ ] `ReaderPageTurnMode` 不再承担布局模式职责
-- [ ] 阶段 1 单测完成：模式推导单测
+- [x] 页面不再自己拼“小说分页/漫画连续”判断
+- [x] `ReaderPageTurnMode` 不再承担布局模式职责
+- [x] 阶段 1 单测完成：模式推导单测
 
 ---
 
@@ -153,29 +153,29 @@
 
 执行清单：
 
-- [ ] 收口 `ReaderSettings` 主字段，只保留文本排版字段
-- [ ] 收口 `ReaderSettings` 主字段，只保留正文 padding 字段
-- [ ] 收口 `ReaderSettings` 主字段，只保留章节头字段
-- [ ] 收口 `ReaderSettings` 主字段，只保留分页动画字段
-- [ ] 收口 `ReaderSettings` 主字段，只保留漫画能力字段
-- [ ] 以 `bodyMarginTop/Bottom/Left/Right` 作为主用正文边距字段
-- [ ] 以 `showChapterHeader` 作为主用章节头开关字段
-- [ ] 以 `chapterHeaderHorizontalOffset` 作为主用章节头横向偏移字段
-- [ ] 以 `chapterHeaderVerticalOffset` 作为主用章节头纵向偏移字段
-- [ ] 以 `pageAnimationStyle` 作为主用分页动画字段
-- [ ] 将 `bodyMarginMode`、`bodyMarginPreset` 降级为兼容迁移输入
-- [ ] 将 `chapterHeaderMode`、`chapterHeaderTopSpacing`、`chapterHeaderBottomSpacing` 降级为兼容迁移输入
-- [ ] 将 `pinnedChapterHeaderOffsetX/Y` 降级为兼容迁移输入
-- [ ] 调整 `ReaderPreferencesService`，实现“新字段优先、旧字段兜底迁移”
-- [ ] 同步更新 `settings summary`
-- [ ] 同步更新 `presenter`
-- [ ] 同步更新相关测试
+- [x] 收口 `ReaderSettings` 主字段，只保留文本排版字段
+- [x] 收口 `ReaderSettings` 主字段，只保留正文 padding 字段
+- [x] 收口 `ReaderSettings` 主字段，只保留章节头字段
+- [x] 收口 `ReaderSettings` 主字段，只保留分页动画字段
+- [x] 收口 `ReaderSettings` 主字段，只保留漫画能力字段
+- [x] 以 `bodyMarginTop/Bottom/Left/Right` 作为主用正文边距字段
+- [x] 以 `showChapterHeader` 作为主用章节头开关字段
+- [x] 以 `chapterHeaderHorizontalOffset` 作为主用章节头横向偏移字段
+- [x] 以 `chapterHeaderVerticalOffset` 作为主用章节头纵向偏移字段
+- [x] 以 `pageAnimationStyle` 作为主用分页动画字段
+- [x] 将 `bodyMarginMode`、`bodyMarginPreset` 降级为兼容迁移输入
+- [x] 将 `chapterHeaderMode`、`chapterHeaderTopSpacing`、`chapterHeaderBottomSpacing` 降级为兼容迁移输入
+- [x] 将 `pinnedChapterHeaderOffsetX/Y` 降级为兼容迁移输入
+- [x] 调整 `ReaderPreferencesService`，实现“新字段优先、旧字段兜底迁移”
+- [x] 同步更新 `settings summary`
+- [x] 同步更新 `presenter`
+- [x] 同步更新相关测试
 
 阶段完成定义：
 
-- [ ] 主设置、主渲染、prefs 主读取只认新字段
-- [ ] 旧字段只在迁移逻辑中出现
-- [ ] 阶段 2 单测完成：settings/prefs 迁移单测
+- [x] 主设置、主渲染、prefs 主读取只认新字段
+- [x] 旧字段只在迁移逻辑中出现
+- [x] 阶段 2 单测完成：settings/prefs 迁移单测
 
 ---
 
@@ -289,8 +289,8 @@
 
 每阶段都要完成最小闭环验证：
 
-- [ ] 阶段 1：模式推导单测
-- [ ] 阶段 2：settings/prefs 迁移单测
+- [x] 阶段 1：模式推导单测
+- [x] 阶段 2：settings/prefs 迁移单测
 - [ ] 阶段 3：surface metrics 与章节头显示回归
 - [ ] 阶段 4：分页动画手测
 - [ ] 阶段 5：设置项显隐回归

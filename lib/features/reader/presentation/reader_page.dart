@@ -126,8 +126,11 @@ import 'reader_shell.dart';
 import 'reader_source_switch_controller.dart';
 import 'reader_text_offset_mapper.dart' as text_offset_mapper;
 import 'reader_text_block_presentation.dart';
+import 'reader_paged_viewport_support.dart';
+import 'reader_presentation_resolver.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_text_scroll_view.dart';
+import 'reader_viewport_builder.dart';
 
 part 'reader_page_content_loading.dart';
 part 'reader_page_selection.dart';
@@ -191,6 +194,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderContentLoadingPresenter();
   final ReaderContentModeResolver _contentModeResolver =
       const ReaderContentModeResolver();
+  final ReaderPresentationResolver _presentationResolver =
+      const ReaderPresentationResolver();
+  final ReaderViewportBuilder _viewportBuilder = const ReaderViewportBuilder();
   final ReaderModeCapabilitiesResolver _modeCapabilitiesResolver =
       const ReaderModeCapabilitiesResolver();
   final ReaderModeResolver _readerModeResolver = const ReaderModeResolver();
@@ -215,6 +221,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSurfacePolicyResolver();
   final PagedTransitionController _pagedTransitionLogic =
       const PagedTransitionController();
+  final ReaderPagedViewportTransitionResolver
+  _pagedViewportTransitionResolver =
+      const ReaderPagedViewportTransitionResolver();
   final PagedAnimationRendererRegistry _pagedAnimationRendererRegistry =
       const PagedAnimationRendererRegistry();
   final CurlPagedAnimationRenderer _curlPagedAnimationRenderer =
@@ -497,7 +506,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             .resolve(
               contentMode: effectiveContentMode,
               contentCapabilities: _contentCapabilities,
-              hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
+              hasInlineImageParagraphs:
+                  _currentChapterHasInlineImageParagraphs(),
             )
             .canUsePagedText;
     return _readerModeResolver.resolve(
@@ -590,6 +600,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  ReaderContentSession _resolvedContentSession() {
+    final current = _currentContentSession();
+    if (current != null) {
+      return current;
+    }
+    return _presentationResolver.resolveContentSession(
+      seed: ReaderSessionSeed(
+        contentMode: _currentContentMode,
+        bookId: _activeBookId,
+        sourceId: _sourceId ?? '',
+        detailUrl: _detailUrl ?? '',
+        bookTitle: _bookTitle,
+        bookAuthor: _bookAuthor,
+        bookCoverUrl: _bookCoverUrl,
+        chapterId: _chapterId,
+        chapterUrl: _chapterUrl,
+        chapterTitle: _chapterTitle,
+        chapterIndex: _currentIndex,
+        chapters: _chapters,
+      ),
+    );
+  }
+
+  ReaderPresentationPalette _presentationPalette(BuildContext context) {
+    return ReaderPresentationPalette.fromColorScheme(Theme.of(context).colorScheme);
+  }
+
+  ReaderPresentationViewportKind get _presentationViewportKind {
+    return switch (_currentViewportKind) {
+      ReaderModeViewportKind.textPaged =>
+        ReaderPresentationViewportKind.textPaged,
+      ReaderModeViewportKind.textScroll =>
+        ReaderPresentationViewportKind.textScroll,
+      ReaderModeViewportKind.imagePaged =>
+        ReaderPresentationViewportKind.mangaPaged,
+      ReaderModeViewportKind.imageScroll =>
+        ReaderPresentationViewportKind.mangaContinuous,
+    };
+  }
+
   ReadingProgress? _bootstrapProgressForCurrentChapter({bool consume = false}) {
     final progress = _bootstrapProgress;
     if (progress == null) {
@@ -651,7 +701,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _isSwipePaginationEnabled() {
-    return _currentReaderMode.viewportKind == ReaderModeViewportKind.textPaged &&
+    return _currentReaderMode.viewportKind ==
+            ReaderModeViewportKind.textPaged &&
         _currentReaderMode.swipeTurnEnabled;
   }
 
@@ -1217,60 +1268,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       },
       child: Builder(
         builder: (context) {
-          final shellSession =
-              _currentContentSession() ??
-              ReaderContentSession(
-                contentMode: _currentContentMode,
-                bookId: _activeBookId,
-                sourceId: _sourceId ?? '',
-                detailUrl: _detailUrl ?? '',
-                bookTitle: _bookTitle,
-                bookAuthor: _bookAuthor,
-                bookCoverUrl: _bookCoverUrl,
-                chapterId: _chapterId,
-                chapterUrl: _chapterUrl,
-                chapterTitle: _chapterTitle,
-                chapterIndex: _currentIndex,
-                chapters: _chapters,
-              );
-          final viewportKind = switch (_currentViewportKind) {
-            ReaderModeViewportKind.textPaged =>
-              ReaderPresentationViewportKind.textPaged,
-            ReaderModeViewportKind.textScroll =>
-              ReaderPresentationViewportKind.textScroll,
-            ReaderModeViewportKind.imagePaged =>
-              ReaderPresentationViewportKind.mangaPaged,
-            ReaderModeViewportKind.imageScroll =>
-              ReaderPresentationViewportKind.mangaContinuous,
-          };
-          final shellModel = ReaderShellModel(
-            contentSession: shellSession,
+          final shellModel = _presentationResolver.buildShellModel(
+            contentSession: _resolvedContentSession(),
             settings: _settings,
             surfaceMetrics: _resolveReaderSurfaceMetrics(context),
-            viewportKind: viewportKind,
-            palette: ReaderPresentationPalette.fromColorScheme(
-              Theme.of(context).colorScheme,
-            ),
-            background: _buildBackgroundLayer(colors),
-            chrome: ReaderShellChromeSlots(
-              backgroundOverlay:
-                  _readerBrightnessOverlayAlpha() > 0.001
-                      ? IgnorePointer(
-                        child: ColoredBox(
-                          color: Colors.black.withValues(
-                            alpha: _readerBrightnessOverlayAlpha(),
+            viewportKind: _presentationViewportKind,
+            palette: _presentationPalette(context),
+            parts: ReaderShellParts(
+              background: _buildBackgroundLayer(colors),
+              chrome: ReaderShellChromeSlots(
+                backgroundOverlay:
+                    _readerBrightnessOverlayAlpha() > 0.001
+                        ? IgnorePointer(
+                          child: ColoredBox(
+                            color: Colors.black.withValues(
+                              alpha: _readerBrightnessOverlayAlpha(),
+                            ),
                           ),
-                        ),
-                      )
-                      : null,
-              foregroundOverlay: Stack(
-                clipBehavior: Clip.hardEdge,
-                children: [
-                  _buildChapterLoadingIndicator(colors),
-                  _buildOverlayScrim(),
-                  _buildTopOverlay(colors),
-                  _buildBottomOverlay(colors),
-                ],
+                        )
+                        : null,
+                foregroundOverlay: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    _buildChapterLoadingIndicator(colors),
+                    _buildOverlayScrim(),
+                    _buildTopOverlay(colors),
+                    _buildBottomOverlay(colors),
+                  ],
+                ),
               ),
             ),
           );
@@ -1809,117 +1834,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       overlayColor: colors.overlay,
       dividerColor: colors.divider,
     );
-    if (_shouldShowBlockingReaderLoading) {
-      return _buildTapAwareBody(
-        child: ReaderBodyRegion(
-          model: const ReaderBodyRegionModel.stateCard(
-            stateCard: ReaderBodyRegionStateCard(
-              title: '正在加载正文',
-              message: '请稍候，马上为你展开章节内容。',
-              icon: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          ),
-          palette: palette,
-        ),
-      );
-    }
-
-    if ((_isBootstrapping || _isLoadingContent) && !_hasVisibleReaderContent) {
-      return ReaderBodyRegion(
-        model: const ReaderBodyRegionModel.hidden(),
-        palette: palette,
-      );
-    }
-
-    if (_errorText != null) {
-      final canSwitchSource = _canSwitchSource;
-      return _buildTapAwareBody(
-        child: ReaderBodyRegion(
-          model: ReaderBodyRegionModel.stateCard(
-            stateCard: ReaderBodyRegionStateCard(
-              title: '加载失败',
-              message: _errorText!,
-              icon: Icon(
-                Icons.warning_amber_rounded,
-                color: colors.meta,
-                size: 20,
-              ),
-              action: Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  FilledButton.tonal(
-                    onPressed:
-                        _isSwitchSourceLoading
-                            ? null
-                            : () =>
-                                _loadCurrentChapter(initialScrollRatio: null),
-                    child: const Text('重试'),
-                  ),
-                  if (_isLocalContent)
-                    OutlinedButton.icon(
-                      onPressed: _copyLocalReaderDiagnostics,
-                      icon: const Icon(Icons.copy_rounded, size: 16),
-                      label: const Text('复制诊断信息'),
-                    ),
-                  if (canSwitchSource)
-                    OutlinedButton.icon(
-                      onPressed:
-                          _isSwitchSourceLoading
-                              ? null
-                              : () => unawaited(_showSwitchSourceSheet()),
-                      icon:
-                          _isSwitchSourceLoading
-                              ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Icon(Icons.swap_horiz_rounded),
-                      label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          palette: palette,
-        ),
-      );
-    }
-
-    if (_content.trim().isEmpty && _chapterImageUrls.isEmpty) {
-      return _buildTapAwareBody(
-        child: ReaderBodyRegion(
-          model: ReaderBodyRegionModel.stateCard(
-            stateCard: ReaderBodyRegionStateCard(
-              title: '暂无正文',
-              message: '当前章节没有可展示的内容。',
-              icon: Icon(Icons.article_outlined, color: colors.meta, size: 20),
-            ),
-          ),
-          palette: palette,
-        ),
-      );
-    }
-
-    return _buildTapAwareBody(
-      child: ReaderBodyRegion(
-        model: const ReaderBodyRegionModel.content(),
-        palette: palette,
-        child: switch (_currentViewportKind) {
-          ReaderModeViewportKind.imagePaged ||
-          ReaderModeViewportKind.imageScroll => _buildMangaReader(colors),
-          ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
-          ReaderModeViewportKind.textScroll => _buildReaderList(colors),
-        },
+    return _viewportBuilder.buildBody(
+      state: ReaderViewportBodyState(
+        showBlockingLoading: _shouldShowBlockingReaderLoading,
+        showHiddenLoading:
+            (_isBootstrapping || _isLoadingContent) && !_hasVisibleReaderContent,
+        hasRenderableContent:
+            _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty,
+        errorText: _errorText,
+        canSwitchSource: _canSwitchSource,
+        isSwitchSourceLoading: _isSwitchSourceLoading,
       ),
+      palette: palette,
+      tapAwareBuilder: ({required child}) => _buildTapAwareBody(child: child),
+      contentBuilder: () => switch (_currentViewportKind) {
+        ReaderModeViewportKind.imagePaged ||
+        ReaderModeViewportKind.imageScroll => _buildMangaReader(colors),
+        ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
+        ReaderModeViewportKind.textScroll => _buildReaderList(colors),
+      },
+      onRetry: () => unawaited(_loadCurrentChapter(initialScrollRatio: null)),
+      onCopyDiagnostics: _copyLocalReaderDiagnostics,
+      onSwitchSource: () => unawaited(_showSwitchSourceSheet()),
+      isLocalContent: _isLocalContent,
     );
   }
 
@@ -1932,75 +1869,49 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Widget _buildStandardReaderList(_ReaderThemeColors colors) {
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
-    final bodyPadding = surfaceMetrics.scrollBodyPadding;
-    final contentSession = _currentContentSession();
-    final scrollView = NotificationListener<ScrollNotification>(
-      onNotification: _onReaderScrollNotification,
-      child: ReaderTextScrollView(
-        model: ReaderTextScrollViewModel(
-          contentSession:
-              contentSession ??
-              ReaderContentSession(
-                contentMode: _currentContentMode,
-                bookId: _activeBookId,
-                sourceId: _sourceId ?? '',
-                detailUrl: _detailUrl ?? '',
-                bookTitle: _bookTitle,
-                bookAuthor: _bookAuthor,
-                bookCoverUrl: _bookCoverUrl,
-                chapterId: _chapterId,
-                chapterUrl: _chapterUrl,
-                chapterTitle: _chapterTitle,
-                chapterIndex: _currentIndex,
-                chapters: _chapters,
-              ),
-          settings: _settings,
-          document: _document,
-          surfaceMetrics: surfaceMetrics,
-          palette: ReaderPresentationPalette.fromColorScheme(
-            Theme.of(context).colorScheme,
-          ),
-          renderItems: _renderItems,
-          contentPadding: bodyPadding,
-        ),
-        scrollController: _scrollController,
-        imageBuilder:
-            (_, item) => _buildInlineReaderImageCard(
-              imageUrl: item.imageUrl,
-              colors: colors,
-            ),
-        blockWrapper: (context, item, isLast, child) {
-          if (item is ReaderRenderTextItem) {
-            return _buildSelectableReaderBlockItem(
-              item: item,
-              isLast: isLast,
-              colors: colors,
-            );
-          }
-          if (item is ReaderRenderImageItem) {
-            return _buildInlineImageParagraphItem(
-              imageUrl: item.imageUrl,
-              isLast: isLast,
-              colors: colors,
-            );
-          }
-          return child;
-        },
-        overlay:
-            _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
-      ),
+    final scrollModel = _presentationResolver.buildTextScrollModel(
+      contentSession: _resolvedContentSession(),
+      settings: _settings,
+      document: _document,
+      surfaceMetrics: surfaceMetrics,
+      palette: _presentationPalette(context),
+      renderItems: _renderItems,
+      contentPadding: surfaceMetrics.scrollBodyPadding,
     );
-
-    return KeyedSubtree(
-      key: _readerBodyKey,
-      child: _wrapSelectionArea(child: scrollView),
+    return _viewportBuilder.buildStandardTextViewport(
+      model: scrollModel,
+      scrollController: _scrollController,
+      bodyKey: _readerBodyKey,
+      selectionWrapper: ({required child}) => _wrapSelectionArea(child: child),
+      onScrollNotification: _onReaderScrollNotification,
+      imageBuilder:
+          (_, item) =>
+              _buildInlineReaderImageCard(imageUrl: item.imageUrl, colors: colors),
+      blockWrapper: (context, item, isLast, child) {
+        if (item is ReaderRenderTextItem) {
+          return _buildSelectableReaderBlockItem(
+            item: item,
+            isLast: isLast,
+            colors: colors,
+          );
+        }
+        if (item is ReaderRenderImageItem) {
+          return _buildInlineImageParagraphItem(
+            imageUrl: item.imageUrl,
+            isLast: isLast,
+            colors: colors,
+          );
+        }
+        return child;
+      },
+      overlay: _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
     );
   }
 
   Widget _buildContinuousTextReader(_ReaderThemeColors colors) {
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
     final bodyPadding = surfaceMetrics.scrollBodyPadding;
-    final contentSession = _currentContentSession();
+    final contentSession = _resolvedContentSession();
 
     final listView = NotificationListener<ScrollNotification>(
       onNotification: _onReaderScrollNotification,
@@ -2030,29 +1941,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ),
     );
 
-    if (contentSession == null) {
-      return Stack(
-        key: _readerBodyKey,
-        children: [
-          listView,
-          if (_isAutoReadSessionEnabled) _buildAutoReadIndicator(colors),
-        ],
-      );
-    }
-
-    return ReaderTextScrollView(
-      model: ReaderTextScrollViewModel(
+    return _viewportBuilder.buildContinuousTextViewport(
+      listView: listView,
+      bodyKey: _readerBodyKey,
+      shellModel: _viewportBuilder.buildContinuousShellModel(
         contentSession: contentSession,
         settings: _settings,
         document: _document,
         surfaceMetrics: surfaceMetrics,
-        palette: ReaderPresentationPalette.fromColorScheme(
-          Theme.of(context).colorScheme,
-        ),
+        palette: _presentationPalette(context),
       ),
-      content: listView,
-      overlay:
-          _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
+      overlay: _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
     );
   }
 
@@ -2721,48 +2620,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildMangaReader(_ReaderThemeColors colors) {
-    final contentSession =
-        _currentContentSession() ??
-        ReaderContentSession(
-          contentMode: _currentContentMode,
-          bookId: _activeBookId,
-          sourceId: _sourceId ?? '',
-          detailUrl: _detailUrl ?? '',
-          bookTitle: _bookTitle,
-          bookAuthor: _bookAuthor,
-          bookCoverUrl: _bookCoverUrl,
-          chapterId: _chapterId,
-          chapterUrl: _chapterUrl,
-          chapterTitle: _chapterTitle,
-          chapterIndex: _currentIndex,
-          chapters: _chapters,
-        );
+    final contentSession = _resolvedContentSession();
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
     final bottomInset = _effectiveBottomSafeInset(context);
-    return ReaderMangaView(
-      model: ReaderMangaViewModel(
-        contentSession: contentSession,
-        settings: _settings,
-        surfaceMetrics: surfaceMetrics,
-        palette: ReaderPresentationPalette.fromColorScheme(
-          Theme.of(context).colorScheme,
-        ),
-        imageUrls: _chapterImageUrls,
-        currentIndex: _mangaPageIndex,
-        continuousPadding: EdgeInsets.fromLTRB(
-          _settings.mangaImagePadding,
-          12,
-          _settings.mangaImagePadding,
-          96 + bottomInset,
-        ),
-        pagedPagePadding: EdgeInsets.fromLTRB(
-          _settings.mangaImagePadding,
-          12,
-          _settings.mangaImagePadding,
-          6,
-        ),
-        continuousCacheExtent: _resolveMangaCacheExtent(),
+    final mangaModel = _presentationResolver.buildMangaModel(
+      contentSession: contentSession,
+      settings: _settings,
+      surfaceMetrics: surfaceMetrics,
+      palette: _presentationPalette(context),
+      imageUrls: _chapterImageUrls,
+      currentIndex: _mangaPageIndex,
+      continuousPadding: EdgeInsets.fromLTRB(
+        _settings.mangaImagePadding,
+        12,
+        _settings.mangaImagePadding,
+        96 + bottomInset,
       ),
+      pagedPagePadding: EdgeInsets.fromLTRB(
+        _settings.mangaImagePadding,
+        12,
+        _settings.mangaImagePadding,
+        6,
+      ),
+      continuousCacheExtent: _resolveMangaCacheExtent(),
+    );
+    return _viewportBuilder.buildMangaViewport(
+      model: mangaModel,
       scrollController: _scrollController,
       pageController: _mangaPageController,
       onPageChanged: (index) {
@@ -3061,7 +2944,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderPageAnimationStyle _currentPagedAnimationStyle() {
-    return _currentReaderMode.pageAnimationStyle ?? ReaderPageAnimationStyle.none;
+    return _currentReaderMode.pageAnimationStyle ??
+        ReaderPageAnimationStyle.none;
   }
 
   ReaderAnimationPolicy _resolveAnimationPolicy({
@@ -7643,7 +7527,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       double? right,
                     }) {
                       final next = draft.copyWith(
-                        bodyMarginMode: ReaderBodyMarginMode.custom,
                         bodyMarginTop: top ?? draft.bodyMarginTop,
                         bodyMarginBottom: bottom ?? draft.bodyMarginBottom,
                         bodyMarginLeft: left ?? draft.bodyMarginLeft,
@@ -7655,7 +7538,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     void resetBodyMarginsToDefault() {
                       updatePaddingSettings(
                         draft.copyWith(
-                          bodyMarginMode: ReaderBodyMarginMode.custom,
                           bodyMarginTop: 6,
                           bodyMarginBottom: 6,
                           bodyMarginLeft: 16,
@@ -8113,7 +7995,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               double compactScaleValue(double value) =>
                   value * compactSheetScale;
               final disablePageAnimationSelection =
-                  !isMangaChapter && _pageTurnUsesScroll(draft.pageTurnMode);
+                  !isMangaChapter && draft.pageTurnMode.usesScrollLayout;
               final pageAnimationInactiveReason = _pageAnimationInactiveReason(
                 modeOverride: draft.pageTurnMode,
                 isMangaChapterOverride: isMangaChapter,
@@ -8798,7 +8680,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             onPressed: () {
                               setModalState(() {
                                 draft = draft.copyWith(
-                                  bodyMarginMode: ReaderBodyMarginMode.custom,
                                   bodyMarginTop: 6,
                                   bodyMarginBottom: 6,
                                   bodyMarginLeft: 16,
@@ -8833,10 +8714,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                         onChanged: (value) {
                           setModalState(() {
-                            draft = draft.copyWith(
-                              bodyMarginMode: ReaderBodyMarginMode.custom,
-                              bodyMarginTop: value,
-                            );
+                            draft = draft.copyWith(bodyMarginTop: value);
                           });
                         },
                       ),
@@ -8852,10 +8730,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                         onChanged: (value) {
                           setModalState(() {
-                            draft = draft.copyWith(
-                              bodyMarginMode: ReaderBodyMarginMode.custom,
-                              bodyMarginBottom: value,
-                            );
+                            draft = draft.copyWith(bodyMarginBottom: value);
                           });
                         },
                       ),
@@ -8871,10 +8746,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                         onChanged: (value) {
                           setModalState(() {
-                            draft = draft.copyWith(
-                              bodyMarginMode: ReaderBodyMarginMode.custom,
-                              bodyMarginLeft: value,
-                            );
+                            draft = draft.copyWith(bodyMarginLeft: value);
                           });
                         },
                       ),
@@ -8890,10 +8762,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                         onChanged: (value) {
                           setModalState(() {
-                            draft = draft.copyWith(
-                              bodyMarginMode: ReaderBodyMarginMode.custom,
-                              bodyMarginRight: value,
-                            );
+                            draft = draft.copyWith(bodyMarginRight: value);
                           });
                         },
                       ),
@@ -9897,14 +9766,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           children: [
                             FilterChip(
                               label: const Text('点按'),
-                              selected: _pageTurnIncludesTap(
-                                draft.pageTurnMode,
-                              ),
+                              selected: draft.pageTurnMode.tapEnabled,
                               showCheckmark: false,
                               onSelected: (selected) {
                                 setModalState(() {
                                   draft = draft.copyWith(
-                                    pageTurnMode: _applyPageTurnToggle(
+                                    pageTurnMode: applyReaderPageTurnModeToggle(
                                       draft.pageTurnMode,
                                       tapEnabled: selected,
                                     ),
@@ -9915,14 +9782,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             const SizedBox(width: 8),
                             FilterChip(
                               label: const Text('滑动'),
-                              selected: _pageTurnIncludesSwipe(
-                                draft.pageTurnMode,
-                              ),
+                              selected: draft.pageTurnMode.swipeEnabled,
                               showCheckmark: false,
                               onSelected: (selected) {
                                 setModalState(() {
                                   draft = draft.copyWith(
-                                    pageTurnMode: _applyPageTurnToggle(
+                                    pageTurnMode: applyReaderPageTurnModeToggle(
                                       draft.pageTurnMode,
                                       swipeEnabled: selected,
                                     ),
@@ -9933,12 +9798,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             const SizedBox(width: 8),
                             FilterChip(
                               label: const Text('滚动'),
-                              selected: _pageTurnUsesScroll(draft.pageTurnMode),
+                              selected: draft.pageTurnMode.usesScrollLayout,
                               showCheckmark: false,
                               onSelected: (selected) {
                                 setModalState(() {
                                   draft = draft.copyWith(
-                                    pageTurnMode: _applyPageTurnToggle(
+                                    pageTurnMode: applyReaderPageTurnModeToggle(
                                       draft.pageTurnMode,
                                       scrollEnabled: selected,
                                     ),
@@ -11103,15 +10968,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 FilterChip(
                                                   label: const Text('点按'),
                                                   selected:
-                                                      _pageTurnIncludesTap(
-                                                        draft.pageTurnMode,
-                                                      ),
+                                                      draft
+                                                          .pageTurnMode
+                                                          .tapEnabled,
                                                   showCheckmark: false,
                                                   onSelected: (selected) {
                                                     setModalState(() {
                                                       draft = draft.copyWith(
                                                         pageTurnMode:
-                                                            _applyPageTurnToggle(
+                                                            applyReaderPageTurnModeToggle(
                                                               draft
                                                                   .pageTurnMode,
                                                               tapEnabled:
@@ -11125,15 +10990,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 FilterChip(
                                                   label: const Text('滑动'),
                                                   selected:
-                                                      _pageTurnIncludesSwipe(
-                                                        draft.pageTurnMode,
-                                                      ),
+                                                      draft
+                                                          .pageTurnMode
+                                                          .swipeEnabled,
                                                   showCheckmark: false,
                                                   onSelected: (selected) {
                                                     setModalState(() {
                                                       draft = draft.copyWith(
                                                         pageTurnMode:
-                                                            _applyPageTurnToggle(
+                                                            applyReaderPageTurnModeToggle(
                                                               draft
                                                                   .pageTurnMode,
                                                               swipeEnabled:
@@ -11146,15 +11011,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 const SizedBox(width: 8),
                                                 FilterChip(
                                                   label: const Text('滚动'),
-                                                  selected: _pageTurnUsesScroll(
-                                                    draft.pageTurnMode,
-                                                  ),
+                                                  selected:
+                                                      draft
+                                                          .pageTurnMode
+                                                          .usesScrollLayout,
                                                   showCheckmark: false,
                                                   onSelected: (selected) {
                                                     setModalState(() {
                                                       draft = draft.copyWith(
                                                         pageTurnMode:
-                                                            _applyPageTurnToggle(
+                                                            applyReaderPageTurnModeToggle(
                                                               draft
                                                                   .pageTurnMode,
                                                               scrollEnabled:

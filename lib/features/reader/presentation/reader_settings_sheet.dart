@@ -332,11 +332,11 @@ class ReaderSettingsSheetState {
         preset,
       ) {
         final applied = service.applyChapterHeaderPreset(settings, preset);
-        return applied.chapterHeaderMode == settings.chapterHeaderMode &&
-            applied.chapterHeaderTopSpacing ==
-                settings.chapterHeaderTopSpacing &&
-            applied.chapterHeaderBottomSpacing ==
-                settings.chapterHeaderBottomSpacing;
+        return applied.showChapterHeader == settings.showChapterHeader &&
+            applied.chapterHeaderHorizontalOffset ==
+                settings.chapterHeaderHorizontalOffset &&
+            applied.chapterHeaderVerticalOffset ==
+                settings.chapterHeaderVerticalOffset;
       }),
       infoStyle: _firstMatchingOrNull(ReaderInfoStylePreset.values, (preset) {
         final applied = service.applyInfoStylePreset(settings, preset);
@@ -907,10 +907,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 valueLabel: settings.bodyMarginTop.toStringAsFixed(0),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(
-                        bodyMarginMode: ReaderBodyMarginMode.custom,
-                        bodyMarginTop: value,
-                      ),
+                      settings.copyWith(bodyMarginTop: value),
                     ),
               ),
               _ReaderSettingsSliderRow(
@@ -922,10 +919,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 valueLabel: settings.bodyMarginBottom.toStringAsFixed(0),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(
-                        bodyMarginMode: ReaderBodyMarginMode.custom,
-                        bodyMarginBottom: value,
-                      ),
+                      settings.copyWith(bodyMarginBottom: value),
                     ),
               ),
               _ReaderSettingsSliderRow(
@@ -937,10 +931,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 valueLabel: settings.bodyMarginLeft.toStringAsFixed(0),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(
-                        bodyMarginMode: ReaderBodyMarginMode.custom,
-                        bodyMarginLeft: value,
-                      ),
+                      settings.copyWith(bodyMarginLeft: value),
                     ),
               ),
               _ReaderSettingsSliderRow(
@@ -952,10 +943,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 valueLabel: settings.bodyMarginRight.toStringAsFixed(0),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(
-                        bodyMarginMode: ReaderBodyMarginMode.custom,
-                        bodyMarginRight: value,
-                      ),
+                      settings.copyWith(bodyMarginRight: value),
                     ),
               ),
               Align(
@@ -964,7 +952,6 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                   onPressed:
                       () => callbacks.onSettingsChanged?.call(
                         settings.copyWith(
-                          bodyMarginMode: ReaderBodyMarginMode.custom,
                           bodyMarginTop: 6,
                           bodyMarginBottom: 6,
                           bodyMarginLeft: 16,

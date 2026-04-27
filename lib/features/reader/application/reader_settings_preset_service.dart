@@ -68,19 +68,19 @@ class ReaderSettingsPresetService {
   ) {
     return switch (preset) {
       ReaderChapterHeaderPreset.standard => settings.copyWith(
-        chapterHeaderMode: ReaderChapterHeaderMode.start,
-        chapterHeaderTopSpacing: 0,
-        chapterHeaderBottomSpacing: 0,
+        showChapterHeader: true,
+        chapterHeaderHorizontalOffset: 0,
+        chapterHeaderVerticalOffset: 0,
       ),
       ReaderChapterHeaderPreset.compact => settings.copyWith(
-        chapterHeaderMode: ReaderChapterHeaderMode.start,
-        chapterHeaderTopSpacing: 0,
-        chapterHeaderBottomSpacing: 0,
+        showChapterHeader: true,
+        chapterHeaderHorizontalOffset: 0,
+        chapterHeaderVerticalOffset: 0,
       ),
       ReaderChapterHeaderPreset.immersive => settings.copyWith(
-        chapterHeaderMode: ReaderChapterHeaderMode.center,
-        chapterHeaderTopSpacing: 8,
-        chapterHeaderBottomSpacing: 6,
+        showChapterHeader: true,
+        chapterHeaderHorizontalOffset: 0.5,
+        chapterHeaderVerticalOffset: 8,
       ),
     };
   }

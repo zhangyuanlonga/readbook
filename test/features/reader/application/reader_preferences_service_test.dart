@@ -76,7 +76,6 @@ void main() {
         infoFooterMarginBottom: 3,
         infoFooterMarginLeft: 15,
         infoFooterMarginRight: 17,
-        bodyMarginMode: ReaderBodyMarginMode.custom,
         showChapterHeader: true,
         chapterHeaderHorizontalOffset: 0.42,
         chapterHeaderVerticalOffset: 24,
@@ -144,7 +143,6 @@ void main() {
       expect(restored.bodyMarginBottom, 11);
       expect(restored.bodyMarginLeft, 19);
       expect(restored.bodyMarginRight, 21);
-      expect(restored.bodyMarginMode, ReaderBodyMarginMode.custom);
       expect(restored.infoFooterMarginTop, 7);
       expect(restored.infoFooterMarginBottom, 3);
       expect(restored.infoFooterMarginLeft, 15);
@@ -152,6 +150,79 @@ void main() {
       expect(restored.showChapterHeader, isTrue);
       expect(restored.chapterHeaderHorizontalOffset, closeTo(0.42, 0.0001));
       expect(restored.chapterHeaderVerticalOffset, 24);
+    });
+
+    test(
+      'loads new settings while treating legacy fields as migration input',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'reader.settings.bodyMarginMode': 'preset',
+          'reader.settings.bodyMarginPreset': 'relaxed',
+          'reader.settings.horizontalPadding': 30.0,
+          'reader.settings.chapterHeaderMode': 'center',
+          'reader.settings.chapterHeaderTopSpacing': 12.0,
+          'reader.settings.chapterHeaderBottomSpacing': 6.0,
+          'reader.settings.pinnedChapterHeaderOffsetX': 80.0,
+          'reader.settings.pinnedChapterHeaderOffsetY': 18.0,
+        });
+
+        final service = ReaderPreferencesService();
+        final restored = await service.loadSettings();
+
+        expect(restored.bodyMarginTop, 8);
+        expect(restored.bodyMarginBottom, 10);
+        expect(restored.bodyMarginLeft, 20);
+        expect(restored.bodyMarginRight, 20);
+        expect(restored.showChapterHeader, isTrue);
+        expect(restored.chapterHeaderHorizontalOffset, closeTo(2 / 3, 0.0001));
+        expect(restored.chapterHeaderVerticalOffset, 12);
+      },
+    );
+
+    test('saving settings clears legacy storage keys', () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.settings.bodyMarginMode': 'preset',
+        'reader.settings.bodyMarginPreset': 'relaxed',
+        'reader.settings.chapterHeaderMode': 'center',
+        'reader.settings.chapterHeaderTopSpacing': 12.0,
+        'reader.settings.chapterHeaderBottomSpacing': 6.0,
+        'reader.settings.pinnedChapterHeaderOffsetX': 80.0,
+        'reader.settings.pinnedChapterHeaderOffsetY': 18.0,
+      });
+
+      final service = ReaderPreferencesService();
+      await service.saveSettings(
+        const ReaderSettings(
+          bodyMarginTop: 7,
+          bodyMarginBottom: 9,
+          bodyMarginLeft: 15,
+          bodyMarginRight: 17,
+          showChapterHeader: true,
+          chapterHeaderHorizontalOffset: 0.4,
+          chapterHeaderVerticalOffset: 10,
+        ),
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('reader.settings.bodyMarginMode'), isFalse);
+      expect(prefs.containsKey('reader.settings.bodyMarginPreset'), isFalse);
+      expect(prefs.containsKey('reader.settings.chapterHeaderMode'), isFalse);
+      expect(
+        prefs.containsKey('reader.settings.chapterHeaderTopSpacing'),
+        isFalse,
+      );
+      expect(
+        prefs.containsKey('reader.settings.chapterHeaderBottomSpacing'),
+        isFalse,
+      );
+      expect(
+        prefs.containsKey('reader.settings.pinnedChapterHeaderOffsetX'),
+        isFalse,
+      );
+      expect(
+        prefs.containsKey('reader.settings.pinnedChapterHeaderOffsetY'),
+        isFalse,
+      );
     });
 
     test('saves and loads reading progress', () async {
