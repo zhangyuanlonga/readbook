@@ -115,6 +115,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final standardNavigationAppearance = ref.watch(
       appStandardNavigationBarAppearanceProvider,
     );
+    final cupertinoDockAppearance = ref.watch(
+      appCupertinoDockAppearanceProvider,
+    );
     final navigationState = ref.watch(appShellNavigationProvider);
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final activeIconGallery =
@@ -227,6 +230,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         showNavigationLabels: showNavigationLabels,
         activeIconGallery: activeIconGallery,
         standardAppearance: standardNavigationAppearance,
+        cupertinoDockAppearance: cupertinoDockAppearance,
       ),
     );
   }
@@ -243,6 +247,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required bool showNavigationLabels,
     required BottomNavIconGallery? activeIconGallery,
     required AppStandardNavigationBarAppearance standardAppearance,
+    required AppCupertinoDockAppearance cupertinoDockAppearance,
   }) {
     final brightness = Theme.of(context).brightness;
     final backdrop = resolveAdvancedThemeBackdrop(
@@ -384,16 +389,22 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
         return surface;
       case AppNavigationStyle.cupertinoDock:
+        final dockFrosted = cupertinoDockAppearance.frostedEffect;
         return CupertinoDockNavigationBar(
           destinations: destinations,
           selectedIndex: selectedIndex,
           showLabels: showNavigationLabels,
           activeIconGallery: activeIconGallery,
+          frostedEffect: dockFrosted,
           themePalette: DockThemePalette(
             containerColor:
                 hasWallpaper
-                    ? advancedPalette.cardColor.withValues(alpha: 0.68)
-                    : advancedPalette.cardColor,
+                    ? advancedPalette.cardColor.withValues(
+                      alpha: dockFrosted ? 0.56 : 0.68,
+                    )
+                    : advancedPalette.cardColor.withValues(
+                      alpha: dockFrosted ? 0.82 : 1.0,
+                    ),
             borderColor: advancedPalette.cardBorderColor.withValues(
               alpha: 0.92,
             ),

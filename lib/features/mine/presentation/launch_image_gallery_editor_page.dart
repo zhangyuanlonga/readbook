@@ -13,21 +13,23 @@ import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../application/launch_image_gallery_provider.dart';
 import '../application/launch_image_gallery_service.dart';
+import '../providers.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
-class LaunchImageGalleryEditorPage extends StatefulWidget {
+class LaunchImageGalleryEditorPage extends ConsumerStatefulWidget {
   const LaunchImageGalleryEditorPage({super.key, required this.galleryId});
 
   final String galleryId;
 
   @override
-  State<LaunchImageGalleryEditorPage> createState() =>
+  ConsumerState<LaunchImageGalleryEditorPage> createState() =>
       _LaunchImageGalleryEditorPageState();
 }
 
 class _LaunchImageGalleryEditorPageState
-    extends State<LaunchImageGalleryEditorPage> {
-  final LaunchImageGalleryService _service = LaunchImageGalleryService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
+    extends ConsumerState<LaunchImageGalleryEditorPage> {
+  late final LaunchImageGalleryService _service;
+  late final ImageSelectionService _imageSelectionService;
   final TextEditingController _nameController = TextEditingController();
 
   LaunchImageGallery? _gallery;
@@ -40,6 +42,8 @@ class _LaunchImageGalleryEditorPageState
   @override
   void initState() {
     super.initState();
+    _service = ref.read(launchImageGalleryServiceProvider);
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _load();
   }
 
@@ -85,13 +89,12 @@ class _LaunchImageGalleryEditorPageState
       _showMessage('图集名称不能为空');
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.renameGallery(galleryId: gallery.id, name: nextName);
-      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -116,7 +119,6 @@ class _LaunchImageGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     try {
       final source = await _selectImageSource();
       if (source == null || !mounted) {
@@ -141,7 +143,7 @@ class _LaunchImageGalleryEditorPageState
           fileName: picked.name,
         );
       }
-      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -228,7 +230,6 @@ class _LaunchImageGalleryEditorPageState
     if (gallery == null || _selectedPaths.isEmpty || _isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
@@ -237,7 +238,7 @@ class _LaunchImageGalleryEditorPageState
         galleryId: gallery.id,
         paths: _selectedPaths.toList(growable: false),
       );
-      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -282,13 +283,12 @@ class _LaunchImageGalleryEditorPageState
     if (confirmed != true || !mounted) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.deleteGallery(gallery.id);
-      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -465,6 +465,22 @@ class _LaunchImageGalleryEditorPageState
                         ? const Center(child: CircularProgressIndicator())
                         : gallery == null
                         ? const Center(child: Text('图集不存在'))
+                        : gallery.imagePaths.isEmpty
+                        ? ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            12,
+                            horizontal,
+                            16 + bottomSafe,
+                          ),
+                          children: const [
+                            ImageResourceEmptyStateCard(
+                              icon: Icons.rocket_launch_outlined,
+                              title: '还没有启动图片',
+                              description: '点击右上角新增，准备启动页和主题可复用的启动素材。',
+                            ),
+                          ],
+                        )
                         : GridView.builder(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
@@ -507,27 +523,19 @@ class _LaunchImageGalleryEditorPageState
                                       ),
                                     ),
                                   ),
-                                  if (selected)
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.check_rounded,
-                                          size: 16,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child:
+                                        selected
+                                            ? const ImageResourceSelectionBadge()
+                                            : _isSelectionMode
+                                            ? const SizedBox.shrink()
+                                            : const ImageResourceCornerHint(
+                                              label: '长按删除',
+                                              icon: Icons.delete_outline,
+                                            ),
+                                  ),
                                 ],
                               ),
                             );

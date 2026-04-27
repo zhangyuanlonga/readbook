@@ -31,6 +31,7 @@ Future<void> bootstrap() async {
   AppNavigationStylePreferenceNotifier.prime(prefs);
   AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppStandardNavigationBarAppearanceNotifier.prime(prefs);
+  AppCupertinoDockAppearanceNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   ActiveAdvancedThemeIdNotifier.prime(prefs);

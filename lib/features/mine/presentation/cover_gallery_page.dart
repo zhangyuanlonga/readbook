@@ -12,16 +12,17 @@ import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_service.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
-class CoverGalleryPage extends StatefulWidget {
+class CoverGalleryPage extends ConsumerStatefulWidget {
   const CoverGalleryPage({super.key});
 
   @override
-  State<CoverGalleryPage> createState() => _CoverGalleryPageState();
+  ConsumerState<CoverGalleryPage> createState() => _CoverGalleryPageState();
 }
 
-class _CoverGalleryPageState extends State<CoverGalleryPage> {
-  final CoverGalleryService _service = CoverGalleryService();
+class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
+  late final CoverGalleryService _service;
 
   List<CoverGallery> _galleries = const <CoverGallery>[];
   bool _isLoading = true;
@@ -30,6 +31,7 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(coverGalleryServiceProvider);
     _load();
   }
 
@@ -48,13 +50,12 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
     if (_isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       final gallery = await _service.createGallery();
-      container.read(coverGalleryRevisionProvider.notifier).markChanged();
+      ref.read(coverGalleryRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
         return;
@@ -77,125 +78,86 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final activeAdvancedTheme =
-            ref.watch(activeAdvancedThemeProvider).valueOrNull;
-        final backdrop = resolveAdvancedThemeBackdrop(
-          Theme.of(context).colorScheme,
-          activeAdvancedTheme,
-        );
-        final horizontal = AppSpacing.pageHorizontal(context);
-        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-        return PopScope<void>(
-          canPop: context.canPop(),
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !context.mounted) {
-              return;
-            }
-            context.go('/mine');
-          },
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text('封面图集'),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              actions: [
-                IconButton(
-                  tooltip: '新增图集',
-                  onPressed: _isLoading || _isSaving ? null : _createGallery,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ],
-            ),
-            body: LayoutBuilder(
-              builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.settingsContentMaxWidth,
-                );
-                return DecoratedBox(
-                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child:
-                          _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  horizontal,
-                                  topInset + 12,
-                                  horizontal,
-                                  16 + bottomSafe,
-                                ),
-                                children: [
-                                  if (_galleries.isEmpty)
-                                    _buildEmptyState(context)
-                                  else
-                                    ..._galleries.map(
-                                      (gallery) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 10,
-                                        ),
-                                        child: _buildGalleryCard(
-                                          context,
-                                          gallery,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
       },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: const Text('封面图集'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          actions: [
+            IconButton(
+              tooltip: '新增图集',
+              onPressed: _isLoading || _isSaving ? null : _createGallery,
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child:
+                      _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + 12,
+                              horizontal,
+                              16 + bottomSafe,
+                            ),
+                            children: [
+                              if (_galleries.isEmpty)
+                                _buildEmptyState(context)
+                              else
+                                ..._galleries.map(
+                                  (gallery) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildGalleryCard(context, gallery),
+                                  ),
+                                ),
+                            ],
+                          ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.photo_library_outlined,
-            size: 34,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '还没有封面图集',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '点击右上角新增，开始管理你的封面图片。',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return const ImageResourceEmptyStateCard(
+      icon: Icons.photo_library_outlined,
+      title: '还没有封面图集',
+      description: '点击右上角新增，准备书架和主题可复用的封面素材。',
     );
   }
 
@@ -263,14 +225,25 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
                               alpha: 0.4,
                             ),
                           ),
-                          image:
-                              path != null && File(path).existsSync()
-                                  ? DecorationImage(
-                                    image: FileImage(File(path)),
-                                    fit: BoxFit.cover,
-                                  )
-                                  : null,
                         ),
+                        child:
+                            path != null && File(path).existsSync()
+                                ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.file(
+                                    File(path),
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (_, __, ___) => Icon(
+                                          Icons.broken_image_outlined,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                )
+                                : Icon(
+                                  Icons.image_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                       ),
                     ),
                   );

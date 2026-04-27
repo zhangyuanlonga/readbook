@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -20,9 +19,11 @@ import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../application/app_background_service.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_provider.dart';
 import 'widgets/appearance_other_settings_card.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import '../providers.dart';
 
@@ -54,39 +55,24 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   bool _isLoadingBackgrounds = true;
   final ReaderFontRegistryService _fontRegistryService =
       ReaderFontRegistryService();
+  late final AppBackgroundService _backgroundService;
   late final ImageSelectionService _imageSelectionService;
   List<ReaderCustomFontEntry> _availableCustomFonts = const [];
 
   @override
   void initState() {
     super.initState();
+    _backgroundService = ref.read(appBackgroundServiceProvider);
     _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _loadBackgrounds();
     unawaited(_loadAvailableFonts());
   }
 
   Future<void> _loadBackgrounds() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final bgDir = Directory('${dir.path}/backgrounds');
-    final paths = <String>[];
-    if (await bgDir.exists()) {
-      final files =
-          bgDir
-              .listSync()
-              .whereType<File>()
-              .where(
-                (f) =>
-                    f.path.endsWith('.jpg') ||
-                    f.path.endsWith('.jpeg') ||
-                    f.path.endsWith('.png') ||
-                    f.path.endsWith('.webp') ||
-                    f.path.endsWith('.gif'),
-              )
-              .map((f) => f.path)
-              .toList();
-      paths.addAll(files);
+    final paths = await _backgroundService.loadBackgroundPaths();
+    if (!mounted) {
+      return;
     }
-    if (!mounted) return;
     setState(() {
       _backgroundPaths = paths;
       _isLoadingBackgrounds = false;
@@ -119,30 +105,14 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         return;
       }
 
-      final dir = await getApplicationDocumentsDirectory();
-      final bgDir = Directory('${dir.path}/backgrounds');
-      if (!await bgDir.exists()) {
-        await bgDir.create(recursive: true);
-      }
-
-      final savedPaths = <String>[];
       for (final picked in pickedImages) {
-        final extension = _imageExtensionForName(picked.name);
-        final fileName =
-            '${DateTime.now().microsecondsSinceEpoch}_${savedPaths.length}_bg.$extension';
-        final destPath = '${bgDir.path}/$fileName';
-        final destFile = File(destPath);
-        await destFile.writeAsBytes(picked.bytes, flush: true);
-        savedPaths.add(destPath);
+        await _backgroundService.importBackground(
+          bytes: picked.bytes,
+          fileName: picked.name,
+        );
       }
-
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _backgroundPaths = <String>[..._backgroundPaths, ...savedPaths];
-      });
-      _showMessage('已添加 ${savedPaths.length} 张背景');
+      await _loadBackgrounds();
+      _showMessage('已添加 ${pickedImages.length} 张背景');
     } on ImageSelectionException catch (error) {
       _showMessage(error.message);
     } on PlatformException catch (error) {
@@ -204,14 +174,8 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Future<void> _deleteBackground(String path) async {
-    final file = File(path);
-    if (await file.exists()) {
-      await file.delete();
-    }
-    if (!mounted) return;
-    setState(() {
-      _backgroundPaths.remove(path);
-    });
+    await _backgroundService.deleteBackground(path);
+    await _loadBackgrounds();
   }
 
   Future<void> _confirmDeleteBackground(String path) async {
@@ -332,6 +296,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     final standardNavigationAppearance = ref.watch(
       appStandardNavigationBarAppearanceProvider,
     );
+    final cupertinoDockAppearance = ref.watch(
+      appCupertinoDockAppearanceProvider,
+    );
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
@@ -388,6 +355,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                       selectedNavigationStyle: selectedNavigationStyle,
                       standardNavigationAppearance:
                           standardNavigationAppearance,
+                      cupertinoDockAppearance: cupertinoDockAppearance,
                       showNavigationLabels: showNavigationLabels,
                     ),
                   ),
@@ -416,6 +384,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     required Color selectedSeedColor,
     required AppNavigationStylePreference selectedNavigationStyle,
     required AppStandardNavigationBarAppearance standardNavigationAppearance,
+    required AppCupertinoDockAppearance cupertinoDockAppearance,
     required bool showNavigationLabels,
   }) {
     final sections = <Widget>[];
@@ -436,6 +405,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           context,
           selectedNavigationStyle: selectedNavigationStyle,
           standardNavigationAppearance: standardNavigationAppearance,
+          cupertinoDockAppearance: cupertinoDockAppearance,
           showNavigationLabels: showNavigationLabels,
         ),
       );
@@ -1223,17 +1193,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
 
               if (_backgroundPaths.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 2,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    '还没有自定义应用背景，点击右上角 + 号开始。',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                return const ImageResourceEmptyStateCard(
+                  icon: Icons.wallpaper_outlined,
+                  title: '还没有应用背景',
+                  description: '点击右上角新增，准备应用级可复用的背景素材。',
                 );
               }
 
@@ -1261,45 +1224,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                             Positioned(
                               right: 6,
                               top: 6,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.45),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: const Text(
-                                  '点击预览',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: 6,
-                              bottom: 6,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.45),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: const Text(
-                                  '长按删除',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
+                              child: const ImageResourceCornerHint(
+                                label: '长按删除',
+                                icon: Icons.delete_outline,
                               ),
                             ),
                           ],
@@ -1314,26 +1241,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     );
   }
 
-  String _imageExtensionForName(String fileName) {
-    final normalized = fileName.trim().toLowerCase();
-    final dotIndex = normalized.lastIndexOf('.');
-    if (dotIndex < 0 || dotIndex >= normalized.length - 1) {
-      return 'png';
-    }
-    final extension = normalized.substring(dotIndex + 1);
-    return switch (extension) {
-      'jpg' || 'jpeg' => 'jpg',
-      'png' => 'png',
-      'webp' => 'webp',
-      'gif' => 'gif',
-      _ => 'png',
-    };
-  }
-
   Widget _buildNavigationStyleSection(
     BuildContext context, {
     required AppNavigationStylePreference selectedNavigationStyle,
     required AppStandardNavigationBarAppearance standardNavigationAppearance,
+    required AppCupertinoDockAppearance cupertinoDockAppearance,
     required bool showNavigationLabels,
   }) {
     return _buildSectionCard(
@@ -1462,6 +1374,23 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 unawaited(
                   ref
                       .read(appStandardNavigationBarAppearanceProvider.notifier)
+                      .setFrostedEffect(value),
+                );
+              },
+            ),
+          ],
+          if (selectedNavigationStyle ==
+              AppNavigationStylePreference.cupertinoDock) ...[
+            const SizedBox(height: 8),
+            _buildStandardNavigationToggleTile(
+              context,
+              title: '磨砂效果',
+              description: '苹果风格底栏启用磨砂背景效果',
+              enabled: cupertinoDockAppearance.frostedEffect,
+              onChanged: (value) {
+                unawaited(
+                  ref
+                      .read(appCupertinoDockAppearanceProvider.notifier)
                       .setFrostedEffect(value),
                 );
               },

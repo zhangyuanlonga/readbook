@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +40,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
     required this.selectedIndex,
     required this.showLabels,
     this.activeIconGallery,
+    this.frostedEffect = false,
     this.themePalette,
     required this.onDestinationSelected,
     required this.onSearchPressed,
@@ -48,6 +50,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final bool showLabels;
   final BottomNavIconGallery? activeIconGallery;
+  final bool frostedEffect;
   final DockThemePalette? themePalette;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onSearchPressed;
@@ -95,6 +98,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                 child: _DockSurface(
                   radius: dockRadius,
                   palette: palette,
+                  frostedEffect: frostedEffect,
                   child: SizedBox(
                     height: dockHeight,
                     child: Padding(
@@ -132,6 +136,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                 height: searchHeight,
                 showLabel: showLabels,
                 palette: palette,
+                frostedEffect: frostedEffect,
                 onPressed: onSearchPressed,
               ),
             ],
@@ -146,16 +151,18 @@ class _DockSurface extends StatelessWidget {
   const _DockSurface({
     required this.radius,
     required this.palette,
+    required this.frostedEffect,
     required this.child,
   });
 
   final double radius;
   final _Md3DockPalette palette;
+  final bool frostedEffect;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final decorated = DecoratedBox(
       decoration: BoxDecoration(
         color: palette.containerColor,
         borderRadius: BorderRadius.circular(radius),
@@ -169,6 +176,16 @@ class _DockSurface extends StatelessWidget {
         ],
       ),
       child: child,
+    );
+    if (!frostedEffect) {
+      return decorated;
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: decorated,
+      ),
     );
   }
 }
@@ -290,6 +307,7 @@ class _SearchIconButton extends StatelessWidget {
     required this.height,
     required this.showLabel,
     required this.palette,
+    required this.frostedEffect,
     required this.onPressed,
   });
 
@@ -297,11 +315,45 @@ class _SearchIconButton extends StatelessWidget {
   final double height;
   final bool showLabel;
   final _Md3DockPalette palette;
+  final bool frostedEffect;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final radius = height / 2;
+    final searchSurface = Ink(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: palette.containerColor,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: palette.borderColor, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Icon(
+          CupertinoIcons.search,
+          size: showLabel ? 20 : 21,
+          color: palette.unselectedIconColor,
+        ),
+      ),
+    );
+    final clippedSearchSurface = ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child:
+          frostedEffect
+              ? BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: searchSurface,
+              )
+              : searchSurface,
+    );
 
     return Hero(
       tag: kSearchEntryHeroTag,
@@ -317,29 +369,7 @@ class _SearchIconButton extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(radius),
               onTap: onPressed,
-              child: Ink(
-                width: width,
-                height: height,
-                decoration: BoxDecoration(
-                  color: palette.containerColor,
-                  borderRadius: BorderRadius.circular(radius),
-                  border: Border.all(color: palette.borderColor, width: 0.8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Icon(
-                    CupertinoIcons.search,
-                    size: showLabel ? 20 : 21,
-                    color: palette.unselectedIconColor,
-                  ),
-                ),
-              ),
+              child: clippedSearchSurface,
             ),
           ),
         ),

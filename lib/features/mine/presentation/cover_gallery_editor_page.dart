@@ -13,19 +13,23 @@ import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/cover_gallery_service.dart';
+import '../providers.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
-class CoverGalleryEditorPage extends StatefulWidget {
+class CoverGalleryEditorPage extends ConsumerStatefulWidget {
   const CoverGalleryEditorPage({super.key, required this.galleryId});
 
   final String galleryId;
 
   @override
-  State<CoverGalleryEditorPage> createState() => _CoverGalleryEditorPageState();
+  ConsumerState<CoverGalleryEditorPage> createState() =>
+      _CoverGalleryEditorPageState();
 }
 
-class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
-  final CoverGalleryService _service = CoverGalleryService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
+class _CoverGalleryEditorPageState
+    extends ConsumerState<CoverGalleryEditorPage> {
+  late final CoverGalleryService _service;
+  late final ImageSelectionService _imageSelectionService;
   final TextEditingController _nameController = TextEditingController();
 
   CoverGallery? _gallery;
@@ -38,6 +42,8 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(coverGalleryServiceProvider);
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _load();
   }
 
@@ -112,7 +118,6 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
     if (gallery == null || _isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     try {
       final source = await _selectImageSource();
       if (source == null || !mounted) {
@@ -120,7 +125,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
       }
       final pickedImages = await _imageSelectionService.pickImages(
         confirmButtonText: '选择封面',
-        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp'},
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
         source: source,
       );
       if (pickedImages.isEmpty || !mounted) {
@@ -137,7 +142,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
           fileName: picked.name,
         );
       }
-      container.read(coverGalleryRevisionProvider.notifier).markChanged();
+      ref.read(coverGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -224,7 +229,6 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
     if (gallery == null || _selectedPaths.isEmpty || _isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
@@ -233,7 +237,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         galleryId: gallery.id,
         paths: _selectedPaths.toList(growable: false),
       );
-      container.read(coverGalleryRevisionProvider.notifier).markChanged();
+      ref.read(coverGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -459,6 +463,22 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
                         ? const Center(child: CircularProgressIndicator())
                         : gallery == null
                         ? const Center(child: Text('图集不存在'))
+                        : gallery.imagePaths.isEmpty
+                        ? ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            12,
+                            horizontal,
+                            16 + bottomSafe,
+                          ),
+                          children: const [
+                            ImageResourceEmptyStateCard(
+                              icon: Icons.photo_library_outlined,
+                              title: '还没有封面图片',
+                              description: '点击右上角新增，准备书架和主题可复用的封面素材。',
+                            ),
+                          ],
+                        )
                         : GridView.builder(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
@@ -501,27 +521,19 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
                                       ),
                                     ),
                                   ),
-                                  if (selected)
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.check_rounded,
-                                          size: 16,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child:
+                                        selected
+                                            ? const ImageResourceSelectionBadge()
+                                            : _isSelectionMode
+                                            ? const SizedBox.shrink()
+                                            : const ImageResourceCornerHint(
+                                              label: '长按删除',
+                                              icon: Icons.delete_outline,
+                                            ),
+                                  ),
                                 ],
                               ),
                             );

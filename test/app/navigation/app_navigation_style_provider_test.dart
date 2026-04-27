@@ -67,4 +67,32 @@ void main() {
     expect(prefs.getBool('app.navigation.standard.floatingBar'), isTrue);
     expect(prefs.getBool('app.navigation.standard.frostedEffect'), isTrue);
   });
+
+  test(
+    'cupertino dock appearance defaults and persists frosted effect',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(appCupertinoDockAppearanceProvider),
+        const AppCupertinoDockAppearance(),
+      );
+
+      await container
+          .read(appCupertinoDockAppearanceProvider.notifier)
+          .setFrostedEffect(true);
+
+      expect(
+        container.read(appCupertinoDockAppearanceProvider),
+        const AppCupertinoDockAppearance(frostedEffect: true),
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getBool('app.navigation.cupertinoDock.frostedEffect'),
+        isTrue,
+      );
+    },
+  );
 }

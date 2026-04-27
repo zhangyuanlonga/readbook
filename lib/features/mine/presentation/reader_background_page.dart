@@ -15,6 +15,7 @@ import '../../../core/media/image_selection_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/reader_background_service.dart';
 import '../providers.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
 class ReaderBackgroundPage extends ConsumerStatefulWidget {
   const ReaderBackgroundPage({super.key});
@@ -319,40 +320,10 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.chrome_reader_mode_outlined,
-            size: 34,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '还没有阅读背景',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '点击右上角新增，准备高级主题和阅读器可复用的背景素材。',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return const ImageResourceEmptyStateCard(
+      icon: Icons.chrome_reader_mode_outlined,
+      title: '还没有阅读背景',
+      description: '点击右上角新增，准备高级主题和阅读器可复用的背景素材。',
     );
   }
 
@@ -360,6 +331,7 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
     final colorScheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => _openPreview(path),
+      onLongPress: _isSaving ? null : () => _confirmDeleteBackground(path),
       child: Container(
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
@@ -390,18 +362,9 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
             Positioned(
               top: 10,
               right: 10,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.35),
-                shape: const CircleBorder(),
-                child: IconButton(
-                  onPressed:
-                      _isSaving ? null : () => _confirmDeleteBackground(path),
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
+              child: const ImageResourceCornerHint(
+                label: '长按删除',
+                icon: Icons.delete_outline,
               ),
             ),
           ],

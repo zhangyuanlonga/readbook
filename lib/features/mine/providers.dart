@@ -10,6 +10,7 @@ import '../../core/mobile_features/mobile_feature_service.dart';
 import '../../domain/repositories/bookmark_repository.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
+import 'application/app_background_service.dart';
 import 'application/bookmarks_query_service.dart';
 import 'application/cache_management_service.dart';
 import 'application/mine_page_flow_coordinator.dart';
@@ -58,6 +59,10 @@ final mineImageSelectionServiceProvider = Provider<ImageSelectionService>((
   ref,
 ) {
   return ImageSelectionService();
+});
+
+final appBackgroundServiceProvider = Provider<AppBackgroundService>((ref) {
+  return AppBackgroundService();
 });
 
 final minePagePreferencesServiceProvider = Provider<MinePagePreferencesService>(

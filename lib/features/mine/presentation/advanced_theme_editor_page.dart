@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
@@ -25,6 +24,7 @@ import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/app_background_service.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_service.dart';
 import '../application/cover_gallery_service.dart';
@@ -50,6 +50,7 @@ class _AdvancedThemeEditorPageState
 
   late final AdvancedThemeService _service;
   late final BottomNavIconGalleryService _bottomNavIconGalleryService;
+  late final AppBackgroundService _appBackgroundService;
   late final CoverGalleryService _coverGalleryService;
   late final LaunchImageGalleryService _launchImageGalleryService;
   late final ReaderBackgroundService _readerBackgroundService;
@@ -95,6 +96,7 @@ class _AdvancedThemeEditorPageState
     _bottomNavIconGalleryService = ref.read(
       bottomNavIconGalleryServiceProvider,
     );
+    _appBackgroundService = ref.read(appBackgroundServiceProvider);
     _coverGalleryService = ref.read(coverGalleryServiceProvider);
     _launchImageGalleryService = ref.read(launchImageGalleryServiceProvider);
     _readerBackgroundService = ref.read(readerBackgroundServiceProvider);
@@ -208,26 +210,7 @@ class _AdvancedThemeEditorPageState
   }
 
   Future<void> _loadAppearanceLinks() async {
-    final documents = await getApplicationDocumentsDirectory();
-    final bgDir = Directory('${documents.path}/backgrounds');
-    final backgroundPaths = <String>[];
-    if (await bgDir.exists()) {
-      backgroundPaths.addAll(
-        bgDir
-            .listSync()
-            .whereType<File>()
-            .where(
-              (file) =>
-                  file.path.endsWith('.jpg') ||
-                  file.path.endsWith('.jpeg') ||
-                  file.path.endsWith('.png') ||
-                  file.path.endsWith('.webp') ||
-                  file.path.endsWith('.gif'),
-            )
-            .map((file) => file.path)
-            .toList(growable: false),
-      );
-    }
+    final backgroundPaths = await _appBackgroundService.loadBackgroundPaths();
     final readerBackgroundPaths =
         await _readerBackgroundService.loadBackgroundPaths();
     final activeGallery =

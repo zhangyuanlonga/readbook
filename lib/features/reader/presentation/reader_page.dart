@@ -6201,12 +6201,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      backgroundColor: readerModalTheme.colorScheme.surface,
+      backgroundColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (context) {
         return Theme(
           data: readerModalTheme,
           child: StatefulBuilder(
             builder: (context, setModalState) {
+              final sheetSurfaceColor = readerModalTheme.colorScheme.surface
+                  .withValues(alpha: isSliderInteracting ? 0.42 : 1.0);
+
+              Widget wrapSheetSurface(Widget child) {
+                return AnimatedTheme(
+                  duration: const Duration(milliseconds: 160),
+                  data: readerModalTheme.copyWith(
+                    bottomSheetTheme: readerModalTheme.bottomSheetTheme
+                        .copyWith(
+                          backgroundColor: sheetSurfaceColor,
+                          modalBackgroundColor: sheetSurfaceColor,
+                        ),
+                  ),
+                  child: Material(color: sheetSurfaceColor, child: child),
+                );
+              }
+
               final activeBackgroundBase64 =
                   draft.backgroundImageBase64?.trim();
               final hasBackgroundImage =
@@ -6852,6 +6873,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     ),
                   ),
                 );
+              }
+
+              Color interactiveCardColor(Color baseColor, {double alpha = 1}) {
+                final targetAlpha =
+                    isSliderInteracting ? alpha.clamp(0.0, 1.0) : 1.0;
+                return baseColor.withValues(alpha: targetAlpha);
               }
 
               Future<void> showFloatingReaderSubSheet({
@@ -7711,7 +7738,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     compactScaleValue(10),
                   ),
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerLow,
+                    color: interactiveCardColor(
+                      colorScheme.surfaceContainerLow,
+                      alpha: 0.54,
+                    ),
                     borderRadius: BorderRadius.circular(compactScaleValue(16)),
                     border: Border.all(
                       color: colorScheme.outlineVariant.withValues(alpha: 0.42),
@@ -7800,7 +7830,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       compactScaleValue(10),
                     ),
                     decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
+                      color: interactiveCardColor(
+                        colorScheme.surfaceContainerLow,
+                        alpha: 0.54,
+                      ),
                       borderRadius: BorderRadius.circular(
                         compactScaleValue(16),
                       ),
@@ -7977,7 +8010,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       compactScaleValue(12),
                     ),
                     decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
+                      color: interactiveCardColor(
+                        colorScheme.surfaceContainerLow,
+                        alpha: 0.54,
+                      ),
                       borderRadius: BorderRadius.circular(
                         compactScaleValue(18),
                       ),
@@ -8011,7 +8047,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             vertical: compactScaleValue(7),
                           ),
                           decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
+                            color: interactiveCardColor(
+                              colorScheme.surfaceContainerLow,
+                              alpha: 0.54,
+                            ),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
                               color: colorScheme.outlineVariant.withValues(
@@ -9709,881 +9748,971 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               previewDraftSettings();
 
               if (!isMangaChapter) {
-                return buildTextReaderSettingsSheet();
+                return wrapSheetSurface(buildTextReaderSettingsSheet());
               }
 
-              return AnimatedPadding(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(bottom: keyboardInset),
-                child: SafeArea(
-                  child: FractionallySizedBox(
-                    heightFactor: sheetHeightFactor,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: maxSheetWidth),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            sheetHorizontal,
-                            8,
-                            sheetHorizontal,
-                            14,
-                          ),
-                          child: Column(
-                            children: [
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  showInterfaceSection
-                                      ? _readerModeCapabilities
-                                          .interfaceSettingsTitle
-                                      : _readerModeCapabilities
-                                          .readingSettingsTitle,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Expanded(
-                                child: ListView(
-                                  padding: EdgeInsets.only(
-                                    bottom: safeBottom + 12,
+              return wrapSheetSurface(
+                AnimatedPadding(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(bottom: keyboardInset),
+                  child: SafeArea(
+                    child: FractionallySizedBox(
+                      heightFactor: sheetHeightFactor,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: maxSheetWidth),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              sheetHorizontal,
+                              8,
+                              sheetHorizontal,
+                              14,
+                            ),
+                            child: Column(
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    showInterfaceSection
+                                        ? _readerModeCapabilities
+                                            .interfaceSettingsTitle
+                                        : _readerModeCapabilities
+                                            .readingSettingsTitle,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
-                                  children: [
-                                    if (showInterfaceSection) ...[
-                                      _buildSettingLine(
-                                        context: context,
-                                        label: '亮度',
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    draft.followSystemBrightness
-                                                        ? '当前跟随系统亮度变化'
-                                                        : '关闭后可单独调节阅读器亮度',
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.bodySmall?.copyWith(
-                                                      color:
-                                                          Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Switch.adaptive(
-                                                  value:
-                                                      draft
-                                                          .followSystemBrightness,
-                                                  onChanged: (enabled) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        followSystemBrightness:
-                                                            enabled,
-                                                      );
-                                                    });
-                                                    previewDraftSettings();
-                                                  },
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: buildPreviewAwareSlider(
-                                                    min: 0.2,
-                                                    max: 1,
-                                                    divisions: 8,
-                                                    value: draft.brightness,
-                                                    label:
-                                                        '${(draft.brightness * 100).round()}%',
-                                                    onChanged:
-                                                        draft.followSystemBrightness
-                                                            ? null
-                                                            : (value) {
-                                                              setModalState(() {
-                                                                draft = draft
-                                                                    .copyWith(
-                                                                      brightness:
-                                                                          value,
-                                                                    );
-                                                              });
-                                                              previewDraftSettings();
-                                                            },
-                                                  ),
-                                                ),
-                                                SizedBox(
-                                                  width: 44,
-                                                  child: Text(
-                                                    draft.followSystemBrightness
-                                                        ? '系统'
-                                                        : '${(draft.brightness * 100).round()}%',
-                                                    textAlign: TextAlign.right,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .labelMedium
-                                                        ?.copyWith(
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .onSurfaceVariant,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: [
-                                                    _createReaderBackgroundColorOption(
-                                                      label: '浅色',
-                                                      mode:
-                                                          ReaderThemeMode.light,
-                                                      backgroundStyle:
-                                                          ReaderBackgroundStyle
-                                                              .plain,
-                                                      backgroundTone:
-                                                          ReaderBackgroundTone
-                                                              .surface,
-                                                    ),
-                                                    _createReaderBackgroundColorOption(
-                                                      label: '护眼',
-                                                      mode:
-                                                          ReaderThemeMode.sepia,
-                                                      backgroundStyle:
-                                                          ReaderBackgroundStyle
-                                                              .warm,
-                                                      backgroundTone:
-                                                          ReaderBackgroundTone
-                                                              .container,
-                                                    ),
-                                                    _createReaderBackgroundColorOption(
-                                                      label: '深色',
-                                                      mode:
-                                                          ReaderThemeMode.dark,
-                                                      backgroundStyle:
-                                                          ReaderBackgroundStyle
-                                                              .plain,
-                                                      backgroundTone:
-                                                          ReaderBackgroundTone
-                                                              .pureBlack,
-                                                    ),
-                                                    _createReaderBackgroundColorOption(
-                                                      label: '纸张',
-                                                      mode:
-                                                          ReaderThemeMode.light,
-                                                      backgroundStyle:
-                                                          ReaderBackgroundStyle
-                                                              .paper,
-                                                      backgroundTone:
-                                                          ReaderBackgroundTone
-                                                              .containerHigh,
-                                                    ),
-                                                  ]
-                                                  .map((option) {
-                                                    final normalizedTone =
-                                                        normalizeReaderBackgroundTone(
-                                                          mode: draft.themeMode,
-                                                          tone:
-                                                              draft
-                                                                  .backgroundTone,
-                                                        );
-                                                    final selected =
-                                                        draft.themeMode ==
-                                                            option.mode &&
-                                                        draft.backgroundStyle ==
-                                                            option
-                                                                .backgroundStyle &&
-                                                        normalizedTone ==
-                                                            option
-                                                                .backgroundTone;
-                                                    return ChoiceChip(
-                                                      label: Text(option.label),
-                                                      selected: selected,
-                                                      showCheckmark: false,
-                                                      onSelected: (_) {
-                                                        setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            themeMode:
-                                                                option.mode,
-                                                            backgroundStyle:
-                                                                option
-                                                                    .backgroundStyle,
-                                                            backgroundTone:
-                                                                option
-                                                                    .backgroundTone,
-                                                          );
-                                                        });
-                                                        previewDraftSettings();
-                                                      },
-                                                    );
-                                                  })
-                                                  .toList(growable: false),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (!isMangaChapter) ...[
-                                        const Divider(height: 1),
+                                ),
+                                const SizedBox(height: 6),
+                                Expanded(
+                                  child: ListView(
+                                    padding: EdgeInsets.only(
+                                      bottom: safeBottom + 12,
+                                    ),
+                                    children: [
+                                      if (showInterfaceSection) ...[
                                         _buildSettingLine(
                                           context: context,
-                                          label: '字号',
-                                          child: Row(
-                                            children: [
-                                              IconButton.filledTonal(
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                onPressed: () {
-                                                  final next =
-                                                      (draft.fontSize - 1)
-                                                          .clamp(5, 50)
-                                                          .toDouble();
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      fontSize: next,
-                                                    );
-                                                  });
-                                                },
-                                                icon: const Icon(Icons.remove),
-                                              ),
-                                              SizedBox(
-                                                width: 40,
-                                                child: Center(
-                                                  child: Text(
-                                                    draft.fontSize
-                                                        .toStringAsFixed(0),
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .titleSmall
-                                                        ?.copyWith(
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .colorScheme
-                                                                  .onSurface,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                              IconButton.filledTonal(
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                onPressed: () {
-                                                  final next =
-                                                      (draft.fontSize + 1)
-                                                          .clamp(5, 50)
-                                                          .toDouble();
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      fontSize: next,
-                                                    );
-                                                  });
-                                                },
-                                                icon: const Icon(Icons.add),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Flexible(
-                                                child: OutlinedButton(
-                                                  onPressed:
-                                                      openFontPickerSheet,
-                                                  style:
-                                                      OutlinedButton.styleFrom(
-                                                        visualDensity:
-                                                            VisualDensity
-                                                                .compact,
-                                                        alignment:
-                                                            Alignment.center,
-                                                      ),
-                                                  child: Text(
-                                                    currentFontLabel(),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                      const Divider(height: 1),
-                                      _buildSettingLine(
-                                        context: context,
-                                        label: '背景颜色',
-                                        labelWidth: 72,
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
-                                          child: Row(
-                                            children:
-                                                _readerBackgroundColorOptions()
-                                                    .map(
-                                                      (
-                                                        option,
-                                                      ) => _buildThemeColorDot(
-                                                        draft: draft,
-                                                        color:
-                                                            option.previewColor,
-                                                        label: option.label,
-                                                        mode: option.mode,
-                                                        backgroundStyle:
-                                                            option
-                                                                .backgroundStyle,
-                                                        backgroundTone:
-                                                            option
-                                                                .backgroundTone,
-                                                        onChanged: (next) {
-                                                          setModalState(() {
-                                                            draft = next;
-                                                          });
-                                                        },
-                                                      ),
-                                                    )
-                                                    .toList(growable: false),
-                                          ),
-                                        ),
-                                      ),
-                                      const Divider(height: 1),
-                                      _buildSettingLine(
-                                        context: context,
-                                        label: '背景',
-                                        child: ScrollConfiguration(
-                                          behavior: ScrollConfiguration.of(
-                                            context,
-                                          ).copyWith(
-                                            dragDevices: _kScrollDragDevices,
-                                          ),
-                                          child: SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            child: Row(
-                                              children: [
-                                                _buildBackgroundTile(
-                                                  label: '无背景',
-                                                  selected: !hasBackgroundImage,
-                                                  icon:
-                                                      Icons.hide_image_outlined,
-                                                  onTap: () {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        clearBackgroundImage:
-                                                            true,
-                                                      );
-                                                    });
-                                                    unawaited(
-                                                      persistBackgroundDraftNow(
-                                                        draft,
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                                const SizedBox(width: 8),
-                                                ...presetBackgroundTiles,
-                                                ...customBackgroundTiles,
-                                                _buildBackgroundTile(
-                                                  label: '自定义',
-                                                  selected: false,
-                                                  icon:
-                                                      Icons.upload_file_rounded,
-                                                  showLabel: true,
-                                                  onTap:
-                                                      applyCustomBackgroundImage,
-                                                ),
-                                                if (hasBackgroundImage) ...[
-                                                  const SizedBox(width: 8),
-                                                  OutlinedButton(
-                                                    onPressed:
-                                                        () => unawaited(
-                                                          removeActiveBackground(),
-                                                        ),
-                                                    child: const Text('移除'),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    if (showReadingSection) ...[
-                                      if (showInterfaceSection)
-                                        const Divider(height: 1),
-                                      if (!isMangaChapter)
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 4,
-                                          ),
-                                          child: SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            child: Row(
-                                              children: [
-                                                buildReadingActionTab(
-                                                  label: '字重',
-                                                  value: fontWeightDisplayLabel(
-                                                    draft,
-                                                  ),
-                                                  onTap:
-                                                      () => unawaited(
-                                                        openFontWeightTabSheet(),
-                                                      ),
-                                                ),
-                                                buildReadingActionTab(
-                                                  label: '边距',
-                                                  value:
-                                                      _bodyMarginDisplayValue(
-                                                        draft,
-                                                      ),
-                                                  onTap:
-                                                      () => unawaited(
-                                                        openHorizontalPaddingTabSheet(),
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      if (!isMangaChapter)
-                                        const Divider(height: 1),
-                                      if (!isMangaChapter)
-                                        _buildSettingLine(
-                                          context: context,
-                                          label: '排版',
+                                          label: '亮度',
                                           child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Row(
                                                 children: [
-                                                  const Spacer(),
+                                                  Expanded(
+                                                    child: Text(
+                                                      draft.followSystemBrightness
+                                                          ? '当前跟随系统亮度变化'
+                                                          : '关闭后可单独调节阅读器亮度',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurfaceVariant,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
                                                   Switch.adaptive(
                                                     value:
                                                         draft
-                                                            .textFullJustifyEnabled,
+                                                            .followSystemBrightness,
                                                     onChanged: (enabled) {
                                                       setModalState(() {
                                                         draft = draft.copyWith(
-                                                          textFullJustifyEnabled:
+                                                          followSystemBrightness:
                                                               enabled,
                                                         );
                                                       });
+                                                      previewDraftSettings();
                                                     },
                                                   ),
                                                 ],
                                               ),
+                                              const SizedBox(height: 6),
                                               Row(
                                                 children: [
-                                                  Text(
-                                                    '斜体',
-                                                    style:
-                                                        Theme.of(
-                                                          context,
-                                                        ).textTheme.bodyMedium,
+                                                  Expanded(
+                                                    child: buildPreviewAwareSlider(
+                                                      min: 0.2,
+                                                      max: 1,
+                                                      divisions: 8,
+                                                      value: draft.brightness,
+                                                      label:
+                                                          '${(draft.brightness * 100).round()}%',
+                                                      onChanged:
+                                                          draft.followSystemBrightness
+                                                              ? null
+                                                              : (value) {
+                                                                setModalState(() {
+                                                                  draft = draft
+                                                                      .copyWith(
+                                                                        brightness:
+                                                                            value,
+                                                                      );
+                                                                });
+                                                                previewDraftSettings();
+                                                              },
+                                                    ),
                                                   ),
-                                                  const Spacer(),
-                                                  Switch.adaptive(
-                                                    value:
-                                                        draft
-                                                            .bodyTextItalicEnabled,
-                                                    onChanged: (enabled) {
-                                                      setModalState(() {
-                                                        draft = draft.copyWith(
-                                                          bodyTextItalicEnabled:
-                                                              enabled,
-                                                        );
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
-                                              Row(
-                                                children: [
-                                                  Text(
-                                                    '阴影',
-                                                    style:
-                                                        Theme.of(
-                                                          context,
-                                                        ).textTheme.bodyMedium,
-                                                  ),
-                                                  const Spacer(),
-                                                  Switch.adaptive(
-                                                    value:
-                                                        draft
-                                                            .bodyTextShadowEnabled,
-                                                    onChanged: (enabled) {
-                                                      setModalState(() {
-                                                        draft = draft.copyWith(
-                                                          bodyTextShadowEnabled:
-                                                              enabled,
-                                                        );
-                                                      });
-                                                    },
+                                                  SizedBox(
+                                                    width: 44,
+                                                    child: Text(
+                                                      draft.followSystemBrightness
+                                                          ? '系统'
+                                                          : '${(draft.brightness * 100).round()}%',
+                                                      textAlign:
+                                                          TextAlign.right,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelMedium
+                                                          ?.copyWith(
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurfaceVariant,
+                                                          ),
+                                                    ),
                                                   ),
                                                 ],
                                               ),
-                                              if (draft.bodyTextShadowEnabled)
-                                                buildTypographySliderRow(
-                                                  label: '模糊',
-                                                  min: 0,
-                                                  max: 32,
-                                                  divisions: 32,
-                                                  value:
-                                                      draft
-                                                          .bodyTextShadowBlurRadius,
-                                                  step: 1,
-                                                  valueLabel:
-                                                      draft
-                                                          .bodyTextShadowBlurRadius
-                                                          .round()
-                                                          .toString(),
-                                                  onChanged: (value) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        bodyTextShadowBlurRadius:
-                                                            value,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              const SizedBox(height: 4),
+                                              const SizedBox(height: 8),
                                               Wrap(
                                                 spacing: 8,
                                                 runSpacing: 8,
-                                                children: ReaderBodyTextDecorationStyle
-                                                    .values
-                                                    .map(
-                                                      (style) => ChoiceChip(
+                                                children: [
+                                                      _createReaderBackgroundColorOption(
+                                                        label: '浅色',
+                                                        mode:
+                                                            ReaderThemeMode
+                                                                .light,
+                                                        backgroundStyle:
+                                                            ReaderBackgroundStyle
+                                                                .plain,
+                                                        backgroundTone:
+                                                            ReaderBackgroundTone
+                                                                .surface,
+                                                      ),
+                                                      _createReaderBackgroundColorOption(
+                                                        label: '护眼',
+                                                        mode:
+                                                            ReaderThemeMode
+                                                                .sepia,
+                                                        backgroundStyle:
+                                                            ReaderBackgroundStyle
+                                                                .warm,
+                                                        backgroundTone:
+                                                            ReaderBackgroundTone
+                                                                .container,
+                                                      ),
+                                                      _createReaderBackgroundColorOption(
+                                                        label: '深色',
+                                                        mode:
+                                                            ReaderThemeMode
+                                                                .dark,
+                                                        backgroundStyle:
+                                                            ReaderBackgroundStyle
+                                                                .plain,
+                                                        backgroundTone:
+                                                            ReaderBackgroundTone
+                                                                .pureBlack,
+                                                      ),
+                                                      _createReaderBackgroundColorOption(
+                                                        label: '纸张',
+                                                        mode:
+                                                            ReaderThemeMode
+                                                                .light,
+                                                        backgroundStyle:
+                                                            ReaderBackgroundStyle
+                                                                .paper,
+                                                        backgroundTone:
+                                                            ReaderBackgroundTone
+                                                                .containerHigh,
+                                                      ),
+                                                    ]
+                                                    .map((option) {
+                                                      final normalizedTone =
+                                                          normalizeReaderBackgroundTone(
+                                                            mode:
+                                                                draft.themeMode,
+                                                            tone:
+                                                                draft
+                                                                    .backgroundTone,
+                                                          );
+                                                      final selected =
+                                                          draft.themeMode ==
+                                                              option.mode &&
+                                                          draft.backgroundStyle ==
+                                                              option
+                                                                  .backgroundStyle &&
+                                                          normalizedTone ==
+                                                              option
+                                                                  .backgroundTone;
+                                                      return ChoiceChip(
                                                         label: Text(
-                                                          decorationStyleLabel(
-                                                            style,
-                                                          ),
+                                                          option.label,
                                                         ),
-                                                        selected:
-                                                            draft
-                                                                .bodyTextDecorationStyle ==
-                                                            style,
+                                                        selected: selected,
+                                                        showCheckmark: false,
                                                         onSelected: (_) {
                                                           setModalState(() {
                                                             draft = draft.copyWith(
-                                                              bodyTextDecorationStyle:
-                                                                  style,
+                                                              themeMode:
+                                                                  option.mode,
+                                                              backgroundStyle:
+                                                                  option
+                                                                      .backgroundStyle,
+                                                              backgroundTone:
+                                                                  option
+                                                                      .backgroundTone,
                                                             );
                                                           });
+                                                          previewDraftSettings();
                                                         },
-                                                      ),
-                                                    )
+                                                      );
+                                                    })
                                                     .toList(growable: false),
-                                              ),
-                                              if (draft
-                                                      .bodyTextDecorationStyle !=
-                                                  ReaderBodyTextDecorationStyle
-                                                      .none)
-                                                Row(
-                                                  children: [
-                                                    OutlinedButton(
-                                                      onPressed: () {
-                                                        setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            clearBodyTextDecorationColor:
-                                                                true,
-                                                          );
-                                                        });
-                                                      },
-                                                      child: const Text(
-                                                        '下划线跟随文字',
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    OutlinedButton(
-                                                      onPressed: () async {
-                                                        final selectedColor =
-                                                            await _showBodyTextDecorationColorPickerDialog(
-                                                              context,
-                                                              initialColorValue:
-                                                                  draft
-                                                                      .bodyTextDecorationColorValue,
-                                                            );
-                                                        if (selectedColor ==
-                                                                null ||
-                                                            !context.mounted) {
-                                                          return;
-                                                        }
-                                                        setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            bodyTextDecorationColorValue:
-                                                                selectedColor,
-                                                          );
-                                                        });
-                                                      },
-                                                      child: const Text(
-                                                        '下划线颜色',
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              if (draft
-                                                      .bodyTextDecorationStyle !=
-                                                  ReaderBodyTextDecorationStyle
-                                                      .none)
-                                                buildTypographySliderRow(
-                                                  label: '粗细',
-                                                  min: 1,
-                                                  max: 10,
-                                                  divisions: 18,
-                                                  value:
-                                                      draft
-                                                          .bodyTextUnderlineThickness,
-                                                  step: 0.5,
-                                                  valueLabel: draft
-                                                      .bodyTextUnderlineThickness
-                                                      .toStringAsFixed(1),
-                                                  onChanged: (value) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        bodyTextUnderlineThickness:
-                                                            value,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              if (draft
-                                                      .bodyTextDecorationStyle !=
-                                                  ReaderBodyTextDecorationStyle
-                                                      .none)
-                                                buildTypographySliderRow(
-                                                  label: '间距',
-                                                  min: 0,
-                                                  max: 16,
-                                                  divisions: 16,
-                                                  value:
-                                                      draft
-                                                          .bodyTextUnderlineGap,
-                                                  step: 1,
-                                                  valueLabel:
-                                                      draft.bodyTextUnderlineGap
-                                                          .round()
-                                                          .toString(),
-                                                  onChanged: (value) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        bodyTextUnderlineGap:
-                                                            value,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              if (draft
-                                                      .bodyTextDecorationStyle ==
-                                                  ReaderBodyTextDecorationStyle
-                                                      .dashed)
-                                                buildTypographySliderRow(
-                                                  label: '线长',
-                                                  min: 1,
-                                                  max: 24,
-                                                  divisions: 23,
-                                                  value:
-                                                      draft
-                                                          .bodyTextUnderlineDashLength,
-                                                  step: 1,
-                                                  valueLabel:
-                                                      draft
-                                                          .bodyTextUnderlineDashLength
-                                                          .round()
-                                                          .toString(),
-                                                  onChanged: (value) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        bodyTextUnderlineDashLength:
-                                                            value,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              if (draft
-                                                      .bodyTextDecorationStyle ==
-                                                  ReaderBodyTextDecorationStyle
-                                                      .dashed)
-                                                buildTypographySliderRow(
-                                                  label: '比例',
-                                                  min: 1,
-                                                  max: 12,
-                                                  divisions: 11,
-                                                  value:
-                                                      draft
-                                                          .bodyTextUnderlineDashGapRatio,
-                                                  step: 1,
-                                                  valueLabel:
-                                                      draft
-                                                          .bodyTextUnderlineDashGapRatio
-                                                          .round()
-                                                          .toString(),
-                                                  onChanged: (value) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        bodyTextUnderlineDashGapRatio:
-                                                            value,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              const SizedBox(height: 8),
-                                              buildTypographySliderRow(
-                                                label: '字号',
-                                                min: 5,
-                                                max: 50,
-                                                divisions: 45,
-                                                value: draft.fontSize,
-                                                step: 1,
-                                                valueLabel: _fontSizeValueLabel(
-                                                  draft,
-                                                ),
-                                                showValueLabel: false,
-                                                onChanged: (value) {
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      fontSize: value,
-                                                    );
-                                                  });
-                                                },
-                                              ),
-                                              buildTypographySliderRow(
-                                                label: '字距',
-                                                min: 0,
-                                                max: 100,
-                                                divisions: 100,
-                                                value:
-                                                    _letterSpacingSliderValue(
-                                                      draft,
-                                                    ),
-                                                step: 1,
-                                                valueLabel:
-                                                    _letterSpacingValueLabel(
-                                                      draft,
-                                                    ),
-                                                onChanged: (value) {
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      letterSpacing:
-                                                          _letterSpacingFromSliderValue(
-                                                            value,
-                                                          ),
-                                                    );
-                                                  });
-                                                },
-                                              ),
-                                              buildTypographySliderRow(
-                                                label: '行距',
-                                                min: 0,
-                                                max: 20,
-                                                divisions: 20,
-                                                value: _lineHeightSliderValue(
-                                                  draft,
-                                                ),
-                                                step: 1,
-                                                valueLabel:
-                                                    _lineHeightValueLabel(
-                                                      draft,
-                                                    ),
-                                                onChanged: (value) {
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      lineHeight:
-                                                          _lineHeightFromSliderValue(
-                                                            sliderValue: value,
-                                                            settings: draft,
-                                                          ),
-                                                    );
-                                                  });
-                                                },
-                                              ),
-                                              buildTypographySliderRow(
-                                                label: '段距',
-                                                min: 0,
-                                                max: 20,
-                                                divisions: 20,
-                                                value: draft.paragraphSpacing,
-                                                step: 1,
-                                                valueLabel:
-                                                    _paragraphSpacingValueLabel(
-                                                      draft,
-                                                    ),
-                                                onChanged: (value) {
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      paragraphSpacing: value,
-                                                    );
-                                                  });
-                                                },
-                                              ),
-                                              buildTypographySliderRow(
-                                                label: '缩进',
-                                                min: 0,
-                                                max: 8,
-                                                divisions: 8,
-                                                value:
-                                                    draft.paragraphIndent
-                                                        .clamp(0, 8)
-                                                        .toDouble(),
-                                                step: 1,
-                                                valueLabel:
-                                                    _paragraphIndentValueLabel(
-                                                      draft,
-                                                    ),
-                                                onChanged: (value) {
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      paragraphIndent:
-                                                          value
-                                                              .round()
-                                                              .toDouble(),
-                                                    );
-                                                  });
-                                                },
                                               ),
                                             ],
                                           ),
                                         ),
-                                      if (!isMangaChapter)
-                                        const Divider(height: 1),
-                                      _buildSettingLine(
-                                        context: context,
-                                        label: !isMangaChapter ? '阅读方式' : '翻页',
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            if (!isMangaChapter ||
-                                                animationPolicy
-                                                    .supportsTextPageTurnAnimations)
-                                              buildPageAnimationSelector()
-                                            else
-                                              Text(
-                                                animationPolicy
-                                                        .inactiveReason ??
-                                                    '当前模式不使用正文翻页动画。',
-                                                style: Theme.of(
-                                                  context,
-                                                ).textTheme.bodySmall?.copyWith(
-                                                  color:
-                                                      Theme.of(context)
-                                                          .colorScheme
-                                                          .onSurfaceVariant,
-                                                  height: 1.35,
+                                        if (!isMangaChapter) ...[
+                                          const Divider(height: 1),
+                                          _buildSettingLine(
+                                            context: context,
+                                            label: '字号',
+                                            child: Row(
+                                              children: [
+                                                IconButton.filledTonal(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  onPressed: () {
+                                                    final next =
+                                                        (draft.fontSize - 1)
+                                                            .clamp(5, 50)
+                                                            .toDouble();
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        fontSize: next,
+                                                      );
+                                                    });
+                                                  },
+                                                  icon: const Icon(
+                                                    Icons.remove,
+                                                  ),
                                                 ),
+                                                SizedBox(
+                                                  width: 40,
+                                                  child: Center(
+                                                    child: Text(
+                                                      draft.fontSize
+                                                          .toStringAsFixed(0),
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .titleSmall
+                                                          ?.copyWith(
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurface,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                IconButton.filledTonal(
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  onPressed: () {
+                                                    final next =
+                                                        (draft.fontSize + 1)
+                                                            .clamp(5, 50)
+                                                            .toDouble();
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        fontSize: next,
+                                                      );
+                                                    });
+                                                  },
+                                                  icon: const Icon(Icons.add),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Flexible(
+                                                  child: OutlinedButton(
+                                                    onPressed:
+                                                        openFontPickerSheet,
+                                                    style:
+                                                        OutlinedButton.styleFrom(
+                                                          visualDensity:
+                                                              VisualDensity
+                                                                  .compact,
+                                                          alignment:
+                                                              Alignment.center,
+                                                        ),
+                                                    child: Text(
+                                                      currentFontLabel(),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                        const Divider(height: 1),
+                                        _buildSettingLine(
+                                          context: context,
+                                          label: '背景颜色',
+                                          labelWidth: 72,
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: _readerBackgroundColorOptions()
+                                                  .map(
+                                                    (
+                                                      option,
+                                                    ) => _buildThemeColorDot(
+                                                      draft: draft,
+                                                      color:
+                                                          option.previewColor,
+                                                      label: option.label,
+                                                      mode: option.mode,
+                                                      backgroundStyle:
+                                                          option
+                                                              .backgroundStyle,
+                                                      backgroundTone:
+                                                          option.backgroundTone,
+                                                      onChanged: (next) {
+                                                        setModalState(() {
+                                                          draft = next;
+                                                        });
+                                                      },
+                                                    ),
+                                                  )
+                                                  .toList(growable: false),
+                                            ),
+                                          ),
+                                        ),
+                                        const Divider(height: 1),
+                                        _buildSettingLine(
+                                          context: context,
+                                          label: '背景',
+                                          child: ScrollConfiguration(
+                                            behavior: ScrollConfiguration.of(
+                                              context,
+                                            ).copyWith(
+                                              dragDevices: _kScrollDragDevices,
+                                            ),
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: Row(
+                                                children: [
+                                                  _buildBackgroundTile(
+                                                    label: '无背景',
+                                                    selected:
+                                                        !hasBackgroundImage,
+                                                    icon:
+                                                        Icons
+                                                            .hide_image_outlined,
+                                                    onTap: () {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          clearBackgroundImage:
+                                                              true,
+                                                        );
+                                                      });
+                                                      unawaited(
+                                                        persistBackgroundDraftNow(
+                                                          draft,
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  ...presetBackgroundTiles,
+                                                  ...customBackgroundTiles,
+                                                  _buildBackgroundTile(
+                                                    label: '自定义',
+                                                    selected: false,
+                                                    icon:
+                                                        Icons
+                                                            .upload_file_rounded,
+                                                    showLabel: true,
+                                                    onTap:
+                                                        applyCustomBackgroundImage,
+                                                  ),
+                                                  if (hasBackgroundImage) ...[
+                                                    const SizedBox(width: 8),
+                                                    OutlinedButton(
+                                                      onPressed:
+                                                          () => unawaited(
+                                                            removeActiveBackground(),
+                                                          ),
+                                                      child: const Text('移除'),
+                                                    ),
+                                                  ],
+                                                ],
                                               ),
-                                            if (!isMangaChapter) ...[
-                                              const SizedBox(height: 6),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      if (showReadingSection) ...[
+                                        if (showInterfaceSection)
+                                          const Divider(height: 1),
+                                        if (!isMangaChapter)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 4,
+                                            ),
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: Row(
+                                                children: [
+                                                  buildReadingActionTab(
+                                                    label: '字重',
+                                                    value:
+                                                        fontWeightDisplayLabel(
+                                                          draft,
+                                                        ),
+                                                    onTap:
+                                                        () => unawaited(
+                                                          openFontWeightTabSheet(),
+                                                        ),
+                                                  ),
+                                                  buildReadingActionTab(
+                                                    label: '边距',
+                                                    value:
+                                                        _bodyMarginDisplayValue(
+                                                          draft,
+                                                        ),
+                                                    onTap:
+                                                        () => unawaited(
+                                                          openHorizontalPaddingTabSheet(),
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        if (!isMangaChapter)
+                                          const Divider(height: 1),
+                                        if (!isMangaChapter)
+                                          _buildSettingLine(
+                                            context: context,
+                                            label: '排版',
+                                            child: Column(
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    const Spacer(),
+                                                    Switch.adaptive(
+                                                      value:
+                                                          draft
+                                                              .textFullJustifyEnabled,
+                                                      onChanged: (enabled) {
+                                                        setModalState(() {
+                                                          draft = draft.copyWith(
+                                                            textFullJustifyEnabled:
+                                                                enabled,
+                                                          );
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      '斜体',
+                                                      style:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .bodyMedium,
+                                                    ),
+                                                    const Spacer(),
+                                                    Switch.adaptive(
+                                                      value:
+                                                          draft
+                                                              .bodyTextItalicEnabled,
+                                                      onChanged: (enabled) {
+                                                        setModalState(() {
+                                                          draft = draft.copyWith(
+                                                            bodyTextItalicEnabled:
+                                                                enabled,
+                                                          );
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      '阴影',
+                                                      style:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .bodyMedium,
+                                                    ),
+                                                    const Spacer(),
+                                                    Switch.adaptive(
+                                                      value:
+                                                          draft
+                                                              .bodyTextShadowEnabled,
+                                                      onChanged: (enabled) {
+                                                        setModalState(() {
+                                                          draft = draft.copyWith(
+                                                            bodyTextShadowEnabled:
+                                                                enabled,
+                                                          );
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (draft.bodyTextShadowEnabled)
+                                                  buildTypographySliderRow(
+                                                    label: '模糊',
+                                                    min: 0,
+                                                    max: 32,
+                                                    divisions: 32,
+                                                    value:
+                                                        draft
+                                                            .bodyTextShadowBlurRadius,
+                                                    step: 1,
+                                                    valueLabel:
+                                                        draft
+                                                            .bodyTextShadowBlurRadius
+                                                            .round()
+                                                            .toString(),
+                                                    onChanged: (value) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          bodyTextShadowBlurRadius:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                const SizedBox(height: 4),
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
+                                                  children: ReaderBodyTextDecorationStyle
+                                                      .values
+                                                      .map(
+                                                        (style) => ChoiceChip(
+                                                          label: Text(
+                                                            decorationStyleLabel(
+                                                              style,
+                                                            ),
+                                                          ),
+                                                          selected:
+                                                              draft
+                                                                  .bodyTextDecorationStyle ==
+                                                              style,
+                                                          onSelected: (_) {
+                                                            setModalState(() {
+                                                              draft = draft
+                                                                  .copyWith(
+                                                                    bodyTextDecorationStyle:
+                                                                        style,
+                                                                  );
+                                                            });
+                                                          },
+                                                        ),
+                                                      )
+                                                      .toList(growable: false),
+                                                ),
+                                                if (draft
+                                                        .bodyTextDecorationStyle !=
+                                                    ReaderBodyTextDecorationStyle
+                                                        .none)
+                                                  Row(
+                                                    children: [
+                                                      OutlinedButton(
+                                                        onPressed: () {
+                                                          setModalState(() {
+                                                            draft = draft.copyWith(
+                                                              clearBodyTextDecorationColor:
+                                                                  true,
+                                                            );
+                                                          });
+                                                        },
+                                                        child: const Text(
+                                                          '下划线跟随文字',
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      OutlinedButton(
+                                                        onPressed: () async {
+                                                          final selectedColor =
+                                                              await _showBodyTextDecorationColorPickerDialog(
+                                                                context,
+                                                                initialColorValue:
+                                                                    draft
+                                                                        .bodyTextDecorationColorValue,
+                                                              );
+                                                          if (selectedColor ==
+                                                                  null ||
+                                                              !context
+                                                                  .mounted) {
+                                                            return;
+                                                          }
+                                                          setModalState(() {
+                                                            draft = draft.copyWith(
+                                                              bodyTextDecorationColorValue:
+                                                                  selectedColor,
+                                                            );
+                                                          });
+                                                        },
+                                                        child: const Text(
+                                                          '下划线颜色',
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                if (draft
+                                                        .bodyTextDecorationStyle !=
+                                                    ReaderBodyTextDecorationStyle
+                                                        .none)
+                                                  buildTypographySliderRow(
+                                                    label: '粗细',
+                                                    min: 1,
+                                                    max: 10,
+                                                    divisions: 18,
+                                                    value:
+                                                        draft
+                                                            .bodyTextUnderlineThickness,
+                                                    step: 0.5,
+                                                    valueLabel: draft
+                                                        .bodyTextUnderlineThickness
+                                                        .toStringAsFixed(1),
+                                                    onChanged: (value) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          bodyTextUnderlineThickness:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                if (draft
+                                                        .bodyTextDecorationStyle !=
+                                                    ReaderBodyTextDecorationStyle
+                                                        .none)
+                                                  buildTypographySliderRow(
+                                                    label: '间距',
+                                                    min: 0,
+                                                    max: 16,
+                                                    divisions: 16,
+                                                    value:
+                                                        draft
+                                                            .bodyTextUnderlineGap,
+                                                    step: 1,
+                                                    valueLabel:
+                                                        draft
+                                                            .bodyTextUnderlineGap
+                                                            .round()
+                                                            .toString(),
+                                                    onChanged: (value) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          bodyTextUnderlineGap:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                if (draft
+                                                        .bodyTextDecorationStyle ==
+                                                    ReaderBodyTextDecorationStyle
+                                                        .dashed)
+                                                  buildTypographySliderRow(
+                                                    label: '线长',
+                                                    min: 1,
+                                                    max: 24,
+                                                    divisions: 23,
+                                                    value:
+                                                        draft
+                                                            .bodyTextUnderlineDashLength,
+                                                    step: 1,
+                                                    valueLabel:
+                                                        draft
+                                                            .bodyTextUnderlineDashLength
+                                                            .round()
+                                                            .toString(),
+                                                    onChanged: (value) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          bodyTextUnderlineDashLength:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                if (draft
+                                                        .bodyTextDecorationStyle ==
+                                                    ReaderBodyTextDecorationStyle
+                                                        .dashed)
+                                                  buildTypographySliderRow(
+                                                    label: '比例',
+                                                    min: 1,
+                                                    max: 12,
+                                                    divisions: 11,
+                                                    value:
+                                                        draft
+                                                            .bodyTextUnderlineDashGapRatio,
+                                                    step: 1,
+                                                    valueLabel:
+                                                        draft
+                                                            .bodyTextUnderlineDashGapRatio
+                                                            .round()
+                                                            .toString(),
+                                                    onChanged: (value) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          bodyTextUnderlineDashGapRatio:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                const SizedBox(height: 8),
+                                                buildTypographySliderRow(
+                                                  label: '字号',
+                                                  min: 5,
+                                                  max: 50,
+                                                  divisions: 45,
+                                                  value: draft.fontSize,
+                                                  step: 1,
+                                                  valueLabel:
+                                                      _fontSizeValueLabel(
+                                                        draft,
+                                                      ),
+                                                  showValueLabel: false,
+                                                  onChanged: (value) {
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        fontSize: value,
+                                                      );
+                                                    });
+                                                  },
+                                                ),
+                                                buildTypographySliderRow(
+                                                  label: '字距',
+                                                  min: 0,
+                                                  max: 100,
+                                                  divisions: 100,
+                                                  value:
+                                                      _letterSpacingSliderValue(
+                                                        draft,
+                                                      ),
+                                                  step: 1,
+                                                  valueLabel:
+                                                      _letterSpacingValueLabel(
+                                                        draft,
+                                                      ),
+                                                  onChanged: (value) {
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        letterSpacing:
+                                                            _letterSpacingFromSliderValue(
+                                                              value,
+                                                            ),
+                                                      );
+                                                    });
+                                                  },
+                                                ),
+                                                buildTypographySliderRow(
+                                                  label: '行距',
+                                                  min: 0,
+                                                  max: 20,
+                                                  divisions: 20,
+                                                  value: _lineHeightSliderValue(
+                                                    draft,
+                                                  ),
+                                                  step: 1,
+                                                  valueLabel:
+                                                      _lineHeightValueLabel(
+                                                        draft,
+                                                      ),
+                                                  onChanged: (value) {
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        lineHeight:
+                                                            _lineHeightFromSliderValue(
+                                                              sliderValue:
+                                                                  value,
+                                                              settings: draft,
+                                                            ),
+                                                      );
+                                                    });
+                                                  },
+                                                ),
+                                                buildTypographySliderRow(
+                                                  label: '段距',
+                                                  min: 0,
+                                                  max: 20,
+                                                  divisions: 20,
+                                                  value: draft.paragraphSpacing,
+                                                  step: 1,
+                                                  valueLabel:
+                                                      _paragraphSpacingValueLabel(
+                                                        draft,
+                                                      ),
+                                                  onChanged: (value) {
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        paragraphSpacing: value,
+                                                      );
+                                                    });
+                                                  },
+                                                ),
+                                                buildTypographySliderRow(
+                                                  label: '缩进',
+                                                  min: 0,
+                                                  max: 8,
+                                                  divisions: 8,
+                                                  value:
+                                                      draft.paragraphIndent
+                                                          .clamp(0, 8)
+                                                          .toDouble(),
+                                                  step: 1,
+                                                  valueLabel:
+                                                      _paragraphIndentValueLabel(
+                                                        draft,
+                                                      ),
+                                                  onChanged: (value) {
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        paragraphIndent:
+                                                            value
+                                                                .round()
+                                                                .toDouble(),
+                                                      );
+                                                    });
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        if (!isMangaChapter)
+                                          const Divider(height: 1),
+                                        _buildSettingLine(
+                                          context: context,
+                                          label:
+                                              !isMangaChapter ? '阅读方式' : '翻页',
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              if (!isMangaChapter ||
+                                                  animationPolicy
+                                                      .supportsTextPageTurnAnimations)
+                                                buildPageAnimationSelector()
+                                              else
+                                                Text(
+                                                  animationPolicy
+                                                          .inactiveReason ??
+                                                      '当前模式不使用正文翻页动画。',
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.bodySmall?.copyWith(
+                                                    color:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .onSurfaceVariant,
+                                                    height: 1.35,
+                                                  ),
+                                                ),
+                                              if (!isMangaChapter) ...[
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  draft
+                                                          .pageTurnMode
+                                                          .usesScrollLayout
+                                                      ? '当前为滚动阅读。分页时默认固定为点按 + 滑动。'
+                                                      : '当前为分页阅读，默认固定使用点按 + 滑动翻页。',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                        color:
+                                                            Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurfaceVariant,
+                                                      ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        const Divider(height: 1),
+                                        _buildSettingLine(
+                                          context: context,
+                                          label: '音量键翻页',
+                                          labelWidth: 96,
+                                          stackOnCompact: true,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      draft.volumeKeyPageEnabled
+                                                          ? '音量上键上一页，音量下键下一页'
+                                                          : '保留系统音量键行为',
+                                                      style:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .bodyMedium,
+                                                    ),
+                                                  ),
+                                                  Switch.adaptive(
+                                                    value:
+                                                        draft
+                                                            .volumeKeyPageEnabled,
+                                                    onChanged:
+                                                        ReaderVolumeKeyPageBridge
+                                                                .instance
+                                                                .isSupported
+                                                            ? (enabled) {
+                                                              setModalState(() {
+                                                                draft = draft
+                                                                    .copyWith(
+                                                                      volumeKeyPageEnabled:
+                                                                          enabled,
+                                                                    );
+                                                              });
+                                                            }
+                                                            : null,
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
                                               Text(
-                                                draft
-                                                        .pageTurnMode
-                                                        .usesScrollLayout
-                                                    ? '当前为滚动阅读。分页时默认固定为点按 + 滑动。'
-                                                    : '当前为分页阅读，默认固定使用点按 + 滑动翻页。',
+                                                _volumeKeyPageSupportDescription,
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .labelSmall
@@ -10595,427 +10724,389 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                     ),
                                               ),
                                             ],
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                      const Divider(height: 1),
-                                      _buildSettingLine(
-                                        context: context,
-                                        label: '音量键翻页',
-                                        labelWidth: 96,
-                                        stackOnCompact: true,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    draft.volumeKeyPageEnabled
-                                                        ? '音量上键上一页，音量下键下一页'
-                                                        : '保留系统音量键行为',
-                                                    style:
-                                                        Theme.of(
-                                                          context,
-                                                        ).textTheme.bodyMedium,
-                                                  ),
-                                                ),
-                                                Switch.adaptive(
-                                                  value:
-                                                      draft
-                                                          .volumeKeyPageEnabled,
-                                                  onChanged:
-                                                      ReaderVolumeKeyPageBridge
-                                                              .instance
-                                                              .isSupported
-                                                          ? (enabled) {
-                                                            setModalState(() {
-                                                              draft = draft
-                                                                  .copyWith(
-                                                                    volumeKeyPageEnabled:
-                                                                        enabled,
+                                        const Divider(height: 1),
+                                        _buildSettingLine(
+                                          context: context,
+                                          label: isMangaChapter ? '其他' : '自动读',
+                                          child:
+                                              isMangaChapter
+                                                  ? Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 8,
+                                                        children: ReaderMangaReadMode
+                                                            .values
+                                                            .map(
+                                                              (
+                                                                mode,
+                                                              ) => ChoiceChip(
+                                                                label: Text(
+                                                                  _mangaReadModeLabel(
+                                                                    mode,
+                                                                  ),
+                                                                ),
+                                                                selected:
+                                                                    draft
+                                                                        .mangaReadMode ==
+                                                                    mode,
+                                                                onSelected: (
+                                                                  _,
+                                                                ) {
+                                                                  setModalState(() {
+                                                                    draft = draft
+                                                                        .copyWith(
+                                                                          mangaReadMode:
+                                                                              mode,
+                                                                        );
+                                                                  });
+                                                                },
+                                                              ),
+                                                            )
+                                                            .toList(
+                                                              growable: false,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      Text(
+                                                        '留白',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 8,
+                                                        children: const [
+                                                              0.0,
+                                                              4.0,
+                                                              8.0,
+                                                              12.0,
+                                                              16.0,
+                                                            ]
+                                                            .map(
+                                                              (
+                                                                value,
+                                                              ) => ChoiceChip(
+                                                                label: Text(
+                                                                  '${value.toInt()}',
+                                                                ),
+                                                                selected:
+                                                                    (draft.mangaImagePadding -
+                                                                            value)
+                                                                        .abs() <
+                                                                    0.2,
+                                                                onSelected: (
+                                                                  _,
+                                                                ) {
+                                                                  setModalState(() {
+                                                                    draft = draft.copyWith(
+                                                                      mangaImagePadding:
+                                                                          value,
+                                                                    );
+                                                                  });
+                                                                },
+                                                              ),
+                                                            )
+                                                            .toList(
+                                                              growable: false,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      Text(
+                                                        '图间距',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 8,
+                                                        children: const [
+                                                              0.0,
+                                                              6.0,
+                                                              10.0,
+                                                              14.0,
+                                                              18.0,
+                                                            ]
+                                                            .map(
+                                                              (
+                                                                value,
+                                                              ) => ChoiceChip(
+                                                                label: Text(
+                                                                  '${value.toInt()}',
+                                                                ),
+                                                                selected:
+                                                                    (draft.mangaImageSpacing -
+                                                                            value)
+                                                                        .abs() <
+                                                                    0.2,
+                                                                onSelected: (
+                                                                  _,
+                                                                ) {
+                                                                  setModalState(() {
+                                                                    draft = draft.copyWith(
+                                                                      mangaImageSpacing:
+                                                                          value,
+                                                                    );
+                                                                  });
+                                                                },
+                                                              ),
+                                                            )
+                                                            .toList(
+                                                              growable: false,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      Text(
+                                                        '背景颜色',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 8,
+                                                        children: _readerBackgroundColorOptions()
+                                                            .map(
+                                                              (
+                                                                option,
+                                                              ) => _buildBackgroundColorChoiceChip(
+                                                                draft: draft,
+                                                                option: option,
+                                                                onChanged: (
+                                                                  next,
+                                                                ) {
+                                                                  setModalState(
+                                                                    () {
+                                                                      draft =
+                                                                          next;
+                                                                    },
                                                                   );
-                                                            });
-                                                          }
-                                                          : null,
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _volumeKeyPageSupportDescription,
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelSmall?.copyWith(
-                                                color:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const Divider(height: 1),
-                                      _buildSettingLine(
-                                        context: context,
-                                        label: isMangaChapter ? '其他' : '自动读',
-                                        child:
-                                            isMangaChapter
-                                                ? Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Wrap(
-                                                      spacing: 8,
-                                                      runSpacing: 8,
-                                                      children: ReaderMangaReadMode
-                                                          .values
-                                                          .map(
-                                                            (
-                                                              mode,
-                                                            ) => ChoiceChip(
-                                                              label: Text(
-                                                                _mangaReadModeLabel(
-                                                                  mode,
+                                                                },
+                                                              ),
+                                                            )
+                                                            .toList(
+                                                              growable: false,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      Text(
+                                                        '加载策略',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 8,
+                                                        children: ReaderMangaLoadStrategy
+                                                            .values
+                                                            .map(
+                                                              (
+                                                                strategy,
+                                                              ) => ChoiceChip(
+                                                                label: Text(
+                                                                  _mangaLoadStrategyLabel(
+                                                                    strategy,
+                                                                  ),
                                                                 ),
+                                                                selected:
+                                                                    draft
+                                                                        .mangaLoadStrategy ==
+                                                                    strategy,
+                                                                onSelected: (
+                                                                  _,
+                                                                ) {
+                                                                  setModalState(() {
+                                                                    draft = draft.copyWith(
+                                                                      mangaLoadStrategy:
+                                                                          strategy,
+                                                                    );
+                                                                  });
+                                                                },
                                                               ),
-                                                              selected:
-                                                                  draft
-                                                                      .mangaReadMode ==
-                                                                  mode,
-                                                              onSelected: (_) {
-                                                                setModalState(() {
-                                                                  draft = draft
-                                                                      .copyWith(
-                                                                        mangaReadMode:
-                                                                            mode,
-                                                                      );
-                                                                });
-                                                              },
+                                                            )
+                                                            .toList(
+                                                              growable: false,
                                                             ),
-                                                          )
-                                                          .toList(
-                                                            growable: false,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    Text(
-                                                      '留白',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium
-                                                          ?.copyWith(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Wrap(
-                                                      spacing: 8,
-                                                      runSpacing: 8,
-                                                      children: const [
-                                                            0.0,
-                                                            4.0,
-                                                            8.0,
-                                                            12.0,
-                                                            16.0,
-                                                          ]
-                                                          .map(
-                                                            (
-                                                              value,
-                                                            ) => ChoiceChip(
-                                                              label: Text(
-                                                                '${value.toInt()}',
-                                                              ),
-                                                              selected:
-                                                                  (draft.mangaImagePadding -
-                                                                          value)
-                                                                      .abs() <
-                                                                  0.2,
-                                                              onSelected: (_) {
-                                                                setModalState(() {
-                                                                  draft = draft
-                                                                      .copyWith(
-                                                                        mangaImagePadding:
-                                                                            value,
-                                                                      );
-                                                                });
-                                                              },
+                                                      ),
+                                                    ],
+                                                  )
+                                                  : Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          Expanded(
+                                                            child: Text(
+                                                              startAutoReadAfterApply
+                                                                  ? '关闭弹窗后立即启动自动阅读'
+                                                                  : '本次不启动自动阅读',
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .bodyMedium,
                                                             ),
-                                                          )
-                                                          .toList(
-                                                            growable: false,
                                                           ),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    Text(
-                                                      '图间距',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium
-                                                          ?.copyWith(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
+                                                          Switch.adaptive(
+                                                            value:
+                                                                startAutoReadAfterApply,
+                                                            onChanged: (
+                                                              enabled,
+                                                            ) {
+                                                              setModalState(() {
+                                                                startAutoReadAfterApply =
+                                                                    enabled;
+                                                              });
+                                                            },
                                                           ),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Wrap(
-                                                      spacing: 8,
-                                                      runSpacing: 8,
-                                                      children: const [
-                                                            0.0,
-                                                            6.0,
-                                                            10.0,
-                                                            14.0,
-                                                            18.0,
-                                                          ]
-                                                          .map(
-                                                            (
-                                                              value,
-                                                            ) => ChoiceChip(
-                                                              label: Text(
-                                                                '${value.toInt()}',
-                                                              ),
-                                                              selected:
-                                                                  (draft.mangaImageSpacing -
-                                                                          value)
-                                                                      .abs() <
-                                                                  0.2,
-                                                              onSelected: (_) {
-                                                                setModalState(() {
-                                                                  draft = draft
-                                                                      .copyWith(
-                                                                        mangaImageSpacing:
-                                                                            value,
-                                                                      );
-                                                                });
-                                                              },
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        '一次性操作，不会保存为默认状态',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelSmall
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
                                                             ),
-                                                          )
-                                                          .toList(
-                                                            growable: false,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    Text(
-                                                      '背景颜色',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium
-                                                          ?.copyWith(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Wrap(
-                                                      spacing: 8,
-                                                      runSpacing: 8,
-                                                      children: _readerBackgroundColorOptions()
-                                                          .map(
-                                                            (
-                                                              option,
-                                                            ) => _buildBackgroundColorChoiceChip(
-                                                              draft: draft,
-                                                              option: option,
-                                                              onChanged: (
-                                                                next,
-                                                              ) {
-                                                                setModalState(
-                                                                  () {
-                                                                    draft =
-                                                                        next;
-                                                                  },
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        '自动阅读速度：${_autoReadSpeedLevelLabel(draft.autoReadSpeed)} · ${draft.autoReadSpeed.round()} px/s',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .labelMedium
+                                                            ?.copyWith(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onSurfaceVariant,
+                                                            ),
+                                                      ),
+                                                      Slider(
+                                                        min:
+                                                            ReaderSettings
+                                                                .minAutoReadSpeed,
+                                                        max:
+                                                            ReaderSettings
+                                                                .maxAutoReadSpeed,
+                                                        divisions: 20,
+                                                        label:
+                                                            '${draft.autoReadSpeed.round()}',
+                                                        value:
+                                                            draft.autoReadSpeed
+                                                                .clamp(
+                                                                  ReaderSettings
+                                                                      .minAutoReadSpeed,
+                                                                  ReaderSettings
+                                                                      .maxAutoReadSpeed,
+                                                                )
+                                                                .toDouble(),
+                                                        onChanged: (value) {
+                                                          setModalState(() {
+                                                            draft = draft
+                                                                .copyWith(
+                                                                  autoReadSpeed:
+                                                                      value,
                                                                 );
-                                                              },
-                                                            ),
-                                                          )
-                                                          .toList(
-                                                            growable: false,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    Text(
-                                                      '加载策略',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium
-                                                          ?.copyWith(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Wrap(
-                                                      spacing: 8,
-                                                      runSpacing: 8,
-                                                      children: ReaderMangaLoadStrategy
-                                                          .values
-                                                          .map(
-                                                            (
-                                                              strategy,
-                                                            ) => ChoiceChip(
-                                                              label: Text(
-                                                                _mangaLoadStrategyLabel(
-                                                                  strategy,
-                                                                ),
-                                                              ),
-                                                              selected:
-                                                                  draft
-                                                                      .mangaLoadStrategy ==
-                                                                  strategy,
-                                                              onSelected: (_) {
-                                                                setModalState(() {
-                                                                  draft = draft
-                                                                      .copyWith(
-                                                                        mangaLoadStrategy:
-                                                                            strategy,
-                                                                      );
-                                                                });
-                                                              },
-                                                            ),
-                                                          )
-                                                          .toList(
-                                                            growable: false,
-                                                          ),
-                                                    ),
-                                                  ],
-                                                )
-                                                : Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            startAutoReadAfterApply
-                                                                ? '关闭弹窗后立即启动自动阅读'
-                                                                : '本次不启动自动阅读',
+                                                          });
+                                                        },
+                                                      ),
+                                                      Row(
+                                                        children: [
+                                                          Text(
+                                                            '慢',
                                                             style:
                                                                 Theme.of(
                                                                       context,
                                                                     )
                                                                     .textTheme
-                                                                    .bodyMedium,
+                                                                    .labelSmall,
                                                           ),
-                                                        ),
-                                                        Switch.adaptive(
-                                                          value:
-                                                              startAutoReadAfterApply,
-                                                          onChanged: (enabled) {
-                                                            setModalState(() {
-                                                              startAutoReadAfterApply =
-                                                                  enabled;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      '一次性操作，不会保存为默认状态',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelSmall
-                                                          ?.copyWith(
-                                                            color:
+                                                          const Spacer(),
+                                                          Text(
+                                                            '快',
+                                                            style:
                                                                 Theme.of(
                                                                       context,
                                                                     )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
+                                                                    .textTheme
+                                                                    .labelSmall,
                                                           ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      '自动阅读速度：${_autoReadSpeedLevelLabel(draft.autoReadSpeed)} · ${draft.autoReadSpeed.round()} px/s',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelMedium
-                                                          ?.copyWith(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
-                                                          ),
-                                                    ),
-                                                    Slider(
-                                                      min:
-                                                          ReaderSettings
-                                                              .minAutoReadSpeed,
-                                                      max:
-                                                          ReaderSettings
-                                                              .maxAutoReadSpeed,
-                                                      divisions: 20,
-                                                      label:
-                                                          '${draft.autoReadSpeed.round()}',
-                                                      value:
-                                                          draft.autoReadSpeed
-                                                              .clamp(
-                                                                ReaderSettings
-                                                                    .minAutoReadSpeed,
-                                                                ReaderSettings
-                                                                    .maxAutoReadSpeed,
-                                                              )
-                                                              .toDouble(),
-                                                      onChanged: (value) {
-                                                        setModalState(() {
-                                                          draft = draft
-                                                              .copyWith(
-                                                                autoReadSpeed:
-                                                                    value,
-                                                              );
-                                                        });
-                                                      },
-                                                    ),
-                                                    Row(
-                                                      children: [
-                                                        Text(
-                                                          '慢',
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .labelSmall,
-                                                        ),
-                                                        const Spacer(),
-                                                        Text(
-                                                          '快',
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .labelSmall,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                      ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

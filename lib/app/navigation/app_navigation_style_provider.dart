@@ -21,6 +21,11 @@ final appStandardNavigationBarAppearanceProvider = NotifierProvider<
   AppStandardNavigationBarAppearance
 >(AppStandardNavigationBarAppearanceNotifier.new);
 
+final appCupertinoDockAppearanceProvider = NotifierProvider<
+  AppCupertinoDockAppearanceNotifier,
+  AppCupertinoDockAppearance
+>(AppCupertinoDockAppearanceNotifier.new);
+
 class AppStandardNavigationBarAppearance {
   const AppStandardNavigationBarAppearance({
     this.floatingBar = false,
@@ -49,6 +54,27 @@ class AppStandardNavigationBarAppearance {
 
   @override
   int get hashCode => Object.hash(floatingBar, frostedEffect);
+}
+
+class AppCupertinoDockAppearance {
+  const AppCupertinoDockAppearance({this.frostedEffect = false});
+
+  final bool frostedEffect;
+
+  AppCupertinoDockAppearance copyWith({bool? frostedEffect}) {
+    return AppCupertinoDockAppearance(
+      frostedEffect: frostedEffect ?? this.frostedEffect,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AppCupertinoDockAppearance &&
+        other.frostedEffect == frostedEffect;
+  }
+
+  @override
+  int get hashCode => frostedEffect.hashCode;
 }
 
 class AppNavigationStylePreferenceNotifier
@@ -232,6 +258,61 @@ class AppStandardNavigationBarAppearanceNotifier
       floatingBar: prefs.getBool(_floatingBarKey) ?? false,
       frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
     );
+  }
+}
+
+class AppCupertinoDockAppearanceNotifier
+    extends Notifier<AppCupertinoDockAppearance> {
+  static const String _frostedEffectKey =
+      'app.navigation.cupertinoDock.frostedEffect';
+  static AppCupertinoDockAppearance? _primedAppearance;
+
+  bool _loadTriggered = false;
+  bool _hasExplicitSet = false;
+
+  static void prime(SharedPreferences prefs) {
+    _primedAppearance = AppCupertinoDockAppearance(
+      frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
+    );
+  }
+
+  @override
+  AppCupertinoDockAppearance build() {
+    final primedAppearance = _primedAppearance;
+    if (primedAppearance != null) {
+      return primedAppearance;
+    }
+    if (!_loadTriggered) {
+      _loadTriggered = true;
+      _load();
+    }
+    return const AppCupertinoDockAppearance();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = AppCupertinoDockAppearance(
+      frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
+    );
+    if (_hasExplicitSet) {
+      return;
+    }
+    if (loaded != state) {
+      state = loaded;
+    }
+  }
+
+  Future<void> setFrostedEffect(bool enabled) async {
+    final next = state.copyWith(frostedEffect: enabled);
+    if (next == state) {
+      return;
+    }
+    _hasExplicitSet = true;
+    _primedAppearance = next;
+    state = next;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_frostedEffectKey, enabled);
   }
 }
 

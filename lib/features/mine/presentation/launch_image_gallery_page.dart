@@ -12,16 +12,19 @@ import '../../../domain/entities/launch_image_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/launch_image_gallery_provider.dart';
 import '../application/launch_image_gallery_service.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
-class LaunchImageGalleryPage extends StatefulWidget {
+class LaunchImageGalleryPage extends ConsumerStatefulWidget {
   const LaunchImageGalleryPage({super.key});
 
   @override
-  State<LaunchImageGalleryPage> createState() => _LaunchImageGalleryPageState();
+  ConsumerState<LaunchImageGalleryPage> createState() =>
+      _LaunchImageGalleryPageState();
 }
 
-class _LaunchImageGalleryPageState extends State<LaunchImageGalleryPage> {
-  final LaunchImageGalleryService _service = LaunchImageGalleryService();
+class _LaunchImageGalleryPageState
+    extends ConsumerState<LaunchImageGalleryPage> {
+  late final LaunchImageGalleryService _service;
 
   List<LaunchImageGallery> _galleries = const <LaunchImageGallery>[];
   bool _isLoading = true;
@@ -30,6 +33,7 @@ class _LaunchImageGalleryPageState extends State<LaunchImageGalleryPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(launchImageGalleryServiceProvider);
     _load();
   }
 
@@ -48,13 +52,12 @@ class _LaunchImageGalleryPageState extends State<LaunchImageGalleryPage> {
     if (_isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       final gallery = await _service.createGallery();
-      container.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
         return;
@@ -77,125 +80,86 @@ class _LaunchImageGalleryPageState extends State<LaunchImageGalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final activeAdvancedTheme =
-            ref.watch(activeAdvancedThemeProvider).valueOrNull;
-        final backdrop = resolveAdvancedThemeBackdrop(
-          Theme.of(context).colorScheme,
-          activeAdvancedTheme,
-        );
-        final horizontal = AppSpacing.pageHorizontal(context);
-        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-        return PopScope<void>(
-          canPop: context.canPop(),
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !context.mounted) {
-              return;
-            }
-            context.go('/mine');
-          },
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text('启动图集'),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              actions: [
-                IconButton(
-                  tooltip: '新增图集',
-                  onPressed: _isLoading || _isSaving ? null : _createGallery,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ],
-            ),
-            body: LayoutBuilder(
-              builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.settingsContentMaxWidth,
-                );
-                return DecoratedBox(
-                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child:
-                          _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  horizontal,
-                                  topInset + 12,
-                                  horizontal,
-                                  16 + bottomSafe,
-                                ),
-                                children: [
-                                  if (_galleries.isEmpty)
-                                    _buildEmptyState(context)
-                                  else
-                                    ..._galleries.map(
-                                      (gallery) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 10,
-                                        ),
-                                        child: _buildGalleryCard(
-                                          context,
-                                          gallery,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
       },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: const Text('启动图集'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          actions: [
+            IconButton(
+              tooltip: '新增图集',
+              onPressed: _isLoading || _isSaving ? null : _createGallery,
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child:
+                      _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + 12,
+                              horizontal,
+                              16 + bottomSafe,
+                            ),
+                            children: [
+                              if (_galleries.isEmpty)
+                                _buildEmptyState(context)
+                              else
+                                ..._galleries.map(
+                                  (gallery) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _buildGalleryCard(context, gallery),
+                                  ),
+                                ),
+                            ],
+                          ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.rocket_launch_outlined,
-            size: 34,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '还没有启动图集',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '点击右上角新增，准备你的启动页素材。',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return const ImageResourceEmptyStateCard(
+      icon: Icons.rocket_launch_outlined,
+      title: '还没有启动图集',
+      description: '点击右上角新增，准备启动页和主题可复用的启动素材。',
     );
   }
 
