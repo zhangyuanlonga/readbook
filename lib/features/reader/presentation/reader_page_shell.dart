@@ -365,7 +365,8 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
-    if (!_settings.pageTurnMode.tapEnabled) {
+    if (!_settings.pageTurnMode.tapEnabled &&
+        !_settings.pageTurnMode.usesScrollLayout) {
       return;
     }
 

@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/composition/app_providers.dart' as app_providers;
+import '../book/application/book_presentation_query_service.dart';
 import '../source/application/source_runtime_facade.dart';
-import 'application/search_book_presentation_service.dart';
 import 'application/search_history_service.dart';
 import 'application/search_service.dart';
 import 'application/search_system_settings_service.dart';
@@ -26,9 +26,7 @@ final searchSystemSettingsServiceProvider =
       return SearchSystemSettingsService();
     });
 
-final searchBookPresentationServiceProvider =
-    Provider<SearchBookPresentationService>((ref) {
-      return SearchBookPresentationService(
-        database: ref.watch(app_providers.appDatabaseProvider),
-      );
+final searchBookPresentationQueryServiceProvider =
+    Provider<BookPresentationQueryService>((ref) {
+      return ref.watch(app_providers.bookPresentationQueryServiceProvider);
     });

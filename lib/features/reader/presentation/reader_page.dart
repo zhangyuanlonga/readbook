@@ -1758,18 +1758,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _ReaderThemeColors colors, {
     required bool isHeader,
   }) {
-    final leadingItems = <ReaderInfoBarItemData>[
+    final footerItems = <ReaderInfoBarItemData>[
       if (_settings.infoShowProgress)
         ReaderInfoBarItemData.text(
           '进度 ${(_currentScrollRatio() * 100).round()}%',
         ),
-    ];
-    final centerItems = <ReaderInfoBarItemData>[
       if (_settings.infoShowChapter &&
           (_chapterTitle?.trim().isNotEmpty ?? false))
-        ReaderInfoBarItemData.text(_chapterTitle!.trim()),
-    ];
-    final trailingItems = <ReaderInfoBarItemData>[
+        ReaderInfoBarItemData.text(_chapterTitle!.trim(), expand: true),
       if (_settings.infoShowTime)
         ReaderInfoBarItemData.text(_formatReaderInfoTime(_readerInfoNow)),
       if (_settings.infoShowBattery)
@@ -1794,9 +1790,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           (_, true) => ReaderChromeRole.pagedHeader,
           (_, false) => ReaderChromeRole.pagedFooter,
         },
-        leadingItems: leadingItems,
-        centerItems: centerItems,
-        trailingItems: trailingItems,
+        leadingItems: const <ReaderInfoBarItemData>[],
+        centerItems: isHeader ? const <ReaderInfoBarItemData>[] : footerItems,
+        trailingItems: const <ReaderInfoBarItemData>[],
       ),
       palette: _chromePalette(colors),
     );
@@ -3164,7 +3160,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       total: total,
       bottomInset: 0,
       safeBottomInset: 0,
-      fadeProgress: _overlayControlsFadeProgress,
+      fadeProgress: 0,
       rightItems: <String>[
         if (_settings.infoShowTime) _formatReaderInfoTime(_readerInfoNow),
         if (_settings.infoShowBattery) _readerBatteryLabel(),
@@ -3176,9 +3172,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ReaderSettings.minInfoBarPadding,
               ReaderSettings.maxInfoBarPadding,
             )
-            .toDouble();
-    final footerInnerVerticalPadding =
-        (footerInnerHorizontalPadding * 0.45).clamp(2.0, 12.0).toDouble();
+            .toDouble() *
+        3.2;
+    const footerInnerVerticalPadding = 3.0;
     final footerTopPadding =
         layoutMetrics.footerPadding.top + footerInnerVerticalPadding;
     final footerBottomPadding =
@@ -9379,9 +9375,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           });
                         },
                       ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () {
+                            const defaults = ReaderSettings();
+                            setModalState(() {
+                              draft = draft.copyWith(
+                                infoFooterDividerEnabled:
+                                    defaults.infoFooterDividerEnabled,
+                                infoFooterPadding: defaults.infoFooterPadding,
+                              );
+                            });
+                          },
+                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                          label: const Text('恢复默认'),
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       Text(
-                        '页脚分隔线控制顶部细线，页脚内距控制页脚内容与边界的内部留白。',
+                        '页脚内距只控制左右向内收缩，拉高后页脚信息会从两边明显往中间聚拢。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           height: 1.35,

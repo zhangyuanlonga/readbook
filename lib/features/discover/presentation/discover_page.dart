@@ -18,9 +18,9 @@ import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/source_health.dart';
+import '../../book/application/book_presentation_query_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/presentation/book_detail_route.dart';
-import '../application/discover_book_presentation_service.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
@@ -75,7 +75,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   late final SourceHealthService _sourceHealthService;
   late final SourceRuntimeTaskConflictService _taskConflictService;
   late final SourceRuntimeSchedulerService _taskScheduler;
-  late final DiscoverBookPresentationService _bookPresentationService;
+  late final BookPresentationQueryService _bookPresentationService;
   final ScrollController _booksScrollController = ScrollController();
   Timer? _sourceRefreshDebounce;
 
@@ -145,7 +145,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     _taskConflictService = ref.read(discoverTaskConflictServiceProvider);
     _taskScheduler = ref.read(discoverTaskSchedulerProvider);
     _bookPresentationService = ref.read(
-      discoverBookPresentationServiceProvider,
+      discoverBookPresentationQueryServiceProvider,
     );
     _booksScrollController.addListener(_onBookListScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1187,7 +1187,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 
   Future<BookMetadataPresentation> _resolvePresentedBook(Book book) async {
-    return _bookPresentationService.resolvePresentedBook(book);
+    return _bookPresentationService.resolveRemoteBook(book);
   }
 
   Widget _buildCoverPreview({

@@ -78,6 +78,7 @@ Future<void> runAdaptivePageSmokeMatrix(
   required Widget Function() pageBuilder,
   required String pageName,
   bool useProviderScope = false,
+  List<Override> overrides = const <Override>[],
   List<AdaptiveViewportCase> cases = kAdaptiveSmokeViewportCases,
 }) async {
   await registerAdaptiveViewportTearDown(tester);
@@ -90,8 +91,8 @@ Future<void> runAdaptivePageSmokeMatrix(
       routes: [GoRoute(path: '/', builder: (context, state) => pageBuilder())],
     );
     Widget app = MaterialApp.router(routerConfig: router);
-    if (useProviderScope) {
-      app = ProviderScope(child: app);
+    if (useProviderScope || overrides.isNotEmpty) {
+      app = ProviderScope(overrides: overrides, child: app);
     }
 
     await tester.pumpWidget(app);

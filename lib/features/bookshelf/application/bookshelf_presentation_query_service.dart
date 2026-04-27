@@ -1,4 +1,5 @@
 import '../../../data/datasources/local/app_database.dart';
+import '../../book/application/book_presentation_query_service.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
@@ -6,41 +7,28 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../source/application/source_runtime_facade.dart';
+import 'local_book_import_service.dart';
 
 class BookshelfPresentationQueryService {
   BookshelfPresentationQueryService({
     required AppDatabase database,
+    required BookPresentationQueryService bookPresentationQueryService,
     required LocalBookRepository localBookRepository,
     required SourceRuntimeFacade sourceRuntimeFacade,
   }) : _database = database,
+       _bookPresentationQueryService = bookPresentationQueryService,
        _localBookRepository = localBookRepository,
        _sourceRuntimeFacade = sourceRuntimeFacade;
 
   final AppDatabase _database;
+  final BookPresentationQueryService _bookPresentationQueryService;
   final LocalBookRepository _localBookRepository;
   final SourceRuntimeFacade _sourceRuntimeFacade;
 
   Future<Map<String, BookMetadataOverride>> loadBookMetadataOverrideMap(
     List<BookshelfBook> books,
   ) async {
-    if (books.isEmpty) {
-      return const <String, BookMetadataOverride>{};
-    }
-    final overrides = await _database.getAllBookMetadataOverrides();
-    final validKeys = <String>{
-      for (final book in books)
-        if (book.sourceId == _kLocalBookSourceId)
-          BookMetadataOverride.localTargetKey(book.bookId)
-        else
-          BookMetadataOverride.remoteTargetKey(
-            sourceId: book.sourceId,
-            detailUrl: book.detailUrl,
-          ),
-    };
-    return <String, BookMetadataOverride>{
-      for (final item in overrides)
-        if (validKeys.contains(item.targetKey)) item.targetKey: item,
-    };
+    return _bookPresentationQueryService.loadMetadataOverrideMapForBooks(books);
   }
 
   Future<Map<String, LocalBook>> loadLocalBookMap(
@@ -48,7 +36,10 @@ class BookshelfPresentationQueryService {
   ) async {
     final localBookIds =
         books
-            .where((book) => book.sourceId == _kLocalBookSourceId)
+            .where(
+              (book) =>
+                  book.sourceId == LocalBookImportService.localBookSourceId,
+            )
             .map((book) => book.bookId.trim())
             .where((bookId) => bookId.isNotEmpty)
             .toSet();
@@ -109,5 +100,3 @@ class BookshelfPresentationQueryService {
     return sourceTypeBySourceId;
   }
 }
-
-const String _kLocalBookSourceId = 'local-import';

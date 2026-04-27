@@ -18,6 +18,7 @@ class ReaderSurfacePolicyResolver {
   const ReaderSurfacePolicyResolver();
 
   static const double _kPagedFooterSafetyBuffer = 6.0;
+  static const double _kPagedFooterVerticalPadding = 3.0;
 
   ReaderSurfacePolicy resolve({
     required bool showsReaderFooterInfoBar,
@@ -59,7 +60,7 @@ class ReaderSurfacePolicyResolver {
             ? bottomProgressReserve
             : footerMarginTop +
                 footerMarginBottom +
-                infoFooterPadding +
+                _kPagedFooterVerticalPadding +
                 (footerFontSize * footerLineHeightFactor) +
                 6 +
                 _kPagedFooterSafetyBuffer;

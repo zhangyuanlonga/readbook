@@ -180,7 +180,9 @@ class SearchBookCard extends ConsumerWidget {
     WidgetRef ref,
     Book book,
   ) async {
-    return ref.read(searchBookPresentationServiceProvider).resolve(book);
+    return ref
+        .read(searchBookPresentationQueryServiceProvider)
+        .resolveRemoteBook(book);
   }
 }
 

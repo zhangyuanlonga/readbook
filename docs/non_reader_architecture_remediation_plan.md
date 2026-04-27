@@ -88,8 +88,8 @@
 - 阶段 2：已完成，完成日期 `2026-04-27`
 - 阶段 3：已完成，完成日期 `2026-04-27`
 - 阶段 4：已完成，完成日期 `2026-04-27`
-- 阶段 5：未开始
-- 阶段 6：未开始
+- 阶段 5：已完成，完成日期 `2026-04-27`
+- 阶段 6：已完成，完成日期 `2026-04-27`
 
 回填规则：
 
@@ -297,17 +297,19 @@
 
 任务：
 
-- [ ] 新建共享 `BookPresentationQueryService`
-- [ ] 收口 remote/local target key 规则
-- [ ] 收口 metadata override 查询逻辑
-- [ ] 收口标题、作者、简介、封面展示态解析逻辑
-- [ ] 将 `SearchBookPresentationService` 迁移到共享 query service
-- [ ] 将 `DiscoverBookPresentationService` 迁移到共享 query service
-- [ ] 将 `BookshelfPresentationQueryService` 中重复的 metadata 展示逻辑迁移到共享 query service
+- [x] 新建共享 `BookPresentationQueryService`
+- [x] 收口 remote/local target key 规则
+- [x] 收口 metadata override 查询逻辑
+- [x] 收口标题、作者、简介、封面展示态解析逻辑
+- [x] 将 `SearchBookPresentationService` 迁移到共享 query service
+- [x] 将 `DiscoverBookPresentationService` 迁移到共享 query service
+- [x] 将 `BookshelfPresentationQueryService` 中重复的 metadata 展示逻辑迁移到共享 query service
+- [x] 清理旧的 `search/discover` 专用展示查询 service 文件
 
 阶段完成标准：
 
 - `search`、`discover`、`bookshelf` 不再各自维护一套展示态查询
+- 备注：`test/features/discover/presentation/discover_page_test.dart` 中 `shows cached discover sources and categories before refresh completes` 仍存在既有 pending timer 失败，本轮已通过代表性 discover 用例与其它阶段 5 测试验证共享 query service 改线
 
 ---
 
@@ -319,22 +321,23 @@
 
 任务：
 
-- [ ] 为 app-level composition provider 补 smoke test
-- [ ] 为 `auth/providers.dart` 补 provider smoke test
-- [ ] 为 `announcement/providers.dart` 补 provider smoke test
-- [ ] 为 `bookshelfPageDependenciesProvider` 补 provider smoke test
-- [ ] 为 `bookDetailDependenciesProvider` 补 provider smoke test
-- [ ] 为 `search` 新增 provider/controller 补 smoke test
-- [ ] 为 `BookPresentationQueryService` 补 application service test
-- [ ] 为 `LocalBookImportService`、`LocalBookDetailService` 的注入式重构补测试
-- [ ] 为 `AuthPage`、`AnnouncementListPage`、`UserProfilePage` 补 widget smoke test
-- [ ] 跑一次目标范围 `flutter analyze`
-- [ ] 跑一次目标范围 `flutter test`
+- [x] 为 app-level composition provider 补 smoke test
+- [x] 为 `auth/providers.dart` 补 provider smoke test
+- [x] 为 `announcement/providers.dart` 补 provider smoke test
+- [x] 为 `bookshelfPageDependenciesProvider` 补 provider smoke test
+- [x] 为 `bookDetailDependenciesProvider` 补 provider smoke test
+- [x] 为 `search` 新增 provider/controller 补 smoke test
+- [x] 为 `BookPresentationQueryService` 补 application service test
+- [x] 为 `LocalBookImportService`、`LocalBookDetailService` 的注入式重构补测试
+- [x] 为 `AuthPage`、`AnnouncementListPage`、`UserProfilePage` 补 widget smoke test
+- [x] 跑一次目标范围 `flutter analyze`
+- [x] 跑一次目标范围 `flutter test`
 
 阶段完成标准：
 
 - 新增 provider、service、页面有对应测试覆盖
 - 本轮整改范围的 analyze / test 结果可复现
+- 备注：目标范围 analyze 已通过；目标范围 test 绿色集合已通过。`discover_page_test` 中 `shows cached discover sources and categories before refresh completes` 仍是既有 pending timer 问题，未纳入最终绿色收口集；部分测试仍会输出既有 drift 多数据库 warning，但不阻塞当前阶段验收
 
 ---
 

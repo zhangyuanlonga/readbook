@@ -7,7 +7,9 @@ import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
 import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/features/book/application/book_presentation_query_service.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_presentation_query_service.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_import_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
@@ -29,6 +31,9 @@ void main() {
       database = AppDatabase(executor: NativeDatabase.memory());
       service = BookshelfPresentationQueryService(
         database: database,
+        bookPresentationQueryService: BookPresentationQueryService(
+          database: database,
+        ),
         localBookRepository: LocalBookRepositoryImpl(database),
         sourceRuntimeFacade: _FakeSourceRuntimeFacade(
           runtimeSources: <RegisteredSource>[
@@ -113,7 +118,7 @@ void main() {
           ),
           BookshelfBook(
             bookId: 'local_book_1',
-            sourceId: 'local-import',
+            sourceId: LocalBookImportService.localBookSourceId,
             detailUrl: '/local/1',
             title: '本地图书',
             addedAt: now,

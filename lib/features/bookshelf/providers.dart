@@ -192,6 +192,9 @@ final bookshelfPresentationQueryServiceProvider =
     Provider<BookshelfPresentationQueryService>((ref) {
       return BookshelfPresentationQueryService(
         database: ref.watch(app_providers.appDatabaseProvider),
+        bookPresentationQueryService: ref.watch(
+          app_providers.bookPresentationQueryServiceProvider,
+        ),
         localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
         sourceRuntimeFacade: ref.watch(bookshelfSourceRuntimeFacadeProvider),
       );

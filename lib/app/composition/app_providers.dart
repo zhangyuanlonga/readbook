@@ -10,6 +10,7 @@ import '../../domain/repositories/book_metadata_override_repository.dart';
 import '../../domain/repositories/bookmark_repository.dart';
 import '../../domain/repositories/local_book_repository.dart';
 import '../../domain/repositories/script_source_repository.dart';
+import '../../features/book/application/book_presentation_query_service.dart';
 import '../../features/source/application/source_runtime_facade.dart';
 import '../lifecycle/app_lifecycle_coordinator.dart';
 import '../startup/app_announcement_coordinator.dart';
@@ -41,6 +42,13 @@ final appSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
     scriptSourceRepository: ref.watch(scriptSourceRepositoryProvider),
   );
 });
+
+final bookPresentationQueryServiceProvider =
+    Provider<BookPresentationQueryService>((ref) {
+      return BookPresentationQueryService(
+        database: ref.watch(appDatabaseProvider),
+      );
+    });
 
 typedef AppLifecycleCoordinatorFactory = AppLifecycleCoordinator Function();
 

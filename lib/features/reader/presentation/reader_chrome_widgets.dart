@@ -239,16 +239,19 @@ class ReaderInfoBarModel {
     EdgeInsets extraOuterPadding = EdgeInsets.zero,
   }) {
     final isHeader = placement == ReaderInfoBarPlacement.header;
-    final innerHorizontalPadding =
+    final rawInnerPadding =
         (isHeader ? settings.infoHeaderPadding : settings.infoFooterPadding)
             .clamp(
               ReaderSettings.minInfoBarPadding,
               ReaderSettings.maxInfoBarPadding,
             )
             .toDouble();
-    final verticalPadding = _resolveInfoBarVerticalPadding(
-      innerHorizontalPadding,
-    );
+    final innerHorizontalPadding =
+        isHeader
+            ? rawInnerPadding
+            : _resolveFooterHorizontalInset(rawInnerPadding);
+    final verticalPadding =
+        isHeader ? _resolveInfoBarVerticalPadding(innerHorizontalPadding) : 3.0;
 
     return ReaderInfoBarModel(
       leadingItems: leadingItems,
@@ -286,6 +289,10 @@ class ReaderInfoBarModel {
 
   static double _resolveInfoBarVerticalPadding(double innerPadding) {
     return (innerPadding * 0.45).clamp(2.0, 12.0).toDouble();
+  }
+
+  static double _resolveFooterHorizontalInset(double innerPadding) {
+    return (innerPadding * 3.2).clamp(0.0, 76.0).toDouble();
   }
 }
 

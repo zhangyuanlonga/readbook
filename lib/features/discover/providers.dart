@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/composition/app_providers.dart' as app_providers;
+import '../book/application/book_presentation_query_service.dart';
 import '../source/application/source_health_service.dart';
 import '../source/application/source_runtime_scheduler_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
-import 'application/discover_book_presentation_service.dart';
 import 'application/discover_preferences_service.dart';
 import 'application/explore_service.dart';
 
@@ -35,9 +35,7 @@ final discoverTaskSchedulerProvider = Provider<SourceRuntimeSchedulerService>((
   return SourceRuntimeSchedulerService.instance;
 });
 
-final discoverBookPresentationServiceProvider =
-    Provider<DiscoverBookPresentationService>((ref) {
-      return DiscoverBookPresentationService(
-        database: ref.watch(app_providers.appDatabaseProvider),
-      );
+final discoverBookPresentationQueryServiceProvider =
+    Provider<BookPresentationQueryService>((ref) {
+      return ref.watch(app_providers.bookPresentationQueryServiceProvider);
     });

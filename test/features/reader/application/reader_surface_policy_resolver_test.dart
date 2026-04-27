@@ -48,7 +48,7 @@ void main() {
         footerLineHeightFactor: 1.3,
       );
 
-      expect(policy.pagedInfoOverlayReserve, closeTo(61.6, 0.001));
+      expect(policy.pagedInfoOverlayReserve, closeTo(46.6, 0.001));
       expect(
         policy.pagedBottomReserve,
         greaterThanOrEqualTo(policy.pagedInfoOverlayReserve),
