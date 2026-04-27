@@ -326,6 +326,14 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.transparent,
+          actions: [
+            if (widget.section == AppearanceSection.background)
+              IconButton(
+                tooltip: '新增背景',
+                onPressed: _uploadBackground,
+                icon: const Icon(Icons.add_rounded),
+              ),
+          ],
         ),
         body: LayoutBuilder(
           builder: (context, _) {
@@ -373,7 +381,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       AppearanceSection.appearance => '外观',
       AppearanceSection.tabBar => '底栏',
       AppearanceSection.cover => '封面',
-      AppearanceSection.background => '背景',
+      AppearanceSection.background => '应用背景',
     };
   }
 
@@ -1130,55 +1138,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Widget _buildBackgroundGallerySection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.wallpaper_outlined,
-                size: 16,
-                color: colorScheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '应用背景',
-                    style: textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    '移动端可选相册或文件，桌面端从文件选择。长按图片可删除。',
-                    style: textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: '新增背景',
-              onPressed: _uploadBackground,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
         if (_isLoadingBackgrounds)
           const SizedBox(
             height: 80,
@@ -1193,10 +1155,13 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
 
               if (_backgroundPaths.isEmpty) {
-                return const ImageResourceEmptyStateCard(
-                  icon: Icons.wallpaper_outlined,
-                  title: '还没有应用背景',
-                  description: '点击右上角新增，准备应用级可复用的背景素材。',
+                return const SizedBox(
+                  width: double.infinity,
+                  child: ImageResourceEmptyStateCard(
+                    icon: Icons.chrome_reader_mode_outlined,
+                    title: '还没有应用背景',
+                    description: '点击右上角新增，准备高级主题和应用可复用的背景素材。',
+                  ),
                 );
               }
 
