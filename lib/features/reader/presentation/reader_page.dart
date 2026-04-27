@@ -85,7 +85,6 @@ import '../application/reader_pagination_engine.dart';
 import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
 import '../application/reader_settings_groups.dart';
-import '../application/reader_settings_preset_service.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
@@ -118,7 +117,6 @@ import 'reader_chrome_widgets.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
 import 'reader_selection_state.dart';
-import 'reader_settings_sheet.dart';
 import 'reader_shell.dart';
 import 'reader_source_switch_controller.dart';
 import 'reader_text_offset_mapper.dart' as text_offset_mapper;
@@ -2968,20 +2966,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool _currentChapterHasInlineImageParagraphs() {
     return _paragraphs.any(_isInlineImageParagraph);
-  }
-
-  String? _pageAnimationInactiveReason({
-    ReaderPageTurnMode? modeOverride,
-    bool? isMangaChapterOverride,
-  }) {
-    final contentMode =
-        (isMangaChapterOverride ?? _isMangaChapter)
-            ? ReaderContentMode.comic
-            : ReaderContentMode.text;
-    return _resolveAnimationPolicy(
-      modeOverride: contentMode,
-      pageTurnModeOverride: modeOverride,
-    ).inactiveReason;
   }
 
   Widget _buildPagedReader(_ReaderThemeColors colors) {
@@ -6126,246 +6110,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
   }
 
-  Future<void> showSettingsSheetGroupedPreview({
-    _ReaderSettingsTab initialTab = _ReaderSettingsTab.reading,
-  }) async {
-    _stopAutoReadSession();
-    final shouldRestoreOverlay = _showOverlayControls;
-    if (shouldRestoreOverlay) {
-      _hideOverlayControls(resumeAutoRead: false, syncSystemUi: false);
-    }
-
-    var draft = _settings;
-    var isPersistingDraft = false;
-    var activeSettingsTab =
-        initialTab == _ReaderSettingsTab.interface
-            ? ReaderSettingsSheetTab.basic
-            : ReaderSettingsSheetTab.advanced;
-    String? activeSettingsGroupKey;
-    Timer? persistDraftTimer;
-    const settingsPresetService = ReaderSettingsPresetService();
-
-    String fingerprint(ReaderSettings settings) {
-      return jsonEncode(settings.copyWith(autoReadEnabled: false).toJson());
-    }
-
-    var persistedFingerprint = fingerprint(_settings);
-
-    Future<void> persistDraftNow(ReaderSettings settings) async {
-      final normalized = settings.copyWith(autoReadEnabled: false);
-      final nextFingerprint = fingerprint(normalized);
-      if (nextFingerprint == persistedFingerprint || isPersistingDraft) {
-        return;
-      }
-      isPersistingDraft = true;
-      try {
-        await _preferencesService.saveSettings(normalized);
-        persistedFingerprint = nextFingerprint;
-      } catch (_) {
-        // Keep in-memory preview even when persistence fails.
-      } finally {
-        isPersistingDraft = false;
-      }
-    }
-
-    void schedulePersistDraft() {
-      persistDraftTimer?.cancel();
-      persistDraftTimer = Timer(const Duration(milliseconds: 220), () {
-        if (!mounted) {
-          return;
-        }
-        unawaited(persistDraftNow(draft));
-      });
-    }
-
-    void previewDraftSettings() {
-      if (!mounted) {
-        return;
-      }
-      schedulePersistDraft();
-      final currentFingerprint = fingerprint(_settings);
-      final draftFingerprint = fingerprint(draft);
-      if (currentFingerprint == draftFingerprint) {
-        return;
-      }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || fingerprint(_settings) == fingerprint(draft)) {
-          return;
-        }
-        _applyReaderSettingsWithModeRestore(nextSettings: draft);
-      });
-    }
-
-    String currentFontLabel() {
-      if (draft.fontSource == ReaderFontSource.custom) {
-        final familyKey = draft.fontFamilyKey;
-        if (familyKey != null) {
-          for (final entry in _customFonts) {
-            if (entry.fontFamilyKey == familyKey) {
-              return entry.displayName;
-            }
-          }
-        }
-        return '自定义字体';
-      }
-      return switch (draft.systemFontPreset) {
-        ReaderSystemFontPreset.defaultSans => '系统默认',
-        ReaderSystemFontPreset.serif => '衬线',
-        ReaderSystemFontPreset.monospace => '等宽',
-      };
-    }
-
-    final readerModalTheme = _readerModalTheme();
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      isDismissible: true,
-      enableDrag: true,
-      showDragHandle: false,
-      useSafeArea: false,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.04),
-      builder: (bottomSheetContext) {
-        return Theme(
-          data: readerModalTheme,
-          child: StatefulBuilder(
-            builder: (sheetContext, setModalState) {
-              final mediaQuery = MediaQuery.of(sheetContext);
-              final keyboardInset = mediaQuery.viewInsets.bottom;
-              final safeBottom = mediaQuery.padding.bottom;
-              final width = mediaQuery.size.width;
-              final sheetHorizontal = width >= 840 ? 24.0 : 12.0;
-              final textSheetMaxWidth = AppLayout.pageContentMaxWidth(
-                sheetContext,
-                maxWidth: 760,
-              );
-
-              void updateDraft(ReaderSettings next) {
-                setModalState(() {
-                  draft = next;
-                });
-                previewDraftSettings();
-              }
-
-              final settingsSheetState = ReaderSettingsSheetState.fromSettings(
-                settings: draft,
-                contentKind: _currentReaderMode.contentKind,
-                layoutMode: _currentReaderMode.layoutMode,
-                showInterfaceSettings:
-                    activeSettingsTab == ReaderSettingsSheetTab.basic,
-                currentFontLabel: currentFontLabel(),
-                activeGroupKey: activeSettingsGroupKey,
-                activeTab: activeSettingsTab,
-                showsPinnedChapterHeader: _showsPinnedChapterHeader,
-                showsBatteryWarning: draft.infoShowBattery,
-              );
-              final settingsSheetCallbacks = ReaderSettingsSheetCallbacks(
-                onBack: () {
-                  setModalState(() {
-                    activeSettingsGroupKey = null;
-                  });
-                },
-                onTabChanged: (tab) {
-                  setModalState(() {
-                    activeSettingsTab = tab;
-                    activeSettingsGroupKey = null;
-                  });
-                },
-                onAdvancedGroupChanged: (group) {
-                  setModalState(() {
-                    activeSettingsGroupKey =
-                        group == null
-                            ? null
-                            : readerSettingsSheetGroupStorageKey(group);
-                  });
-                },
-                onSettingsChanged: updateDraft,
-                onTypographyPresetSelected:
-                    (preset) => updateDraft(
-                      settingsPresetService.applyTypographyPreset(
-                        draft,
-                        preset,
-                      ),
-                    ),
-                onSpacingPresetSelected:
-                    (preset) => updateDraft(
-                      settingsPresetService.applySpacingPreset(draft, preset),
-                    ),
-                onChapterHeaderPresetSelected:
-                    (preset) => updateDraft(
-                      settingsPresetService.applyChapterHeaderPreset(
-                        draft,
-                        preset,
-                      ),
-                    ),
-                onInfoStylePresetSelected:
-                    (preset) => updateDraft(
-                      settingsPresetService.applyInfoStylePreset(draft, preset),
-                    ),
-                onFontPresetSelected:
-                    (preset) => updateDraft(
-                      settingsPresetService.applyFontPreset(draft, preset),
-                    ),
-              );
-
-              return _buildFloatingReaderSettingsSheet(
-                context: sheetContext,
-                readerModalTheme: readerModalTheme,
-                keyboardInset: keyboardInset,
-                safeBottom: safeBottom,
-                sheetHorizontal: sheetHorizontal,
-                maxWidth: textSheetMaxWidth,
-                heightFactor: _adaptiveReaderSheetHeightFactor(
-                  sheetContext,
-                  compact: 0.66,
-                  regular: 0.6,
-                  large: 0.56,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            sheetContext,
-                          ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      Expanded(
-                        child: ReaderSettingsSheet(
-                          title:
-                              settingsSheetState.activeGroupDescriptor?.title ??
-                              (activeSettingsTab == ReaderSettingsSheetTab.basic
-                                  ? '基础设置'
-                                  : '高级设置'),
-                          state: settingsSheetState,
-                          callbacks: settingsSheetCallbacks,
-                          onBack: settingsSheetCallbacks.onBack,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    persistDraftTimer?.cancel();
-    await persistDraftNow(draft);
-    if (mounted && shouldRestoreOverlay) {
-      _setOverlayControlsVisibility(true);
-    }
-  }
-
   Future<void> _showSettingsSheet({
     _ReaderSettingsTab initialTab = _ReaderSettingsTab.reading,
   }) async {
@@ -6377,13 +6121,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     var draft = _settings;
     final isMangaChapter = _isMangaChapter;
+    if (!isMangaChapter && !draft.pageTurnMode.usesScrollLayout) {
+      draft = draft.copyWith(pageTurnMode: ReaderPageTurnMode.tapAndSwipe);
+    }
     var availableCustomFonts = List<ReaderCustomFontEntry>.from(_customFonts);
     var startAutoReadAfterApply = false;
     var isPersistingDraft = false;
-    var activeSettingsTab =
-        initialTab == _ReaderSettingsTab.interface
-            ? ReaderSettingsSheetTab.basic
-            : ReaderSettingsSheetTab.advanced;
+    final showInterfaceSettings = initialTab == _ReaderSettingsTab.interface;
     String? activeSettingsGroupKey;
     Timer? persistDraftTimer;
     const settingsGroupingService = ReaderSettingsGroupingService();
@@ -7710,12 +7454,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       .toDouble();
               double compactScaleValue(double value) =>
                   value * compactSheetScale;
-              final disablePageAnimationSelection =
-                  !isMangaChapter && draft.pageTurnMode.usesScrollLayout;
-              final pageAnimationInactiveReason = _pageAnimationInactiveReason(
-                modeOverride: draft.pageTurnMode,
-                isMangaChapterOverride: isMangaChapter,
-              );
               final animationPolicy = _resolveAnimationPolicy(
                 modeOverride:
                     isMangaChapter
@@ -7723,48 +7461,66 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         : ReaderContentMode.text,
                 pageTurnModeOverride: draft.pageTurnMode,
               );
+
+              void applyTextPresentationMode({
+                required bool useScrollLayout,
+                ReaderPageAnimationStyle? style,
+              }) {
+                setModalState(() {
+                  draft = draft.copyWith(
+                    pageTurnMode:
+                        useScrollLayout
+                            ? ReaderPageTurnMode.scroll
+                            : ReaderPageTurnMode.tapAndSwipe,
+                    pageAnimationStyle: style ?? draft.pageAnimationStyle,
+                  );
+                });
+              }
+
               Widget buildPageAnimationSelector() {
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: const [
-                          ReaderPageAnimationStyle.curl,
-                          ReaderPageAnimationStyle.cover,
-                          ReaderPageAnimationStyle.translate,
-                          ReaderPageAnimationStyle.fade,
-                          ReaderPageAnimationStyle.none,
-                        ]
-                        .map(
-                          (style) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Opacity(
-                              opacity:
-                                  disablePageAnimationSelection ? 0.45 : 1.0,
-                              child: Tooltip(
-                                message:
-                                    disablePageAnimationSelection
-                                        ? '滚动触发模式下不支持分页动画'
-                                        : _pageAnimationLabel(style),
-                                child: ChoiceChip(
-                                  label: Text(_pageAnimationLabel(style)),
-                                  selected: draft.pageAnimationStyle == style,
-                                  showCheckmark: false,
-                                  onSelected:
-                                      disablePageAnimationSelection
-                                          ? null
-                                          : (_) {
-                                            setModalState(() {
-                                              draft = draft.copyWith(
-                                                pageAnimationStyle: style,
-                                              );
-                                            });
-                                          },
-                                ),
-                              ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: const Text('滚动'),
+                          selected: draft.pageTurnMode.usesScrollLayout,
+                          showCheckmark: false,
+                          onSelected: (_) {
+                            applyTextPresentationMode(useScrollLayout: true);
+                          },
+                        ),
+                      ),
+                      ...const [
+                        ReaderPageAnimationStyle.curl,
+                        ReaderPageAnimationStyle.cover,
+                        ReaderPageAnimationStyle.translate,
+                        ReaderPageAnimationStyle.fade,
+                        ReaderPageAnimationStyle.none,
+                      ].map(
+                        (style) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Tooltip(
+                            message: _pageAnimationLabel(style),
+                            child: ChoiceChip(
+                              label: Text(_pageAnimationLabel(style)),
+                              selected:
+                                  !draft.pageTurnMode.usesScrollLayout &&
+                                  draft.pageAnimationStyle == style,
+                              showCheckmark: false,
+                              onSelected: (_) {
+                                applyTextPresentationMode(
+                                  useScrollLayout: false,
+                                  style: style,
+                                );
+                              },
                             ),
                           ),
-                        )
-                        .toList(growable: false),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }
@@ -8697,8 +8453,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ],
                 );
 
-                final showInterfaceSettings =
-                    activeSettingsTab == ReaderSettingsSheetTab.basic;
                 final selectedCards = switch (activeSettingsGroupKey) {
                   null =>
                     showInterfaceSettings
@@ -9042,21 +8796,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           const SizedBox(height: 14),
                           buildCompactSectionTitle('翻页动画'),
                           const SizedBox(height: 10),
-                          if (pageAnimationInactiveReason != null)
-                            Text(
-                              pageAnimationInactiveReason,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                height: 1.35,
-                              ),
-                            )
-                          else
-                            buildPageAnimationSelector(),
+                          buildPageAnimationSelector(),
+                          const SizedBox(height: 8),
+                          Text(
+                            draft.pageTurnMode.usesScrollLayout
+                                ? '当前为滚动阅读。分页时默认固定为点按 + 滑动。'
+                                : '当前为分页阅读，默认固定使用点按 + 滑动翻页。',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                              height: 1.35,
+                            ),
+                          ),
                         ]
                         : <Widget>[
                           buildSettingsGroupEntryCard(
@@ -9473,78 +9228,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ],
                   'interaction' => <Widget>[
                     buildCompactSettingsCard([
-                      buildCompactSectionTitle('触发方式'),
+                      buildCompactSectionTitle('阅读方式'),
                       const SizedBox(height: 10),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            FilterChip(
-                              label: const Text('点按'),
-                              selected: draft.pageTurnMode.tapEnabled,
-                              showCheckmark: false,
-                              onSelected: (selected) {
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    pageTurnMode: applyReaderPageTurnModeToggle(
-                                      draft.pageTurnMode,
-                                      tapEnabled: selected,
-                                    ),
-                                  );
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            FilterChip(
-                              label: const Text('滑动'),
-                              selected: draft.pageTurnMode.swipeEnabled,
-                              showCheckmark: false,
-                              onSelected: (selected) {
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    pageTurnMode: applyReaderPageTurnModeToggle(
-                                      draft.pageTurnMode,
-                                      swipeEnabled: selected,
-                                    ),
-                                  );
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            FilterChip(
-                              label: const Text('滚动'),
-                              selected: draft.pageTurnMode.usesScrollLayout,
-                              showCheckmark: false,
-                              onSelected: (selected) {
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    pageTurnMode: applyReaderPageTurnModeToggle(
-                                      draft.pageTurnMode,
-                                      scrollEnabled: selected,
-                                    ),
-                                  );
-                                });
-                              },
-                            ),
-                          ],
+                      buildPageAnimationSelector(),
+                      const SizedBox(height: 8),
+                      Text(
+                        draft.pageTurnMode.usesScrollLayout
+                            ? '当前为滚动阅读。分页时默认固定为点按 + 滑动。'
+                            : '当前为分页阅读，默认固定使用点按 + 滑动翻页。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.35,
                         ),
                       ),
-                      buildSectionDivider(),
-                      buildCompactSectionTitle('翻页动画'),
-                      const SizedBox(height: 10),
-                      if (pageAnimationInactiveReason != null)
-                        Text(
-                          pageAnimationInactiveReason,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            height: 1.35,
-                          ),
-                        )
-                      else
-                        buildPageAnimationSelector(),
                       buildSectionDivider(),
                       buildCompactSectionTitle('音量键翻页'),
                       const SizedBox(height: 10),
@@ -10672,113 +10368,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         ),
                                       if (!isMangaChapter)
                                         const Divider(height: 1),
-                                      if (!isMangaChapter)
-                                        _buildSettingLine(
-                                          context: context,
-                                          label: '触发',
-                                          child: SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            child: Row(
-                                              children: [
-                                                FilterChip(
-                                                  label: const Text('点按'),
-                                                  selected:
-                                                      draft
-                                                          .pageTurnMode
-                                                          .tapEnabled,
-                                                  showCheckmark: false,
-                                                  onSelected: (selected) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        pageTurnMode:
-                                                            applyReaderPageTurnModeToggle(
-                                                              draft
-                                                                  .pageTurnMode,
-                                                              tapEnabled:
-                                                                  selected,
-                                                            ),
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                                const SizedBox(width: 8),
-                                                FilterChip(
-                                                  label: const Text('滑动'),
-                                                  selected:
-                                                      draft
-                                                          .pageTurnMode
-                                                          .swipeEnabled,
-                                                  showCheckmark: false,
-                                                  onSelected: (selected) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        pageTurnMode:
-                                                            applyReaderPageTurnModeToggle(
-                                                              draft
-                                                                  .pageTurnMode,
-                                                              swipeEnabled:
-                                                                  selected,
-                                                            ),
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                                const SizedBox(width: 8),
-                                                FilterChip(
-                                                  label: const Text('滚动'),
-                                                  selected:
-                                                      draft
-                                                          .pageTurnMode
-                                                          .usesScrollLayout,
-                                                  showCheckmark: false,
-                                                  onSelected: (selected) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        pageTurnMode:
-                                                            applyReaderPageTurnModeToggle(
-                                                              draft
-                                                                  .pageTurnMode,
-                                                              scrollEnabled:
-                                                                  selected,
-                                                            ),
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      if (!isMangaChapter)
-                                        const Divider(height: 1),
                                       _buildSettingLine(
                                         context: context,
-                                        label: !isMangaChapter ? '动画' : '翻页',
+                                        label: !isMangaChapter ? '阅读方式' : '翻页',
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            if (pageAnimationInactiveReason !=
-                                                null)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  bottom: 6,
-                                                ),
-                                                child: Text(
-                                                  pageAnimationInactiveReason,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .labelSmall
-                                                      ?.copyWith(
-                                                        color:
-                                                            Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurfaceVariant,
-                                                      ),
-                                                ),
-                                              ),
-                                            if (animationPolicy
-                                                .supportsTextPageTurnAnimations)
+                                            if (!isMangaChapter ||
+                                                animationPolicy
+                                                    .supportsTextPageTurnAnimations)
                                               buildPageAnimationSelector()
                                             else
                                               Text(
@@ -10795,6 +10394,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                   height: 1.35,
                                                 ),
                                               ),
+                                            if (!isMangaChapter) ...[
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                draft
+                                                        .pageTurnMode
+                                                        .usesScrollLayout
+                                                    ? '当前为滚动阅读。分页时默认固定为点按 + 滑动。'
+                                                    : '当前为分页阅读，默认固定使用点按 + 滑动翻页。',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                            ],
                                           ],
                                         ),
                                       ),

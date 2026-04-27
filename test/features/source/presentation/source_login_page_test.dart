@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_login_runtime_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/features/source/presentation/source_login_page.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 
@@ -47,6 +50,9 @@ void main() {
 }
 
 class _FakeSourceLoginRuntimeService extends SourceLoginRuntimeService {
+  _FakeSourceLoginRuntimeService()
+    : super(sourceRuntimeFacade: _FakeSourceRuntimeFacade());
+
   int submitCount = 0;
   String? lastActionCode;
   Map<String, String> lastFormData = const <String, String>{};
@@ -122,4 +128,32 @@ class _FakeSourceLoginRuntimeService extends SourceLoginRuntimeService {
       message: actionCode == null ? '登录已执行' : '按钮动作已执行',
     );
   }
+}
+
+class _FakeSourceRuntimeFacade extends SourceRuntimeFacade {
+  _FakeSourceRuntimeFacade() : super(scriptSourceRepository: _FakeSourceRepo());
+}
+
+class _FakeSourceRepo implements ScriptSourceRepository {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> deleteById(String id) async {}
+
+  @override
+  Future<List<ScriptSource>> getAll() async => const <ScriptSource>[];
+
+  @override
+  Future<ScriptSource?> getById(String id) async => null;
+
+  @override
+  Future<void> upsert(ScriptSource source) async {}
+
+  @override
+  Future<void> setEnabled({required String id, required bool enabled}) async {}
+
+  @override
+  Stream<List<ScriptSource>> watchAll() =>
+      const Stream<List<ScriptSource>>.empty();
 }

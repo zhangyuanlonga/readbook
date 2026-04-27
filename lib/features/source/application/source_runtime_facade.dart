@@ -52,9 +52,14 @@ class SourceRuntimeDebugArtifactsSnapshot {
 }
 
 class SourceRuntimeFacade {
-  static final SourceRuntimeFacade instance = SourceRuntimeFacade(
-    scriptSourceRepository: ScriptSourceRepositoryImpl(AppDatabase.instance),
-  );
+  @Deprecated('Use provider injection via appSourceRuntimeFacadeProvider.')
+  static final SourceRuntimeFacade instance = SourceRuntimeFacade.legacy();
+
+  factory SourceRuntimeFacade.legacy() {
+    return SourceRuntimeFacade(
+      scriptSourceRepository: ScriptSourceRepositoryImpl(AppDatabase.instance),
+    );
+  }
 
   SourceRuntimeFacade({
     required ScriptSourceRepository scriptSourceRepository,

@@ -4,10 +4,10 @@ import '../../book/application/book_metadata_presentation_resolver.dart';
 
 class SearchBookPresentationService {
   SearchBookPresentationService({
-    AppDatabase? database,
+    required AppDatabase database,
     BookMetadataPresentationResolver resolver =
         const BookMetadataPresentationResolver(),
-  }) : _database = database ?? AppDatabase.instance,
+  }) : _database = database,
        _resolver = resolver;
 
   final AppDatabase _database;

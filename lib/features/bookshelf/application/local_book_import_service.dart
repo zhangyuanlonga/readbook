@@ -9,8 +9,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -50,44 +48,14 @@ typedef LocalBookImportProgressCallback =
 
 class LocalBookImportService {
   LocalBookImportService({
-    LocalBookRepository? localBookRepository,
-    BookshelfService? bookshelfService,
-    ReaderSystemSettingsService? readerSystemSettingsService,
-    LocalBookIndexService? localBookIndexService,
-    LocalBookStorageService? localBookStorageService,
-    AppLogger? logger,
-    SourceLoginStateService? sourceLoginStateService,
-    Future<Directory> Function()? supportDirectoryProvider,
-    Duration warmUpDelay = const Duration(milliseconds: 350),
-  }) : this._(
-         localBookRepository:
-             localBookRepository ??
-             LocalBookRepositoryImpl(AppDatabase.instance),
-         bookshelfService: bookshelfService ?? BookshelfService(),
-         readerSystemSettingsService:
-             readerSystemSettingsService ?? ReaderSystemSettingsService(),
-         localBookStorageService:
-             localBookStorageService ??
-             LocalBookStorageService(
-               logger: logger ?? AppLogger.instance,
-               supportDirectoryProvider: supportDirectoryProvider,
-             ),
-         localBookIndexService: localBookIndexService,
-         logger: logger ?? AppLogger.instance,
-         sourceLoginStateService:
-             sourceLoginStateService ?? SourceLoginStateService(),
-         warmUpDelay: warmUpDelay,
-       );
-
-  LocalBookImportService._({
     required LocalBookRepository localBookRepository,
     required BookshelfService bookshelfService,
     required ReaderSystemSettingsService readerSystemSettingsService,
     required LocalBookStorageService localBookStorageService,
     required AppLogger logger,
     required SourceLoginStateService sourceLoginStateService,
-    required Duration warmUpDelay,
     LocalBookIndexService? localBookIndexService,
+    Duration warmUpDelay = const Duration(milliseconds: 350),
   }) : _localBookRepository = localBookRepository,
        _bookshelfService = bookshelfService,
        _readerSystemSettingsService = readerSystemSettingsService,

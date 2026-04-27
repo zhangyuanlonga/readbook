@@ -9,10 +9,10 @@ import '../../source/application/source_runtime_facade.dart';
 
 class BookshelfPresentationQueryService {
   BookshelfPresentationQueryService({
-    AppDatabase? database,
+    required AppDatabase database,
     required LocalBookRepository localBookRepository,
     required SourceRuntimeFacade sourceRuntimeFacade,
-  }) : _database = database ?? AppDatabase.instance,
+  }) : _database = database,
        _localBookRepository = localBookRepository,
        _sourceRuntimeFacade = sourceRuntimeFacade;
 

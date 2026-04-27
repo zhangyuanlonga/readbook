@@ -18,18 +18,21 @@ class LocalBookDetailResult {
 }
 
 class LocalBookDetailService {
+  factory LocalBookDetailService.legacy() {
+    final localBookRepository = LocalBookRepositoryImpl(AppDatabase.instance);
+    return LocalBookDetailService(
+      localBookRepository: localBookRepository,
+      indexService: LocalBookIndexService(
+        localBookRepository: localBookRepository,
+      ),
+    );
+  }
+
   LocalBookDetailService({
-    LocalBookRepository? localBookRepository,
-    LocalBookIndexService? indexService,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _indexService =
-           indexService ??
-           LocalBookIndexService(
-             localBookRepository:
-                 localBookRepository ??
-                 LocalBookRepositoryImpl(AppDatabase.instance),
-           );
+    required LocalBookRepository localBookRepository,
+    required LocalBookIndexService indexService,
+  }) : _localBookRepository = localBookRepository,
+       _indexService = indexService;
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;

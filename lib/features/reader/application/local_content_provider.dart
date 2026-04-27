@@ -16,7 +16,7 @@ class LocalContentProvider extends ContentProvider {
     LocalBookDetailService? detailService,
     LocalChapterContentService? chapterContentService,
     LocalBookPreviewService? previewService,
-  }) : _detailService = detailService ?? LocalBookDetailService(),
+  }) : _detailService = detailService ?? LocalBookDetailService.legacy(),
        _chapterContentService =
            chapterContentService ?? LocalChapterContentService(),
        _previewService = previewService ?? LocalBookPreviewService();

@@ -50,7 +50,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   void initState() {
     super.initState();
     _sourceLoginRuntimeService =
-        widget.sourceLoginRuntimeService ?? SourceLoginRuntimeService();
+        widget.sourceLoginRuntimeService ?? SourceLoginRuntimeService.legacy();
     _sourceLoginBrowserService =
         widget.sourceLoginBrowserService ?? const SourceLoginBrowserService();
     _load();

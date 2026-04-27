@@ -19,6 +19,7 @@ import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/book_detail_service.dart';
 import 'application/book_local_metadata_service.dart';
 import 'application/custom_cover_storage_service.dart';
+import 'application/local_book_detail_service.dart';
 
 class BookDetailDependencies {
   const BookDetailDependencies({
@@ -143,6 +144,15 @@ final bookLocalMetadataServiceProvider = Provider<BookLocalMetadataService>((
 ) {
   return BookLocalMetadataService(
     localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+  );
+});
+
+final bookLocalBookDetailServiceProvider = Provider<LocalBookDetailService>((
+  ref,
+) {
+  return LocalBookDetailService(
+    localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+    indexService: ref.watch(bookDetailLocalBookIndexServiceProvider),
   );
 });
 

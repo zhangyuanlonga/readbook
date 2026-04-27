@@ -28,5 +28,7 @@ final searchSystemSettingsServiceProvider =
 
 final searchBookPresentationServiceProvider =
     Provider<SearchBookPresentationService>((ref) {
-      return SearchBookPresentationService();
+      return SearchBookPresentationService(
+        database: ref.watch(app_providers.appDatabaseProvider),
+      );
     });

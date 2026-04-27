@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/composition/app_providers.dart' as app_providers;
+import '../../core/logging/app_logger.dart';
 import '../../core/media/image_selection_service.dart';
 import '../../domain/repositories/book_metadata_override_repository.dart';
 import '../../domain/repositories/local_book_repository.dart';
@@ -9,9 +10,12 @@ import '../announcement/application/announcement_service.dart';
 import '../book/application/book_detail_service.dart';
 import '../book/application/custom_cover_storage_service.dart';
 import '../reader/application/local/local_book_index_service.dart';
+import '../reader/application/local/local_book_storage_service.dart';
 import '../reader/application/reader_preferences_service.dart';
 import '../reader/application/reader_entry_route_resolver.dart';
+import '../reader/application/reader_system_settings_service.dart';
 import '../source/application/source_runtime_facade.dart';
+import '../source/application/source_login_state_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
 import 'application/bookshelf_presentation_query_service.dart';
@@ -72,12 +76,46 @@ final bookshelfLocalBookIndexServiceProvider = Provider<LocalBookIndexService>((
   return LocalBookIndexService();
 });
 
+final bookshelfReaderSystemSettingsServiceProvider =
+    Provider<ReaderSystemSettingsService>((ref) {
+      return ReaderSystemSettingsService();
+    });
+
+final bookshelfLocalBookStorageServiceProvider =
+    Provider<LocalBookStorageService>((ref) {
+      return LocalBookStorageService(
+        logger: ref.watch(bookshelfLoggerProvider),
+      );
+    });
+
+final bookshelfLoggerProvider = Provider<AppLogger>((ref) {
+  return AppLogger.instance;
+});
+
+final bookshelfSourceLoginStateServiceProvider =
+    Provider<SourceLoginStateService>((ref) {
+      return SourceLoginStateService();
+    });
+
 final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
   return BookDetailService();
 });
 
 final localBookImportServiceProvider = Provider<LocalBookImportService>((ref) {
-  return LocalBookImportService();
+  return LocalBookImportService(
+    localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+    bookshelfService: ref.watch(bookshelfServiceProvider),
+    readerSystemSettingsService: ref.watch(
+      bookshelfReaderSystemSettingsServiceProvider,
+    ),
+    localBookStorageService: ref.watch(
+      bookshelfLocalBookStorageServiceProvider,
+    ),
+    logger: ref.watch(bookshelfLoggerProvider),
+    sourceLoginStateService: ref.watch(
+      bookshelfSourceLoginStateServiceProvider,
+    ),
+  );
 });
 
 final bookshelfImageSelectionServiceProvider = Provider<ImageSelectionService>((

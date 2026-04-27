@@ -15,8 +15,9 @@ import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_s
 import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_import_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
-import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_login_state_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,17 +45,28 @@ void main() {
       }
     });
 
+    LocalBookImportService buildService({
+      required SharedPreferences preferences,
+      LocalBookIndexService? localBookIndexService,
+    }) {
+      return LocalBookImportService(
+        localBookRepository: LocalBookRepositoryImpl(database),
+        bookshelfService: BookshelfService(preferences: preferences),
+        readerSystemSettingsService: ReaderSystemSettingsService(),
+        localBookStorageService: storageService,
+        logger: AppLogger.instance,
+        sourceLoginStateService: SourceLoginStateService(),
+        localBookIndexService: localBookIndexService,
+      );
+    }
+
     test('imports txt file and writes bookshelf/local book records', () async {
       final sourceFile = File('${tempDir.path}/demo.txt');
       const sourceText = '第一章\n内容';
       await sourceFile.writeAsString(sourceText);
 
       final prefs = await SharedPreferences.getInstance();
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
-        localBookStorageService: storageService,
-      );
+      final service = buildService(preferences: prefs);
 
       final result = await service.importFromFile(
         filePath: sourceFile.path,
@@ -100,11 +112,7 @@ void main() {
       );
 
       final prefs = await SharedPreferences.getInstance();
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
-        localBookStorageService: storageService,
-      );
+      final service = buildService(preferences: prefs);
 
       final result = await service.importFromFile(
         filePath: sourceFile.path,
@@ -137,11 +145,7 @@ void main() {
         await sourceFile.writeAsBytes(rawBytes, flush: true);
 
         final prefs = await SharedPreferences.getInstance();
-        final service = LocalBookImportService(
-          localBookRepository: LocalBookRepositoryImpl(database),
-          bookshelfService: BookshelfService(preferences: prefs),
-          localBookStorageService: storageService,
-        );
+        final service = buildService(preferences: prefs);
 
         final result = await service.importFromFile(
           filePath: sourceFile.path,
@@ -176,11 +180,7 @@ void main() {
         ], flush: true);
 
         final prefs = await SharedPreferences.getInstance();
-        final service = LocalBookImportService(
-          localBookRepository: LocalBookRepositoryImpl(database),
-          bookshelfService: BookshelfService(preferences: prefs),
-          localBookStorageService: storageService,
-        );
+        final service = buildService(preferences: prefs);
 
         final result = await service.importFromFile(
           filePath: sourceFile.path,
@@ -208,11 +208,7 @@ void main() {
       await sourceFile.writeAsString(rawContent, flush: true);
 
       final prefs = await SharedPreferences.getInstance();
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
-        localBookStorageService: storageService,
-      );
+      final service = buildService(preferences: prefs);
 
       final result = await service.importFromFile(
         filePath: sourceFile.path,
@@ -233,12 +229,8 @@ void main() {
       final sourceFile = File('${tempDir.path}/same.txt');
       await sourceFile.writeAsString('初始内容');
 
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(
-          preferences: await SharedPreferences.getInstance(),
-        ),
-        localBookStorageService: storageService,
+      final service = buildService(
+        preferences: await SharedPreferences.getInstance(),
       );
 
       final first = await service.importFromFile(filePath: sourceFile.path);
@@ -260,11 +252,7 @@ void main() {
       await sourceFile.writeAsString('待删除内容');
 
       final prefs = await SharedPreferences.getInstance();
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
-        localBookStorageService: storageService,
-      );
+      final service = buildService(preferences: prefs);
 
       final result = await service.importFromFile(filePath: sourceFile.path);
       final resolvedStoragePath = await storageService.resolveStoragePath(
@@ -287,12 +275,8 @@ void main() {
       final sourceFile = File('${tempDir.path}/invalid.docx');
       await sourceFile.writeAsString('docx');
 
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(
-          preferences: await SharedPreferences.getInstance(),
-        ),
-        localBookStorageService: storageService,
+      final service = buildService(
+        preferences: await SharedPreferences.getInstance(),
       );
 
       expect(
@@ -318,11 +302,9 @@ void main() {
         parsers: const <LocalBookParser>[_FakePdfSuccessParser()],
         storageService: storageService,
       );
-      final service = LocalBookImportService(
-        localBookRepository: repository,
-        bookshelfService: BookshelfService(preferences: prefs),
+      final service = buildService(
+        preferences: prefs,
         localBookIndexService: indexService,
-        localBookStorageService: storageService,
       );
 
       final result = await service.importFromFile(
@@ -353,11 +335,7 @@ void main() {
 ''');
 
       final prefs = await SharedPreferences.getInstance();
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
-        localBookStorageService: storageService,
-      );
+      final service = buildService(preferences: prefs);
 
       final result = await service.importFromFile(
         filePath: sourceFile.path,
@@ -386,11 +364,9 @@ void main() {
         parsers: const <LocalBookParser>[_FakeKindleSuccessParser()],
         storageService: storageService,
       );
-      final service = LocalBookImportService(
-        localBookRepository: repository,
-        bookshelfService: BookshelfService(preferences: prefs),
+      final service = buildService(
+        preferences: prefs,
         localBookIndexService: indexService,
-        localBookStorageService: storageService,
       );
 
       final result = await service.importFromFile(
@@ -418,11 +394,9 @@ void main() {
         parsers: const <LocalBookParser>[_FakeKindleSuccessParser()],
         storageService: storageService,
       );
-      final service = LocalBookImportService(
-        localBookRepository: repository,
-        bookshelfService: BookshelfService(preferences: prefs),
+      final service = buildService(
+        preferences: prefs,
         localBookIndexService: indexService,
-        localBookStorageService: storageService,
       );
 
       final result = await service.importFromFile(
@@ -461,11 +435,7 @@ void main() {
 ''');
 
       final prefs = await SharedPreferences.getInstance();
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
-        localBookStorageService: storageService,
-      );
+      final service = buildService(preferences: prefs);
 
       final result = await service.importFromFile(
         filePath: sourceFile.path,
@@ -500,6 +470,8 @@ void main() {
         bookshelfService: BookshelfService(preferences: prefs),
         readerSystemSettingsService: systemSettingsService,
         localBookStorageService: storageService,
+        logger: AppLogger.instance,
+        sourceLoginStateService: SourceLoginStateService(),
       );
 
       final result = await service.importFromFile(filePath: sourceFile.path);
@@ -527,7 +499,10 @@ void main() {
           bookshelfService: BookshelfService(
             preferences: await SharedPreferences.getInstance(),
           ),
+          readerSystemSettingsService: ReaderSystemSettingsService(),
           localBookStorageService: storageService,
+          logger: AppLogger.instance,
+          sourceLoginStateService: SourceLoginStateService(),
           localBookIndexService: fakeIndexService,
           warmUpDelay: const Duration(milliseconds: 20),
         );
@@ -569,9 +544,11 @@ void main() {
         bookshelfService: BookshelfService(
           preferences: await SharedPreferences.getInstance(),
         ),
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         localBookStorageService: storageService,
-        localBookIndexService: fakeIndexService,
         logger: logger,
+        sourceLoginStateService: SourceLoginStateService(),
+        localBookIndexService: fakeIndexService,
         warmUpDelay: Duration.zero,
       );
 
@@ -606,9 +583,11 @@ void main() {
         bookshelfService: BookshelfService(
           preferences: await SharedPreferences.getInstance(),
         ),
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         localBookStorageService: storageService,
-        localBookIndexService: fakeIndexService,
         logger: logger,
+        sourceLoginStateService: SourceLoginStateService(),
+        localBookIndexService: fakeIndexService,
         warmUpDelay: Duration.zero,
       );
 

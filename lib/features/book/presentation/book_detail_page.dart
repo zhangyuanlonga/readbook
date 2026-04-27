@@ -265,7 +265,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       detailService: detailService,
     );
     _contentProviderRegistry = ContentProviderRegistry(
-      providers: [LocalContentProvider(), _sourceContentProvider],
+      providers: [
+        LocalContentProvider(
+          detailService: ref.read(bookLocalBookDetailServiceProvider),
+        ),
+        _sourceContentProvider,
+      ],
     );
     _bookshelfService =
         widget.bookshelfService ?? dependencies.bookshelfService;

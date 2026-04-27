@@ -86,7 +86,7 @@
 - 阶段 0：已完成，完成日期 `2026-04-27`
 - 阶段 1：已完成，完成日期 `2026-04-27`
 - 阶段 2：已完成，完成日期 `2026-04-27`
-- 阶段 3：未开始
+- 阶段 3：已完成，完成日期 `2026-04-27`
 - 阶段 4：未开始
 - 阶段 5：未开始
 - 阶段 6：未开始
@@ -231,25 +231,27 @@
 
 任务：`bookshelf`
 
-- [ ] 将 `LocalBookImportService` 改为纯注入式
-- [ ] 将 `BookshelfPresentationQueryService` 改为纯注入式
+- [x] 将 `LocalBookImportService` 改为显式注入式
+- [x] 将 `BookshelfPresentationQueryService` 改为显式注入式
 
 任务：`book`
 
-- [ ] 将 `LocalBookDetailService` 改为纯注入式
+- [x] 将 `LocalBookDetailService` 改为显式注入式
+- [x] 为兼容旧调用点保留 `legacy` factory，后续阶段继续清理剩余调用
 
 任务：`search`
 
-- [ ] 将 `SearchBookPresentationService` 改为纯注入式
+- [x] 将 `SearchBookPresentationService` 改为显式注入式
 
 任务：`discover`
 
-- [ ] 将 `DiscoverBookPresentationService` 改为纯注入式
+- [x] 将 `DiscoverBookPresentationService` 改为显式注入式
 
 任务：`source`
 
-- [ ] 清理 `SourceRuntimeFacade` 中直接绑定 `ScriptSourceRepositoryImpl(AppDatabase.instance)` 的默认入口
-- [ ] 统一 `SourceLoginRuntimeService` 的 provider 注入方式
+- [x] 清理 `SourceRuntimeFacade` 中直接绑定 `ScriptSourceRepositoryImpl(AppDatabase.instance)` 的默认入口
+- [x] 统一 `SourceLoginRuntimeService` 的 provider 注入方式
+- [x] 为兼容旧调用点保留 `legacy` factory，后续阶段继续清理子页面默认构造
 
 阶段完成标准：
 

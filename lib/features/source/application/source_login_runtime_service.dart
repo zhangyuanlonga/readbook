@@ -111,9 +111,14 @@ class SourceLoginActionResult {
 }
 
 class SourceLoginRuntimeService {
-  SourceLoginRuntimeService({SourceRuntimeFacade? sourceRuntimeFacade})
-    : _sourceRuntimeFacade =
-          sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+  SourceLoginRuntimeService({required SourceRuntimeFacade sourceRuntimeFacade})
+    : _sourceRuntimeFacade = sourceRuntimeFacade;
+
+  factory SourceLoginRuntimeService.legacy() {
+    return SourceLoginRuntimeService(
+      sourceRuntimeFacade: SourceRuntimeFacade.instance,
+    );
+  }
 
   final SourceRuntimeFacade _sourceRuntimeFacade;
   final BrowserCookieSynchronizer _cookieSynchronizer =
@@ -483,10 +488,7 @@ class SourceLoginRuntimeService {
       confirmHandler: ui.confirmHandler,
       promptHandler: ui.promptHandler,
       verificationCodeHandler: ui.verificationCodeHandler,
-      openUrlHandler: ({
-        required String url,
-        String? title,
-      }) async {
+      openUrlHandler: ({required String url, String? title}) async {
         final normalized = url.trim();
         if (normalized.isEmpty) {
           return;
@@ -494,10 +496,7 @@ class SourceLoginRuntimeService {
         final parsed = _resolveBrowserRequest(normalized);
         try {
           await _syncSessionCookiesToBrowser(base, parsed.uri);
-          await ui.openUrl(
-            url: normalized,
-            title: title,
-          );
+          await ui.openUrl(url: normalized, title: title);
         } catch (_) {
           await ui.openUrl(url: normalized, title: title);
         }
@@ -524,10 +523,7 @@ class SourceLoginRuntimeService {
                   : parsed.uri.toString();
           final finalUri = Uri.tryParse(finalUrl) ?? parsed.uri;
           await _syncBrowserCookiesFromBrowser(base, finalUri);
-          await _persistBrowserCookies(
-            context: base,
-            uri: finalUri,
-          );
+          await _persistBrowserCookies(context: base, uri: finalUri);
           return response;
         } catch (_) {
           return await ui.openBrowserAwait(
@@ -663,10 +659,7 @@ class SourceLoginRuntimeService {
   String? _coerceMessage(Object? raw) {
     if (raw is Map) {
       final message =
-          raw['message'] ??
-          raw['_message'] ??
-          raw['toast'] ??
-          raw['tip'];
+          raw['message'] ?? raw['_message'] ?? raw['toast'] ?? raw['tip'];
       final text = (message?.toString() ?? '').trim();
       return text.isEmpty ? null : text;
     }
@@ -716,9 +709,7 @@ class SourceLoginRuntimeService {
         return decoded;
       }
       if (decoded is Map) {
-        return decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
       }
     } catch (_) {
       return null;
