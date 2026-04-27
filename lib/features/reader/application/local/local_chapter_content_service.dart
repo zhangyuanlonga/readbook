@@ -77,6 +77,25 @@ class LocalChapterContentService {
       chapterId: chapterId,
       chapterIndex: chapterIndex,
     );
+    if (_needsReindex(book)) {
+      if (chapter != null &&
+          _canUseLegacyTxtOffsetFallback(
+            originalBook: originalBook,
+            refreshedBook: refreshedBook,
+            chapter: chapter,
+          )) {
+        unawaited(_indexService.ensureIndexed(bookId: normalizedBookId));
+        final readableBook = await _hydrateReadableBook(book);
+        final hydratedContent = await _loadTxtChapterContentByOffsets(
+          chapter: chapter,
+          book: readableBook,
+        );
+        return chapter.copyWith(content: hydratedContent);
+      }
+
+      _ensureBookReadyForReading(book);
+    }
+
     if (chapter == null) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -84,22 +103,6 @@ class LocalChapterContentService {
         briefMessage: '未找到本地章节内容，请重新索引后重试。',
       );
     }
-
-    if (_canUseLegacyTxtOffsetFallback(
-      originalBook: originalBook,
-      refreshedBook: refreshedBook,
-      chapter: chapter,
-    )) {
-      unawaited(_indexService.ensureIndexed(bookId: normalizedBookId));
-      final readableBook = await _hydrateReadableBook(book);
-      final hydratedContent = await _loadTxtChapterContentByOffsets(
-        chapter: chapter,
-        book: readableBook,
-      );
-      return chapter.copyWith(content: hydratedContent);
-    }
-
-    _ensureBookReadyForReading(book);
 
     if (_canUseStoredChapterContent(chapter: chapter)) {
       return chapter;
@@ -309,11 +312,7 @@ class LocalChapterContentService {
     try {
       await handle.setPosition(safeStart);
       final bytes = await handle.read(safeEnd - safeStart);
-      final decoded = await _textEncodingDetector.decodeDirectBytesAsync(
-        bytes,
-        preferredCharset: book.charset,
-        hintedCharset: book.charset,
-      );
+      final decoded = _decodeTxtBytesWithBookCharset(bytes: bytes, book: book);
       final text = decoded?.text.trim() ?? '';
       if (text.isEmpty) {
         throw AppException(
@@ -326,5 +325,25 @@ class LocalChapterContentService {
     } finally {
       await handle.close();
     }
+  }
+
+  LocalTextDecodeResult? _decodeTxtBytesWithBookCharset({
+    required List<int> bytes,
+    required LocalBook book,
+  }) {
+    final normalizedCharset = LocalTextEncodingDetector.normalizeCharsetName(
+      book.charset,
+    );
+    if (normalizedCharset != null) {
+      return _textEncodingDetector.decodeWithFrozenCharset(
+        bytes,
+        charsetName: normalizedCharset,
+      );
+    }
+    return _textEncodingDetector.decodeDirectBytes(
+      bytes,
+      preferredCharset: book.charset,
+      hintedCharset: book.charset,
+    );
   }
 }

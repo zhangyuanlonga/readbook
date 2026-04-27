@@ -18,7 +18,14 @@ class LocalBookWorkflowPolicy {
   static String importSuccessMessage({
     required int successCount,
     required int failureCount,
+    bool directoryReady = false,
   }) {
+    if (directoryReady) {
+      if (failureCount > 0) {
+        return '已导入 $successCount 本书并加入书架，失败 $failureCount 本。成功导入的图书目录已建立，可直接阅读。';
+      }
+      return '已导入 $successCount 本书并加入书架，目录已建立，可直接阅读。';
+    }
     if (failureCount > 0) {
       return '已导入 $successCount 本书并加入书架，失败 $failureCount 本。后台会继续解析成功导入的图书。';
     }

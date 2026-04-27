@@ -318,6 +318,35 @@ class LocalTextEncodingDetector {
     return decoded;
   }
 
+  LocalTextDecodeResult? decodeWithFrozenCharset(
+    List<int> bytes, {
+    required String charsetName,
+  }) {
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final normalizedCharset = normalizeCharsetName(charsetName);
+    if (normalizedCharset == null || normalizedCharset.isEmpty) {
+      return null;
+    }
+
+    final bom = _detectBom(bytes);
+    final contentBytes = _stripCompatibleBom(
+      bytes,
+      bom: bom,
+      charsetName: normalizedCharset,
+    );
+    final decoded = tryDecodeByCharset(contentBytes, normalizedCharset);
+    if (decoded == null || decoded.trim().isEmpty) {
+      return null;
+    }
+    return LocalTextDecodeResult(
+      text: decoded.replaceFirst('\uFEFF', ''),
+      charsetName: normalizedCharset,
+      bomLength: bom.length,
+    );
+  }
+
   Future<LocalTextDecodeResult?> decodeDirectBytesAsync(
     List<int> bytes, {
     String? preferredCharset,
@@ -605,6 +634,25 @@ class LocalTextEncodingDetector {
       codeUnits.add(littleEndian ? last : (last << 8));
     }
     return String.fromCharCodes(codeUnits);
+  }
+
+  List<int> _stripCompatibleBom(
+    List<int> bytes, {
+    required _BomInfo bom,
+    required String charsetName,
+  }) {
+    if (bom.length <= 0 || bytes.length <= bom.length) {
+      return List<int>.from(bytes);
+    }
+    if (bom.charsetName == null) {
+      return List<int>.from(bytes);
+    }
+    if (charsetName == bom.charsetName ||
+        (charsetName == 'utf-16' &&
+            (bom.charsetName == 'utf-16le' || bom.charsetName == 'utf-16be'))) {
+      return bytes.sublist(bom.length);
+    }
+    return List<int>.from(bytes);
   }
 
   int _scoreDecodedText(

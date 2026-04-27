@@ -338,6 +338,32 @@ $chapter2
       expect(await file.readAsBytes(), rawBytes);
     });
 
+    test('uses frozen charset for utf-16le txt parsing', () async {
+      final file = File('${tempDir.path}/frozen_utf16le_book.txt');
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      final rawBytes = _encodeUtf16(content, littleEndian: true, withBom: true);
+      await file.writeAsBytes(rawBytes, flush: true);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_frozen_utf16le',
+          title: '冻结编码测试书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          charset: 'utf-16le',
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'utf-16le');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第1章 开始');
+      expect(result.chapters.last.content, contains('第二章内容'));
+    });
+
     test(
       'detects utf-16le with bom without rewriting original bytes',
       () async {

@@ -38,8 +38,8 @@
 
 - [x] 阶段 0：建立改造基线
 - [x] 阶段 1：重做 TXT 导入与编码冻结
-- [ ] 阶段 2：统一 TXT 索引与正文读取
-- [ ] 阶段 3：收紧本地导入与索引时序
+- [x] 阶段 2：统一 TXT 索引与正文读取
+- [x] 阶段 3：收紧本地导入与索引时序
 - [ ] 阶段 4：补齐 EPUB `fragment` 级目录解析
 - [ ] 阶段 5：依赖注入收口与残留清理
 - [ ] 阶段 6：测试、回归与文档验收
@@ -107,18 +107,18 @@
 
 执行清单：
 
-- [ ] 梳理 `TxtLocalBookParser` 当前全量解析与流式解析两条链路
-- [ ] 统一 `TxtLocalBookParser` 的编码输入来源，禁止索引过程中二次漂移
-- [ ] 统一章节偏移计算规则，确保 offset 与冻结编码一致
-- [ ] 校正 `LocalChapterContentService` 的 offset 回读逻辑，确保按冻结编码读取
-- [ ] 保留 TXT 自动分章能力，但不恢复用户可编辑目录规则入口
-- [ ] 对长章节拆分继续使用统一业务规则，不引入平台分叉
-- [ ] 清理旧 fallback 路径里与当前主路径冲突的解码逻辑
+- [x] 梳理 `TxtLocalBookParser` 当前全量解析与流式解析两条链路
+- [x] 统一 `TxtLocalBookParser` 的编码输入来源，禁止索引过程中二次漂移
+- [x] 统一章节偏移计算规则，确保 offset 与冻结编码一致
+- [x] 校正 `LocalChapterContentService` 的 offset 回读逻辑，确保按冻结编码读取
+- [x] 保留 TXT 自动分章能力，但不恢复用户可编辑目录规则入口
+- [x] 对长章节拆分继续使用统一业务规则，不引入平台分叉
+- [x] 清理旧 fallback 路径里与当前主路径冲突的解码逻辑
 
 阶段完成定义：
 
-- [ ] TXT 目录和正文不再出现“目录可用但正文乱码”或“重索引后反而变坏”
-- [ ] TXT 改编码后重新索引可以稳定修复可恢复文件
+- [x] TXT 目录和正文不再出现“目录可用但正文乱码”或“重索引后反而变坏”
+- [x] TXT 改编码后重新索引可以稳定修复可恢复文件
 
 ---
 
@@ -130,18 +130,18 @@
 
 执行清单：
 
-- [ ] 梳理 `LocalBookImportService` 当前导入完成、后台索引、UI 提示的时序
-- [ ] 明确哪些导入入口必须 `waitForIndexing: true`
-- [ ] 明确本地图书“可进入阅读”的状态定义
-- [ ] 让 `LocalBookIndexService` 成为唯一权威索引入口
-- [ ] 收口 TXT 预览、详情页、阅读页对索引状态的口径
-- [ ] 统一索引失败、正文缺失、目录过期的错误提示语义
-- [ ] 校正外部打开本地图书时的可读性体验
+- [x] 梳理 `LocalBookImportService` 当前导入完成、后台索引、UI 提示的时序
+- [x] 明确哪些导入入口必须 `waitForIndexing: true`
+- [x] 明确本地图书“可进入阅读”的状态定义
+- [x] 让 `LocalBookIndexService` 成为唯一权威索引入口
+- [x] 收口 TXT 预览、详情页、阅读页对索引状态的口径
+- [x] 统一索引失败、正文缺失、目录过期的错误提示语义
+- [x] 校正外部打开本地图书时的可读性体验
 
 阶段完成定义：
 
-- [ ] 导入完成后，详情页至少能稳定拿到目录
-- [ ] 阅读页不会再命中多套相互冲突的“补索引/补解析”策略
+- [x] 导入完成后，详情页至少能稳定拿到目录
+- [x] 阅读页不会再命中多套相互冲突的“补索引/补解析”策略
 
 ---
 
@@ -239,12 +239,16 @@ TXT 编码样本最小集合：
 
 - [x] [local_book_storage_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_storage_service.dart)
 - [x] [local_text_encoding_detector.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_text_encoding_detector.dart)
-- [ ] [txt_local_book_parser.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/txt_local_book_parser.dart)
-- [ ] [local_chapter_content_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_chapter_content_service.dart)
+- [x] [txt_local_book_parser.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/txt_local_book_parser.dart)
+- [x] [local_chapter_content_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_chapter_content_service.dart)
 - [ ] [local_book_index_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_index_service.dart)
 - [ ] [local_book_import_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/bookshelf/application/local_book_import_service.dart)
 - [ ] [local_content_provider.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local_content_provider.dart)
 - [ ] [epub_local_book_parser.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/epub_local_book_parser.dart)
+- [x] [local_book_preview_service.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_preview_service.dart)
+- [x] [local_book_workflow_policy.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/local/local_book_workflow_policy.dart)
+- [x] [local_library_page.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/bookshelf/presentation/local_library_page.dart)
+- [x] [bookshelf_page.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/bookshelf/presentation/bookshelf_page.dart)
 
 说明：
 
@@ -277,15 +281,15 @@ TXT 编码样本最小集合：
 
 ### 阶段 2
 
-- 状态：`未完成`
-- 完成日期：
-- 备注：
+- 状态：`已完成`
+- 完成日期：`2026-04-27`
+- 备注：`TxtLocalBookParser` 已统一优先使用冻结后的 `book.charset` 进行全量解析与流式样本解码；`LocalChapterContentService` 与 `LocalBookPreviewService` 已按冻结编码回读 TXT 字节，避免索引后正文阶段再次漂移到其它编码。
 
 ### 阶段 3
 
-- 状态：`未完成`
-- 完成日期：
-- 备注：
+- 状态：`已完成`
+- 完成日期：`2026-04-27`
+- 备注：手动导入与外部导入入口已统一使用 `waitForIndexing: true`，导入成功口径收紧为“目录已建立，可直接阅读”；`LocalChapterContentService` 已先按索引状态返回 `pending / stale / failed` 语义，再处理章节缺失，避免阅读页误报“未找到章节”。
 
 ### 阶段 4
 

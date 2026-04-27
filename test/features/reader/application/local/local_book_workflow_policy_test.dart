@@ -15,6 +15,17 @@ void main() {
       expect(mode, LocalBookImportExecutionMode.backgroundIndex);
     });
 
+    test('builds import success text for directory-ready flow', () {
+      expect(
+        LocalBookWorkflowPolicy.importSuccessMessage(
+          successCount: 2,
+          failureCount: 0,
+          directoryReady: true,
+        ),
+        contains('目录已建立'),
+      );
+    });
+
     test('builds failed status text with reimport guidance', () {
       final book = LocalBook(
         id: 'local_1',

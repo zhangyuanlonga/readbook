@@ -1829,7 +1829,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           await _localBookImportService.importFromFile(
             filePath: filePath,
             displayName: displayName,
-            waitForIndexing: false,
+            waitForIndexing: true,
           );
           successCount += 1;
         } on AppException catch (error) {
@@ -1852,6 +1852,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           LocalBookWorkflowPolicy.importSuccessMessage(
             successCount: successCount,
             failureCount: failureCount,
+            directoryReady: true,
           ),
         );
         return;

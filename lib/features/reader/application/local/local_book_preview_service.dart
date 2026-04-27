@@ -106,11 +106,7 @@ class LocalBookPreviewService {
     try {
       await handle.setPosition(0);
       final bytes = await handle.read(end);
-      final decoded = await _textEncodingDetector.decodeDirectBytesAsync(
-        bytes,
-        preferredCharset: book.charset,
-        hintedCharset: book.charset,
-      );
+      final decoded = _decodeTxtBytesWithBookCharset(bytes: bytes, book: book);
       final content = decoded?.text.trim() ?? '';
       if (content.isEmpty) {
         throw AppException(
@@ -135,5 +131,25 @@ class LocalBookPreviewService {
     } finally {
       await handle.close();
     }
+  }
+
+  LocalTextDecodeResult? _decodeTxtBytesWithBookCharset({
+    required List<int> bytes,
+    required LocalBook book,
+  }) {
+    final normalizedCharset = LocalTextEncodingDetector.normalizeCharsetName(
+      book.charset,
+    );
+    if (normalizedCharset != null) {
+      return _textEncodingDetector.decodeWithFrozenCharset(
+        bytes,
+        charsetName: normalizedCharset,
+      );
+    }
+    return _textEncodingDetector.decodeDirectBytes(
+      bytes,
+      preferredCharset: book.charset,
+      hintedCharset: book.charset,
+    );
   }
 }

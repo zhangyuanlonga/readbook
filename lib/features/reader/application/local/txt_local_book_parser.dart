@@ -27,6 +27,8 @@ class TxtLocalBookParser implements LocalBookParser {
   static const int _splitBreakMinDistance = 800;
   static const int _backgroundYieldByteBudget = 512 * 1024;
   static const int _backgroundYieldStepBudget = 8;
+  static const LocalTextEncodingDetector _textEncodingDetector =
+      LocalTextEncodingDetector();
   @override
   bool supports(LocalBookFormat format) {
     return format == LocalBookFormat.txt;
@@ -238,17 +240,18 @@ class TxtLocalBookParser implements LocalBookParser {
     final preferredCharset = _normalizeCharsetName(book.charset);
     for (final chunk in chunks) {
       final decoded =
-          preferredCharset == 'utf-8'
-              ? const LocalTextEncodingDetector().decodeSampleBestEffort(
+          preferredCharset != null
+              ? _textEncodingDetector.decodeWithFrozenCharset(
                 chunk.bytes,
-                preferredCharset: preferredCharset,
-                hintedCharset: preferredCharset,
+                charsetName: preferredCharset,
               )
-              : await const LocalTextEncodingDetector()
-                  .decodeSampleBestEffortAsync(
+              : _textEncodingDetector.decodeSampleBestEffort(
                     chunk.bytes,
-                    preferredCharset: book.charset,
-                    hintedCharset: book.charset,
+                    hintedCharset: preferredCharset,
+                  ) ??
+                  await _textEncodingDetector.decodeSampleBestEffortAsync(
+                    chunk.bytes,
+                    hintedCharset: preferredCharset,
                   );
       if (decoded == null || decoded.text.trim().isEmpty) {
         continue;
@@ -1152,12 +1155,18 @@ class TxtLocalBookParser implements LocalBookParser {
     required List<TxtAutoChapterPattern> enabledRules,
   }) async {
     final normalizedPreferred = _normalizeCharsetName(book.charset);
-    if (normalizedPreferred == 'utf-8') {
-      final decoded = const LocalTextEncodingDetector().decodeBestEffort(
+    if (normalizedPreferred != null) {
+      final decoded = _textEncodingDetector.decodeWithFrozenCharset(
         bytes,
-        preferredCharset: normalizedPreferred,
-        hintedCharset: normalizedPreferred,
+        charsetName: normalizedPreferred,
       );
+      if (decoded == null || decoded.text.trim().isEmpty) {
+        throw AppException(
+          code: ErrorCode.decode,
+          stage: ErrorStage.content,
+          briefMessage: '已冻结的文本编码无法解码当前 TXT，请重新设置编码后重试。',
+        );
+      }
       return _DecodedBookText(
         text: decoded.text,
         charsetName: decoded.charsetName,
@@ -1221,13 +1230,12 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     if (best != null) {
-      final mobileDecoded = await const LocalTextEncodingDetector()
-          .decodeBestEffortAsync(
-            bytes,
-            preferredCharset: book.charset,
-            hintedCharset: hintedCharset,
-            candidateCharsets: candidateCharsets,
-          );
+      final mobileDecoded = await _textEncodingDetector.decodeBestEffortAsync(
+        bytes,
+        preferredCharset: book.charset,
+        hintedCharset: hintedCharset,
+        candidateCharsets: candidateCharsets,
+      );
       final mobileScore = _scoreDecodedText(
         mobileDecoded.text,
         enabledRules: enabledRules,
@@ -1244,13 +1252,12 @@ class TxtLocalBookParser implements LocalBookParser {
       return best;
     }
 
-    final decoded = await const LocalTextEncodingDetector()
-        .decodeBestEffortAsync(
-          bytes,
-          preferredCharset: book.charset,
-          hintedCharset: hintedCharset,
-          candidateCharsets: candidateCharsets,
-        );
+    final decoded = await _textEncodingDetector.decodeBestEffortAsync(
+      bytes,
+      preferredCharset: book.charset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+    );
     return _DecodedBookText(
       text: decoded.text,
       charsetName: decoded.charsetName,
