@@ -1,4 +1,4 @@
-import 'dart:ui' show lerpDouble;
+import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -112,6 +112,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
     final navigationState = ref.watch(appShellNavigationProvider);
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final activeIconGallery =
@@ -223,6 +226,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         style: effectiveNavigationStyle,
         showNavigationLabels: showNavigationLabels,
         activeIconGallery: activeIconGallery,
+        standardAppearance: standardNavigationAppearance,
       ),
     );
   }
@@ -238,6 +242,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required AppNavigationStyle style,
     required bool showNavigationLabels,
     required BottomNavIconGallery? activeIconGallery,
+    required AppStandardNavigationBarAppearance standardAppearance,
   }) {
     final brightness = Theme.of(context).brightness;
     final backdrop = resolveAdvancedThemeBackdrop(
@@ -253,94 +258,131 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
     switch (style) {
       case AppNavigationStyle.standard:
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color:
-                hasWallpaper
-                    ? advancedPalette.cardColor.withValues(alpha: 0.48)
-                    : advancedPalette.cardColor.withValues(alpha: 0.92),
-            border: Border(
-              top: BorderSide(
-                color: resolveAppBorderColor(
-                  Theme.of(context).colorScheme,
-                  baseColor: advancedPalette.cardBorderColor,
-                  containerColor: advancedPalette.cardColor,
-                ),
-              ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 16,
-                offset: const Offset(0, -4),
-              ),
-            ],
+        final floating = standardAppearance.floatingBar;
+        final frosted = standardAppearance.frostedEffect;
+        final borderColor = resolveAppBorderColor(
+          Theme.of(context).colorScheme,
+          baseColor: advancedPalette.cardBorderColor,
+          containerColor: advancedPalette.cardColor,
+        );
+        final surfaceColor = _standardNavigationSurfaceColor(
+          baseColor: advancedPalette.cardColor,
+          hasWallpaper: hasWallpaper,
+          floating: floating,
+          frosted: frosted,
+        );
+        final radius = floating ? 28.0 : 0.0;
+        final navigationBar = NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            indicatorColor: Colors.transparent,
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color:
+                        selected
+                            ? advancedPalette.textPrimaryColor
+                            : advancedPalette.textSecondaryColor,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ) ??
+                  TextStyle(
+                    color:
+                        selected
+                            ? advancedPalette.textPrimaryColor
+                            : advancedPalette.textSecondaryColor,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  );
+            }),
           ),
-          child: NavigationBarTheme(
-            data: NavigationBarThemeData(
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              indicatorColor: Colors.transparent,
-              labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                final selected = states.contains(WidgetState.selected);
-                return Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color:
-                          selected
-                              ? advancedPalette.textPrimaryColor
-                              : advancedPalette.textSecondaryColor,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    ) ??
-                    TextStyle(
-                      color:
-                          selected
-                              ? advancedPalette.textPrimaryColor
-                              : advancedPalette.textSecondaryColor,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    );
-              }),
-            ),
-            child: IconTheme(
-              data: IconThemeData(color: advancedPalette.textSecondaryColor),
-              child: NavigationBar(
-                labelBehavior:
-                    showNavigationLabels
-                        ? NavigationDestinationLabelBehavior.alwaysShow
-                        : NavigationDestinationLabelBehavior.alwaysHide,
-                selectedIndex: selectedIndex,
-                onDestinationSelected: (index) {
-                  _goToDestination(context, destinations[index]);
-                },
-                destinations: [
-                  for (final destination in destinations)
-                    NavigationDestination(
-                      icon: BottomNavIconView(
-                        icon: resolveStandardBottomNavIcon(
-                          destination: destination,
-                          selected: false,
-                          brightness: brightness,
-                          gallery: activeIconGallery,
-                        ),
-                        size: 24,
-                        fallbackColor: advancedPalette.textSecondaryColor,
+          child: IconTheme(
+            data: IconThemeData(color: advancedPalette.textSecondaryColor),
+            child: NavigationBar(
+              labelBehavior:
+                  showNavigationLabels
+                      ? NavigationDestinationLabelBehavior.alwaysShow
+                      : NavigationDestinationLabelBehavior.alwaysHide,
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) {
+                _goToDestination(context, destinations[index]);
+              },
+              destinations: [
+                for (final destination in destinations)
+                  NavigationDestination(
+                    icon: BottomNavIconView(
+                      icon: resolveStandardBottomNavIcon(
+                        destination: destination,
+                        selected: false,
+                        brightness: brightness,
+                        gallery: activeIconGallery,
                       ),
-                      selectedIcon: BottomNavIconView(
-                        icon: resolveStandardBottomNavIcon(
-                          destination: destination,
-                          selected: true,
-                          brightness: brightness,
-                          gallery: activeIconGallery,
-                        ),
-                        size: 24,
-                        fallbackColor: advancedPalette.textPrimaryColor,
-                      ),
-                      label: destination.label,
+                      size: 24,
+                      fallbackColor: advancedPalette.textSecondaryColor,
                     ),
-                ],
-              ),
+                    selectedIcon: BottomNavIconView(
+                      icon: resolveStandardBottomNavIcon(
+                        destination: destination,
+                        selected: true,
+                        brightness: brightness,
+                        gallery: activeIconGallery,
+                      ),
+                      size: 24,
+                      fallbackColor: advancedPalette.textPrimaryColor,
+                    ),
+                    label: destination.label,
+                  ),
+              ],
             ),
           ),
         );
+
+        Widget surface = DecoratedBox(
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius:
+                floating ? BorderRadius.circular(radius) : BorderRadius.zero,
+            border:
+                floating
+                    ? Border.all(
+                      color: borderColor.withValues(alpha: 0.92),
+                      width: 0.8,
+                    )
+                    : Border(top: BorderSide(color: borderColor)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: floating ? 0.045 : 0.03),
+                blurRadius: floating ? 20 : 16,
+                offset: Offset(0, floating ? 10 : -4),
+              ),
+            ],
+          ),
+          child: navigationBar,
+        );
+
+        if (frosted) {
+          surface = ClipRRect(
+            borderRadius:
+                floating ? BorderRadius.circular(radius) : BorderRadius.zero,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: floating ? 18 : 14,
+                sigmaY: floating ? 18 : 14,
+              ),
+              child: surface,
+            ),
+          );
+        }
+
+        if (floating) {
+          return SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            child: surface,
+          );
+        }
+
+        return surface;
       case AppNavigationStyle.cupertinoDock:
         return CupertinoDockNavigationBar(
           destinations: destinations,
@@ -367,6 +409,25 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           },
         );
     }
+  }
+
+  Color _standardNavigationSurfaceColor({
+    required Color baseColor,
+    required bool hasWallpaper,
+    required bool floating,
+    required bool frosted,
+  }) {
+    final alpha = switch ((floating, frosted, hasWallpaper)) {
+      (true, true, true) => 0.44,
+      (true, true, false) => 0.76,
+      (true, false, true) => 0.72,
+      (true, false, false) => 0.96,
+      (false, true, true) => 0.42,
+      (false, true, false) => 0.8,
+      (false, false, true) => 0.48,
+      (false, false, false) => 0.92,
+    };
+    return baseColor.withValues(alpha: alpha);
   }
 
   void _onHorizontalDragEnd(

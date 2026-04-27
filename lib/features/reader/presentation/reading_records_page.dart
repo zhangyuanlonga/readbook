@@ -397,6 +397,9 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                                 style: effectiveNavigationStyle,
                                                 showNavigationLabels:
                                                     showNavigationLabels,
+                                                standardAppearance: ref.watch(
+                                                  appStandardNavigationBarAppearanceProvider,
+                                                ),
                                                 left: horizontal,
                                                 top: topInset + 12,
                                                 right: horizontal,

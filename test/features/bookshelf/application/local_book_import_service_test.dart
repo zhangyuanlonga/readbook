@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:charset/charset.dart';
 import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
@@ -201,6 +203,40 @@ void main() {
       },
     );
 
+    test(
+      'imports big5 txt and keeps frozen charset for traditional text',
+      () async {
+        final big5 = Charset.getByName('big5');
+        if (big5 == null) {
+          return;
+        }
+
+        final sourceFile = File('${tempDir.path}/traditional_big5.txt');
+        const content = '第1章 開始\n第一章內容。\n\n第2章 繼續\n第二章內容。';
+        final rawBytes = big5.encode(content);
+        await sourceFile.writeAsBytes(rawBytes, flush: true);
+
+        final prefs = await SharedPreferences.getInstance();
+        final service = buildService(preferences: prefs);
+
+        final result = await service.importFromFile(
+          filePath: sourceFile.path,
+          displayName: 'traditional_big5.txt',
+          waitForIndexing: true,
+        );
+
+        expect(result.localBook.charset, 'big5');
+        final resolvedStoragePath = await storageService.resolveStoragePath(
+          result.localBook.storagePath,
+        );
+        expect(await File(resolvedStoragePath).readAsBytes(), rawBytes);
+        final chapters = await database.getLocalChapters(result.localBook.id);
+        expect(chapters, hasLength(2));
+        expect(chapters.first.title, '第1章 開始');
+        expect(chapters.last.content, contains('第二章內容'));
+      },
+    );
+
     test('keeps large utf8 txt raw bytes', () async {
       final sourceFile = File('${tempDir.path}/large_utf8_raw.txt');
       final buffer = StringBuffer();
@@ -354,6 +390,108 @@ void main() {
       expect(chapters, hasLength(2));
       expect(chapters.first.content, contains('第一章内容'));
       expect(chapters.last.content, contains('第二章内容'));
+    });
+
+    test('imports epub file and indexes fragment-aware chapters', () async {
+      final archive =
+          Archive()
+            ..addFile(
+              ArchiveFile(
+                'META-INF/container.xml',
+                0,
+                _utf8('''
+<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/content.opf',
+                0,
+                _utf8('''
+<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>EPUB Fragment 测试</dc:title>
+    <dc:creator>测试作者</dc:creator>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="nav"/>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/nav.xhtml',
+                0,
+                _utf8('''
+<html>
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="chapter1.xhtml#part1">第一节</a></li>
+        <li><a href="chapter1.xhtml#part2">第二节</a></li>
+      </ol>
+    </nav>
+  </body>
+</html>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/chapter1.xhtml',
+                0,
+                _utf8('''
+<html>
+  <body>
+    <h1 id="part1">第一节</h1>
+    <p>第一节内容第一节内容。</p>
+    <h1 id="part2">第二节</h1>
+    <p>第二节内容第二节内容。</p>
+  </body>
+</html>
+'''),
+              ),
+            );
+      final encoded = ZipEncoder().encode(archive);
+      expect(encoded, isNotNull);
+
+      final sourceFile = File('${tempDir.path}/fragment.epub');
+      await sourceFile.writeAsBytes(encoded, flush: true);
+
+      final prefs = await SharedPreferences.getInstance();
+      final service = buildService(preferences: prefs);
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        waitForIndexing: true,
+      );
+
+      expect(result.localBook.format, LocalBookFormat.epub);
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.indexStatus, LocalBookIndexStatus.ready);
+      expect(stored.title, 'EPUB Fragment 测试');
+      expect(stored.author, '测试作者');
+      final chapters = await database.getLocalChapters(result.localBook.id);
+      expect(chapters, hasLength(2));
+      expect(chapters.first.title, '第一节');
+      expect(chapters.first.sourceRef, startsWith('epub-ref://chapter?'));
+      expect(chapters.last.title, '第二节');
+      expect(chapters.last.content, contains('第二节内容'));
     });
 
     test('accepts mobi import when parser is provided', () async {
@@ -605,6 +743,8 @@ void main() {
     });
   });
 }
+
+List<int> _utf8(String value) => utf8.encode(value);
 
 class _FakeLocalBookIndexService extends LocalBookIndexService {
   _FakeLocalBookIndexService({

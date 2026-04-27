@@ -152,6 +152,9 @@ class _MinePageState extends ConsumerState<MinePage> {
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
     final visibilityState = ref.watch(minePageVisibilityProvider);
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final toggleTooltip =
@@ -219,6 +222,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       context,
                       style: effectiveNavigationStyle,
                       showNavigationLabels: showNavigationLabels,
+                      standardAppearance: standardNavigationAppearance,
                       left: horizontal,
                       top: topInset + 4,
                       right: horizontal,

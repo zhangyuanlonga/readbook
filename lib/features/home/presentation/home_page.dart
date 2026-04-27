@@ -83,10 +83,14 @@ class _HomePageState extends ConsumerState<HomePage>
       platform: platform,
     );
     final showLabels = ref.watch(appNavigationLabelVisibilityProvider);
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
     final bottomInset = mobileBottomNavigationBodyInset(
       context,
       style: navigationStyle,
       showNavigationLabels: showLabels,
+      standardAppearance: standardNavigationAppearance,
     );
 
     return Scaffold(

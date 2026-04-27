@@ -1,89 +1,70 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/navigation/app_navigation_style_provider.dart';
 
 void main() {
-  group('AppNavigationStylePreferenceNotifier', () {
-    setUp(() {
-      SharedPreferences.setMockInitialValues({});
-    });
-
-    test('defaults to followSystem', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      final state = container.read(appNavigationStylePreferenceProvider);
-      expect(state, AppNavigationStylePreference.followSystem);
-    });
-
-    test('persists selected navigation style preference', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      await container
-          .read(appNavigationStylePreferenceProvider.notifier)
-          .setPreference(AppNavigationStylePreference.cupertinoDock);
-
-      final updated = container.read(appNavigationStylePreferenceProvider);
-      expect(updated, AppNavigationStylePreference.cupertinoDock);
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('app.navigationStyle'), 'cupertinoDock');
-    });
-
-    test('persists navigation label visibility', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      await container
-          .read(appNavigationLabelVisibilityProvider.notifier)
-          .setVisible(false);
-
-      final updated = container.read(appNavigationLabelVisibilityProvider);
-      expect(updated, isFalse);
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('app.navigation.showLabels'), isFalse);
-    });
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await SharedPreferences.getInstance();
+    AppStandardNavigationBarAppearanceNotifier.prime(prefs);
   });
 
-  group('resolveAppNavigationStyle', () {
-    test('follows Android system style with standard navigation', () {
-      final style = resolveAppNavigationStyle(
-        AppNavigationStylePreference.followSystem,
-        isWeb: false,
-        platform: TargetPlatform.android,
-      );
+  test(
+    'standard navigation appearance defaults to non-floating and non-frosted',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-      expect(style, AppNavigationStyle.standard);
+      expect(
+        container.read(appStandardNavigationBarAppearanceProvider),
+        const AppStandardNavigationBarAppearance(),
+      );
+    },
+  );
+
+  test('standard navigation appearance prime reads persisted flags', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'app.navigation.standard.floatingBar': true,
+      'app.navigation.standard.frostedEffect': true,
     });
+    final prefs = await SharedPreferences.getInstance();
 
-    test('follows iOS system style with cupertino dock navigation', () {
-      final style = resolveAppNavigationStyle(
-        AppNavigationStylePreference.followSystem,
-        isWeb: false,
-        platform: TargetPlatform.iOS,
-      );
+    AppStandardNavigationBarAppearanceNotifier.prime(prefs);
 
-      expect(style, AppNavigationStyle.cupertinoDock);
-    });
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
 
-    test('falls back to standard navigation on unsupported platforms', () {
-      final desktopStyle = resolveAppNavigationStyle(
-        AppNavigationStylePreference.cupertinoDock,
-        isWeb: false,
-        platform: TargetPlatform.macOS,
-      );
-      final webStyle = resolveAppNavigationStyle(
-        AppNavigationStylePreference.cupertinoDock,
-        isWeb: true,
-        platform: TargetPlatform.iOS,
-      );
+    expect(
+      container.read(appStandardNavigationBarAppearanceProvider),
+      const AppStandardNavigationBarAppearance(
+        floatingBar: true,
+        frostedEffect: true,
+      ),
+    );
+  });
 
-      expect(desktopStyle, AppNavigationStyle.standard);
-      expect(webStyle, AppNavigationStyle.standard);
-    });
+  test('standard navigation appearance persists changes', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await container
+        .read(appStandardNavigationBarAppearanceProvider.notifier)
+        .setFloatingBar(true);
+    await container
+        .read(appStandardNavigationBarAppearanceProvider.notifier)
+        .setFrostedEffect(true);
+
+    expect(
+      container.read(appStandardNavigationBarAppearanceProvider),
+      const AppStandardNavigationBarAppearance(
+        floatingBar: true,
+        frostedEffect: true,
+      ),
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('app.navigation.standard.floatingBar'), isTrue);
+    expect(prefs.getBool('app.navigation.standard.frostedEffect'), isTrue);
   });
 }

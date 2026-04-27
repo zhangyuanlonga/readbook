@@ -476,10 +476,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
     final navigationBottomInset = mobileBottomNavigationContentInset(
       context,
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
+      standardAppearance: standardNavigationAppearance,
     );
     final navigationComfortInset = mobileBottomNavigationComfortInset(
       style: effectiveNavigationStyle,

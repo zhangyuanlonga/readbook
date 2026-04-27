@@ -180,10 +180,14 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
     final contentBottomInset = mobileBottomNavigationBodyInset(
       context,
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
+      standardAppearance: standardNavigationAppearance,
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 

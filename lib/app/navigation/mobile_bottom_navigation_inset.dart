@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 
 import '../widgets/cupertino_dock_navigation_bar.dart';
@@ -6,12 +8,15 @@ import 'app_navigation_style_provider.dart';
 const double _kStandardNavigationBarHeightWithLabels = 80;
 const double _kStandardNavigationBarHeightIconOnly = 64;
 const double _kStandardNavigationContentComfortInset = 8;
+const double _kStandardFloatingNavigationBottomMinimum = 10;
 const double _kCupertinoDockContentComfortInset = 8;
 
 double mobileBottomNavigationContentInset(
   BuildContext context, {
   required AppNavigationStyle style,
   required bool showNavigationLabels,
+  AppStandardNavigationBarAppearance standardAppearance =
+      const AppStandardNavigationBarAppearance(),
 }) {
   final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
   return switch (style) {
@@ -19,7 +24,9 @@ double mobileBottomNavigationContentInset(
       (showNavigationLabels
               ? _kStandardNavigationBarHeightWithLabels
               : _kStandardNavigationBarHeightIconOnly) +
-          bottomSafe,
+          (standardAppearance.floatingBar
+              ? math.max(bottomSafe, _kStandardFloatingNavigationBottomMinimum)
+              : bottomSafe),
     AppNavigationStyle.cupertinoDock =>
       CupertinoDockNavigationBar.contentBottomInset(
         context,
@@ -39,12 +46,15 @@ double mobileBottomNavigationBodyInset(
   BuildContext context, {
   required AppNavigationStyle style,
   required bool showNavigationLabels,
+  AppStandardNavigationBarAppearance standardAppearance =
+      const AppStandardNavigationBarAppearance(),
   double extra = 0,
 }) {
   return mobileBottomNavigationContentInset(
         context,
         style: style,
         showNavigationLabels: showNavigationLabels,
+        standardAppearance: standardAppearance,
       ) +
       mobileBottomNavigationComfortInset(style: style) +
       extra;
@@ -54,6 +64,8 @@ EdgeInsets mobileBottomNavigationBodyPadding(
   BuildContext context, {
   required AppNavigationStyle style,
   required bool showNavigationLabels,
+  AppStandardNavigationBarAppearance standardAppearance =
+      const AppStandardNavigationBarAppearance(),
   double left = 0,
   double top = 0,
   double right = 0,
@@ -68,6 +80,7 @@ EdgeInsets mobileBottomNavigationBodyPadding(
           context,
           style: style,
           showNavigationLabels: showNavigationLabels,
+          standardAppearance: standardAppearance,
         ),
   );
 }

@@ -286,6 +286,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     final selectedNavigationStyle = ref.watch(
       appNavigationStylePreferenceProvider,
     );
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
     final showNavigationLabels = ref.watch(
       appNavigationLabelVisibilityProvider,
     );
@@ -340,6 +343,8 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                       selectedThemeMode: selectedThemeMode,
                       selectedSeedColor: selectedSeedColor,
                       selectedNavigationStyle: selectedNavigationStyle,
+                      standardNavigationAppearance:
+                          standardNavigationAppearance,
                       showNavigationLabels: showNavigationLabels,
                     ),
                   ),
@@ -367,6 +372,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     required ThemeMode selectedThemeMode,
     required Color selectedSeedColor,
     required AppNavigationStylePreference selectedNavigationStyle,
+    required AppStandardNavigationBarAppearance standardNavigationAppearance,
     required bool showNavigationLabels,
   }) {
     final sections = <Widget>[];
@@ -386,6 +392,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         _buildNavigationStyleSection(
           context,
           selectedNavigationStyle: selectedNavigationStyle,
+          standardNavigationAppearance: standardNavigationAppearance,
           showNavigationLabels: showNavigationLabels,
         ),
       );
@@ -1260,6 +1267,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Widget _buildNavigationStyleSection(
     BuildContext context, {
     required AppNavigationStylePreference selectedNavigationStyle,
+    required AppStandardNavigationBarAppearance standardNavigationAppearance,
     required bool showNavigationLabels,
   }) {
     return _buildSectionCard(
@@ -1362,6 +1370,37 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               );
             },
           ),
+          if (selectedNavigationStyle ==
+              AppNavigationStylePreference.standard) ...[
+            const SizedBox(height: 8),
+            _buildStandardNavigationToggleTile(
+              context,
+              title: '悬浮底栏',
+              description: '底栏悬浮在内容上方',
+              enabled: standardNavigationAppearance.floatingBar,
+              onChanged: (value) {
+                unawaited(
+                  ref
+                      .read(appStandardNavigationBarAppearanceProvider.notifier)
+                      .setFloatingBar(value),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _buildStandardNavigationToggleTile(
+              context,
+              title: '磨砂效果',
+              description: '底栏启用磨砂背景效果',
+              enabled: standardNavigationAppearance.frostedEffect,
+              onChanged: (value) {
+                unawaited(
+                  ref
+                      .read(appStandardNavigationBarAppearanceProvider.notifier)
+                      .setFrostedEffect(value),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -1468,7 +1507,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '苹果风格下控制左侧主导航是否显示文字。',
+                  '控制底栏是否显示文字标签。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                     height: 1.35,
@@ -1479,6 +1518,55 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           ),
           const SizedBox(width: 12),
           Switch.adaptive(value: showLabels, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStandardNavigationToggleTile(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required bool enabled,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.58),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch.adaptive(value: enabled, onChanged: onChanged),
         ],
       ),
     );

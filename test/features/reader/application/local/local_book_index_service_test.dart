@@ -12,6 +12,7 @@ import 'package:shuxiang_reading_next/features/reader/application/reader_system_
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -333,7 +334,90 @@ void main() {
         expect(refreshed!.indexStatus, LocalBookIndexStatus.stale);
       },
     );
+
+    test('reindex succeeds after correcting frozen txt charset', () async {
+      final file = File('${tempDir.path}/reindex_charset_utf16le.txt');
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      await file.writeAsBytes(
+        _encodeUtf16(content, littleEndian: true, withBom: true),
+        flush: true,
+      );
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_reindex_charset_1',
+          title: '重建编码测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          charset: 'utf-8',
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final service = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const <LocalBookParser>[TxtLocalBookParser()],
+        storageService: storageService,
+      );
+
+      await expectLater(
+        service.ensureIndexed(bookId: 'local_index_reindex_charset_1'),
+        throwsA(isA<AppException>()),
+      );
+
+      final wrongIndexed = await repository.getBookById(
+        'local_index_reindex_charset_1',
+      );
+      expect(wrongIndexed, isNotNull);
+      await repository.upsertBook(
+        wrongIndexed!.copyWith(charset: 'utf-16le', updatedAt: DateTime.now()),
+      );
+
+      final chapters = await service.ensureIndexed(
+        bookId: 'local_index_reindex_charset_1',
+        force: true,
+      );
+
+      expect(chapters, hasLength(2));
+      expect(chapters.first.title, '第1章 开始');
+      expect(chapters.last.content, contains('第二章内容'));
+
+      final updated = await repository.getBookById(
+        'local_index_reindex_charset_1',
+      );
+      expect(updated, isNotNull);
+      expect(updated!.indexStatus, LocalBookIndexStatus.ready);
+      expect(updated.charset, 'utf-16le');
+    });
   });
+}
+
+List<int> _encodeUtf16(
+  String value, {
+  required bool littleEndian,
+  bool withBom = false,
+}) {
+  final bytes = <int>[];
+  if (withBom) {
+    if (littleEndian) {
+      bytes.addAll(const <int>[0xFF, 0xFE]);
+    } else {
+      bytes.addAll(const <int>[0xFE, 0xFF]);
+    }
+  }
+  for (final unit in value.codeUnits) {
+    if (littleEndian) {
+      bytes.add(unit & 0xFF);
+      bytes.add((unit >> 8) & 0xFF);
+    } else {
+      bytes.add((unit >> 8) & 0xFF);
+      bytes.add(unit & 0xFF);
+    }
+  }
+  return bytes;
 }
 
 class _FakeSuccessParser implements LocalBookParser {

@@ -16,6 +16,41 @@ final appNavigationLabelVisibilityProvider =
       AppNavigationLabelVisibilityNotifier.new,
     );
 
+final appStandardNavigationBarAppearanceProvider = NotifierProvider<
+  AppStandardNavigationBarAppearanceNotifier,
+  AppStandardNavigationBarAppearance
+>(AppStandardNavigationBarAppearanceNotifier.new);
+
+class AppStandardNavigationBarAppearance {
+  const AppStandardNavigationBarAppearance({
+    this.floatingBar = false,
+    this.frostedEffect = false,
+  });
+
+  final bool floatingBar;
+  final bool frostedEffect;
+
+  AppStandardNavigationBarAppearance copyWith({
+    bool? floatingBar,
+    bool? frostedEffect,
+  }) {
+    return AppStandardNavigationBarAppearance(
+      floatingBar: floatingBar ?? this.floatingBar,
+      frostedEffect: frostedEffect ?? this.frostedEffect,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AppStandardNavigationBarAppearance &&
+        other.floatingBar == floatingBar &&
+        other.frostedEffect == frostedEffect;
+  }
+
+  @override
+  int get hashCode => Object.hash(floatingBar, frostedEffect);
+}
+
 class AppNavigationStylePreferenceNotifier
     extends Notifier<AppNavigationStylePreference> {
   static const String _navigationStyleKey = 'app.navigationStyle';
@@ -130,6 +165,76 @@ class AppNavigationLabelVisibilityNotifier extends Notifier<bool> {
   }
 }
 
+class AppStandardNavigationBarAppearanceNotifier
+    extends Notifier<AppStandardNavigationBarAppearance> {
+  static const String _floatingBarKey = 'app.navigation.standard.floatingBar';
+  static const String _frostedEffectKey =
+      'app.navigation.standard.frostedEffect';
+  static AppStandardNavigationBarAppearance? _primedAppearance;
+
+  bool _loadTriggered = false;
+  bool _hasExplicitSet = false;
+
+  static void prime(SharedPreferences prefs) {
+    _primedAppearance = _readAppearance(prefs);
+  }
+
+  @override
+  AppStandardNavigationBarAppearance build() {
+    final primedAppearance = _primedAppearance;
+    if (primedAppearance != null) {
+      return primedAppearance;
+    }
+    if (!_loadTriggered) {
+      _loadTriggered = true;
+      _load();
+    }
+    return const AppStandardNavigationBarAppearance();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = _readAppearance(prefs);
+    if (_hasExplicitSet) {
+      return;
+    }
+    if (loaded != state) {
+      state = loaded;
+    }
+  }
+
+  Future<void> setFloatingBar(bool enabled) async {
+    await _setAppearance(state.copyWith(floatingBar: enabled));
+  }
+
+  Future<void> setFrostedEffect(bool enabled) async {
+    await _setAppearance(state.copyWith(frostedEffect: enabled));
+  }
+
+  Future<void> _setAppearance(AppStandardNavigationBarAppearance next) async {
+    if (next == state) {
+      return;
+    }
+
+    _hasExplicitSet = true;
+    _primedAppearance = next;
+    state = next;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_floatingBarKey, next.floatingBar);
+    await prefs.setBool(_frostedEffectKey, next.frostedEffect);
+  }
+
+  static AppStandardNavigationBarAppearance _readAppearance(
+    SharedPreferences prefs,
+  ) {
+    return AppStandardNavigationBarAppearance(
+      floatingBar: prefs.getBool(_floatingBarKey) ?? false,
+      frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
+    );
+  }
+}
+
 bool supportsMobileNavigationStyle({
   required bool isWeb,
   required TargetPlatform platform,
@@ -151,8 +256,7 @@ AppNavigationStyle resolveAppNavigationStyle(
   }
 
   return switch (preference) {
-    AppNavigationStylePreference.followSystem =>
-      AppNavigationStyle.standard,
+    AppNavigationStylePreference.followSystem => AppNavigationStyle.standard,
     AppNavigationStylePreference.standard => AppNavigationStyle.standard,
     AppNavigationStylePreference.cupertinoDock =>
       AppNavigationStyle.cupertinoDock,

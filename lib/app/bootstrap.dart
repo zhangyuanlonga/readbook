@@ -30,6 +30,7 @@ Future<void> bootstrap() async {
   final prefs = await SharedPreferences.getInstance();
   AppNavigationStylePreferenceNotifier.prime(prefs);
   AppNavigationLabelVisibilityNotifier.prime(prefs);
+  AppStandardNavigationBarAppearanceNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   ActiveAdvancedThemeIdNotifier.prime(prefs);

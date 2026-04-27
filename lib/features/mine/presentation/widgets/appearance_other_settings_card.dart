@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,12 +14,20 @@ class AppearanceOtherSettingsCard extends ConsumerStatefulWidget {
 
 class _AppearanceOtherSettingsCardState
     extends ConsumerState<AppearanceOtherSettingsCard> {
-  final GlobalKey _startupAnchorKey = GlobalKey();
+  final GlobalKey<PopupMenuButtonState<MinePageStartupDestination>>
+  _startupMenuKey =
+      GlobalKey<PopupMenuButtonState<MinePageStartupDestination>>();
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final startupDestination = ref.watch(minePageStartupDestinationProvider);
+    final visibilityState = ref.watch(minePageVisibilityProvider);
+    final visibleCount =
+        configurableMinePageItemDefinitions
+            .where((definition) => visibilityState.isVisible(definition.id))
+            .length;
 
     return Container(
       width: double.infinity,
@@ -77,18 +83,46 @@ class _AppearanceOtherSettingsCardState
           const SizedBox(height: 10),
           _buildActionTile(
             context,
+            icon: Icons.view_list_outlined,
             title: '我的页面显示内容',
             subtitle: '自定义我的页面中显示的功能项',
+            trailingText: '$visibleCount 项显示中',
             onTap: _openMinePageDisplaySheet,
           ),
-          const SizedBox(height: 8),
-          KeyedSubtree(
-            key: _startupAnchorKey,
-            child: _buildActionTile(
-              context,
-              title: '启动项',
-              subtitle: '选择应用启动时的默认页面',
-              onTap: _openStartupDestinationMenu,
+          Divider(
+            height: 17,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+          ),
+          _buildActionTile(
+            context,
+            icon: Icons.rocket_launch_outlined,
+            title: '启动项',
+            subtitle: '选择应用启动时的默认页面',
+            onTap: _openStartupDestinationMenu,
+            trailing: PopupMenuButton<MinePageStartupDestination>(
+              key: _startupMenuKey,
+              tooltip: '选择启动项',
+              onSelected: _setStartupDestination,
+              itemBuilder: (context) {
+                return [
+                  for (final destination in MinePageStartupDestination.values)
+                    PopupMenuItem<MinePageStartupDestination>(
+                      value: destination,
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(destination.label)),
+                          if (startupDestination == destination)
+                            Icon(
+                              Icons.check_rounded,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                        ],
+                      ),
+                    ),
+                ];
+              },
+              child: _buildStartupSelector(context, startupDestination),
             ),
           ),
         ],
@@ -98,36 +132,34 @@ class _AppearanceOtherSettingsCardState
 
   Widget _buildActionTile(
     BuildContext context, {
+    required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    String? trailingText,
+    Widget? trailing,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.58),
-            ),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -142,13 +174,23 @@ class _AppearanceOtherSettingsCardState
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                '配置>',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w700,
+              if (trailing != null)
+                trailing
+              else ...[
+                if (trailingText != null)
+                  Text(
+                    trailingText,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                if (trailingText != null) const SizedBox(width: 6),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -241,58 +283,53 @@ class _AppearanceOtherSettingsCardState
   }
 
   Future<void> _openStartupDestinationMenu() async {
-    final anchorContext = _startupAnchorKey.currentContext;
-    if (anchorContext == null) {
-      return;
-    }
-    final renderBox = anchorContext.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (renderBox == null || overlay == null) {
-      return;
-    }
+    _startupMenuKey.currentState?.showButtonMenu();
+  }
 
-    final topLeft = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
-    final bottomRight = renderBox.localToGlobal(
-      renderBox.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    final selected = await showMenu<MinePageStartupDestination>(
-      context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromPoints(topLeft, bottomRight),
-        Offset.zero & overlay.size,
+  Widget _buildStartupSelector(
+    BuildContext context,
+    MinePageStartupDestination destination,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.34),
+        ),
       ),
-      items: [
-        for (final destination in MinePageStartupDestination.values)
-          PopupMenuItem<MinePageStartupDestination>(
-            value: destination,
-            child: Consumer(
-              builder: (context, ref, _) {
-                final current = ref.watch(minePageStartupDestinationProvider);
-                return Row(
-                  children: [
-                    Expanded(child: Text(destination.label)),
-                    if (current == destination)
-                      Icon(
-                        Icons.check_rounded,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                  ],
-                );
-              },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              destination.label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colorScheme.onSecondaryContainer,
+              ),
             ),
-          ),
-      ],
+            const SizedBox(width: 2),
+            Icon(
+              Icons.arrow_drop_down_rounded,
+              size: 20,
+              color: colorScheme.onSecondaryContainer,
+            ),
+          ],
+        ),
+      ),
     );
-    if (selected == null || !mounted) {
-      return;
-    }
+  }
+
+  Future<void> _setStartupDestination(
+    MinePageStartupDestination destination,
+  ) async {
     try {
       await ref
           .read(minePageStartupDestinationProvider.notifier)
-          .setDestination(selected);
+          .setDestination(destination);
     } catch (_) {
       _showMessage('启动项保存失败，请稍后重试。');
     }
