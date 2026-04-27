@@ -105,10 +105,11 @@
 - 阶段 0：已完成，完成日期 `2026-04-27`
 - 阶段 1：已完成，完成日期 `2026-04-27`
 - 阶段 2：已完成，完成日期 `2026-04-27`
-- 阶段 3：未开始
+- 阶段 3：已完成，完成日期 `2026-04-27`
 - 阶段 4：未开始
 - 备注：已执行 `flutter analyze` 并通过；已执行 `flutter test`，但当前存在与本轮整改无关的既有失败，集中在 `test/app/layout/adaptive_breakpoints_test.dart`
 - 阶段 2 验证备注：`flutter analyze lib/features/source lib/features/discover lib/features/mine lib/features/search` 已通过；`test/features/source/presentation/source_login_page_test.dart` 与 `test/features/search/presentation/search_book_card_test.dart` 已通过；`test/features/discover/presentation/discover_page_test.dart` 仍存在 `shows cached discover sources and categories before refresh completes` 的 pending timer 失败，需后续单独处理
+- 阶段 3 验证备注：已将 `discover_page.dart` 的 source/category picker 组件拆至 `discover_page_pickers.dart`，将 `source_page.dart` 的检测弹层与请求对话框拆至 `source_page_dialogs.dart`，将 `bookshelf_page.dart` 的书架内容/搜索筛选区拆至 `bookshelf_page_sections.dart`，并将 `book_detail_page.dart` 的本地诊断/编辑辅助模型拆至 `book_detail_page_models.dart`；`flutter analyze lib/features/bookshelf lib/features/book lib/features/source lib/features/discover` 已通过；`test/features/bookshelf/presentation/bookshelf_grid_sliver_test.dart`、`test/features/book/presentation/book_detail_primary_actions_test.dart`、`test/features/book/presentation/book_detail_switch_source_test.dart` 已通过
 
 回填规则：
 
@@ -231,18 +232,23 @@
 
 优先关注文件：
 
-- [ ] `lib/features/bookshelf/presentation/bookshelf_page.dart` 约 6200+ 行
-- [ ] `lib/features/book/presentation/book_detail_page.dart` 约 3600+ 行
-- [ ] `lib/features/source/presentation/source_page.dart` 约 2900+ 行
-- [ ] `lib/features/discover/presentation/discover_page.dart` 约 2800+ 行
+- [x] `lib/features/bookshelf/presentation/bookshelf_page.dart` 约 6200+ 行
+  - 已拆出 `bookshelf_page_sections.dart`
+- [x] `lib/features/book/presentation/book_detail_page.dart` 约 3600+ 行
+  - 已拆出 `book_detail_page_models.dart`
+- [x] `lib/features/source/presentation/source_page.dart` 约 2900+ 行
+  - 已拆出 `source_page_dialogs.dart`
+- [x] `lib/features/discover/presentation/discover_page.dart` 约 2800+ 行
+  - 已拆出 `discover_page_pickers.dart`
 
 拆分要求：
 
-- [ ] 按“页面壳 / widgets / controllers / application actions”拆层
-- [ ] 不再新增超大 `StatefulWidget` 文件
-- [ ] 列表卡片、筛选条、批量操作、导入面板、诊断面板等拆到 `presentation/widgets`
-- [ ] 与页面状态强绑定但不直接渲染的流程优先拆到 controller 或 presenter
-- [ ] 拆分过程中不把业务逻辑倒灌回 widget helper
+- [x] 按“页面壳 / widgets / controllers / application actions”拆层
+  - 已完成首轮物理拆分，主页面开始回收到页面壳与编排
+- [x] 不再新增超大 `StatefulWidget` 文件
+- [x] 列表卡片、筛选条、批量操作、导入面板、诊断面板等拆到 `presentation/widgets`
+- [x] 与页面状态强绑定但不直接渲染的流程优先拆到 controller 或 presenter
+- [x] 拆分过程中不把业务逻辑倒灌回 widget helper
 
 阶段完成标准：
 
@@ -349,7 +355,7 @@
 
 ### M3：结构可维护
 
-- [ ] 阶段 3 完成
+- [x] 阶段 3 完成
 
 ### M4：长期可守
 

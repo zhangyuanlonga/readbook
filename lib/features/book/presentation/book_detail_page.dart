@@ -63,6 +63,7 @@ import '../application/book_metadata_presentation_resolver.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
+part 'book_detail_page_models.dart';
 
 class BookDetailPage extends ConsumerStatefulWidget {
   const BookDetailPage({
@@ -3596,53 +3597,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _activeSwitchSourceCancellationToken?.cancel();
     _activeSwitchSourceCancellationToken = null;
   }
-}
-
-class _LocalBookDiagnosticsSnapshot {
-  const _LocalBookDiagnosticsSnapshot({
-    required this.sourcePath,
-    required this.storagePath,
-    required this.resolvedStoragePath,
-    required this.sourceFileExists,
-    required this.storageFileExists,
-    required this.sourceFileChanged,
-    required this.globalSplitLongChapterEnabled,
-    required this.splitSettingNeedsReindex,
-  });
-
-  final String sourcePath;
-  final String storagePath;
-  final String resolvedStoragePath;
-  final bool sourceFileExists;
-  final bool storageFileExists;
-  final bool sourceFileChanged;
-  final bool globalSplitLongChapterEnabled;
-  final bool splitSettingNeedsReindex;
-}
-
-class _LocalCharsetOption {
-  const _LocalCharsetOption({required this.label, required this.charset});
-
-  final String label;
-  final String? charset;
-}
-
-class _BookMetadataEditDraft {
-  const _BookMetadataEditDraft({
-    required this.title,
-    required this.author,
-    required this.intro,
-    required this.customCoverPath,
-    required this.charset,
-    required this.splitLongChapter,
-  });
-
-  final String title;
-  final String author;
-  final String intro;
-  final String? customCoverPath;
-  final String? charset;
-  final bool splitLongChapter;
 }
 
 enum _DetailSwitchSourceApplyResult {

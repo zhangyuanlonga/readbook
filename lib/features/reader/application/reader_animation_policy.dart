@@ -1,5 +1,5 @@
 import 'audio_reading_mode.dart';
-import 'reader_content_session.dart';
+import 'reader_mode_model.dart';
 
 class ReaderAnimationPolicy {
   const ReaderAnimationPolicy({
@@ -21,21 +21,11 @@ class ReaderAnimationPolicyResolver {
   const ReaderAnimationPolicyResolver();
 
   ReaderAnimationPolicy resolve({
-    required ReaderContentMode contentMode,
+    required ReaderModeModel mode,
     required bool hasInlineImageParagraphs,
-    required bool usesScrollTrigger,
   }) {
-    switch (contentMode) {
-      case ReaderContentMode.text:
-        if (usesScrollTrigger) {
-          return const ReaderAnimationPolicy(
-            usesShellOverlayAnimations: true,
-            supportsTextPageTurnAnimations: false,
-            usesMangaModeAnimations: false,
-            reusesTextPageTurnAnimations: false,
-            inactiveReason: '滚动触发模式下不使用分页动画。',
-          );
-        }
+    switch (mode.contentKind) {
+      case ReaderContentKind.text:
         if (hasInlineImageParagraphs) {
           return const ReaderAnimationPolicy(
             usesShellOverlayAnimations: true,
@@ -45,13 +35,22 @@ class ReaderAnimationPolicyResolver {
             inactiveReason: '当前章节包含插图，已退回滚动正文，本章不会展示分页动画。',
           );
         }
+        if (mode.isScroll) {
+          return const ReaderAnimationPolicy(
+            usesShellOverlayAnimations: true,
+            supportsTextPageTurnAnimations: false,
+            usesMangaModeAnimations: false,
+            reusesTextPageTurnAnimations: false,
+            inactiveReason: '滚动触发模式下不使用分页动画。',
+          );
+        }
         return const ReaderAnimationPolicy(
           usesShellOverlayAnimations: true,
           supportsTextPageTurnAnimations: true,
           usesMangaModeAnimations: false,
           reusesTextPageTurnAnimations: false,
         );
-      case ReaderContentMode.comic:
+      case ReaderContentKind.image:
         return const ReaderAnimationPolicy(
           usesShellOverlayAnimations: true,
           supportsTextPageTurnAnimations: false,
@@ -59,7 +58,7 @@ class ReaderAnimationPolicyResolver {
           reusesTextPageTurnAnimations: false,
           inactiveReason: '漫画模式使用独立的翻图与缩放反馈，不复用正文分页动画。',
         );
-      case ReaderContentMode.audio:
+      case ReaderContentKind.audio:
         return const ReaderAnimationPolicy(
           usesShellOverlayAnimations: true,
           supportsTextPageTurnAnimations: false,

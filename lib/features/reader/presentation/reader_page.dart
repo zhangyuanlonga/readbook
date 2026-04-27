@@ -67,6 +67,8 @@ import '../application/reader_content_session.dart';
 import '../application/reader_content_mode_resolver.dart';
 import '../application/reader_content_session_resolver.dart';
 import '../application/reader_mode_capabilities.dart';
+import '../application/reader_mode_model.dart';
+import '../application/reader_mode_resolver.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_chapter_cache_decoder.dart';
 import '../application/reader_chapter_load_planner.dart';
@@ -137,8 +139,6 @@ part 'reader_page_source_switch.dart';
 
 enum _ReaderSettingsTab { interface, reading }
 
-enum _ReaderViewportKind { textPaged, textScroll, mangaPaged, mangaContinuous }
-
 enum _OverlayEdge { top, bottom }
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -193,6 +193,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderContentModeResolver();
   final ReaderModeCapabilitiesResolver _modeCapabilitiesResolver =
       const ReaderModeCapabilitiesResolver();
+  final ReaderModeResolver _readerModeResolver = const ReaderModeResolver();
   final ReaderChapterCacheDecoder _chapterCacheDecoder =
       const ReaderChapterCacheDecoder();
   final ReaderChapterLoadPlanner _chapterLoadPlanner =
@@ -476,81 +477,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double get _curlTouchYFactor => _curlTransition.touchYFactor;
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
-  bool _pageTurnIncludesTap(ReaderPageTurnMode mode) {
-    return mode == ReaderPageTurnMode.tap ||
-        mode == ReaderPageTurnMode.tapAndSwipe ||
-        mode == ReaderPageTurnMode.tapAndScroll;
-  }
-
-  bool _pageTurnIncludesSwipe(ReaderPageTurnMode mode) {
-    return mode == ReaderPageTurnMode.swipe ||
-        mode == ReaderPageTurnMode.tapAndSwipe;
-  }
-
-  bool _pageTurnUsesScroll(ReaderPageTurnMode mode) {
-    return mode == ReaderPageTurnMode.scroll ||
-        mode == ReaderPageTurnMode.tapAndScroll;
-  }
-
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
-
-  ReaderPageTurnMode _composePageTurnMode({
-    required bool tapEnabled,
-    required bool swipeEnabled,
-    required bool scrollEnabled,
-  }) {
-    if (scrollEnabled) {
-      return tapEnabled
-          ? ReaderPageTurnMode.tapAndScroll
-          : ReaderPageTurnMode.scroll;
-    }
-    if (swipeEnabled) {
-      return tapEnabled
-          ? ReaderPageTurnMode.tapAndSwipe
-          : ReaderPageTurnMode.swipe;
-    }
-    return ReaderPageTurnMode.tap;
-  }
-
-  ReaderPageTurnMode _applyPageTurnToggle(
-    ReaderPageTurnMode current, {
-    bool? tapEnabled,
-    bool? swipeEnabled,
-    bool? scrollEnabled,
-  }) {
-    var nextTapEnabled = _pageTurnIncludesTap(current);
-    var nextSwipeEnabled = _pageTurnIncludesSwipe(current);
-    var nextScrollEnabled = _pageTurnUsesScroll(current);
-
-    if (tapEnabled != null) {
-      nextTapEnabled = tapEnabled;
-    }
-    if (swipeEnabled != null) {
-      nextSwipeEnabled = swipeEnabled;
-      if (nextSwipeEnabled) {
-        nextScrollEnabled = false;
-      }
-    }
-    if (scrollEnabled != null) {
-      nextScrollEnabled = scrollEnabled;
-      if (nextScrollEnabled) {
-        nextSwipeEnabled = false;
-      }
-    }
-
-    if (nextSwipeEnabled && nextScrollEnabled) {
-      nextScrollEnabled = false;
-    }
-    if (!nextTapEnabled && !nextSwipeEnabled && !nextScrollEnabled) {
-      nextTapEnabled = true;
-    }
-
-    return _composePageTurnMode(
-      tapEnabled: nextTapEnabled,
-      swipeEnabled: nextSwipeEnabled,
-      scrollEnabled: nextScrollEnabled,
-    );
-  }
 
   TextAlign _paragraphTextAlign(ReaderSettings settings) {
     return settings.textFullJustifyEnabled
@@ -558,11 +485,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         : TextAlign.start;
   }
 
+  ReaderModeModel _resolveReaderModeFor(
+    ReaderSettings settings, {
+    ReaderContentMode? contentMode,
+    bool? canUsePagedText,
+  }) {
+    final effectiveContentMode = contentMode ?? _currentContentMode;
+    final effectiveCanUsePagedText =
+        canUsePagedText ??
+        _modeCapabilitiesResolver
+            .resolve(
+              contentMode: effectiveContentMode,
+              contentCapabilities: _contentCapabilities,
+              hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
+            )
+            .canUsePagedText;
+    return _readerModeResolver.resolve(
+      contentMode: effectiveContentMode,
+      settings: settings,
+      canUsePagedText: effectiveCanUsePagedText,
+    );
+  }
+
+  ReaderModeModel get _currentReaderMode => _resolveReaderModeFor(_settings);
+
   bool _isPagedTextReaderEnabledFor(ReaderSettings settings) {
-    if (!_readerModeCapabilities.canUsePagedText) {
-      return false;
-    }
-    return !_pageTurnUsesScroll(settings.pageTurnMode);
+    final mode = _resolveReaderModeFor(settings);
+    return mode.isText && mode.isPaged;
   }
 
   bool _isPagedTextReaderEnabled() {
@@ -702,8 +651,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _isSwipePaginationEnabled() {
-    return _currentViewportKind == _ReaderViewportKind.textPaged &&
-        _pageTurnIncludesSwipe(_settings.pageTurnMode);
+    return _currentReaderMode.viewportKind == ReaderModeViewportKind.textPaged &&
+        _currentReaderMode.swipeTurnEnabled;
   }
 
   ReaderContentMode get _currentContentMode {
@@ -719,26 +668,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.mangaReadMode != ReaderMangaReadMode.continuous;
   }
 
-  _ReaderViewportKind get _currentViewportKind {
-    if (_isMangaChapter) {
-      return _isMangaPagedMode
-          ? _ReaderViewportKind.mangaPaged
-          : _ReaderViewportKind.mangaContinuous;
-    }
-    return _isPagedTextReaderEnabled()
-        ? _ReaderViewportKind.textPaged
-        : _ReaderViewportKind.textScroll;
-  }
+  ReaderModeViewportKind get _currentViewportKind =>
+      _currentReaderMode.viewportKind;
 
   bool get _isTextPagedViewport =>
-      _currentViewportKind == _ReaderViewportKind.textPaged;
+      _currentViewportKind == ReaderModeViewportKind.textPaged;
 
   bool get _isTextScrollViewport =>
-      _currentViewportKind == _ReaderViewportKind.textScroll;
+      _currentViewportKind == ReaderModeViewportKind.textScroll;
 
   bool get _isMangaViewport =>
-      _currentViewportKind == _ReaderViewportKind.mangaPaged ||
-      _currentViewportKind == _ReaderViewportKind.mangaContinuous;
+      _currentViewportKind == ReaderModeViewportKind.imagePaged ||
+      _currentViewportKind == ReaderModeViewportKind.imageScroll;
 
   ReaderModeCapabilities get _readerModeCapabilities =>
       _modeCapabilitiesResolver.resolve(
@@ -799,21 +740,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _selectionState = _selectionState.copyWith(wavy: value);
   }
 
-  bool _showsOuterPinnedChapterHeaderFor(_ReaderViewportKind viewportKind) {
-    return viewportKind != _ReaderViewportKind.textPaged &&
+  bool _showsOuterPinnedChapterHeaderFor(ReaderModeViewportKind viewportKind) {
+    return viewportKind != ReaderModeViewportKind.textPaged &&
         _layoutResolver.showsPinnedChapterHeader(_settings);
   }
 
-  bool _showsPagedPinnedChapterHeaderFor(_ReaderViewportKind viewportKind) {
-    return viewportKind == _ReaderViewportKind.textPaged &&
+  bool _showsPagedPinnedChapterHeaderFor(ReaderModeViewportKind viewportKind) {
+    return viewportKind == ReaderModeViewportKind.textPaged &&
         _layoutResolver.showsPinnedChapterHeader(_settings);
   }
 
-  bool _showsOuterInfoBarsFor(_ReaderViewportKind viewportKind) {
-    return viewportKind == _ReaderViewportKind.textScroll;
+  bool _showsOuterInfoBarsFor(ReaderModeViewportKind viewportKind) {
+    return viewportKind == ReaderModeViewportKind.textScroll;
   }
 
-  bool _showsPagedHeaderInfoBarFor(_ReaderViewportKind viewportKind) {
+  bool _showsPagedHeaderInfoBarFor(ReaderModeViewportKind viewportKind) {
     return false;
   }
 
@@ -823,7 +764,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _settings.infoShowBattery ||
       _settings.infoShowChapter;
 
-  bool _showsOuterFooterInfoBarFor(_ReaderViewportKind viewportKind) {
+  bool _showsOuterFooterInfoBarFor(ReaderModeViewportKind viewportKind) {
     return _showsOuterInfoBarsFor(viewportKind) &&
         (_settings.infoFooterEnabled ||
             (!_settings.infoHeaderEnabled &&
@@ -831,7 +772,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 _hasReaderInfoItems));
   }
 
-  bool _reservesPinnedHeaderSpaceFor(_ReaderViewportKind viewportKind) {
+  bool _reservesPinnedHeaderSpaceFor(ReaderModeViewportKind viewportKind) {
     return _showsOuterPinnedChapterHeaderFor(viewportKind) ||
         _showsPagedPinnedChapterHeaderFor(viewportKind);
   }
@@ -924,7 +865,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   _ReaderSurfaceReserves _resolveReaderSurfaceReserves(
     BuildContext context, {
-    _ReaderViewportKind? viewportKind,
+    ReaderModeViewportKind? viewportKind,
   }) {
     final effectiveViewportKind = viewportKind ?? _currentViewportKind;
     final footerPadding = _layoutResolver.resolveInfoBarPadding(
@@ -981,7 +922,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   ReaderSurfaceMetrics _resolveReaderSurfaceMetrics(
     BuildContext context, {
-    _ReaderViewportKind? viewportKind,
+    ReaderModeViewportKind? viewportKind,
     Size? viewportSize,
     double? scrollBottomReserve,
     double? pagedBottomReserve,
@@ -1293,13 +1234,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 chapters: _chapters,
               );
           final viewportKind = switch (_currentViewportKind) {
-            _ReaderViewportKind.textPaged =>
+            ReaderModeViewportKind.textPaged =>
               ReaderPresentationViewportKind.textPaged,
-            _ReaderViewportKind.textScroll =>
+            ReaderModeViewportKind.textScroll =>
               ReaderPresentationViewportKind.textScroll,
-            _ReaderViewportKind.mangaPaged =>
+            ReaderModeViewportKind.imagePaged =>
               ReaderPresentationViewportKind.mangaPaged,
-            _ReaderViewportKind.mangaContinuous =>
+            ReaderModeViewportKind.imageScroll =>
               ReaderPresentationViewportKind.mangaContinuous,
           };
           final shellModel = ReaderShellModel(
@@ -1813,9 +1754,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 ? ReaderInfoBarPlacement.header
                 : ReaderInfoBarPlacement.footer,
         role: switch ((_currentViewportKind, isHeader)) {
-          (_ReaderViewportKind.textScroll, true) =>
+          (ReaderModeViewportKind.textScroll, true) =>
             ReaderChromeRole.scrollHeader,
-          (_ReaderViewportKind.textScroll, false) =>
+          (ReaderModeViewportKind.textScroll, false) =>
             ReaderChromeRole.scrollFooter,
           (_, true) => ReaderChromeRole.pagedHeader,
           (_, false) => ReaderChromeRole.pagedFooter,
@@ -1973,10 +1914,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         model: const ReaderBodyRegionModel.content(),
         palette: palette,
         child: switch (_currentViewportKind) {
-          _ReaderViewportKind.mangaPaged ||
-          _ReaderViewportKind.mangaContinuous => _buildMangaReader(colors),
-          _ReaderViewportKind.textPaged => _buildPagedReader(colors),
-          _ReaderViewportKind.textScroll => _buildReaderList(colors),
+          ReaderModeViewportKind.imagePaged ||
+          ReaderModeViewportKind.imageScroll => _buildMangaReader(colors),
+          ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
+          ReaderModeViewportKind.textScroll => _buildReaderList(colors),
         },
       ),
     );
@@ -3120,7 +3061,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderPageAnimationStyle _currentPagedAnimationStyle() {
-    return _pagedTextRenderer.resolveAnimationStyle(_settings);
+    return _currentReaderMode.pageAnimationStyle ?? ReaderPageAnimationStyle.none;
   }
 
   ReaderAnimationPolicy _resolveAnimationPolicy({
@@ -3128,12 +3069,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ReaderPageTurnMode? pageTurnModeOverride,
   }) {
     final effectiveMode = modeOverride ?? _currentContentMode;
-    final effectivePageTurnMode =
-        pageTurnModeOverride ?? _settings.pageTurnMode;
-    return _animationPolicyResolver.resolve(
+    final effectiveSettings =
+        pageTurnModeOverride == null
+            ? _settings
+            : _settings.copyWith(pageTurnMode: pageTurnModeOverride);
+    final resolvedMode = _resolveReaderModeFor(
+      effectiveSettings,
       contentMode: effectiveMode,
+    );
+    return _animationPolicyResolver.resolve(
+      mode: resolvedMode,
       hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
-      usesScrollTrigger: _pageTurnUsesScroll(effectivePageTurnMode),
     );
   }
 
