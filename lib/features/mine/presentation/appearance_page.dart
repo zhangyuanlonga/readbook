@@ -238,6 +238,49 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     }
   }
 
+  Future<void> _previewBackground(String path) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.88),
+      builder: (context) {
+        return Dialog.fullscreen(
+          backgroundColor: Colors.transparent,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4,
+                  child: Center(
+                    child: Image.file(
+                      File(path),
+                      fit: BoxFit.contain,
+                      errorBuilder:
+                          (_, __, ___) => const Center(
+                            child: Text(
+                              '图片加载失败',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 8,
+                right: 12,
+                child: IconButton.filledTonal(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -1200,6 +1243,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 children: _backgroundPaths
                     .map((path) {
                       return GestureDetector(
+                        onTap: () => _previewBackground(path),
                         onLongPress: () => _confirmDeleteBackground(path),
                         child: Stack(
                           children: [
@@ -1217,6 +1261,28 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                             Positioned(
                               right: 6,
                               top: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  '点击预览',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 6,
+                              bottom: 6,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,

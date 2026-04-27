@@ -84,6 +84,7 @@ class ReaderSettings {
     this.textFullJustifyEnabled = false,
     this.letterSpacing = defaultLetterSpacing,
     this.brightness = 1,
+    this.followSystemBrightness = false,
     this.themeMode = ReaderThemeMode.light,
     this.pageTurnMode = ReaderPageTurnMode.tapAndSwipe,
     this.volumeKeyPageEnabled = false,
@@ -174,6 +175,7 @@ class ReaderSettings {
   static const double legacyMaxPinnedHeaderOffsetX = 160;
   static const double minPinnedHeaderOffsetY = -40;
   static const double maxPinnedHeaderOffsetY = 180;
+  static const double minChapterHeaderVerticalOffset = -20;
   static const double minChapterHeaderSpacing = 0;
   static const double maxChapterHeaderSpacing = 40;
 
@@ -185,6 +187,7 @@ class ReaderSettings {
   final bool textFullJustifyEnabled;
   final double letterSpacing;
   final double brightness;
+  final bool followSystemBrightness;
   final ReaderThemeMode themeMode;
   final ReaderPageTurnMode pageTurnMode;
   final bool volumeKeyPageEnabled;
@@ -301,6 +304,7 @@ class ReaderSettings {
     bool? textFullJustifyEnabled,
     double? letterSpacing,
     double? brightness,
+    bool? followSystemBrightness,
     ReaderThemeMode? themeMode,
     ReaderPageTurnMode? pageTurnMode,
     bool? volumeKeyPageEnabled,
@@ -414,6 +418,8 @@ class ReaderSettings {
               .clamp(minLetterSpacing, maxLetterSpacing)
               .toDouble(),
       brightness: brightness ?? this.brightness,
+      followSystemBrightness:
+          followSystemBrightness ?? this.followSystemBrightness,
       themeMode: themeMode ?? this.themeMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
       volumeKeyPageEnabled: volumeKeyPageEnabled ?? this.volumeKeyPageEnabled,
@@ -560,7 +566,7 @@ class ReaderSettings {
               .toDouble(),
       chapterHeaderVerticalOffset:
           (chapterHeaderVerticalOffset ?? this.chapterHeaderVerticalOffset)
-              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .clamp(minChapterHeaderVerticalOffset, maxChapterHeaderSpacing)
               .toDouble(),
       chapterHeaderMode: chapterHeaderMode ?? this.chapterHeaderMode,
       chapterHeaderTopSpacing:
@@ -592,6 +598,7 @@ class ReaderSettings {
       'textFullJustifyEnabled': textFullJustifyEnabled,
       'letterSpacing': letterSpacing,
       'brightness': brightness,
+      'followSystemBrightness': followSystemBrightness,
       'themeMode': themeMode.name,
       'pageTurnMode': pageTurnMode.name,
       'volumeKeyPageEnabled': volumeKeyPageEnabled,
@@ -806,6 +813,7 @@ class ReaderSettings {
               .clamp(minLetterSpacing, maxLetterSpacing)
               .toDouble(),
       brightness: _asDouble(json['brightness'])?.clamp(0.2, 1.0) ?? 1,
+      followSystemBrightness: _asBool(json['followSystemBrightness']) ?? false,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
       volumeKeyPageEnabled: _asBool(json['volumeKeyPageEnabled']) ?? false,
@@ -944,7 +952,7 @@ class ReaderSettings {
           (_asDouble(json['chapterHeaderVerticalOffset']) ??
                   (_asDouble(json['chapterHeaderTopSpacing']) ??
                       (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8)))
-              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .clamp(minChapterHeaderVerticalOffset, maxChapterHeaderSpacing)
               .toDouble(),
     );
   }

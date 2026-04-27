@@ -23,6 +23,7 @@ void main() {
         paragraphIndent: 4,
         letterSpacing: 0.12,
         brightness: 0.75,
+        followSystemBrightness: true,
         themeMode: ReaderThemeMode.sepia,
         pageTurnMode: ReaderPageTurnMode.tapAndSwipe,
         autoReadEnabled: true,
@@ -91,6 +92,7 @@ void main() {
       expect(restored.paragraphIndent, 4);
       expect(restored.letterSpacing, closeTo(0.12, 0.0001));
       expect(restored.brightness, 0.75);
+      expect(restored.followSystemBrightness, isTrue);
       expect(restored.themeMode, ReaderThemeMode.sepia);
       expect(restored.pageTurnMode, ReaderPageTurnMode.tapAndSwipe);
       expect(restored.autoReadEnabled, isTrue);

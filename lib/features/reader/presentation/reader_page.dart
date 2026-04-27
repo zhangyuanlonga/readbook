@@ -1193,6 +1193,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
     final appThemeMode = ref.read(appThemeModeProvider);
+    if (_settings.followSystemBrightness && mounted) {
+      setState(() {});
+    }
     if (appThemeMode != ThemeMode.system) {
       return;
     }
@@ -1310,7 +1313,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _readerBrightnessOverlayAlpha() {
-    if (_isSystemBrightnessOverrideActive) {
+    if (_settings.followSystemBrightness || _isSystemBrightnessOverrideActive) {
       return 0;
     }
     final alpha = (1 - _settings.brightness) * 0.6;
@@ -1366,6 +1369,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _applySystemReaderBrightness([double? brightness]) async {
+    if (_settings.followSystemBrightness) {
+      await _restoreSystemReaderBrightness();
+      return;
+    }
     final applied = await _screenBrightnessBridge.setReaderBrightness(
       brightness ?? _settings.brightness,
     );
@@ -6132,6 +6139,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final showInterfaceSettings = initialTab == _ReaderSettingsTab.interface;
     String? activeSettingsGroupKey;
     Timer? persistDraftTimer;
+    Timer? sliderInteractionTimer;
+    var isSliderInteracting = false;
     const settingsGroupingService = ReaderSettingsGroupingService();
 
     String fingerprint(ReaderSettings settings) {
@@ -6293,6 +6302,64 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   draft = next;
                 });
                 previewDraftSettings();
+              }
+
+              void setSliderInteractionPreview(
+                bool active, {
+                bool delayedRestore = false,
+              }) {
+                sliderInteractionTimer?.cancel();
+                if (delayedRestore && !active) {
+                  sliderInteractionTimer = Timer(
+                    const Duration(milliseconds: 180),
+                    () {
+                      if (!mounted ||
+                          !context.mounted ||
+                          !isSliderInteracting) {
+                        return;
+                      }
+                      setModalState(() {
+                        isSliderInteracting = false;
+                      });
+                    },
+                  );
+                  return;
+                }
+                if (isSliderInteracting == active) {
+                  return;
+                }
+                setModalState(() {
+                  isSliderInteracting = active;
+                });
+              }
+
+              Slider buildPreviewAwareSlider({
+                required double min,
+                required double max,
+                required int? divisions,
+                required double value,
+                required ValueChanged<double>? onChanged,
+                String? label,
+              }) {
+                return Slider(
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  value: value,
+                  label: label,
+                  onChangeStart:
+                      onChanged == null
+                          ? null
+                          : (_) => setSliderInteractionPreview(true),
+                  onChangeEnd:
+                      onChanged == null
+                          ? null
+                          : (_) => setSliderInteractionPreview(
+                            false,
+                            delayedRestore: true,
+                          ),
+                  onChanged: onChanged,
+                );
               }
 
               Future<void> persistBackgroundDraftNow(
@@ -7126,7 +7193,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               icon: const Icon(Icons.remove_rounded),
                             ),
                             Expanded(
-                              child: Slider(
+                              child: buildPreviewAwareSlider(
                                 min: ReaderSettings.minLayoutMargin,
                                 max: ReaderSettings.maxLayoutMargin,
                                 divisions:
@@ -7581,7 +7648,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                       ),
                       Expanded(
-                        child: Slider(
+                        child: buildPreviewAwareSlider(
                           min: min,
                           max: max,
                           divisions: divisions,
@@ -8378,9 +8445,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                       buildTypographySliderRow(
                         label: '纵向',
-                        min: ReaderSettings.minChapterHeaderSpacing,
+                        min: ReaderSettings.minChapterHeaderVerticalOffset,
                         max: ReaderSettings.maxChapterHeaderSpacing,
-                        divisions: 20,
+                        divisions:
+                            (ReaderSettings.maxChapterHeaderSpacing -
+                                    ReaderSettings
+                                        .minChapterHeaderVerticalOffset)
+                                .round(),
                         value: draft.chapterHeaderVerticalOffset,
                         step: 1,
                         valueLabel:
@@ -8445,86 +8516,155 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   null =>
                     showInterfaceSettings
                         ? <Widget>[
-                          Row(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '亮度',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Slider(
-                                  min: 0.2,
-                                  max: 1,
-                                  divisions: 8,
-                                  value: draft.brightness,
-                                  onChanged: (value) {
-                                    setModalState(() {
-                                      draft = draft.copyWith(brightness: value);
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                height: 48,
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    final selected =
-                                        draft.themeMode !=
-                                        ReaderThemeMode.sepia;
-                                    setModalState(() {
-                                      draft = draft.copyWith(
-                                        themeMode:
-                                            selected
-                                                ? ReaderThemeMode.sepia
-                                                : ReaderThemeMode.light,
-                                        backgroundStyle:
-                                            selected
-                                                ? ReaderBackgroundStyle.warm
-                                                : ReaderBackgroundStyle.plain,
-                                        backgroundTone:
-                                            selected
-                                                ? ReaderBackgroundTone.container
-                                                : ReaderBackgroundTone.surface,
-                                      );
-                                    });
-                                  },
-                                  style: TextButton.styleFrom(
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: compactScaleValue(6),
-                                      vertical: compactScaleValue(10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '亮度',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          draft.followSystemBrightness
+                                              ? '当前跟随系统亮度变化'
+                                              : '关闭后可单独调节阅读器亮度',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  icon: Icon(
-                                    draft.themeMode == ReaderThemeMode.sepia
-                                        ? Icons.visibility_rounded
-                                        : Icons.visibility_outlined,
-                                    size: compactScaleValue(16),
-                                    color:
+                                  Switch.adaptive(
+                                    value: draft.followSystemBrightness,
+                                    onChanged: (enabled) {
+                                      setModalState(() {
+                                        draft = draft.copyWith(
+                                          followSystemBrightness: enabled,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                  SizedBox(
+                                    height: 48,
+                                    child: TextButton.icon(
+                                      onPressed: () {
+                                        final selected =
+                                            draft.themeMode !=
+                                            ReaderThemeMode.sepia;
+                                        setModalState(() {
+                                          draft = draft.copyWith(
+                                            themeMode:
+                                                selected
+                                                    ? ReaderThemeMode.sepia
+                                                    : ReaderThemeMode.light,
+                                            backgroundStyle:
+                                                selected
+                                                    ? ReaderBackgroundStyle.warm
+                                                    : ReaderBackgroundStyle
+                                                        .plain,
+                                            backgroundTone:
+                                                selected
+                                                    ? ReaderBackgroundTone
+                                                        .container
+                                                    : ReaderBackgroundTone
+                                                        .surface,
+                                          );
+                                        });
+                                      },
+                                      style: TextButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: compactScaleValue(6),
+                                          vertical: compactScaleValue(10),
+                                        ),
+                                      ),
+                                      icon: Icon(
                                         draft.themeMode == ReaderThemeMode.sepia
-                                            ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                            : Theme.of(
+                                            ? Icons.visibility_rounded
+                                            : Icons.visibility_outlined,
+                                        size: compactScaleValue(16),
+                                        color:
+                                            draft.themeMode ==
+                                                    ReaderThemeMode.sepia
+                                                ? Theme.of(
+                                                  context,
+                                                ).colorScheme.primary
+                                                : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                      ),
+                                      label: Text(
+                                        '护眼',
+                                        style: TextStyle(
+                                          color:
+                                              draft.themeMode ==
+                                                      ReaderThemeMode.sepia
+                                                  ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                  : null,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: buildPreviewAwareSlider(
+                                      min: 0.2,
+                                      max: 1,
+                                      divisions: 8,
+                                      value: draft.brightness,
+                                      onChanged:
+                                          draft.followSystemBrightness
+                                              ? null
+                                              : (value) {
+                                                setModalState(() {
+                                                  draft = draft.copyWith(
+                                                    brightness: value,
+                                                  );
+                                                });
+                                              },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    width: 52,
+                                    child: Text(
+                                      draft.followSystemBrightness
+                                          ? '系统'
+                                          : '${(draft.brightness * 100).round()}%',
+                                      textAlign: TextAlign.right,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color:
+                                            Theme.of(
                                               context,
                                             ).colorScheme.onSurfaceVariant,
-                                  ),
-                                  label: Text(
-                                    '护眼',
-                                    style: TextStyle(
-                                      color:
-                                          draft.themeMode ==
-                                                  ReaderThemeMode.sepia
-                                              ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
-                                              : null,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
                             ],
                           ),
@@ -9450,7 +9590,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      Slider(
+                      buildPreviewAwareSlider(
                         min: ReaderSettings.minAutoReadSpeed,
                         max: ReaderSettings.maxAutoReadSpeed,
                         divisions: 20,
@@ -9489,7 +9629,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 return AnimatedPadding(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
+                  padding: EdgeInsets.only(bottom: keyboardInset),
                   child: SafeArea(
                     child: FractionallySizedBox(
                       heightFactor: _adaptiveReaderSheetHeightFactor(
@@ -9550,7 +9690,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 const SizedBox(height: 6),
                                 Expanded(
                                   child: ListView(
-                                    padding: const EdgeInsets.only(bottom: 4),
+                                    padding: EdgeInsets.only(
+                                      bottom: safeBottom + 12,
+                                    ),
                                     children: selectedCards,
                                   ),
                                 ),
@@ -9573,7 +9715,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               return AnimatedPadding(
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
+                padding: EdgeInsets.only(bottom: keyboardInset),
                 child: SafeArea(
                   child: FractionallySizedBox(
                     heightFactor: sheetHeightFactor,
@@ -9604,7 +9746,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               const SizedBox(height: 6),
                               Expanded(
                                 child: ListView(
-                                  padding: const EdgeInsets.only(bottom: 4),
+                                  padding: EdgeInsets.only(
+                                    bottom: safeBottom + 12,
+                                  ),
                                   children: [
                                     if (showInterfaceSection) ...[
                                       _buildSettingLine(
@@ -9617,27 +9761,69 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             Row(
                                               children: [
                                                 Expanded(
-                                                  child: Slider(
+                                                  child: Text(
+                                                    draft.followSystemBrightness
+                                                        ? '当前跟随系统亮度变化'
+                                                        : '关闭后可单独调节阅读器亮度',
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.bodySmall?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Switch.adaptive(
+                                                  value:
+                                                      draft
+                                                          .followSystemBrightness,
+                                                  onChanged: (enabled) {
+                                                    setModalState(() {
+                                                      draft = draft.copyWith(
+                                                        followSystemBrightness:
+                                                            enabled,
+                                                      );
+                                                    });
+                                                    previewDraftSettings();
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: buildPreviewAwareSlider(
                                                     min: 0.2,
                                                     max: 1,
                                                     divisions: 8,
                                                     value: draft.brightness,
                                                     label:
                                                         '${(draft.brightness * 100).round()}%',
-                                                    onChanged: (value) {
-                                                      setModalState(() {
-                                                        draft = draft.copyWith(
-                                                          brightness: value,
-                                                        );
-                                                      });
-                                                      previewDraftSettings();
-                                                    },
+                                                    onChanged:
+                                                        draft.followSystemBrightness
+                                                            ? null
+                                                            : (value) {
+                                                              setModalState(() {
+                                                                draft = draft
+                                                                    .copyWith(
+                                                                      brightness:
+                                                                          value,
+                                                                    );
+                                                              });
+                                                              previewDraftSettings();
+                                                            },
                                                   ),
                                                 ),
                                                 SizedBox(
                                                   width: 44,
                                                   child: Text(
-                                                    '${(draft.brightness * 100).round()}%',
+                                                    draft.followSystemBrightness
+                                                        ? '系统'
+                                                        : '${(draft.brightness * 100).round()}%',
                                                     textAlign: TextAlign.right,
                                                     style: Theme.of(context)
                                                         .textTheme
@@ -10842,6 +11028,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       },
     );
+    sliderInteractionTimer?.cancel();
 
     persistDraftTimer?.cancel();
     await persistDraftNow(draft);

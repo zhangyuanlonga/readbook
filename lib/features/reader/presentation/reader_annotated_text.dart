@@ -116,6 +116,7 @@ class ReaderAnnotatedText extends StatelessWidget {
                   textPainter: textPainter,
                   start: indentLength,
                   end: displayText.length,
+                  excludedLeadingLength: indentLength,
                   color: bodyDecorationColor ?? baseStyle.color ?? Colors.black,
                   style: bodyDecorationStyle,
                   thickness: bodyDecorationThickness,
@@ -291,6 +292,7 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
     required this.textPainter,
     required this.start,
     required this.end,
+    required this.excludedLeadingLength,
     required this.color,
     required this.style,
     required this.thickness,
@@ -302,6 +304,7 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
   final TextPainter textPainter;
   final int start;
   final int end;
+  final int excludedLeadingLength;
   final Color color;
   final ReaderBodyTextDecorationStyle style;
   final double thickness;
@@ -330,9 +333,25 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
           ..strokeCap = StrokeCap.round;
     final dashGap = math.max(1.0, dashLength * (dashGapRatio / 6));
     final lineMetrics = textPainter.computeLineMetrics();
+    final excludedBoxes =
+        excludedLeadingLength <= 0
+            ? const <TextBox>[]
+            : textPainter.getBoxesForSelection(
+              TextSelection(
+                baseOffset: 0,
+                extentOffset: excludedLeadingLength.clamp(0, end),
+              ),
+            );
 
     for (final box in boxes) {
-      final rect = box.toRect();
+      final adjustedRect = _trimLeadingExcludedRange(
+        box.toRect(),
+        excludedBoxes,
+      );
+      if (adjustedRect == null) {
+        continue;
+      }
+      final rect = adjustedRect;
       if (rect.width <= 0) {
         continue;
       }
@@ -353,6 +372,31 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
         x = nextX + dashGap;
       }
     }
+  }
+
+  Rect? _trimLeadingExcludedRange(Rect rect, List<TextBox> excludedBoxes) {
+    if (excludedBoxes.isEmpty) {
+      return rect;
+    }
+
+    double? trimmedLeft;
+    for (final excluded in excludedBoxes) {
+      final excludedRect = excluded.toRect();
+      final verticallyOverlaps =
+          rect.bottom > excludedRect.top && rect.top < excludedRect.bottom;
+      if (!verticallyOverlaps) {
+        continue;
+      }
+      trimmedLeft = math.max(trimmedLeft ?? rect.left, excludedRect.right);
+    }
+
+    if (trimmedLeft == null) {
+      return rect;
+    }
+    if (trimmedLeft >= rect.right) {
+      return null;
+    }
+    return Rect.fromLTRB(trimmedLeft, rect.top, rect.right, rect.bottom);
   }
 
   double _resolveBaselineY({
@@ -377,6 +421,7 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
   bool shouldRepaint(covariant ReaderBodyUnderlinePainter oldDelegate) {
     return oldDelegate.start != start ||
         oldDelegate.end != end ||
+        oldDelegate.excludedLeadingLength != excludedLeadingLength ||
         oldDelegate.color != color ||
         oldDelegate.style != style ||
         oldDelegate.thickness != thickness ||

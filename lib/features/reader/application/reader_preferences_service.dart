@@ -25,6 +25,8 @@ class ReaderPreferencesService {
       'reader.settings.textFullJustifyEnabled';
   static const String _letterSpacingKey = 'reader.settings.letterSpacing';
   static const String _brightnessKey = 'reader.settings.brightness';
+  static const String _followSystemBrightnessKey =
+      'reader.settings.followSystemBrightness';
   static const String _themeModeKey = 'reader.settings.themeMode';
   static const String _pageTurnModeKey = 'reader.settings.pageTurnMode';
   static const String _volumeKeyPageEnabledKey =
@@ -282,6 +284,8 @@ class ReaderPreferencesService {
               )
               .toDouble(),
       brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
+      followSystemBrightness:
+          prefs.getBool(_followSystemBrightnessKey) ?? false,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
       volumeKeyPageEnabled: prefs.getBool(_volumeKeyPageEnabledKey) ?? false,
@@ -481,6 +485,10 @@ class ReaderPreferencesService {
     );
     await prefs.setDouble(_letterSpacingKey, settings.letterSpacing);
     await prefs.setDouble(_brightnessKey, settings.brightness);
+    await prefs.setBool(
+      _followSystemBrightnessKey,
+      settings.followSystemBrightness,
+    );
     await prefs.setString(_themeModeKey, settings.themeMode.name);
     await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
     await prefs.setBool(
