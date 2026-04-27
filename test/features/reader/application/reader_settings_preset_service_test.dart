@@ -17,7 +17,7 @@ void main() {
       expect(next.brightness, 0.72);
       expect(next.autoReadEnabled, isTrue);
       expect(next.fontSize, 19);
-      expect(next.lineHeight, 1.82);
+      expect(next.lineHeight, 1.74);
       expect(next.fontWeightLevel, ReaderFontWeightLevel.medium);
       expect(next.textFullJustifyEnabled, isTrue);
     });
@@ -28,18 +28,19 @@ void main() {
         ReaderSpacingPreset.relaxed,
       );
 
-      expect(next.paragraphSpacing, 18);
+      expect(next.paragraphSpacing, 3);
       expect(next.paragraphIndent, 2);
     });
 
-    test('applies chapter header preset to pinned offsets', () {
+    test('applies chapter header preset to chapter header semantics', () {
       final next = service.applyChapterHeaderPreset(
         const ReaderSettings(),
         ReaderChapterHeaderPreset.immersive,
       );
 
-      expect(next.pinnedChapterHeaderOffsetX, closeTo(0.08, 0.0001));
-      expect(next.pinnedChapterHeaderOffsetY, 18);
+      expect(next.chapterHeaderMode, ReaderChapterHeaderMode.center);
+      expect(next.chapterHeaderTopSpacing, 8);
+      expect(next.chapterHeaderBottomSpacing, 6);
     });
 
     test('applies info style preset to header and footer presentation', () {

@@ -30,7 +30,9 @@ import '../application/source_health_action_policy_service.dart';
 import '../application/source_login_runtime_service.dart';
 import '../application/source_check_service.dart';
 import '../application/source_health_service.dart';
+import '../application/source_page_flow_coordinator.dart';
 import '../application/source_runtime_facade.dart';
+import '../providers.dart';
 import 'source_login_page.dart';
 import 'script_source_debug_page.dart';
 
@@ -464,7 +466,7 @@ class _SourceWebsiteClusterSummary {
   final String? recommendedSourceId;
 }
 
-class SourcePage extends StatefulWidget {
+class SourcePage extends ConsumerStatefulWidget {
   const SourcePage({
     super.key,
     this.sourceRuntimeFacade,
@@ -481,10 +483,10 @@ class SourcePage extends StatefulWidget {
   final bool enableRouterNavigation;
 
   @override
-  State<SourcePage> createState() => _SourcePageState();
+  ConsumerState<SourcePage> createState() => _SourcePageState();
 }
 
-class _SourcePageState extends State<SourcePage> {
+class _SourcePageState extends ConsumerState<SourcePage> {
   static const String _ungroupedGroupKey = '__ungrouped__';
   static const String _duplicateGroupKey = '__duplicate__';
   late final SourceRuntimeFacade _sourceRuntimeFacade;
@@ -492,11 +494,10 @@ class _SourcePageState extends State<SourcePage> {
   late final SourceHealthService _sourceHealthService;
   late final SourceHealthActionPolicyService _policyService;
   late final TextEditingController _searchController;
-  final AuthSessionStore _authSessionStore = AuthSessionStore();
-  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
-  final SourceLoginRuntimeService _sourceLoginRuntimeService =
-      SourceLoginRuntimeService();
-  StreamSubscription<AuthEvent>? _authEventSub;
+  late final AuthSessionStore _authSessionStore;
+  late final MobileFeatureService _mobileFeatureService;
+  late final SourceLoginRuntimeService _sourceLoginRuntimeService;
+  late final SourcePageFlowCoordinator _pageFlowCoordinator;
   List<ScriptSource> _lastRawSources = const <ScriptSource>[];
   List<ScriptSource> _lastVisibleSources = const <ScriptSource>[];
 
@@ -507,7 +508,6 @@ class _SourcePageState extends State<SourcePage> {
   final Set<String> _changingEnabledScriptSourceIds = <String>{};
   final Set<String> _deletingScriptSourceIds = <String>{};
   final Dio _importDio = Dio();
-  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
   bool _isConsumingExternalImportPayloads = false;
   bool _isFeatureAccessLoading = true;
   bool _canAccessSourcePage = false;
@@ -517,21 +517,23 @@ class _SourcePageState extends State<SourcePage> {
   void initState() {
     super.initState();
     _sourceRuntimeFacade =
-        widget.sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
-    _sourceCheckService = widget.sourceCheckService ?? SourceCheckService();
+        widget.sourceRuntimeFacade ?? ref.read(sourceRuntimeFacadeProvider);
+    _sourceCheckService =
+        widget.sourceCheckService ?? ref.read(sourceCheckServiceProvider);
     _sourceHealthService =
-        widget.sourceHealthService ?? SourceHealthService.instance;
+        widget.sourceHealthService ?? ref.read(sourceHealthServiceProvider);
     _policyService = const SourceHealthActionPolicyService();
+    _authSessionStore = ref.read(sourceAuthSessionStoreProvider);
+    _mobileFeatureService = ref.read(sourceMobileFeatureServiceProvider);
+    _sourceLoginRuntimeService = ref.read(sourceLoginRuntimeServiceProvider);
+    _pageFlowCoordinator = ref.read(sourcePageFlowCoordinatorFactoryProvider)();
     _searchController = TextEditingController();
-    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
-      payload,
-    ) {
-      if (payload.type != ExternalImportPayloadType.scriptSource) {
-        return;
-      }
-      unawaited(_consumePendingExternalImportPayloads());
-    });
-    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
+    _pageFlowCoordinator.initialize(
+      onPendingImportAvailable: () {
+        unawaited(_consumePendingExternalImportPayloads());
+      },
+      onAuthEvent: _handleAuthEvent,
+    );
     if (widget.bootstrapOnInit) {
       unawaited(_reloadScriptSourcesSilently());
     }
@@ -546,8 +548,7 @@ class _SourcePageState extends State<SourcePage> {
 
   @override
   void dispose() {
-    _incomingImportSub?.cancel();
-    _authEventSub?.cancel();
+    unawaited(_pageFlowCoordinator.dispose());
     _searchController.dispose();
     super.dispose();
   }
@@ -2260,15 +2261,9 @@ class _SourcePageState extends State<SourcePage> {
 
     _isConsumingExternalImportPayloads = true;
     try {
-      while (mounted) {
-        final payload = ExternalImportBridge.instance.consumePendingPayload(
-          type: ExternalImportPayloadType.scriptSource,
-        );
-        if (payload == null) {
-          break;
-        }
-        await _importFromExternalPayload(payload);
-      }
+      await _pageFlowCoordinator.consumePendingScriptSourcePayloads(
+        _importFromExternalPayload,
+      );
     } finally {
       _isConsumingExternalImportPayloads = false;
     }
@@ -2277,9 +2272,7 @@ class _SourcePageState extends State<SourcePage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
-    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
-      payload,
-    );
+    final cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
     if (cached == null) {
       ExternalImportDiagnostics.logCacheFailed(payload);
       _showMessage(

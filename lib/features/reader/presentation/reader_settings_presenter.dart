@@ -23,9 +23,7 @@ class ReaderSettingsPresenter {
   }
 
   String bodyMarginDisplayValue(ReaderSettings settings) {
-    return settings.bodyMarginMode == ReaderBodyMarginMode.preset
-        ? bodyMarginPresetLabel(settings.bodyMarginPreset)
-        : '自定义';
+    return '上${settings.bodyMarginTop.round()} 下${settings.bodyMarginBottom.round()} 左${settings.bodyMarginLeft.round()} 右${settings.bodyMarginRight.round()}';
   }
 
   String autoReadSpeedLevelLabel(double speed) {
@@ -89,7 +87,7 @@ class ReaderSettingsPresenter {
 
   String pageAnimationLabel(ReaderPageAnimationStyle style) {
     return switch (style) {
-      ReaderPageAnimationStyle.curl => '卷页',
+      ReaderPageAnimationStyle.curl => '仿真',
       ReaderPageAnimationStyle.fade => '淡入淡出',
       ReaderPageAnimationStyle.cover => '覆盖',
       ReaderPageAnimationStyle.translate => '平移',

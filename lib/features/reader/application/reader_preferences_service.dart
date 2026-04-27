@@ -124,6 +124,18 @@ class ReaderPreferencesService {
       'reader.settings.infoFooterMarginLeft';
   static const String _infoFooterMarginRightKey =
       'reader.settings.infoFooterMarginRight';
+  static const String _showChapterHeaderKey =
+      'reader.settings.showChapterHeader';
+  static const String _chapterHeaderHorizontalOffsetKey =
+      'reader.settings.chapterHeaderHorizontalOffset';
+  static const String _chapterHeaderVerticalOffsetKey =
+      'reader.settings.chapterHeaderVerticalOffset';
+  static const String _chapterHeaderModeKey =
+      'reader.settings.chapterHeaderMode';
+  static const String _chapterHeaderTopSpacingKey =
+      'reader.settings.chapterHeaderTopSpacing';
+  static const String _chapterHeaderBottomSpacingKey =
+      'reader.settings.chapterHeaderBottomSpacing';
   static const String _pinnedChapterHeaderOffsetXKey =
       'reader.settings.pinnedChapterHeaderOffsetX';
   static const String _pinnedChapterHeaderOffsetYKey =
@@ -214,9 +226,17 @@ class ReaderPreferencesService {
       (item) => item.name == bodyMarginPresetName,
       orElse: () => ReaderBodyMarginPreset.standard,
     );
+    final chapterHeaderModeName = prefs.getString(_chapterHeaderModeKey);
+    final legacyChapterHeaderMode = ReaderChapterHeaderMode.values.firstWhere(
+      (item) => item.name == chapterHeaderModeName,
+      orElse:
+          () => ReaderSettings.inferChapterHeaderModeFromLegacy(
+            legacyOffsetX: prefs.getDouble(_pinnedChapterHeaderOffsetXKey) ?? 0,
+          ),
+    );
 
     final legacyHorizontalPadding =
-        prefs.getDouble(_horizontalPaddingKey) ?? 18;
+        prefs.getDouble(_horizontalPaddingKey) ?? 16;
     final bodyMarginLeft =
         (prefs.getDouble(_bodyMarginLeftKey) ?? legacyHorizontalPadding)
             .clamp(
@@ -374,14 +394,14 @@ class ReaderPreferencesService {
       bodyMarginMode: bodyMarginMode,
       bodyMarginPreset: bodyMarginPreset,
       bodyMarginTop:
-          (prefs.getDouble(_bodyMarginTopKey) ?? 18)
+          (prefs.getDouble(_bodyMarginTopKey) ?? 6)
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxLayoutMargin,
               )
               .toDouble(),
       bodyMarginBottom:
-          (prefs.getDouble(_bodyMarginBottomKey) ?? 18)
+          (prefs.getDouble(_bodyMarginBottomKey) ?? 6)
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxLayoutMargin,
@@ -416,6 +436,46 @@ class ReaderPreferencesService {
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      showChapterHeader:
+          prefs.getBool(_showChapterHeaderKey) ??
+          ReaderSettings.inferShowChapterHeaderFromLegacy(
+            legacyMode: legacyChapterHeaderMode,
+          ),
+      chapterHeaderHorizontalOffset:
+          (prefs.getDouble(_chapterHeaderHorizontalOffsetKey) ??
+                  ReaderSettings.normalizePinnedChapterHeaderOffsetX(
+                    prefs.getDouble(_pinnedChapterHeaderOffsetXKey) ?? 0,
+                  ))
+              .clamp(
+                ReaderSettings.minPinnedHeaderOffsetX,
+                ReaderSettings.maxPinnedHeaderOffsetX,
+              )
+              .toDouble(),
+      chapterHeaderVerticalOffset:
+          (prefs.getDouble(_chapterHeaderVerticalOffsetKey) ??
+                  (prefs.getDouble(_chapterHeaderTopSpacingKey) ??
+                      (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8)))
+              .clamp(
+                ReaderSettings.minChapterHeaderSpacing,
+                ReaderSettings.maxChapterHeaderSpacing,
+              )
+              .toDouble(),
+      chapterHeaderMode: legacyChapterHeaderMode,
+      chapterHeaderTopSpacing:
+          (prefs.getDouble(_chapterHeaderTopSpacingKey) ??
+                  (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8))
+              .clamp(
+                ReaderSettings.minChapterHeaderSpacing,
+                ReaderSettings.maxChapterHeaderSpacing,
+              )
+              .toDouble(),
+      chapterHeaderBottomSpacing:
+          (prefs.getDouble(_chapterHeaderBottomSpacingKey) ?? 0)
+              .clamp(
+                ReaderSettings.minChapterHeaderSpacing,
+                ReaderSettings.maxChapterHeaderSpacing,
               )
               .toDouble(),
       pinnedChapterHeaderOffsetX:
@@ -595,13 +655,26 @@ class ReaderPreferencesService {
       _infoFooterMarginRightKey,
       settings.infoFooterMarginRight,
     );
+    await prefs.setBool(_showChapterHeaderKey, settings.showChapterHeader);
     await prefs.setDouble(
-      _pinnedChapterHeaderOffsetXKey,
-      settings.pinnedChapterHeaderOffsetX,
+      _chapterHeaderHorizontalOffsetKey,
+      settings.chapterHeaderHorizontalOffset,
     );
     await prefs.setDouble(
-      _pinnedChapterHeaderOffsetYKey,
-      settings.pinnedChapterHeaderOffsetY,
+      _chapterHeaderVerticalOffsetKey,
+      settings.chapterHeaderVerticalOffset,
+    );
+    await prefs.setString(
+      _chapterHeaderModeKey,
+      settings.chapterHeaderMode.name,
+    );
+    await prefs.setDouble(
+      _chapterHeaderTopSpacingKey,
+      settings.chapterHeaderTopSpacing,
+    );
+    await prefs.setDouble(
+      _chapterHeaderBottomSpacingKey,
+      settings.chapterHeaderBottomSpacing,
     );
     final backgroundImageBase64 = settings.backgroundImageBase64;
     if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {

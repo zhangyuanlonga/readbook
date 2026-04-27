@@ -50,12 +50,14 @@ class ReaderBodyLayoutSettings {
 
 class ReaderChapterHeaderSettings {
   const ReaderChapterHeaderSettings({
-    required this.pinnedChapterHeaderOffsetX,
-    required this.pinnedChapterHeaderOffsetY,
+    required this.mode,
+    required this.topSpacing,
+    required this.bottomSpacing,
   });
 
-  final double pinnedChapterHeaderOffsetX;
-  final double pinnedChapterHeaderOffsetY;
+  final ReaderChapterHeaderMode mode;
+  final double topSpacing;
+  final double bottomSpacing;
 }
 
 class ReaderInfoBarSettings {
@@ -182,8 +184,9 @@ class ReaderSettingsGroupingService {
         bodyMarginRight: settings.bodyMarginRight,
       ),
       chapterHeader: ReaderChapterHeaderSettings(
-        pinnedChapterHeaderOffsetX: settings.pinnedChapterHeaderOffsetX,
-        pinnedChapterHeaderOffsetY: settings.pinnedChapterHeaderOffsetY,
+        mode: settings.chapterHeaderMode,
+        topSpacing: settings.chapterHeaderTopSpacing,
+        bottomSpacing: settings.chapterHeaderBottomSpacing,
       ),
       infoBar: ReaderInfoBarSettings(
         infoHeaderEnabled: settings.infoHeaderEnabled,
@@ -253,8 +256,9 @@ class ReaderSettingsGroupingService {
       bodyMarginBottom: bodyLayout?.bodyMarginBottom,
       bodyMarginLeft: bodyLayout?.bodyMarginLeft,
       bodyMarginRight: bodyLayout?.bodyMarginRight,
-      pinnedChapterHeaderOffsetX: chapterHeader?.pinnedChapterHeaderOffsetX,
-      pinnedChapterHeaderOffsetY: chapterHeader?.pinnedChapterHeaderOffsetY,
+      chapterHeaderMode: chapterHeader?.mode,
+      chapterHeaderTopSpacing: chapterHeader?.topSpacing,
+      chapterHeaderBottomSpacing: chapterHeader?.bottomSpacing,
       infoHeaderEnabled: infoBar?.infoHeaderEnabled,
       infoFooterEnabled: infoBar?.infoFooterEnabled,
       infoShowTime: infoBar?.infoShowTime,

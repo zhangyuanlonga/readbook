@@ -8,6 +8,23 @@ import 'reader_surface_metrics.dart';
 class ReaderLayoutResolver {
   const ReaderLayoutResolver();
 
+  bool showsPinnedChapterHeader(ReaderSettings settings) {
+    return settings.showChapterHeader;
+  }
+
+  double resolveChapterHeaderTopSpacing(ReaderSettings settings) {
+    return settings.chapterHeaderVerticalOffset
+        .clamp(
+          ReaderSettings.minChapterHeaderSpacing,
+          ReaderSettings.maxChapterHeaderSpacing,
+        )
+        .toDouble();
+  }
+
+  double resolveChapterHeaderBottomSpacing(ReaderSettings settings) {
+    return 0;
+  }
+
   EdgeInsets resolveBodyPadding(ReaderSettings settings) {
     final margins = settings.effectiveBodyMarginValues;
     return EdgeInsets.fromLTRB(

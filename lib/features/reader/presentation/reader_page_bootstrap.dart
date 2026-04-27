@@ -164,7 +164,9 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     _cancelBackgroundRefreshConflictForCurrentBook();
     try {
       final loadedSettings = await _preferencesService.loadSettings();
-      var normalizedSettings = loadedSettings;
+      var normalizedSettings = _typographyMetricsResolver.normalizeSettings(
+        loadedSettings,
+      );
       var availableCustomFonts = const <ReaderCustomFontEntry>[];
       var storedCustomBackgrounds = const <String>[];
 
@@ -186,6 +188,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           clearCustomFontPath: true,
         );
       }
+
+      normalizedSettings = _typographyMetricsResolver.normalizeSettings(
+        normalizedSettings,
+      );
 
       var infoSettingsChanged = false;
       if (!normalizedSettings.infoShowTime &&
@@ -228,7 +234,16 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           normalizedSettings.fontSource != loadedSettings.fontSource ||
           normalizedSettings.fontFamilyKey != loadedSettings.fontFamilyKey ||
           normalizedSettings.customFontPath != loadedSettings.customFontPath;
-      if (fontSettingsChanged || infoSettingsChanged) {
+      final typographySettingsChanged =
+          normalizedSettings.lineHeight != loadedSettings.lineHeight ||
+          normalizedSettings.paragraphSpacing !=
+              loadedSettings.paragraphSpacing ||
+          normalizedSettings.paragraphIndent !=
+              loadedSettings.paragraphIndent ||
+          normalizedSettings.letterSpacing != loadedSettings.letterSpacing;
+      if (fontSettingsChanged ||
+          infoSettingsChanged ||
+          typographySettingsChanged) {
         await _preferencesService.saveSettings(normalizedSettings);
       }
 

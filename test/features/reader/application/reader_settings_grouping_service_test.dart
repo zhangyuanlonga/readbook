@@ -44,6 +44,9 @@ void main() {
         infoFooterMarginBottom: 6,
         infoFooterMarginLeft: 7,
         infoFooterMarginRight: 8,
+        chapterHeaderMode: ReaderChapterHeaderMode.center,
+        chapterHeaderTopSpacing: 22,
+        chapterHeaderBottomSpacing: 6,
         pinnedChapterHeaderOffsetX: 0.3,
         pinnedChapterHeaderOffsetY: 22,
         backgroundStyle: ReaderBackgroundStyle.warm,
@@ -72,7 +75,9 @@ void main() {
       expect(groups.typography.fontFamilyKey, 'reader_font');
       expect(groups.bodyLayout.bodyMarginMode, ReaderBodyMarginMode.custom);
       expect(groups.bodyLayout.bodyMarginLeft, 14);
-      expect(groups.chapterHeader.pinnedChapterHeaderOffsetX, 0.3);
+      expect(groups.chapterHeader.mode, ReaderChapterHeaderMode.center);
+      expect(groups.chapterHeader.topSpacing, 22);
+      expect(groups.chapterHeader.bottomSpacing, 6);
       expect(groups.infoBar.infoHeaderEnabled, isTrue);
       expect(groups.infoBar.infoFooterMarginRight, 8);
       expect(
@@ -117,8 +122,9 @@ void main() {
           bodyMarginRight: 11,
         ),
         chapterHeader: const ReaderChapterHeaderSettings(
-          pinnedChapterHeaderOffsetX: 0.2,
-          pinnedChapterHeaderOffsetY: 18,
+          mode: ReaderChapterHeaderMode.center,
+          topSpacing: 18,
+          bottomSpacing: 4,
         ),
       );
 
@@ -127,7 +133,9 @@ void main() {
       expect(merged.pageTurnMode, ReaderPageTurnMode.tapAndSwipe);
       expect(merged.fontSize, 20);
       expect(merged.bodyMarginRight, 11);
-      expect(merged.pinnedChapterHeaderOffsetY, 18);
+      expect(merged.chapterHeaderMode, ReaderChapterHeaderMode.center);
+      expect(merged.chapterHeaderTopSpacing, 18);
+      expect(merged.chapterHeaderBottomSpacing, 4);
     });
   });
 }

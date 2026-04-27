@@ -463,8 +463,9 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
       infoFooterMarginBottom: defaults.infoFooterMarginBottom,
       infoFooterMarginLeft: defaults.infoFooterMarginLeft,
       infoFooterMarginRight: defaults.infoFooterMarginRight,
-      pinnedChapterHeaderOffsetX: defaults.pinnedChapterHeaderOffsetX,
-      pinnedChapterHeaderOffsetY: defaults.pinnedChapterHeaderOffsetY,
+      showChapterHeader: defaults.showChapterHeader,
+      chapterHeaderHorizontalOffset: defaults.chapterHeaderHorizontalOffset,
+      chapterHeaderVerticalOffset: defaults.chapterHeaderVerticalOffset,
       clearBackgroundImage: true,
     );
   }
@@ -499,8 +500,7 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
       bodyTextUnderlineGap: defaults.bodyTextUnderlineGap,
       bodyTextUnderlineDashLength: defaults.bodyTextUnderlineDashLength,
       bodyTextUnderlineDashGapRatio: defaults.bodyTextUnderlineDashGapRatio,
-      bodyMarginMode: defaults.bodyMarginMode,
-      bodyMarginPreset: defaults.bodyMarginPreset,
+      bodyMarginMode: ReaderBodyMarginMode.custom,
       bodyMarginTop: defaults.bodyMarginTop,
       bodyMarginBottom: defaults.bodyMarginBottom,
       bodyMarginLeft: defaults.bodyMarginLeft,

@@ -77,9 +77,9 @@ void main() {
         infoFooterMarginLeft: 15,
         infoFooterMarginRight: 17,
         bodyMarginMode: ReaderBodyMarginMode.custom,
-        bodyMarginPreset: ReaderBodyMarginPreset.immersive,
-        pinnedChapterHeaderOffsetX: 0.42,
-        pinnedChapterHeaderOffsetY: 24,
+        showChapterHeader: true,
+        chapterHeaderHorizontalOffset: 0.42,
+        chapterHeaderVerticalOffset: 24,
       );
 
       await service.saveSettings(settings);
@@ -145,13 +145,13 @@ void main() {
       expect(restored.bodyMarginLeft, 19);
       expect(restored.bodyMarginRight, 21);
       expect(restored.bodyMarginMode, ReaderBodyMarginMode.custom);
-      expect(restored.bodyMarginPreset, ReaderBodyMarginPreset.immersive);
       expect(restored.infoFooterMarginTop, 7);
       expect(restored.infoFooterMarginBottom, 3);
       expect(restored.infoFooterMarginLeft, 15);
       expect(restored.infoFooterMarginRight, 17);
-      expect(restored.pinnedChapterHeaderOffsetX, closeTo(0.42, 0.0001));
-      expect(restored.pinnedChapterHeaderOffsetY, 24);
+      expect(restored.showChapterHeader, isTrue);
+      expect(restored.chapterHeaderHorizontalOffset, closeTo(0.42, 0.0001));
+      expect(restored.chapterHeaderVerticalOffset, 24);
     });
 
     test('saves and loads reading progress', () async {

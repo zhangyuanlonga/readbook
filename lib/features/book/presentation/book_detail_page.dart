@@ -20,10 +20,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/bookmark_repository_impl.dart';
-import '../../../data/repositories/book_metadata_override_repository_impl.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -35,6 +31,7 @@ import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reading_progress.dart';
+import '../providers.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
@@ -61,12 +58,13 @@ import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
 import '../application/custom_cover_storage_service.dart';
 import '../application/book_detail_service.dart';
+import '../application/book_local_metadata_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
 
-class BookDetailPage extends StatefulWidget {
+class BookDetailPage extends ConsumerStatefulWidget {
   const BookDetailPage({
     super.key,
     required this.bookId,
@@ -93,7 +91,7 @@ class BookDetailPage extends StatefulWidget {
   final SearchService? switchSourceSearchService;
 
   @override
-  State<BookDetailPage> createState() => _BookDetailPageState();
+  ConsumerState<BookDetailPage> createState() => _BookDetailPageState();
 }
 
 class _BookDetailPresentationState {
@@ -163,7 +161,7 @@ class _BookDetailAuxiliaryState {
   }
 }
 
-class _BookDetailPageState extends State<BookDetailPage> {
+class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   static const List<_LocalCharsetOption> _kLocalCharsetOptions =
       <_LocalCharsetOption>[
         _LocalCharsetOption(label: '自动', charset: null),
@@ -208,14 +206,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
-  final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
-    AppDatabase.instance,
-  );
-  final BookMetadataOverrideRepository _bookMetadataOverrideRepository =
-      BookMetadataOverrideRepositoryImpl(AppDatabase.instance);
-  final LocalBookRepository _localBookRepository = LocalBookRepositoryImpl(
-    AppDatabase.instance,
-  );
+  late final BookmarkRepository _bookmarkRepository;
+  late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
+  late final LocalBookRepository _localBookRepository;
+  late final BookLocalMetadataService _localMetadataService;
+  late final SourceRuntimeFacade _sourceRuntimeFacade;
   final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
       const BookMetadataPresentationResolver();
   final ReaderCatalogSearchService _catalogSearchService =
@@ -233,10 +228,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       const CustomCoverStorageService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
-  final SourceRuntimeTaskConflictService _taskConflictService =
-      SourceRuntimeTaskConflictService.instance;
-  final SourceRuntimeSchedulerService _taskScheduler =
-      SourceRuntimeSchedulerService.instance;
+  late final SourceRuntimeTaskConflictService _taskConflictService;
+  late final SourceRuntimeSchedulerService _taskScheduler;
   final TextEditingController _editTitleController = TextEditingController();
   final TextEditingController _editAuthorController = TextEditingController();
   final TextEditingController _editIntroController = TextEditingController();
@@ -251,6 +244,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
   @override
   void initState() {
     super.initState();
+    _bookmarkRepository = ref.read(bookBookmarkRepositoryProvider);
+    _bookMetadataOverrideRepository = ref.read(
+      bookMetadataOverrideRepositoryProvider,
+    );
+    _localBookRepository = ref.read(bookLocalBookRepositoryProvider);
+    _localMetadataService = ref.read(bookLocalMetadataServiceProvider);
+    _sourceRuntimeFacade = ref.read(bookSourceRuntimeFacadeProvider);
+    _taskConflictService = ref.read(bookTaskConflictServiceProvider);
+    _taskScheduler = ref.read(bookTaskSchedulerProvider);
     final detailService = widget.bookDetailService ?? BookDetailService();
     _sourceContentProvider = SourceContentProvider(
       detailService: detailService,
@@ -265,7 +267,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       switchSourceSearchService: _switchSourceSearchService,
       searchHitCacheService: _searchHitCacheService,
       switchSourceScoreService: _switchSourceScoreService,
-      sourceRuntimeFacade: SourceRuntimeFacade.instance,
+      sourceRuntimeFacade: _sourceRuntimeFacade,
     );
     _activeSourceId = _normalizeRouteParam(widget.sourceId);
     _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
@@ -296,7 +298,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _editIntroController.dispose();
     final sourceId = (_activeSourceId ?? '').trim();
     if (sourceId.isNotEmpty) {
-      SourceRuntimeFacade.instance.clearReadingFlow(
+      _sourceRuntimeFacade.clearReadingFlow(
         sourceId: sourceId,
         detailUrl: (_activeDetailUrl ?? '').trim(),
         title: (_displayTitle ?? '').trim(),
@@ -2592,7 +2594,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     final normalizedPreviousSourceId = (previousSourceId ?? '').trim();
     if (normalizedPreviousSourceId.isNotEmpty) {
-      SourceRuntimeFacade.instance.clearReadingFlow(
+      _sourceRuntimeFacade.clearReadingFlow(
         sourceId: normalizedPreviousSourceId,
         detailUrl: (previousDetailUrl ?? '').trim(),
         title: (previousTitle ?? '').trim(),
@@ -3039,10 +3041,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
     required String sourceId,
     required String bookId,
   }) async {
-    if (!LocalReaderIdentity.isLocalSourceId(sourceId)) {
-      return null;
-    }
-    return AppDatabase.instance.getLocalBookById(bookId);
+    return _localMetadataService.loadLocalBook(
+      sourceId: sourceId,
+      bookId: bookId,
+    );
   }
 
   Future<LocalBook?> _ensureEditableLocalBookMeta() async {
@@ -3332,7 +3334,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Future<void> _copyLocalDiagnosticsFromError() async {
     final book =
         _localBookMeta ??
-        await AppDatabase.instance.getLocalBookById(_activeBookId);
+        await _localMetadataService.loadLocalBook(
+          sourceId: (_activeSourceId ?? '').trim(),
+          bookId: _activeBookId,
+        );
     if (book == null) {
       final content = [
         '本地图书诊断',

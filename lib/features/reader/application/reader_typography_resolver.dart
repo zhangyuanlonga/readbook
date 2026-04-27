@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/entities/reader_settings.dart';
+import 'reader_typography_metrics_resolver.dart';
 
 class ReaderTypographyResolver {
   const ReaderTypographyResolver();
@@ -9,6 +10,7 @@ class ReaderTypographyResolver {
     required ReaderSettings settings,
     required Color color,
   }) {
+    const metricsResolver = ReaderTypographyMetricsResolver();
     final decorationStyle = settings.bodyTextDecorationStyle;
     final decorationColorValue = settings.bodyTextDecorationColorValue;
     final decorationEnabled =
@@ -32,7 +34,7 @@ class ReaderTypographyResolver {
     return TextStyle(
       color: color,
       fontSize: settings.fontSize,
-      height: settings.lineHeight,
+      height: metricsResolver.resolveLineHeight(settings),
       letterSpacing: settings.letterSpacing,
       fontWeight: _resolveFontWeight(settings),
       fontFamily: _resolveFontFamily(settings),

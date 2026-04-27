@@ -9,15 +9,10 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
-import '../../../core/cache/cover_image_disk_cache.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../domain/entities/book_metadata_override.dart';
-import '../../../domain/entities/local_book.dart';
-import '../../bookshelf/application/bookshelf_service.dart';
-import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/cache_management_service.dart';
 import '../application/cover_gallery_provider.dart';
-import '../../reader/application/local/local_reader_identity.dart';
+import '../providers.dart';
 
 class CacheManagementPage extends ConsumerStatefulWidget {
   const CacheManagementPage({super.key});
@@ -28,112 +23,21 @@ class CacheManagementPage extends ConsumerStatefulWidget {
 }
 
 class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
-  final BookshelfService _bookshelfService = BookshelfService();
-  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
-      const BookMetadataPresentationResolver();
-  late Future<Map<String, _CachedBookPresentation>>
-  _bookPresentationIndexFuture;
+  late final CacheManagementService _cacheManagementService;
+  late Future<Map<String, CachedBookPresentation>> _bookPresentationIndexFuture;
 
   @override
   void initState() {
     super.initState();
-    _bookPresentationIndexFuture = _buildBookPresentationIndex();
-  }
-
-  Future<Map<String, _CachedBookPresentation>>
-  _buildBookPresentationIndex() async {
-    final items = await _bookshelfService.getAll();
-    final records = await AppDatabase.instance.listLatestReadingRecords();
-    final localBooks = await AppDatabase.instance.getAllLocalBooks();
-    final metadataOverrides =
-        await AppDatabase.instance.getAllBookMetadataOverrides();
-    final localBooksById = <String, LocalBook>{
-      for (final book in localBooks) book.id.trim(): book,
-    };
-    final metadataOverridesByTargetKey = <String, BookMetadataOverride>{
-      for (final item in metadataOverrides) item.targetKey: item,
-    };
-    final result = <String, _CachedBookPresentation>{};
-
-    for (final record in records) {
-      final bookId = record.bookId.trim();
-      if (bookId.isEmpty) {
-        continue;
-      }
-      final title = record.bookTitle.trim();
-      final presentation = _bookMetadataPresentationResolver.resolve(
-        fallbackTitle: title,
-        fallbackAuthor: record.bookAuthor,
-        realCoverUrl: record.coverUrl,
-        localBook:
-            record.sourceId == LocalReaderIdentity.localSourceId
-                ? localBooksById[bookId]
-                : null,
-        metadataOverride:
-            metadataOverridesByTargetKey[record.sourceId ==
-                    LocalReaderIdentity.localSourceId
-                ? BookMetadataOverride.localTargetKey(bookId)
-                : BookMetadataOverride.remoteTargetKey(
-                  sourceId: record.sourceId,
-                  detailUrl: record.detailUrl,
-                )],
-      );
-      result[bookId] = _CachedBookPresentation(
-        bookId: record.bookId,
-        sourceId: record.sourceId,
-        detailUrl: record.detailUrl,
-        title:
-            presentation.displayTitle.trim().isEmpty
-                ? null
-                : presentation.displayTitle.trim(),
-        author: presentation.displayAuthor?.trim(),
-        coverUrl: presentation.displayCover?.trim(),
-        inBookshelf: false,
-      );
-    }
-
-    for (final item in items) {
-      final bookId = item.bookId.trim();
-      if (bookId.isEmpty) {
-        continue;
-      }
-      final presentation = _bookMetadataPresentationResolver.resolve(
-        fallbackTitle: item.title,
-        fallbackAuthor: item.author,
-        realCoverUrl: item.coverUrl,
-        localBook:
-            item.sourceId == LocalReaderIdentity.localSourceId
-                ? localBooksById[bookId]
-                : null,
-        metadataOverride:
-            metadataOverridesByTargetKey[item.sourceId ==
-                    LocalReaderIdentity.localSourceId
-                ? BookMetadataOverride.localTargetKey(bookId)
-                : BookMetadataOverride.remoteTargetKey(
-                  sourceId: item.sourceId,
-                  detailUrl: item.detailUrl,
-                )],
-      );
-      result[bookId] = _CachedBookPresentation(
-        bookId: item.bookId,
-        sourceId: item.sourceId,
-        detailUrl: item.detailUrl,
-        title:
-            presentation.displayTitle.trim().isEmpty
-                ? result[bookId]?.title
-                : presentation.displayTitle.trim(),
-        author: presentation.displayAuthor?.trim() ?? result[bookId]?.author,
-        coverUrl: presentation.displayCover?.trim() ?? result[bookId]?.coverUrl,
-        inBookshelf: true,
-      );
-    }
-
-    return result;
+    _cacheManagementService = ref.read(cacheManagementServiceProvider);
+    _bookPresentationIndexFuture =
+        _cacheManagementService.buildBookPresentationIndex();
   }
 
   void _reloadBookPresentationIndex() {
     setState(() {
-      _bookPresentationIndexFuture = _buildBookPresentationIndex();
+      _bookPresentationIndexFuture =
+          _cacheManagementService.buildBookPresentationIndex();
     });
   }
 
@@ -206,19 +110,19 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                       horizontal,
                       12 + bottomSafe,
                     ),
-                    child: FutureBuilder<Map<String, _CachedBookPresentation>>(
+                    child: FutureBuilder<Map<String, CachedBookPresentation>>(
                       future: _bookPresentationIndexFuture,
                       builder: (context, snapshot) {
                         final presentationIndex =
                             snapshot.data ??
-                            const <String, _CachedBookPresentation>{};
+                            const <String, CachedBookPresentation>{};
 
-                        return StreamBuilder<List<ChapterCacheBookSummary>>(
-                          stream: AppDatabase.instance.watchCachedBooks(),
+                        return StreamBuilder<List<CachedBookSummary>>(
+                          stream: _cacheManagementService.watchCachedBooks(),
                           builder: (context, summarySnapshot) {
                             final summaries =
                                 summarySnapshot.data ??
-                                const <ChapterCacheBookSummary>[];
+                                const <CachedBookSummary>[];
                             final totalCachedChapters = summaries.fold<int>(
                               0,
                               (sum, item) => sum + item.cachedCount,
@@ -326,8 +230,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
 
   Widget _buildCacheList(
     BuildContext context, {
-    required List<ChapterCacheBookSummary> summaries,
-    required Map<String, _CachedBookPresentation> presentationIndex,
+    required List<CachedBookSummary> summaries,
+    required Map<String, CachedBookPresentation> presentationIndex,
   }) {
     if (summaries.isEmpty) {
       return Card(
@@ -520,8 +424,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       return;
     }
 
-    await AppDatabase.instance.clearChapterCaches();
-    final clearedCoverCount = await CoverImageDiskCache.instance.clearAll();
+    final clearedCoverCount = await _cacheManagementService.clearAllCaches();
 
     if (!mounted) {
       return;
@@ -533,8 +436,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   }
 
   Future<void> _confirmClearBook(
-    ChapterCacheBookSummary summary,
-    _CachedBookPresentation? presentation,
+    CachedBookSummary summary,
+    CachedBookPresentation? presentation,
   ) async {
     final title =
         presentation?.title?.trim().isNotEmpty == true
@@ -567,9 +470,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       return;
     }
 
-    await AppDatabase.instance.deleteChapterCachesByBookId(summary.bookId);
-    final clearedCover = await CoverImageDiskCache.instance.clearByUrl(
-      presentation?.coverUrl ?? '',
+    final clearedCover = await _cacheManagementService.clearBookCache(
+      bookId: summary.bookId,
+      coverUrl: presentation?.coverUrl,
     );
 
     if (!mounted) {
@@ -591,24 +494,4 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     final minute = local.minute.toString().padLeft(2, '0');
     return '$month-$day $hour:$minute';
   }
-}
-
-class _CachedBookPresentation {
-  const _CachedBookPresentation({
-    this.bookId,
-    this.sourceId,
-    this.detailUrl,
-    this.title,
-    this.author,
-    this.coverUrl,
-    required this.inBookshelf,
-  });
-
-  final String? bookId;
-  final String? sourceId;
-  final String? detailUrl;
-  final String? title;
-  final String? author;
-  final String? coverUrl;
-  final bool inBookshelf;
 }

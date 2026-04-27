@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_settings_groups.dart';
 import '../application/reader_settings_preset_service.dart';
+import '../application/reader_typography_metrics_resolver.dart';
 
 enum ReaderSettingsSheetTab { basic, advanced }
 
@@ -331,10 +332,11 @@ class ReaderSettingsSheetState {
         preset,
       ) {
         final applied = service.applyChapterHeaderPreset(settings, preset);
-        return applied.pinnedChapterHeaderOffsetX ==
-                settings.pinnedChapterHeaderOffsetX &&
-            applied.pinnedChapterHeaderOffsetY ==
-                settings.pinnedChapterHeaderOffsetY;
+        return applied.chapterHeaderMode == settings.chapterHeaderMode &&
+            applied.chapterHeaderTopSpacing ==
+                settings.chapterHeaderTopSpacing &&
+            applied.chapterHeaderBottomSpacing ==
+                settings.chapterHeaderBottomSpacing;
       }),
       infoStyle: _firstMatchingOrNull(ReaderInfoStylePreset.values, (preset) {
         final applied = service.applyInfoStylePreset(settings, preset);
@@ -532,6 +534,7 @@ class _ReaderSettingsSheetBasicSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const metricsResolver = ReaderTypographyMetricsResolver();
     final basic = state.basicInput;
     final presetInput = state.presetInput;
     return ListView(
@@ -597,11 +600,11 @@ class _ReaderSettingsSheetBasicSkeleton extends StatelessWidget {
         _ReaderSettingsCard(
           title: '正文排版',
           subtitle:
-              '字号 ${basic.groups.typography.fontSize.toStringAsFixed(0)} / 行距 ${basic.groups.typography.lineHeight.toStringAsFixed(2)} / 段距 ${basic.groups.typography.paragraphSpacing.toStringAsFixed(0)} / 字距 ${basic.groups.typography.letterSpacing.toStringAsFixed(2)}',
+              '字号 ${basic.groups.typography.fontSize.toStringAsFixed(0)} / 行距 ${metricsResolver.resolveLineSpacingExtra(basic.settings).round()} / 段距 ${(metricsResolver.resolveParagraphSpacingUnits(basic.settings)).toStringAsFixed(1)} / 字距 ${basic.groups.typography.letterSpacing.toStringAsFixed(2)}',
           child: _ReaderSettingsSummaryList(
             items: [
               '字体：${basic.currentFontLabel}',
-              '缩进：${basic.groups.typography.paragraphIndent.toStringAsFixed(0)}',
+              '缩进：${metricsResolver.resolveParagraphIndentCount(basic.settings)} 字符',
               '两端对齐：${basic.groups.typography.textFullJustifyEnabled ? '开' : '关'}',
             ],
           ),
@@ -624,41 +627,11 @@ class _ReaderSettingsSheetBasicSkeleton extends StatelessWidget {
         ),
         _ReaderSettingsCard(
           title: '正文版面',
-          subtitle: '基础设置聚焦边距 preset。',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ReaderBodyMarginPreset.values
-                    .map(
-                      (preset) => ChoiceChip(
-                        label: Text(_bodyMarginPresetLabel(preset)),
-                        selected:
-                            basic.groups.bodyLayout.bodyMarginMode ==
-                                ReaderBodyMarginMode.preset &&
-                            basic.groups.bodyLayout.bodyMarginPreset == preset,
-                        showCheckmark: false,
-                        onSelected:
-                            (_) => callbacks.onSettingsChanged?.call(
-                              basic.settings.copyWith(
-                                bodyMarginMode: ReaderBodyMarginMode.preset,
-                                bodyMarginPreset: preset,
-                              ),
-                            ),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 10),
-              _ReaderSettingsSummaryList(
-                items: [
-                  '模式：${_bodyMarginModeLabel(basic.groups.bodyLayout.bodyMarginMode)}',
-                  '预设：${_bodyMarginPresetLabel(basic.groups.bodyLayout.bodyMarginPreset)}',
-                  '左/右：${basic.groups.bodyLayout.bodyMarginLeft.toStringAsFixed(0)} / ${basic.groups.bodyLayout.bodyMarginRight.toStringAsFixed(0)}',
-                ],
-              ),
+          subtitle: '直接调整正文四边留白。',
+          child: _ReaderSettingsSummaryList(
+            items: [
+              '上/下：${basic.groups.bodyLayout.bodyMarginTop.toStringAsFixed(0)} / ${basic.groups.bodyLayout.bodyMarginBottom.toStringAsFixed(0)}',
+              '左/右：${basic.groups.bodyLayout.bodyMarginLeft.toStringAsFixed(0)} / ${basic.groups.bodyLayout.bodyMarginRight.toStringAsFixed(0)}',
             ],
           ),
         ),
@@ -667,7 +640,7 @@ class _ReaderSettingsSheetBasicSkeleton extends StatelessWidget {
           subtitle: '基础设置只放高频摘要，高级设置再进入分组细调。',
           child: _ReaderSettingsSummaryList(
             items: [
-              '章节头位置：${basic.groups.chapterHeader.pinnedChapterHeaderOffsetX.toStringAsFixed(2)} / ${basic.groups.chapterHeader.pinnedChapterHeaderOffsetY.toStringAsFixed(0)}',
+              '章节头：${basic.settings.showChapterHeader ? '显示' : '隐藏'} / 横 ${(basic.settings.chapterHeaderHorizontalOffset * 100).round()} / 纵 ${basic.settings.chapterHeaderVerticalOffset.toStringAsFixed(0)}',
               '信息项：${basic.enabledInfoItemCount}',
               '页眉/页脚：${basic.groups.infoBar.infoHeaderEnabled ? '开' : '关'} / ${basic.groups.infoBar.infoFooterEnabled ? '开' : '关'}',
             ],
@@ -795,6 +768,7 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
   }
 
   Widget _buildTypographyGroup(BuildContext context) {
+    const metricsResolver = ReaderTypographyMetricsResolver();
     final settings = state.settings;
     return ListView(
       children: [
@@ -831,7 +805,11 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                 min: 1.2,
                 max: 2.2,
                 divisions: 20,
-                valueLabel: settings.lineHeight.toStringAsFixed(2),
+                valueLabel:
+                    metricsResolver
+                        .resolveLineSpacingExtra(settings)
+                        .round()
+                        .toString(),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
                       settings.copyWith(lineHeight: value),
@@ -840,10 +818,12 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
               _ReaderSettingsSliderRow(
                 label: '段距',
                 value: settings.paragraphSpacing,
-                min: 0,
-                max: 32,
-                divisions: 16,
-                valueLabel: settings.paragraphSpacing.toStringAsFixed(0),
+                min: ReaderSettings.minParagraphSpacing,
+                max: ReaderSettings.maxParagraphSpacing,
+                divisions: 20,
+                valueLabel: metricsResolver
+                    .resolveParagraphSpacingUnits(settings)
+                    .toStringAsFixed(1),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
                       settings.copyWith(paragraphSpacing: value),
@@ -852,10 +832,11 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
               _ReaderSettingsSliderRow(
                 label: '缩进',
                 value: settings.paragraphIndent,
-                min: 0,
-                max: 6,
-                divisions: 6,
-                valueLabel: settings.paragraphIndent.toStringAsFixed(0),
+                min: ReaderSettings.minParagraphIndent,
+                max: ReaderSettings.maxParagraphIndent,
+                divisions: 4,
+                valueLabel:
+                    '${metricsResolver.resolveParagraphIndentCount(settings)} 字符',
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
                       settings.copyWith(paragraphIndent: value),
@@ -872,6 +853,24 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
                     (value) => callbacks.onSettingsChanged?.call(
                       settings.copyWith(letterSpacing: value),
                     ),
+              ),
+              Row(
+                children: [
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed:
+                        () => callbacks.onSettingsChanged?.call(
+                          settings.copyWith(
+                            lineHeight: 1.67,
+                            paragraphSpacing: 2,
+                            paragraphIndent: 2,
+                            letterSpacing: ReaderSettings.defaultLetterSpacing,
+                          ),
+                        ),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: const Text('恢复默认'),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               _ReaderSettingsToggleRow(
@@ -895,114 +894,87 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
       children: [
         _ReaderSettingsCard(
           title: '正文版面',
-          subtitle: 'preset 作为默认入口，自定义边距下沉。',
+          subtitle: '直接调整正文四边留白。',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ReaderBodyMarginMode.values
-                    .map(
-                      (mode) => ChoiceChip(
-                        label: Text(_bodyMarginModeLabel(mode)),
-                        selected: settings.bodyMarginMode == mode,
-                        showCheckmark: false,
-                        onSelected:
-                            (_) => callbacks.onSettingsChanged?.call(
-                              settings.copyWith(bodyMarginMode: mode),
-                            ),
+              _ReaderSettingsSliderRow(
+                label: '上边距',
+                value: settings.bodyMarginTop,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.bodyMarginTop.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(
+                        bodyMarginMode: ReaderBodyMarginMode.custom,
+                        bodyMarginTop: value,
                       ),
-                    )
-                    .toList(growable: false),
+                    ),
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ReaderBodyMarginPreset.values
-                    .map(
-                      (preset) => ChoiceChip(
-                        label: Text(_bodyMarginPresetLabel(preset)),
-                        selected:
-                            settings.bodyMarginMode ==
-                                ReaderBodyMarginMode.preset &&
-                            settings.bodyMarginPreset == preset,
-                        showCheckmark: false,
-                        onSelected:
-                            (_) => callbacks.onSettingsChanged?.call(
-                              settings.copyWith(
-                                bodyMarginMode: ReaderBodyMarginMode.preset,
-                                bodyMarginPreset: preset,
-                              ),
-                            ),
+              _ReaderSettingsSliderRow(
+                label: '下边距',
+                value: settings.bodyMarginBottom,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.bodyMarginBottom.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(
+                        bodyMarginMode: ReaderBodyMarginMode.custom,
+                        bodyMarginBottom: value,
                       ),
-                    )
-                    .toList(growable: false),
+                    ),
               ),
-              if (settings.bodyMarginMode == ReaderBodyMarginMode.custom) ...[
-                const SizedBox(height: 12),
-                _ReaderSettingsSliderRow(
-                  label: '上边距',
-                  value: settings.bodyMarginTop,
-                  min: ReaderSettings.minLayoutMargin,
-                  max: ReaderSettings.maxLayoutMargin,
-                  divisions: 20,
-                  valueLabel: settings.bodyMarginTop.toStringAsFixed(0),
-                  onChanged:
-                      (value) => callbacks.onSettingsChanged?.call(
+              _ReaderSettingsSliderRow(
+                label: '左边距',
+                value: settings.bodyMarginLeft,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.bodyMarginLeft.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(
+                        bodyMarginMode: ReaderBodyMarginMode.custom,
+                        bodyMarginLeft: value,
+                      ),
+                    ),
+              ),
+              _ReaderSettingsSliderRow(
+                label: '右边距',
+                value: settings.bodyMarginRight,
+                min: ReaderSettings.minLayoutMargin,
+                max: ReaderSettings.maxLayoutMargin,
+                divisions: 20,
+                valueLabel: settings.bodyMarginRight.toStringAsFixed(0),
+                onChanged:
+                    (value) => callbacks.onSettingsChanged?.call(
+                      settings.copyWith(
+                        bodyMarginMode: ReaderBodyMarginMode.custom,
+                        bodyMarginRight: value,
+                      ),
+                    ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed:
+                      () => callbacks.onSettingsChanged?.call(
                         settings.copyWith(
                           bodyMarginMode: ReaderBodyMarginMode.custom,
-                          bodyMarginTop: value,
+                          bodyMarginTop: 6,
+                          bodyMarginBottom: 6,
+                          bodyMarginLeft: 16,
+                          bodyMarginRight: 16,
                         ),
                       ),
+                  icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                  label: const Text('恢复默认'),
                 ),
-                _ReaderSettingsSliderRow(
-                  label: '下边距',
-                  value: settings.bodyMarginBottom,
-                  min: ReaderSettings.minLayoutMargin,
-                  max: ReaderSettings.maxLayoutMargin,
-                  divisions: 20,
-                  valueLabel: settings.bodyMarginBottom.toStringAsFixed(0),
-                  onChanged:
-                      (value) => callbacks.onSettingsChanged?.call(
-                        settings.copyWith(
-                          bodyMarginMode: ReaderBodyMarginMode.custom,
-                          bodyMarginBottom: value,
-                        ),
-                      ),
-                ),
-                _ReaderSettingsSliderRow(
-                  label: '左边距',
-                  value: settings.bodyMarginLeft,
-                  min: ReaderSettings.minLayoutMargin,
-                  max: ReaderSettings.maxLayoutMargin,
-                  divisions: 20,
-                  valueLabel: settings.bodyMarginLeft.toStringAsFixed(0),
-                  onChanged:
-                      (value) => callbacks.onSettingsChanged?.call(
-                        settings.copyWith(
-                          bodyMarginMode: ReaderBodyMarginMode.custom,
-                          bodyMarginLeft: value,
-                        ),
-                      ),
-                ),
-                _ReaderSettingsSliderRow(
-                  label: '右边距',
-                  value: settings.bodyMarginRight,
-                  min: ReaderSettings.minLayoutMargin,
-                  max: ReaderSettings.maxLayoutMargin,
-                  divisions: 20,
-                  valueLabel: settings.bodyMarginRight.toStringAsFixed(0),
-                  onChanged:
-                      (value) => callbacks.onSettingsChanged?.call(
-                        settings.copyWith(
-                          bodyMarginMode: ReaderBodyMarginMode.custom,
-                          bodyMarginRight: value,
-                        ),
-                      ),
-                ),
-              ],
+              ),
             ],
           ),
         ),
@@ -1016,58 +988,53 @@ class _ReaderSettingsSheetAdvancedSkeleton extends StatelessWidget {
       children: [
         _ReaderSettingsCard(
           title: '章节头',
-          subtitle: '保留 preset 和位置微调。',
+          subtitle: '横纵微调。',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ReaderChapterHeaderPreset.values
-                    .map(
-                      (preset) => ChoiceChip(
-                        label: Text(_chapterHeaderPresetLabel(preset)),
-                        selected:
-                            state.presetInput.selection.chapterHeader == preset,
-                        showCheckmark: false,
-                        onSelected:
-                            (_) => callbacks.onChapterHeaderPresetSelected
-                                ?.call(preset),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 12),
               _ReaderSettingsSliderRow(
-                label: '横向位置',
-                value: settings.pinnedChapterHeaderOffsetX,
+                label: '横向',
+                value: settings.chapterHeaderHorizontalOffset,
                 min: ReaderSettings.minPinnedHeaderOffsetX,
                 max: ReaderSettings.maxPinnedHeaderOffsetX,
                 divisions: 100,
-                valueLabel: settings.pinnedChapterHeaderOffsetX.toStringAsFixed(
-                  2,
-                ),
+                valueLabel:
+                    (settings.chapterHeaderHorizontalOffset * 100)
+                        .round()
+                        .toString(),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(pinnedChapterHeaderOffsetX: value),
+                      settings.copyWith(chapterHeaderHorizontalOffset: value),
                     ),
               ),
               _ReaderSettingsSliderRow(
-                label: '纵向位置',
-                value: settings.pinnedChapterHeaderOffsetY,
-                min: ReaderSettings.minPinnedHeaderOffsetY,
-                max: ReaderSettings.maxPinnedHeaderOffsetY,
-                divisions:
-                    (ReaderSettings.maxPinnedHeaderOffsetY -
-                            ReaderSettings.minPinnedHeaderOffsetY)
-                        .round(),
-                valueLabel: settings.pinnedChapterHeaderOffsetY.toStringAsFixed(
-                  0,
-                ),
+                label: '纵向',
+                value: settings.chapterHeaderVerticalOffset,
+                min: ReaderSettings.minChapterHeaderSpacing,
+                max: ReaderSettings.maxChapterHeaderSpacing,
+                divisions: 20,
+                valueLabel: settings.chapterHeaderVerticalOffset
+                    .toStringAsFixed(0),
                 onChanged:
                     (value) => callbacks.onSettingsChanged?.call(
-                      settings.copyWith(pinnedChapterHeaderOffsetY: value),
+                      settings.copyWith(chapterHeaderVerticalOffset: value),
                     ),
+              ),
+              Row(
+                children: [
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed:
+                        () => callbacks.onSettingsChanged?.call(
+                          settings.copyWith(
+                            chapterHeaderHorizontalOffset: 0,
+                            chapterHeaderVerticalOffset: 0,
+                          ),
+                        ),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: const Text('恢复默认'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1417,7 +1384,7 @@ const List<ReaderSettingsSheetGroupDescriptor> _defaultGroupDescriptors = [
   ReaderSettingsSheetGroupDescriptor(
     key: ReaderSettingsSheetGroupKey.chapterHeader,
     title: '章节头',
-    subtitle: '章节头位置、显示策略与 pinned header 调整。',
+    subtitle: '章节头对齐方式与上下留白。',
   ),
   ReaderSettingsSheetGroupDescriptor(
     key: ReaderSettingsSheetGroupKey.infoBar,
@@ -1490,34 +1457,10 @@ String _fontWeightValueLabel(ReaderSettings settings) {
   return '$value';
 }
 
-String _chapterHeaderPresetLabel(ReaderChapterHeaderPreset preset) {
-  return switch (preset) {
-    ReaderChapterHeaderPreset.standard => '标准',
-    ReaderChapterHeaderPreset.compact => '贴顶',
-    ReaderChapterHeaderPreset.immersive => '沉浸',
-  };
-}
-
 String _infoStylePresetLabel(ReaderInfoStylePreset preset) {
   return switch (preset) {
     ReaderInfoStylePreset.minimalFooter => '极简页脚',
     ReaderInfoStylePreset.balanced => '上下平衡',
     ReaderInfoStylePreset.readingFocused => '专注阅读',
-  };
-}
-
-String _bodyMarginModeLabel(ReaderBodyMarginMode mode) {
-  return switch (mode) {
-    ReaderBodyMarginMode.preset => '预设',
-    ReaderBodyMarginMode.custom => '自定义',
-  };
-}
-
-String _bodyMarginPresetLabel(ReaderBodyMarginPreset preset) {
-  return switch (preset) {
-    ReaderBodyMarginPreset.compact => '紧凑',
-    ReaderBodyMarginPreset.standard => '标准',
-    ReaderBodyMarginPreset.relaxed => '舒展',
-    ReaderBodyMarginPreset.immersive => '沉浸',
   };
 }

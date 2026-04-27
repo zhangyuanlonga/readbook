@@ -16,9 +16,6 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/book_metadata_override_repository_impl.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
@@ -27,9 +24,13 @@ import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
+import '../../../domain/repositories/local_book_repository.dart';
 import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
+import '../application/bookshelf_external_import_coordinator.dart';
+import '../application/bookshelf_presentation_query_service.dart';
 import '../application/local_book_import_service.dart';
+import '../providers.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
@@ -45,7 +46,6 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
-import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/session/source_session.dart';
@@ -264,20 +264,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final ScrollController _bookshelfScrollController = ScrollController();
   final LocalBookImportService _localBookImportService =
       LocalBookImportService();
-  final LocalBookRepositoryImpl _localBookRepository = LocalBookRepositoryImpl(
-    AppDatabase.instance,
-  );
-  final BookMetadataOverrideRepository _bookMetadataOverrideRepository =
-      BookMetadataOverrideRepositoryImpl(AppDatabase.instance);
+  late final LocalBookRepository _localBookRepository;
+  late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
+  late final BookshelfPresentationQueryService
+  _bookshelfPresentationQueryService;
+  late final BookshelfExternalImportCoordinator _externalImportCoordinator;
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final CustomCoverStorageService _customCoverStorageService =
       const CustomCoverStorageService();
   final AnnouncementService _announcementService = AnnouncementService();
   final AnnouncementReadStateService _announcementReadStateService =
       AnnouncementReadStateService();
-  final SourceRuntimeTaskConflictService _taskConflictService =
-      SourceRuntimeTaskConflictService.instance;
-  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
+  late final SourceRuntimeTaskConflictService _taskConflictService;
   StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
 
   bool _isLoading = true;
@@ -384,15 +382,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   void initState() {
     super.initState();
+    _localBookRepository = ref.read(bookshelfLocalBookRepositoryProvider);
+    _bookMetadataOverrideRepository = ref.read(
+      bookshelfMetadataOverrideRepositoryProvider,
+    );
+    _bookshelfPresentationQueryService = ref.read(
+      bookshelfPresentationQueryServiceProvider,
+    );
+    _externalImportCoordinator =
+        ref.read(bookshelfExternalImportCoordinatorFactoryProvider)();
+    _taskConflictService = ref.read(bookshelfTaskConflictServiceProvider);
     _bookshelfSearchFocusNode.addListener(_handleBookshelfSearchFocusChanged);
-    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
-      payload,
-    ) {
-      if (payload.type != ExternalImportPayloadType.localBook) {
-        return;
-      }
-      unawaited(_consumePendingExternalImportPayloads());
-    });
+    _externalImportCoordinator.initialize(
+      onPendingImportAvailable: () {
+        unawaited(_consumePendingExternalImportPayloads());
+      },
+    );
     _taxonomyChangeSub = BookshelfService.watchTaxonomyChanges.listen(
       _handleTaxonomyChange,
     );
@@ -433,7 +438,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _loadTicket += 1;
     _routeInformationProvider?.removeListener(_handleRouteLocationChanged);
     _routeInformationProvider = null;
-    _incomingImportSub?.cancel();
+    unawaited(_externalImportCoordinator.dispose());
     _taxonomyChangeSub?.cancel();
     _bookshelfSearchFocusNode.removeListener(
       _handleBookshelfSearchFocusChanged,
@@ -1957,15 +1962,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     _isConsumingExternalImportPayloads = true;
     try {
-      while (mounted) {
-        final payload = ExternalImportBridge.instance.consumePendingPayload(
-          type: ExternalImportPayloadType.localBook,
-        );
-        if (payload == null) {
-          break;
-        }
-        await _importFromExternalPayload(payload);
-      }
+      await _externalImportCoordinator.consumePendingPayloads(
+        _importFromExternalPayload,
+      );
     } finally {
       _isConsumingExternalImportPayloads = false;
     }
@@ -1974,7 +1973,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
-    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
+    final cached = await _externalImportCoordinator.cacheExternalFileFromUri(
       payload,
     );
     if (cached == null) {
@@ -4725,22 +4724,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return const <String, BookMetadataOverride>{};
     }
     try {
-      final overrides =
-          await AppDatabase.instance.getAllBookMetadataOverrides();
-      final validKeys = <String>{
-        for (final book in books)
-          if (book.sourceId == _kLocalBookSourceId)
-            BookMetadataOverride.localTargetKey(book.bookId)
-          else
-            BookMetadataOverride.remoteTargetKey(
-              sourceId: book.sourceId,
-              detailUrl: book.detailUrl,
-            ),
-      };
-      return <String, BookMetadataOverride>{
-        for (final item in overrides)
-          if (validKeys.contains(item.targetKey)) item.targetKey: item,
-      };
+      return await _bookshelfPresentationQueryService
+          .loadBookMetadataOverrideMap(books);
     } catch (_) {
       return const <String, BookMetadataOverride>{};
     }
@@ -4749,22 +4734,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Future<Map<String, LocalBook>> _loadLocalBookMap(
     List<BookshelfBook> books,
   ) async {
-    final localBookIds =
-        books
-            .where((book) => book.sourceId == _kLocalBookSourceId)
-            .map((book) => book.bookId.trim())
-            .where((bookId) => bookId.isNotEmpty)
-            .toSet();
-    if (localBookIds.isEmpty) {
+    if (!books.any((book) => book.sourceId == _kLocalBookSourceId)) {
       return const <String, LocalBook>{};
     }
 
     try {
-      final localBooks = await _localBookRepository.getAllBooks();
-      return <String, LocalBook>{
-        for (final book in localBooks)
-          if (localBookIds.contains(book.id)) book.id: book,
-      };
+      return await _bookshelfPresentationQueryService.loadLocalBookMap(books);
     } catch (_) {
       return const <String, LocalBook>{};
     }
@@ -4783,8 +4758,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final latestByBookSource = await AppDatabase.instance
-        .getLatestCachedChapterTitlesByBookSource(pairs);
+    final latestByBookSource = await _bookshelfPresentationQueryService
+        .loadLatestCachedChapterTitles(pairs);
 
     if (!mounted || ticket != _loadTicket) {
       return;
@@ -4832,8 +4807,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final countByBookSource = await AppDatabase.instance
-        .getCachedChapterCountsByBookSource(pairs);
+    final countByBookSource = await _bookshelfPresentationQueryService
+        .loadCachedChapterCounts(pairs);
 
     if (!mounted || ticket != _loadTicket) {
       return;
@@ -5275,32 +5250,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
-    final sourceTypeBySourceId = <String, int>{};
-
-    // Prefer in-memory runtime metadata when available to avoid extra I/O.
-    final runtimeSources = SourceRuntimeFacade.instance.registeredScriptSources(
-      enabledOnly: false,
+    return _bookshelfPresentationQueryService.loadSourceTypeMap(
+      timeout: _kSourceMapLoadTimeout,
+      inferRuntimeSourceType: _inferScriptSourceType,
+      inferPersistedSourceType: _inferScriptSourceTypeFromCode,
     );
-    for (final source in runtimeSources) {
-      sourceTypeBySourceId[source.runtime.id] = _inferScriptSourceType(source);
-    }
-
-    // Avoid triggering heavy runtime reload/compile during bookshelf startup.
-    // Read persisted script sources directly and classify by capabilities.
-    try {
-      final persistedSources = await SourceRuntimeFacade.instance
-          .listScriptSources()
-          .timeout(_kSourceMapLoadTimeout);
-      for (final source in persistedSources) {
-        sourceTypeBySourceId[source.id] = _inferScriptSourceTypeFromCode(
-          source.sourceCode,
-        );
-      }
-    } catch (_) {
-      // Keep whatever runtime-derived results we already have.
-    }
-
-    return sourceTypeBySourceId;
   }
 
   int _inferScriptSourceType(RegisteredSource source) {
@@ -5580,7 +5534,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     List<ReadingRecord> records;
     try {
-      records = await AppDatabase.instance.listLatestReadingRecords();
+      records =
+          await _bookshelfPresentationQueryService.listLatestReadingRecords();
     } catch (_) {
       return;
     }

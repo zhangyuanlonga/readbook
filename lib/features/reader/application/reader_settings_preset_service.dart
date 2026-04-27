@@ -20,22 +20,22 @@ class ReaderSettingsPresetService {
     return switch (preset) {
       ReaderTypographyPreset.md3Balanced => settings.copyWith(
         fontSize: 18,
-        lineHeight: 1.72,
-        letterSpacing: 0.02,
+        lineHeight: 1.67,
+        letterSpacing: 0.1,
         textFullJustifyEnabled: true,
         fontWeightLevel: ReaderFontWeightLevel.regular,
       ),
       ReaderTypographyPreset.md3Compact => settings.copyWith(
         fontSize: 17,
-        lineHeight: 1.62,
-        letterSpacing: 0,
+        lineHeight: 1.59,
+        letterSpacing: 0.05,
         textFullJustifyEnabled: true,
         fontWeightLevel: ReaderFontWeightLevel.regular,
       ),
       ReaderTypographyPreset.md3Comfortable => settings.copyWith(
         fontSize: 19,
-        lineHeight: 1.82,
-        letterSpacing: 0.04,
+        lineHeight: 1.74,
+        letterSpacing: 0.12,
         textFullJustifyEnabled: true,
         fontWeightLevel: ReaderFontWeightLevel.medium,
       ),
@@ -48,15 +48,15 @@ class ReaderSettingsPresetService {
   ) {
     return switch (preset) {
       ReaderSpacingPreset.compact => settings.copyWith(
-        paragraphSpacing: 10,
+        paragraphSpacing: 1,
         paragraphIndent: 2,
       ),
       ReaderSpacingPreset.balanced => settings.copyWith(
-        paragraphSpacing: 14,
+        paragraphSpacing: 2,
         paragraphIndent: 2,
       ),
       ReaderSpacingPreset.relaxed => settings.copyWith(
-        paragraphSpacing: 18,
+        paragraphSpacing: 3,
         paragraphIndent: 2,
       ),
     };
@@ -68,16 +68,19 @@ class ReaderSettingsPresetService {
   ) {
     return switch (preset) {
       ReaderChapterHeaderPreset.standard => settings.copyWith(
-        pinnedChapterHeaderOffsetX: 0,
-        pinnedChapterHeaderOffsetY: 8,
+        chapterHeaderMode: ReaderChapterHeaderMode.start,
+        chapterHeaderTopSpacing: 0,
+        chapterHeaderBottomSpacing: 0,
       ),
       ReaderChapterHeaderPreset.compact => settings.copyWith(
-        pinnedChapterHeaderOffsetX: 0,
-        pinnedChapterHeaderOffsetY: 0,
+        chapterHeaderMode: ReaderChapterHeaderMode.start,
+        chapterHeaderTopSpacing: 0,
+        chapterHeaderBottomSpacing: 0,
       ),
       ReaderChapterHeaderPreset.immersive => settings.copyWith(
-        pinnedChapterHeaderOffsetX: 0.08,
-        pinnedChapterHeaderOffsetY: 18,
+        chapterHeaderMode: ReaderChapterHeaderMode.center,
+        chapterHeaderTopSpacing: 8,
+        chapterHeaderBottomSpacing: 6,
       ),
     };
   }

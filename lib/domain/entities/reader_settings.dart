@@ -58,6 +58,8 @@ enum ReaderBodyMarginMode { preset, custom }
 
 enum ReaderBodyMarginPreset { compact, standard, relaxed, immersive }
 
+enum ReaderChapterHeaderMode { start, center, hidden }
+
 class ReaderBodyMarginValues {
   const ReaderBodyMarginValues({
     required this.top,
@@ -75,10 +77,10 @@ class ReaderBodyMarginValues {
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 18,
-    this.lineHeight = 1.7,
-    this.horizontalPadding = 18,
-    this.paragraphSpacing = 14,
-    this.paragraphIndent = 0,
+    this.lineHeight = 1.67,
+    this.horizontalPadding = 16,
+    this.paragraphSpacing = 2,
+    this.paragraphIndent = 2,
     this.textFullJustifyEnabled = false,
     this.letterSpacing = defaultLetterSpacing,
     this.brightness = 1,
@@ -132,14 +134,20 @@ class ReaderSettings {
     this.infoHeaderMarginRight = 18,
     this.bodyMarginMode = ReaderBodyMarginMode.preset,
     this.bodyMarginPreset = ReaderBodyMarginPreset.standard,
-    this.bodyMarginTop = 18,
-    this.bodyMarginBottom = 18,
-    this.bodyMarginLeft = 18,
-    this.bodyMarginRight = 18,
+    this.bodyMarginTop = 6,
+    this.bodyMarginBottom = 6,
+    this.bodyMarginLeft = 16,
+    this.bodyMarginRight = 16,
     this.infoFooterMarginTop = 0,
     this.infoFooterMarginBottom = 0,
     this.infoFooterMarginLeft = 18,
     this.infoFooterMarginRight = 18,
+    this.showChapterHeader = true,
+    this.chapterHeaderHorizontalOffset = 0,
+    this.chapterHeaderVerticalOffset = 0,
+    this.chapterHeaderMode = ReaderChapterHeaderMode.start,
+    this.chapterHeaderTopSpacing = 0,
+    this.chapterHeaderBottomSpacing = 0,
     this.pinnedChapterHeaderOffsetX = 0,
     this.pinnedChapterHeaderOffsetY = 8,
   });
@@ -149,7 +157,11 @@ class ReaderSettings {
   static const double defaultAutoReadSpeed = 48;
   static const double minLetterSpacing = -0.5;
   static const double maxLetterSpacing = 0.5;
-  static const double defaultLetterSpacing = 0;
+  static const double defaultLetterSpacing = 0.1;
+  static const double minParagraphSpacing = 0;
+  static const double maxParagraphSpacing = 20;
+  static const double minParagraphIndent = 0;
+  static const double maxParagraphIndent = 4;
   static const int minFontWeightValue = 100;
   static const int maxFontWeightValue = 900;
   static const double minInfoBarPadding = 0;
@@ -162,6 +174,8 @@ class ReaderSettings {
   static const double legacyMaxPinnedHeaderOffsetX = 160;
   static const double minPinnedHeaderOffsetY = -40;
   static const double maxPinnedHeaderOffsetY = 180;
+  static const double minChapterHeaderSpacing = 0;
+  static const double maxChapterHeaderSpacing = 40;
 
   final double fontSize;
   final double lineHeight;
@@ -229,19 +243,22 @@ class ReaderSettings {
   final double infoFooterMarginBottom;
   final double infoFooterMarginLeft;
   final double infoFooterMarginRight;
+  final bool showChapterHeader;
+  final double chapterHeaderHorizontalOffset;
+  final double chapterHeaderVerticalOffset;
+  final ReaderChapterHeaderMode chapterHeaderMode;
+  final double chapterHeaderTopSpacing;
+  final double chapterHeaderBottomSpacing;
   final double pinnedChapterHeaderOffsetX;
   final double pinnedChapterHeaderOffsetY;
 
   ReaderBodyMarginValues get effectiveBodyMarginValues {
-    if (bodyMarginMode == ReaderBodyMarginMode.custom) {
-      return ReaderBodyMarginValues(
-        top: bodyMarginTop,
-        bottom: bodyMarginBottom,
-        left: bodyMarginLeft,
-        right: bodyMarginRight,
-      );
-    }
-    return bodyMarginValuesForPreset(bodyMarginPreset);
+    return ReaderBodyMarginValues(
+      top: bodyMarginTop,
+      bottom: bodyMarginBottom,
+      left: bodyMarginLeft,
+      right: bodyMarginRight,
+    );
   }
 
   static ReaderBodyMarginValues bodyMarginValuesForPreset(
@@ -249,28 +266,28 @@ class ReaderSettings {
   ) {
     return switch (preset) {
       ReaderBodyMarginPreset.compact => const ReaderBodyMarginValues(
-        top: 12,
-        bottom: 12,
+        top: 4,
+        bottom: 4,
         left: 12,
         right: 12,
       ),
       ReaderBodyMarginPreset.standard => const ReaderBodyMarginValues(
-        top: 18,
-        bottom: 18,
-        left: 18,
-        right: 18,
+        top: 6,
+        bottom: 6,
+        left: 16,
+        right: 16,
       ),
       ReaderBodyMarginPreset.relaxed => const ReaderBodyMarginValues(
-        top: 22,
-        bottom: 24,
-        left: 24,
-        right: 24,
+        top: 8,
+        bottom: 10,
+        left: 20,
+        right: 20,
       ),
       ReaderBodyMarginPreset.immersive => const ReaderBodyMarginValues(
-        top: 10,
-        bottom: 18,
-        left: 28,
-        right: 28,
+        top: 0,
+        bottom: 6,
+        left: 24,
+        right: 24,
       ),
     };
   }
@@ -342,6 +359,12 @@ class ReaderSettings {
     double? infoFooterMarginBottom,
     double? infoFooterMarginLeft,
     double? infoFooterMarginRight,
+    bool? showChapterHeader,
+    double? chapterHeaderHorizontalOffset,
+    double? chapterHeaderVerticalOffset,
+    ReaderChapterHeaderMode? chapterHeaderMode,
+    double? chapterHeaderTopSpacing,
+    double? chapterHeaderBottomSpacing,
     double? pinnedChapterHeaderOffsetX,
     double? pinnedChapterHeaderOffsetY,
     bool clearBackgroundImage = false,
@@ -368,26 +391,22 @@ class ReaderSettings {
             .toDouble();
     final nextBodyMarginMode = bodyMarginMode ?? this.bodyMarginMode;
     final nextBodyMarginPreset = bodyMarginPreset ?? this.bodyMarginPreset;
-    final nextEffectiveMargins =
-        nextBodyMarginMode == ReaderBodyMarginMode.custom
-            ? ReaderBodyMarginValues(
-              top: nextBodyMarginTop,
-              bottom: nextBodyMarginBottom,
-              left: nextBodyMarginLeft,
-              right: nextBodyMarginRight,
-            )
-            : bodyMarginValuesForPreset(nextBodyMarginPreset);
     final nextHorizontalPadding =
         horizontalPadding ??
-        ((nextEffectiveMargins.left + nextEffectiveMargins.right) / 2)
-            .toDouble();
+        ((nextBodyMarginLeft + nextBodyMarginRight) / 2).toDouble();
 
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
       lineHeight: lineHeight ?? this.lineHeight,
       horizontalPadding: nextHorizontalPadding,
-      paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
-      paragraphIndent: paragraphIndent ?? this.paragraphIndent,
+      paragraphSpacing:
+          (paragraphSpacing ?? this.paragraphSpacing)
+              .clamp(minParagraphSpacing, maxParagraphSpacing)
+              .toDouble(),
+      paragraphIndent:
+          (paragraphIndent ?? this.paragraphIndent)
+              .clamp(minParagraphIndent, maxParagraphIndent)
+              .toDouble(),
       textFullJustifyEnabled:
           textFullJustifyEnabled ?? this.textFullJustifyEnabled,
       letterSpacing:
@@ -534,6 +553,24 @@ class ReaderSettings {
           (infoFooterMarginRight ?? this.infoFooterMarginRight)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
+      showChapterHeader: showChapterHeader ?? this.showChapterHeader,
+      chapterHeaderHorizontalOffset:
+          (chapterHeaderHorizontalOffset ?? this.chapterHeaderHorizontalOffset)
+              .clamp(minPinnedHeaderOffsetX, maxPinnedHeaderOffsetX)
+              .toDouble(),
+      chapterHeaderVerticalOffset:
+          (chapterHeaderVerticalOffset ?? this.chapterHeaderVerticalOffset)
+              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .toDouble(),
+      chapterHeaderMode: chapterHeaderMode ?? this.chapterHeaderMode,
+      chapterHeaderTopSpacing:
+          (chapterHeaderTopSpacing ?? this.chapterHeaderTopSpacing)
+              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .toDouble(),
+      chapterHeaderBottomSpacing:
+          (chapterHeaderBottomSpacing ?? this.chapterHeaderBottomSpacing)
+              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .toDouble(),
       pinnedChapterHeaderOffsetX:
           (pinnedChapterHeaderOffsetX ?? this.pinnedChapterHeaderOffsetX)
               .clamp(minPinnedHeaderOffsetX, maxPinnedHeaderOffsetX)
@@ -613,9 +650,32 @@ class ReaderSettings {
       'infoFooterMarginBottom': infoFooterMarginBottom,
       'infoFooterMarginLeft': infoFooterMarginLeft,
       'infoFooterMarginRight': infoFooterMarginRight,
+      'showChapterHeader': showChapterHeader,
+      'chapterHeaderHorizontalOffset': chapterHeaderHorizontalOffset,
+      'chapterHeaderVerticalOffset': chapterHeaderVerticalOffset,
+      'chapterHeaderMode': chapterHeaderMode.name,
+      'chapterHeaderTopSpacing': chapterHeaderTopSpacing,
+      'chapterHeaderBottomSpacing': chapterHeaderBottomSpacing,
       'pinnedChapterHeaderOffsetX': pinnedChapterHeaderOffsetX,
       'pinnedChapterHeaderOffsetY': pinnedChapterHeaderOffsetY,
     };
+  }
+
+  static bool inferShowChapterHeaderFromLegacy({
+    required ReaderChapterHeaderMode? legacyMode,
+  }) {
+    return legacyMode != ReaderChapterHeaderMode.hidden;
+  }
+
+  static ReaderChapterHeaderMode inferChapterHeaderModeFromLegacy({
+    required double? legacyOffsetX,
+  }) {
+    final normalizedOffsetX = normalizePinnedChapterHeaderOffsetX(
+      legacyOffsetX ?? 0,
+    );
+    return normalizedOffsetX >= 0.05
+        ? ReaderChapterHeaderMode.center
+        : ReaderChapterHeaderMode.start;
   }
 
   factory ReaderSettings.fromJson(Map<String, dynamic> json) {
@@ -690,6 +750,17 @@ class ReaderSettings {
       (item) => item.name == bodyMarginPresetName,
       orElse: () => ReaderBodyMarginPreset.standard,
     );
+    final chapterHeaderModeName = json['chapterHeaderMode']?.toString();
+    final legacyPinnedHeaderOffsetX = _asDouble(
+      json['pinnedChapterHeaderOffsetX'],
+    );
+    final legacyChapterHeaderMode = ReaderChapterHeaderMode.values.firstWhere(
+      (item) => item.name == chapterHeaderModeName,
+      orElse:
+          () => inferChapterHeaderModeFromLegacy(
+            legacyOffsetX: legacyPinnedHeaderOffsetX,
+          ),
+    );
 
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();
@@ -707,7 +778,7 @@ class ReaderSettings {
     final rawFontWeightValue = _asInt(json['fontWeightValue']);
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
-    final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 18;
+    final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 16;
     final bodyMarginLeft =
         (_asDouble(json['bodyMarginLeft']) ?? legacyHorizontalPadding)
             .clamp(minLayoutMargin, maxLayoutMargin)
@@ -719,10 +790,16 @@ class ReaderSettings {
 
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
-      lineHeight: _asDouble(json['lineHeight']) ?? 1.7,
+      lineHeight: _asDouble(json['lineHeight']) ?? 1.67,
       horizontalPadding: ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
-      paragraphSpacing: _asDouble(json['paragraphSpacing']) ?? 14,
-      paragraphIndent: _asDouble(json['paragraphIndent']) ?? 0,
+      paragraphSpacing:
+          (_asDouble(json['paragraphSpacing']) ?? 2)
+              .clamp(minParagraphSpacing, maxParagraphSpacing)
+              .toDouble(),
+      paragraphIndent:
+          (_asDouble(json['paragraphIndent']) ?? 2)
+              .clamp(minParagraphIndent, maxParagraphIndent)
+              .toDouble(),
       textFullJustifyEnabled: _asBool(json['textFullJustifyEnabled']) ?? false,
       letterSpacing:
           (_asDouble(json['letterSpacing']) ?? defaultLetterSpacing)
@@ -824,11 +901,11 @@ class ReaderSettings {
       bodyMarginMode: bodyMarginMode,
       bodyMarginPreset: bodyMarginPreset,
       bodyMarginTop:
-          (_asDouble(json['bodyMarginTop']) ?? 18)
+          (_asDouble(json['bodyMarginTop']) ?? 6)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginBottom:
-          (_asDouble(json['bodyMarginBottom']) ?? 18)
+          (_asDouble(json['bodyMarginBottom']) ?? 6)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginLeft: bodyMarginLeft,
@@ -848,6 +925,32 @@ class ReaderSettings {
       infoFooterMarginRight:
           (_asDouble(json['infoFooterMarginRight']) ?? legacyHorizontalPadding)
               .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      showChapterHeader:
+          _asBool(json['showChapterHeader']) ??
+          inferShowChapterHeaderFromLegacy(legacyMode: legacyChapterHeaderMode),
+      chapterHeaderHorizontalOffset:
+          (_asDouble(json['chapterHeaderHorizontalOffset']) ??
+                  normalizePinnedChapterHeaderOffsetX(
+                    _asDouble(json['pinnedChapterHeaderOffsetX']),
+                  ))
+              .clamp(minPinnedHeaderOffsetX, maxPinnedHeaderOffsetX)
+              .toDouble(),
+      chapterHeaderVerticalOffset:
+          (_asDouble(json['chapterHeaderVerticalOffset']) ??
+                  (_asDouble(json['chapterHeaderTopSpacing']) ??
+                      (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8)))
+              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .toDouble(),
+      chapterHeaderMode: legacyChapterHeaderMode,
+      chapterHeaderTopSpacing:
+          (_asDouble(json['chapterHeaderTopSpacing']) ??
+                  (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8))
+              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
+              .toDouble(),
+      chapterHeaderBottomSpacing:
+          (_asDouble(json['chapterHeaderBottomSpacing']) ?? 0)
+              .clamp(minChapterHeaderSpacing, maxChapterHeaderSpacing)
               .toDouble(),
       pinnedChapterHeaderOffsetX: normalizePinnedChapterHeaderOffsetX(
         _asDouble(json['pinnedChapterHeaderOffsetX']),

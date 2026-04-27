@@ -81,8 +81,10 @@ class ReaderInfoBarItemData {
 class ReaderPinnedChapterHeaderModel {
   const ReaderPinnedChapterHeaderModel({
     required this.title,
+    required this.mode,
     required this.horizontalProgress,
     required this.topSafeInset,
+    this.bottomSpacing = 0,
     this.topPadding = 6,
     this.height = 40,
     this.offsetY = 0,
@@ -93,8 +95,10 @@ class ReaderPinnedChapterHeaderModel {
   });
 
   final String title;
+  final ReaderChapterHeaderMode mode;
   final double horizontalProgress;
   final double topSafeInset;
+  final double bottomSpacing;
   final double topPadding;
   final double height;
   final double offsetY;
@@ -103,10 +107,10 @@ class ReaderPinnedChapterHeaderModel {
   final double? measuredWidth;
   final String backTooltip;
 
-  double get clampedHorizontalProgress => horizontalProgress.clamp(0.0, 1.0);
-
-  EdgeInsets get padding =>
-      EdgeInsets.only(top: topSafeInset + topPadding + offsetY);
+  EdgeInsets get padding => EdgeInsets.only(
+    top: topSafeInset + topPadding + offsetY,
+    bottom: bottomSpacing,
+  );
 }
 
 class ReaderPinnedChapterHeader extends StatelessWidget {
@@ -145,7 +149,8 @@ class ReaderPinnedChapterHeader extends StatelessWidget {
             );
             final maxTravel = max(0.0, maxHeaderWidth - measuredWidth);
             final left =
-                model.outerLeft + (maxTravel * model.clampedHorizontalProgress);
+                model.outerLeft +
+                (maxTravel * model.horizontalProgress.clamp(0.0, 1.0));
 
             Widget row = Row(
               mainAxisSize: MainAxisSize.min,

@@ -98,6 +98,7 @@ import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
 import '../application/reader_typography_resolver.dart';
+import '../application/reader_typography_metrics_resolver.dart';
 import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';
@@ -176,6 +177,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final ReaderFontRegistryService _fontRegistryService;
   final ReaderTypographyResolver _typographyResolver =
       const ReaderTypographyResolver();
+  final ReaderTypographyMetricsResolver _typographyMetricsResolver =
+      const ReaderTypographyMetricsResolver();
   final ReaderAutoReadCoordinator _autoReadCoordinator =
       const ReaderAutoReadCoordinator();
   final ReaderAnimationPolicyResolver _animationPolicyResolver =
@@ -795,7 +798,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _showsOuterPinnedChapterHeaderFor(_ReaderViewportKind viewportKind) {
-    return viewportKind != _ReaderViewportKind.textPaged;
+    return viewportKind != _ReaderViewportKind.textPaged &&
+        _layoutResolver.showsPinnedChapterHeader(_settings);
+  }
+
+  bool _showsPagedPinnedChapterHeaderFor(_ReaderViewportKind viewportKind) {
+    return viewportKind == _ReaderViewportKind.textPaged &&
+        _layoutResolver.showsPinnedChapterHeader(_settings);
   }
 
   bool _showsOuterInfoBarsFor(_ReaderViewportKind viewportKind) {
@@ -821,8 +830,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _reservesPinnedHeaderSpaceFor(_ReaderViewportKind viewportKind) {
-    return viewportKind == _ReaderViewportKind.textPaged ||
-        _showsOuterPinnedChapterHeaderFor(viewportKind);
+    return _showsOuterPinnedChapterHeaderFor(viewportKind) ||
+        _showsPagedPinnedChapterHeaderFor(viewportKind);
   }
 
   bool get _showsPinnedChapterHeader =>
@@ -906,26 +915,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double _pinnedHeaderTotalHeight(BuildContext context) {
     return _topSafeInset(context) +
         _kPinnedHeaderTopPadding +
-        _clampPinnedChapterHeaderOffsetY(_settings.pinnedChapterHeaderOffsetY) +
-        _kPinnedHeaderHeight;
-  }
-
-  double _clampPinnedChapterHeaderOffsetX(double value) {
-    return value
-        .clamp(
-          ReaderSettings.minPinnedHeaderOffsetX,
-          ReaderSettings.maxPinnedHeaderOffsetX,
-        )
-        .toDouble();
-  }
-
-  double _clampPinnedChapterHeaderOffsetY(double value) {
-    return value
-        .clamp(
-          ReaderSettings.minPinnedHeaderOffsetY,
-          ReaderSettings.maxPinnedHeaderOffsetY,
-        )
-        .toDouble();
+        _layoutResolver.resolveChapterHeaderTopSpacing(_settings) +
+        _kPinnedHeaderHeight +
+        _layoutResolver.resolveChapterHeaderBottomSpacing(_settings);
   }
 
   _ReaderSurfaceReserves _resolveReaderSurfaceReserves(
@@ -1771,15 +1763,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return ReaderPinnedChapterHeader(
       model: ReaderPinnedChapterHeaderModel(
         title: chapterTitle,
-        horizontalProgress: _clampPinnedChapterHeaderOffsetX(
-          _settings.pinnedChapterHeaderOffsetX,
-        ),
+        mode:
+            _settings.showChapterHeader
+                ? ReaderChapterHeaderMode.start
+                : ReaderChapterHeaderMode.hidden,
+        horizontalProgress: _settings.chapterHeaderHorizontalOffset,
         topSafeInset: _topSafeInset(context),
-        topPadding: _kPinnedHeaderTopPadding,
-        height: _kPinnedHeaderHeight,
-        offsetY: _clampPinnedChapterHeaderOffsetY(
-          _settings.pinnedChapterHeaderOffsetY,
+        topPadding:
+            _kPinnedHeaderTopPadding +
+            _layoutResolver.resolveChapterHeaderTopSpacing(_settings),
+        bottomSpacing: _layoutResolver.resolveChapterHeaderBottomSpacing(
+          _settings,
         ),
+        height: _kPinnedHeaderHeight,
         measuredWidth: _measuredPinnedChapterHeaderWidth,
       ),
       palette: _chromePalette(colors),
@@ -2071,8 +2067,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         padding: bodyPadding,
         itemCount: _continuousTextChapters.length,
         separatorBuilder:
-            (_, __) =>
-                SizedBox(height: max(18.0, _settings.paragraphSpacing * 1.2)),
+            (_, __) => SizedBox(
+              height: max(
+                18.0,
+                _typographyMetricsResolver.resolveParagraphSpacingPixels(
+                      settings: _settings,
+                    ) *
+                    1.2,
+              ),
+            ),
         itemBuilder: (context, index) {
           final chapter = _continuousTextChapters[index];
           return _buildContinuousTextChapterSection(
@@ -2169,7 +2172,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final textStyle = _paragraphTextStyle(colors);
-    final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
+    final paddingBottom =
+        isLast
+            ? 0.0
+            : _typographyMetricsResolver.resolveParagraphSpacingPixels(
+              settings: _settings,
+            );
 
     return RepaintBoundary(
       child: Padding(
@@ -2353,7 +2361,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final textStyle = _paragraphTextStyle(colors);
-    final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
+    final paddingBottom =
+        isLast
+            ? 0.0
+            : _typographyMetricsResolver.resolveParagraphSpacingPixels(
+              settings: _settings,
+            );
 
     return RepaintBoundary(
       child: Padding(
@@ -2487,7 +2500,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required bool isLast,
     required _ReaderThemeColors colors,
   }) {
-    final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
+    final paddingBottom =
+        isLast
+            ? 0.0
+            : _typographyMetricsResolver.resolveParagraphSpacingPixels(
+              settings: _settings,
+            );
     return RepaintBoundary(
       child: Padding(
         padding: EdgeInsets.only(bottom: paddingBottom),
@@ -2535,7 +2553,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int _paragraphIndentLength() {
-    final indentCount = _settings.paragraphIndent.round();
+    final indentCount = _typographyMetricsResolver.resolveParagraphIndentCount(
+      _settings,
+    );
     return indentCount <= 0 ? 0 : indentCount;
   }
 
@@ -3182,7 +3202,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         if (_pagedPaginationState.isPaginating || _pagedPages.isEmpty) {
           return Column(
             children: [
-              _buildPinnedChapterHeader(colors),
+              if (_showsPagedPinnedChapterHeaderFor(_currentViewportKind))
+                _buildPinnedChapterHeader(colors),
               if (layoutMetrics.pagedHeaderReserve > 0)
                 _buildPagedHeaderSection(colors, layoutMetrics),
               Expanded(
@@ -3411,7 +3432,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final content = Column(
       children: [
-        SelectionContainer.disabled(child: _buildPinnedChapterHeader(colors)),
+        if (_showsPagedPinnedChapterHeaderFor(_currentViewportKind))
+          SelectionContainer.disabled(child: _buildPinnedChapterHeader(colors)),
         if (layoutMetrics.pagedHeaderReserve > 0)
           SelectionContainer.disabled(
             child: _buildPagedHeaderSection(colors, layoutMetrics),
@@ -5261,28 +5283,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '$_bookTitle · 第 $chapter / $total 章';
   }
 
-  String _bodyMarginPresetLabel(ReaderBodyMarginPreset preset) {
-    return switch (preset) {
-      ReaderBodyMarginPreset.compact => '紧凑',
-      ReaderBodyMarginPreset.standard => '标准',
-      ReaderBodyMarginPreset.relaxed => '舒展',
-      ReaderBodyMarginPreset.immersive => '沉浸',
-    };
-  }
-
-  String _bodyMarginPresetDescription(ReaderBodyMarginPreset preset) {
-    return switch (preset) {
-      ReaderBodyMarginPreset.compact => '更贴近屏幕边缘，单页内容更多。',
-      ReaderBodyMarginPreset.standard => '平衡留白与阅读密度。',
-      ReaderBodyMarginPreset.relaxed => '更宽松的留白，阅读压力更低。',
-      ReaderBodyMarginPreset.immersive => '缩窄正文宽度，聚焦内容区域。',
-    };
-  }
-
   String _bodyMarginDisplayValue(ReaderSettings settings) {
-    return settings.bodyMarginMode == ReaderBodyMarginMode.preset
-        ? _bodyMarginPresetLabel(settings.bodyMarginPreset)
-        : '自定义';
+    return '上${settings.bodyMarginTop.round()} 下${settings.bodyMarginBottom.round()} 左${settings.bodyMarginLeft.round()} 右${settings.bodyMarginRight.round()}';
   }
 
   String _toUserReadableError(AppException error) {
@@ -7277,20 +7279,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         final children = <Widget>[
                           buildFontChoiceTile(
                             label: systemFontPresetLabel(
-                              ReaderSystemFontPreset.defaultSans,
-                            ),
-                            selected:
-                                draft.fontSource == ReaderFontSource.system &&
-                                draft.systemFontPreset ==
-                                    ReaderSystemFontPreset.defaultSans,
-                            icon: Icons.text_fields_rounded,
-                            onTap:
-                                () => selectSystemFont(
-                                  ReaderSystemFontPreset.defaultSans,
-                                ),
-                          ),
-                          buildFontChoiceTile(
-                            label: systemFontPresetLabel(
                               ReaderSystemFontPreset.serif,
                             ),
                             selected:
@@ -7706,12 +7694,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     void resetBodyMarginsToDefault() {
                       updatePaddingSettings(
                         draft.copyWith(
-                          bodyMarginMode: ReaderBodyMarginMode.preset,
-                          bodyMarginPreset: ReaderBodyMarginPreset.standard,
-                          bodyMarginTop: 18,
-                          bodyMarginBottom: 18,
-                          bodyMarginLeft: 18,
-                          bodyMarginRight: 18,
+                          bodyMarginMode: ReaderBodyMarginMode.custom,
+                          bodyMarginTop: 6,
+                          bodyMarginBottom: 6,
+                          bodyMarginLeft: 16,
+                          bodyMarginRight: 16,
                         ),
                       );
                     }
@@ -7959,125 +7946,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     label: const Text('恢复默认'),
                                   ),
                                 ),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    ChoiceChip(
-                                      label: const Text('预设'),
-                                      selected:
-                                          draft.bodyMarginMode ==
-                                          ReaderBodyMarginMode.preset,
-                                      showCheckmark: false,
-                                      onSelected: (_) {
-                                        updatePaddingSettings(
-                                          draft.copyWith(
-                                            bodyMarginMode:
-                                                ReaderBodyMarginMode.preset,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    ChoiceChip(
-                                      label: const Text('自定义'),
-                                      selected:
-                                          draft.bodyMarginMode ==
-                                          ReaderBodyMarginMode.custom,
-                                      showCheckmark: false,
-                                      onSelected: (_) {
-                                        updatePaddingSettings(
-                                          draft.copyWith(
-                                            bodyMarginMode:
-                                                ReaderBodyMarginMode.custom,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
+                                buildMarginControlRow(
+                                  label: '上边距',
+                                  value: draft.bodyMarginTop,
+                                  onChanged:
+                                      (value) => updateBodyMargins(top: value),
+                                ),
+                                buildMarginControlRow(
+                                  label: '下边距',
+                                  value: draft.bodyMarginBottom,
+                                  onChanged:
+                                      (value) =>
+                                          updateBodyMargins(bottom: value),
+                                ),
+                                buildMarginControlRow(
+                                  label: '左边距',
+                                  value: draft.bodyMarginLeft,
+                                  onChanged:
+                                      (value) => updateBodyMargins(left: value),
+                                ),
+                                buildMarginControlRow(
+                                  label: '右边距',
+                                  value: draft.bodyMarginRight,
+                                  onChanged:
+                                      (value) =>
+                                          updateBodyMargins(right: value),
                                 ),
                                 const SizedBox(height: 8),
-                                if (draft.bodyMarginMode ==
-                                    ReaderBodyMarginMode.preset) ...[
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: ReaderBodyMarginPreset.values
-                                        .map(
-                                          (preset) => ChoiceChip(
-                                            label: Text(
-                                              _bodyMarginPresetLabel(preset),
-                                            ),
-                                            selected:
-                                                draft.bodyMarginPreset ==
-                                                preset,
-                                            showCheckmark: false,
-                                            onSelected: (_) {
-                                              updatePaddingSettings(
-                                                draft.copyWith(
-                                                  bodyMarginMode:
-                                                      ReaderBodyMarginMode
-                                                          .preset,
-                                                  bodyMarginPreset: preset,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        )
-                                        .toList(growable: false),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _bodyMarginPresetDescription(
-                                      draft.bodyMarginPreset,
-                                    ),
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Builder(
-                                    builder: (context) {
-                                      final margins =
-                                          draft.effectiveBodyMarginValues;
-                                      return Text(
-                                        '当前正文边距：上 ${margins.top.round()} / 下 ${margins.bottom.round()} / 左 ${margins.left.round()} / 右 ${margins.right.round()}',
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ] else ...[
-                                  buildMarginControlRow(
-                                    label: '上边距',
-                                    value: draft.bodyMarginTop,
-                                    onChanged:
-                                        (value) =>
-                                            updateBodyMargins(top: value),
-                                  ),
-                                  buildMarginControlRow(
-                                    label: '下边距',
-                                    value: draft.bodyMarginBottom,
-                                    onChanged:
-                                        (value) =>
-                                            updateBodyMargins(bottom: value),
-                                  ),
-                                  buildMarginControlRow(
-                                    label: '左边距',
-                                    value: draft.bodyMarginLeft,
-                                    onChanged:
-                                        (value) =>
-                                            updateBodyMargins(left: value),
-                                  ),
-                                  buildMarginControlRow(
-                                    label: '右边距',
-                                    value: draft.bodyMarginRight,
-                                    onChanged:
-                                        (value) =>
-                                            updateBodyMargins(right: value),
-                                  ),
-                                ],
+                                Builder(
+                                  builder: (context) {
+                                    final margins =
+                                        draft.effectiveBodyMarginValues;
+                                    return Text(
+                                      '当前正文边距：上 ${margins.top.round()} / 下 ${margins.bottom.round()} / 左 ${margins.left.round()} / 右 ${margins.right.round()}',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    );
+                                  },
+                                ),
                                 const SizedBox(height: 8),
                                 buildSectionTitle(title: '信息栏精调'),
                                 buildSectionTitle(
@@ -8930,13 +8837,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             onPressed: () {
                               setModalState(() {
                                 draft = draft.copyWith(
-                                  bodyMarginMode: ReaderBodyMarginMode.preset,
-                                  bodyMarginPreset:
-                                      ReaderBodyMarginPreset.standard,
-                                  bodyMarginTop: 18,
-                                  bodyMarginBottom: 18,
-                                  bodyMarginLeft: 18,
-                                  bodyMarginRight: 18,
+                                  bodyMarginMode: ReaderBodyMarginMode.custom,
+                                  bodyMarginTop: 6,
+                                  bodyMarginBottom: 6,
+                                  bodyMarginLeft: 16,
+                                  bodyMarginRight: 16,
                                 );
                               });
                             },
@@ -8948,41 +8853,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                         ],
                       ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('预设'),
-                            selected:
-                                draft.bodyMarginMode ==
-                                ReaderBodyMarginMode.preset,
-                            showCheckmark: false,
-                            onSelected: (_) {
-                              setModalState(() {
-                                draft = draft.copyWith(
-                                  bodyMarginMode: ReaderBodyMarginMode.preset,
-                                );
-                              });
-                            },
-                          ),
-                          ChoiceChip(
-                            label: const Text('自定义'),
-                            selected:
-                                draft.bodyMarginMode ==
-                                ReaderBodyMarginMode.custom,
-                            showCheckmark: false,
-                            onSelected: (_) {
-                              setModalState(() {
-                                draft = draft.copyWith(
-                                  bodyMarginMode: ReaderBodyMarginMode.custom,
-                                );
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
                       Text(
                         '当前：上 ${groups.bodyLayout.bodyMarginTop.toStringAsFixed(0)} / 下 ${groups.bodyLayout.bodyMarginBottom.toStringAsFixed(0)} / 左 ${groups.bodyLayout.bodyMarginLeft.toStringAsFixed(0)} / 右 ${groups.bodyLayout.bodyMarginRight.toStringAsFixed(0)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -8990,114 +8860,85 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                       ),
                       const SizedBox(height: 10),
-                      if (draft.bodyMarginMode == ReaderBodyMarginMode.preset)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: ReaderBodyMarginPreset.values
-                              .map(
-                                (preset) => ChoiceChip(
-                                  label: Text(_bodyMarginPresetLabel(preset)),
-                                  selected: draft.bodyMarginPreset == preset,
-                                  showCheckmark: false,
-                                  onSelected: (_) {
-                                    setModalState(() {
-                                      draft = draft.copyWith(
-                                        bodyMarginMode:
-                                            ReaderBodyMarginMode.preset,
-                                        bodyMarginPreset: preset,
-                                      );
-                                    });
-                                  },
-                                ),
-                              )
-                              .toList(growable: false),
-                        )
-                      else ...[
-                        buildTypographySliderRow(
-                          label: '上',
-                          min: ReaderSettings.minLayoutMargin,
-                          max: ReaderSettings.maxLayoutMargin,
-                          divisions: marginDivisions,
-                          value: draft.bodyMarginTop,
-                          step: _kMarginControlStep,
-                          valueLabel: _formatLayoutMarginValue(
-                            draft.bodyMarginTop,
-                          ),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyMarginMode: ReaderBodyMarginMode.custom,
-                                bodyMarginTop: value,
-                              );
-                            });
-                          },
+                      buildTypographySliderRow(
+                        label: '上',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginTop,
+                        step: _kMarginControlStep,
+                        valueLabel: _formatLayoutMarginValue(
+                          draft.bodyMarginTop,
                         ),
-                        buildTypographySliderRow(
-                          label: '下',
-                          min: ReaderSettings.minLayoutMargin,
-                          max: ReaderSettings.maxLayoutMargin,
-                          divisions: marginDivisions,
-                          value: draft.bodyMarginBottom,
-                          step: _kMarginControlStep,
-                          valueLabel: _formatLayoutMarginValue(
-                            draft.bodyMarginBottom,
-                          ),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyMarginMode: ReaderBodyMarginMode.custom,
-                                bodyMarginBottom: value,
-                              );
-                            });
-                          },
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyMarginMode: ReaderBodyMarginMode.custom,
+                              bodyMarginTop: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '下',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginBottom,
+                        step: _kMarginControlStep,
+                        valueLabel: _formatLayoutMarginValue(
+                          draft.bodyMarginBottom,
                         ),
-                        buildTypographySliderRow(
-                          label: '左',
-                          min: ReaderSettings.minLayoutMargin,
-                          max: ReaderSettings.maxLayoutMargin,
-                          divisions: marginDivisions,
-                          value: draft.bodyMarginLeft,
-                          step: _kMarginControlStep,
-                          valueLabel: _formatLayoutMarginValue(
-                            draft.bodyMarginLeft,
-                          ),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyMarginMode: ReaderBodyMarginMode.custom,
-                                bodyMarginLeft: value,
-                              );
-                            });
-                          },
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyMarginMode: ReaderBodyMarginMode.custom,
+                              bodyMarginBottom: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '左',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginLeft,
+                        step: _kMarginControlStep,
+                        valueLabel: _formatLayoutMarginValue(
+                          draft.bodyMarginLeft,
                         ),
-                        buildTypographySliderRow(
-                          label: '右',
-                          min: ReaderSettings.minLayoutMargin,
-                          max: ReaderSettings.maxLayoutMargin,
-                          divisions: marginDivisions,
-                          value: draft.bodyMarginRight,
-                          step: _kMarginControlStep,
-                          valueLabel: _formatLayoutMarginValue(
-                            draft.bodyMarginRight,
-                          ),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyMarginMode: ReaderBodyMarginMode.custom,
-                                bodyMarginRight: value,
-                              );
-                            });
-                          },
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyMarginMode: ReaderBodyMarginMode.custom,
+                              bodyMarginLeft: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '右',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginRight,
+                        step: _kMarginControlStep,
+                        valueLabel: _formatLayoutMarginValue(
+                          draft.bodyMarginRight,
                         ),
-                      ],
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyMarginMode: ReaderBodyMarginMode.custom,
+                              bodyMarginRight: value,
+                            );
+                          });
+                        },
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        draft.bodyMarginMode == ReaderBodyMarginMode.preset
-                            ? _bodyMarginPresetDescription(
-                              draft.bodyMarginPreset,
-                            )
-                            : '自定义模式下可分别精细调整上、下、左、右边距。',
+                        '直接调整正文四边留白，默认口径对齐成熟阅读器的页面 padding。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           height: 1.35,
@@ -9109,6 +8950,161 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
+                      ),
+                    ]),
+                    buildCompactSettingsCard([
+                      Row(
+                        children: [
+                          Expanded(child: buildCompactSectionTitle('阅读排版')),
+                          TextButton.icon(
+                            onPressed: () {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  lineHeight: 1.67,
+                                  paragraphSpacing: 2,
+                                  paragraphIndent: 2,
+                                  letterSpacing:
+                                      ReaderSettings.defaultLetterSpacing,
+                                );
+                              });
+                            },
+                            icon: const Icon(
+                              Icons.restart_alt_rounded,
+                              size: 16,
+                            ),
+                            label: const Text('恢复默认'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      buildTypographySliderRow(
+                        label: '字距',
+                        min: 0,
+                        max: 100,
+                        divisions: 100,
+                        value: _letterSpacingSliderValue(draft),
+                        step: 1,
+                        valueLabel: _letterSpacingValueLabel(draft),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              letterSpacing: _letterSpacingFromSliderValue(
+                                value,
+                              ),
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '行距',
+                        min: 0,
+                        max: 20,
+                        divisions: 20,
+                        value: _lineHeightSliderValue(draft),
+                        step: 1,
+                        valueLabel: _lineHeightValueLabel(draft),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              lineHeight: _lineHeightFromSliderValue(
+                                sliderValue: value,
+                                settings: draft,
+                              ),
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '段距',
+                        min: 0,
+                        max: 20,
+                        divisions: 20,
+                        value: draft.paragraphSpacing,
+                        step: 1,
+                        valueLabel: _paragraphSpacingValueLabel(draft),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(paragraphSpacing: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '缩进',
+                        min: 0,
+                        max: 4,
+                        divisions: 4,
+                        value: draft.paragraphIndent.clamp(0, 4).toDouble(),
+                        step: 1,
+                        valueLabel: _paragraphIndentValueLabel(draft),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              paragraphIndent:
+                                  value.round().clamp(0, 4).toDouble(),
+                            );
+                          });
+                        },
+                      ),
+                    ]),
+                    buildCompactSettingsCard([
+                      Row(
+                        children: [
+                          Expanded(child: buildCompactSectionTitle('章节头')),
+                          TextButton.icon(
+                            onPressed: () {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  chapterHeaderHorizontalOffset: 0,
+                                  chapterHeaderVerticalOffset: 0,
+                                );
+                              });
+                            },
+                            icon: const Icon(
+                              Icons.restart_alt_rounded,
+                              size: 16,
+                            ),
+                            label: const Text('恢复默认'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      buildTypographySliderRow(
+                        label: '横向',
+                        min: ReaderSettings.minPinnedHeaderOffsetX,
+                        max: ReaderSettings.maxPinnedHeaderOffsetX,
+                        divisions: 100,
+                        value: draft.chapterHeaderHorizontalOffset,
+                        step: 0.01,
+                        valueLabel:
+                            (draft.chapterHeaderHorizontalOffset * 100)
+                                .round()
+                                .toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              chapterHeaderHorizontalOffset: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '纵向',
+                        min: ReaderSettings.minChapterHeaderSpacing,
+                        max: ReaderSettings.maxChapterHeaderSpacing,
+                        divisions: 20,
+                        value: draft.chapterHeaderVerticalOffset,
+                        step: 1,
+                        valueLabel:
+                            draft.chapterHeaderVerticalOffset
+                                .round()
+                                .toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              chapterHeaderVerticalOffset: value,
+                            );
+                          });
+                        },
                       ),
                     ]),
                   ];
@@ -9540,7 +9536,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ],
                   'quick_margins' => buildQuickMarginCards(),
                   'typography' => <Widget>[
-                    buildCompactSectionTitle('当前字体与字重'),
+                    buildCompactSectionTitle('字体样式'),
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -9564,7 +9560,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     ),
                     buildSectionDivider(),
                     buildCompactSectionTitle(
-                      '文字颜色',
+                      '颜色样式',
                       trailing: Wrap(
                         spacing: 8,
                         children: [
@@ -9620,29 +9616,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                     ],
                     buildSectionDivider(),
-                    buildCompactSectionTitle('文字效果'),
-                    buildCompactToggleRow(
-                      label: '斜体',
-                      value: draft.bodyTextItalicEnabled,
-                      onChanged: (enabled) {
-                        setModalState(() {
-                          draft = draft.copyWith(
-                            bodyTextItalicEnabled: enabled,
-                          );
-                        });
-                      },
-                    ),
-                    buildSectionDivider(),
-                    buildCompactToggleRow(
-                      label: '阴影',
-                      value: draft.bodyTextShadowEnabled,
-                      onChanged: (enabled) {
-                        setModalState(() {
-                          draft = draft.copyWith(
-                            bodyTextShadowEnabled: enabled,
-                          );
-                        });
-                      },
+                    buildCompactSectionTitle('字体细节'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilterChip(
+                          label: const Text('斜体'),
+                          selected: draft.bodyTextItalicEnabled,
+                          showCheckmark: false,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              draft = draft.copyWith(
+                                bodyTextItalicEnabled: selected,
+                              );
+                            });
+                          },
+                        ),
+                        FilterChip(
+                          label: const Text('阴影'),
+                          selected: draft.bodyTextShadowEnabled,
+                          showCheckmark: false,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              draft = draft.copyWith(
+                                bodyTextShadowEnabled: selected,
+                              );
+                            });
+                          },
+                        ),
+                      ],
                     ),
                     if (draft.bodyTextShadowEnabled) ...[
                       const SizedBox(height: 8),
@@ -9745,21 +9749,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: ReaderBodyTextDecorationStyle.values
-                          .map(
-                            (style) => ChoiceChip(
-                              label: Text(decorationStyleLabel(style)),
-                              selected: draft.bodyTextDecorationStyle == style,
-                              onSelected: (_) {
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    bodyTextDecorationStyle: style,
-                                  );
-                                });
-                              },
-                            ),
-                          )
-                          .toList(growable: false),
+                      children: [
+                        FilterChip(
+                          label: const Text('下划线'),
+                          selected:
+                              draft.bodyTextDecorationStyle !=
+                              ReaderBodyTextDecorationStyle.none,
+                          showCheckmark: false,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              draft = draft.copyWith(
+                                bodyTextDecorationStyle:
+                                    selected
+                                        ? ReaderBodyTextDecorationStyle.solid
+                                        : ReaderBodyTextDecorationStyle.none,
+                              );
+                            });
+                          },
+                        ),
+                        FilterChip(
+                          label: const Text('虚线'),
+                          selected:
+                              draft.bodyTextDecorationStyle ==
+                              ReaderBodyTextDecorationStyle.dashed,
+                          showCheckmark: false,
+                          onSelected:
+                              draft.bodyTextDecorationStyle ==
+                                      ReaderBodyTextDecorationStyle.none
+                                  ? null
+                                  : (selected) {
+                                    setModalState(() {
+                                      draft = draft.copyWith(
+                                        bodyTextDecorationStyle:
+                                            selected
+                                                ? ReaderBodyTextDecorationStyle
+                                                    .dashed
+                                                : ReaderBodyTextDecorationStyle
+                                                    .solid,
+                                      );
+                                    });
+                                  },
+                        ),
+                      ],
                     ),
                     if (draft.bodyTextDecorationStyle !=
                         ReaderBodyTextDecorationStyle.none) ...[
@@ -9775,7 +9806,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               });
                             },
                             icon: const Icon(Icons.format_color_reset_rounded),
-                            label: const Text('跟随文字'),
+                            label: const Text('下划线颜色'),
                           ),
                           const SizedBox(width: 8),
                           OutlinedButton.icon(
@@ -9820,7 +9851,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ],
                       ),
                       buildTypographySliderRow(
-                        label: '粗细',
+                        label: '线段高度',
                         min: 1,
                         max: 10,
                         divisions: 18,
@@ -9837,7 +9868,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         },
                       ),
                       buildTypographySliderRow(
-                        label: '间距',
+                        label: '离字间距',
                         min: 0,
                         max: 16,
                         divisions: 16,
@@ -9854,7 +9885,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       if (draft.bodyTextDecorationStyle ==
                           ReaderBodyTextDecorationStyle.dashed) ...[
                         buildTypographySliderRow(
-                          label: '线长',
+                          label: '线段长',
                           min: 1,
                           max: 24,
                           divisions: 23,
@@ -9873,7 +9904,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           },
                         ),
                         buildTypographySliderRow(
-                          label: '比例',
+                          label: '空隙比例',
                           min: 1,
                           max: 12,
                           divisions: 11,
@@ -9894,72 +9925,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ],
                     ],
                     buildSectionDivider(),
-                    buildCompactSectionTitle('阅读排版细节'),
-                    buildTypographySliderRow(
-                      label: '字距',
-                      min: 0,
-                      max: 100,
-                      divisions: 100,
-                      value: _letterSpacingSliderValue(draft),
-                      step: 1,
-                      valueLabel: _letterSpacingValueLabel(draft),
-                      onChanged: (value) {
-                        setModalState(() {
-                          draft = draft.copyWith(
-                            letterSpacing: _letterSpacingFromSliderValue(value),
-                          );
-                        });
-                      },
-                    ),
-                    buildTypographySliderRow(
-                      label: '行距',
-                      min: 0,
-                      max: 20,
-                      divisions: 20,
-                      value: _lineHeightSliderValue(draft),
-                      step: 1,
-                      valueLabel: _lineHeightValueLabel(draft),
-                      onChanged: (value) {
-                        setModalState(() {
-                          draft = draft.copyWith(
-                            lineHeight: _lineHeightFromSliderValue(
-                              sliderValue: value,
-                              settings: draft,
-                            ),
-                          );
-                        });
-                      },
-                    ),
-                    buildTypographySliderRow(
-                      label: '段距',
-                      min: 0,
-                      max: 20,
-                      divisions: 20,
-                      value: draft.paragraphSpacing,
-                      step: 1,
-                      valueLabel: _paragraphSpacingValueLabel(draft),
-                      onChanged: (value) {
-                        setModalState(() {
-                          draft = draft.copyWith(paragraphSpacing: value);
-                        });
-                      },
-                    ),
-                    buildTypographySliderRow(
-                      label: '缩进',
-                      min: 0,
-                      max: 8,
-                      divisions: 8,
-                      value: draft.paragraphIndent.clamp(0, 8).toDouble(),
-                      step: 1,
-                      valueLabel: _paragraphIndentValueLabel(draft),
-                      onChanged: (value) {
-                        setModalState(() {
-                          draft = draft.copyWith(
-                            paragraphIndent: value.round().toDouble(),
-                          );
-                        });
-                      },
-                    ),
                   ],
                   'interaction' => <Widget>[
                     buildCompactSettingsCard([
@@ -10217,59 +10182,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                       ],
                     ]),
-                    buildCompactSettingsCard([
-                      buildCompactSectionTitle('章节头位置'),
-                      const SizedBox(height: 10),
-                      Text(
-                        _showsPinnedChapterHeader
-                            ? '通过横向、纵向进度条调整正文左上角“<章节名”的位置。'
-                            : '当前阅读模式没有显示这个章节头，切到滚动/连续正文后再调整会更直观。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      buildTypographySliderRow(
-                        label: '横',
-                        min: ReaderSettings.minPinnedHeaderOffsetX,
-                        max: ReaderSettings.maxPinnedHeaderOffsetX,
-                        divisions: 100,
-                        value: draft.pinnedChapterHeaderOffsetX,
-                        step: 0.01,
-                        valueLabel:
-                            (draft.pinnedChapterHeaderOffsetX * 100)
-                                .round()
-                                .toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              pinnedChapterHeaderOffsetX: value,
-                            );
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '纵',
-                        min: ReaderSettings.minPinnedHeaderOffsetY,
-                        max: ReaderSettings.maxPinnedHeaderOffsetY,
-                        divisions:
-                            (ReaderSettings.maxPinnedHeaderOffsetY -
-                                    ReaderSettings.minPinnedHeaderOffsetY)
-                                .round(),
-                        value: draft.pinnedChapterHeaderOffsetY,
-                        step: 1,
-                        valueLabel:
-                            draft.pinnedChapterHeaderOffsetY.round().toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              pinnedChapterHeaderOffsetY: value,
-                            );
-                          });
-                        },
-                      ),
-                    ]),
                   ],
                   'behavior' => <Widget>[
                     buildCompactSettingsCard([quickToggleCard]),
@@ -10328,7 +10240,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   _ => const <Widget>[],
                 };
                 final sheetTitle = switch (activeSettingsGroupKey) {
-                  'quick_margins' => '边距',
+                  'quick_margins' => '边距与排版',
                   'typography' => '字体',
                   'interaction' => '翻页与动画',
                   'info' => '信息排版',
@@ -12412,8 +12324,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _lineHeightSliderValue(ReaderSettings settings) {
-    final safeFontSize = settings.fontSize <= 0 ? 18.0 : settings.fontSize;
-    return (((settings.lineHeight - 1) * safeFontSize).clamp(0, 20)).toDouble();
+    return _typographyMetricsResolver.resolveLineSpacingExtra(settings);
   }
 
   double _lineHeightFromSliderValue({
@@ -12425,21 +12336,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String _lineHeightValueLabel(ReaderSettings settings) {
-    return _formatTypographyValue(
-      value: settings.lineHeight,
-      fractionDigits: 2,
+    final md3Extra = _typographyMetricsResolver.resolveLineSpacingExtra(
+      settings,
     );
+    return md3Extra.round().toString();
   }
 
   String _paragraphSpacingValueLabel(ReaderSettings settings) {
-    return _formatTypographyValue(
-      value: settings.paragraphSpacing,
-      fractionDigits: 0,
+    final md3Spacing = _typographyMetricsResolver.resolveParagraphSpacingUnits(
+      settings,
     );
+    return md3Spacing.toStringAsFixed(1);
   }
 
   String _paragraphIndentValueLabel(ReaderSettings settings) {
-    return settings.paragraphIndent.round().toString();
+    return switch (_typographyMetricsResolver.resolveParagraphIndentCount(
+      settings,
+    )) {
+      0 => '无缩进',
+      1 => '一字符',
+      2 => '二字符',
+      3 => '三字符',
+      _ => '四字符',
+    };
   }
 
   String _mangaReadModeLabel(ReaderMangaReadMode mode) {
@@ -12460,7 +12379,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   String _pageAnimationLabel(ReaderPageAnimationStyle style) {
     return switch (style) {
-      ReaderPageAnimationStyle.curl => '卷页',
+      ReaderPageAnimationStyle.curl => '仿真',
       ReaderPageAnimationStyle.fade => '淡入淡出',
       ReaderPageAnimationStyle.cover => '覆盖',
       ReaderPageAnimationStyle.translate => '平移',

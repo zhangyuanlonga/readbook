@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_document_render_model.dart';
+import '../application/reader_typography_metrics_resolver.dart';
 import '../application/reader_typography_resolver.dart';
 
 class ReaderTextBlockPresentation {
@@ -34,6 +35,7 @@ ReaderTextBlockPresentation resolveReaderTextBlockPresentation({
       settings.bodyTextColorValue == null
           ? primaryTextColor
           : Color(settings.bodyTextColorValue!);
+  const metricsResolver = ReaderTypographyMetricsResolver();
   final baseStyle = resolver.resolveBodyStyle(
     settings: settings,
     color: bodyColor,
@@ -85,22 +87,27 @@ ReaderTextBlockPresentation resolveReaderTextBlockPresentation({
     ReaderRenderTextKind.footnote => '注: $rawText',
     ReaderRenderTextKind.title => rawText,
   };
+  final effectiveFontSize = textStyle.fontSize ?? settings.fontSize;
+  final effectiveLineHeight =
+      textStyle.height ?? metricsResolver.resolveLineHeight(settings);
+  final baseParagraphSpacing = metricsResolver.resolveParagraphSpacingPixels(
+    settings: settings,
+    fontSize: effectiveFontSize,
+    lineHeight: effectiveLineHeight,
+  );
   final spacingAfter =
       isLast
           ? 0
           : switch (kind) {
-            ReaderRenderTextKind.paragraph => settings.paragraphSpacing,
-            ReaderRenderTextKind.listItem => settings.paragraphSpacing * 0.7,
+            ReaderRenderTextKind.paragraph => baseParagraphSpacing,
+            ReaderRenderTextKind.listItem => baseParagraphSpacing * 0.7,
             ReaderRenderTextKind.quote => math.max(
-              settings.paragraphSpacing * 0.85,
-              14.0,
+              baseParagraphSpacing * 0.85,
+              8.0,
             ),
-            ReaderRenderTextKind.caption => settings.paragraphSpacing * 0.6,
-            ReaderRenderTextKind.footnote => settings.paragraphSpacing * 0.55,
-            ReaderRenderTextKind.title => math.max(
-              settings.paragraphSpacing,
-              18.0,
-            ),
+            ReaderRenderTextKind.caption => baseParagraphSpacing * 0.6,
+            ReaderRenderTextKind.footnote => baseParagraphSpacing * 0.55,
+            ReaderRenderTextKind.title => math.max(baseParagraphSpacing, 12.0),
           };
   return ReaderTextBlockPresentation(
     textStyle: textStyle,
@@ -112,7 +119,8 @@ ReaderTextBlockPresentation resolveReaderTextBlockPresentation({
 }
 
 String readerParagraphIndentPrefix(ReaderSettings settings) {
-  final indentCount = settings.paragraphIndent.round();
+  const metricsResolver = ReaderTypographyMetricsResolver();
+  final indentCount = metricsResolver.resolveParagraphIndentCount(settings);
   if (indentCount <= 0) {
     return '';
   }
