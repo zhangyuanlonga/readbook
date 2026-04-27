@@ -20,15 +20,17 @@ import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_seat_sync_result.dart';
 import '../../../core/membership/membership_service.dart';
 import '../application/advanced_theme_provider.dart';
+import '../providers.dart';
 
-class MembershipCenterPage extends StatefulWidget {
+class MembershipCenterPage extends ConsumerStatefulWidget {
   const MembershipCenterPage({super.key});
 
   @override
-  State<MembershipCenterPage> createState() => _MembershipCenterPageState();
+  ConsumerState<MembershipCenterPage> createState() =>
+      _MembershipCenterPageState();
 }
 
-class _MembershipCenterPageState extends State<MembershipCenterPage> {
+class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   static const String _supportQqNumber = '782045011';
   static const String _paymentQrAssetPath = 'assets/logo/vx.jpg';
   static final Uri _supportChatUri = Uri.parse(
@@ -112,8 +114,8 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     ),
   ];
 
-  final AuthSessionStore _sessionStore = AuthSessionStore();
-  final MembershipService _membershipService = MembershipService();
+  late final AuthSessionStore _sessionStore;
+  late final MembershipService _membershipService;
   final TextEditingController _codeController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -132,6 +134,8 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   @override
   void initState() {
     super.initState();
+    _sessionStore = ref.read(mineAuthSessionStoreProvider);
+    _membershipService = ref.read(mineMembershipServiceProvider);
     _loadPage();
   }
 
@@ -144,82 +148,78 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final activeAdvancedTheme =
-            ref.watch(activeAdvancedThemeProvider).valueOrNull;
-        final backdrop = resolveAdvancedThemeBackdrop(
-          Theme.of(context).colorScheme,
-          activeAdvancedTheme,
-        );
-        final horizontal = AppSpacing.pageHorizontal(context);
-        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-        const title = '会员中心';
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    const title = '会员中心';
 
-        return PopScope<void>(
-          canPop: context.canPop(),
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !context.mounted) {
-              return;
-            }
-            context.go('/mine');
-          },
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: Text(title),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                    return;
-                  }
-                  context.go('/mine');
-                },
-              ),
-            ),
-            bottomNavigationBar:
-                _isLoading ? null : _buildBottomActionBar(context, bottomSafe),
-            body: LayoutBuilder(
-              builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.mineContentMaxWidth,
-                );
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
+      },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: Text(title),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+                return;
+              }
+              context.go('/mine');
+            },
+          ),
+        ),
+        bottomNavigationBar:
+            _isLoading ? null : _buildBottomActionBar(context, bottomSafe),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            );
 
-                return DecoratedBox(
-                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: RefreshIndicator(
-                        onRefresh: _refreshPage,
-                        child: ListView(
-                          controller: _scrollController,
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            topInset + 12,
-                            horizontal,
-                            108 + bottomSafe,
-                          ),
-                          children: _buildContent(context),
-                        ),
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: RefreshIndicator(
+                    onRefresh: _refreshPage,
+                    child: ListView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        topInset + 12,
+                        horizontal,
+                        108 + bottomSafe,
                       ),
+                      children: _buildContent(context),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-        );
-      },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 

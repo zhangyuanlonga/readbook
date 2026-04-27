@@ -1758,9 +1758,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _ReaderThemeColors colors, {
     required bool isHeader,
   }) {
-    final items = _buildReaderInfoItems()
-        .map((item) => ReaderInfoBarItemData.text(item))
-        .toList(growable: false);
+    final leadingItems = <ReaderInfoBarItemData>[
+      if (_settings.infoShowProgress)
+        ReaderInfoBarItemData.text(
+          '进度 ${(_currentScrollRatio() * 100).round()}%',
+        ),
+    ];
+    final centerItems = <ReaderInfoBarItemData>[
+      if (_settings.infoShowChapter &&
+          (_chapterTitle?.trim().isNotEmpty ?? false))
+        ReaderInfoBarItemData.text(_chapterTitle!.trim()),
+    ];
+    final trailingItems = <ReaderInfoBarItemData>[
+      if (_settings.infoShowTime)
+        ReaderInfoBarItemData.text(_formatReaderInfoTime(_readerInfoNow)),
+      if (_settings.infoShowBattery)
+        ReaderInfoBarItemData.battery(
+          batteryLevel: _readerBatteryLevel,
+          batteryReadFailed: _readerBatteryReadFailed,
+        ),
+    ];
     return ReaderInfoBar(
       model: ReaderInfoBarModel.fromSettings(
         settings: _settings,
@@ -1777,7 +1794,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           (_, true) => ReaderChromeRole.pagedHeader,
           (_, false) => ReaderChromeRole.pagedFooter,
         },
-        centerItems: items,
+        leadingItems: leadingItems,
+        centerItems: centerItems,
+        trailingItems: trailingItems,
       ),
       palette: _chromePalette(colors),
     );
@@ -1787,24 +1806,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
-  }
-
-  List<String> _buildReaderInfoItems() {
-    final items = <String>[];
-    if (_settings.infoShowTime) {
-      items.add(_formatReaderInfoTime(_readerInfoNow));
-    }
-    if (_settings.infoShowBattery) {
-      items.add(_readerBatteryLabel());
-    }
-    if (_settings.infoShowProgress) {
-      items.add('进度 ${(_currentScrollRatio() * 100).round()}%');
-    }
-    if (_settings.infoShowChapter &&
-        (_chapterTitle?.trim().isNotEmpty ?? false)) {
-      items.add(_chapterTitle!.trim());
-    }
-    return items;
   }
 
   String _readerBatteryLabel() {
@@ -3169,23 +3170,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         if (_settings.infoShowBattery) _readerBatteryLabel(),
       ],
     );
-    final footerTopPadding =
-        layoutMetrics.footerPadding.top +
+    final footerInnerHorizontalPadding =
         _settings.infoFooterPadding
             .clamp(
               ReaderSettings.minInfoBarPadding,
               ReaderSettings.maxInfoBarPadding,
             )
             .toDouble();
+    final footerInnerVerticalPadding =
+        (footerInnerHorizontalPadding * 0.45).clamp(2.0, 12.0).toDouble();
+    final footerTopPadding =
+        layoutMetrics.footerPadding.top + footerInnerVerticalPadding;
     final footerBottomPadding =
-        layoutMetrics.safeInsets.bottom + layoutMetrics.footerPadding.bottom;
+        layoutMetrics.safeInsets.bottom +
+        layoutMetrics.footerPadding.bottom +
+        footerInnerVerticalPadding;
     final footer = SizedBox(
       height: layoutMetrics.pagedFooterReserve,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          overlayModel.horizontalPadding,
+          overlayModel.horizontalPadding + footerInnerHorizontalPadding,
           footerTopPadding,
-          overlayModel.horizontalPadding,
+          overlayModel.horizontalPadding + footerInnerHorizontalPadding,
           footerBottomPadding,
         ),
         child: Opacity(
@@ -3223,7 +3229,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: colors.divider.withValues(alpha: 0.4)),
+          top: BorderSide(color: colors.divider.withValues(alpha: 0.22)),
         ),
       ),
       child: footer,
@@ -7869,20 +7875,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               }
 
               Widget buildTextReaderSettingsSheet() {
-                int enabledInfoItemCount() {
-                  var count = 0;
-                  if (draft.infoShowTime) {
-                    count += 1;
-                  }
-                  if (draft.infoShowBattery) {
-                    count += 1;
-                  }
-                  if (draft.infoShowProgress) {
-                    count += 1;
-                  }
-                  return count;
-                }
-
                 Widget buildCompactSectionTitle(
                   String title, {
                   Widget? trailing,
@@ -9387,18 +9379,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           });
                         },
                       ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed:
-                              () => unawaited(openHorizontalPaddingTabSheet()),
-                          icon: const Icon(Icons.tune_rounded, size: 16),
-                          label: const Text('页脚与正文边距'),
-                        ),
-                      ),
                       const SizedBox(height: 10),
                       Text(
-                        '当前启用 ${enabledInfoItemCount()} 项信息，控制正文页底部/角落的信息显示。',
+                        '页脚分隔线控制顶部细线，页脚内距控制页脚内容与边界的内部留白。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           height: 1.35,

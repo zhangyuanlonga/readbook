@@ -246,6 +246,9 @@ class ReaderInfoBarModel {
               ReaderSettings.maxInfoBarPadding,
             )
             .toDouble();
+    final verticalPadding = _resolveInfoBarVerticalPadding(
+      innerHorizontalPadding,
+    );
 
     return ReaderInfoBarModel(
       leadingItems: leadingItems,
@@ -257,6 +260,7 @@ class ReaderInfoBarModel {
           layoutResolver.resolveInfoBarPadding(settings, isHeader: isHeader) +
           extraOuterPadding,
       innerHorizontalPadding: innerHorizontalPadding,
+      verticalPadding: verticalPadding,
       showDivider:
           isHeader
               ? settings.infoHeaderDividerEnabled
@@ -279,6 +283,10 @@ class ReaderInfoBarModel {
       leadingItems.isNotEmpty ||
       centerItems.isNotEmpty ||
       trailingItems.isNotEmpty;
+
+  static double _resolveInfoBarVerticalPadding(double innerPadding) {
+    return (innerPadding * 0.45).clamp(2.0, 12.0).toDouble();
+  }
 }
 
 class ReaderInfoBar extends StatelessWidget {
@@ -308,11 +316,11 @@ class ReaderInfoBar extends StatelessWidget {
           border: Border(
             bottom:
                 model.showDivider && model.isHeader
-                    ? BorderSide(color: palette.divider.withValues(alpha: 0.4))
+                    ? BorderSide(color: palette.divider.withValues(alpha: 0.22))
                     : BorderSide.none,
             top:
                 model.showDivider && !model.isHeader
-                    ? BorderSide(color: palette.divider.withValues(alpha: 0.4))
+                    ? BorderSide(color: palette.divider.withValues(alpha: 0.22))
                     : BorderSide.none,
           ),
         ),
@@ -408,10 +416,13 @@ class _ReaderInfoBarSection extends StatelessWidget {
                       ),
                 ),
               ),
-            _ReaderInfoBarItem(
-              item: items[index],
-              palette: palette,
-              itemTextStyle: itemTextStyle,
+            Flexible(
+              fit: FlexFit.loose,
+              child: _ReaderInfoBarItem(
+                item: items[index],
+                palette: palette,
+                itemTextStyle: itemTextStyle,
+              ),
             ),
           ],
         ],

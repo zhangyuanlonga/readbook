@@ -45,6 +45,7 @@ export default {
       await runAdaptivePageSmokeMatrix(
         tester,
         pageBuilder: () => const ScriptSourceEditorPage(),
+        useProviderScope: true,
         pageName: 'ScriptSourceEditorPage',
       );
     });

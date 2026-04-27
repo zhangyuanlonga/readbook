@@ -23,6 +23,7 @@ import '../../../core/media/image_selection_service.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_provider.dart';
 import '../../reader/application/reader_font_registry_service.dart';
+import '../providers.dart';
 
 enum AppearanceSection { appearance, tabBar, cover, background }
 
@@ -52,12 +53,13 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   bool _isLoadingBackgrounds = true;
   final ReaderFontRegistryService _fontRegistryService =
       ReaderFontRegistryService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
+  late final ImageSelectionService _imageSelectionService;
   List<ReaderCustomFontEntry> _availableCustomFonts = const [];
 
   @override
   void initState() {
     super.initState();
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _loadBackgrounds();
     unawaited(_loadAvailableFonts());
   }

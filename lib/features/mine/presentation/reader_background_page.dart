@@ -14,6 +14,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/reader_background_service.dart';
+import '../providers.dart';
 
 class ReaderBackgroundPage extends ConsumerStatefulWidget {
   const ReaderBackgroundPage({super.key});
@@ -24,8 +25,8 @@ class ReaderBackgroundPage extends ConsumerStatefulWidget {
 }
 
 class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
-  final ReaderBackgroundService _service = ReaderBackgroundService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
+  late final ReaderBackgroundService _service;
+  late final ImageSelectionService _imageSelectionService;
 
   List<String> _backgroundPaths = const <String>[];
   bool _isLoading = true;
@@ -34,6 +35,8 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(readerBackgroundServiceProvider);
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _load();
   }
 

@@ -5,6 +5,7 @@ import '../../core/auth/auth_session_store.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
 import 'application/source_check_service.dart';
 import 'application/source_health_service.dart';
+import 'application/source_login_browser_service.dart';
 import 'application/source_login_runtime_service.dart';
 import 'application/source_page_flow_coordinator.dart';
 import 'application/source_runtime_facade.dart';
@@ -39,6 +40,12 @@ final sourceLoginRuntimeServiceProvider = Provider<SourceLoginRuntimeService>((
   return SourceLoginRuntimeService(
     sourceRuntimeFacade: ref.watch(sourceRuntimeFacadeProvider),
   );
+});
+
+final sourceLoginBrowserServiceProvider = Provider<SourceLoginBrowserService>((
+  ref,
+) {
+  return const SourceLoginBrowserService();
 });
 
 typedef SourcePageFlowCoordinatorFactory = SourcePageFlowCoordinator Function();

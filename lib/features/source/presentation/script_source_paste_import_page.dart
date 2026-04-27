@@ -1,29 +1,31 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../application/source_runtime_facade.dart';
+import '../providers.dart';
 
-class ScriptSourcePasteImportPage extends StatefulWidget {
+class ScriptSourcePasteImportPage extends ConsumerStatefulWidget {
   const ScriptSourcePasteImportPage({super.key, this.sourceRuntimeFacade});
 
   final SourceRuntimeFacade? sourceRuntimeFacade;
 
   @override
-  State<ScriptSourcePasteImportPage> createState() =>
+  ConsumerState<ScriptSourcePasteImportPage> createState() =>
       _ScriptSourcePasteImportPageState();
 }
 
 class _ScriptSourcePasteImportPageState
-    extends State<ScriptSourcePasteImportPage> {
+    extends ConsumerState<ScriptSourcePasteImportPage> {
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final TextEditingController _controller;
-  final AuthSessionStore _authSessionStore = AuthSessionStore();
-  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
+  late final AuthSessionStore _authSessionStore;
+  late final MobileFeatureService _mobileFeatureService;
 
   bool _isImporting = false;
 
@@ -31,7 +33,9 @@ class _ScriptSourcePasteImportPageState
   void initState() {
     super.initState();
     _sourceRuntimeFacade =
-        widget.sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+        widget.sourceRuntimeFacade ?? ref.read(sourceRuntimeFacadeProvider);
+    _authSessionStore = ref.read(sourceAuthSessionStoreProvider);
+    _mobileFeatureService = ref.read(sourceMobileFeatureServiceProvider);
     _controller = TextEditingController();
     unawaited(_tryPrefillFromClipboard());
   }

@@ -87,7 +87,7 @@
 - 阶段 1：已完成，完成日期 `2026-04-27`
 - 阶段 2：已完成，完成日期 `2026-04-27`
 - 阶段 3：已完成，完成日期 `2026-04-27`
-- 阶段 4：未开始
+- 阶段 4：已完成，完成日期 `2026-04-27`
 - 阶段 5：未开始
 - 阶段 6：未开始
 
@@ -268,17 +268,19 @@
 
 任务：`source`
 
-- [ ] 将 `script_source_editor_page.dart` 中直接构造的 `AuthSessionStore`、`MobileFeatureService` 迁出页面
-- [ ] 将 `script_source_paste_import_page.dart` 中直接构造的 `AuthSessionStore`、`MobileFeatureService` 迁出页面
-- [ ] 将 `source_login_page.dart` 默认 `SourceLoginRuntimeService()` 改为 provider 注入
-- [ ] 统一 `source` 全部页面只通过 `source/providers.dart` 取依赖
+- [x] 将 `script_source_editor_page.dart` 中直接构造的 `AuthSessionStore`、`MobileFeatureService` 迁出页面
+- [x] 将 `script_source_paste_import_page.dart` 中直接构造的 `AuthSessionStore`、`MobileFeatureService` 迁出页面
+- [x] 将 `source_login_page.dart` 默认 `SourceLoginRuntimeService()` 改为 provider 注入
+- [x] 统一 `source` 全部页面只通过 `source/providers.dart` 取依赖
+- [x] 新增 `sourceLoginBrowserServiceProvider`，补齐登录页默认依赖入口
 
 任务：`mine`
 
-- [ ] 将 `appearance_page.dart` 直连的图片选择能力迁出页面
-- [ ] 将 `reader_background_page.dart` 直连的 service 迁出页面
-- [ ] 将 `advanced_theme_editor_page.dart` 直连的 service 迁出页面
-- [ ] 将 `membership_center_page.dart` 直连的 store/service 迁出页面
+- [x] 将 `appearance_page.dart` 直连的图片选择能力迁出页面
+- [x] 将 `reader_background_page.dart` 直连的 service 迁出页面
+- [x] 将 `advanced_theme_editor_page.dart` 直连的 service 迁出页面
+- [x] 将 `membership_center_page.dart` 直连的 store/service 迁出页面
+- [x] 新增 `readerBackgroundServiceProvider`，统一阅读背景能力入口
 
 阶段完成标准：
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -9,8 +10,9 @@ import '../../../core/errors/app_exception.dart';
 import '../../../runtime/sources/source_contract.dart';
 import '../application/source_login_browser_service.dart';
 import '../application/source_login_runtime_service.dart';
+import '../providers.dart';
 
-class SourceLoginPage extends StatefulWidget {
+class SourceLoginPage extends ConsumerStatefulWidget {
   const SourceLoginPage({
     super.key,
     required this.sourceId,
@@ -27,10 +29,10 @@ class SourceLoginPage extends StatefulWidget {
   final ScrollController? parentScrollController;
 
   @override
-  State<SourceLoginPage> createState() => _SourceLoginPageState();
+  ConsumerState<SourceLoginPage> createState() => _SourceLoginPageState();
 }
 
-class _SourceLoginPageState extends State<SourceLoginPage> {
+class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
   late final SourceLoginRuntimeService _sourceLoginRuntimeService;
   late final SourceLoginBrowserService _sourceLoginBrowserService;
   bool _isLoading = true;
@@ -50,9 +52,11 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
   void initState() {
     super.initState();
     _sourceLoginRuntimeService =
-        widget.sourceLoginRuntimeService ?? SourceLoginRuntimeService.legacy();
+        widget.sourceLoginRuntimeService ??
+        ref.read(sourceLoginRuntimeServiceProvider);
     _sourceLoginBrowserService =
-        widget.sourceLoginBrowserService ?? const SourceLoginBrowserService();
+        widget.sourceLoginBrowserService ??
+        ref.read(sourceLoginBrowserServiceProvider);
     _load();
   }
 

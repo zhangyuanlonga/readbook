@@ -8,6 +8,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -24,10 +25,13 @@ import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_service.dart';
 import '../application/cover_gallery_service.dart';
+import '../application/launch_image_gallery_provider.dart';
 import '../application/launch_image_gallery_service.dart';
 import '../application/reader_background_service.dart';
+import '../providers.dart';
 
 class AdvancedThemeEditorPage extends ConsumerStatefulWidget {
   const AdvancedThemeEditorPage({super.key, this.themeId});
@@ -44,14 +48,11 @@ class _AdvancedThemeEditorPageState
     with SingleTickerProviderStateMixin {
   static const double _resourcePickerSheetHeightFactor = 0.7;
 
-  final AdvancedThemeService _service = AdvancedThemeService();
-  final BottomNavIconGalleryService _bottomNavIconGalleryService =
-      BottomNavIconGalleryService();
-  final CoverGalleryService _coverGalleryService = CoverGalleryService();
-  final LaunchImageGalleryService _launchImageGalleryService =
-      LaunchImageGalleryService();
-  final ReaderBackgroundService _readerBackgroundService =
-      ReaderBackgroundService();
+  late final AdvancedThemeService _service;
+  late final BottomNavIconGalleryService _bottomNavIconGalleryService;
+  late final CoverGalleryService _coverGalleryService;
+  late final LaunchImageGalleryService _launchImageGalleryService;
+  late final ReaderBackgroundService _readerBackgroundService;
   final TextEditingController _nameController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
@@ -90,6 +91,13 @@ class _AdvancedThemeEditorPageState
       return;
     }
     _didInitialize = true;
+    _service = ref.read(advancedThemeServiceProvider);
+    _bottomNavIconGalleryService = ref.read(
+      bottomNavIconGalleryServiceProvider,
+    );
+    _coverGalleryService = ref.read(coverGalleryServiceProvider);
+    _launchImageGalleryService = ref.read(launchImageGalleryServiceProvider);
+    _readerBackgroundService = ref.read(readerBackgroundServiceProvider);
     unawaited(_initializeDraft());
     unawaited(_loadAppearanceLinks());
   }

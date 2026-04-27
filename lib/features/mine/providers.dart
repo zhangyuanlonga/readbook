@@ -12,6 +12,7 @@ import 'application/advanced_theme_page_flow_coordinator.dart';
 import 'application/bookmarks_query_service.dart';
 import 'application/cache_management_service.dart';
 import 'application/mine_page_flow_coordinator.dart';
+import 'application/reader_background_service.dart';
 
 final mineBookshelfServiceProvider = Provider<BookshelfService>((ref) {
   return BookshelfService();
@@ -55,6 +56,12 @@ final mineImageSelectionServiceProvider = Provider<ImageSelectionService>((
   ref,
 ) {
   return ImageSelectionService();
+});
+
+final readerBackgroundServiceProvider = Provider<ReaderBackgroundService>((
+  ref,
+) {
+  return ReaderBackgroundService();
 });
 
 typedef MinePageFlowCoordinatorFactory = MinePageFlowCoordinator Function();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
@@ -17,9 +18,10 @@ import '../../../runtime/sources/source_script_compiler.dart'
     show SourceScriptCompileException;
 import '../../../runtime/sources/source_script_template.dart';
 import '../application/source_runtime_facade.dart';
+import '../providers.dart';
 import 'script_source_debug_page.dart';
 
-class ScriptSourceEditorPage extends StatefulWidget {
+class ScriptSourceEditorPage extends ConsumerStatefulWidget {
   const ScriptSourceEditorPage({
     super.key,
     this.scriptSourceId,
@@ -30,16 +32,18 @@ class ScriptSourceEditorPage extends StatefulWidget {
   final SourceRuntimeFacade? sourceRuntimeFacade;
 
   @override
-  State<ScriptSourceEditorPage> createState() => _ScriptSourceEditorPageState();
+  ConsumerState<ScriptSourceEditorPage> createState() =>
+      _ScriptSourceEditorPageState();
 }
 
 enum _EditorToolbarMenuAction { format, search, toggleAppearance, debug }
 
-class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
+class _ScriptSourceEditorPageState
+    extends ConsumerState<ScriptSourceEditorPage> {
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final CodeController _controller;
-  final AuthSessionStore _authSessionStore = AuthSessionStore();
-  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
+  late final AuthSessionStore _authSessionStore;
+  late final MobileFeatureService _mobileFeatureService;
   final ValueNotifier<_EditorIssueSummary> _issueSummaryNotifier =
       ValueNotifier<_EditorIssueSummary>(_EditorIssueSummary.empty);
 
@@ -97,7 +101,9 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   void initState() {
     super.initState();
     _sourceRuntimeFacade =
-        widget.sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+        widget.sourceRuntimeFacade ?? ref.read(sourceRuntimeFacadeProvider);
+    _authSessionStore = ref.read(sourceAuthSessionStoreProvider);
+    _mobileFeatureService = ref.read(sourceMobileFeatureServiceProvider);
     _controller = CodeController(
       text: '',
       language: javascript,
@@ -209,7 +215,9 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   }
 
   void _refreshIssueSummary() {
-    final next = _EditorIssueSummary.fromIssues(_controller.analysisResult.issues);
+    final next = _EditorIssueSummary.fromIssues(
+      _controller.analysisResult.issues,
+    );
     if (_issueSummaryNotifier.value == next) {
       return;
     }
@@ -335,7 +343,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       previousOffset.clamp(0, formatted.length),
       formatted.length,
     );
-      _controller.selection = TextSelection.collapsed(offset: nextOffset);
+    _controller.selection = TextSelection.collapsed(offset: nextOffset);
     _isApplyingEditorValue = false;
     _refreshIssueSummary();
     if (!mounted) {
@@ -746,7 +754,11 @@ class _EditorIssueBanner extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline_rounded, size: 18, color: issueColor),
+                  Icon(
+                    Icons.error_outline_rounded,
+                    size: 18,
+                    color: issueColor,
+                  ),
                   const SizedBox(width: 10),
                   Text(
                     issueLabel,
@@ -778,10 +790,7 @@ class _EditorIssueBanner extends StatelessWidget {
 }
 
 class _EditorIssueSummary {
-  const _EditorIssueSummary({
-    required this.count,
-    required this.firstIssue,
-  });
+  const _EditorIssueSummary({required this.count, required this.firstIssue});
 
   static const _EditorIssueSummary empty = _EditorIssueSummary(
     count: 0,
@@ -797,10 +806,7 @@ class _EditorIssueSummary {
     if (issues.isEmpty) {
       return empty;
     }
-    return _EditorIssueSummary(
-      count: issues.length,
-      firstIssue: issues.first,
-    );
+    return _EditorIssueSummary(count: issues.length, firstIssue: issues.first);
   }
 
   @override
@@ -817,11 +823,11 @@ class _EditorIssueSummary {
 
   @override
   int get hashCode => Object.hash(
-        count,
-        firstIssue?.line,
-        firstIssue?.message,
-        firstIssue?.type,
-      );
+    count,
+    firstIssue?.line,
+    firstIssue?.message,
+    firstIssue?.type,
+  );
 }
 
 class _ScriptSourceEditorAnalyzer extends AbstractAnalyzer {
@@ -933,9 +939,7 @@ String? validateScriptSourceDraft(String sourceCode) {
 }
 
 @visibleForTesting
-List<Issue> analyzeScriptSourceDraftIssues(
-  String sourceCode,
-) {
+List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
   return _analyzeScriptSourceDraftIssues(
     sourceCode,
     mode: _DraftAnalysisMode.full,

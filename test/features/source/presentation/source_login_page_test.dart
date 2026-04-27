@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
@@ -13,10 +14,12 @@ void main() {
     final service = _FakeSourceLoginRuntimeService();
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: SourceLoginPage(
-          sourceId: 'source_login',
-          sourceLoginRuntimeService: service,
+      ProviderScope(
+        child: MaterialApp(
+          home: SourceLoginPage(
+            sourceId: 'source_login',
+            sourceLoginRuntimeService: service,
+          ),
         ),
       ),
     );
