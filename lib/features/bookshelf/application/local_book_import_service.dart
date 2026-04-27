@@ -9,6 +9,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
+import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -72,7 +73,7 @@ class LocalBookImportService {
        _logger = logger,
        _warmUpDelay = warmUpDelay;
 
-  static const String localBookSourceId = '__local_book__';
+  static const String localBookSourceId = BookIdentityScheme.localSourceId;
 
   final LocalBookRepository _localBookRepository;
   final BookshelfService _bookshelfService;
@@ -374,7 +375,7 @@ class LocalBookImportService {
       bookId: localBook.id,
       sourceId: localBookSourceId,
       title: localBook.title,
-      detailUrl: 'local://book/${localBook.id}',
+      detailUrl: buildLocalBookDetailUrl(localBook.id),
       addedAt: now,
       author: localBook.author,
     );

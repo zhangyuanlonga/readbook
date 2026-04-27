@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../../domain/entities/book_identity.dart';
 import '../../../runtime/sources/source_executor.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
@@ -39,8 +40,7 @@ class SourceRuntimeReadingFlowContainerService {
   final AppLogger _logger;
   final Duration _disposalDelay;
   final Map<SourceRuntimeReadingFlowExecutionContainer, Timer>
-  _pendingDisposals =
-      <SourceRuntimeReadingFlowExecutionContainer, Timer>{};
+  _pendingDisposals = <SourceRuntimeReadingFlowExecutionContainer, Timer>{};
 
   SourceRuntimeReadingFlowExecutionContainer? get({
     required String sourceId,
@@ -146,20 +146,12 @@ class SourceRuntimeReadingFlowContainerService {
     required String sourceId,
     required runtime_models.Book book,
   }) {
-    final normalizedSourceId = sourceId.trim();
-    final detailUrl = book.detailUrl.trim();
-    if (detailUrl.isNotEmpty) {
-      return '$normalizedSourceId::detail:${Uri.encodeComponent(detailUrl)}';
-    }
-    final tocUrl = book.tocUrl.trim();
-    if (tocUrl.isNotEmpty) {
-      return '$normalizedSourceId::toc:${Uri.encodeComponent(tocUrl)}';
-    }
-    final title = book.title.trim();
-    if (title.isNotEmpty) {
-      return '$normalizedSourceId::title:${Uri.encodeComponent(title)}';
-    }
-    return '$normalizedSourceId::anonymous-book';
+    return SourceBookKey.forReadingFlow(
+      sourceId: sourceId,
+      detailUrl: book.detailUrl,
+      tocUrl: book.tocUrl,
+      title: book.title,
+    ).storageKey;
   }
 
   void _scheduleDisposal(

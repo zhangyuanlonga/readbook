@@ -120,6 +120,10 @@ void main() {
       expect(report.books, hasLength(1));
       expect(report.books.first.title, '脚本书源结果');
       expect(report.books.first.sourceId, 'script_source_1');
+      expect(
+        report.books.first.id,
+        'script_source_1:${Uri.encodeComponent('https://script.example.com/book/1')}',
+      );
     });
 
     test('aggregates same title and author when enabled', () async {

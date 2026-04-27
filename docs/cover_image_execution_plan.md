@@ -1,0 +1,207 @@
+# 封面图整改执行计划
+
+更新时间：2026-04-27  
+目标：将当前项目中的封面图能力从“分散实现”收口为统一业务线，明确唯一优先级、统一展示态、下沉页面编排，并对齐开发约束。  
+关联文档：
+
+- `docs/cover_image_business_inventory.md`
+- `docs/book_model_and_cover_business_inventory.md`
+- `docs/development_architecture_guardrails.md`
+
+---
+
+## Phase 0 当前已完成
+
+- [x] 梳理封面图业务线文档
+- [x] 梳理书模型与封面模型关系文档
+- [x] 统一最终渲染入口的封面优先级
+- [x] `resolveBookCover()` 已改为 `自定义封面 > 真实封面 > 图库 > 占位图`
+- [x] 封面优先级单测已更新并通过
+
+当前产物：
+
+- `docs/cover_image_business_inventory.md`
+- `docs/book_model_and_cover_business_inventory.md`
+- `lib/app/widgets/resolved_book_cover.dart`
+- `test/app/widgets/resolved_book_cover_test.dart`
+
+---
+
+## Phase 1 展示口径统一
+
+目标：
+
+- 所有页面对标题、作者、简介、封面使用同一套展示态口径
+
+任务：
+
+- [ ] 明确唯一展示模型：标题、作者、简介、封面统一从同一 presentation 对象输出
+- [ ] 盘点所有仍直接传 `realCoverUrl + customCoverPath` 的页面
+- [ ] 搜索页统一改为消费同一种封面展示态
+- [ ] 发现页统一改为消费同一种封面展示态
+- [ ] 书架页统一改为消费同一种封面展示态
+- [ ] 阅读记录页统一改为消费同一种封面展示态
+- [ ] 书签页、缓存管理页、首页继续阅读入口统一改为消费同一种封面展示态
+- [ ] 补页面级回归测试，验证自定义封面在各页面显示一致
+
+验收标准：
+
+- 同一本书在搜索、发现、书架、阅读记录、详情页中展示的封面一致
+- 自定义封面不会被真实封面覆盖
+
+---
+
+## Phase 2 展示态查询收口
+
+目标：
+
+- 页面不再自己拼 `title/author/intro/cover` 规则
+
+任务：
+
+- [ ] 提炼统一 `BookPresentation` / `BookDisplayState` 模型
+- [ ] 收口远程书展示态查询入口
+- [ ] 收口本地图书展示态查询入口
+- [ ] 收口书架快照展示态查询入口
+- [ ] 收口阅读记录展示态查询入口
+- [ ] 页面不再自己拼 `title/author/cover` 优先级
+- [ ] 补 application/service 层测试
+
+验收标准：
+
+- 页面层只消费稳定展示模型
+- 不再出现多个页面各自维护一套解析逻辑
+
+---
+
+## Phase 3 封面来源分层
+
+目标：
+
+- 把“书籍事实封面”和“UI 兜底封面”分层表达
+
+任务：
+
+- [ ] 明确区分 4 类封面来源
+- [ ] 远程真实封面
+- [ ] 本地索引封面
+- [ ] 用户自定义封面
+- [ ] 主题图库兜底封面
+- [ ] 展示态里显式保留“当前命中的封面来源类型”
+- [ ] 避免把主题图库继续当作书籍事实封面
+- [ ] 补来源优先级测试
+
+验收标准：
+
+- 能明确回答某个页面当前显示的是哪一类封面
+- 主题图库只作为 UI fallback，不回写为书籍事实数据
+
+---
+
+## Phase 4 编辑与写回编排下沉
+
+目标：
+
+- 详情页不再直接承担封面选择、持久化、快照同步等完整编排
+
+任务：
+
+- [ ] 从 `book_detail_page.dart` 抽离封面变更编排
+- [ ] 抽离“选择图片并持久化”能力
+- [ ] 抽离“远程书 override 保存”能力
+- [ ] 抽离“本地图书 metadata 保存”能力
+- [ ] 抽离“书架快照同步”能力
+- [ ] 抽离“阅读记录展示态同步”能力
+- [ ] 页面只保留交互分发和状态订阅
+- [ ] 补详情页交互回归测试
+
+验收标准：
+
+- 页面层不再直接编排 repository + storage + bookshelf + reading record
+- 对齐 `docs/development_architecture_guardrails.md`
+
+---
+
+## Phase 5 数据与依赖边界整改
+
+目标：
+
+- 封面对齐 application / repository / data 分层约束
+
+任务：
+
+- [ ] `BookPresentationQueryService` 不再直接依赖 `AppDatabase`
+- [ ] `CacheManagementService` 不再直接依赖 `AppDatabase`
+- [ ] 封面展示态相关查询改走 repository / stable service
+- [ ] 本地书 sourceId 常量不再跨 feature 直接引用实现类
+- [ ] 对齐 `docs/development_architecture_guardrails.md` 约束
+- [ ] 补 provider / repository 层测试
+
+验收标准：
+
+- presentation 不直接碰数据库实现
+- feature application 尽量不再直接绑定底层 datasource 细节
+
+---
+
+## Phase 6 快照一致性治理
+
+目标：
+
+- 统一封面变更后的快照同步机制
+
+任务：
+
+- [ ] 明确哪些字段属于事实数据
+- [ ] 明确哪些字段属于书架快照
+- [ ] 明确哪些字段属于阅读记录快照
+- [ ] 统一封面变更后的快照同步时机
+- [ ] 验证详情页改封面后书架同步
+- [ ] 验证详情页改封面后阅读记录同步
+- [ ] 验证本地图书重新索引后封面同步
+- [ ] 补同步链路测试
+
+验收标准：
+
+- 详情修改、本地重索引、来源切换后，各入口展示结果一致
+
+---
+
+## Phase 7 文档与验收
+
+目标：
+
+- 让后续开发可以按统一文档执行，不再重复讨论口径
+
+任务：
+
+- [ ] 更新封面业务梳理文档为最终状态
+- [ ] 更新书模型与封面模型文档为最终状态
+- [ ] 补充“封面优先级唯一口径”
+- [ ] 补充“页面不得自行拼装封面规则”
+- [ ] 输出验收清单
+- [ ] 搜索/发现/书架/阅读记录/详情页抽样验收
+
+验收标准：
+
+- 文档能直接指导后续封面相关开发和 review
+
+---
+
+## 当前建议执行顺序
+
+建议顺序：
+
+1. `Phase 1`
+2. `Phase 2`
+3. `Phase 4`
+4. `Phase 5`
+5. `Phase 6`
+6. `Phase 7`
+7. `Phase 3`
+
+说明：
+
+- `Phase 3` 的来源分层可以稍后做，因为当前最紧急的问题是页面展示结果不一致和页面编排过重。
+- 如果希望先快速稳定用户可见行为，应优先完成 `Phase 1` 和 `Phase 2`。
+

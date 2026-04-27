@@ -10,6 +10,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/request_context.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/source_health.dart';
 import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';

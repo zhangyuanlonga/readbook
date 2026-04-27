@@ -47,7 +47,7 @@ void main() {
     }
   });
 
-  test('prefers real cover over custom cover and gallery cover', () {
+  test('prefers custom cover over real cover and gallery cover', () {
     final resolved = resolveBookCover(
       realCoverUrl: 'https://example.com/cover.jpg',
       customCoverPath: customCoverFile.path,
@@ -58,8 +58,8 @@ void main() {
       detailUrl: 'https://example.com/book/1',
     );
 
-    expect(resolved.source, ResolvedBookCoverSource.real);
-    expect(resolved.imageUrl, 'https://example.com/cover.jpg');
+    expect(resolved.source, ResolvedBookCoverSource.custom);
+    expect(resolved.filePath, customCoverFile.path);
   });
 
   test('prefers custom cover over gallery cover when real cover missing', () {
@@ -76,21 +76,24 @@ void main() {
     expect(resolved.filePath, customCoverFile.path);
   });
 
-  test('uses gallery cover when theme is bound and book has no other cover', () {
-    final resolved = resolveBookCover(
-      activeTheme: activeTheme,
-      galleries: <CoverGallery>[coverGallery],
-      bookId: 'book_1',
-      sourceId: 'source_a',
-      detailUrl: 'https://example.com/book/1',
-    );
+  test(
+    'uses gallery cover when theme is bound and book has no other cover',
+    () {
+      final resolved = resolveBookCover(
+        activeTheme: activeTheme,
+        galleries: <CoverGallery>[coverGallery],
+        bookId: 'book_1',
+        sourceId: 'source_a',
+        detailUrl: 'https://example.com/book/1',
+      );
 
-    expect(resolved.source, ResolvedBookCoverSource.gallery);
-    expect(
-      <String>[galleryImageA.path, galleryImageB.path],
-      contains(resolved.filePath),
-    );
-  });
+      expect(resolved.source, ResolvedBookCoverSource.gallery);
+      expect(<String>[
+        galleryImageA.path,
+        galleryImageB.path,
+      ], contains(resolved.filePath));
+    },
+  );
 
   test('falls back to placeholder when bound gallery is unavailable', () {
     final resolved = resolveBookCover(
@@ -105,34 +108,37 @@ void main() {
     expect(resolved.filePath, isNull);
   });
 
-  test('reuses the only gallery image for all books when gallery has one image', () {
-    final singleImageGallery = coverGallery.copyWith(
-      imagePaths: <String>[galleryImageA.path],
-    );
-    final singleImageTheme = activeTheme.copyWith(
-      coverGalleryId: singleImageGallery.id,
-    );
+  test(
+    'reuses the only gallery image for all books when gallery has one image',
+    () {
+      final singleImageGallery = coverGallery.copyWith(
+        imagePaths: <String>[galleryImageA.path],
+      );
+      final singleImageTheme = activeTheme.copyWith(
+        coverGalleryId: singleImageGallery.id,
+      );
 
-    final first = resolveBookCover(
-      activeTheme: singleImageTheme,
-      galleries: <CoverGallery>[singleImageGallery],
-      bookId: 'book_1',
-      sourceId: 'source_a',
-      detailUrl: 'https://example.com/book/1',
-    );
-    final second = resolveBookCover(
-      activeTheme: singleImageTheme,
-      galleries: <CoverGallery>[singleImageGallery],
-      bookId: 'book_2',
-      sourceId: 'source_a',
-      detailUrl: 'https://example.com/book/2',
-    );
+      final first = resolveBookCover(
+        activeTheme: singleImageTheme,
+        galleries: <CoverGallery>[singleImageGallery],
+        bookId: 'book_1',
+        sourceId: 'source_a',
+        detailUrl: 'https://example.com/book/1',
+      );
+      final second = resolveBookCover(
+        activeTheme: singleImageTheme,
+        galleries: <CoverGallery>[singleImageGallery],
+        bookId: 'book_2',
+        sourceId: 'source_a',
+        detailUrl: 'https://example.com/book/2',
+      );
 
-    expect(first.source, ResolvedBookCoverSource.gallery);
-    expect(second.source, ResolvedBookCoverSource.gallery);
-    expect(first.filePath, galleryImageA.path);
-    expect(second.filePath, galleryImageA.path);
-  });
+      expect(first.source, ResolvedBookCoverSource.gallery);
+      expect(second.source, ResolvedBookCoverSource.gallery);
+      expect(first.filePath, galleryImageA.path);
+      expect(second.filePath, galleryImageA.path);
+    },
+  );
 
   test('assigns gallery image stably for the same book', () {
     final first = resolveBookCover(
@@ -155,24 +161,27 @@ void main() {
     expect(first.filePath, second.filePath);
   });
 
-  test('uses sourceId and detailUrl as fallback stable key when bookId missing', () {
-    final first = resolveBookCover(
-      activeTheme: activeTheme,
-      galleries: <CoverGallery>[coverGallery],
-      sourceId: 'source_a',
-      detailUrl: 'https://example.com/book/fallback-key',
-    );
-    final second = resolveBookCover(
-      activeTheme: activeTheme,
-      galleries: <CoverGallery>[coverGallery],
-      sourceId: 'source_a',
-      detailUrl: 'https://example.com/book/fallback-key',
-    );
+  test(
+    'uses sourceId and detailUrl as fallback stable key when bookId missing',
+    () {
+      final first = resolveBookCover(
+        activeTheme: activeTheme,
+        galleries: <CoverGallery>[coverGallery],
+        sourceId: 'source_a',
+        detailUrl: 'https://example.com/book/fallback-key',
+      );
+      final second = resolveBookCover(
+        activeTheme: activeTheme,
+        galleries: <CoverGallery>[coverGallery],
+        sourceId: 'source_a',
+        detailUrl: 'https://example.com/book/fallback-key',
+      );
 
-    expect(first.source, ResolvedBookCoverSource.gallery);
-    expect(second.source, ResolvedBookCoverSource.gallery);
-    expect(first.filePath, second.filePath);
-  });
+      expect(first.source, ResolvedBookCoverSource.gallery);
+      expect(second.source, ResolvedBookCoverSource.gallery);
+      expect(first.filePath, second.filePath);
+    },
+  );
 
   test('treats file uri real cover as local custom-style file cover', () {
     final resolved = resolveBookCover(

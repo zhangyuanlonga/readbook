@@ -42,14 +42,14 @@ ResolvedBookCover resolveBookCover({
   String? sourceId,
   String? detailUrl,
 }) {
-  final resolvedReal = _resolveRealCover(realCoverUrl);
-  if (resolvedReal != null) {
-    return resolvedReal;
-  }
-
   final resolvedCustom = _resolveCustomCover(customCoverPath);
   if (resolvedCustom != null) {
     return resolvedCustom;
+  }
+
+  final resolvedReal = _resolveRealCover(realCoverUrl);
+  if (resolvedReal != null) {
+    return resolvedReal;
   }
 
   final galleryId = activeTheme?.coverGalleryId?.trim() ?? '';
@@ -100,17 +100,17 @@ class ResolvedBookCoverView extends StatelessWidget {
           fallback: _buildPlaceholder(),
         ),
       ),
-      ResolvedBookCoverSource.custom || ResolvedBookCoverSource.gallery =>
-        ClipRRect(
-          borderRadius: borderRadius,
-          child: Image.file(
-            File(cover.filePath!),
-            width: width,
-            height: height,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _buildPlaceholder(),
-          ),
+      ResolvedBookCoverSource.custom ||
+      ResolvedBookCoverSource.gallery => ClipRRect(
+        borderRadius: borderRadius,
+        child: Image.file(
+          File(cover.filePath!),
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
         ),
+      ),
       ResolvedBookCoverSource.placeholder => _buildPlaceholder(),
     };
   }
@@ -157,7 +157,10 @@ ResolvedBookCover? _resolveCustomCover(String? customCoverPath) {
   return ResolvedBookCover.custom(normalized);
 }
 
-CoverGallery? _findGalleryById(Iterable<CoverGallery> galleries, String galleryId) {
+CoverGallery? _findGalleryById(
+  Iterable<CoverGallery> galleries,
+  String galleryId,
+) {
   for (final gallery in galleries) {
     if (gallery.id == galleryId) {
       return gallery;
@@ -176,12 +179,11 @@ String? _resolveGalleryImagePath(
     return null;
   }
 
-  final validPaths =
-      gallery.imagePaths
-          .map((path) => path.trim())
-          .where((path) => path.isNotEmpty)
-          .where((path) => File(path).existsSync())
-          .toList(growable: false);
+  final validPaths = gallery.imagePaths
+      .map((path) => path.trim())
+      .where((path) => path.isNotEmpty)
+      .where((path) => File(path).existsSync())
+      .toList(growable: false);
   if (validPaths.isEmpty) {
     return null;
   }

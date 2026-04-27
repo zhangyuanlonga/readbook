@@ -33,13 +33,12 @@ class _ScriptSourceSearchRunner {
       requestUrl: '',
       method: HttpRequestMethod.get,
       statusCode: 200,
-      books:
-          books
-              .map(
-                (book) =>
-                    _mapRuntimeBookToDomain(book, sourceId: source.runtime.id),
-              )
-              .toList(growable: false),
+      books: books
+          .map(
+            (book) =>
+                _mapRuntimeBookToDomain(book, sourceId: source.runtime.id),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -48,13 +47,13 @@ class _ScriptSourceSearchRunner {
     required String sourceId,
   }) {
     final normalizedDetailUrl = book.detailUrl.trim();
-    final resolvedId = _buildRuntimeBookId(
+    final identity = BookIdentity.remote(
       sourceId: sourceId,
       detailUrl: normalizedDetailUrl,
-      title: book.title,
+      fallbackTitle: book.title,
     );
     return Book(
-      id: resolvedId,
+      id: identity.logicalBookId,
       sourceId: sourceId,
       title: book.title.trim().isEmpty ? '未命名书籍' : book.title.trim(),
       detailUrl: normalizedDetailUrl,
@@ -63,18 +62,6 @@ class _ScriptSourceSearchRunner {
       coverUrl: _normalizeOptionalText(book.cover),
       latestChapter: _normalizeOptionalText(book.latestChapter),
     );
-  }
-
-  String _buildRuntimeBookId({
-    required String sourceId,
-    required String detailUrl,
-    required String title,
-  }) {
-    final normalizedDetailUrl = detailUrl.trim();
-    if (normalizedDetailUrl.isNotEmpty) {
-      return '$sourceId:${Uri.encodeComponent(normalizedDetailUrl)}';
-    }
-    return '$sourceId:${Uri.encodeComponent(title.trim())}';
   }
 
   String? _normalizeOptionalText(String? value) {

@@ -3,6 +3,7 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/book_identity.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../source/application/source_health_service.dart';
@@ -443,13 +444,13 @@ class ExploreService {
     required String sourceId,
   }) {
     final normalizedDetailUrl = book.detailUrl.trim();
-    final resolvedId = _buildRuntimeBookId(
+    final identity = BookIdentity.remote(
       sourceId: sourceId,
       detailUrl: normalizedDetailUrl,
-      title: book.title,
+      fallbackTitle: book.title,
     );
     return Book(
-      id: resolvedId,
+      id: identity.logicalBookId,
       sourceId: sourceId,
       title: book.title.trim().isEmpty ? '未命名书籍' : book.title.trim(),
       detailUrl: normalizedDetailUrl,
@@ -458,18 +459,6 @@ class ExploreService {
       coverUrl: _normalizeOptionalText(book.cover),
       latestChapter: _normalizeOptionalText(book.latestChapter),
     );
-  }
-
-  String _buildRuntimeBookId({
-    required String sourceId,
-    required String detailUrl,
-    required String title,
-  }) {
-    final normalizedDetailUrl = detailUrl.trim();
-    if (normalizedDetailUrl.isNotEmpty) {
-      return '$sourceId:${Uri.encodeComponent(normalizedDetailUrl)}';
-    }
-    return '$sourceId:${Uri.encodeComponent(title.trim())}';
   }
 
   String? _normalizeOptionalText(String? value) {

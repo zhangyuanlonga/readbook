@@ -11,6 +11,7 @@ import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:shuxiang_reading_next/core/logging/app_logger.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
+import 'package:shuxiang_reading_next/domain/entities/book_identity.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
@@ -102,7 +103,10 @@ void main() {
         bookshelf.first.sourceId,
         LocalBookImportService.localBookSourceId,
       );
-      expect(bookshelf.first.detailUrl, 'local://book/${result.localBook.id}');
+      expect(
+        bookshelf.first.detailUrl,
+        buildLocalBookDetailUrl(result.localBook.id),
+      );
     });
 
     test(

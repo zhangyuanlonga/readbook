@@ -163,7 +163,7 @@ void main() {
 
     test('buildReplacementBookshelfBook falls back to candidate title', () {
       final replacement = coordinator.buildReplacementBookshelfBook(
-        currentBookId: 'book_id',
+        currentLogicalBookId: 'book_id',
         nextSourceId: 'source_b',
         nextDetailUrl: 'https://example.com/new',
         nextBookTitle: ' ',

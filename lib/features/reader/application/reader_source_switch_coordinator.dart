@@ -240,7 +240,7 @@ class ReaderSourceSwitchCoordinator {
   }
 
   BookshelfBook buildReplacementBookshelfBook({
-    required String currentBookId,
+    required String currentLogicalBookId,
     required String nextSourceId,
     required String nextDetailUrl,
     required String nextBookTitle,
@@ -252,7 +252,9 @@ class ReaderSourceSwitchCoordinator {
     required DateTime addedAt,
   }) {
     return BookshelfBook(
-      bookId: currentBookId,
+      // Keep the app-side logical work identity stable while replacing the
+      // source-scoped identity (`sourceId + detailUrl`) during switch-source.
+      bookId: currentLogicalBookId,
       sourceId: nextSourceId,
       title: nextBookTitle.trim().isEmpty ? fallbackBookTitle : nextBookTitle,
       detailUrl: nextDetailUrl,

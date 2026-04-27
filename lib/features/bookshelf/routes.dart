@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../../domain/entities/book_identity.dart';
 import '../book/presentation/book_detail_page.dart';
 import 'application/local_book_import_service.dart';
 import 'presentation/bookshelf_page.dart';
@@ -28,7 +29,7 @@ final List<RouteBase> bookshelfRoutes = <RouteBase>[
       final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
       final query = Map<String, String>.from(state.uri.queryParameters);
       query['sourceId'] = LocalBookImportService.localBookSourceId;
-      query['detailUrl'] = 'local://book/$bookId';
+      query['detailUrl'] = buildLocalBookDetailUrl(bookId);
       return Uri(path: '/book/$bookId', queryParameters: query).toString();
     },
     builder: (context, state) {
@@ -36,7 +37,7 @@ final List<RouteBase> bookshelfRoutes = <RouteBase>[
       return BookDetailPage(
         bookId: bookId,
         sourceId: LocalBookImportService.localBookSourceId,
-        detailUrl: 'local://book/$bookId',
+        detailUrl: buildLocalBookDetailUrl(bookId),
       );
     },
   ),

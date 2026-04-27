@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_interface_typography_provider.dart';
 import '../../app/theme/app_theme.dart';
+import '../../domain/entities/book_identity.dart';
 import '../bookshelf/application/local_book_import_service.dart';
 import 'presentation/reader_page.dart';
 import 'presentation/reader_route.dart';
@@ -34,8 +35,8 @@ final List<RouteBase> readerRoutes = <RouteBase>[
           state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
       final query = Map<String, String>.from(state.uri.queryParameters);
       query['sourceId'] = LocalBookImportService.localBookSourceId;
-      query['detailUrl'] = 'local://book/$bookId';
-      query['chapterUrl'] = 'local://chapter/$chapterId';
+      query['detailUrl'] = buildLocalBookDetailUrl(bookId);
+      query['chapterUrl'] = buildLocalChapterUrl(chapterId);
       return buildReaderRoute(
         bookId: bookId,
         chapterId: chapterId,
@@ -57,8 +58,8 @@ final List<RouteBase> readerRoutes = <RouteBase>[
         bookId: bookId,
         chapterId: chapterId,
         sourceId: LocalBookImportService.localBookSourceId,
-        detailUrl: 'local://book/$bookId',
-        chapterUrl: 'local://chapter/$chapterId',
+        detailUrl: buildLocalBookDetailUrl(bookId),
+        chapterUrl: buildLocalChapterUrl(chapterId),
         bookmarkId: bookmarkId,
       );
     },

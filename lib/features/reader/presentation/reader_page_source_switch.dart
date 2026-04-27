@@ -774,7 +774,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     try {
       final replacementBook = _sourceSwitchCoordinator
           .buildReplacementBookshelfBook(
-            currentBookId: _currentBookId,
+            currentLogicalBookId: _currentBookId,
             nextSourceId: candidate.book.sourceId,
             nextDetailUrl: candidate.book.detailUrl,
             nextBookTitle: _bookTitle,
