@@ -48,6 +48,7 @@ class _CurlPagedAnimationAdapter extends PagedAnimationRenderer {
       targetPage: toPage,
       progress: progress,
       direction: direction >= 0 ? 1 : -1,
+      touchYFactor: 0.82,
       colors: _colors,
     );
   }

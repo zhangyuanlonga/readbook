@@ -23,6 +23,7 @@ class CurlPagedAnimationRenderer {
     required Widget targetPage,
     required double progress,
     required int direction,
+    double touchYFactor = 0.82,
     required CurlRendererColors colors,
   }) {
     if (progress <= 0) {
@@ -38,12 +39,14 @@ class CurlPagedAnimationRenderer {
           page: currentPage,
           progress: clampedProgress,
           direction: direction,
+          touchYFactor: touchYFactor,
           colors: colors,
         ),
         ClipPath(
           clipper: _CurlPageClipper(
             progress: clampedProgress,
             direction: direction,
+            touchYFactor: touchYFactor,
           ),
           child: currentPage,
         ),
@@ -52,6 +55,7 @@ class CurlPagedAnimationRenderer {
             painter: _CurlOverlayPainter(
               progress: clampedProgress,
               direction: direction,
+              touchYFactor: touchYFactor,
               backgroundColor: colors.backgroundColor,
               dividerColor: colors.dividerColor,
               overlayColor: colors.overlayColor,
@@ -68,12 +72,14 @@ class _CurlBacksideLayer extends StatelessWidget {
     required this.page,
     required this.progress,
     required this.direction,
+    required this.touchYFactor,
     required this.colors,
   });
 
   final Widget page;
   final double progress;
   final int direction;
+  final double touchYFactor;
   final CurlRendererColors colors;
 
   @override
@@ -88,7 +94,11 @@ class _CurlBacksideLayer extends StatelessWidget {
     final tintAlpha = lerpDouble(0.05, 0.18, progress)!;
 
     return ClipPath(
-      clipper: _CurlBacksideClipper(progress: progress, direction: direction),
+      clipper: _CurlBacksideClipper(
+        progress: progress,
+        direction: direction,
+        touchYFactor: touchYFactor,
+      ),
       child: Transform(
         alignment:
             normalizedDirection > 0
@@ -133,12 +143,14 @@ class _CurlBacksideLayer extends StatelessWidget {
 class _CurlVisualMetrics {
   const _CurlVisualMetrics({
     required this.boundaryX,
+    required this.anchorY,
     required this.curveDepth,
     required this.shadowWidth,
     required this.highlightWidth,
   });
 
   final double boundaryX;
+  final double anchorY;
   final double curveDepth;
   final double shadowWidth;
   final double highlightWidth;
@@ -147,9 +159,16 @@ class _CurlVisualMetrics {
     Size size, {
     required double progress,
     required int direction,
+    required double touchYFactor,
   }) {
     final clamped = progress.clamp(0.0, 1.0);
     final eased = Curves.easeInOutCubic.transform(clamped);
+    final anchorY =
+        lerpDouble(
+          size.height * 0.16,
+          size.height * 0.84,
+          touchYFactor.clamp(0.0, 1.0),
+        )!;
     final curveDepth =
         lerpDouble(
           10,
@@ -163,6 +182,7 @@ class _CurlVisualMetrics {
     if (direction >= 0) {
       return _CurlVisualMetrics(
         boundaryX: lerpDouble(size.width, size.width * 0.08, eased)!,
+        anchorY: anchorY,
         curveDepth: curveDepth,
         shadowWidth: shadowWidth,
         highlightWidth: highlightWidth,
@@ -171,6 +191,7 @@ class _CurlVisualMetrics {
 
     return _CurlVisualMetrics(
       boundaryX: lerpDouble(0, size.width * 0.92, eased)!,
+      anchorY: anchorY,
       curveDepth: curveDepth,
       shadowWidth: shadowWidth,
       highlightWidth: highlightWidth,
@@ -179,10 +200,15 @@ class _CurlVisualMetrics {
 }
 
 class _CurlPageClipper extends CustomClipper<Path> {
-  const _CurlPageClipper({required this.progress, required this.direction});
+  const _CurlPageClipper({
+    required this.progress,
+    required this.direction,
+    required this.touchYFactor,
+  });
 
   final double progress;
   final int direction;
+  final double touchYFactor;
 
   @override
   Path getClip(Size size) {
@@ -190,7 +216,12 @@ class _CurlPageClipper extends CustomClipper<Path> {
       size,
       progress: progress,
       direction: direction,
+      touchYFactor: touchYFactor,
     );
+    final anchorY = metrics.anchorY;
+    final topControlY = lerpDouble(anchorY * 0.35, anchorY, 0.42)!;
+    final bottomControlY =
+        lerpDouble(anchorY + (size.height - anchorY) * 0.65, anchorY, 0.42)!;
     final path = Path();
 
     if (direction >= 0) {
@@ -199,13 +230,13 @@ class _CurlPageClipper extends CustomClipper<Path> {
         ..lineTo(metrics.boundaryX, 0)
         ..quadraticBezierTo(
           metrics.boundaryX - metrics.curveDepth * 0.18,
-          size.height * 0.22,
+          topControlY,
           metrics.boundaryX - metrics.curveDepth,
-          size.height * 0.5,
+          anchorY,
         )
         ..quadraticBezierTo(
           metrics.boundaryX - metrics.curveDepth * 0.18,
-          size.height * 0.78,
+          bottomControlY,
           metrics.boundaryX,
           size.height,
         )
@@ -221,13 +252,13 @@ class _CurlPageClipper extends CustomClipper<Path> {
       ..lineTo(metrics.boundaryX, size.height)
       ..quadraticBezierTo(
         metrics.boundaryX + metrics.curveDepth * 0.18,
-        size.height * 0.78,
+        bottomControlY,
         metrics.boundaryX + metrics.curveDepth,
-        size.height * 0.5,
+        anchorY,
       )
       ..quadraticBezierTo(
         metrics.boundaryX + metrics.curveDepth * 0.18,
-        size.height * 0.22,
+        topControlY,
         metrics.boundaryX,
         0,
       )
@@ -237,15 +268,22 @@ class _CurlPageClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant _CurlPageClipper oldClipper) {
-    return oldClipper.progress != progress || oldClipper.direction != direction;
+    return oldClipper.progress != progress ||
+        oldClipper.direction != direction ||
+        oldClipper.touchYFactor != touchYFactor;
   }
 }
 
 class _CurlBacksideClipper extends CustomClipper<Path> {
-  const _CurlBacksideClipper({required this.progress, required this.direction});
+  const _CurlBacksideClipper({
+    required this.progress,
+    required this.direction,
+    required this.touchYFactor,
+  });
 
   final double progress;
   final int direction;
+  final double touchYFactor;
 
   @override
   Path getClip(Size size) {
@@ -253,7 +291,12 @@ class _CurlBacksideClipper extends CustomClipper<Path> {
       size,
       progress: progress,
       direction: direction,
+      touchYFactor: touchYFactor,
     );
+    final anchorY = metrics.anchorY;
+    final topControlY = lerpDouble(anchorY * 0.35, anchorY, 0.42)!;
+    final bottomControlY =
+        lerpDouble(anchorY + (size.height - anchorY) * 0.65, anchorY, 0.42)!;
     final foldDepth = metrics.curveDepth * 0.82 + metrics.shadowWidth * 0.16;
     final innerDepth = metrics.curveDepth * 0.26;
     final path = Path();
@@ -266,29 +309,24 @@ class _CurlBacksideClipper extends CustomClipper<Path> {
         ..lineTo(outerX, 0)
         ..quadraticBezierTo(
           outerX - innerDepth * 0.22,
-          size.height * 0.24,
+          topControlY,
           innerX,
-          size.height * 0.5,
+          anchorY,
         )
         ..quadraticBezierTo(
           outerX - innerDepth * 0.22,
-          size.height * 0.76,
+          bottomControlY,
           outerX,
           size.height,
         )
         ..lineTo(innerX, size.height)
         ..quadraticBezierTo(
           innerX + innerDepth * 0.18,
-          size.height * 0.76,
+          bottomControlY,
           innerX + innerDepth * 0.3,
-          size.height * 0.5,
+          anchorY,
         )
-        ..quadraticBezierTo(
-          innerX + innerDepth * 0.18,
-          size.height * 0.24,
-          innerX,
-          0,
-        )
+        ..quadraticBezierTo(innerX + innerDepth * 0.18, topControlY, innerX, 0)
         ..close();
       return path;
     }
@@ -300,36 +338,33 @@ class _CurlBacksideClipper extends CustomClipper<Path> {
       ..lineTo(innerX, 0)
       ..quadraticBezierTo(
         innerX - innerDepth * 0.18,
-        size.height * 0.24,
+        topControlY,
         innerX - innerDepth * 0.3,
-        size.height * 0.5,
+        anchorY,
       )
       ..quadraticBezierTo(
         innerX - innerDepth * 0.18,
-        size.height * 0.76,
+        bottomControlY,
         innerX,
         size.height,
       )
       ..lineTo(outerX, size.height)
       ..quadraticBezierTo(
         outerX + innerDepth * 0.22,
-        size.height * 0.76,
+        bottomControlY,
         innerX,
-        size.height * 0.5,
+        anchorY,
       )
-      ..quadraticBezierTo(
-        outerX + innerDepth * 0.22,
-        size.height * 0.24,
-        outerX,
-        0,
-      )
+      ..quadraticBezierTo(outerX + innerDepth * 0.22, topControlY, outerX, 0)
       ..close();
     return path;
   }
 
   @override
   bool shouldReclip(covariant _CurlBacksideClipper oldClipper) {
-    return oldClipper.progress != progress || oldClipper.direction != direction;
+    return oldClipper.progress != progress ||
+        oldClipper.direction != direction ||
+        oldClipper.touchYFactor != touchYFactor;
   }
 }
 
@@ -337,6 +372,7 @@ class _CurlOverlayPainter extends CustomPainter {
   const _CurlOverlayPainter({
     required this.progress,
     required this.direction,
+    required this.touchYFactor,
     required this.backgroundColor,
     required this.dividerColor,
     required this.overlayColor,
@@ -344,6 +380,7 @@ class _CurlOverlayPainter extends CustomPainter {
 
   final double progress;
   final int direction;
+  final double touchYFactor;
   final Color backgroundColor;
   final Color dividerColor;
   final Color overlayColor;
@@ -358,7 +395,12 @@ class _CurlOverlayPainter extends CustomPainter {
       size,
       progress: progress,
       direction: direction,
+      touchYFactor: touchYFactor,
     );
+    final anchorY = metrics.anchorY;
+    final topControlY = lerpDouble(anchorY * 0.35, anchorY, 0.42)!;
+    final bottomControlY =
+        lerpDouble(anchorY + (size.height - anchorY) * 0.65, anchorY, 0.42)!;
     final shadowAlpha = lerpDouble(0.0, 0.24, progress)!;
     final overlayAlpha = lerpDouble(0.0, 0.18, progress)!;
     final highlightAlpha = lerpDouble(0.0, 0.22, progress)!;
@@ -414,13 +456,13 @@ class _CurlOverlayPainter extends CustomPainter {
             ..moveTo(metrics.boundaryX, 0)
             ..quadraticBezierTo(
               metrics.boundaryX - metrics.curveDepth * 0.18,
-              size.height * 0.22,
+              topControlY,
               metrics.boundaryX - metrics.curveDepth,
-              size.height * 0.5,
+              anchorY,
             )
             ..quadraticBezierTo(
               metrics.boundaryX - metrics.curveDepth * 0.18,
-              size.height * 0.78,
+              bottomControlY,
               metrics.boundaryX,
               size.height,
             );
@@ -483,13 +525,13 @@ class _CurlOverlayPainter extends CustomPainter {
           ..moveTo(metrics.boundaryX, 0)
           ..quadraticBezierTo(
             metrics.boundaryX + metrics.curveDepth * 0.18,
-            size.height * 0.22,
+            topControlY,
             metrics.boundaryX + metrics.curveDepth,
-            size.height * 0.5,
+            anchorY,
           )
           ..quadraticBezierTo(
             metrics.boundaryX + metrics.curveDepth * 0.18,
-            size.height * 0.78,
+            bottomControlY,
             metrics.boundaryX,
             size.height,
           );
@@ -506,6 +548,7 @@ class _CurlOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant _CurlOverlayPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.direction != direction ||
+        oldDelegate.touchYFactor != touchYFactor ||
         oldDelegate.backgroundColor != backgroundColor ||
         oldDelegate.dividerColor != dividerColor ||
         oldDelegate.overlayColor != overlayColor;

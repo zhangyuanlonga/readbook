@@ -342,6 +342,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const _ScrollEdgeAdvanceState();
   double? _swipeDragStartDx;
   double? _swipeDragCurrentDx;
+  double? _swipeDragCurrentDy;
   int? _tapPointerId;
   Offset? _tapPointerDownPosition;
   DateTime? _tapPointerDownTime;
@@ -472,6 +473,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int get _curlAnimationFromIndex => _curlTransition.fromIndex;
   int get _curlAnimationToIndex => _curlTransition.toIndex;
   double get _curlPreviewProgress => _curlTransition.previewProgress;
+  double get _curlTouchYFactor => _curlTransition.touchYFactor;
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
   bool _pageTurnIncludesTap(ReaderPageTurnMode mode) {
@@ -3815,6 +3817,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           targetPage: child ?? targetPage,
           progress: progress,
           direction: _curlAutoDirection,
+          touchYFactor: _curlTouchYFactor,
           colors: CurlRendererColors(
             backgroundColor: colors.background,
             dividerColor: colors.divider,
@@ -3832,6 +3835,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final startDx = _swipeDragStartDx;
     final currentDx = _swipeDragCurrentDx;
+    final currentDy = _swipeDragCurrentDy;
     if (startDx == null || currentDx == null) {
       return;
     }
@@ -3873,11 +3877,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       0.0,
       0.98,
     );
+    final touchYFactor =
+        currentDy == null
+            ? 0.82
+            : (currentDy / max(viewportSize.height, 1.0)).clamp(0.08, 0.92);
     if (_isCurlPreviewActive &&
         _curlAutoDirection == direction &&
         _curlAnimationFromIndex == currentIndex &&
         _curlAnimationToIndex == targetIndex &&
-        (progress - _curlPreviewProgress).abs() < 0.01) {
+        (progress - _curlPreviewProgress).abs() < 0.01 &&
+        (touchYFactor - _curlTouchYFactor).abs() < 0.01) {
       return;
     }
 
@@ -3887,6 +3896,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         fromIndex: currentIndex,
         toIndex: targetIndex,
         previewProgress: progress,
+        touchYFactor: touchYFactor,
         isPreview: true,
       );
     });
@@ -4011,6 +4021,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         commitOnAnimationEnd: true,
         isPreview: false,
         previewProgress: 0,
+        touchYFactor: direction > 0 ? 0.82 : 0.86,
         isAnimating: true,
       );
     });
@@ -4191,6 +4202,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if (enableSwipeTurn) {
               _swipeDragStartDx = event.localPosition.dx;
               _swipeDragCurrentDx = event.localPosition.dx;
+              _swipeDragCurrentDy = event.localPosition.dy;
             }
           },
           onPointerMove: (event) {
@@ -4199,6 +4211,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             }
             if (enableSwipeTurn) {
               _swipeDragCurrentDx = event.localPosition.dx;
+              _swipeDragCurrentDy = event.localPosition.dy;
               if (enableCurlPreview) {
                 _updateCurlPreviewProgress(constraints.biggest);
               }
@@ -4288,6 +4301,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final currentDx = _swipeDragCurrentDx;
     _swipeDragStartDx = null;
     _swipeDragCurrentDx = null;
+    _swipeDragCurrentDy = null;
 
     if (!_isSwipePaginationEnabled() || startDx == null || currentDx == null) {
       return;
@@ -4349,6 +4363,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _tapPointerMoved = false;
     _swipeDragStartDx = null;
     _swipeDragCurrentDx = null;
+    _swipeDragCurrentDy = null;
   }
 
   bool _isPrimaryReaderPointerDown(PointerDownEvent event) {
@@ -12752,6 +12767,7 @@ class _CurlTransitionState {
     this.fromIndex = 0,
     this.toIndex = 0,
     this.previewProgress = 0,
+    this.touchYFactor = 0.82,
     this.commitOnAnimationEnd = true,
   });
 
@@ -12761,6 +12777,7 @@ class _CurlTransitionState {
   final int fromIndex;
   final int toIndex;
   final double previewProgress;
+  final double touchYFactor;
   final bool commitOnAnimationEnd;
 
   _CurlTransitionState copyWith({
@@ -12770,6 +12787,7 @@ class _CurlTransitionState {
     int? fromIndex,
     int? toIndex,
     double? previewProgress,
+    double? touchYFactor,
     bool? commitOnAnimationEnd,
   }) {
     return _CurlTransitionState(
@@ -12779,6 +12797,7 @@ class _CurlTransitionState {
       fromIndex: fromIndex ?? this.fromIndex,
       toIndex: toIndex ?? this.toIndex,
       previewProgress: previewProgress ?? this.previewProgress,
+      touchYFactor: touchYFactor ?? this.touchYFactor,
       commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
     );
   }

@@ -16,18 +16,19 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../domain/entities/source_health.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_health.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/presentation/book_detail_route.dart';
+import '../application/discover_book_presentation_service.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/source_health_service.dart';
-import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
+import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../providers.dart';
 
 enum _SourceRuntimeStatus {
   unknown,
@@ -69,13 +70,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
 
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
-  final SourceHealthService _sourceHealthService = SourceHealthService.instance;
-  final SourceRuntimeTaskConflictService _taskConflictService =
-      SourceRuntimeTaskConflictService.instance;
-  final SourceRuntimeSchedulerService _taskScheduler =
-      SourceRuntimeSchedulerService.instance;
-  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
-      const BookMetadataPresentationResolver();
+  late final SourceHealthService _sourceHealthService;
+  late final SourceRuntimeTaskConflictService _taskConflictService;
+  late final SourceRuntimeSchedulerService _taskScheduler;
+  late final DiscoverBookPresentationService _bookPresentationService;
   final ScrollController _booksScrollController = ScrollController();
   Timer? _sourceRefreshDebounce;
 
@@ -136,9 +134,17 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   @override
   void initState() {
     super.initState();
-    _exploreService = widget._exploreService ?? ExploreService();
+    _exploreService =
+        widget._exploreService ?? ref.read(discoverExploreServiceProvider);
     _discoverPreferencesService =
-        widget._discoverPreferencesService ?? DiscoverPreferencesService();
+        widget._discoverPreferencesService ??
+        ref.read(discoverPreferencesServiceProvider);
+    _sourceHealthService = ref.read(discoverSourceHealthServiceProvider);
+    _taskConflictService = ref.read(discoverTaskConflictServiceProvider);
+    _taskScheduler = ref.read(discoverTaskSchedulerProvider);
+    _bookPresentationService = ref.read(
+      discoverBookPresentationServiceProvider,
+    );
     _booksScrollController.addListener(_onBookListScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -430,12 +436,32 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 
   Widget _buildSidePanel(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        _buildSourceSelectorCard(context),
-        const SizedBox(height: 12),
-        Expanded(child: _buildCategoryPanelCard(context)),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxHeight < 420) {
+          final categoryHeight = math.max(220.0, constraints.maxHeight * 0.72);
+          return SingleChildScrollView(
+            child: Column(
+              children: <Widget>[
+                _buildSourceSelectorCard(context),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: categoryHeight,
+                  child: _buildCategoryPanelCard(context),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: <Widget>[
+            _buildSourceSelectorCard(context),
+            const SizedBox(height: 12),
+            Expanded(child: _buildCategoryPanelCard(context)),
+          ],
+        );
+      },
     );
   }
 
@@ -1159,18 +1185,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 
   Future<BookMetadataPresentation> _resolvePresentedBook(Book book) async {
-    final override = await AppDatabase.instance
-        .getBookMetadataOverrideByRemoteBook(
-          sourceId: book.sourceId,
-          detailUrl: book.detailUrl,
-        );
-    return _bookMetadataPresentationResolver.resolve(
-      fallbackTitle: book.title,
-      fallbackAuthor: book.author,
-      fallbackIntro: book.intro,
-      realCoverUrl: book.coverUrl,
-      metadataOverride: override,
-    );
+    return _bookPresentationService.resolvePresentedBook(book);
   }
 
   Widget _buildCoverPreview({
@@ -1238,6 +1253,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       title: '正在加载',
       message: message,
       tone: RuntimeFeedbackTone.loading,
+      compact: true,
     );
   }
 
@@ -1251,6 +1267,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       title: '加载失败',
       message: message,
       tone: RuntimeFeedbackTone.error,
+      compact: true,
       actions: [
         FilledButton.tonalIcon(
           onPressed: onRetry,
@@ -1266,6 +1283,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       title: '提示',
       message: message,
       tone: RuntimeFeedbackTone.info,
+      compact: true,
     );
   }
 

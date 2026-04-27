@@ -22,10 +22,12 @@ import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
-import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_import_catalog.dart';
+import '../../source/application/external_source_import_bridge.dart';
+import '../application/advanced_theme_page_flow_coordinator.dart';
 import '../application/advanced_theme_provider.dart';
+import '../providers.dart';
 
 class AdvancedThemeListPage extends ConsumerStatefulWidget {
   const AdvancedThemeListPage({super.key});
@@ -40,29 +42,29 @@ enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 enum _ThemeImportPackageKind { official, red, rgshare }
 
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
-  final AuthSessionStore _sessionStore = AuthSessionStore();
-  final MembershipService _membershipService = MembershipService();
+  late final AuthSessionStore _sessionStore;
+  late final MembershipService _membershipService;
+  late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
   List<AppAdvancedTheme> _themes = const <AppAdvancedTheme>[];
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isConsumingExternalImportPayloads = false;
   bool _isAccessLoading = true;
   bool _canUseAdvancedThemes = false;
-  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
-  StreamSubscription<AuthEvent>? _authEventSub;
 
   @override
   void initState() {
     super.initState();
-    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
-      payload,
-    ) {
-      if (payload.type != ExternalImportPayloadType.advancedTheme) {
-        return;
-      }
-      unawaited(_consumePendingExternalImportPayloads());
-    });
-    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
+    _sessionStore = ref.read(mineAuthSessionStoreProvider);
+    _membershipService = ref.read(mineMembershipServiceProvider);
+    _pageFlowCoordinator =
+        ref.read(advancedThemePageFlowCoordinatorFactoryProvider)();
+    _pageFlowCoordinator.initialize(
+      onPendingImportAvailable: () {
+        unawaited(_consumePendingExternalImportPayloads());
+      },
+      onAuthEvent: _handleAuthEvent,
+    );
     _loadAccess();
     _load();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -108,8 +110,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   @override
   void dispose() {
-    _incomingImportSub?.cancel();
-    _authEventSub?.cancel();
+    unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }
 
@@ -404,15 +405,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
     _isConsumingExternalImportPayloads = true;
     try {
-      while (mounted) {
-        final payload = ExternalImportBridge.instance.consumePendingPayload(
-          type: ExternalImportPayloadType.advancedTheme,
-        );
-        if (payload == null) {
-          break;
-        }
-        await _importFromExternalPayload(payload);
-      }
+      await _pageFlowCoordinator.consumePendingPayloads(
+        _importFromExternalPayload,
+      );
     } finally {
       _isConsumingExternalImportPayloads = false;
     }
@@ -421,9 +416,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
-    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
-      payload,
-    );
+    final cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
     if (cached == null) {
       ExternalImportDiagnostics.logCacheFailed(payload);
       _showMessage(

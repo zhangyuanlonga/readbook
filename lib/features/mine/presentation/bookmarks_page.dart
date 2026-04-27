@@ -9,15 +9,14 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/bookmark_repository_impl.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
-import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/bookmarks_query_service.dart';
 import '../application/cover_gallery_provider.dart';
+import '../providers.dart';
 
 class BookmarksPage extends ConsumerStatefulWidget {
   const BookmarksPage({super.key});
@@ -28,10 +27,8 @@ class BookmarksPage extends ConsumerStatefulWidget {
 
 class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   static const Duration _loadTimeout = Duration(seconds: 8);
-  final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
-    AppDatabase.instance,
-  );
-  final BookshelfService _bookshelfService = BookshelfService();
+  late final BookmarksQueryService _bookmarksQueryService;
+  late final BookmarkRepository _bookmarkRepository;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
 
@@ -43,6 +40,8 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   @override
   void initState() {
     super.initState();
+    _bookmarksQueryService = ref.read(bookmarksQueryServiceProvider);
+    _bookmarkRepository = ref.read(mineBookmarkRepositoryProvider);
     unawaited(_reload());
   }
 
@@ -56,23 +55,15 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     });
 
     try {
-      final bookmarks = await _bookmarkRepository.listAllBookmarks().timeout(
-        _loadTimeout,
-        onTimeout: () => const <Bookmark>[],
+      final data = await _bookmarksQueryService.loadPageData(
+        timeout: _loadTimeout,
       );
-      final books = await _bookshelfService.getAll().timeout(
-        _loadTimeout,
-        onTimeout: () => const <BookshelfBook>[],
-      );
-      final index = <String, BookshelfBook>{
-        for (final book in books) book.bookId: book,
-      };
       if (!mounted) {
         return;
       }
       setState(() {
-        _bookmarks = bookmarks;
-        _bookshelfIndex = index;
+        _bookmarks = data.bookmarks;
+        _bookshelfIndex = data.bookshelfIndex;
       });
     } catch (_) {
       if (!mounted) {

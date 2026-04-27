@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../../app/widgets/resolved_book_cover.dart';
-import '../../../../data/datasources/local/app_database.dart';
 import '../../../../domain/entities/book.dart';
 import '../../../book/application/book_metadata_presentation_resolver.dart';
 import '../../../mine/application/advanced_theme_provider.dart';
 import '../../../mine/application/cover_gallery_provider.dart';
+import '../../providers.dart';
 
 class SearchBookCard extends ConsumerWidget {
   const SearchBookCard({
@@ -41,7 +41,7 @@ class SearchBookCard extends ConsumerWidget {
     final showHitCount = sourceHitCount > 1;
 
     return FutureBuilder<BookMetadataPresentation>(
-      future: _resolvePresentation(book),
+      future: _resolvePresentation(ref, book),
       builder: (context, snapshot) {
         final presentation =
             snapshot.data ?? const BookMetadataPresentation(displayTitle: '');
@@ -176,19 +176,11 @@ class SearchBookCard extends ConsumerWidget {
     );
   }
 
-  Future<BookMetadataPresentation> _resolvePresentation(Book book) async {
-    final override = await AppDatabase.instance
-        .getBookMetadataOverrideByRemoteBook(
-          sourceId: book.sourceId,
-          detailUrl: book.detailUrl,
-        );
-    return const BookMetadataPresentationResolver().resolve(
-      fallbackTitle: book.title,
-      fallbackAuthor: book.author,
-      fallbackIntro: book.intro,
-      realCoverUrl: book.coverUrl,
-      metadataOverride: override,
-    );
+  Future<BookMetadataPresentation> _resolvePresentation(
+    WidgetRef ref,
+    Book book,
+  ) async {
+    return ref.read(searchBookPresentationServiceProvider).resolve(book);
   }
 }
 

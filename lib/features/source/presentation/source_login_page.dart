@@ -6,9 +6,8 @@ import 'package:flutter/material.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../core/webview/interactive_verification_browser_executor.dart';
-import '../../../core/webview/webview_executor.dart';
 import '../../../runtime/sources/source_contract.dart';
+import '../application/source_login_browser_service.dart';
 import '../application/source_login_runtime_service.dart';
 
 class SourceLoginPage extends StatefulWidget {
@@ -16,12 +15,14 @@ class SourceLoginPage extends StatefulWidget {
     super.key,
     required this.sourceId,
     this.sourceLoginRuntimeService,
+    this.sourceLoginBrowserService,
     this.embedded = false,
     this.parentScrollController,
   });
 
   final String sourceId;
   final SourceLoginRuntimeService? sourceLoginRuntimeService;
+  final SourceLoginBrowserService? sourceLoginBrowserService;
   final bool embedded;
   final ScrollController? parentScrollController;
 
@@ -31,6 +32,7 @@ class SourceLoginPage extends StatefulWidget {
 
 class _SourceLoginPageState extends State<SourceLoginPage> {
   late final SourceLoginRuntimeService _sourceLoginRuntimeService;
+  late final SourceLoginBrowserService _sourceLoginBrowserService;
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _errorText;
@@ -49,6 +51,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     super.initState();
     _sourceLoginRuntimeService =
         widget.sourceLoginRuntimeService ?? SourceLoginRuntimeService();
+    _sourceLoginBrowserService =
+        widget.sourceLoginBrowserService ?? const SourceLoginBrowserService();
     _load();
   }
 
@@ -222,8 +226,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       _syncFormState(result.presentation);
       setState(() {
         _presentation = result.presentation;
-        _statusText =
-            result.message ?? (actionCode == null ? '操作已完成。' : null);
+        _statusText = result.message ?? (actionCode == null ? '操作已完成。' : null);
         _statusTone = _MessageTone.success;
       });
       final message = result.message;
@@ -374,17 +377,13 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       openUrlHandler:
           ({required url, title}) => _openUrl(url: url, title: title),
       confirmHandler:
-          ({
-            required message,
-            title,
-            confirmText,
-            cancelText,
-          }) => _confirmAction(
-            message: message,
-            title: title,
-            confirmText: confirmText,
-            cancelText: cancelText,
-          ),
+          ({required message, title, confirmText, cancelText}) =>
+              _confirmAction(
+                message: message,
+                title: title,
+                confirmText: confirmText,
+                cancelText: cancelText,
+              ),
       promptHandler:
           ({
             required message,
@@ -407,27 +406,14 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         bool refetchAfterSuccess = true,
         String? html,
       }) async {
-        final normalizedUrl = url.trim();
-        final htmlData = html ?? _htmlFromDataUrl(normalizedUrl);
-        final response = await InteractiveVerificationBrowserExecutor.instance
-            .open(
-              request: WebViewRequestPayload(
-                url: htmlData == null ? normalizedUrl : 'about:blank',
-                sourceId: widget.sourceId,
-                html: htmlData,
-              ),
-              awaitUserResult: true,
-              title: title,
-              refetchAfterSuccess: refetchAfterSuccess,
-            );
-        return <String, Object?>{
-          'statusCode': response.statusCode,
-          'body': response.body,
-          'finalUrl': response.finalUrl,
-          'matchedResourceUrl': response.matchedResourceUrl,
-          'matchedOverrideUrl': response.matchedOverrideUrl,
-          'scriptResult': response.scriptResult,
-        };
+        final response = await _sourceLoginBrowserService.openBrowserAwait(
+          sourceId: widget.sourceId,
+          url: url,
+          title: title,
+          refetchAfterSuccess: refetchAfterSuccess,
+          html: html,
+        );
+        return response.toUiPayload();
       },
       verificationCodeHandler: (imageUrl) => _promptVerificationCode(imageUrl),
     );
@@ -438,16 +424,10 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     if (!mounted || normalizedUrl.isEmpty) {
       return;
     }
-    final htmlData = _htmlFromDataUrl(normalizedUrl);
-    await InteractiveVerificationBrowserExecutor.instance.open(
-      request: WebViewRequestPayload(
-        url: htmlData == null ? normalizedUrl : 'about:blank',
-        sourceId: widget.sourceId,
-        html: htmlData,
-      ),
-      awaitUserResult: false,
+    await _sourceLoginBrowserService.openUrl(
+      sourceId: widget.sourceId,
+      url: normalizedUrl,
       title: title,
-      refetchAfterSuccess: false,
     );
   }
 
@@ -533,7 +513,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
               ),
               FilledButton(
                 onPressed:
-                    () => Navigator.of(dialogContext).pop(controller.text.trim()),
+                    () =>
+                        Navigator.of(dialogContext).pop(controller.text.trim()),
                 child: Text(
                   (confirmText?.trim().isNotEmpty ?? false)
                       ? confirmText!.trim()
@@ -629,23 +610,6 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
     return Image.network(trimmed, fit: BoxFit.contain, height: 120);
   }
 
-  String? _htmlFromDataUrl(String value) {
-    final trimmed = value.trim();
-    if (!trimmed.startsWith('data:text/html')) {
-      return null;
-    }
-    final commaIndex = trimmed.indexOf(',');
-    if (commaIndex < 0) {
-      return null;
-    }
-    final meta = trimmed.substring(0, commaIndex).toLowerCase();
-    final payload = trimmed.substring(commaIndex + 1);
-    if (meta.endsWith(';base64')) {
-      return utf8.decode(base64Decode(payload));
-    }
-    return Uri.decodeComponent(payload);
-  }
-
   Widget _buildField(BuildContext context, SourceLoginField field) {
     final label =
         field.label?.trim().isNotEmpty == true
@@ -723,8 +687,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
-          children:
-              presentation.fields.map((field) {
+          children: presentation.fields
+              .map((field) {
                 final width = _fieldWidth(
                   maxWidth: availableWidth,
                   spacing: spacing,
@@ -732,10 +696,15 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                 );
                 final child = SizedBox(
                   width: width,
-                  child: _buildFieldShell(context, field, child: _buildField(context, field)),
+                  child: _buildFieldShell(
+                    context,
+                    field,
+                    child: _buildField(context, field),
+                  ),
                 );
                 return child;
-              }).toList(growable: false),
+              })
+              .toList(growable: false),
         );
       },
     );
@@ -894,10 +863,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
+          child: Text(label, style: Theme.of(context).textTheme.labelLarge),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -910,8 +876,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
               ),
             ),
             child: Row(
-              children:
-                  options.map((option) {
+              children: options
+                  .map((option) {
                     final selected = option.value == value;
                     return Expanded(
                       child: InkWell(
@@ -944,7 +910,9 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                           child: Text(
                             option.label,
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleSmall?.copyWith(
                               color:
                                   selected
                                       ? colorScheme.onPrimaryContainer
@@ -955,7 +923,8 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
                         ),
                       ),
                     );
-                  }).toList(growable: false),
+                  })
+                  .toList(growable: false),
             ),
           ),
         ),
@@ -974,8 +943,7 @@ class _SourceLoginPageState extends State<SourceLoginPage> {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap:
-            _isSubmitting ? null : () => _submit(actionCode: field.action),
+        onTap: _isSubmitting ? null : () => _submit(actionCode: field.action),
         onLongPress:
             _isSubmitting
                 ? null

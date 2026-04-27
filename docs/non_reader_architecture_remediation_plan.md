@@ -104,10 +104,11 @@
 
 - 阶段 0：已完成，完成日期 `2026-04-27`
 - 阶段 1：已完成，完成日期 `2026-04-27`
-- 阶段 2：未开始
+- 阶段 2：已完成，完成日期 `2026-04-27`
 - 阶段 3：未开始
 - 阶段 4：未开始
 - 备注：已执行 `flutter analyze` 并通过；已执行 `flutter test`，但当前存在与本轮整改无关的既有失败，集中在 `test/app/layout/adaptive_breakpoints_test.dart`
+- 阶段 2 验证备注：`flutter analyze lib/features/source lib/features/discover lib/features/mine lib/features/search` 已通过；`test/features/source/presentation/source_login_page_test.dart` 与 `test/features/search/presentation/search_book_card_test.dart` 已通过；`test/features/discover/presentation/discover_page_test.dart` 仍存在 `shows cached discover sources and categories before refresh completes` 的 pending timer 失败，需后续单独处理
 
 回填规则：
 
@@ -190,32 +191,32 @@
 
 ### 4.5 `source_login`
 
-- [ ] 把交互浏览器打开流程提取为 `SourceLoginBrowserService` 或同类 application service
-- [ ] 页面只保留登录表单、验证码输入、提示展示
-- [ ] 将浏览器返回协议封装为稳定模型，而非页面直接拼装 map
+- [x] 把交互浏览器打开流程提取为 `SourceLoginBrowserService` 或同类 application service
+- [x] 页面只保留登录表单、验证码输入、提示展示
+- [x] 将浏览器返回协议封装为稳定模型，而非页面直接拼装 map
 
 ### 4.6 `discover`
 
-- [ ] 将书籍展示元数据覆盖查询移入 query service
-- [ ] 将 `SourceHealthService`、任务冲突服务、任务调度服务改为 provider 注入
-- [ ] 页面保留分类、列表、分页、滚动与交互
+- [x] 将书籍展示元数据覆盖查询移入 query service
+- [x] 将 `SourceHealthService`、任务冲突服务、任务调度服务改为 provider 注入
+- [x] 页面保留分类、列表、分页、滚动与交互
 
 ### 4.7 `mine/bookmarks`
 
-- [ ] 将 `BookmarkRepositoryImpl` 迁出页面
-- [ ] 建立书签列表 query service
-- [ ] 建立书签跳转 action service 或复用现有 route resolver provider
+- [x] 将 `BookmarkRepositoryImpl` 迁出页面
+- [x] 建立书签列表 query service
+- [x] 建立书签跳转 action service 或复用现有 route resolver provider
 
 ### 4.8 `search`
 
-- [ ] 将 `search_book_card.dart` 中元数据覆盖查询迁出 widget
-- [ ] 将展示态解析统一走 search feature query/presentation resolver
+- [x] 将 `search_book_card.dart` 中元数据覆盖查询迁出 widget
+- [x] 将展示态解析统一走 search feature query/presentation resolver
 
 ### 4.9 `mine/advanced_theme_list`
 
-- [ ] 将外部导入监听迁出页面
-- [ ] 将 `AuthEventBus` 监听迁出页面
-- [ ] 将 payload 消费和缓存流程迁移到 application service
+- [x] 将外部导入监听迁出页面
+- [x] 将 `AuthEventBus` 监听迁出页面
+- [x] 将 payload 消费和缓存流程迁移到 application service
 
 阶段完成标准：
 
@@ -344,7 +345,7 @@
 
 ### M2：中优先级越界清零
 
-- [ ] 阶段 2 完成
+- [x] 阶段 2 完成
 
 ### M3：结构可维护
 
