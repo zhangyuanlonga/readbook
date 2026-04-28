@@ -423,14 +423,23 @@ class _ReaderInfoBarSection extends StatelessWidget {
                       ),
                 ),
               ),
-            Flexible(
-              fit: FlexFit.loose,
-              child: _ReaderInfoBarItem(
-                item: items[index],
-                palette: palette,
-                itemTextStyle: itemTextStyle,
+            if (items[index].expand)
+              Expanded(
+                child: _ReaderInfoBarItem(
+                  item: items[index],
+                  palette: palette,
+                  itemTextStyle: itemTextStyle,
+                ),
+              )
+            else
+              Flexible(
+                fit: FlexFit.loose,
+                child: _ReaderInfoBarItem(
+                  item: items[index],
+                  palette: palette,
+                  itemTextStyle: itemTextStyle,
+                ),
               ),
-            ),
           ],
         ],
       ),
@@ -451,7 +460,7 @@ class _ReaderInfoBarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = switch (item.kind) {
+    return switch (item.kind) {
       ReaderInfoBarItemKind.text => _buildTextItem(),
       ReaderInfoBarItemKind.battery => _ReaderInfoBarBattery(
         level: item.batteryLevel,
@@ -459,10 +468,6 @@ class _ReaderInfoBarItem extends StatelessWidget {
         palette: palette,
       ),
     };
-    if (!item.expand) {
-      return child;
-    }
-    return Flexible(child: child);
   }
 
   Widget _buildTextItem() {

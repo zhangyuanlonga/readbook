@@ -16,7 +16,7 @@
 - [x] `settings / background` 主体已迁到独立文件
 - [x] `overlay / chrome` 主体已迁到独立文件
 
-当前主文件仍然约 `1.2w+` 行，说明还剩下几组 glue code 没有拆完。
+当前主文件已压到约 `5k` 行，主渲染、设置面板与背景资源残余 glue 已完成一轮集中下沉。
 
 一句话判断：
 
@@ -322,10 +322,10 @@
 
 ### 8.1 生命周期与依赖绑定收口
 
-- [ ] 继续压薄 `_bindDependencies()`
-- [ ] 继续压薄 `initState()`
-- [ ] 继续压薄 `dispose()`
-- [ ] 明确哪些副作用应下沉到独立 flow / coordinator
+- [x] 继续压薄 `_bindDependencies()`
+- [x] 继续压薄 `initState()`
+- [x] 继续压薄 `dispose()`
+- [x] 明确哪些副作用应下沉到独立 flow / coordinator
 
 完成标准：
 
@@ -334,12 +334,12 @@
 
 ### 8.2 顶层 Build 收口
 
-- [ ] 拆分 `_buildReaderContent()`
-- [ ] 拆分 `_buildBody()`
-- [ ] 拆分 `_buildReaderList()`
-- [ ] 拆分 `_buildMangaReader()`
-- [ ] 拆分 `_buildPagedReader()`
-- [ ] 让主文件只负责选择渲染分支，不直接承载大块 UI 组装
+- [x] 拆分 `_buildReaderContent()`
+- [x] 拆分 `_buildBody()`
+- [x] 拆分 `_buildReaderList()`
+- [x] 拆分 `_buildMangaReader()`
+- [x] 拆分 `_buildPagedReader()`
+- [x] 让主文件只负责选择渲染分支，不直接承载大块 UI 组装
 
 完成标准：
 
@@ -348,10 +348,10 @@
 
 ### 8.3 背景与资源型 UI 状态下沉
 
-- [ ] 下沉背景预设加载逻辑
-- [ ] 下沉背景预览缓存逻辑
-- [ ] 下沉自定义背景文件管理逻辑
-- [ ] 下沉背景 preset bytes/base64 管理逻辑
+- [x] 下沉背景预设加载逻辑
+- [x] 下沉背景预览缓存逻辑
+- [x] 下沉自定义背景文件管理逻辑
+- [x] 下沉背景 preset bytes/base64 管理逻辑
 
 完成标准：
 
@@ -360,9 +360,9 @@
 
 ### 8.4 设置面板 Glue 下沉
 
-- [ ] 拆分 `_buildFloatingReaderSettingsSheet()`
-- [ ] 下沉设置项显示格式化辅助方法
-- [ ] 下沉设置项分组、展示和交互 glue
+- [x] 拆分 `_buildFloatingReaderSettingsSheet()`
+- [x] 下沉设置项显示格式化辅助方法
+- [x] 下沉设置项分组、展示和交互 glue
 
 完成标准：
 
@@ -371,10 +371,10 @@
 
 ### 8.5 阅读内容构建辅助收口
 
-- [ ] 继续下沉分页阅读残余 render helper
-- [ ] 继续下沉滚动阅读残余 render helper
-- [ ] 继续下沉漫画阅读残余 render helper
-- [ ] 继续下沉正文 block / paragraph 展示辅助
+- [x] 继续下沉分页阅读残余 render helper
+- [x] 继续下沉滚动阅读残余 render helper
+- [x] 继续下沉漫画阅读残余 render helper
+- [x] 继续下沉正文 block / paragraph 展示辅助
 
 完成标准：
 
@@ -383,9 +383,9 @@
 
 ### 8.6 最终收尾验证
 
-- [ ] 对照“最终收尾标准”逐项关闭
-- [ ] 回填本清单和总计划中的 reader 阶段状态
-- [ ] 补齐本轮 analyze / test / 手工验证记录
+- [x] 对照“最终收尾标准”逐项关闭
+- [x] 回填本清单和总计划中的 reader 阶段状态
+- [x] 补齐本轮 analyze / test / 手工验证记录
 
 完成标准：
 
@@ -398,12 +398,12 @@
 
 当下面条件全部满足时，可认定 `reader_page.dart` 拆解完成：
 
-- [ ] 主文件不再包含完整业务流
-- [ ] 主文件不再包含完整渲染大块
-- [ ] 主文件不再直接 new 基础设施
-- [ ] 主文件主要只剩 state、lifecycle、build、callback bind
-- [ ] 所有 reader 子模块都能单独 `flutter analyze`
-- [ ] 核心 presentation/application 测试可独立执行
+- [x] 主文件不再包含完整业务流
+- [x] 主文件不再包含完整渲染大块
+- [x] 主文件不再直接 new 基础设施
+- [x] 主文件主要只剩 state、lifecycle、build、callback bind
+- [x] 所有 reader 子模块都能单独 `flutter analyze`
+- [x] 核心 presentation/application 测试可独立执行
 
 目标参考：
 
@@ -417,12 +417,24 @@
 每个阶段完成后都应补下面记录：
 
 - 变更目标：
+  - 完成 Reader 剩余结构收口，清掉 settings sheet glue 与 render helper 残留
 - 拆出的文件：
+  - `lib/features/reader/presentation/reader_page_background.dart`
+  - `lib/features/reader/presentation/reader_page_lifecycle.dart`
+  - `lib/features/reader/presentation/reader_page_viewport.dart`
+  - `lib/features/reader/presentation/reader_page_settings_panel.dart`
+  - `lib/features/reader/presentation/reader_page_settings_sheet.dart`
+  - `lib/features/reader/presentation/reader_page_content_rendering.dart`
 - 主文件减少的行数：
+  - `12276 -> 4967`，减少 `7309` 行
 - `flutter analyze` 结果：
+  - `flutter analyze lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_page_background.dart lib/features/reader/presentation/reader_page_lifecycle.dart lib/features/reader/presentation/reader_page_viewport.dart lib/features/reader/presentation/reader_page_settings_panel.dart lib/features/reader/presentation/reader_page_settings_sheet.dart lib/features/reader/presentation/reader_page_content_rendering.dart lib/features/reader/application/reader_dependencies_provider.dart lib/features/reader/presentation/reader_chrome_widgets.dart` 通过
 - `flutter test` 范围与结果：
+  - `flutter test test/features/reader/presentation/reader_settings_presenter_test.dart test/features/reader/presentation/reader_viewport_builder_test.dart test/features/reader/presentation/reader_chrome_widgets_test.dart test/features/reader/presentation/reader_route_test.dart` 通过
 - 手工验证项：
+  - 未执行
 - 剩余风险：
+  - 设置页和阅读视图的手工交互回归尚未补跑
 
 ---
 

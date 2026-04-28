@@ -1,3 +1,5 @@
+import 'package:battery_plus/battery_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/logging/app_logger.dart';
@@ -57,6 +59,8 @@ class ReaderFeatureDependencies {
     required this.cachedChapterStore,
     required this.readerErrorCenterService,
     required this.logger,
+    required this.battery,
+    required this.deviceInfo,
   });
 
   final ContentProviderRegistry contentProviderRegistry;
@@ -81,6 +85,8 @@ class ReaderFeatureDependencies {
   final ReaderCachedChapterStore cachedChapterStore;
   final ReaderErrorCenterService readerErrorCenterService;
   final AppLogger logger;
+  final Battery battery;
+  final DeviceInfoPlugin deviceInfo;
 }
 
 typedef ReaderFeatureDependenciesFactory = ReaderFeatureDependencies Function();
@@ -153,6 +159,8 @@ final readerFeatureDependenciesFactoryProvider =
           cachedChapterStore: ReaderCachedChapterStore(database: database),
           readerErrorCenterService: ReaderErrorCenterService.instance,
           logger: AppLogger.instance,
+          battery: Battery(),
+          deviceInfo: DeviceInfoPlugin(),
         );
       };
     });

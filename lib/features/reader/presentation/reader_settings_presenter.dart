@@ -51,6 +51,18 @@ class ReaderSettingsPresenter {
     return settings.paragraphIndent.round().toString();
   }
 
+  String layoutMarginValueLabel(double value) {
+    final normalized = value.clamp(
+      ReaderSettings.minLayoutMargin,
+      ReaderSettings.maxLayoutMargin,
+    );
+    final rounded = normalized.roundToDouble();
+    if ((normalized - rounded).abs() < 0.001) {
+      return rounded.toInt().toString();
+    }
+    return normalized.toStringAsFixed(1);
+  }
+
   String mangaReadModeLabel(ReaderMangaReadMode mode) {
     return switch (mode) {
       ReaderMangaReadMode.continuous => '连续长图',
