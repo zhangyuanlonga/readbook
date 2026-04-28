@@ -9,7 +9,10 @@ import 'application/discover_preferences_service.dart';
 import 'application/explore_service.dart';
 
 final discoverExploreServiceProvider = Provider<ExploreService>((ref) {
-  return ExploreService();
+  return ExploreService(
+    sourceRuntimeFacade: ref.watch(app_providers.appSourceRuntimeFacadeProvider),
+    sourceHealthService: ref.watch(app_providers.appSourceHealthServiceProvider),
+  );
 });
 
 final discoverPreferencesServiceProvider = Provider<DiscoverPreferencesService>(
@@ -21,18 +24,20 @@ final discoverPreferencesServiceProvider = Provider<DiscoverPreferencesService>(
 final discoverSourceHealthServiceProvider = Provider<SourceHealthService>((
   ref,
 ) {
-  return SourceHealthService.instance;
+  return ref.watch(app_providers.appSourceHealthServiceProvider);
 });
 
 final discoverTaskConflictServiceProvider =
     Provider<SourceRuntimeTaskConflictService>((ref) {
-      return SourceRuntimeTaskConflictService.instance;
+      return ref.watch(
+        app_providers.appSourceRuntimeTaskConflictServiceProvider,
+      );
     });
 
 final discoverTaskSchedulerProvider = Provider<SourceRuntimeSchedulerService>((
   ref,
 ) {
-  return SourceRuntimeSchedulerService.instance;
+  return ref.watch(app_providers.appSourceRuntimeSchedulerServiceProvider);
 });
 
 final discoverBookPresentationQueryServiceProvider =

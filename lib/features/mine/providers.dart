@@ -141,7 +141,9 @@ typedef MinePageFlowCoordinatorFactory = MinePageFlowCoordinator Function();
 
 final minePageFlowCoordinatorProvider =
     Provider<MinePageFlowCoordinatorFactory>((ref) {
-      return () => MinePageFlowCoordinator();
+      return () => MinePageFlowCoordinator(
+        authEvents: ref.watch(app_providers.appAuthEventStreamProvider),
+      );
     });
 
 typedef AdvancedThemePageFlowCoordinatorFactory =
@@ -149,7 +151,12 @@ typedef AdvancedThemePageFlowCoordinatorFactory =
 
 final advancedThemePageFlowCoordinatorFactoryProvider =
     Provider<AdvancedThemePageFlowCoordinatorFactory>((ref) {
-      return () => AdvancedThemePageFlowCoordinator();
+      return () => AdvancedThemePageFlowCoordinator(
+        externalImportBridge: ref.watch(
+          app_providers.appExternalImportBridgeProvider,
+        ),
+        authEvents: ref.watch(app_providers.appAuthEventStreamProvider),
+      );
     });
 
 class MinePageVisibilityNotifier extends Notifier<MinePageVisibilityState> {

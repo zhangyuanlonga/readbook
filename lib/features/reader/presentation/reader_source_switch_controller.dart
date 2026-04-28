@@ -12,12 +12,13 @@ class ReaderSourceSwitchController {
   Future<ReaderSwitchSourceScopePlan> buildSwitchSourceScope({
     required String currentSourceId,
     required bool isMangaChapter,
+    required SourceRuntimeFacade sourceRuntimeFacade,
   }) async {
-    var sources = SourceRuntimeFacade.instance.registeredScriptSources(
+    var sources = sourceRuntimeFacade.registeredScriptSources(
       enabledOnly: true,
     );
     if (sources.isEmpty) {
-      final report = await SourceRuntimeFacade.instance.reloadScriptSources();
+      final report = await sourceRuntimeFacade.reloadScriptSources();
       sources = report.loaded;
     }
     return _coordinator.buildSwitchSourceScope(

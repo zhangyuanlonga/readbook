@@ -2,7 +2,7 @@
 
 更新时间：2026-04-17  
 用途：梳理当前项目在 iOS、Android、macOS、Windows、Linux、Web 的职责边界，明确哪些能力必须保留在原生层，哪些能力应该统一收口到 Flutter / Dart 层，并给出后续重构优先级。
-总计划状态：`进行中专题`
+总计划状态：`已完成专题`
 
 ## 0. 结论先行
 
@@ -18,6 +18,27 @@
 - **内容处理统一 Flutter**
 
 本方案的目标不是“一刀切全改成 Flutter”，而是把平台职责收口到合理边界。
+
+当前状态（2026-04-28）：
+
+- 外部导入桥、source runtime health / scheduler / conflict、交互式 webview 验证入口已统一通过 app-level provider 暴露
+- `SourcePage / Bookshelf / AdvancedTheme / FontManagement / SourceDebugServicePage / ScriptSourceDebugPage / ReaderPage` 不再直接抓 `instance` 作为主入口
+- 阅读页平台能力已收口到 `ReaderPlatformBridgeService`，页面层只消费能力语义，不再直接编排亮度桥和音量键桥
+- `runtime -> application -> presentation` 现有主链已固定为：shared runtime/bridge implementation -> app/provider wiring -> feature application -> presentation
+
+阶段 5 的桥接策略：
+
+- 保留共享实现但通过 provider 暴露：
+  - `ExternalImportBridge`
+  - `SourceHealthService`
+  - `SourceRuntimeSchedulerService`
+  - `SourceRuntimeTaskConflictService`
+  - `InteractiveVerificationBrowserExecutor`
+  - `SourceDebugWebService`
+- 以 feature application service 暴露能力：
+  - `ReaderPlatformBridgeService`
+  - `SourceLoginBrowserService`
+  - `SourceLoginRuntimeService`
 
 ---
 

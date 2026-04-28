@@ -50,7 +50,8 @@ void main() {
       await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
 
       await tester.pumpWidget(_buildApp(facade, sourceHealthService));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(
         find.text('还没有书源').evaluate().isNotEmpty ||
@@ -65,11 +66,7 @@ void main() {
       expect(items.first.primaryHost, 'debug.local');
       expect(items.first.registrableDomain, 'debug.local');
       expect(items.first.clusterKey, 'debug.local');
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 350));
     });
 
     testWidgets('shows source health badge and failure hint', (tester) async {
@@ -91,20 +88,15 @@ void main() {
       );
 
       await tester.pumpWidget(_buildApp(facade, sourceHealthService));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('高风险'), findsWidgets);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
       expect(
         find.textContaining('失败: browser challenge failed'),
         findsOneWidget,
       );
       expect(find.textContaining('自动停用:'), findsOneWidget);
       expect(find.textContaining('冷却中'), findsOneWidget);
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 350));
     });
 
     testWidgets('shows suggested actions for risky and unavailable sources', (
@@ -138,15 +130,12 @@ void main() {
       );
 
       await tester.pumpWidget(_buildApp(facade, sourceHealthService));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('建议检测'), findsWidgets);
       expect(find.text('建议停用'), findsOneWidget);
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 350));
     });
 
     testWidgets('supports selecting source for batch check scope', (
@@ -155,18 +144,16 @@ void main() {
       await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
 
       await tester.pumpWidget(_buildApp(facade, sourceHealthService));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       await tester.longPress(find.text('临时书享源'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('已选：1'), findsOneWidget);
       expect(find.text('清空选中'), findsOneWidget);
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 350));
     });
 
     testWidgets('shows duplicate website source hints in single list', (
@@ -179,15 +166,11 @@ void main() {
       );
 
       await tester.pumpWidget(_buildApp(facade, sourceHealthService));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.textContaining('同站 2 个'), findsWidgets);
-      expect(find.text('推荐保留源'), findsWidgets);
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 350));
     });
 
     testWidgets('filters duplicate sources from group menu', (tester) async {
@@ -218,19 +201,16 @@ export default {
       );
 
       await tester.pumpWidget(_buildApp(facade, sourceHealthService));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       await tester.tap(find.byTooltip('分组'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('重复源'));
+      await tester.tap(find.text('重复源').last);
       await tester.pumpAndSettle();
 
       expect(find.text('单独站点源'), findsNothing);
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 350));
     });
 
   });

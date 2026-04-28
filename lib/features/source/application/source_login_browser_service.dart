@@ -31,7 +31,12 @@ class SourceLoginBrowserResponse {
 }
 
 class SourceLoginBrowserService {
-  const SourceLoginBrowserService();
+  SourceLoginBrowserService({
+    InteractiveVerificationBrowserExecutor? browserExecutor,
+  }) : _browserExecutor =
+           browserExecutor ?? InteractiveVerificationBrowserExecutor.instance;
+
+  final InteractiveVerificationBrowserExecutor _browserExecutor;
 
   Future<SourceLoginBrowserResponse> openBrowserAwait({
     required String sourceId,
@@ -42,7 +47,7 @@ class SourceLoginBrowserService {
   }) async {
     final normalizedUrl = url.trim();
     final htmlData = _resolveHtmlData(normalizedUrl, html: html);
-    final response = await InteractiveVerificationBrowserExecutor.instance.open(
+    final response = await _browserExecutor.open(
       request: WebViewRequestPayload(
         url: htmlData == null ? normalizedUrl : 'about:blank',
         sourceId: sourceId,
@@ -69,7 +74,7 @@ class SourceLoginBrowserService {
   }) async {
     final normalizedUrl = url.trim();
     final htmlData = _resolveHtmlData(normalizedUrl);
-    await InteractiveVerificationBrowserExecutor.instance.open(
+    await _browserExecutor.open(
       request: WebViewRequestPayload(
         url: htmlData == null ? normalizedUrl : 'about:blank',
         sourceId: sourceId,

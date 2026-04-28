@@ -17,6 +17,7 @@ import '../../../runtime/sources/source_script_compiler.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../application/source_runtime_facade.dart';
 import '../application/source_check_service.dart';
+import '../providers.dart';
 
 part 'script_source_debug_page_run.dart';
 
@@ -43,7 +44,7 @@ class ScriptSourceDebugPage extends StatefulWidget {
 }
 
 class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
-  final SourceRuntimeFacade _sourceRuntimeFacade = SourceRuntimeFacade.instance;
+  late final SourceRuntimeFacade _sourceRuntimeFacade;
   final SourceScriptDebugService _draftDebugService = SourceScriptDebugService(
     browserRuntime: AppReadBrowserRuntime(),
   );
@@ -64,6 +65,10 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
   @override
   void initState() {
     super.initState();
+    _sourceRuntimeFacade =
+        ProviderScope.containerOf(context, listen: false).read(
+          sourceRuntimeFacadeProvider,
+        );
     if (widget.autoRunOnInit) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {

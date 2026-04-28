@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
@@ -30,6 +31,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       ReaderFontRegistryService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
+  late final ExternalImportBridge _externalImportBridge;
 
   bool _isLoading = true;
   bool _isImporting = false;
@@ -42,9 +44,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   @override
   void initState() {
     super.initState();
+    _externalImportBridge = ref.read(app_providers.appExternalImportBridgeProvider);
     unawaited(_reload());
-    unawaited(ExternalImportBridge.instance.initialize());
-    _importSubscription = ExternalImportBridge.instance.payloadStream.listen((
+    unawaited(_externalImportBridge.initialize());
+    _importSubscription = _externalImportBridge.payloadStream.listen((
       payload,
     ) {
       if (payload.type != ExternalImportPayloadType.font) {
@@ -105,7 +108,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     _isConsumingExternalImportPayloads = true;
     try {
       while (mounted) {
-        final payload = ExternalImportBridge.instance.consumePendingPayload(
+        final payload = _externalImportBridge.consumePendingPayload(
           type: ExternalImportPayloadType.font,
         );
         if (payload == null) {
@@ -121,7 +124,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
-    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
+    final cached = await _externalImportBridge.cacheExternalFileFromUri(
       payload,
     );
     if (cached == null) {

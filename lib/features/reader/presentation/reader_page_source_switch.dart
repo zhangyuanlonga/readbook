@@ -114,6 +114,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     return _sourceSwitchController.buildSwitchSourceScope(
       currentSourceId: currentSourceId,
       isMangaChapter: _isMangaChapter,
+      sourceRuntimeFacade: _sourceRuntimeFacade,
     );
   }
 

@@ -117,7 +117,10 @@ final bookshelfSourceLoginStateServiceProvider =
     });
 
 final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
-  return BookDetailService();
+  return BookDetailService(
+    sourceRuntimeFacade: ref.watch(app_providers.appSourceRuntimeFacadeProvider),
+    sourceHealthService: ref.watch(app_providers.appSourceHealthServiceProvider),
+  );
 });
 
 final bookshelfReadingRecordServiceProvider = Provider<ReadingRecordService>((
@@ -249,7 +252,9 @@ final bookshelfSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((
 
 final bookshelfTaskConflictServiceProvider =
     Provider<SourceRuntimeTaskConflictService>((ref) {
-      return SourceRuntimeTaskConflictService.instance;
+      return ref.watch(
+        app_providers.appSourceRuntimeTaskConflictServiceProvider,
+      );
     });
 
 final bookshelfPresentationQueryServiceProvider =
@@ -269,5 +274,9 @@ typedef BookshelfExternalImportCoordinatorFactory =
 
 final bookshelfExternalImportCoordinatorFactoryProvider =
     Provider<BookshelfExternalImportCoordinatorFactory>((ref) {
-      return () => BookshelfExternalImportCoordinator();
+      return () => BookshelfExternalImportCoordinator(
+        externalImportBridge: ref.watch(
+          app_providers.appExternalImportBridgeProvider,
+        ),
+      );
     });

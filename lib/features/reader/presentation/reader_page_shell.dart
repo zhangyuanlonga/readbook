@@ -4,7 +4,7 @@ part of 'reader_page.dart';
 
 extension _ReaderPageShellExtension on _ReaderPageState {
   bool get _shouldEnableVolumeKeyPageInterception {
-    if (!ReaderVolumeKeyPageBridge.instance.isSupported) {
+    if (!_platformBridgeService.isVolumeKeyPagingSupported) {
       return false;
     }
     if (!_settings.volumeKeyPageEnabled) {
@@ -20,13 +20,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   String get _volumeKeyPageSupportDescription {
-    if (!ReaderVolumeKeyPageBridge.instance.isSupported) {
-      return '当前平台暂不支持音量键翻页。';
-    }
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return 'iOS 真机支持音量键翻页；启用后会拦截按键并维持系统音量。';
-    }
-    return '仅在阅读态生效，打开菜单或弹层时不会拦截系统音量。';
+    return _platformBridgeService.volumeKeyPagingSupportDescription;
   }
 
   Future<void> _syncVolumeKeyPageInterception() async {
@@ -40,7 +34,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     _isVolumeKeyPageInterceptionEnabled = enabled;
-    await ReaderVolumeKeyPageBridge.instance.setEnabled(enabled);
+    await _platformBridgeService.setVolumeKeyPagingEnabled(enabled);
   }
 
   Future<void> _handleVolumeKeyEvent(ReaderVolumeKeyEvent event) async {

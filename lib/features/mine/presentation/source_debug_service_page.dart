@@ -11,6 +11,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../source/debug_service/source_debug_web_service.dart';
 import '../application/advanced_theme_provider.dart';
+import '../../source/providers.dart';
 
 class SourceDebugServicePage extends ConsumerStatefulWidget {
   const SourceDebugServicePage({super.key});
@@ -22,12 +23,13 @@ class SourceDebugServicePage extends ConsumerStatefulWidget {
 
 class _SourceDebugServicePageState
     extends ConsumerState<SourceDebugServicePage> {
-  final SourceDebugWebService _service = SourceDebugWebService.instance;
+  late final SourceDebugWebService _service;
   bool _isBusy = false;
 
   @override
   void initState() {
     super.initState();
+    _service = ref.read(sourceDebugWebServiceProvider);
     _service.addListener(_handleServiceChanged);
   }
 

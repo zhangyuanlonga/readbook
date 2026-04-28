@@ -11,9 +11,17 @@ import '../application/source_runtime_facade.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 
 class SourceDebugWebService extends ChangeNotifier {
-  SourceDebugWebService._();
+  SourceDebugWebService({required SourceRuntimeFacade sourceRuntimeFacade})
+    : _sourceRuntimeFacade = sourceRuntimeFacade;
 
-  static final SourceDebugWebService instance = SourceDebugWebService._();
+  factory SourceDebugWebService.shared({
+    required SourceRuntimeFacade sourceRuntimeFacade,
+  }) {
+    return _shared ??=
+        SourceDebugWebService(sourceRuntimeFacade: sourceRuntimeFacade);
+  }
+
+  static SourceDebugWebService? _shared;
 
   static const int defaultPort = 15421;
 
@@ -27,7 +35,7 @@ class SourceDebugWebService extends ChangeNotifier {
   PackageInfo? _packageInfo;
   List<String> _advertisedBaseUrls = const <String>[];
   Future<void>? _startFuture;
-  final SourceRuntimeFacade _sourceRuntimeFacade = SourceRuntimeFacade.instance;
+  final SourceRuntimeFacade _sourceRuntimeFacade;
 
   bool get isRunning => _server != null;
 

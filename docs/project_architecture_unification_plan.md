@@ -352,7 +352,7 @@
 - [x] 已拆 `source_page.dart`
 - [x] 已拆 `script_source_debug_page.dart`
 - [x] 调试运行、批量检测、登录状态处理已继续 service / coordinator 化
-- [ ] 收口 `source_page_script_tab_test.dart` 这类旧夹具对 Provider / runtime 的耦合问题后，再将本节正式关闭
+- 无，`7.6 Source` 本轮已完成正式关闭
 
 本轮已完成：
 
@@ -362,6 +362,7 @@
 - [x] `script_source_debug_page.dart` 已拆出 `script_source_debug_page_run.dart`
 - [x] Source 定向 `flutter analyze` 已通过
 - [x] 新增 Source application 测试与 debug page 渲染测试已通过
+- [x] `source_page_script_tab_test.dart` 旧夹具已改为内存 fake repository + provider override，并通过页面测试
 
 ---
 
@@ -468,7 +469,7 @@
 
 ## 10. 阶段 5：Runtime / Bridge / 平台边界统一
 
-状态：`未开始`
+状态：`已完成`
 
 目标：
 
@@ -484,11 +485,11 @@
 
 剩余任务：
 
-- [ ] 复查 `docs/cross_platform_boundary_refactor_plan.md` 当前完成度
-- [ ] 明确哪些 bridge 保留单例，哪些 provider 化
-- [ ] 明确 `runtime -> application -> presentation` 唯一路径
-- [ ] 统一 source 调试、登录、导入、健康状态、调度入口
-- [ ] reader 平台桥只保留能力适配，不再夹带页面决策
+- [x] 复查 `docs/cross_platform_boundary_refactor_plan.md` 当前完成度
+- [x] 明确哪些 bridge 保留单例，哪些 provider 化
+- [x] 明确 `runtime -> application -> presentation` 唯一路径
+- [x] 统一 source 调试、登录、导入、健康状态、调度入口
+- [x] reader 平台桥只保留能力适配，不再夹带页面决策
 
 完成标准：
 

@@ -236,13 +236,15 @@ final bookDetailMetadataFlowServiceProvider =
 
 final bookTaskConflictServiceProvider =
     Provider<SourceRuntimeTaskConflictService>((ref) {
-      return SourceRuntimeTaskConflictService.instance;
+      return ref.watch(
+        app_providers.appSourceRuntimeTaskConflictServiceProvider,
+      );
     });
 
 final bookTaskSchedulerProvider = Provider<SourceRuntimeSchedulerService>((
   ref,
 ) {
-  return SourceRuntimeSchedulerService.instance;
+  return ref.watch(app_providers.appSourceRuntimeSchedulerServiceProvider);
 });
 
 final bookLocalMetadataServiceProvider = Provider<BookLocalMetadataService>((

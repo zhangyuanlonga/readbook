@@ -2,6 +2,7 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
@@ -28,6 +29,7 @@ import 'local/local_book_storage_service.dart';
 import 'reader_error_center_service.dart';
 import 'reader_font_registry_service.dart';
 import 'reader_pagination_cache_service.dart';
+import 'reader_platform_bridge_service.dart';
 import 'reader_preferences_service.dart';
 import 'reader_system_settings_service.dart';
 import 'reading_record_service.dart';
@@ -39,6 +41,7 @@ class ReaderFeatureDependencies {
   const ReaderFeatureDependencies({
     required this.contentProviderRegistry,
     required this.preferencesService,
+    required this.platformBridgeService,
     required this.fontRegistryService,
     required this.paginationCacheService,
     required this.systemSettingsService,
@@ -65,6 +68,7 @@ class ReaderFeatureDependencies {
 
   final ContentProviderRegistry contentProviderRegistry;
   final ReaderPreferencesService preferencesService;
+  final ReaderPlatformBridgeService platformBridgeService;
   final ReaderFontRegistryService fontRegistryService;
   final ReaderPaginationCacheService paginationCacheService;
   final ReaderSystemSettingsService systemSettingsService;
@@ -100,6 +104,7 @@ final readerFeatureDependenciesFactoryProvider =
         final database = AppDatabase.instance;
         final localBookRepository = LocalBookRepositoryImpl(database);
         final readerPreferencesService = ReaderPreferencesService();
+        final readerPlatformBridgeService = ReaderPlatformBridgeService();
         final readerSystemSettingsService = ReaderSystemSettingsService();
         final readerBackgroundService = ReaderBackgroundService();
         final localBookStorageService = LocalBookStorageService();
@@ -137,6 +142,7 @@ final readerFeatureDependenciesFactoryProvider =
             ],
           ),
           preferencesService: readerPreferencesService,
+          platformBridgeService: readerPlatformBridgeService,
           fontRegistryService: ReaderFontRegistryService(),
           paginationCacheService: _sharedReaderPaginationCacheService,
           systemSettingsService: readerSystemSettingsService,
@@ -145,12 +151,24 @@ final readerFeatureDependenciesFactoryProvider =
           readingRecordService: readingRecordService,
           imageSelectionService: ImageSelectionService(),
           bookshelfService: bookshelfService,
-          switchSourceSearchService: SearchService(),
+          switchSourceSearchService: SearchService(
+            sourceRuntimeFacade: ref.watch(
+              app_providers.appSourceRuntimeFacadeProvider,
+            ),
+          ),
           searchHitCacheService: SearchHitCacheService(),
-          sourceHealthService: SourceHealthService.instance,
-          sourceRuntimeFacade: SourceRuntimeFacade.instance,
-          taskConflictService: SourceRuntimeTaskConflictService.instance,
-          taskScheduler: SourceRuntimeSchedulerService.instance,
+          sourceHealthService: ref.watch(
+            app_providers.appSourceHealthServiceProvider,
+          ),
+          sourceRuntimeFacade: ref.watch(
+            app_providers.appSourceRuntimeFacadeProvider,
+          ),
+          taskConflictService: ref.watch(
+            app_providers.appSourceRuntimeTaskConflictServiceProvider,
+          ),
+          taskScheduler: ref.watch(
+            app_providers.appSourceRuntimeSchedulerServiceProvider,
+          ),
           bookmarkRepository: BookmarkRepositoryImpl(database),
           bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
             database,

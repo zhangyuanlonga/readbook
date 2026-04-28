@@ -2432,7 +2432,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       label: '音量键翻页',
                       value: draft.volumeKeyPageEnabled,
                       onChanged:
-                          ReaderVolumeKeyPageBridge.instance.isSupported
+                          _platformBridgeService.isVolumeKeyPagingSupported
                               ? (enabled) {
                                 setModalState(() {
                                   draft = draft.copyWith(
@@ -2442,7 +2442,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               }
                               : null,
                     ),
-                    if (!ReaderVolumeKeyPageBridge.instance.isSupported) ...[
+                    if (!_platformBridgeService.isVolumeKeyPagingSupported) ...[
                       const SizedBox(height: 4),
                       Text(
                         _volumeKeyPageSupportDescription,
@@ -3348,7 +3348,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         label: '启用',
                         value: draft.volumeKeyPageEnabled,
                         onChanged:
-                            ReaderVolumeKeyPageBridge.instance.isSupported
+                            _platformBridgeService.isVolumeKeyPagingSupported
                                 ? (enabled) {
                                   setModalState(() {
                                     draft = draft.copyWith(
@@ -4629,9 +4629,8 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                                         draft
                                                             .volumeKeyPageEnabled,
                                                     onChanged:
-                                                        ReaderVolumeKeyPageBridge
-                                                                .instance
-                                                                .isSupported
+                                                        _platformBridgeService
+                                                                .isVolumeKeyPagingSupported
                                                             ? (enabled) {
                                                               setModalState(() {
                                                                 draft = draft

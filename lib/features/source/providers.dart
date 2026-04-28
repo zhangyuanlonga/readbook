@@ -9,8 +9,11 @@ import 'application/source_login_browser_service.dart';
 import 'application/source_login_runtime_service.dart';
 import 'application/source_page_access_service.dart';
 import 'application/source_page_flow_coordinator.dart';
+import 'application/source_runtime_scheduler_service.dart';
+import 'application/source_runtime_task_conflict_service.dart';
 import 'application/source_script_import_service.dart';
 import 'application/source_runtime_facade.dart';
+import 'debug_service/source_debug_web_service.dart';
 
 final sourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
   return ref.watch(app_providers.appSourceRuntimeFacadeProvider);
@@ -23,7 +26,7 @@ final sourceCheckServiceProvider = Provider<SourceCheckService>((ref) {
 });
 
 final sourceHealthServiceProvider = Provider<SourceHealthService>((ref) {
-  return SourceHealthService.instance;
+  return ref.watch(app_providers.appSourceHealthServiceProvider);
 });
 
 final sourceAuthSessionStoreProvider = Provider<AuthSessionStore>((ref) {
@@ -47,7 +50,11 @@ final sourceLoginRuntimeServiceProvider = Provider<SourceLoginRuntimeService>((
 final sourceLoginBrowserServiceProvider = Provider<SourceLoginBrowserService>((
   ref,
 ) {
-  return const SourceLoginBrowserService();
+  return SourceLoginBrowserService(
+    browserExecutor: ref.watch(
+      app_providers.appInteractiveVerificationBrowserExecutorProvider,
+    ),
+  );
 });
 
 final sourcePageAccessServiceProvider = Provider<SourcePageAccessService>((ref) {
@@ -66,5 +73,26 @@ typedef SourcePageFlowCoordinatorFactory = SourcePageFlowCoordinator Function();
 
 final sourcePageFlowCoordinatorFactoryProvider =
     Provider<SourcePageFlowCoordinatorFactory>((ref) {
-      return () => SourcePageFlowCoordinator();
+      return () => SourcePageFlowCoordinator(
+        externalImportBridge: ref.watch(
+          app_providers.appExternalImportBridgeProvider,
+        ),
+        authEvents: ref.watch(app_providers.appAuthEventStreamProvider),
+      );
     });
+
+final sourceRuntimeTaskConflictServiceProvider =
+    Provider<SourceRuntimeTaskConflictService>((ref) {
+      return ref.watch(
+        app_providers.appSourceRuntimeTaskConflictServiceProvider,
+      );
+    });
+
+final sourceRuntimeSchedulerServiceProvider =
+    Provider<SourceRuntimeSchedulerService>((ref) {
+      return ref.watch(app_providers.appSourceRuntimeSchedulerServiceProvider);
+    });
+
+final sourceDebugWebServiceProvider = Provider<SourceDebugWebService>((ref) {
+  return ref.watch(app_providers.appSourceDebugWebServiceProvider);
+});

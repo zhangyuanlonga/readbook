@@ -6,6 +6,7 @@ class _ReaderPageDependencyBinder {
   void bind(_ReaderPageState state, ReaderFeatureDependencies dependencies) {
     state._contentProviderRegistry = dependencies.contentProviderRegistry;
     state._preferencesService = dependencies.preferencesService;
+    state._platformBridgeService = dependencies.platformBridgeService;
     state._fontRegistryService = dependencies.fontRegistryService;
     state._paginationCacheService = dependencies.paginationCacheService;
     state._systemSettingsService = dependencies.systemSettingsService;
@@ -80,9 +81,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
         unawaited(_syncReaderThemeModeWithAppTheme(next));
       },
     );
-    if (ReaderVolumeKeyPageBridge.instance.isSupported) {
-      _volumeKeyEventSubscription = ReaderVolumeKeyPageBridge.instance.events
-          .listen(
+    if (_platformBridgeService.isVolumeKeyPagingSupported) {
+      _volumeKeyEventSubscription = _platformBridgeService.volumeKeyEvents.listen(
             (event) => unawaited(_handleVolumeKeyEvent(event)),
             onError: (_) {},
           );
@@ -180,7 +180,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       await _restoreSystemReaderBrightness();
       return;
     }
-    final applied = await _screenBrightnessBridge.setReaderBrightness(
+    final applied = await _platformBridgeService.setReaderBrightness(
       brightness ?? _settings.brightness,
     );
     if (!mounted) {
@@ -196,7 +196,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   }
 
   Future<void> _restoreSystemReaderBrightnessImpl() async {
-    await _screenBrightnessBridge.resetReaderBrightness();
+    await _platformBridgeService.resetReaderBrightness();
     _isSystemBrightnessOverrideActive = false;
   }
 }

@@ -85,6 +85,7 @@ import '../application/reader_pagination_cache_service.dart';
 import '../application/reader_pagination_engine.dart';
 import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
+import '../application/reader_platform_bridge_service.dart';
 import '../application/reader_settings_groups.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
@@ -95,7 +96,6 @@ import '../application/reader_session_state_resolver.dart';
 import '../application/reader_source_switch_coordinator.dart';
 import '../application/reader_source_switch_target_resolver.dart';
 import '../application/reader_reading_record_coordinator.dart';
-import '../application/reader_screen_brightness_bridge.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_feedback_service.dart';
@@ -187,6 +187,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   late final ContentProviderRegistry _contentProviderRegistry;
   late final ReaderPreferencesService _preferencesService;
+  late final ReaderPlatformBridgeService _platformBridgeService;
   late final ReaderFontRegistryService _fontRegistryService;
   final ReaderTypographyResolver _typographyResolver =
       const ReaderTypographyResolver();
@@ -237,8 +238,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderCatalogSearchService();
   final ReaderReadingRecordCoordinator _readingRecordCoordinator =
       const ReaderReadingRecordCoordinator();
-  final ReaderScreenBrightnessBridge _screenBrightnessBridge =
-      ReaderScreenBrightnessBridge.instance;
   final ReaderFeedbackService _readerFeedbackService =
       const ReaderFeedbackService();
   final ReaderThemeModeService _readerThemeModeService =
