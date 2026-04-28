@@ -333,10 +333,17 @@
 
 当前剩余项：
 
-- [ ] 拆 `advanced_theme_editor_page.dart`
-- [ ] 拆 `appearance_page.dart`
-- [ ] 拆 `mine_page.dart`
-- [ ] 让资源编辑和导入编排进入 application
+- 无，`7.5 Mine Appearance / Advanced Theme` 本轮已完成
+
+已完成：
+
+- [x] `advanced_theme_editor_page.dart` 已拆出独立 flow part
+- [x] `appearance_page.dart` 已拆出独立 view part
+- [x] `mine_page.dart` 已拆出独立 view part
+- [x] 新增 `AppearancePageResourceService`
+- [x] 新增 `AdvancedThemeEditorStateService`
+- [x] 新增 `MinePageSessionService`
+- [x] 资源编辑和导入编排已进入 application service
 
 ### 7.6 Source
 

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/composition/app_providers.dart' as app_providers;
+import '../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../core/app_update/app_update_service.dart';
 import '../../core/auth/auth_session_store.dart';
 import '../../core/media/image_selection_service.dart';
@@ -12,12 +13,19 @@ import '../../features/reader/application/chapter_cache_service.dart';
 import '../../features/reader/application/reading_record_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
+import 'application/advanced_theme_provider.dart';
+import 'application/advanced_theme_editor_state_service.dart';
+import 'application/appearance_page_resource_service.dart';
 import 'application/app_background_service.dart';
 import 'application/bookmarks_query_service.dart';
 import 'application/cache_management_service.dart';
+import 'application/cover_gallery_provider.dart';
 import 'application/mine_page_flow_coordinator.dart';
 import 'application/mine_page_preferences_service.dart';
+import 'application/launch_image_gallery_provider.dart';
+import 'application/mine_page_session_service.dart';
 import 'application/reader_background_service.dart';
+import '../reader/application/reader_font_registry_service.dart';
 
 final mineBookshelfServiceProvider = Provider<BookshelfService>((ref) {
   return BookshelfService();
@@ -86,6 +94,37 @@ final readerBackgroundServiceProvider = Provider<ReaderBackgroundService>((
   ref,
 ) {
   return ReaderBackgroundService();
+});
+
+final appearancePageResourceServiceProvider =
+    Provider<AppearancePageResourceService>((ref) {
+      return AppearancePageResourceService(
+        backgroundService: ref.watch(appBackgroundServiceProvider),
+        fontRegistryService: ReaderFontRegistryService(),
+      );
+    });
+
+final advancedThemeEditorStateServiceProvider =
+    Provider<AdvancedThemeEditorStateService>((ref) {
+      return AdvancedThemeEditorStateService(
+        service: ref.watch(advancedThemeServiceProvider),
+        bottomNavIconGalleryService: ref.watch(
+          bottomNavIconGalleryServiceProvider,
+        ),
+        appBackgroundService: ref.watch(appBackgroundServiceProvider),
+        coverGalleryService: ref.watch(coverGalleryServiceProvider),
+        launchImageGalleryService: ref.watch(launchImageGalleryServiceProvider),
+        readerBackgroundService: ref.watch(readerBackgroundServiceProvider),
+        fontRegistryService: ReaderFontRegistryService(),
+      );
+    });
+
+final minePageSessionServiceProvider = Provider<MinePageSessionService>((ref) {
+  return MinePageSessionService(
+    authSessionStore: ref.watch(mineAuthSessionStoreProvider),
+    mobileFeatureService: ref.watch(mineMobileFeatureServiceProvider),
+    membershipService: ref.watch(mineMembershipServiceProvider),
+  );
 });
 
 final minePageVisibilityProvider =

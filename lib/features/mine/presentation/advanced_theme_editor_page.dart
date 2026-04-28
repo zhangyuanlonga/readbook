@@ -7,8 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
-import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
@@ -25,14 +23,11 @@ import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import '../application/advanced_theme_provider.dart';
-import '../application/app_background_service.dart';
-import '../application/cover_gallery_provider.dart';
+import '../application/advanced_theme_editor_state_service.dart';
 import '../application/advanced_theme_service.dart';
-import '../application/cover_gallery_service.dart';
-import '../application/launch_image_gallery_provider.dart';
-import '../application/launch_image_gallery_service.dart';
-import '../application/reader_background_service.dart';
 import '../providers.dart';
+
+part 'advanced_theme_editor_page_flow.dart';
 
 class AdvancedThemeEditorPage extends ConsumerStatefulWidget {
   const AdvancedThemeEditorPage({super.key, this.themeId});
@@ -50,13 +45,7 @@ class _AdvancedThemeEditorPageState
   static const double _resourcePickerSheetHeightFactor = 0.7;
 
   late final AdvancedThemeService _service;
-  late final BottomNavIconGalleryService _bottomNavIconGalleryService;
-  late final AppBackgroundService _appBackgroundService;
-  late final CoverGalleryService _coverGalleryService;
-  late final LaunchImageGalleryService _launchImageGalleryService;
-  late final ReaderBackgroundService _readerBackgroundService;
-  final ReaderFontRegistryService _fontRegistryService =
-      ReaderFontRegistryService();
+  late final AdvancedThemeEditorStateService _stateService;
   final TextEditingController _nameController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
@@ -97,13 +86,7 @@ class _AdvancedThemeEditorPageState
     }
     _didInitialize = true;
     _service = ref.read(advancedThemeServiceProvider);
-    _bottomNavIconGalleryService = ref.read(
-      bottomNavIconGalleryServiceProvider,
-    );
-    _appBackgroundService = ref.read(appBackgroundServiceProvider);
-    _coverGalleryService = ref.read(coverGalleryServiceProvider);
-    _launchImageGalleryService = ref.read(launchImageGalleryServiceProvider);
-    _readerBackgroundService = ref.read(readerBackgroundServiceProvider);
+    _stateService = ref.read(advancedThemeEditorStateServiceProvider);
     unawaited(_initializeDraft());
     unawaited(_loadAppearanceLinks());
   }
@@ -134,49 +117,14 @@ class _AdvancedThemeEditorPageState
     });
   }
 
-  Future<void> _initializeDraft() async {
-    final themeId = widget.themeId?.trim() ?? '';
-    if (themeId.isEmpty) {
-      final seedColor = ref.read(appSeedColorProvider);
-      final now = DateTime.now().toUtc();
-      final draft = AppAdvancedTheme(
-        id: _service.createThemeId(),
-        name: '未命名主题',
-        createdAt: now,
-        updatedAt: now,
-        lightConfig: _modeConfigFromScheme(buildAppLightColorScheme(seedColor)),
-        darkConfig: _modeConfigFromScheme(buildAppDarkColorScheme(seedColor)),
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _draft = draft;
-        _isLoading = false;
-      });
-      _syncControllersFromDraft(draft);
-      return;
-    }
-
-    final themes = await _service.loadThemes();
-    AppAdvancedTheme? target;
-    for (final theme in themes) {
-      if (theme.id == themeId) {
-        target = theme;
-        break;
-      }
-    }
+  void _updateAdvancedThemeEditorState(VoidCallback mutation) {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _draft = target;
-      _isLoading = false;
-    });
-    if (target != null) {
-      _syncControllersFromDraft(target);
-    }
+    setState(mutation);
   }
+
+  Future<void> _initializeDraft() => _initializeDraftImpl();
 
   AppAdvancedThemeModeConfig _modeConfigFromScheme(ColorScheme colorScheme) {
     return AppAdvancedThemeModeConfig(
@@ -213,30 +161,7 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Future<void> _loadAppearanceLinks() async {
-    final backgroundPaths = await _appBackgroundService.loadBackgroundPaths();
-    final readerBackgroundPaths =
-        await _readerBackgroundService.loadBackgroundPaths();
-    final activeGallery =
-        await _bottomNavIconGalleryService.loadActiveGallery();
-    final galleries = await _bottomNavIconGalleryService.loadGalleries();
-    final coverGalleries = await _coverGalleryService.loadGalleries();
-    final launchImageGalleries =
-        await _launchImageGalleryService.loadGalleries();
-    final fonts = await _fontRegistryService.listRegisteredFonts();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _backgroundLibraryPaths = backgroundPaths;
-      _readerBackgroundLibraryPaths = readerBackgroundPaths;
-      _bottomNavGalleries = galleries;
-      _coverGalleries = coverGalleries;
-      _launchImageGalleries = launchImageGalleries;
-      _availableFonts = fonts;
-      _activeBottomNavGalleryName = activeGallery?.name;
-    });
-  }
+  Future<void> _loadAppearanceLinks() => _loadAppearanceLinksImpl();
 
   void _syncControllersFromDraft(AppAdvancedTheme theme) {
     _nameController.text = theme.name;
@@ -249,63 +174,7 @@ class _AdvancedThemeEditorPageState
     }
   }
 
-  Future<void> _saveTheme() async {
-    final draft = _draft;
-    if (draft == null || _isSaving) {
-      return;
-    }
-    final normalizedName = _nameController.text.trim();
-    if (normalizedName.isEmpty) {
-      _showMessage('请先填写主题名称');
-      return;
-    }
-
-    final parsedLightColors = _parseColorsForMode(AppAdvancedThemeMode.light);
-    if (parsedLightColors == null) {
-      return;
-    }
-    final parsedDarkColors = _parseColorsForMode(AppAdvancedThemeMode.dark);
-    if (parsedDarkColors == null) {
-      return;
-    }
-    if (parsedLightColors.configuredColorCount == 0) {
-      _showMessage('请先完成浅色配置');
-      _selectMode(AppAdvancedThemeMode.light);
-      return;
-    }
-    if (parsedDarkColors.configuredColorCount == 0) {
-      _showMessage('请先完成深色配置');
-      _selectMode(AppAdvancedThemeMode.dark);
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      final saved = await _service.saveTheme(
-        draft.copyWith(
-          name: normalizedName,
-          lightConfig: draft.lightConfig.copyWith(colors: parsedLightColors),
-          darkConfig: draft.darkConfig.copyWith(colors: parsedDarkColors),
-        ),
-      );
-      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _draft = saved;
-      });
-      context.pop('已保存高级主题');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
+  Future<void> _saveTheme() => _saveThemeImpl();
 
   AppAdvancedThemeColors? _parseColorsForMode(AppAdvancedThemeMode mode) {
     final values = <_ThemeColorSlot, int?>{};
@@ -428,45 +297,8 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Future<void> _applyPickedWallpaper(PickedImageData picked) async {
-    final draft = _draft;
-    if (draft == null || _isSaving) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
-    final currentConfig = draft.configFor(_selectedMode);
-    try {
-      final previousPath = currentConfig.wallpaperPath?.trim();
-      final path = await _service.saveWallpaper(
-        themeId: draft.id,
-        mode: _selectedMode,
-        bytes: picked.bytes,
-        fileName: picked.name,
-      );
-      if (previousPath != null &&
-          previousPath.isNotEmpty &&
-          previousPath != path) {
-        await _service.deleteWallpaper(previousPath);
-      }
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _draft = draft.copyWithModeConfig(
-          _selectedMode,
-          currentConfig.copyWith(wallpaperPath: path),
-        );
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
+  Future<void> _applyPickedWallpaper(PickedImageData picked) =>
+      _applyPickedWallpaperImpl(picked);
 
   Future<void> _pickReaderWallpaperFromBackgroundLibrary() async {
     if (_isSaving) {
