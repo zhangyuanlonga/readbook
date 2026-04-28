@@ -23,7 +23,7 @@ class BookPresentationSyncService {
   Future<void> syncPresentation({
     required BookDetail detail,
     required List<Chapter> chapters,
-    required BookMetadataPresentation presentation,
+    required BookDisplayState presentation,
     required bool isInBookshelf,
     String? latestChapterTitle,
   }) async {

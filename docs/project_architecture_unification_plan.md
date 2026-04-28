@@ -234,7 +234,7 @@
 
 ## 7. 阶段 2：超大页面和 Glue Code 下沉
 
-状态：`进行中`
+状态：`已完成`
 
 目标：
 
@@ -391,8 +391,7 @@
 
 当前剩余项：
 
-- [ ] 完成剩余场景回查
-- [ ] 补充新口径使用约束
+- 无，`8.1 书籍身份语义` 本轮已完成
 
 ### 8.2 书籍展示态语义
 
@@ -405,8 +404,7 @@
 
 当前剩余项：
 
-- [ ] 继续替换仍直接依赖旧命名的调用点
-- [ ] 明确展示态与事实字段的边界说明
+- 无，`8.2 书籍展示态语义` 本轮已完成
 
 ### 8.3 快照语义
 
@@ -426,7 +424,7 @@
 
 ## 9. 阶段 4：资源系统统一
 
-状态：`未开始`
+状态：`进行中`
 
 目标：
 
@@ -449,11 +447,17 @@
 
 剩余任务：
 
-- [ ] 新建资源系统专题文档
-- [ ] 定义 `ManagedAssetRef / ManagedAssetCollection / ManagedAssetType / ManagedAssetScope`
-- [ ] 统一目录、命名、相对引用、迁移规则
-- [ ] 让主题层只持有绑定关系，不直接管理文件路径
-- [ ] 统一导入、删除、迁移、导出、预览、引用校验生命周期
+- [x] 新建资源系统专题文档
+- [x] 定义 `ManagedAssetRef / ManagedAssetCollection / ManagedAssetType / ManagedAssetScope`
+- [x] 补充 `ManagedAssetRoot / ManagedAssetDirectoryPolicy`
+- [x] 让 `ManagedFilePathResolver` 改为消费统一目录策略
+- [x] 统一目录、命名、相对引用、迁移规则
+- [x] 让主题层只持有绑定关系，不直接管理文件路径
+- [x] 统一导入、删除、迁移、导出、预览、引用校验生命周期
+
+关联专题：
+
+- `docs/managed_asset_system_execution_plan.md`
 
 完成标准：
 

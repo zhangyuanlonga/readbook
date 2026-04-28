@@ -1,15 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/composition/app_providers.dart' as app_providers;
+import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
-import '../../book/application/book_display_state.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/presentation/book_detail_route.dart';
-import 'local/local_reader_identity.dart';
 import 'reading_book_status_service.dart';
 import 'reader_entry_route_resolver.dart';
 import 'reader_preferences_service.dart';
@@ -193,15 +192,14 @@ class ReadingRecordsPresentationService {
   ReadingRecordsPresentationService({
     required LocalBookRepository localBookRepository,
     required BookMetadataOverrideRepository bookMetadataOverrideRepository,
-    BookMetadataPresentationResolver resolver =
-        const BookMetadataPresentationResolver(),
+    BookDisplayStateResolver resolver = const BookDisplayStateResolver(),
   }) : _localBookRepository = localBookRepository,
        _bookMetadataOverrideRepository = bookMetadataOverrideRepository,
        _resolver = resolver;
 
   final LocalBookRepository _localBookRepository;
   final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
-  final BookMetadataPresentationResolver _resolver;
+  final BookDisplayStateResolver _resolver;
 
   Stream<List<LocalBook>> watchLocalBooks() {
     return _localBookRepository.watchAllBooks();
@@ -220,11 +218,11 @@ class ReadingRecordsPresentationService {
     final normalizedSourceId = record.sourceId.trim();
     final normalizedDetailUrl = record.detailUrl.trim();
     final localBook =
-        normalizedSourceId == LocalReaderIdentity.localSourceId
+        isLocalBookSourceId(normalizedSourceId)
             ? localBooksById[normalizedBookId]
             : null;
     final overrideKey =
-        normalizedSourceId == LocalReaderIdentity.localSourceId
+        isLocalBookSourceId(normalizedSourceId)
             ? BookMetadataOverride.localTargetKey(normalizedBookId)
             : BookMetadataOverride.remoteTargetKey(
               sourceId: normalizedSourceId,
@@ -252,11 +250,11 @@ class ReadingRecordsPresentationService {
     final normalizedSourceId = (sourceId ?? '').trim();
     final normalizedDetailUrl = (detailUrl ?? '').trim();
     final localBook =
-        normalizedSourceId == LocalReaderIdentity.localSourceId
+        isLocalBookSourceId(normalizedSourceId)
             ? localBooksById[normalizedBookId]
             : null;
     final overrideKey =
-        normalizedSourceId == LocalReaderIdentity.localSourceId
+        isLocalBookSourceId(normalizedSourceId)
             ? BookMetadataOverride.localTargetKey(normalizedBookId)
             : BookMetadataOverride.remoteTargetKey(
               sourceId: normalizedSourceId,

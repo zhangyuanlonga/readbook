@@ -56,11 +56,11 @@ void main() {
             index: 0,
           ),
         ],
-        presentation: const BookMetadataPresentation(
+        presentation: const BookDisplayState(
           displayTitle: '展示标题',
           displayAuthor: '展示作者',
           displayCover: 'https://example.com/cover.jpg',
-          displayCoverSource: BookMetadataPresentationCoverSource.remote,
+          displayCoverSource: BookDisplayCoverSource.remote,
         ),
         isInBookshelf: true,
         latestChapterTitle: '第一章',

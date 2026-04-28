@@ -2,17 +2,22 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/launch_image_gallery.dart';
 import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('LaunchImageGalleryService', () {
     setUp(() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
     test('persists galleries and active gallery id', () async {
-      final service = LaunchImageGalleryService();
+      final service = LaunchImageGalleryService(
+        assetStore: await _createAssetStore(),
+      );
       final gallery = LaunchImageGallery(
         id: 'launch_gallery_a',
         name: '品牌启动图',
@@ -32,7 +37,9 @@ void main() {
     });
 
     test('resolves first existing image path from active gallery', () async {
-      final service = LaunchImageGalleryService();
+      final service = LaunchImageGalleryService(
+        assetStore: await _createAssetStore(),
+      );
       final tempDir = await Directory.systemTemp.createTemp(
         'launch_image_gallery_test_',
       );
@@ -58,7 +65,9 @@ void main() {
     test(
       'resolves first existing image path for a specific gallery id',
       () async {
-        final service = LaunchImageGalleryService();
+        final service = LaunchImageGalleryService(
+          assetStore: await _createAssetStore(),
+        );
         final tempDir = await Directory.systemTemp.createTemp(
           'launch_image_gallery_theme_test_',
         );
@@ -87,4 +96,21 @@ void main() {
       },
     );
   });
+}
+
+Future<ManagedAssetStore> _createAssetStore() async {
+  final documentsDir = await Directory.systemTemp.createTemp('launch_docs_');
+  final supportDir = await Directory.systemTemp.createTemp('launch_support_');
+  addTearDown(() async {
+    if (documentsDir.existsSync()) {
+      await documentsDir.delete(recursive: true);
+    }
+    if (supportDir.existsSync()) {
+      await supportDir.delete(recursive: true);
+    }
+  });
+  return ManagedAssetStore(
+    documentsDirectoryProvider: () async => documentsDir,
+    supportDirectoryProvider: () async => supportDir,
+  );
 }

@@ -2,22 +2,27 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/images/file_image_cache.dart';
-import '../../../core/storage/managed_file_path_resolver.dart';
+import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
+import '../../../domain/entities/managed_asset.dart';
 
 class LaunchImageGalleryService {
-  LaunchImageGalleryService({SharedPreferences? preferences})
+  LaunchImageGalleryService({
+    SharedPreferences? preferences,
+    ManagedAssetStore? assetStore,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
+  final ManagedAssetStore _assetStore;
 
   static const Uuid _uuid = Uuid();
   static const String _galleriesKey = 'launchImageGallery.galleries';
@@ -44,16 +49,17 @@ class LaunchImageGalleryService {
           )
           .toList(growable: false);
       galleries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      final resolver = ManagedFilePathResolver();
       var changed = false;
       final normalizedGalleries = <LaunchImageGallery>[];
       for (final gallery in galleries) {
         final normalizedPaths = <String>[];
         for (final path in gallery.imagePaths) {
-          final normalized =
-              await resolver.normalizePersistedFilePath(path) ?? path;
-          normalizedPaths.add(normalized);
-          if (normalized != path) {
+          final persisted =
+              await _assetStore.relativizePersistedPath(path) ?? path;
+          final resolved =
+              await _assetStore.resolvePersistedPath(persisted) ?? path;
+          normalizedPaths.add(resolved);
+          if (persisted != path || resolved != path) {
             changed = true;
           }
         }
@@ -77,7 +83,17 @@ class LaunchImageGalleryService {
     await prefs.setString(
       _galleriesKey,
       jsonEncode(
-        galleries.map((item) => item.toJson()).toList(growable: false),
+        await Future.wait(
+          galleries.map((item) async {
+            final persistedPaths = <String>[];
+            for (final path in item.imagePaths) {
+              persistedPaths.add(
+                await _assetStore.relativizePersistedPath(path) ?? path,
+              );
+            }
+            return item.copyWith(imagePaths: persistedPaths).toJson();
+          }),
+        ),
       ),
     );
   }
@@ -204,15 +220,15 @@ class LaunchImageGalleryService {
       throw const FormatException('Gallery not found.');
     }
     final extension = _normalizeFileExtension(fileName);
-    final directory = await _galleryDirectory(galleryId);
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
-    final targetPath = p.join(
-      directory.path,
-      'launch_${DateTime.now().millisecondsSinceEpoch}.$extension',
+    final asset = await _assetStore.persistBytes(
+      type: ManagedAssetType.launchImageGalleryImage,
+      scope: ManagedAssetScope.launchImage,
+      bytes: bytes,
+      fileName: 'launch.$extension',
+      collectionId: galleryId,
+      targetNamePrefix: 'launch',
     );
-    await File(targetPath).writeAsBytes(bytes, flush: true);
+    final targetPath = asset.resolvedPath!;
     await evictFileImagePath(targetPath);
     return saveGallery(
       gallery.copyWith(imagePaths: <String>[targetPath, ...gallery.imagePaths]),
@@ -228,31 +244,35 @@ class LaunchImageGalleryService {
       throw const FormatException('Gallery not found.');
     }
 
-    final normalizedTargets =
-        paths
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-
-    for (final path in normalizedTargets) {
-      await evictFileImagePath(path);
-      final file = File(path);
-      if (await file.exists()) {
-        await file.delete();
+    final normalizedTargets = <String>{};
+    for (final rawPath in paths) {
+      final resolved =
+          await _assetStore.resolvePersistedPath(rawPath) ?? rawPath.trim();
+      if (resolved.isNotEmpty) {
+        normalizedTargets.add(resolved);
       }
     }
 
-    final updatedPaths = gallery.imagePaths
-        .where((path) => !normalizedTargets.contains(path))
-        .toList(growable: false);
+    for (final path in normalizedTargets) {
+      await evictFileImagePath(path);
+      await _assetStore.deletePath(path);
+    }
+
+    final updatedPaths = <String>[];
+    for (final path in gallery.imagePaths) {
+      final resolved = await _assetStore.resolvePersistedPath(path) ?? path;
+      if (!normalizedTargets.contains(resolved)) {
+        updatedPaths.add(path);
+      }
+    }
 
     return saveGallery(gallery.copyWith(imagePaths: updatedPaths));
   }
 
   Future<Directory> _galleryDirectory(String galleryId) async {
-    final documents = await getApplicationDocumentsDirectory();
-    return Directory(
-      p.join(documents.path, 'launch_image_galleries', galleryId),
+    return _assetStore.resolveDirectory(
+      ManagedAssetType.launchImageGalleryImage,
+      collectionId: galleryId,
     );
   }
 

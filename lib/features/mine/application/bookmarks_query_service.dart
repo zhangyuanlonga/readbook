@@ -1,7 +1,6 @@
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
-import '../../book/application/book_display_state.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 
@@ -41,15 +40,14 @@ class BookmarksQueryService {
   BookmarksQueryService({
     required BookmarkRepository bookmarkRepository,
     required BookshelfService bookshelfService,
-    BookMetadataPresentationResolver resolver =
-        const BookMetadataPresentationResolver(),
+    BookDisplayStateResolver resolver = const BookDisplayStateResolver(),
   }) : _bookmarkRepository = bookmarkRepository,
        _bookshelfService = bookshelfService,
        _resolver = resolver;
 
   final BookmarkRepository _bookmarkRepository;
   final BookshelfService _bookshelfService;
-  final BookMetadataPresentationResolver _resolver;
+  final BookDisplayStateResolver _resolver;
 
   Future<BookmarksPageData> loadPageData({required Duration timeout}) async {
     final bookmarks = await _bookmarkRepository.listAllBookmarks().timeout(

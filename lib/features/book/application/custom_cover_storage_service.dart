@@ -1,14 +1,18 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/storage/managed_asset_store.dart';
+import '../../../domain/entities/managed_asset.dart';
 
 class CustomCoverStorageService {
-  const CustomCoverStorageService();
+  CustomCoverStorageService({ManagedAssetStore? assetStore})
+    : _assetStore = assetStore ?? ManagedAssetStore();
 
-  Future<Uri?> persistForBook({
+  final ManagedAssetStore _assetStore;
+
+  Future<String?> persistForBook({
     required String sourceId,
     required String detailUrl,
     required PickedImageData picked,
@@ -24,9 +28,8 @@ class CustomCoverStorageService {
       return null;
     }
 
-    final baseDir = await getApplicationSupportDirectory();
-    final coverDir = Directory(
-      p.join(baseDir.path, 'shuxiang_reading_next', 'custom_covers'),
+    final coverDir = await _assetStore.resolveDirectory(
+      ManagedAssetType.customBookCover,
     );
     if (!await coverDir.exists()) {
       await coverDir.create(recursive: true);
@@ -63,13 +66,14 @@ class CustomCoverStorageService {
       }
     }
 
-    final targetFile = File(
-      p.join(
-        coverDir.path,
-        '${bookKey}_${DateTime.now().millisecondsSinceEpoch}$extension',
-      ),
+    final asset = await _assetStore.persistBytes(
+      type: ManagedAssetType.customBookCover,
+      scope: ManagedAssetScope.bookshelfBook,
+      bytes: bytes,
+      fileName: '$bookKey$extension',
+      assetId: bookKey,
+      targetNamePrefix: bookKey,
     );
-    await targetFile.writeAsBytes(bytes, flush: true);
-    return targetFile.uri;
+    return asset.relativePath;
   }
 }

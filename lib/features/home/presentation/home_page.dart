@@ -48,8 +48,8 @@ class _HomePageState extends ConsumerState<HomePage>
   late final HomeEngagementService _engagementService;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
-  final BookMetadataPresentationResolver _bookPresentationResolver =
-      const BookMetadataPresentationResolver();
+  final BookDisplayStateResolver _bookPresentationResolver =
+      const BookDisplayStateResolver();
 
   HomeEngagementState _engagementState = const HomeEngagementState();
   bool _isEngagementLoading = true;

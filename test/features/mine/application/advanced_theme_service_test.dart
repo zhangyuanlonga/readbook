@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
@@ -17,14 +21,14 @@ void main() {
       name: '护眼绿',
       createdAt: DateTime.parse('2026-04-18T00:00:00.000Z'),
       updatedAt: DateTime.parse('2026-04-18T00:00:00.000Z'),
-      lightConfig: const AppAdvancedThemeModeConfig(
+      lightConfig: AppAdvancedThemeModeConfig(
         colors: AppAdvancedThemeColors(
           primaryColorValue: 0xFF336699,
           backgroundColorValue: 0xFFF5F8F2,
         ),
         readerWallpaperPath: '/tmp/reader_light.jpg',
       ),
-      darkConfig: const AppAdvancedThemeModeConfig(
+      darkConfig: AppAdvancedThemeModeConfig(
         colors: AppAdvancedThemeColors(
           primaryColorValue: 0xFF88CCAA,
           backgroundColorValue: 0xFF101512,
@@ -51,7 +55,7 @@ void main() {
   });
 
   test('imports theme colors into a new saved theme', () async {
-    final service = AdvancedThemeService();
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
 
     final imported = await service.importThemeColorJson(
       jsonEncode(<String, dynamic>{
@@ -87,16 +91,16 @@ void main() {
   });
 
   test('persists reader wallpaper path inside theme mode config', () async {
-    final service = AdvancedThemeService();
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
     final theme = AppAdvancedTheme(
       id: 'theme_reader_wallpaper',
       name: '阅读器联动',
       createdAt: DateTime.parse('2026-04-21T00:00:00.000Z'),
       updatedAt: DateTime.parse('2026-04-21T00:00:00.000Z'),
-      lightConfig: const AppAdvancedThemeModeConfig(
+      lightConfig: AppAdvancedThemeModeConfig(
         readerWallpaperPath: '/tmp/reader_light.jpg',
       ),
-      darkConfig: const AppAdvancedThemeModeConfig(
+      darkConfig: AppAdvancedThemeModeConfig(
         readerWallpaperPath: '/tmp/reader_dark.jpg',
       ),
     );
@@ -113,14 +117,14 @@ void main() {
   });
 
   test('persists launch image gallery binding in theme payload', () async {
-    final service = AdvancedThemeService();
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
     final theme = AppAdvancedTheme(
       id: 'theme_launch_gallery',
       name: '启动联动',
       createdAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
       updatedAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
-      lightConfig: const AppAdvancedThemeModeConfig(),
-      darkConfig: const AppAdvancedThemeModeConfig(),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
       launchImageGalleryId: 'launch_gallery_a',
     );
 
@@ -130,4 +134,21 @@ void main() {
     expect(themes, hasLength(1));
     expect(themes.first.launchImageGalleryId, 'launch_gallery_a');
   });
+}
+
+Future<ManagedAssetStore> _createAssetStore() async {
+  final documentsDir = await Directory.systemTemp.createTemp('theme_docs_');
+  final supportDir = await Directory.systemTemp.createTemp('theme_support_');
+  addTearDown(() async {
+    if (documentsDir.existsSync()) {
+      await documentsDir.delete(recursive: true);
+    }
+    if (supportDir.existsSync()) {
+      await supportDir.delete(recursive: true);
+    }
+  });
+  return ManagedAssetStore(
+    documentsDirectoryProvider: () async => documentsDir,
+    supportDirectoryProvider: () async => supportDir,
+  );
 }

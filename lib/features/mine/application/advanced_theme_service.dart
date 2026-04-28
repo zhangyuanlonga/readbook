@@ -9,9 +9,10 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/images/file_image_cache.dart';
-import '../../../core/storage/managed_file_path_resolver.dart';
+import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
+import '../../../domain/entities/managed_asset.dart';
 import 'cover_gallery_service.dart';
 import 'launch_image_gallery_service.dart';
 import '../../reader/application/reader_font_registry_service.dart';
@@ -25,13 +26,18 @@ class AdvancedThemeService {
   static const String _bundleExportType = 'advanced_theme_bundle';
   static const int _bundleExportVersion = 1;
 
-  AdvancedThemeService({SharedPreferences? preferences})
+  AdvancedThemeService({
+    SharedPreferences? preferences,
+    ManagedAssetStore? assetStore,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
+  final ManagedAssetStore _assetStore;
 
   static const Uuid _uuid = Uuid();
   static const String _themesKey = 'app.advancedThemes';
@@ -64,34 +70,11 @@ class AdvancedThemeService {
             ),
           )
           .toList(growable: false);
-      final resolver = ManagedFilePathResolver();
       var changed = false;
       final normalizedThemes = <AppAdvancedTheme>[];
       for (final theme in themes) {
-        final normalizedLightWallpaper = await resolver
-            .normalizePersistedFilePath(theme.lightConfig.wallpaperPath);
-        final normalizedLightReaderWallpaper = await resolver
-            .normalizePersistedFilePath(theme.lightConfig.readerWallpaperPath);
-        final normalizedDarkWallpaper = await resolver
-            .normalizePersistedFilePath(theme.darkConfig.wallpaperPath);
-        final normalizedDarkReaderWallpaper = await resolver
-            .normalizePersistedFilePath(theme.darkConfig.readerWallpaperPath);
-        final normalizedTheme = theme.copyWith(
-          lightConfig: theme.lightConfig.copyWith(
-            wallpaperPath: normalizedLightWallpaper,
-            readerWallpaperPath: normalizedLightReaderWallpaper,
-          ),
-          darkConfig: theme.darkConfig.copyWith(
-            wallpaperPath: normalizedDarkWallpaper,
-            readerWallpaperPath: normalizedDarkReaderWallpaper,
-          ),
-        );
-        if (normalizedLightWallpaper != theme.lightConfig.wallpaperPath ||
-            normalizedLightReaderWallpaper !=
-                theme.lightConfig.readerWallpaperPath ||
-            normalizedDarkWallpaper != theme.darkConfig.wallpaperPath ||
-            normalizedDarkReaderWallpaper !=
-                theme.darkConfig.readerWallpaperPath) {
+        final normalizedTheme = await _normalizeThemeForRuntime(theme);
+        if (_themeNeedsPersistenceNormalization(theme, normalizedTheme)) {
           changed = true;
         }
         normalizedThemes.add(normalizedTheme);
@@ -112,10 +95,80 @@ class AdvancedThemeService {
       await prefs.remove(_themesKey);
       return;
     }
+    final persistedThemes = <Map<String, dynamic>>[];
+    for (final theme in themes) {
+      persistedThemes.add((await _normalizeThemeForPersistence(theme)).toJson());
+    }
     await prefs.setString(
       _themesKey,
-      jsonEncode(themes.map((item) => item.toJson()).toList(growable: false)),
+      jsonEncode(persistedThemes),
     );
+  }
+
+  Future<AppAdvancedTheme> _normalizeThemeForRuntime(AppAdvancedTheme theme) async {
+    return theme.copyWith(
+      lightConfig: await _normalizeModeConfigForRuntime(theme.lightConfig),
+      darkConfig: await _normalizeModeConfigForRuntime(theme.darkConfig),
+    );
+  }
+
+  Future<AppAdvancedTheme> _normalizeThemeForPersistence(
+    AppAdvancedTheme theme,
+  ) async {
+    return theme.copyWith(
+      lightConfig: await _normalizeModeConfigForPersistence(theme.lightConfig),
+      darkConfig: await _normalizeModeConfigForPersistence(theme.darkConfig),
+    );
+  }
+
+  Future<AppAdvancedThemeModeConfig> _normalizeModeConfigForRuntime(
+    AppAdvancedThemeModeConfig config,
+  ) async {
+    return config.copyWith(
+      wallpaperAsset: await _assetStore.normalizeRefForRuntime(
+        config.wallpaperAsset,
+      ),
+      clearWallpaperAsset: config.wallpaperAsset == null,
+      readerWallpaperAsset: await _assetStore.normalizeRefForRuntime(
+        config.readerWallpaperAsset,
+      ),
+      clearReaderWallpaperAsset: config.readerWallpaperAsset == null,
+    );
+  }
+
+  Future<AppAdvancedThemeModeConfig> _normalizeModeConfigForPersistence(
+    AppAdvancedThemeModeConfig config,
+  ) async {
+    return config.copyWith(
+      wallpaperAsset: await _assetStore.relativizeRef(config.wallpaperAsset),
+      clearWallpaperAsset: config.wallpaperAsset == null,
+      readerWallpaperAsset: await _assetStore.relativizeRef(
+        config.readerWallpaperAsset,
+      ),
+      clearReaderWallpaperAsset: config.readerWallpaperAsset == null,
+    );
+  }
+
+  bool _themeNeedsPersistenceNormalization(
+    AppAdvancedTheme original,
+    AppAdvancedTheme normalized,
+  ) {
+    return original.lightConfig.wallpaperAsset?.normalizedRelativePath !=
+            normalized.lightConfig.wallpaperAsset?.normalizedRelativePath ||
+        original.lightConfig.wallpaperAsset?.normalizedResolvedPath !=
+            normalized.lightConfig.wallpaperAsset?.normalizedResolvedPath ||
+        original.lightConfig.readerWallpaperAsset?.normalizedRelativePath !=
+            normalized.lightConfig.readerWallpaperAsset?.normalizedRelativePath ||
+        original.lightConfig.readerWallpaperAsset?.normalizedResolvedPath !=
+            normalized.lightConfig.readerWallpaperAsset?.normalizedResolvedPath ||
+        original.darkConfig.wallpaperAsset?.normalizedRelativePath !=
+            normalized.darkConfig.wallpaperAsset?.normalizedRelativePath ||
+        original.darkConfig.wallpaperAsset?.normalizedResolvedPath !=
+            normalized.darkConfig.wallpaperAsset?.normalizedResolvedPath ||
+        original.darkConfig.readerWallpaperAsset?.normalizedRelativePath !=
+            normalized.darkConfig.readerWallpaperAsset?.normalizedRelativePath ||
+        original.darkConfig.readerWallpaperAsset?.normalizedResolvedPath !=
+            normalized.darkConfig.readerWallpaperAsset?.normalizedResolvedPath;
   }
 
   Future<String?> loadActiveThemeId() async {
@@ -212,14 +265,20 @@ class AdvancedThemeService {
     final cloneName =
         name?.trim().isNotEmpty == true ? name!.trim() : '${source.name} 副本';
     final lightWallpaperPath = await _duplicateWallpaper(
-      targetThemeId: cloneId,
-      mode: AppAdvancedThemeMode.light,
       sourcePath: source.lightConfig.wallpaperPath,
+      readerAsset: false,
     );
     final darkWallpaperPath = await _duplicateWallpaper(
-      targetThemeId: cloneId,
-      mode: AppAdvancedThemeMode.dark,
       sourcePath: source.darkConfig.wallpaperPath,
+      readerAsset: false,
+    );
+    final lightReaderWallpaperPath = await _duplicateWallpaper(
+      sourcePath: source.lightConfig.readerWallpaperPath,
+      readerAsset: true,
+    );
+    final darkReaderWallpaperPath = await _duplicateWallpaper(
+      sourcePath: source.darkConfig.readerWallpaperPath,
+      readerAsset: true,
     );
     final clone = source.copyWith(
       id: cloneId,
@@ -229,12 +288,14 @@ class AdvancedThemeService {
       lightConfig: source.lightConfig.copyWith(
         wallpaperPath: lightWallpaperPath,
         clearWallpaperPath: lightWallpaperPath == null,
-        readerWallpaperPath: source.lightConfig.readerWallpaperPath,
+        readerWallpaperPath: lightReaderWallpaperPath,
+        clearReaderWallpaperPath: lightReaderWallpaperPath == null,
       ),
       darkConfig: source.darkConfig.copyWith(
         wallpaperPath: darkWallpaperPath,
         clearWallpaperPath: darkWallpaperPath == null,
-        readerWallpaperPath: source.darkConfig.readerWallpaperPath,
+        readerWallpaperPath: darkReaderWallpaperPath,
+        clearReaderWallpaperPath: darkReaderWallpaperPath == null,
       ),
     );
     return saveTheme(clone);
@@ -480,37 +541,45 @@ class AdvancedThemeService {
         targetNamePrefix: 'reader_wallpaper_dark',
       );
 
-      if (lightWallpaperPath != null) {
-        sharedBackgroundPaths.add(
-          await _importAppearanceBackgroundFromFile(
-            lightWallpaperPath,
-            fileName: p.basename(lightWallpaperPath),
-          ),
-        );
+      final importedLightWallpaperPath =
+          lightWallpaperPath == null
+              ? null
+              : await _importAppearanceBackgroundFromFile(
+                lightWallpaperPath,
+                fileName: p.basename(lightWallpaperPath),
+              );
+      if (importedLightWallpaperPath != null) {
+        sharedBackgroundPaths.add(importedLightWallpaperPath);
       }
-      if (darkWallpaperPath != null) {
-        sharedBackgroundPaths.add(
-          await _importAppearanceBackgroundFromFile(
-            darkWallpaperPath,
-            fileName: p.basename(darkWallpaperPath),
-          ),
-        );
+      final importedDarkWallpaperPath =
+          darkWallpaperPath == null
+              ? null
+              : await _importAppearanceBackgroundFromFile(
+                darkWallpaperPath,
+                fileName: p.basename(darkWallpaperPath),
+              );
+      if (importedDarkWallpaperPath != null) {
+        sharedBackgroundPaths.add(importedDarkWallpaperPath);
       }
-      if (lightReaderWallpaperPath != null) {
-        sharedReaderBackgroundPaths.add(
-          await ReaderBackgroundService().importBackground(
-            bytes: await File(lightReaderWallpaperPath).readAsBytes(),
-            fileName: p.basename(lightReaderWallpaperPath),
-          ),
-        );
+      final importedLightReaderWallpaperPath =
+          lightReaderWallpaperPath == null
+              ? null
+              : await ReaderBackgroundService().importBackground(
+                bytes: await File(lightReaderWallpaperPath).readAsBytes(),
+                fileName: p.basename(lightReaderWallpaperPath),
+              );
+      if (importedLightReaderWallpaperPath != null) {
+        sharedReaderBackgroundPaths.add(importedLightReaderWallpaperPath);
       }
-      if (darkReaderWallpaperPath != null) {
-        sharedReaderBackgroundPaths.add(
-          await ReaderBackgroundService().importBackground(
-            bytes: await File(darkReaderWallpaperPath).readAsBytes(),
-            fileName: p.basename(darkReaderWallpaperPath),
-          ),
-        );
+      final importedDarkReaderWallpaperPath =
+          darkReaderWallpaperPath == null
+              ? null
+              : await ReaderBackgroundService().importBackground(
+                bytes: await File(darkReaderWallpaperPath).readAsBytes(),
+                fileName: p.basename(darkReaderWallpaperPath),
+              );
+      if (importedDarkReaderWallpaperPath != null) {
+        sharedReaderBackgroundPaths.add(importedDarkReaderWallpaperPath);
       }
 
       coverGalleryId = await _importImageGalleryFromBundle(
@@ -540,16 +609,16 @@ class AdvancedThemeService {
         createdAt: now,
         updatedAt: now,
         lightConfig: importedTheme.lightConfig.copyWith(
-          wallpaperPath: lightWallpaperPath,
-          clearWallpaperPath: lightWallpaperPath == null,
-          readerWallpaperPath: lightReaderWallpaperPath,
-          clearReaderWallpaperPath: lightReaderWallpaperPath == null,
+          wallpaperPath: importedLightWallpaperPath,
+          clearWallpaperPath: importedLightWallpaperPath == null,
+          readerWallpaperPath: importedLightReaderWallpaperPath,
+          clearReaderWallpaperPath: importedLightReaderWallpaperPath == null,
         ),
         darkConfig: importedTheme.darkConfig.copyWith(
-          wallpaperPath: darkWallpaperPath,
-          clearWallpaperPath: darkWallpaperPath == null,
-          readerWallpaperPath: darkReaderWallpaperPath,
-          clearReaderWallpaperPath: darkReaderWallpaperPath == null,
+          wallpaperPath: importedDarkWallpaperPath,
+          clearWallpaperPath: importedDarkWallpaperPath == null,
+          readerWallpaperPath: importedDarkReaderWallpaperPath,
+          clearReaderWallpaperPath: importedDarkReaderWallpaperPath == null,
         ),
         coverGalleryId: coverGalleryId,
         clearCoverGalleryId: coverGalleryId == null,
@@ -633,21 +702,25 @@ class AdvancedThemeService {
             targetNamePrefix: 'wallpaper_dark_red',
           );
 
-      if (lightWallpaperPath != null) {
-        sharedBackgroundPaths.add(
-          await _importAppearanceBackgroundFromFile(
-            lightWallpaperPath,
-            fileName: p.basename(lightWallpaperPath),
-          ),
-        );
+      final importedLightWallpaperPath =
+          lightWallpaperPath == null
+              ? null
+              : await _importAppearanceBackgroundFromFile(
+                lightWallpaperPath,
+                fileName: p.basename(lightWallpaperPath),
+              );
+      if (importedLightWallpaperPath != null) {
+        sharedBackgroundPaths.add(importedLightWallpaperPath);
       }
-      if (darkWallpaperPath != null) {
-        sharedBackgroundPaths.add(
-          await _importAppearanceBackgroundFromFile(
-            darkWallpaperPath,
-            fileName: p.basename(darkWallpaperPath),
-          ),
-        );
+      final importedDarkWallpaperPath =
+          darkWallpaperPath == null
+              ? null
+              : await _importAppearanceBackgroundFromFile(
+                darkWallpaperPath,
+                fileName: p.basename(darkWallpaperPath),
+              );
+      if (importedDarkWallpaperPath != null) {
+        sharedBackgroundPaths.add(importedDarkWallpaperPath);
       }
 
       final lightReaderSchema = await _importRedReaderSchema(
@@ -663,22 +736,46 @@ class AdvancedThemeService {
         targetNamePrefix: 'reader_wallpaper_dark_red',
       );
 
-      if (lightReaderSchema?.backgroundPath != null) {
-        sharedReaderBackgroundPaths.add(
-          await ReaderBackgroundService().importBackground(
-            bytes: await File(lightReaderSchema!.backgroundPath!).readAsBytes(),
-            fileName: p.basename(lightReaderSchema.backgroundPath!),
-          ),
-        );
+      final importedLightReaderBackgroundPath =
+          lightReaderSchema?.backgroundPath == null
+              ? null
+              : await ReaderBackgroundService().importBackground(
+                bytes: await File(lightReaderSchema!.backgroundPath!).readAsBytes(),
+                fileName: p.basename(lightReaderSchema.backgroundPath!),
+              );
+      if (importedLightReaderBackgroundPath != null) {
+        sharedReaderBackgroundPaths.add(importedLightReaderBackgroundPath);
       }
-      if (darkReaderSchema?.backgroundPath != null) {
-        sharedReaderBackgroundPaths.add(
-          await ReaderBackgroundService().importBackground(
-            bytes: await File(darkReaderSchema!.backgroundPath!).readAsBytes(),
-            fileName: p.basename(darkReaderSchema.backgroundPath!),
-          ),
-        );
+      final importedDarkReaderBackgroundPath =
+          darkReaderSchema?.backgroundPath == null
+              ? null
+              : await ReaderBackgroundService().importBackground(
+                bytes: await File(darkReaderSchema!.backgroundPath!).readAsBytes(),
+                fileName: p.basename(darkReaderSchema.backgroundPath!),
+              );
+      if (importedDarkReaderBackgroundPath != null) {
+        sharedReaderBackgroundPaths.add(importedDarkReaderBackgroundPath);
       }
+      final resolvedLightReaderSchema =
+          lightReaderSchema == null
+              ? null
+              : _RedReaderSchemaImport(
+                backgroundPath: importedLightReaderBackgroundPath,
+                opacity: lightReaderSchema.opacity,
+                blurSigma: lightReaderSchema.blurSigma,
+                fit: lightReaderSchema.fit,
+                overlayOpacity: lightReaderSchema.overlayOpacity,
+              );
+      final resolvedDarkReaderSchema =
+          darkReaderSchema == null
+              ? null
+              : _RedReaderSchemaImport(
+                backgroundPath: importedDarkReaderBackgroundPath,
+                opacity: darkReaderSchema.opacity,
+                blurSigma: darkReaderSchema.blurSigma,
+                fit: darkReaderSchema.fit,
+                overlayOpacity: darkReaderSchema.overlayOpacity,
+              );
 
       coverGalleryId = await _importRedCoverGallery(
         archive,
@@ -702,13 +799,13 @@ class AdvancedThemeService {
         updatedAt: now,
         lightConfig: _buildModeConfigFromRedSection(
           lightSection,
-          wallpaperPath: lightWallpaperPath,
-          readerSchema: lightReaderSchema,
+          wallpaperPath: importedLightWallpaperPath,
+          readerSchema: resolvedLightReaderSchema,
         ),
         darkConfig: _buildModeConfigFromRedSection(
           darkSection,
-          wallpaperPath: darkWallpaperPath,
-          readerSchema: darkReaderSchema,
+          wallpaperPath: importedDarkWallpaperPath,
+          readerSchema: resolvedDarkReaderSchema,
         ),
         coverGalleryId: coverGalleryId,
         bottomNavGalleryId: bottomNavGalleryId,
@@ -779,21 +876,25 @@ class AdvancedThemeService {
             targetNamePrefix: 'wallpaper_dark_rgshare',
           );
 
-      if (lightWallpaperPath != null) {
-        sharedBackgroundPaths.add(
-          await _importAppearanceBackgroundFromFile(
-            lightWallpaperPath,
-            fileName: p.basename(lightWallpaperPath),
-          ),
-        );
+      final importedLightWallpaperPath =
+          lightWallpaperPath == null
+              ? null
+              : await _importAppearanceBackgroundFromFile(
+                lightWallpaperPath,
+                fileName: p.basename(lightWallpaperPath),
+              );
+      if (importedLightWallpaperPath != null) {
+        sharedBackgroundPaths.add(importedLightWallpaperPath);
       }
-      if (darkWallpaperPath != null) {
-        sharedBackgroundPaths.add(
-          await _importAppearanceBackgroundFromFile(
-            darkWallpaperPath,
-            fileName: p.basename(darkWallpaperPath),
-          ),
-        );
+      final importedDarkWallpaperPath =
+          darkWallpaperPath == null
+              ? null
+              : await _importAppearanceBackgroundFromFile(
+                darkWallpaperPath,
+                fileName: p.basename(darkWallpaperPath),
+              );
+      if (importedDarkWallpaperPath != null) {
+        sharedBackgroundPaths.add(importedDarkWallpaperPath);
       }
 
       final colors = _readOptionalMap(manifest['2']);
@@ -804,12 +905,12 @@ class AdvancedThemeService {
         updatedAt: now,
         lightConfig: _buildModeConfigFromRgShare(
           colors,
-          wallpaperPath: lightWallpaperPath,
+          wallpaperPath: importedLightWallpaperPath,
           isDark: false,
         ),
         darkConfig: _buildModeConfigFromRgShare(
           colors,
-          wallpaperPath: darkWallpaperPath,
+          wallpaperPath: importedDarkWallpaperPath,
           isDark: true,
         ),
       );
@@ -849,10 +950,7 @@ class AdvancedThemeService {
       return;
     }
     await evictFileImagePath(normalized);
-    final file = File(normalized);
-    if (await file.exists()) {
-      await file.delete();
-    }
+    await _assetStore.deletePath(normalized);
   }
 
   Future<Directory> _themeDirectory(String themeId) async {
@@ -861,11 +959,13 @@ class AdvancedThemeService {
   }
 
   Future<String?> _duplicateWallpaper({
-    required String targetThemeId,
-    required AppAdvancedThemeMode mode,
     required String? sourcePath,
+    required bool readerAsset,
   }) async {
-    final normalized = sourcePath?.trim() ?? '';
+    final normalized =
+        await _assetStore.resolvePersistedPath(sourcePath) ??
+        sourcePath?.trim() ??
+        '';
     if (normalized.isEmpty) {
       return null;
     }
@@ -873,17 +973,16 @@ class AdvancedThemeService {
     if (!await sourceFile.exists()) {
       return null;
     }
-    final targetDirectory = await _themeDirectory(targetThemeId);
-    if (!await targetDirectory.exists()) {
-      await targetDirectory.create(recursive: true);
+    if (readerAsset) {
+      return ReaderBackgroundService().importBackground(
+        bytes: await sourceFile.readAsBytes(),
+        fileName: p.basename(sourceFile.path),
+      );
     }
-    final sourceExtension = p.extension(sourceFile.path);
-    final targetPath = p.join(
-      targetDirectory.path,
-      'wallpaper_${mode.name}${sourceExtension.isEmpty ? '.png' : sourceExtension}',
+    return _importAppearanceBackgroundFromFile(
+      sourceFile.path,
+      fileName: p.basename(sourceFile.path),
     );
-    await sourceFile.copy(targetPath);
-    return targetPath;
   }
 
   String _normalizeFileExtension(String fileName) {
@@ -2131,23 +2230,17 @@ class AdvancedThemeService {
   }) async {
     final sourceFile = File(sourcePath);
     final bytes = await sourceFile.readAsBytes();
-    final directory = await _appearanceBackgroundDirectory();
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
     final extension = _normalizeSharedImageExtension(bytes, fileName);
-    final targetPath = p.join(
-      directory.path,
-      'theme_bg_${DateTime.now().millisecondsSinceEpoch}.$extension',
+    final asset = await _assetStore.persistBytes(
+      type: ManagedAssetType.appBackground,
+      scope: ManagedAssetScope.themeBinding,
+      bytes: bytes,
+      fileName: 'theme_bg.$extension',
+      targetNamePrefix: 'theme_bg',
     );
-    await File(targetPath).writeAsBytes(bytes, flush: true);
+    final targetPath = asset.resolvedPath!;
     await evictFileImagePath(targetPath);
     return targetPath;
-  }
-
-  Future<Directory> _appearanceBackgroundDirectory() async {
-    final documents = await getApplicationDocumentsDirectory();
-    return Directory(p.join(documents.path, 'backgrounds'));
   }
 
   Future<void> _safeDeleteAppearanceBackground(String path) async {
@@ -2157,10 +2250,7 @@ class AdvancedThemeService {
     }
     try {
       await evictFileImagePath(normalized);
-      final file = File(normalized);
-      if (await file.exists()) {
-        await file.delete();
-      }
+      await _assetStore.deletePath(normalized);
     } catch (_) {
       // Ignore rollback failures.
     }

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/storage/managed_asset_store.dart';
+
 const String appThemeModePreferenceKey = 'app.themeMode';
 const String appSeedColorPreferenceKey = 'app.seedColor';
 const String appInterfaceFontSourcePreferenceKey = 'app.interfaceFont.source';
@@ -97,23 +99,33 @@ class AppInterfaceFontSettingsSnapshot {
 }
 
 class AppInterfaceTypographyPreferencesService {
-  AppInterfaceTypographyPreferencesService({SharedPreferences? preferences})
+  AppInterfaceTypographyPreferencesService({
+    SharedPreferences? preferences,
+    ManagedAssetStore? assetStore,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
+  final ManagedAssetStore _assetStore;
 
   Future<AppInterfaceFontSettingsSnapshot> loadFontSettings() async {
     final prefs = await _preferencesFuture;
+    final persistedCustomFontPath = prefs.getString(
+      appInterfaceCustomFontPathPreferenceKey,
+    );
     return AppInterfaceFontSettingsSnapshot(
       fontSourceName: prefs.getString(appInterfaceFontSourcePreferenceKey),
       systemFontPresetName: prefs.getString(
         appInterfaceSystemFontPresetPreferenceKey,
       ),
       fontFamilyKey: prefs.getString(appInterfaceFontFamilyKeyPreferenceKey),
-      customFontPath: prefs.getString(appInterfaceCustomFontPathPreferenceKey),
+      customFontPath:
+          await _assetStore.resolvePersistedPath(persistedCustomFontPath) ??
+          persistedCustomFontPath,
     );
   }
 
@@ -151,7 +163,8 @@ class AppInterfaceTypographyPreferencesService {
     } else {
       await prefs.setString(
         appInterfaceCustomFontPathPreferenceKey,
-        settings.customFontPath!,
+        await _assetStore.relativizePersistedPath(settings.customFontPath!) ??
+            settings.customFontPath!,
       );
     }
   }

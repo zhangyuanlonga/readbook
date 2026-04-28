@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_logical_position.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_progress.dart';
@@ -8,13 +11,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ReaderPreferencesService', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
 
     test('saves and loads reader settings', () async {
-      final service = ReaderPreferencesService();
+      final service = await _createService();
       final settings = const ReaderSettings(
         fontSize: 22,
         lineHeight: 1.9,
@@ -168,7 +173,7 @@ void main() {
           'reader.settings.pinnedChapterHeaderOffsetY': 18.0,
         });
 
-        final service = ReaderPreferencesService();
+        final service = await _createService();
         final restored = await service.loadSettings();
 
         expect(restored.bodyMarginTop, 8);
@@ -192,7 +197,7 @@ void main() {
         'reader.settings.pinnedChapterHeaderOffsetY': 18.0,
       });
 
-      final service = ReaderPreferencesService();
+      final service = await _createService();
       await service.saveSettings(
         const ReaderSettings(
           bodyMarginTop: 7,
@@ -228,7 +233,7 @@ void main() {
     });
 
     test('saves and loads reading progress', () async {
-      final service = ReaderPreferencesService();
+      final service = await _createService();
       final progress = ReadingProgress(
         bookId: 'book_1',
         sourceId: 'src_1',
@@ -260,7 +265,7 @@ void main() {
     });
 
     test('migrates reading progress to a new book identity', () async {
-      final service = ReaderPreferencesService();
+      final service = await _createService();
       final progress = ReadingProgress(
         bookId: 'book_old',
         sourceId: 'src_old',
@@ -305,7 +310,7 @@ void main() {
             '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z"}',
       });
 
-      final service = ReaderPreferencesService();
+      final service = await _createService();
       final restored = await service.loadProgress('book_legacy');
 
       expect(restored, isNotNull);
@@ -314,7 +319,7 @@ void main() {
     });
 
     test('saves and loads toc snapshot', () async {
-      final service = ReaderPreferencesService();
+      final service = await _createService();
       final snapshot = ReaderTocSnapshot(
         bookId: 'book_1',
         sourceId: 'src_1',
@@ -359,4 +364,23 @@ void main() {
       expect(restored.chapters.last.index, 1);
     });
   });
+}
+
+Future<ReaderPreferencesService> _createService() async {
+  final documentsDir = await Directory.systemTemp.createTemp('reader_docs_');
+  final supportDir = await Directory.systemTemp.createTemp('reader_support_');
+  addTearDown(() async {
+    if (documentsDir.existsSync()) {
+      await documentsDir.delete(recursive: true);
+    }
+    if (supportDir.existsSync()) {
+      await supportDir.delete(recursive: true);
+    }
+  });
+  return ReaderPreferencesService(
+    assetStore: ManagedAssetStore(
+      documentsDirectoryProvider: () async => documentsDir,
+      supportDirectoryProvider: () async => supportDir,
+    ),
+  );
 }

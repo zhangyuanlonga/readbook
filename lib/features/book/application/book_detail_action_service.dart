@@ -22,7 +22,7 @@ class BookDetailActionService {
   Future<BookDetailBookshelfActionResult> toggleBookshelf({
     required bool wasInBookshelf,
     required BookDetail detail,
-    required BookMetadataPresentation presentation,
+    required BookDisplayState presentation,
     String? latestChapterTitle,
   }) async {
     if (wasInBookshelf) {

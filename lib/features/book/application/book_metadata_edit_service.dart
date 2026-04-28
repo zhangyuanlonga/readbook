@@ -49,15 +49,15 @@ class BookMetadataEditService {
       return null;
     }
 
-    final storedCoverUri = await _customCoverStorageService.persistForBook(
+    final storedCoverPath = await _customCoverStorageService.persistForBook(
       sourceId: detail.sourceId,
       detailUrl: detail.detailUrl,
       picked: picked,
     );
-    if (storedCoverUri == null) {
+    if (storedCoverPath == null) {
       return null;
     }
-    return storedCoverUri.toFilePath();
+    return storedCoverPath;
   }
 
   Future<RemoteBookMetadataSaveResult> saveRemoteBookMetadata({

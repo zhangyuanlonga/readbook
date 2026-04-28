@@ -183,7 +183,7 @@ final bookshelfImageSelectionServiceProvider = Provider<ImageSelectionService>((
 
 final bookshelfCustomCoverStorageServiceProvider =
     Provider<CustomCoverStorageService>((ref) {
-      return const CustomCoverStorageService();
+      return CustomCoverStorageService();
     });
 
 final bookshelfAnnouncementServiceProvider = Provider<AnnouncementService>((

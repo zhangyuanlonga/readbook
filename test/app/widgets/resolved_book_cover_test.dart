@@ -35,8 +35,8 @@ void main() {
       name: '高级主题',
       createdAt: DateTime.parse('2026-04-17T00:00:00.000Z'),
       updatedAt: DateTime.parse('2026-04-17T00:00:00.000Z'),
-      lightConfig: const AppAdvancedThemeModeConfig(),
-      darkConfig: const AppAdvancedThemeModeConfig(),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
       coverGalleryId: coverGallery.id,
     );
   });

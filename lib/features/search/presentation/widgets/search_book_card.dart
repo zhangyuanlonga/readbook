@@ -40,11 +40,11 @@ class SearchBookCard extends ConsumerWidget {
     );
     final showHitCount = sourceHitCount > 1;
 
-    return FutureBuilder<BookMetadataPresentation>(
+    return FutureBuilder<BookDisplayState>(
       future: _resolvePresentation(ref, book),
       builder: (context, snapshot) {
         final presentation =
-            snapshot.data ?? const BookMetadataPresentation(displayTitle: '');
+            snapshot.data ?? const BookDisplayState(displayTitle: '');
         final displayTitle =
             presentation.displayTitle.isNotEmpty
                 ? presentation.displayTitle
@@ -179,7 +179,7 @@ class SearchBookCard extends ConsumerWidget {
     );
   }
 
-  Future<BookMetadataPresentation> _resolvePresentation(
+  Future<BookDisplayState> _resolvePresentation(
     WidgetRef ref,
     Book book,
   ) async {

@@ -1036,7 +1036,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
 
-    return FutureBuilder<BookMetadataPresentation>(
+    return FutureBuilder<BookDisplayState>(
       future: _resolvePresentedBook(book),
       builder: (context, snapshot) {
         final presented = snapshot.data;
@@ -1190,7 +1190,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     );
   }
 
-  Future<BookMetadataPresentation> _resolvePresentedBook(Book book) async {
+  Future<BookDisplayState> _resolvePresentedBook(Book book) async {
     return _bookPresentationService.resolveRemoteBook(book);
   }
 

@@ -21,11 +21,11 @@ void main() {
       title: '原始标题',
       detailUrl: 'https://example.com/book/1',
     );
-    const presentation = BookMetadataPresentation(
+    const presentation = BookDisplayState(
       displayTitle: '展示标题',
       displayAuthor: '展示作者',
       displayCover: 'https://example.com/cover.jpg',
-      displayCoverSource: BookMetadataPresentationCoverSource.remote,
+      displayCoverSource: BookDisplayCoverSource.remote,
     );
 
     final added = await service.toggleBookshelf(

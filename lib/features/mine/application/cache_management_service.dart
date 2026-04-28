@@ -1,4 +1,5 @@
 import '../../../core/cache/cover_image_disk_cache.dart';
+import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
@@ -6,7 +7,6 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../reader/application/chapter_cache_service.dart';
-import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/reading_record_service.dart';
 
 class CachedBookPresentation {
@@ -48,8 +48,7 @@ class CacheManagementService {
     LocalBookRepository? localBookRepository,
     BookMetadataOverrideRepository? bookMetadataOverrideRepository,
     ChapterCacheService? chapterCacheService,
-    BookMetadataPresentationResolver resolver =
-        const BookMetadataPresentationResolver(),
+    BookDisplayStateResolver resolver = const BookDisplayStateResolver(),
     CoverImageDiskCache? coverImageDiskCache,
   }) : _bookshelfService = bookshelfService ?? BookshelfService(),
        _readingRecordService = readingRecordService ?? ReadingRecordService(),
@@ -65,7 +64,7 @@ class CacheManagementService {
   final LocalBookRepository? _localBookRepository;
   final BookMetadataOverrideRepository? _bookMetadataOverrideRepository;
   final ChapterCacheService _chapterCacheService;
-  final BookMetadataPresentationResolver _resolver;
+  final BookDisplayStateResolver _resolver;
   final CoverImageDiskCache _coverImageDiskCache;
 
   Future<Map<String, CachedBookPresentation>>
@@ -95,13 +94,11 @@ class CacheManagementService {
       }
       final presentation = _resolver.resolveReadingRecord(
         record: record,
-        localBook:
-            record.sourceId == LocalReaderIdentity.localSourceId
-                ? localBooksById[bookId]
-                : null,
+        localBook: isLocalBookSourceId(record.sourceId)
+            ? localBooksById[bookId]
+            : null,
         metadataOverride:
-            metadataOverridesByTargetKey[(record.sourceId ==
-                    LocalReaderIdentity.localSourceId)
+            metadataOverridesByTargetKey[(isLocalBookSourceId(record.sourceId))
                 ? BookMetadataOverride.localTargetKey(bookId)
                 : BookMetadataOverride.remoteTargetKey(
                   sourceId: record.sourceId,
@@ -129,13 +126,11 @@ class CacheManagementService {
       }
       final presentation = _resolver.resolveBookshelfBook(
         book: item,
-        localBook:
-            item.sourceId == LocalReaderIdentity.localSourceId
-                ? localBooksById[bookId]
-                : null,
+        localBook: isLocalBookSourceId(item.sourceId)
+            ? localBooksById[bookId]
+            : null,
         metadataOverride:
-            metadataOverridesByTargetKey[(item.sourceId ==
-                    LocalReaderIdentity.localSourceId)
+            metadataOverridesByTargetKey[(isLocalBookSourceId(item.sourceId))
                 ? BookMetadataOverride.localTargetKey(bookId)
                 : BookMetadataOverride.remoteTargetKey(
                   sourceId: item.sourceId,

@@ -183,7 +183,7 @@ final bookDetailImageSelectionServiceProvider = Provider<ImageSelectionService>(
 
 final bookDetailCustomCoverStorageServiceProvider =
     Provider<CustomCoverStorageService>((ref) {
-      return const CustomCoverStorageService();
+      return CustomCoverStorageService();
     });
 
 final bookMetadataEditServiceProvider = Provider<BookMetadataEditService>((
@@ -230,7 +230,7 @@ final bookDetailMetadataFlowServiceProvider =
         bookPresentationSyncService: ref.watch(
           bookPresentationSyncServiceProvider,
         ),
-        presentationResolver: const BookMetadataPresentationResolver(),
+        presentationResolver: const BookDisplayStateResolver(),
       );
     });
 

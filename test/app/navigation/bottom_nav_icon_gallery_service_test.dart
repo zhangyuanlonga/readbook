@@ -1,19 +1,26 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_defaults.dart';
 import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_service.dart';
 import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('BottomNavIconGalleryService', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
     });
 
     test('persists galleries and active gallery id', () async {
-      final service = BottomNavIconGalleryService();
+      final service = BottomNavIconGalleryService(
+        assetStore: await _createAssetStore(),
+      );
       final gallery = BottomNavIconGallery(
         id: 'gallery_custom',
         name: '自定义图集',
@@ -43,7 +50,9 @@ void main() {
     });
 
     test('clears active gallery id when saving empty value', () async {
-      final service = BottomNavIconGalleryService();
+      final service = BottomNavIconGalleryService(
+        assetStore: await _createAssetStore(),
+      );
 
       await service.saveActiveGalleryId('gallery_a');
       await service.saveActiveGalleryId(null);
@@ -52,7 +61,9 @@ void main() {
     });
 
     test('creates, renames, duplicates and deletes custom galleries', () async {
-      final service = BottomNavIconGalleryService();
+      final service = BottomNavIconGalleryService(
+        assetStore: await _createAssetStore(),
+      );
 
       final created = await service.createGallery(name: '新图集');
       expect(created.name, '新图集');
@@ -95,7 +106,24 @@ void main() {
         appShellTabForBottomNavIconGalleryTab(BottomNavIconGalleryTab.stats),
         AppShellTab.stats,
       );
-      expect(bottomNavIconGalleryTabs, hasLength(4));
+      expect(bottomNavIconGalleryTabs, hasLength(5));
     });
   });
+}
+
+Future<ManagedAssetStore> _createAssetStore() async {
+  final documentsDir = await Directory.systemTemp.createTemp('nav_docs_');
+  final supportDir = await Directory.systemTemp.createTemp('nav_support_');
+  addTearDown(() async {
+    if (documentsDir.existsSync()) {
+      await documentsDir.delete(recursive: true);
+    }
+    if (supportDir.existsSync()) {
+      await supportDir.delete(recursive: true);
+    }
+  });
+  return ManagedAssetStore(
+    documentsDirectoryProvider: () async => documentsDir,
+    supportDirectoryProvider: () async => supportDir,
+  );
 }

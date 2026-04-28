@@ -257,8 +257,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final ReaderPreferencesService _readerPreferencesService;
   late final BookshelfPageRouteService _pageRouteService;
   late final LocalBookIndexService _localBookIndexService;
-  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
-      const BookMetadataPresentationResolver();
+  final BookDisplayStateResolver _bookMetadataPresentationResolver =
+      const BookDisplayStateResolver();
   late final BookDetailService _bookDetailService;
   late final BookshelfReaderOpenService _readerOpenService;
   late final AppLogger _logger;

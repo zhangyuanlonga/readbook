@@ -1,3 +1,6 @@
+import '../../core/storage/managed_asset_directory_policy.dart';
+import 'managed_asset.dart';
+
 enum AppAdvancedThemeMode { light, dark }
 
 enum AppAdvancedThemeWallpaperFit { fill, cover }
@@ -268,10 +271,12 @@ class AppAdvancedThemeColors {
 }
 
 class AppAdvancedThemeModeConfig {
-  const AppAdvancedThemeModeConfig({
+  AppAdvancedThemeModeConfig({
     this.colors = const AppAdvancedThemeColors(),
-    this.wallpaperPath,
-    this.readerWallpaperPath,
+    String? wallpaperPath,
+    ManagedAssetRef? wallpaperAsset,
+    String? readerWallpaperPath,
+    ManagedAssetRef? readerWallpaperAsset,
     this.wallpaperOpacity = 1,
     this.wallpaperBlurSigma = 0,
     this.wallpaperFit = AppAdvancedThemeWallpaperFit.cover,
@@ -280,11 +285,22 @@ class AppAdvancedThemeModeConfig {
     this.readerWallpaperBlurSigma = 0,
     this.readerWallpaperFit = AppAdvancedThemeWallpaperFit.cover,
     this.readerWallpaperOverlayOpacity = 0,
-  });
+  }) : wallpaperAsset =
+           wallpaperAsset ??
+           _legacyAssetRefFromPath(
+             path: wallpaperPath,
+             type: ManagedAssetType.appBackground,
+           ),
+       readerWallpaperAsset =
+           readerWallpaperAsset ??
+           _legacyAssetRefFromPath(
+             path: readerWallpaperPath,
+             type: ManagedAssetType.readerBackground,
+           );
 
   final AppAdvancedThemeColors colors;
-  final String? wallpaperPath;
-  final String? readerWallpaperPath;
+  final ManagedAssetRef? wallpaperAsset;
+  final ManagedAssetRef? readerWallpaperAsset;
   final double wallpaperOpacity;
   final double wallpaperBlurSigma;
   final AppAdvancedThemeWallpaperFit wallpaperFit;
@@ -294,13 +310,22 @@ class AppAdvancedThemeModeConfig {
   final AppAdvancedThemeWallpaperFit readerWallpaperFit;
   final double readerWallpaperOverlayOpacity;
 
+  String? get wallpaperPath {
+    return wallpaperAsset?.normalizedResolvedPath ??
+        wallpaperAsset?.normalizedRelativePath;
+  }
+
+  String? get readerWallpaperPath {
+    return readerWallpaperAsset?.normalizedResolvedPath ??
+        readerWallpaperAsset?.normalizedRelativePath;
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'colors': colors.toJson(),
-      if (wallpaperPath != null && wallpaperPath!.trim().isNotEmpty)
-        'wallpaperPath': wallpaperPath,
-      if (readerWallpaperPath != null && readerWallpaperPath!.trim().isNotEmpty)
-        'readerWallpaperPath': readerWallpaperPath,
+      if (wallpaperAsset != null) 'wallpaperAsset': wallpaperAsset!.toJson(),
+      if (readerWallpaperAsset != null)
+        'readerWallpaperAsset': readerWallpaperAsset!.toJson(),
       'wallpaperOpacity': wallpaperOpacity,
       'wallpaperBlurSigma': wallpaperBlurSigma,
       'wallpaperFit': wallpaperFit.name,
@@ -323,7 +348,9 @@ class AppAdvancedThemeModeConfig {
 
     return AppAdvancedThemeModeConfig(
       colors: colors,
+      wallpaperAsset: _readAssetRef(json, 'wallpaperAsset'),
       wallpaperPath: _readNullableString(json, 'wallpaperPath'),
+      readerWallpaperAsset: _readAssetRef(json, 'readerWallpaperAsset'),
       readerWallpaperPath: _readNullableString(json, 'readerWallpaperPath'),
       wallpaperOpacity: _readDouble(json, 'wallpaperOpacity') ?? 1,
       wallpaperBlurSigma: _readDouble(json, 'wallpaperBlurSigma') ?? 0,
@@ -347,8 +374,12 @@ class AppAdvancedThemeModeConfig {
     AppAdvancedThemeColors? colors,
     String? wallpaperPath,
     bool clearWallpaperPath = false,
+    ManagedAssetRef? wallpaperAsset,
+    bool clearWallpaperAsset = false,
     String? readerWallpaperPath,
     bool clearReaderWallpaperPath = false,
+    ManagedAssetRef? readerWallpaperAsset,
+    bool clearReaderWallpaperAsset = false,
     double? wallpaperOpacity,
     double? wallpaperBlurSigma,
     AppAdvancedThemeWallpaperFit? wallpaperFit,
@@ -358,14 +389,28 @@ class AppAdvancedThemeModeConfig {
     AppAdvancedThemeWallpaperFit? readerWallpaperFit,
     double? readerWallpaperOverlayOpacity,
   }) {
+    final nextWallpaperAsset =
+        clearWallpaperPath || clearWallpaperAsset
+            ? null
+            : (wallpaperAsset ??
+                _legacyAssetRefFromPath(
+                  path: wallpaperPath,
+                  type: ManagedAssetType.appBackground,
+                ) ??
+                this.wallpaperAsset);
+    final nextReaderWallpaperAsset =
+        clearReaderWallpaperPath || clearReaderWallpaperAsset
+            ? null
+            : (readerWallpaperAsset ??
+                _legacyAssetRefFromPath(
+                  path: readerWallpaperPath,
+                  type: ManagedAssetType.readerBackground,
+                ) ??
+                this.readerWallpaperAsset);
     return AppAdvancedThemeModeConfig(
       colors: colors ?? this.colors,
-      wallpaperPath:
-          clearWallpaperPath ? null : (wallpaperPath ?? this.wallpaperPath),
-      readerWallpaperPath:
-          clearReaderWallpaperPath
-              ? null
-              : (readerWallpaperPath ?? this.readerWallpaperPath),
+      wallpaperAsset: nextWallpaperAsset,
+      readerWallpaperAsset: nextReaderWallpaperAsset,
       wallpaperOpacity: wallpaperOpacity ?? this.wallpaperOpacity,
       wallpaperBlurSigma: wallpaperBlurSigma ?? this.wallpaperBlurSigma,
       wallpaperFit: wallpaperFit ?? this.wallpaperFit,
@@ -382,13 +427,11 @@ class AppAdvancedThemeModeConfig {
   }
 
   bool get hasWallpaper {
-    final normalized = wallpaperPath?.trim() ?? '';
-    return normalized.isNotEmpty;
+    return wallpaperAsset != null;
   }
 
   bool get hasReaderWallpaper {
-    final normalized = readerWallpaperPath?.trim() ?? '';
-    return normalized.isNotEmpty;
+    return readerWallpaperAsset != null;
   }
 
   static String? _readNullableString(Map<String, dynamic> json, String key) {
@@ -423,6 +466,38 @@ class AppAdvancedThemeModeConfig {
       'cover' => AppAdvancedThemeWallpaperFit.cover,
       _ => null,
     };
+  }
+
+  static ManagedAssetRef? _legacyAssetRefFromPath({
+    required String? path,
+    required ManagedAssetType type,
+  }) {
+    final normalized = path?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    final policy = ManagedAssetDirectoryPolicies.policyFor(type);
+    if (policy == null) {
+      return null;
+    }
+    final normalizedPath = normalized.replaceAll('\\', '/');
+    return ManagedAssetRef(
+      type: type,
+      scope: ManagedAssetScope.themeBinding,
+      root: policy.root,
+      relativePath: normalizedPath,
+      resolvedPath: normalizedPath.startsWith('/') ? normalizedPath : null,
+    );
+  }
+
+  static ManagedAssetRef? _readAssetRef(Map<String, dynamic> json, String key) {
+    final raw = json[key];
+    if (raw is! Map) {
+      return null;
+    }
+    return ManagedAssetRef.fromJson(
+      raw.map((nestedKey, value) => MapEntry(nestedKey.toString(), value)),
+    );
   }
 }
 

@@ -6,8 +6,14 @@ import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_record.dart';
 import 'book_display_state.dart';
 
+export 'book_display_state.dart';
+
 typedef BookMetadataPresentation = BookDisplayState;
 typedef BookMetadataPresentationCoverSource = BookDisplayCoverSource;
+
+class BookDisplayStateResolver extends BookMetadataPresentationResolver {
+  const BookDisplayStateResolver();
+}
 
 class BookMetadataPresentationResolver {
   const BookMetadataPresentationResolver();

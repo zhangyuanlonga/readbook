@@ -33,7 +33,7 @@ class BookDetailMetadataFlowResult {
     this.needsReindex = false,
   });
 
-  final BookMetadataPresentation presentation;
+  final BookDisplayState presentation;
   final String successMessage;
   final BookMetadataOverride? metadataOverride;
   final LocalBook? localBook;
@@ -44,14 +44,14 @@ class BookDetailMetadataFlowService {
   const BookDetailMetadataFlowService({
     required BookMetadataEditService bookMetadataEditService,
     required BookPresentationSyncService bookPresentationSyncService,
-    required BookMetadataPresentationResolver presentationResolver,
+    required BookDisplayStateResolver presentationResolver,
   }) : _bookMetadataEditService = bookMetadataEditService,
        _bookPresentationSyncService = bookPresentationSyncService,
        _presentationResolver = presentationResolver;
 
   final BookMetadataEditService _bookMetadataEditService;
   final BookPresentationSyncService _bookPresentationSyncService;
-  final BookMetadataPresentationResolver _presentationResolver;
+  final BookDisplayStateResolver _presentationResolver;
 
   Future<BookDetailMetadataFlowResult> saveRemoteMetadata({
     required BookDetailLoadResult result,
@@ -180,7 +180,7 @@ class BookDetailMetadataFlowService {
     );
   }
 
-  BookMetadataPresentation _resolvePresentation({
+  BookDisplayState _resolvePresentation({
     required detail,
     required List<Chapter> chapters,
     required BookMetadataOverride? metadataOverride,

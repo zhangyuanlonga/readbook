@@ -257,15 +257,14 @@ extension on _BookshelfPageState {
     required BookshelfBook book,
     required PickedImageData picked,
   }) async {
-    final storedCoverUri = await _customCoverStorageService.persistForBook(
+    final coverPath = await _customCoverStorageService.persistForBook(
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       picked: picked,
     );
-    if (storedCoverUri == null) {
+    if (coverPath == null) {
       throw StateError('custom cover persist failed');
     }
-    final coverPath = storedCoverUri.toFilePath();
 
     if (book.sourceId == _BookshelfPageState._kLocalBookSourceId) {
       final existingLocalBook =

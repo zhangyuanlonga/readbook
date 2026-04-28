@@ -2,25 +2,30 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../images/file_image_cache.dart';
-import '../../core/storage/managed_file_path_resolver.dart';
+import '../../core/storage/managed_asset_store.dart';
 import 'bottom_nav_icon_gallery_defaults.dart';
 import '../../domain/entities/bottom_nav_icon_gallery.dart';
+import '../../domain/entities/managed_asset.dart';
 
 class BottomNavIconGalleryService {
   static const Uuid _uuid = Uuid();
 
-  BottomNavIconGalleryService({SharedPreferences? preferences})
+  BottomNavIconGalleryService({
+    SharedPreferences? preferences,
+    ManagedAssetStore? assetStore,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
+  final ManagedAssetStore _assetStore;
 
   static const String _galleriesKey = 'bottomNavIconGallery.galleries';
   static const String _activeGalleryIdKey = 'bottomNavIconGallery.activeId';
@@ -50,16 +55,12 @@ class BottomNavIconGalleryService {
             ),
           )
           .toList(growable: false);
-      final resolver = ManagedFilePathResolver();
       var changed = false;
       final normalizedCustomGalleries = <BottomNavIconGallery>[];
       for (final gallery in customGalleries) {
         final normalizedItems = <BottomNavIconGalleryTab, BottomNavIconSet>{};
         for (final entry in gallery.items.entries) {
-          final normalizedSet = await _normalizeIconSet(
-            entry.value,
-            resolver: resolver,
-          );
+          final normalizedSet = await _normalizeIconSet(entry.value);
           normalizedItems[entry.key] = normalizedSet;
           if (normalizedSet.lightUnselected?.path !=
                   entry.value.lightUnselected?.path ||
@@ -107,7 +108,9 @@ class BottomNavIconGalleryService {
     await prefs.setString(
       _galleriesKey,
       jsonEncode(
-        customGalleries.map((item) => item.toJson()).toList(growable: false),
+        await Future.wait(
+          customGalleries.map((item) async => _toPersistedGalleryJson(item)),
+        ),
       ),
     );
   }
@@ -280,19 +283,20 @@ class BottomNavIconGalleryService {
       throw const FileSystemException('Selected icon file does not exist.');
     }
 
-    final directory = await _galleryDirectory(galleryId);
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
-
-    final filename =
-        '${tab.name}_${slot.name}_${DateTime.now().millisecondsSinceEpoch}.${format.name}';
-    final destination = File(p.join(directory.path, filename));
-    await sourceFile.copy(destination.path);
-    await evictFileImagePath(destination.path);
+    final imported = await _assetStore.importFile(
+      type: ManagedAssetType.bottomNavIcon,
+      scope: ManagedAssetScope.bottomNav,
+      sourcePath: sourceFile.path,
+      collectionId: galleryId,
+      assetId: '${tab.name}_${slot.name}',
+      fileName: p.basename(sourceFile.path),
+      targetNamePrefix: '${tab.name}_${slot.name}',
+    );
+    final destinationPath = imported.resolvedPath!;
+    await evictFileImagePath(destinationPath);
 
     return BottomNavIconAssetRef(
-      path: destination.path,
+      path: destinationPath,
       format: format,
       isAsset: false,
     );
@@ -303,56 +307,66 @@ class BottomNavIconGalleryService {
       return;
     }
     await evictFileImagePath(assetRef.path);
-    final file = File(assetRef.path);
-    if (await file.exists()) {
-      await file.delete();
-    }
+    await _assetStore.deletePath(assetRef.path);
   }
 
   Future<Directory> _galleryDirectory(String galleryId) async {
-    final supportDirectory = await getApplicationSupportDirectory();
-    return Directory(
-      p.join(supportDirectory.path, 'bottom_nav_icon_galleries', galleryId),
+    return _assetStore.resolveDirectory(
+      ManagedAssetType.bottomNavIcon,
+      collectionId: galleryId,
     );
   }
 
-  Future<BottomNavIconSet> _normalizeIconSet(
-    BottomNavIconSet set, {
-    required ManagedFilePathResolver resolver,
-  }) async {
+  Future<BottomNavIconSet> _normalizeIconSet(BottomNavIconSet set) async {
     return BottomNavIconSet(
-      lightUnselected: await _normalizeAssetRef(
-        set.lightUnselected,
-        resolver: resolver,
-      ),
-      lightSelected: await _normalizeAssetRef(
-        set.lightSelected,
-        resolver: resolver,
-      ),
-      darkUnselected: await _normalizeAssetRef(
-        set.darkUnselected,
-        resolver: resolver,
-      ),
-      darkSelected: await _normalizeAssetRef(
-        set.darkSelected,
-        resolver: resolver,
-      ),
+      lightUnselected: await _normalizeAssetRef(set.lightUnselected),
+      lightSelected: await _normalizeAssetRef(set.lightSelected),
+      darkUnselected: await _normalizeAssetRef(set.darkUnselected),
+      darkSelected: await _normalizeAssetRef(set.darkSelected),
     );
   }
 
   Future<BottomNavIconAssetRef?> _normalizeAssetRef(
-    BottomNavIconAssetRef? assetRef, {
-    required ManagedFilePathResolver resolver,
-  }) async {
+    BottomNavIconAssetRef? assetRef,
+  ) async {
     if (assetRef == null || assetRef.isAsset) {
       return assetRef;
     }
-    final normalizedPath =
-        await resolver.normalizePersistedFilePath(assetRef.path) ??
+    final persisted =
+        await _assetStore.relativizePersistedPath(assetRef.path) ??
         assetRef.path;
-    if (normalizedPath == assetRef.path) {
+    final resolved =
+        await _assetStore.resolvePersistedPath(persisted) ?? assetRef.path;
+    if (persisted == assetRef.path && resolved == assetRef.path) {
       return assetRef;
     }
-    return assetRef.copyWith(path: normalizedPath);
+    return assetRef.copyWith(path: resolved);
+  }
+
+  Future<Map<String, dynamic>> _toPersistedGalleryJson(
+    BottomNavIconGallery gallery,
+  ) async {
+    final items = <BottomNavIconGalleryTab, BottomNavIconSet>{};
+    for (final entry in gallery.items.entries) {
+      items[entry.key] = BottomNavIconSet(
+        lightUnselected: await _toPersistedAssetRef(entry.value.lightUnselected),
+        lightSelected: await _toPersistedAssetRef(entry.value.lightSelected),
+        darkUnselected: await _toPersistedAssetRef(entry.value.darkUnselected),
+        darkSelected: await _toPersistedAssetRef(entry.value.darkSelected),
+      );
+    }
+    return gallery.copyWith(items: items).toJson();
+  }
+
+  Future<BottomNavIconAssetRef?> _toPersistedAssetRef(
+    BottomNavIconAssetRef? assetRef,
+  ) async {
+    if (assetRef == null || assetRef.isAsset) {
+      return assetRef;
+    }
+    final persisted =
+        await _assetStore.relativizePersistedPath(assetRef.path) ??
+        assetRef.path;
+    return assetRef.copyWith(path: persisted);
   }
 }

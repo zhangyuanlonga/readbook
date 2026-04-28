@@ -219,8 +219,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final BookDetailActionService _actionService;
   late final BookDetailCatalogService _catalogService;
   late final SourceRuntimeFacade _sourceRuntimeFacade;
-  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
-      const BookMetadataPresentationResolver();
+  final BookDisplayStateResolver _bookMetadataPresentationResolver =
+      const BookDisplayStateResolver();
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final LocalBookStorageService _localBookStorageService;
   late final ReaderPreferencesService _readerPreferencesService;
@@ -364,7 +364,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     setState(mutation);
   }
 
-  BookMetadataPresentation _resolvePresentedMetadata({
+  BookDisplayState _resolvePresentedMetadata({
     BookDetailLoadResult? result,
   }) {
     final activeResult = result ?? _result;

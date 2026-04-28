@@ -1,13 +1,21 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../../app/images/file_image_cache.dart';
+import '../../../core/storage/managed_asset_store.dart';
+import '../../../domain/entities/managed_asset.dart';
 
 class AppBackgroundService {
+  AppBackgroundService({ManagedAssetStore? assetStore})
+    : _assetStore = assetStore ?? ManagedAssetStore();
+
+  final ManagedAssetStore _assetStore;
+
   Future<List<String>> loadBackgroundPaths() async {
-    final directory = await _backgroundDirectory();
+    final directory = await _assetStore.resolveDirectory(
+      ManagedAssetType.appBackground,
+    );
     if (!await directory.exists()) {
       return const <String>[];
     }
@@ -31,17 +39,15 @@ class AppBackgroundService {
     required List<int> bytes,
     required String fileName,
   }) async {
-    final directory = await _backgroundDirectory();
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
-
     final extension = _normalizeImageFileExtension(bytes, fileName);
-    final targetPath = p.join(
-      directory.path,
-      'app_bg_${DateTime.now().millisecondsSinceEpoch}.$extension',
+    final asset = await _assetStore.persistBytes(
+      type: ManagedAssetType.appBackground,
+      scope: ManagedAssetScope.appAppearance,
+      bytes: bytes,
+      fileName: 'app_bg.$extension',
+      targetNamePrefix: 'app_bg',
     );
-    await File(targetPath).writeAsBytes(bytes, flush: true);
+    final targetPath = asset.resolvedPath!;
     await evictFileImagePath(targetPath);
     return targetPath;
   }
@@ -52,15 +58,7 @@ class AppBackgroundService {
       return;
     }
     await evictFileImagePath(normalized);
-    final file = File(normalized);
-    if (await file.exists()) {
-      await file.delete();
-    }
-  }
-
-  Future<Directory> _backgroundDirectory() async {
-    final documents = await getApplicationDocumentsDirectory();
-    return Directory(p.join(documents.path, 'backgrounds'));
+    await _assetStore.deletePath(normalized);
   }
 
   String _normalizeFileExtension(String fileName) {

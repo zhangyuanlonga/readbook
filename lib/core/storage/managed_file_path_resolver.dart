@@ -3,14 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-enum _ManagedFileRoot { documents, support }
-
-class _ManagedFilePrefixRule {
-  const _ManagedFilePrefixRule({required this.root, required this.prefixes});
-
-  final _ManagedFileRoot root;
-  final List<String> prefixes;
-}
+import '../../domain/entities/managed_asset.dart';
+import 'managed_asset_directory_policy.dart';
 
 class ManagedFilePathResolver {
   ManagedFilePathResolver({
@@ -19,36 +13,19 @@ class ManagedFilePathResolver {
   }) : _documentsDirectoryProvider =
            documentsDirectoryProvider ?? getApplicationDocumentsDirectory,
        _supportDirectoryProvider =
-           supportDirectoryProvider ?? getApplicationSupportDirectory;
+           supportDirectoryProvider ?? getApplicationSupportDirectory,
+       _usesCustomDocumentsDirectoryProvider =
+           documentsDirectoryProvider != null,
+       _usesCustomSupportDirectoryProvider =
+           supportDirectoryProvider != null;
 
   final Future<Directory> Function() _documentsDirectoryProvider;
   final Future<Directory> Function() _supportDirectoryProvider;
+  final bool _usesCustomDocumentsDirectoryProvider;
+  final bool _usesCustomSupportDirectoryProvider;
 
   static String? _cachedDocumentsDirectoryPath;
   static String? _cachedSupportDirectoryPath;
-
-  static const List<_ManagedFilePrefixRule> _rules = <_ManagedFilePrefixRule>[
-    _ManagedFilePrefixRule(
-      root: _ManagedFileRoot.documents,
-      prefixes: <String>[
-        'advanced_themes/',
-        'backgrounds/',
-        'reader_backgrounds/',
-        'cover_galleries/',
-        'launch_image_galleries/',
-      ],
-    ),
-    _ManagedFilePrefixRule(
-      root: _ManagedFileRoot.support,
-      prefixes: <String>[
-        'shuxiang_reading_next/custom_covers/',
-        'bottom_nav_icon_galleries/',
-        'reader_fonts/',
-        'local_books/',
-        'custom_covers/',
-      ],
-    ),
-  ];
 
   static Future<void> primeCurrentRoots({
     Future<Directory> Function()? documentsDirectoryProvider,
@@ -95,9 +72,13 @@ class ManagedFilePathResolver {
   }
 
   Future<String?> _resolveManagedCandidate(String normalizedPath) async {
-    for (final rule in _rules) {
-      final baseDirectory = await _resolveBaseDirectoryPath(rule.root);
-      for (final prefix in rule.prefixes) {
+    for (final root in const <ManagedAssetRoot>[
+      ManagedAssetRoot.documents,
+      ManagedAssetRoot.support,
+    ]) {
+      final baseDirectory = await _resolveBaseDirectoryPath(root);
+      for (final policy in ManagedAssetDirectoryPolicies.policiesForRoot(root)) {
+        for (final prefix in policy.allKnownRelativePrefixes) {
         final relative = _extractManagedRelativePath(
           normalizedPath: normalizedPath,
           prefix: prefix,
@@ -110,20 +91,26 @@ class ManagedFilePathResolver {
           return candidate;
         }
       }
+      }
     }
     return null;
   }
 
   String? _resolveManagedCandidateSync(String normalizedPath) {
-    for (final rule in _rules) {
-      final baseDirectory = switch (rule.root) {
-        _ManagedFileRoot.documents => _cachedDocumentsDirectoryPath,
-        _ManagedFileRoot.support => _cachedSupportDirectoryPath,
+    for (final root in const <ManagedAssetRoot>[
+      ManagedAssetRoot.documents,
+      ManagedAssetRoot.support,
+    ]) {
+      final baseDirectory = switch (root) {
+        ManagedAssetRoot.documents => _cachedDocumentsDirectoryPath,
+        ManagedAssetRoot.support => _cachedSupportDirectoryPath,
+        ManagedAssetRoot.bundled => _cachedSupportDirectoryPath,
       };
       if (baseDirectory == null || baseDirectory.isEmpty) {
         continue;
       }
-      for (final prefix in rule.prefixes) {
+      for (final policy in ManagedAssetDirectoryPolicies.policiesForRoot(root)) {
+        for (final prefix in policy.allKnownRelativePrefixes) {
         final relative = _extractManagedRelativePath(
           normalizedPath: normalizedPath,
           prefix: prefix,
@@ -136,34 +123,44 @@ class ManagedFilePathResolver {
           return candidate;
         }
       }
+      }
     }
     return null;
   }
 
-  Future<String> _resolveBaseDirectoryPath(_ManagedFileRoot root) async {
+  Future<String> _resolveBaseDirectoryPath(ManagedAssetRoot root) async {
     return switch (root) {
-      _ManagedFileRoot.documents => await _resolveDocumentsDirectoryPath(),
-      _ManagedFileRoot.support => await _resolveSupportDirectoryPath(),
+      ManagedAssetRoot.documents => await _resolveDocumentsDirectoryPath(),
+      ManagedAssetRoot.support => await _resolveSupportDirectoryPath(),
+      ManagedAssetRoot.bundled => await _resolveSupportDirectoryPath(),
     };
   }
 
   Future<String> _resolveDocumentsDirectoryPath() async {
     final cached = _cachedDocumentsDirectoryPath;
-    if (cached != null && cached.isNotEmpty) {
+    if (!_usesCustomDocumentsDirectoryProvider &&
+        cached != null &&
+        cached.isNotEmpty) {
       return cached;
     }
     final directory = await _documentsDirectoryProvider();
-    _cachedDocumentsDirectoryPath = directory.path;
+    if (!_usesCustomDocumentsDirectoryProvider) {
+      _cachedDocumentsDirectoryPath = directory.path;
+    }
     return directory.path;
   }
 
   Future<String> _resolveSupportDirectoryPath() async {
     final cached = _cachedSupportDirectoryPath;
-    if (cached != null && cached.isNotEmpty) {
+    if (!_usesCustomSupportDirectoryProvider &&
+        cached != null &&
+        cached.isNotEmpty) {
       return cached;
     }
     final directory = await _supportDirectoryProvider();
-    _cachedSupportDirectoryPath = directory.path;
+    if (!_usesCustomSupportDirectoryProvider) {
+      _cachedSupportDirectoryPath = directory.path;
+    }
     return directory.path;
   }
 

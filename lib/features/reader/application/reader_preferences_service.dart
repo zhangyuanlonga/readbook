@@ -2,18 +2,24 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 
 class ReaderPreferencesService {
-  ReaderPreferencesService({SharedPreferences? preferences})
+  ReaderPreferencesService({
+    SharedPreferences? preferences,
+    ManagedAssetStore? assetStore,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
+  final ManagedAssetStore _assetStore;
 
   static const String _fontSizeKey = 'reader.settings.fontSize';
   static const String _lineHeightKey = 'reader.settings.lineHeight';
@@ -269,6 +275,7 @@ class ReaderPreferencesService {
               : legacyHorizontalPadding),
     );
 
+    final persistedCustomFontPath = prefs.getString(_customFontPathKey);
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
       lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
@@ -319,7 +326,9 @@ class ReaderPreferencesService {
       fontSource: fontSource,
       systemFontPreset: systemFontPreset,
       fontFamilyKey: prefs.getString(_fontFamilyKeyKey),
-      customFontPath: prefs.getString(_customFontPathKey),
+      customFontPath:
+          await _assetStore.resolvePersistedPath(persistedCustomFontPath) ??
+          persistedCustomFontPath,
       bodyTextItalicEnabled: prefs.getBool(_bodyTextItalicEnabledKey) ?? false,
       bodyTextShadowEnabled: prefs.getBool(_bodyTextShadowEnabledKey) ?? false,
       bodyTextShadowColorValue: prefs.getInt(_bodyTextShadowColorValueKey),
@@ -527,7 +536,11 @@ class ReaderPreferencesService {
     if (customFontPath == null || customFontPath.isEmpty) {
       await prefs.remove(_customFontPathKey);
     } else {
-      await prefs.setString(_customFontPathKey, customFontPath);
+      await prefs.setString(
+        _customFontPathKey,
+        await _assetStore.relativizePersistedPath(customFontPath) ??
+            customFontPath,
+      );
     }
     await prefs.setBool(
       _bodyTextItalicEnabledKey,

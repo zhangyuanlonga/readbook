@@ -199,6 +199,27 @@
 - [x] 如有必要，更新 `docs/cover_image_business_inventory.md`
 - [x] 补充“新身份语义口径”和“迁移边界”
 
+### Phase 6: 使用约束补充
+
+- [x] 页面 / presenter / service 不再手写 `sourceId + detailUrl` 拼接
+- [x] 与书源交互的“来源内作品键”统一优先走 `SourceBookKey`
+- [x] 应用内逻辑作品主键统一优先走 `logicalBookId`
+- [x] 本地书来源判断统一优先走 `isLocalBookSourceId()`
+
+约束说明：
+
+- `logicalBookId` 只表达“应用认为这是同一本书”，不回流到书源 contract。
+- `SourceBookKey` 只表达“当前书源下这本书的唯一定位”，不承担跨源作品合并语义。
+- 需要构造书源范围键时，优先使用：
+  - `BookIdentity.remote(...)`
+  - `BookIdentity.local(...)`
+  - `SourceBookKey.forRemoteBook(...)`
+  - `SourceBookKey.forReadingFlow(...)`
+- 新增业务若仍直接操作 `bookId + sourceId + detailUrl` 三元组，必须先说明它到底属于：
+  - 逻辑作品主键
+  - 来源内作品键
+  - 本地实体主键
+
 验收标准：
 
 - 后续开发能直接按文档判断 `bookId`、`sourceBookKey`、`detailUrl` 应该如何使用

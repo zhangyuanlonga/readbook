@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
@@ -31,7 +30,7 @@ void main() {
         ),
         localBookRepository: LocalBookRepositoryImpl(database),
         imageSelectionService: _FakeImageSelectionService(),
-        customCoverStorageService: const _FakeCustomCoverStorageService(),
+        customCoverStorageService: _FakeCustomCoverStorageService(),
       );
 
       final result = await service.saveRemoteBookMetadata(
@@ -83,7 +82,7 @@ void main() {
         ),
         localBookRepository: repository,
         imageSelectionService: _FakeImageSelectionService(),
-        customCoverStorageService: const _FakeCustomCoverStorageService(),
+        customCoverStorageService: _FakeCustomCoverStorageService(),
       );
 
       final result = await service.saveLocalBookMetadata(
@@ -112,7 +111,7 @@ void main() {
           name: 'cover.png',
         ),
       ),
-      customCoverStorageService: const _FakeCustomCoverStorageService(),
+      customCoverStorageService: _FakeCustomCoverStorageService(),
     );
 
     final path = await service.pickAndPersistCustomCover(
@@ -124,7 +123,7 @@ void main() {
       ),
     );
 
-    expect(path, '/tmp/persisted-cover.png');
+    expect(path, 'shuxiang_reading_next/custom_covers/persisted-cover.png');
   });
 }
 
@@ -144,15 +143,13 @@ class _FakeImageSelectionService extends ImageSelectionService {
 }
 
 class _FakeCustomCoverStorageService extends CustomCoverStorageService {
-  const _FakeCustomCoverStorageService();
-
   @override
-  Future<Uri?> persistForBook({
+  Future<String?> persistForBook({
     required String sourceId,
     required String detailUrl,
     required PickedImageData picked,
   }) async {
-    return File('/tmp/persisted-cover.png').uri;
+    return 'shuxiang_reading_next/custom_covers/persisted-cover.png';
   }
 }
 

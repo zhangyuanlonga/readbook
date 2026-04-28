@@ -1,6 +1,7 @@
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../book/application/book_detail_service.dart';
@@ -21,6 +22,8 @@ class LocalContentProvider extends ContentProvider {
        _previewService = previewService;
 
   static const String sourceName = '本地导入';
+  static final ManagedFilePathResolver _pathResolver =
+      ManagedFilePathResolver();
 
   final LocalBookDetailService? _detailService;
   final LocalChapterContentService? _chapterContentService;
@@ -201,7 +204,10 @@ class LocalContentProvider extends ContentProvider {
   }
 
   String? _resolveCoverUrl(String? coverPath) {
-    final normalized = coverPath?.trim() ?? '';
+    final normalized =
+        _pathResolver.tryResolveExistingFilePathSync(coverPath) ??
+        coverPath?.trim() ??
+        '';
     if (normalized.isEmpty) {
       return null;
     }

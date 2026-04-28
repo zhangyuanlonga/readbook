@@ -47,7 +47,8 @@
 
 当前说明：
 
-- 当前统一展示模型沿用 `BookMetadataPresentation`
+- 当前统一展示模型主名已收口为 `BookDisplayState`
+- `BookMetadataPresentation` 仅保留为兼容别名
 - 最终渲染入口统一读取 `presentation.displayCover`
 - `resolveBookCover()` 只负责“图片来源最终落点 + 主题兜底”，不再承担页面层优先级分歧
 
@@ -76,8 +77,10 @@
 
 当前说明：
 
-- 当前统一模型使用现有 `BookMetadataPresentation`
-- `BookMetadataPresentationResolver` 已新增：
+- 当前统一模型主名为 `BookDisplayState`
+- `BookDisplayStateResolver` 已作为主命名入口提供
+- `BookMetadataPresentationResolver` 仅保留为兼容别名
+- `BookDisplayStateResolver` 已新增：
   - `resolveRemoteBook()`
   - `resolveBookshelfBook()`
   - `resolveReadingRecord()`
@@ -110,7 +113,7 @@
 
 当前说明：
 
-- `BookMetadataPresentation` 已新增 `displayCoverSource`
+- `BookDisplayState` 已新增 `displayCoverSource`
 - 当前来源类型：
   - `overrideCustom`
   - `localManaged`

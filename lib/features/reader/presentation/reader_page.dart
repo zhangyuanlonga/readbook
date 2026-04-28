@@ -288,8 +288,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   late final LocalBookRepository _localBookRepository;
   late final ReaderCachedChapterStore _cachedChapterStore;
-  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
-      const BookMetadataPresentationResolver();
+  final BookDisplayStateResolver _bookMetadataPresentationResolver =
+      const BookDisplayStateResolver();
   final Uuid _uuid = const Uuid();
 
   late String _chapterId;
