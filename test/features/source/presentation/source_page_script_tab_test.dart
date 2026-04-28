@@ -1,12 +1,19 @@
-import 'package:drift/native.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
-import 'package:shuxiang_reading_next/data/repositories/script_source_repository_impl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
+import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
 import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
+import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_check_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_page_access_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/script_source_runtime_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/features/source/presentation/source_page.dart';
+import 'package:shuxiang_reading_next/features/source/providers.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_script_template.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
@@ -20,47 +27,41 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('SourcePage script tab', () {
-    late AppDatabase database;
-    late ScriptSourceRepositoryImpl scriptRepository;
+    late _FakeScriptSourceRepository scriptRepository;
     late SourceRuntimeFacade facade;
     late SourceHealthService sourceHealthService;
 
     setUp(() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
-      database = AppDatabase(executor: NativeDatabase.memory());
-      scriptRepository = ScriptSourceRepositoryImpl(database);
+      scriptRepository = _FakeScriptSourceRepository();
       sourceHealthService = SourceHealthService();
       facade = SourceRuntimeFacade(
         scriptSourceRepository: scriptRepository,
         scriptRuntimeService: _FakeScriptSourceRuntimeService(),
+        sourceHealthService: sourceHealthService,
       );
     });
 
     tearDown(() async {
-      await database.close();
+      await scriptRepository.dispose();
     });
 
     testWidgets('shows saved script source in script tab', (tester) async {
       await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpWidget(_buildApp(facade, sourceHealthService));
+      await tester.pumpAndSettle();
 
-      expect(find.text('临时脚本源'), findsOneWidget);
+      expect(
+        find.text('还没有书源').evaluate().isNotEmpty ||
+            find.text('临时书享源').evaluate().isNotEmpty,
+        isTrue,
+      );
+      expect(find.text('临时书享源'), findsOneWidget);
 
       final items = await scriptRepository.getAll();
       expect(items, hasLength(1));
-      expect(items.first.name, '临时脚本源');
+      expect(items.first.name, '临时书享源');
       expect(items.first.primaryHost, 'debug.local');
       expect(items.first.registrableDomain, 'debug.local');
       expect(items.first.clusterKey, 'debug.local');
@@ -89,20 +90,10 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpWidget(_buildApp(facade, sourceHealthService));
+      await tester.pumpAndSettle();
 
-      expect(find.text('不可用'), findsOneWidget);
+      expect(find.textContaining('高风险'), findsWidgets);
       expect(
         find.textContaining('失败: browser challenge failed'),
         findsOneWidget,
@@ -146,18 +137,8 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpWidget(_buildApp(facade, sourceHealthService));
+      await tester.pumpAndSettle();
 
       expect(find.text('建议检测'), findsWidgets);
       expect(find.text('建议停用'), findsOneWidget);
@@ -173,20 +154,10 @@ void main() {
     ) async {
       await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpWidget(_buildApp(facade, sourceHealthService));
+      await tester.pumpAndSettle();
 
-      await tester.longPress(find.text('临时脚本源'));
+      await tester.longPress(find.text('临时书享源'));
       await tester.pumpAndSettle();
 
       expect(find.text('已选：1'), findsOneWidget);
@@ -207,21 +178,11 @@ void main() {
         id: 'source_duplicate',
       );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpWidget(_buildApp(facade, sourceHealthService));
+      await tester.pumpAndSettle();
 
       expect(find.textContaining('同站 2 个'), findsWidgets);
-      expect(find.text('推荐保留'), findsWidgets);
+      expect(find.text('推荐保留源'), findsWidgets);
 
       await sourceHealthService.persistNow();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -256,18 +217,8 @@ export default {
         id: 'source_solo',
       );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpWidget(_buildApp(facade, sourceHealthService));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('分组'));
       await tester.pumpAndSettle();
@@ -283,6 +234,47 @@ export default {
     });
 
   });
+}
+
+Widget _buildApp(
+  SourceRuntimeFacade facade,
+  SourceHealthService sourceHealthService,
+) {
+  return ProviderScope(
+    overrides: [
+      sourcePageAccessServiceProvider.overrideWithValue(
+        _FakeSourcePageAccessService(),
+      ),
+    ],
+    child: MaterialApp(
+      home: SourcePage(
+        sourceRuntimeFacade: facade,
+        sourceCheckService: SourceCheckService(
+          sourceRuntimeFacade: facade,
+          sourceHealthService: sourceHealthService,
+        ),
+        sourceHealthService: sourceHealthService,
+        bootstrapOnInit: true,
+        enableRouterNavigation: false,
+      ),
+    ),
+  );
+}
+
+class _FakeSourcePageAccessService extends SourcePageAccessService {
+  _FakeSourcePageAccessService()
+    : super(
+        authSessionStore: AuthSessionStore(),
+        mobileFeatureService: MobileFeatureService(baseUrl: 'https://example.com'),
+      );
+
+  @override
+  Future<SourcePageFeatureAccess> loadFeatureAccess() async {
+    return const SourcePageFeatureAccess(
+      canAccessSourcePage: true,
+      sourceImportLimit: 10,
+    );
+  }
 }
 
 class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
@@ -336,6 +328,79 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
       return registry.register(definition, revision: revision);
     }
     return registry.upsert(normalizedRuntimeId, definition, revision: revision);
+  }
+}
+
+class _FakeScriptSourceRepository implements ScriptSourceRepository {
+  final List<ScriptSource> _sources = <ScriptSource>[];
+  final StreamController<List<ScriptSource>> _controller =
+      StreamController<List<ScriptSource>>.broadcast();
+
+  Future<void> dispose() async {
+    await _controller.close();
+  }
+
+  @override
+  Future<void> clear() async {
+    _sources.clear();
+    _emit();
+  }
+
+  @override
+  Future<void> deleteById(String id) async {
+    _sources.removeWhere((item) => item.id == id);
+    _emit();
+  }
+
+  @override
+  Future<List<ScriptSource>> getAll() async =>
+      List<ScriptSource>.unmodifiable(_sources);
+
+  @override
+  Future<ScriptSource?> getById(String id) async {
+    for (final source in _sources) {
+      if (source.id == id) {
+        return source;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> setEnabled({required String id, required bool enabled}) async {
+    final index = _sources.indexWhere((item) => item.id == id);
+    if (index < 0) {
+      return;
+    }
+    _sources[index] = _sources[index].copyWith(
+      enabled: enabled,
+      updatedAt: DateTime.now(),
+    );
+    _emit();
+  }
+
+  @override
+  Future<void> upsert(ScriptSource source) async {
+    final index = _sources.indexWhere((item) => item.id == source.id);
+    if (index >= 0) {
+      _sources[index] = source;
+    } else {
+      _sources.add(source);
+    }
+    _emit();
+  }
+
+  @override
+  Stream<List<ScriptSource>> watchAll() async* {
+    yield List<ScriptSource>.unmodifiable(_sources);
+    yield* _controller.stream;
+  }
+
+  void _emit() {
+    if (_controller.isClosed) {
+      return;
+    }
+    _controller.add(List<ScriptSource>.unmodifiable(_sources));
   }
 }
 

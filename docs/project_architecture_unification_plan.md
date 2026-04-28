@@ -349,9 +349,19 @@
 
 当前剩余项：
 
-- [ ] 拆 `source_page.dart`
-- [ ] 拆 `script_source_debug_page.dart`
-- [ ] 调试运行、批量检测、登录状态处理继续 service / coordinator 化
+- [x] 已拆 `source_page.dart`
+- [x] 已拆 `script_source_debug_page.dart`
+- [x] 调试运行、批量检测、登录状态处理已继续 service / coordinator 化
+- [ ] 收口 `source_page_script_tab_test.dart` 这类旧夹具对 Provider / runtime 的耦合问题后，再将本节正式关闭
+
+本轮已完成：
+
+- [x] 新增 `SourcePageAccessService`
+- [x] 新增 `SourceScriptImportService`
+- [x] `source_page.dart` 已拆到 `source_page_flow.dart + source_page_batch_check.dart`
+- [x] `script_source_debug_page.dart` 已拆出 `script_source_debug_page_run.dart`
+- [x] Source 定向 `flutter analyze` 已通过
+- [x] 新增 Source application 测试与 debug page 渲染测试已通过
 
 ---
 
