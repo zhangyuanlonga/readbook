@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../images/file_image_cache.dart';
+import '../../core/storage/managed_file_path_resolver.dart';
 import 'bottom_nav_icon_gallery_defaults.dart';
 import '../../domain/entities/bottom_nav_icon_gallery.dart';
 
@@ -49,15 +50,44 @@ class BottomNavIconGalleryService {
             ),
           )
           .toList(growable: false);
-      return List<BottomNavIconGallery>.unmodifiable(<BottomNavIconGallery>[
-        ...builtInBottomNavIconGalleries,
-        ...customGalleries.where(
-          (gallery) =>
-              !builtInBottomNavIconGalleries.any(
-                (builtIn) => builtIn.id == gallery.id,
-              ),
-        ),
-      ]);
+      final resolver = ManagedFilePathResolver();
+      var changed = false;
+      final normalizedCustomGalleries = <BottomNavIconGallery>[];
+      for (final gallery in customGalleries) {
+        final normalizedItems = <BottomNavIconGalleryTab, BottomNavIconSet>{};
+        for (final entry in gallery.items.entries) {
+          final normalizedSet = await _normalizeIconSet(
+            entry.value,
+            resolver: resolver,
+          );
+          normalizedItems[entry.key] = normalizedSet;
+          if (normalizedSet.lightUnselected?.path !=
+                  entry.value.lightUnselected?.path ||
+              normalizedSet.lightSelected?.path !=
+                  entry.value.lightSelected?.path ||
+              normalizedSet.darkUnselected?.path !=
+                  entry.value.darkUnselected?.path ||
+              normalizedSet.darkSelected?.path !=
+                  entry.value.darkSelected?.path) {
+            changed = true;
+          }
+        }
+        normalizedCustomGalleries.add(gallery.copyWith(items: normalizedItems));
+      }
+      final result =
+          List<BottomNavIconGallery>.unmodifiable(<BottomNavIconGallery>[
+            ...builtInBottomNavIconGalleries,
+            ...normalizedCustomGalleries.where(
+              (gallery) =>
+                  !builtInBottomNavIconGalleries.any(
+                    (builtIn) => builtIn.id == gallery.id,
+                  ),
+            ),
+          ]);
+      if (changed) {
+        await saveGalleries(result);
+      }
+      return result;
     } catch (_) {
       return List<BottomNavIconGallery>.unmodifiable(
         builtInBottomNavIconGalleries,
@@ -284,5 +314,45 @@ class BottomNavIconGalleryService {
     return Directory(
       p.join(supportDirectory.path, 'bottom_nav_icon_galleries', galleryId),
     );
+  }
+
+  Future<BottomNavIconSet> _normalizeIconSet(
+    BottomNavIconSet set, {
+    required ManagedFilePathResolver resolver,
+  }) async {
+    return BottomNavIconSet(
+      lightUnselected: await _normalizeAssetRef(
+        set.lightUnselected,
+        resolver: resolver,
+      ),
+      lightSelected: await _normalizeAssetRef(
+        set.lightSelected,
+        resolver: resolver,
+      ),
+      darkUnselected: await _normalizeAssetRef(
+        set.darkUnselected,
+        resolver: resolver,
+      ),
+      darkSelected: await _normalizeAssetRef(
+        set.darkSelected,
+        resolver: resolver,
+      ),
+    );
+  }
+
+  Future<BottomNavIconAssetRef?> _normalizeAssetRef(
+    BottomNavIconAssetRef? assetRef, {
+    required ManagedFilePathResolver resolver,
+  }) async {
+    if (assetRef == null || assetRef.isAsset) {
+      return assetRef;
+    }
+    final normalizedPath =
+        await resolver.normalizePersistedFilePath(assetRef.path) ??
+        assetRef.path;
+    if (normalizedPath == assetRef.path) {
+      return assetRef;
+    }
+    return assetRef.copyWith(path: normalizedPath);
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/reader/application/reader_font_registry_service.dart';
+import 'dart:io';
 
 enum AppInterfaceFontSource { system, custom }
 
@@ -71,10 +72,10 @@ String? resolveAppInterfaceFontFamily(AppInterfaceFontSettings settings) {
   };
 }
 
-final appInterfaceFontSettingsProvider =
-    NotifierProvider<AppInterfaceFontSettingsNotifier, AppInterfaceFontSettings>(
-      AppInterfaceFontSettingsNotifier.new,
-    );
+final appInterfaceFontSettingsProvider = NotifierProvider<
+  AppInterfaceFontSettingsNotifier,
+  AppInterfaceFontSettings
+>(AppInterfaceFontSettingsNotifier.new);
 
 final appInterfaceTextScaleProvider =
     NotifierProvider<AppInterfaceTextScaleNotifier, double>(
@@ -200,7 +201,7 @@ class AppInterfaceFontSettingsNotifier
       return const AppInterfaceFontSettings();
     }
 
-    if (customPath.isEmpty) {
+    if (customPath.isEmpty || !await File(customPath).exists()) {
       final fonts = await ReaderFontRegistryService().listRegisteredFonts();
       for (final entry in fonts) {
         if (entry.fontFamilyKey == familyKey) {
@@ -348,17 +349,7 @@ class AppInterfaceFontWeightNotifier extends Notifier<int> {
   }
 
   static int _normalize(int value) {
-    const supportedWeights = <int>{
-      100,
-      200,
-      300,
-      400,
-      500,
-      600,
-      700,
-      800,
-      900,
-    };
+    const supportedWeights = <int>{100, 200, 300, 400, 500, 600, 700, 800, 900};
     if (supportedWeights.contains(value)) {
       return value;
     }

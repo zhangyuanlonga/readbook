@@ -13,6 +13,8 @@
   技术架构、模块边界、开发规范和测试要求。
 - `docs/development_architecture_guardrails.md`
   当前项目后续开发的强约束文档，明确目录、依赖、Riverpod、路由、原生边界和 code review 一票否决项。
+- `docs/project_architecture_unification_plan.md`
+  项目整体统一化总计划，负责串联 reader / non-reader / 共享语义 / 资源系统 / runtime / 测试守卫等跨专题阶段任务。
 
 ## 专题文档
 

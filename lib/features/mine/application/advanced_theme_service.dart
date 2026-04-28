@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/images/file_image_cache.dart';
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import 'cover_gallery_service.dart';
@@ -63,8 +64,43 @@ class AdvancedThemeService {
             ),
           )
           .toList(growable: false);
-      themes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return themes;
+      final resolver = ManagedFilePathResolver();
+      var changed = false;
+      final normalizedThemes = <AppAdvancedTheme>[];
+      for (final theme in themes) {
+        final normalizedLightWallpaper = await resolver
+            .normalizePersistedFilePath(theme.lightConfig.wallpaperPath);
+        final normalizedLightReaderWallpaper = await resolver
+            .normalizePersistedFilePath(theme.lightConfig.readerWallpaperPath);
+        final normalizedDarkWallpaper = await resolver
+            .normalizePersistedFilePath(theme.darkConfig.wallpaperPath);
+        final normalizedDarkReaderWallpaper = await resolver
+            .normalizePersistedFilePath(theme.darkConfig.readerWallpaperPath);
+        final normalizedTheme = theme.copyWith(
+          lightConfig: theme.lightConfig.copyWith(
+            wallpaperPath: normalizedLightWallpaper,
+            readerWallpaperPath: normalizedLightReaderWallpaper,
+          ),
+          darkConfig: theme.darkConfig.copyWith(
+            wallpaperPath: normalizedDarkWallpaper,
+            readerWallpaperPath: normalizedDarkReaderWallpaper,
+          ),
+        );
+        if (normalizedLightWallpaper != theme.lightConfig.wallpaperPath ||
+            normalizedLightReaderWallpaper !=
+                theme.lightConfig.readerWallpaperPath ||
+            normalizedDarkWallpaper != theme.darkConfig.wallpaperPath ||
+            normalizedDarkReaderWallpaper !=
+                theme.darkConfig.readerWallpaperPath) {
+          changed = true;
+        }
+        normalizedThemes.add(normalizedTheme);
+      }
+      normalizedThemes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      if (changed) {
+        await saveThemes(normalizedThemes);
+      }
+      return normalizedThemes;
     } catch (_) {
       return const <AppAdvancedTheme>[];
     }

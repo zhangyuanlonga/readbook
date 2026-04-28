@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -39,6 +38,9 @@ class BookMetadataPresentation {
 
 class BookMetadataPresentationResolver {
   const BookMetadataPresentationResolver();
+
+  static final ManagedFilePathResolver _pathResolver =
+      ManagedFilePathResolver();
 
   BookMetadataPresentation resolveRemoteBook({
     required Book book,
@@ -156,8 +158,11 @@ class BookMetadataPresentationResolver {
     required String? customCoverPath,
     required String? realCoverUrl,
   }) {
-    if (customCoverPath != null && File(customCoverPath).existsSync()) {
-      return Uri.file(customCoverPath).toString();
+    final resolvedCustomPath = _pathResolver.tryResolveExistingFilePathSync(
+      customCoverPath,
+    );
+    if (resolvedCustomPath != null) {
+      return Uri.file(resolvedCustomPath).toString();
     }
     return realCoverUrl;
   }
@@ -167,10 +172,11 @@ class BookMetadataPresentationResolver {
     required String? localCoverPath,
     required String? realCoverUrl,
   }) {
-    if (overrideCoverPath != null && File(overrideCoverPath).existsSync()) {
+    if (_pathResolver.tryResolveExistingFilePathSync(overrideCoverPath) !=
+        null) {
       return BookMetadataPresentationCoverSource.overrideCustom;
     }
-    if (localCoverPath != null && File(localCoverPath).existsSync()) {
+    if (_pathResolver.tryResolveExistingFilePathSync(localCoverPath) != null) {
       return BookMetadataPresentationCoverSource.localManaged;
     }
     if (realCoverUrl != null) {

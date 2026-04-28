@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/reader_settings.dart';
 
 class ReaderCustomFontEntry {
@@ -357,7 +358,33 @@ class ReaderFontRegistryService {
         }
         entries.add(entry);
       }
-      return entries;
+      final resolver = ManagedFilePathResolver(
+        supportDirectoryProvider: _supportDirProvider,
+      );
+      var changed = false;
+      final normalizedEntries = <ReaderCustomFontEntry>[];
+      for (final entry in entries) {
+        final normalizedPath =
+            await resolver.normalizePersistedFilePath(entry.filePath) ??
+            entry.filePath;
+        if (normalizedPath != entry.filePath) {
+          changed = true;
+          normalizedEntries.add(
+            ReaderCustomFontEntry(
+              fontFamilyKey: entry.fontFamilyKey,
+              displayName: entry.displayName,
+              filePath: normalizedPath,
+              importedAtEpochMs: entry.importedAtEpochMs,
+            ),
+          );
+          continue;
+        }
+        normalizedEntries.add(entry);
+      }
+      if (changed) {
+        await _saveRegistry(normalizedEntries);
+      }
+      return normalizedEntries;
     } catch (_) {
       return <ReaderCustomFontEntry>[];
     }

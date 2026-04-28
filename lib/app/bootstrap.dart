@@ -17,7 +17,9 @@ import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/mine/providers.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
 import '../core/logging/app_logger.dart';
+import '../core/storage/managed_file_path_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
+import 'startup/managed_asset_path_migration_service.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
@@ -28,6 +30,11 @@ Future<void> bootstrap() async {
   _configureImagePicker();
   PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
   final prefs = await SharedPreferences.getInstance();
+  await ManagedFilePathResolver.primeCurrentRoots();
+  await ManagedAssetPathMigrationService(
+    preferences: prefs,
+    logger: AppLogger.instance,
+  ).migrate();
   AppNavigationStylePreferenceNotifier.prime(prefs);
   AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppStandardNavigationBarAppearanceNotifier.prime(prefs);

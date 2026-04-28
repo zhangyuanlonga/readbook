@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/storage/managed_file_path_resolver.dart';
 import '../../domain/entities/app_advanced_theme.dart';
 import '../../domain/entities/cover_gallery.dart';
 import 'disk_cached_cover_image.dart';
@@ -32,6 +33,9 @@ class ResolvedBookCover {
   final String? imageUrl;
   final String? filePath;
 }
+
+final ManagedFilePathResolver _managedFilePathResolver =
+    ManagedFilePathResolver();
 
 ResolvedBookCover resolveBookCover({
   String? realCoverUrl,
@@ -136,22 +140,21 @@ ResolvedBookCover? _resolveRealCover(String? realCoverUrl) {
     return null;
   }
   if (uri.scheme == 'file') {
-    final file = File.fromUri(uri);
-    if (!file.existsSync()) {
+    final resolvedPath = _managedFilePathResolver
+        .tryResolveExistingFilePathSync(File.fromUri(uri).path);
+    if (resolvedPath == null) {
       return null;
     }
-    return ResolvedBookCover.custom(file.path);
+    return ResolvedBookCover.custom(resolvedPath);
   }
   return ResolvedBookCover.real(normalized);
 }
 
 ResolvedBookCover? _resolveCustomCover(String? customCoverPath) {
-  final normalized = customCoverPath?.trim() ?? '';
-  if (normalized.isEmpty) {
-    return null;
-  }
-  final file = File(normalized);
-  if (!file.existsSync()) {
+  final normalized = _managedFilePathResolver.tryResolveExistingFilePathSync(
+    customCoverPath,
+  );
+  if (normalized == null || normalized.isEmpty) {
     return null;
   }
   return ResolvedBookCover.custom(normalized);
@@ -180,9 +183,10 @@ String? _resolveGalleryImagePath(
   }
 
   final validPaths = gallery.imagePaths
-      .map((path) => path.trim())
-      .where((path) => path.isNotEmpty)
-      .where((path) => File(path).existsSync())
+      .map(
+        (path) => _managedFilePathResolver.tryResolveExistingFilePathSync(path),
+      )
+      .whereType<String>()
       .toList(growable: false);
   if (validPaths.isEmpty) {
     return null;

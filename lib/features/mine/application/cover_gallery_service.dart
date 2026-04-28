@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/images/file_image_cache.dart';
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/cover_gallery.dart';
 
 class CoverGalleryService {
@@ -42,7 +43,25 @@ class CoverGalleryService {
           )
           .toList(growable: false);
       galleries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return galleries;
+      final resolver = ManagedFilePathResolver();
+      var changed = false;
+      final normalizedGalleries = <CoverGallery>[];
+      for (final gallery in galleries) {
+        final normalizedPaths = <String>[];
+        for (final path in gallery.imagePaths) {
+          final normalized =
+              await resolver.normalizePersistedFilePath(path) ?? path;
+          normalizedPaths.add(normalized);
+          if (normalized != path) {
+            changed = true;
+          }
+        }
+        normalizedGalleries.add(gallery.copyWith(imagePaths: normalizedPaths));
+      }
+      if (changed) {
+        await saveGalleries(normalizedGalleries);
+      }
+      return normalizedGalleries;
     } catch (_) {
       return const <CoverGallery>[];
     }
