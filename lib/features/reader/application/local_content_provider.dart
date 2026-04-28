@@ -66,8 +66,8 @@ class LocalContentProvider extends ContentProvider {
 
     final result = await _detailService.load(
       bookId: resolvedBookId,
+      mode: LocalBookDetailLoadMode.directoryOnly,
       forceReindex: forceRefresh,
-      withContent: false,
       allowBackgroundIndex: !forceRefresh,
     );
 

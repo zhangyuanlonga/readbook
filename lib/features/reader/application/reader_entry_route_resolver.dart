@@ -143,7 +143,7 @@ class ReaderEntryRouteResolver {
       return normalized;
     }
     final normalizedChapterId = chapterId.trim();
-    if (normalizedChapterId.isEmpty || normalizedChapterId == 'bootstrap') {
+    if (normalizedChapterId.isEmpty) {
       return normalized.isEmpty ? null : normalized;
     }
     return LocalReaderIdentity.buildChapterUrl(normalizedChapterId);

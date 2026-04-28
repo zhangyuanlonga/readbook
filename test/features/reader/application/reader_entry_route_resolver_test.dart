@@ -66,6 +66,14 @@ void main() {
       expect(route, contains('/reader/local_book_1/bootstrap'));
       expect(route, contains('bookmarkId=bookmark_1'));
       expect(route, contains(Uri.encodeQueryComponent(LocalReaderIdentity.buildBookDetailUrl('local_book_1'))));
+      expect(
+        route,
+        contains(
+          Uri.encodeQueryComponent(
+            LocalReaderIdentity.buildChapterUrl('bootstrap'),
+          ),
+        ),
+      );
     });
 
     test('builds chapter route from chapter entity', () {
@@ -86,6 +94,28 @@ void main() {
 
       expect(route, contains('/reader/book_1/chapter_2'));
       expect(route, contains(Uri.encodeQueryComponent('https://example.com/chapter/2')));
+    });
+
+    test('keeps open trace query when building progress route', () {
+      final progress = ReadingProgress(
+        bookId: 'book_1',
+        sourceId: 'source_1',
+        detailUrl: 'https://example.com/detail/1',
+        chapterId: 'chapter_1',
+        chapterUrl: 'https://example.com/chapter/1',
+        chapterTitle: '第一章',
+        chapterIndex: 0,
+        updatedAt: DateTime(2026, 4, 7),
+      );
+
+      final route = resolver.buildRouteFromProgress(
+        progress,
+        openRequestedAtMs: 123456,
+        openRouteKind: 'progress',
+      );
+
+      expect(route, contains('openRequestedAtMs=123456'));
+      expect(route, contains('openRouteKind=progress'));
     });
   });
 }

@@ -91,9 +91,9 @@
 
 - 阶段 0：已阻塞，最后更新 `2026-04-28`，备注：代码埋点与观测口径已落地，Android 真机基线待实机验证
 - 阶段 1：已完成，完成日期 `2026-04-28`
-- 阶段 2：未开始
-- 阶段 3：未开始
-- 阶段 4：未开始
+- 阶段 2：已完成，完成日期 `2026-04-28`
+- 阶段 3：已完成，完成日期 `2026-04-28`，备注：本轮先通过仓储语义和轻量查询隔离目录/正文，暂不拆分 `LocalChapter` 新模型
+- 阶段 4：已阻塞，最后更新 `2026-04-28`，备注：代码验证、测试回填和文档维护已完成，真机手工回归待设备环境
 
 回填规则：
 
@@ -183,12 +183,19 @@
 
 任务：
 
-- [ ] 明确阅读页启动顺序：`progress -> toc snapshot -> visible content cache -> detail/toc fallback -> chapter content`
-- [ ] 如存在 `toc snapshot`，确保阅读页直接恢复目录和当前章节身份，不重复走详情链路
-- [ ] 如存在当前章节缓存，确保优先展示缓存内容，再异步补齐必要状态
-- [ ] 对 `BookDetailService.peekCached(...)` 建立阅读页可复用的轻量读取入口
-- [ ] 梳理本地图书 `bootstrap` 场景，保证无进度时也能通过轻量目录信息进入首章
-- [ ] 补齐阅读页错误态文案，避免把“书架点击失败”变成“静默空白页”
+- [x] 明确阅读页启动顺序：`progress -> toc snapshot -> visible content cache -> detail/toc fallback -> chapter content`
+- [x] 如存在 `toc snapshot`，确保阅读页直接恢复目录和当前章节身份，不重复走详情链路
+- [x] 如存在当前章节缓存，确保优先展示缓存内容，再异步补齐必要状态
+- [x] 对 `BookDetailService.peekCached(...)` 建立阅读页可复用的轻量读取入口
+- [x] 梳理本地图书 `bootstrap` 场景，保证无进度时也能通过轻量目录信息进入首章
+- [x] 补齐阅读页错误态文案，避免把“书架点击失败”变成“静默空白页”
+
+本轮落地结果：
+
+- 阅读页在 `toc snapshot` 未命中时，会先尝试 `detail cache`，命中后不再立即走脚本详情链路
+- 本地 `bootstrap` 路由在目录未建立完成时，会优先尝试加载预览正文，而不是直接报空目录
+- 阅读页 bootstrap 日志新增 `detailCacheHit`、`localBootstrapPreviewAttempted`、`localBootstrapPreviewLoaded`
+- 本地 `bootstrap` 失败时，阅读页错误文案改为目录/预览失败的本地化提示
 
 完成标准：
 
@@ -206,11 +213,20 @@
 
 任务：
 
-- [ ] 审计 `LocalBookRepository` 现有接口语义，区分“章节 meta 查询”和“章节正文查询”
-- [ ] 为本地章节列表建立明确的 meta-only 查询入口
-- [ ] 禁止书架、目录、详情等非正文场景调用返回 `content/document` 的全量章节列表
-- [ ] 评估 `LocalChapter` 是否需要拆出更轻的目录模型，或至少通过 repository 语义隔离
-- [ ] 审计 `app_database.dart` 中本地章节查询热点，确认是否需要补索引或减少 JSON 解码
+- [x] 审计 `LocalBookRepository` 现有接口语义，区分“章节 meta 查询”和“章节正文查询”
+- [x] 为本地章节列表建立明确的 meta-only 查询入口
+- [x] 禁止书架、目录、详情等非正文场景调用返回 `content/document` 的全量章节列表
+- [x] 评估 `LocalChapter` 是否需要拆出更轻的目录模型，或至少通过 repository 语义隔离
+- [x] 审计 `app_database.dart` 中本地章节查询热点，确认是否需要补索引或减少 JSON 解码
+
+本轮落地结果：
+
+- `LocalBookRepository` 接口补充了目录查询和正文查询的职责注释
+- `getChapterMetaByIndex(...)` 已成为书架首章定位的单条轻量查询入口
+- `LocalBookDetailService` 从布尔 `withContent` 切为明确的 `LocalBookDetailLoadMode`
+- `LocalContentProvider.loadDetail(...)` 已固定走 `directoryOnly` 模式，避免本地详情链路误读正文
+- `app_database.dart` 新增单条目录 meta 查询，避免仅为拿首章而触发整章 `content/document` 映射
+- `LocalChapter` 暂不拆分独立目录模型，本轮先通过 repository 语义和 load mode 隔离风险
 
 完成标准：
 
@@ -227,11 +243,28 @@
 
 任务：
 
-- [ ] 补充或更新测试，至少覆盖书架到阅读页的 route smoke 和关键 application service
+- [x] 补充或更新测试，至少覆盖书架到阅读页的 route smoke 和关键 application service
 - [ ] 手工回归在线书、有缓存在线书、本地图书、未完成索引本地图书四类场景
-- [ ] 回填阶段完成状态、完成日期、关键决策
-- [ ] 将最终落地策略同步到 `docs/README.md`
-- [ ] 如实施过程和本文偏差较大，直接更新本文，不另起平行计划文档
+- [x] 回填阶段完成状态、完成日期、关键决策
+- [x] 将最终落地策略同步到 `docs/README.md`
+- [x] 如实施过程和本文偏差较大，直接更新本文，不另起平行计划文档
+
+本轮收尾结果：
+
+- 已补测试：
+  `bookshelf_reader_open_service_test`
+  `reader_entry_route_resolver_test`
+  `source_content_provider_test`
+  `local_book_detail_service_test`
+  以及本地数据库 / 仓储相关定向测试
+- 已完成静态校验：
+  `flutter analyze` 通过
+- 已完成文档回填：
+  阶段 0-3 状态、当前恢复链路口径、剩余阻塞项已统一写回本文
+
+当前阻塞项：
+
+- 缺少 Android 真机和手工回归环境，阶段 4 剩余项仅为真实设备场景验证
 
 完成标准：
 

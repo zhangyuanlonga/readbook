@@ -170,8 +170,11 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     var tocSnapshotHit = false;
     var visibleCacheLoadMs = 0;
     var visibleCacheHit = false;
+    var detailCacheHit = false;
     var detailLoadMs = 0;
     var detailLoaded = false;
+    var localBootstrapPreviewAttempted = false;
+    var localBootstrapPreviewLoaded = false;
     var chapterLoadMs = 0;
     var chapterLoaded = false;
     var bootstrapSucceeded = false;
@@ -241,12 +244,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           !normalizedSettings.infoShowProgress) {
         normalizedSettings = normalizedSettings.copyWith(
           infoShowProgress: true,
-        );
-        infoSettingsChanged = true;
-      }
-      if (normalizedSettings.infoShowChapter) {
-        normalizedSettings = normalizedSettings.copyWith(
-          infoShowChapter: false,
         );
         infoSettingsChanged = true;
       }
@@ -388,6 +385,30 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         return;
       }
 
+      if (_shouldTryLocalBootstrapPreview()) {
+        localBootstrapPreviewAttempted = true;
+        await _refreshBookshelfState();
+        final bootstrapProgress = _bootstrapProgressForCurrentChapter(
+          consume: true,
+        );
+        final chapterLoadStopwatch = Stopwatch()..start();
+        final loaded = await _loadCurrentChapter(
+          initialScrollRatio: bootstrapProgress?.chapterPositionRatio,
+          initialLogicalPosition: bootstrapProgress?.logicalPosition,
+        );
+        chapterLoadMs = chapterLoadStopwatch.elapsedMilliseconds;
+        chapterLoaded = loaded;
+        bootstrapSucceeded = loaded;
+        localBootstrapPreviewLoaded = loaded;
+        if (loaded && _hasVisibleReaderContent) {
+          tapToVisibleMs ??= _tapTraceElapsedMs();
+        }
+        if (loaded) {
+          await _consumePendingBookmarkJump();
+          return;
+        }
+      }
+
       if (_isMissingCriticalParams) {
         if (!mounted) {
           return;
@@ -404,14 +425,19 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         stage: ErrorStage.detail,
       );
 
-      final detailLoadStopwatch = Stopwatch()..start();
-      final detailResult = await detailProvider.loadDetail(
-        sourceId: _sourceId!,
-        bookId: _currentBookId,
-        detailUrl: _detailUrl!,
-        fallbackTitle: _chapterTitle,
-      );
-      detailLoadMs = detailLoadStopwatch.elapsedMilliseconds;
+      final cachedDetail = _peekCachedDetailResult();
+      detailCacheHit = cachedDetail != null;
+      final detailResult = cachedDetail ?? await () async {
+        final detailLoadStopwatch = Stopwatch()..start();
+        final loaded = await detailProvider.loadDetail(
+          sourceId: _sourceId!,
+          bookId: _currentBookId,
+          detailUrl: _detailUrl!,
+          fallbackTitle: _chapterTitle,
+        );
+        detailLoadMs = detailLoadStopwatch.elapsedMilliseconds;
+        return loaded;
+      }();
       detailLoaded = true;
       await _persistTocSnapshot(detailResult);
 
@@ -432,7 +458,9 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           return;
         }
         setState(() {
-          _errorText = '当前目录没有可阅读的正文章节。';
+          _errorText = _resolveNoReadableChapterMessage(
+            localBootstrapPreviewAttempted: localBootstrapPreviewAttempted,
+          );
           _isBootstrapping = false;
         });
         return;
@@ -495,7 +523,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           'progressHit': progressHit,
           'tocSnapshotHit': tocSnapshotHit,
           'visibleCacheHit': visibleCacheHit,
+          'detailCacheHit': detailCacheHit,
           'detailLoaded': detailLoaded,
+          'localBootstrapPreviewAttempted': localBootstrapPreviewAttempted,
+          'localBootstrapPreviewLoaded': localBootstrapPreviewLoaded,
           'chapterLoaded': chapterLoaded,
           'progressLoadMs': progressLoadMs,
           'tocSnapshotLoadMs': tocSnapshotLoadMs,
@@ -531,6 +562,44 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       return null;
     }
     return nowMs - requestedAtMs;
+  }
+
+  bool _shouldTryLocalBootstrapPreview() {
+    if (!_isLocalSource) {
+      return false;
+    }
+    if (_chapterId.trim().toLowerCase() != 'bootstrap') {
+      return false;
+    }
+    return (_chapterUrl ?? '').trim().isNotEmpty;
+  }
+
+  BookDetailLoadResult? _peekCachedDetailResult() {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
+      return null;
+    }
+    final provider = _contentProviderRegistry.findForSourceId(sourceId);
+    if (provider is! SourceContentProvider) {
+      return null;
+    }
+    return provider.peekCachedDetail(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+  }
+
+  String _resolveNoReadableChapterMessage({
+    required bool localBootstrapPreviewAttempted,
+  }) {
+    if (_isLocalSource && localBootstrapPreviewAttempted) {
+      return '本地图书目录尚未建立完成，预览正文也暂不可用，请稍后重试或等待后台索引完成。';
+    }
+    if (_isLocalSource) {
+      return '本地图书目录尚未建立完成，请稍后重试或先完成索引。';
+    }
+    return '当前目录没有可阅读的正文章节。';
   }
 
   Future<bool> _tryHydrateTocSnapshot() async {

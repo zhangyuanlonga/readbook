@@ -11,6 +11,7 @@ class _FakeBookDetailService extends BookDetailService {
   _FakeBookDetailService(this.result);
 
   final BookDetailLoadResult result;
+  BookDetailLoadResult? cachedResult;
 
   String? sourceId;
   String? bookId;
@@ -35,6 +36,14 @@ class _FakeBookDetailService extends BookDetailService {
     this.fallbackAuthor = fallbackAuthor;
     this.forceRefresh = forceRefresh;
     return result;
+  }
+
+  @override
+  BookDetailLoadResult? peekCached({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    return cachedResult;
   }
 }
 
@@ -167,5 +176,31 @@ void main() {
     expect(fakeContentService.chapterIndex, 0);
     expect(fakeContentService.chapterTitle, '第一章');
     expect(fakeContentService.nextChapterUrl, 'https://example.com/book/1/c2');
+  });
+
+  test('exposes cached detail peek for reader bootstrap reuse', () {
+    const detail = BookDetail(
+      id: 'book_1',
+      sourceId: 'source_a',
+      title: '示例书籍',
+      detailUrl: 'https://example.com/book/1',
+      author: '作者',
+    );
+    const detailResult = BookDetailLoadResult(
+      detail: detail,
+      chapters: <Chapter>[],
+      sourceName: '源A',
+      tocFromCache: true,
+    );
+    final fakeDetailService = _FakeBookDetailService(detailResult)
+      ..cachedResult = detailResult;
+    final provider = SourceContentProvider(detailService: fakeDetailService);
+
+    final cached = provider.peekCachedDetail(
+      sourceId: 'source_a',
+      detailUrl: 'https://example.com/book/1',
+    );
+
+    expect(cached, same(detailResult));
   });
 }

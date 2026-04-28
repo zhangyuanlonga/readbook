@@ -101,6 +101,7 @@ import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
 import '../application/reader_typography_resolver.dart';
 import '../application/reader_typography_metrics_resolver.dart';
+import '../application/source_content_provider.dart';
 import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';

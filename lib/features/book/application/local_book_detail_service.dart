@@ -17,6 +17,8 @@ class LocalBookDetailResult {
   final List<LocalChapter> chapters;
 }
 
+enum LocalBookDetailLoadMode { directoryOnly, withContent }
+
 class LocalBookDetailService {
   factory LocalBookDetailService.legacy() {
     final localBookRepository = LocalBookRepositoryImpl(AppDatabase.instance);
@@ -39,8 +41,8 @@ class LocalBookDetailService {
 
   Future<LocalBookDetailResult> load({
     required String bookId,
+    LocalBookDetailLoadMode mode = LocalBookDetailLoadMode.withContent,
     bool forceReindex = false,
-    bool withContent = true,
     bool allowBackgroundIndex = false,
   }) async {
     final normalizedBookId = bookId.trim();
@@ -91,7 +93,7 @@ class LocalBookDetailService {
     }
 
     final chapters =
-        withContent
+        mode == LocalBookDetailLoadMode.withContent
             ? await _localBookRepository.getChapters(normalizedBookId)
             : await _localBookRepository.getChapterMetas(normalizedBookId);
 
