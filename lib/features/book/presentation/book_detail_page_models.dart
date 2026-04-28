@@ -28,21 +28,3 @@ class _LocalCharsetOption {
   final String label;
   final String? charset;
 }
-
-class _BookMetadataEditDraft {
-  const _BookMetadataEditDraft({
-    required this.title,
-    required this.author,
-    required this.intro,
-    required this.customCoverPath,
-    required this.charset,
-    required this.splitLongChapter,
-  });
-
-  final String title;
-  final String author;
-  final String intro;
-  final String? customCoverPath;
-  final String? charset;
-  final bool splitLongChapter;
-}

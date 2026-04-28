@@ -21,9 +21,13 @@ import '../source/application/source_runtime_scheduler_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/book_detail_service.dart';
 import 'application/book_detail_read_route_service.dart';
+import 'application/book_detail_action_service.dart';
+import 'application/book_detail_catalog_service.dart';
 import 'application/book_local_metadata_service.dart';
 import 'application/book_metadata_edit_service.dart';
+import 'application/book_detail_metadata_flow_service.dart';
 import 'application/book_presentation_sync_service.dart';
+import 'application/book_metadata_presentation_resolver.dart';
 import 'application/custom_cover_storage_service.dart';
 import 'application/local_book_detail_service.dart';
 
@@ -41,6 +45,9 @@ class BookDetailDependencies {
     required this.localBookIndexService,
     required this.bookMetadataEditService,
     required this.bookPresentationSyncService,
+    required this.actionService,
+    required this.catalogService,
+    required this.metadataFlowService,
   });
 
   final BookDetailService bookDetailService;
@@ -55,6 +62,9 @@ class BookDetailDependencies {
   final LocalBookIndexService localBookIndexService;
   final BookMetadataEditService bookMetadataEditService;
   final BookPresentationSyncService bookPresentationSyncService;
+  final BookDetailActionService actionService;
+  final BookDetailCatalogService catalogService;
+  final BookDetailMetadataFlowService metadataFlowService;
 }
 
 final bookBookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
@@ -202,6 +212,28 @@ final bookPresentationSyncServiceProvider =
       );
     });
 
+final bookDetailActionServiceProvider = Provider<BookDetailActionService>((ref) {
+  return BookDetailActionService(
+    bookshelfService: ref.watch(bookDetailBookshelfServiceProvider),
+  );
+});
+
+final bookDetailCatalogServiceProvider =
+    Provider<BookDetailCatalogService>((ref) {
+      return const BookDetailCatalogService();
+    });
+
+final bookDetailMetadataFlowServiceProvider =
+    Provider<BookDetailMetadataFlowService>((ref) {
+      return BookDetailMetadataFlowService(
+        bookMetadataEditService: ref.watch(bookMetadataEditServiceProvider),
+        bookPresentationSyncService: ref.watch(
+          bookPresentationSyncServiceProvider,
+        ),
+        presentationResolver: const BookMetadataPresentationResolver(),
+      );
+    });
+
 final bookTaskConflictServiceProvider =
     Provider<SourceRuntimeTaskConflictService>((ref) {
       return SourceRuntimeTaskConflictService.instance;
@@ -252,5 +284,8 @@ final bookDetailDependenciesProvider = Provider<BookDetailDependencies>((ref) {
     localBookIndexService: ref.watch(bookDetailLocalBookIndexServiceProvider),
     bookMetadataEditService: ref.watch(bookMetadataEditServiceProvider),
     bookPresentationSyncService: ref.watch(bookPresentationSyncServiceProvider),
+    actionService: ref.watch(bookDetailActionServiceProvider),
+    catalogService: ref.watch(bookDetailCatalogServiceProvider),
+    metadataFlowService: ref.watch(bookDetailMetadataFlowServiceProvider),
   );
 });

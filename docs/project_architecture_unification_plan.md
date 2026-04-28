@@ -300,13 +300,17 @@
 - [x] 新增 `BookDetailReadRouteService`
 - [x] 可读章节过滤、最新章节解析、从详情页进入阅读的 route 构造已下沉
 - [x] 本地内容 provider 装配残留继续清理了一轮
+- [x] 新增 `BookDetailActionService`
+- [x] 新增 `BookDetailCatalogService`
+- [x] 新增 `BookDetailMetadataFlowService`
+- [x] metadata flow 已迁到独立 metadata part + application service
+- [x] action flow 已迁到独立 actions part + application service
+- [x] toc / reading sync glue 已迁到独立 catalog part + application service
+- [x] `book_detail_page.dart` 已压到约 `2.3k` 行，并通过本轮 analyze / test
 
 当前剩余项：
 
-- [ ] action flow 继续下沉
-- [ ] metadata flow 继续下沉
-- [ ] toc / reading sync flow 继续下沉
-- [ ] 详情页页面壳进一步压薄
+- 无，`7.3 Book Detail` 本轮已完成；后续若继续下沉卡片细粒度 render helper，再单独回挂
 
 ### 7.4 Reading Records / Bookmarks / Home
 
