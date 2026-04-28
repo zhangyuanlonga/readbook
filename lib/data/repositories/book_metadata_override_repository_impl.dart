@@ -47,6 +47,10 @@ class BookMetadataOverrideRepositoryImpl
       _database.getAllBookMetadataOverrides();
 
   @override
+  Stream<List<BookMetadataOverride>> watchAll() =>
+      _database.watchBookMetadataOverrides();
+
+  @override
   Future<void> upsert(BookMetadataOverride metadataOverride) =>
       _database.upsertBookMetadataOverride(metadataOverride);
 }

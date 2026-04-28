@@ -498,11 +498,11 @@ class _HomePageState extends ConsumerState<HomePage>
   Widget _buildContinueReadingCard(ReadingRecord record) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final presentation = _bookPresentationResolver.resolveReadingRecord(
+    final displayState = _bookPresentationResolver.resolveReadingRecord(
       record: record,
     );
     final cover = resolveBookCover(
-      realCoverUrl: presentation.displayCover,
+      realCoverUrl: displayState.displayCover,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: record.bookId,
@@ -529,15 +529,15 @@ class _HomePageState extends ConsumerState<HomePage>
             children: [
               ResolvedBookCoverView(
                 cover: cover,
-                title: presentation.displayTitle,
-                author: presentation.displayAuthor,
+                title: displayState.displayTitle,
+                author: displayState.displayAuthor,
                 width: 124,
                 height: 124,
                 borderRadius: BorderRadius.circular(18),
               ),
               const SizedBox(height: 12),
               Text(
-                record.bookTitle,
+                displayState.displayTitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
@@ -547,8 +547,8 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
               const SizedBox(height: 6),
               Text(
-                record.bookAuthor?.trim().isNotEmpty == true
-                    ? record.bookAuthor!
+                displayState.displayAuthor?.trim().isNotEmpty == true
+                    ? displayState.displayAuthor!
                     : '继续阅读',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -13,12 +13,14 @@ import '../reader/application/local/local_book_storage_service.dart';
 import '../reader/application/reader_system_settings_service.dart';
 import '../reader/application/reader_preferences_service.dart';
 import '../reader/application/reading_record_service.dart';
+import '../reader/application/reader_entry_route_resolver.dart';
 import '../search/application/search_hit_cache_service.dart';
 import '../search/application/search_service.dart';
 import '../source/application/source_runtime_facade.dart';
 import '../source/application/source_runtime_scheduler_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/book_detail_service.dart';
+import 'application/book_detail_read_route_service.dart';
 import 'application/book_local_metadata_service.dart';
 import 'application/book_metadata_edit_service.dart';
 import 'application/book_presentation_sync_service.dart';
@@ -31,6 +33,7 @@ class BookDetailDependencies {
     required this.bookshelfService,
     required this.switchSourceSearchService,
     required this.searchHitCacheService,
+    required this.readRouteService,
     required this.readerSystemSettingsService,
     required this.localBookStorageService,
     required this.readerPreferencesService,
@@ -44,6 +47,7 @@ class BookDetailDependencies {
   final BookshelfService bookshelfService;
   final SearchService switchSourceSearchService;
   final SearchHitCacheService searchHitCacheService;
+  final BookDetailReadRouteService readRouteService;
   final ReaderSystemSettingsService readerSystemSettingsService;
   final LocalBookStorageService localBookStorageService;
   final ReaderPreferencesService readerPreferencesService;
@@ -93,6 +97,21 @@ final bookDetailSearchHitCacheServiceProvider = Provider<SearchHitCacheService>(
     return SearchHitCacheService();
   },
 );
+
+final bookDetailReaderEntryRouteResolverProvider =
+    Provider<ReaderEntryRouteResolver>((ref) {
+      return const ReaderEntryRouteResolver();
+    });
+
+final bookDetailReadRouteServiceProvider = Provider<BookDetailReadRouteService>((
+  ref,
+) {
+  return BookDetailReadRouteService(
+    readerEntryRouteResolver: ref.watch(
+      bookDetailReaderEntryRouteResolverProvider,
+    ),
+  );
+});
 
 final bookDetailReaderSystemSettingsServiceProvider =
     Provider<ReaderSystemSettingsService>((ref) {
@@ -219,6 +238,7 @@ final bookDetailDependenciesProvider = Provider<BookDetailDependencies>((ref) {
       bookDetailSwitchSourceSearchServiceProvider,
     ),
     searchHitCacheService: ref.watch(bookDetailSearchHitCacheServiceProvider),
+    readRouteService: ref.watch(bookDetailReadRouteServiceProvider),
     readerSystemSettingsService: ref.watch(
       bookDetailReaderSystemSettingsServiceProvider,
     ),

@@ -28,18 +28,17 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/bookshelf_external_import_coordinator.dart';
+import '../application/bookshelf_page_route_service.dart';
 import '../application/bookshelf_presentation_query_service.dart';
 import '../application/bookshelf_reader_open_service.dart';
 import '../application/local_book_import_service.dart';
 import '../providers.dart';
 import '../../reader/application/reader_preferences_service.dart';
-import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/custom_cover_storage_service.dart';
-import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
@@ -253,7 +252,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final BookshelfService _bookshelfService;
   late final BookshelfSystemSettingsService _bookshelfSystemSettingsService;
   late final ReaderPreferencesService _readerPreferencesService;
-  late final ReaderEntryRouteResolver _readerEntryRouteResolver;
+  late final BookshelfPageRouteService _pageRouteService;
   late final LocalBookIndexService _localBookIndexService;
   final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
       const BookMetadataPresentationResolver();
@@ -385,7 +384,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfService = dependencies.bookshelfService;
     _bookshelfSystemSettingsService = dependencies.systemSettingsService;
     _readerPreferencesService = dependencies.readerPreferencesService;
-    _readerEntryRouteResolver = dependencies.readerEntryRouteResolver;
+    _pageRouteService = dependencies.pageRouteService;
     _localBookIndexService = dependencies.localBookIndexService;
     _bookDetailService = dependencies.bookDetailService;
     _readerOpenService = dependencies.readerOpenService;
@@ -5257,57 +5256,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Future<void> _openLatestReadingRecord(ReadingRecord record) async {
     _dismissContinueReadingPrompt();
-    final progress = await _readerPreferencesService.loadProgress(
-      record.bookId,
+    final route = await _pageRouteService.resolveLatestReadingRecordRoute(
+      record,
     );
     if (!mounted) {
       return;
     }
-
-    final hasMatchedProgress =
-        progress != null &&
-        progress.sourceId.trim() == record.sourceId.trim() &&
-        progress.detailUrl.trim() == record.detailUrl.trim();
-    if (hasMatchedProgress) {
-      _continueReading(progress);
-      return;
-    }
-
-    final chapterId =
-        record.lastChapterId?.trim().isNotEmpty == true
-            ? record.lastChapterId!.trim()
-            : '';
-    final chapterUrl =
-        record.lastChapterUrl?.trim().isNotEmpty == true
-            ? record.lastChapterUrl!.trim()
-            : '';
-    final chapterTitle =
-        record.lastChapterTitle?.trim().isNotEmpty == true
-            ? record.lastChapterTitle!.trim()
-            : record.bookTitle.trim();
-
-    if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route = _readerEntryRouteResolver.buildChapterRoute(
-        bookId: record.bookId,
-        chapterId: chapterId,
-        chapterUrl: chapterUrl,
-        chapterTitle: chapterTitle,
-        sourceId: record.sourceId,
-        detailUrl: record.detailUrl,
-        chapterIndex: record.lastChapterIndex,
-      );
-      context.push(route);
-      return;
-    }
-
-    context.push(
-      buildBookDetailRoute(
-        bookId: record.bookId,
-        sourceId: record.sourceId,
-        detailUrl: record.detailUrl,
-        title: record.bookTitle,
-      ),
-    );
+    context.push(route);
   }
 
   void _dismissContinueReadingPrompt() {
@@ -5726,22 +5681,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       bookId: book.bookId,
       byScene: SourceRuntimeConflictScene.reader,
     );
-    final route = _readerEntryRouteResolver.buildRouteFromBookshelfFallback(
-      book,
-    );
-    context.push(route);
-  }
-
-  void _continueReading(ReadingProgress progress) {
-    _cancelBackgroundLatestInfoRefresh();
-    _cancelBackgroundRefreshForBook(
-      sourceId: progress.sourceId,
-      detailUrl: progress.detailUrl,
-      bookId: progress.bookId,
-      byScene: SourceRuntimeConflictScene.reader,
-    );
-    final route = _readerEntryRouteResolver.buildRouteFromProgress(progress);
-
+    final route = _pageRouteService.resolveReaderFallbackRoute(book);
     context.push(route);
   }
 
@@ -5757,13 +5697,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final route = buildBookDetailRoute(
-      bookId: book.bookId,
-      sourceId: book.sourceId,
-      detailUrl: book.detailUrl,
-      title: book.title,
-      author: book.author,
-      coverUrl: book.coverUrl,
+    final route = _pageRouteService.resolveBookDetailRoute(
+      book,
       heroTag: _buildBookCoverHeroTag(book),
     );
     context.push(route);

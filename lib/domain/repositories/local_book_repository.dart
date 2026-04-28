@@ -11,6 +11,8 @@ abstract class LocalBookRepository {
 
   Future<List<LocalBook>> getAllBooks();
 
+  Stream<List<LocalBook>> watchAllBooks();
+
   Future<void> updateBookIndexState({
     required String bookId,
     required LocalBookIndexStatus status,

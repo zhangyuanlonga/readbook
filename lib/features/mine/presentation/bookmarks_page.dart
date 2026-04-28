@@ -12,7 +12,6 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
-import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/bookmarks_query_service.dart';
@@ -32,13 +31,12 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   late final BookmarkRepository _bookmarkRepository;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
-  final BookMetadataPresentationResolver _bookPresentationResolver =
-      const BookMetadataPresentationResolver();
 
   bool _isLoading = true;
   String? _errorText;
   List<Bookmark> _bookmarks = const [];
   Map<String, BookshelfBook> _bookshelfIndex = const <String, BookshelfBook>{};
+  List<BookmarkBookGroupData> _groups = const <BookmarkBookGroupData>[];
 
   @override
   void initState() {
@@ -67,6 +65,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       setState(() {
         _bookmarks = data.bookmarks;
         _bookshelfIndex = data.bookshelfIndex;
+        _groups = data.groups;
       });
     } catch (_) {
       if (!mounted) {
@@ -184,7 +183,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       );
     }
 
-    final groups = _buildBookGroups();
+    final groups = _groups;
     if (groups.isEmpty) {
       return _buildStatusBody(
         context,
@@ -222,7 +221,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
 
   Widget _buildOverviewCard(
     BuildContext context,
-    List<_BookmarkBookGroup> groups,
+    List<BookmarkBookGroupData> groups,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final totalBookmarks = groups.fold<int>(
@@ -330,22 +329,16 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     );
   }
 
-  Widget _buildBookGroupCard(BuildContext context, _BookmarkBookGroup group) {
+  Widget _buildBookGroupCard(
+    BuildContext context,
+    BookmarkBookGroupData group,
+  ) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final book = group.book;
-    final presentation =
-        book == null
-            ? null
-            : _bookPresentationResolver.resolveBookshelfBook(book: book);
-    final title =
-        presentation?.displayTitle.trim().isNotEmpty == true
-            ? presentation!.displayTitle
-            : _resolvedTitle(book, fallbackBookmarks: group.bookmarks);
-    final author =
-        presentation?.displayAuthor?.trim().isNotEmpty == true
-            ? presentation!.displayAuthor!.trim()
-            : _resolvedAuthor(book, fallbackBookmarks: group.bookmarks);
+    final displayState = group.displayState;
+    final title = group.displayTitle;
+    final author = group.displayAuthor;
     final noteCount = group.bookmarks.where((item) => item.hasNote).length;
 
     return Card(
@@ -357,7 +350,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
           child: Row(
             children: [
               _buildCover(
-                realCoverUrl: presentation?.displayCover ?? book?.coverUrl,
+                realCoverUrl: displayState?.displayCover ?? book?.coverUrl,
                 title: title,
                 author: author,
                 bookId: book?.bookId,
@@ -432,7 +425,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     );
   }
 
-  Future<void> _openBookGroup(_BookmarkBookGroup group) async {
+  Future<void> _openBookGroup(BookmarkBookGroupData group) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
@@ -443,8 +436,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
               openBookmark: _openBookmark,
               deleteBookmark: _deleteBookmark,
               formatTime: _formatTime,
-              resolvedTitle: _resolvedTitle,
-              resolvedAuthor: _resolvedAuthor,
             ),
       ),
     );
@@ -477,44 +468,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       height: 74,
       borderRadius: BorderRadius.circular(10),
     );
-  }
-
-  List<_BookmarkBookGroup> _buildBookGroups() {
-    if (_bookmarks.isEmpty) {
-      return const <_BookmarkBookGroup>[];
-    }
-
-    final map = <String, List<Bookmark>>{};
-    for (final bookmark in _bookmarks) {
-      map.putIfAbsent(bookmark.bookId, () => <Bookmark>[]).add(bookmark);
-    }
-
-    final groups = <_BookmarkBookGroup>[];
-    for (final entry in map.entries) {
-      final items = entry.value.toList(growable: false);
-      final latest = _latestTime(items);
-      groups.add(
-        _BookmarkBookGroup(
-          bookId: entry.key,
-          book: _bookshelfIndex[entry.key],
-          bookmarks: items,
-          latestTime: latest,
-        ),
-      );
-    }
-
-    groups.sort((a, b) => b.latestTime.compareTo(a.latestTime));
-    return groups;
-  }
-
-  DateTime _latestTime(List<Bookmark> bookmarks) {
-    var latest = bookmarks.first.updatedAt;
-    for (final bookmark in bookmarks.skip(1)) {
-      if (bookmark.updatedAt.isAfter(latest)) {
-        latest = bookmark.updatedAt;
-      }
-    }
-    return latest;
   }
 
   String _formatTime(DateTime time) {
@@ -558,6 +511,10 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
         _bookmarks = _bookmarks
             .where((item) => item.id != bookmark.id)
             .toList(growable: false);
+        _groups = _bookmarksQueryService.buildGroups(
+          bookmarks: _bookmarks,
+          bookshelfIndex: _bookshelfIndex,
+        );
       });
       _showMessage('已删除灵感。');
       return true;
@@ -565,29 +522,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       _showMessage('删除失败，请稍后重试。');
       return false;
     }
-  }
-
-  String _resolvedTitle(
-    BookshelfBook? book, {
-    required List<Bookmark> fallbackBookmarks,
-  }) {
-    final rawTitle = (book?.title ?? '').trim();
-    if (rawTitle.isNotEmpty) {
-      return rawTitle;
-    }
-    final fallback = fallbackBookmarks.firstOrNull?.displaySnippet ?? '';
-    return fallback.isEmpty ? '未知书籍' : '已移除书籍';
-  }
-
-  String _resolvedAuthor(
-    BookshelfBook? book, {
-    required List<Bookmark> fallbackBookmarks,
-  }) {
-    final rawAuthor = (book?.author ?? '').trim();
-    if (rawAuthor.isNotEmpty) {
-      return rawAuthor;
-    }
-    return book == null ? '书籍已从书架移除' : '作者未知';
   }
 
   void _showMessage(String text) {
@@ -606,11 +540,9 @@ class _BookmarkBookDetailPage extends StatefulWidget {
     required this.openBookmark,
     required this.deleteBookmark,
     required this.formatTime,
-    required this.resolvedTitle,
-    required this.resolvedAuthor,
   });
 
-  final _BookmarkBookGroup group;
+  final BookmarkBookGroupData group;
   final Widget Function({
     String? realCoverUrl,
     String? title,
@@ -624,16 +556,6 @@ class _BookmarkBookDetailPage extends StatefulWidget {
   final void Function(Bookmark bookmark, BookshelfBook? book) openBookmark;
   final Future<bool> Function(Bookmark bookmark) deleteBookmark;
   final String Function(DateTime time) formatTime;
-  final String Function(
-    BookshelfBook? book, {
-    required List<Bookmark> fallbackBookmarks,
-  })
-  resolvedTitle;
-  final String Function(
-    BookshelfBook? book, {
-    required List<Bookmark> fallbackBookmarks,
-  })
-  resolvedAuthor;
 
   @override
   State<_BookmarkBookDetailPage> createState() =>
@@ -653,8 +575,8 @@ class _BookmarkBookDetailPageState extends State<_BookmarkBookDetailPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final book = widget.group.book;
-    final title = widget.resolvedTitle(book, fallbackBookmarks: _bookmarks);
-    final author = widget.resolvedAuthor(book, fallbackBookmarks: _bookmarks);
+    final title = widget.group.displayTitle;
+    final author = widget.group.displayAuthor;
     final chapters = _groupBookmarksByChapter(_bookmarks);
 
     return Scaffold(
@@ -670,7 +592,9 @@ class _BookmarkBookDetailPageState extends State<_BookmarkBookDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   widget.buildCover(
-                    realCoverUrl: book?.coverUrl,
+                    realCoverUrl:
+                        widget.group.displayState?.displayCover ??
+                        book?.coverUrl,
                     title: title,
                     author: author,
                     bookId: book?.bookId,
@@ -911,20 +835,6 @@ class _DetailTag extends StatelessWidget {
   }
 }
 
-class _BookmarkBookGroup {
-  const _BookmarkBookGroup({
-    required this.bookId,
-    required this.book,
-    required this.bookmarks,
-    required this.latestTime,
-  });
-
-  final String bookId;
-  final BookshelfBook? book;
-  final List<Bookmark> bookmarks;
-  final DateTime latestTime;
-}
-
 class _BookmarkChapterGroup {
   _BookmarkChapterGroup({
     required this.key,
@@ -935,8 +845,4 @@ class _BookmarkChapterGroup {
   final String key;
   final String title;
   final List<Bookmark> bookmarks;
-}
-
-extension<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

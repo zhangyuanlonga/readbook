@@ -16,6 +16,9 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
   Future<List<LocalBook>> getAllBooks() => _database.getAllLocalBooks();
 
   @override
+  Stream<List<LocalBook>> watchAllBooks() => _database.watchAllLocalBooks();
+
+  @override
   Future<LocalBook?> getBookById(String bookId) =>
       _database.getLocalBookById(bookId);
 
@@ -43,11 +46,13 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
       );
 
   @override
-  Future<LocalChapter?> getChapterMetaByIndex(String bookId, int chapterIndex) =>
-      _database.getLocalChapterMetaByIndex(
-        bookId: bookId,
-        chapterIndex: chapterIndex,
-      );
+  Future<LocalChapter?> getChapterMetaByIndex(
+    String bookId,
+    int chapterIndex,
+  ) => _database.getLocalChapterMetaByIndex(
+    bookId: bookId,
+    chapterIndex: chapterIndex,
+  );
 
   @override
   Future<void> updateChapterContent({

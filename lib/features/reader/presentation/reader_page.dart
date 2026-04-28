@@ -98,7 +98,9 @@ import '../application/reader_reading_record_coordinator.dart';
 import '../application/reader_screen_brightness_bridge.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
+import '../application/reader_feedback_service.dart';
 import '../application/reader_system_settings_service.dart';
+import '../application/reader_theme_mode_service.dart';
 import '../application/reader_typography_resolver.dart';
 import '../application/reader_typography_metrics_resolver.dart';
 import '../application/source_content_provider.dart';
@@ -229,6 +231,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderReadingRecordCoordinator();
   final ReaderScreenBrightnessBridge _screenBrightnessBridge =
       ReaderScreenBrightnessBridge.instance;
+  final ReaderFeedbackService _readerFeedbackService =
+      const ReaderFeedbackService();
+  final ReaderThemeModeService _readerThemeModeService =
+      const ReaderThemeModeService();
   final ReaderContentSessionResolver _contentSessionResolver =
       const ReaderContentSessionResolver();
   final ReaderSessionStateResolver _sessionStateResolver =
@@ -4743,47 +4749,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _toggleDayNightMode() async {
-    final isDarkMode = _settings.themeMode == ReaderThemeMode.dark;
-    final currentBackgroundImage = _settings.backgroundImageBase64?.trim();
-    if (!isDarkMode &&
-        currentBackgroundImage != null &&
-        currentBackgroundImage.isNotEmpty) {
-      _lightModeBackgroundImageBackup = currentBackgroundImage;
-    }
-
-    final nextSettings = switch (isDarkMode) {
-      true => _settings.copyWith(
-        themeMode: ReaderThemeMode.light,
-        backgroundStyle: ReaderBackgroundStyle.plain,
-        backgroundTone: ReaderBackgroundTone.surface,
-        backgroundImageBase64:
-            (_settings.backgroundImageBase64?.trim().isEmpty ?? true)
-                ? _lightModeBackgroundImageBackup
-                : _settings.backgroundImageBase64,
-      ),
-      false => _settings.copyWith(
-        themeMode: ReaderThemeMode.dark,
-        backgroundStyle: ReaderBackgroundStyle.plain,
-        backgroundTone: ReaderBackgroundTone.pureBlack,
-        clearBackgroundImage: true,
-      ),
-    };
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _settings = nextSettings;
-    });
-
-    await _preferencesService.saveSettings(nextSettings);
-    await ref
-        .read(appThemeModeProvider.notifier)
-        .setThemeMode(isDarkMode ? ThemeMode.light : ThemeMode.dark);
-  }
-
   Widget _buildTopActionButton({
     required String tooltip,
     required VoidCallback? onPressed,
@@ -6022,150 +5987,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _sourceId!.isEmpty ||
         _detailUrl == null ||
         _detailUrl!.isEmpty;
-  }
-
-  void _showMessage(
-    String text, {
-    Duration duration = _kReaderSnackDuration,
-    String? dedupeKey,
-  }) {
-    _showReaderSnackBar(text: text, duration: duration, dedupeKey: dedupeKey);
-  }
-
-  void _showChapterBoundaryHint({required bool isFirst}) {
-    if (_isBackNavigationInteractionCoolingDown) {
-      return;
-    }
-    _showMessage(
-      isFirst ? '已经是第一章。' : '已经是最后一章。',
-      duration: _kReaderBoundarySnackDuration,
-      dedupeKey: isFirst ? 'boundary_first_chapter' : 'boundary_last_chapter',
-    );
-  }
-
-  void _showReaderSnackBar({
-    required String text,
-    Duration duration = _kReaderSnackDuration,
-    String? dedupeKey,
-    String? actionLabel,
-    VoidCallback? onActionPressed,
-    bool replaceCurrent = true,
-  }) {
-    if (!mounted) {
-      return;
-    }
-
-    final now = DateTime.now();
-    final resolvedKey = (dedupeKey ?? text).trim();
-    if (resolvedKey.isNotEmpty &&
-        _lastReaderSnackKey == resolvedKey &&
-        _lastReaderSnackAt != null &&
-        now.difference(_lastReaderSnackAt!) < _kReaderSnackDedupWindow) {
-      return;
-    }
-    if (resolvedKey.isNotEmpty) {
-      _lastReaderSnackKey = resolvedKey;
-      _lastReaderSnackAt = now;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    if (replaceCurrent) {
-      messenger.hideCurrentSnackBar();
-    }
-
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    SnackBarAction? snackAction;
-    final normalizedActionLabel = actionLabel?.trim() ?? '';
-    if (normalizedActionLabel.isNotEmpty && onActionPressed != null) {
-      snackAction = SnackBarAction(
-        label: normalizedActionLabel,
-        textColor: colorScheme.primary,
-        onPressed: onActionPressed,
-      );
-    }
-
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 12 + bottomSafe),
-        elevation: 0,
-        duration: duration,
-        dismissDirection: DismissDirection.down,
-        backgroundColor: colorScheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-          ),
-        ),
-        content: Text(
-          text,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        action: snackAction,
-      ),
-    );
-  }
-
-  void _recordReaderFailure({required String message, ErrorCode? errorCode}) {
-    _readerErrorCenterService.addFailure(
-      bookId: _currentBookId,
-      chapterId: _chapterId,
-      chapterTitle: _chapterTitle ?? '',
-      message: message,
-      bookTitle: _bookTitle,
-      sourceId: _sourceId,
-      detailUrl: _detailUrl,
-      chapterUrl: _chapterUrl,
-      errorCode: errorCode,
-    );
-  }
-
-  void _maybePromptSwitchSourceForMissingSource(ErrorCode? code) {
-    if (!_canSwitchSource) {
-      return;
-    }
-    if (code != ErrorCode.unknownSource ||
-        !mounted ||
-        _hasPromptedMissingSourceSwitch ||
-        _isSwitchSourceLoading) {
-      return;
-    }
-    _hasPromptedMissingSourceSwitch = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || _isSwitchSourceLoading) {
-        return;
-      }
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('当前书源不可用'),
-            content: const Text('该书源可能已被删除或停用，是否现在切换到其他书源？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('稍后'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('立即换源'),
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed == true && mounted) {
-        await _showSwitchSourceSheet();
-      }
-    });
   }
 
   Future<void> _showSettingsSheet({

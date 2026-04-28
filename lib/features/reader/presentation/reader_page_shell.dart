@@ -456,4 +456,172 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       _showMessage('已停止自动阅读。');
     }
   }
+
+  Future<void> _toggleDayNightMode() async {
+    final result = _readerThemeModeService.buildToggleResult(
+      settings: _settings,
+      lightModeBackgroundImageBackup: _lightModeBackgroundImageBackup,
+    );
+    if (!mounted) {
+      return;
+    }
+    _lightModeBackgroundImageBackup = result.nextLightModeBackgroundImageBackup;
+    setState(() {
+      _settings = result.nextSettings;
+    });
+    await _preferencesService.saveSettings(result.nextSettings);
+    await ref
+        .read(appThemeModeProvider.notifier)
+        .setThemeMode(result.nextAppThemeMode);
+  }
+
+  void _showMessage(
+    String text, {
+    Duration duration = _ReaderPageState._kReaderSnackDuration,
+    String? dedupeKey,
+  }) {
+    _showReaderSnackBar(text: text, duration: duration, dedupeKey: dedupeKey);
+  }
+
+  void _showChapterBoundaryHint({required bool isFirst}) {
+    if (_isBackNavigationInteractionCoolingDown) {
+      return;
+    }
+    _showMessage(
+      _readerFeedbackService.chapterBoundaryMessage(isFirst: isFirst),
+      duration: _ReaderPageState._kReaderBoundarySnackDuration,
+      dedupeKey: isFirst ? 'boundary_first_chapter' : 'boundary_last_chapter',
+    );
+  }
+
+  void _showReaderSnackBar({
+    required String text,
+    Duration duration = _ReaderPageState._kReaderSnackDuration,
+    String? dedupeKey,
+    String? actionLabel,
+    VoidCallback? onActionPressed,
+    bool replaceCurrent = true,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    final decision = _readerFeedbackService.resolveSnackDecision(
+      text: text,
+      dedupeKey: dedupeKey,
+      now: DateTime.now(),
+      dedupeWindow: _ReaderPageState._kReaderSnackDedupWindow,
+      currentState: ReaderSnackDedupState(
+        lastAt: _lastReaderSnackAt,
+        lastKey: _lastReaderSnackKey,
+      ),
+    );
+    if (!decision.shouldShow) {
+      return;
+    }
+    _lastReaderSnackAt = decision.nextState.lastAt;
+    _lastReaderSnackKey = decision.nextState.lastKey;
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (replaceCurrent) {
+      messenger.hideCurrentSnackBar();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    SnackBarAction? snackAction;
+    final normalizedActionLabel = actionLabel?.trim() ?? '';
+    if (normalizedActionLabel.isNotEmpty && onActionPressed != null) {
+      snackAction = SnackBarAction(
+        label: normalizedActionLabel,
+        textColor: colorScheme.primary,
+        onPressed: onActionPressed,
+      );
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 12 + bottomSafe),
+        elevation: 0,
+        duration: duration,
+        dismissDirection: DismissDirection.down,
+        backgroundColor: colorScheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
+        ),
+        content: Text(
+          text,
+          style: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        action: snackAction,
+      ),
+    );
+  }
+
+  void _recordReaderFailure({required String message, ErrorCode? errorCode}) {
+    _readerFeedbackService.recordFailure(
+      readerErrorCenterService: _readerErrorCenterService,
+      bookId: _currentBookId,
+      chapterId: _chapterId,
+      chapterTitle: _chapterTitle ?? '',
+      message: message,
+      bookTitle: _bookTitle,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+      chapterUrl: _chapterUrl,
+      errorCode: errorCode,
+    );
+  }
+
+  void _maybePromptSwitchSourceForMissingSource(ErrorCode? code) {
+    final shouldPrompt = _readerFeedbackService
+        .shouldPromptSwitchSourceForMissingSource(
+          canSwitchSource: _canSwitchSource,
+          code: code,
+          mounted: mounted,
+          hasPromptedMissingSourceSwitch: _hasPromptedMissingSourceSwitch,
+          isSwitchSourceLoading: _isSwitchSourceLoading,
+        );
+    if (!shouldPrompt) {
+      return;
+    }
+    _hasPromptedMissingSourceSwitch = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _isSwitchSourceLoading) {
+        return;
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('当前书源不可用'),
+            content: const Text('该书源可能已被删除或停用，是否现在切换到其他书源？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('稍后'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('立即换源'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed == true && mounted) {
+        await _showSwitchSourceSheet();
+      }
+    });
+  }
 }

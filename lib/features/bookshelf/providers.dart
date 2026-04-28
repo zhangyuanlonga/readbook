@@ -19,6 +19,7 @@ import '../source/application/source_runtime_facade.dart';
 import '../source/application/source_login_state_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
+import 'application/bookshelf_page_route_service.dart';
 import 'application/bookshelf_presentation_query_service.dart';
 import 'application/bookshelf_reader_open_service.dart';
 import 'application/bookshelf_service.dart';
@@ -30,7 +31,7 @@ class BookshelfPageDependencies {
     required this.bookshelfService,
     required this.systemSettingsService,
     required this.readerPreferencesService,
-    required this.readerEntryRouteResolver,
+    required this.pageRouteService,
     required this.localBookIndexService,
     required this.bookDetailService,
     required this.readerOpenService,
@@ -45,7 +46,7 @@ class BookshelfPageDependencies {
   final BookshelfService bookshelfService;
   final BookshelfSystemSettingsService systemSettingsService;
   final ReaderPreferencesService readerPreferencesService;
-  final ReaderEntryRouteResolver readerEntryRouteResolver;
+  final BookshelfPageRouteService pageRouteService;
   final LocalBookIndexService localBookIndexService;
   final BookDetailService bookDetailService;
   final BookshelfReaderOpenService readerOpenService;
@@ -140,6 +141,19 @@ final bookshelfReaderOpenServiceProvider = Provider<BookshelfReaderOpenService>(
   },
 );
 
+final bookshelfPageRouteServiceProvider = Provider<BookshelfPageRouteService>((
+  ref,
+) {
+  return BookshelfPageRouteService(
+    readerPreferencesService: ref.watch(
+      bookshelfReaderPreferencesServiceProvider,
+    ),
+    readerEntryRouteResolver: ref.watch(
+      bookshelfReaderEntryRouteResolverProvider,
+    ),
+  );
+});
+
 final localBookImportServiceProvider = Provider<LocalBookImportService>((ref) {
   return LocalBookImportService(
     localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
@@ -189,9 +203,7 @@ final bookshelfPageDependenciesProvider = Provider<BookshelfPageDependencies>((
     readerPreferencesService: ref.watch(
       bookshelfReaderPreferencesServiceProvider,
     ),
-    readerEntryRouteResolver: ref.watch(
-      bookshelfReaderEntryRouteResolverProvider,
-    ),
+    pageRouteService: ref.watch(bookshelfPageRouteServiceProvider),
     localBookIndexService: ref.watch(bookshelfLocalBookIndexServiceProvider),
     bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
     readerOpenService: ref.watch(bookshelfReaderOpenServiceProvider),

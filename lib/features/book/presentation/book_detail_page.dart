@@ -32,7 +32,6 @@ import '../../../domain/entities/reading_progress.dart';
 import '../providers.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
-import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/reader_catalog_search_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_reader_identity.dart';
@@ -55,6 +54,7 @@ import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
 import '../application/book_detail_service.dart';
+import '../application/book_detail_read_route_service.dart';
 import '../application/book_local_metadata_service.dart';
 import '../application/book_metadata_edit_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
@@ -221,8 +221,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final ReaderPreferencesService _readerPreferencesService;
   late final ReadingRecordService _readingRecordService;
   late final LocalBookIndexService _localBookIndexService;
-  final ReaderEntryRouteResolver _readerEntryRouteResolver =
-      const ReaderEntryRouteResolver();
+  late final BookDetailReadRouteService _readRouteService;
   late final SourceRuntimeTaskConflictService _taskConflictService;
   late final SourceRuntimeSchedulerService _taskScheduler;
   final TextEditingController _editTitleController = TextEditingController();
@@ -256,6 +255,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _readerPreferencesService = dependencies.readerPreferencesService;
     _readingRecordService = dependencies.readingRecordService;
     _localBookIndexService = dependencies.localBookIndexService;
+    _readRouteService = dependencies.readRouteService;
     final detailService =
         widget.bookDetailService ?? dependencies.bookDetailService;
     _sourceContentProvider = SourceContentProvider(
@@ -1769,22 +1769,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   Chapter? _resolveLatestChapter(BookDetailLoadResult result) {
-    final readableChapters = _readableChapters(result.chapters);
-    if (readableChapters.isEmpty) {
-      return null;
-    }
-
-    final chapter = readableChapters.last;
-    return _normalizeText(chapter.title).isEmpty ? null : chapter;
+    return _readRouteService.latestReadableChapter(result.chapters);
   }
 
   List<Chapter> _readableChapters(List<Chapter> chapters) {
-    return chapters
-        .where(
-          (chapter) =>
-              !chapter.isVolume && chapter.chapterUrl.trim().isNotEmpty,
-        )
-        .toList(growable: false);
+    return _readRouteService.readableChapters(chapters);
   }
 
   String? _resolveIntro(String? rawIntro) {
@@ -2715,12 +2704,16 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _cancelBackgroundRefreshConflictForCurrentBook(
       byScene: SourceRuntimeConflictScene.reader,
     );
-    final route = _readerEntryRouteResolver.buildRouteFromChapter(
+    final route = _readRouteService.buildChapterRoute(
       bookId: _activeBookId,
       sourceId: sourceId,
       detailUrl: detailUrl,
       chapter: chapter,
     );
+    if (route == null) {
+      _showMessage('当前章节暂不可阅读。');
+      return;
+    }
 
     context.push(route);
   }

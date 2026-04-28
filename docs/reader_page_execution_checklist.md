@@ -281,17 +281,27 @@
 - [x] 抽出 `_toggleAutoReadSession`
 - [x] 抽出 `_startAutoReadSession`
 - [x] 抽出 `_stopAutoReadSession`
-- [ ] 抽出 `_toggleDayNightMode`
-- [ ] 抽出 `_showMessage`
-- [ ] 抽出 `_showChapterBoundaryHint`
-- [ ] 抽出 `_showReaderSnackBar`
-- [ ] 抽出 `_recordReaderFailure`
-- [ ] 抽出 `_maybePromptSwitchSourceForMissingSource`
+- [x] 抽出 `_toggleDayNightMode`
+- [x] 抽出 `_showMessage`
+- [x] 抽出 `_showChapterBoundaryHint`
+- [x] 抽出 `_showReaderSnackBar`
+- [x] 抽出 `_recordReaderFailure`
+- [x] 抽出 `_maybePromptSwitchSourceForMissingSource`
 
 完成标准：
 
 - 页面壳层、副作用和用户提示不再散落在主文件
 - 主页面只保留 UI bind 与 event dispatch
+
+本次新增 application 支撑：
+
+- `lib/features/reader/application/reader_feedback_service.dart`
+- `lib/features/reader/application/reader_theme_mode_service.dart`
+
+本次说明：
+
+- 页面主文件中的昼夜切换、提示去重、错误记录、缺源换源提示已迁到 `reader_page_shell.dart`
+- 其中提示与错误决策已下沉到 application service，不再由主文件直接维护
 
 验收方式：
 
@@ -305,7 +315,86 @@
 
 ---
 
-## 8. 最终收尾标准
+## 8. 当前剩余结构任务
+
+下面这些任务是当前 `reader` 线在阶段 2 内的显式剩余项。  
+后续执行时，先更新本清单，再同步回 `docs/project_architecture_unification_plan.md` 的阶段 2 `reader` 项。
+
+### 8.1 生命周期与依赖绑定收口
+
+- [ ] 继续压薄 `_bindDependencies()`
+- [ ] 继续压薄 `initState()`
+- [ ] 继续压薄 `dispose()`
+- [ ] 明确哪些副作用应下沉到独立 flow / coordinator
+
+完成标准：
+
+- 主文件只保留最少量生命周期入口
+- 依赖绑定不再继续膨胀
+
+### 8.2 顶层 Build 收口
+
+- [ ] 拆分 `_buildReaderContent()`
+- [ ] 拆分 `_buildBody()`
+- [ ] 拆分 `_buildReaderList()`
+- [ ] 拆分 `_buildMangaReader()`
+- [ ] 拆分 `_buildPagedReader()`
+- [ ] 让主文件只负责选择渲染分支，不直接承载大块 UI 组装
+
+完成标准：
+
+- 主文件主要只保留“选择哪种阅读视图”的顶层编排
+- 大块 build 逻辑转移到独立 widget / composer
+
+### 8.3 背景与资源型 UI 状态下沉
+
+- [ ] 下沉背景预设加载逻辑
+- [ ] 下沉背景预览缓存逻辑
+- [ ] 下沉自定义背景文件管理逻辑
+- [ ] 下沉背景 preset bytes/base64 管理逻辑
+
+完成标准：
+
+- 主文件不再直接维护这组资源缓存细节
+- 背景相关状态有独立管理入口
+
+### 8.4 设置面板 Glue 下沉
+
+- [ ] 拆分 `_buildFloatingReaderSettingsSheet()`
+- [ ] 下沉设置项显示格式化辅助方法
+- [ ] 下沉设置项分组、展示和交互 glue
+
+完成标准：
+
+- 设置 UI 由独立 builder / presenter 负责
+- 主文件只传状态和 callback
+
+### 8.5 阅读内容构建辅助收口
+
+- [ ] 继续下沉分页阅读残余 render helper
+- [ ] 继续下沉滚动阅读残余 render helper
+- [ ] 继续下沉漫画阅读残余 render helper
+- [ ] 继续下沉正文 block / paragraph 展示辅助
+
+完成标准：
+
+- 主文件不再夹杂大量 render helper
+- 内容构建辅助逻辑集中到 presentation 子模块
+
+### 8.6 最终收尾验证
+
+- [ ] 对照“最终收尾标准”逐项关闭
+- [ ] 回填本清单和总计划中的 reader 阶段状态
+- [ ] 补齐本轮 analyze / test / 手工验证记录
+
+完成标准：
+
+- `reader_page.dart` 接近“页面壳 + 顶层 build + callback bind”
+- 可以在总计划中将阶段 2 的 `reader` 项正式打勾
+
+---
+
+## 9. 最终收尾标准
 
 当下面条件全部满足时，可认定 `reader_page.dart` 拆解完成：
 
@@ -323,7 +412,7 @@
 
 ---
 
-## 9. 每阶段验收模板
+## 10. 每阶段验收模板
 
 每个阶段完成后都应补下面记录：
 
@@ -337,7 +426,7 @@
 
 ---
 
-## 10. 当前建议执行顺序
+## 11. 当前建议执行顺序
 
 建议按下面顺序推进，不要来回切：
 
@@ -354,7 +443,7 @@
 
 ---
 
-## 11. 文档维护规则
+## 12. 文档维护规则
 
 - 本文档是 Reader 拆解的唯一执行清单
 - 新增 Reader 拆解任务，优先补到本文档而不是散落在聊天里

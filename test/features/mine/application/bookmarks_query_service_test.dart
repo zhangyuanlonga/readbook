@@ -22,6 +22,8 @@ void main() {
 
     expect(result.bookmarks, hasLength(1));
     expect(result.bookshelfIndex['book_1']?.title, '书架书');
+    expect(result.groups, hasLength(1));
+    expect(result.groups.first.displayTitle, '书架书');
   });
 }
 

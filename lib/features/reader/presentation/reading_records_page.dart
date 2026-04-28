@@ -12,18 +12,16 @@ import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
-import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
-import '../../book/presentation/book_detail_route.dart';
-import '../../book/application/book_metadata_presentation_resolver.dart';
+import '../../book/application/book_display_state.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
-import '../application/local/local_reader_identity.dart';
+import '../application/reading_records_page_dependencies_provider.dart';
 import '../application/reading_book_status_service.dart';
 import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_preferences_service.dart';
@@ -41,16 +39,22 @@ class ReadingRecordsPage extends ConsumerStatefulWidget {
     ReaderPreferencesService? preferencesService,
     ReaderSystemSettingsService? readerSystemSettingsService,
     ReadingBookStatusService? readingBookStatusService,
+    ReadingRecordOpenRouteService? recordOpenRouteService,
+    ReadingRecordsPresentationService? presentationService,
     this.initialPeriod,
   }) : _readingRecordService = readingRecordService,
        _preferencesService = preferencesService,
        _readerSystemSettingsService = readerSystemSettingsService,
-       _readingBookStatusService = readingBookStatusService;
+       _readingBookStatusService = readingBookStatusService,
+       _recordOpenRouteService = recordOpenRouteService,
+       _presentationService = presentationService;
 
   final ReadingRecordService? _readingRecordService;
   final ReaderPreferencesService? _preferencesService;
   final ReaderSystemSettingsService? _readerSystemSettingsService;
   final ReadingBookStatusService? _readingBookStatusService;
+  final ReadingRecordOpenRouteService? _recordOpenRouteService;
+  final ReadingRecordsPresentationService? _presentationService;
   final ReadingRecordsPeriod? initialPeriod;
 
   @override
@@ -61,18 +65,13 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   static const double _kStatsPageBottomGap = 24;
 
   late final ReadingRecordService _readingRecordService;
-  final ReadingRecordsQueryService _readingRecordsQueryService =
-      const ReadingRecordsQueryService();
-  final ReaderEntryRouteResolver _readerEntryRouteResolver =
-      const ReaderEntryRouteResolver();
-  late final ReaderPreferencesService _preferencesService;
+  late final ReadingRecordsQueryService _readingRecordsQueryService;
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final ReadingBookStatusService _readingBookStatusService;
+  late final ReadingRecordOpenRouteService _recordOpenRouteService;
+  late final ReadingRecordsPresentationService _presentationService;
   late final Stream<bool> _readRecordEnabledStream;
-  final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
-      const BookMetadataPresentationResolver();
-  final ReadingStatsWorkIdentityService _workIdentityService =
-      const ReadingStatsWorkIdentityService();
+  late final ReadingStatsWorkIdentityService _workIdentityService;
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
       const <String, BookMetadataOverride>{};
@@ -85,14 +84,27 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   @override
   void initState() {
     super.initState();
+    final dependencies = ref.read(readingRecordsPageDependenciesProvider);
     _readingRecordService =
-        widget._readingRecordService ?? ReadingRecordService();
-    _preferencesService =
-        widget._preferencesService ?? ReaderPreferencesService();
+        widget._readingRecordService ?? dependencies.readingRecordService;
+    _readingRecordsQueryService = dependencies.readingRecordsQueryService;
     _readerSystemSettingsService =
-        widget._readerSystemSettingsService ?? ReaderSystemSettingsService();
+        widget._readerSystemSettingsService ??
+        dependencies.readerSystemSettingsService;
     _readingBookStatusService =
-        widget._readingBookStatusService ?? ReadingBookStatusService();
+        widget._readingBookStatusService ??
+        dependencies.readingBookStatusService;
+    _recordOpenRouteService =
+        widget._recordOpenRouteService ??
+        (widget._preferencesService == null
+            ? dependencies.recordOpenRouteService
+            : ReadingRecordOpenRouteService(
+              preferencesService: widget._preferencesService!,
+              readerEntryRouteResolver: const ReaderEntryRouteResolver(),
+            ));
+    _presentationService =
+        widget._presentationService ?? dependencies.presentationService;
+    _workIdentityService = dependencies.workIdentityService;
     _period = widget.initialPeriod ?? _period;
     _readRecordEnabledStream =
         _readerSystemSettingsService.watchReadRecordEnabled();
@@ -186,55 +198,11 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   }
 
   Future<void> _openRecord(ReadingRecord record) async {
-    final progress = await _preferencesService.loadProgress(record.bookId);
+    final route = await _recordOpenRouteService.resolveRoute(record);
     if (!mounted) {
       return;
     }
-
-    final chapterId =
-        progress?.chapterId.trim().isNotEmpty == true
-            ? progress!.chapterId
-            : (record.lastChapterId?.trim().isNotEmpty == true
-                ? record.lastChapterId!
-                : '');
-    final chapterUrl =
-        progress?.chapterUrl.trim().isNotEmpty == true
-            ? progress!.chapterUrl
-            : (record.lastChapterUrl?.trim().isNotEmpty == true
-                ? record.lastChapterUrl!
-                : '');
-    final chapterTitle =
-        progress?.chapterTitle.trim().isNotEmpty == true
-            ? progress!.chapterTitle
-            : (record.lastChapterTitle?.trim().isNotEmpty == true
-                ? record.lastChapterTitle!
-                : record.bookTitle);
-    final chapterIndex = progress?.chapterIndex ?? record.lastChapterIndex;
-
-    if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route = _readerEntryRouteResolver.buildChapterRoute(
-        bookId: record.bookId,
-        chapterId: chapterId,
-        chapterUrl: chapterUrl,
-        chapterTitle: chapterTitle,
-        sourceId: record.sourceId,
-        detailUrl: record.detailUrl,
-        chapterIndex: chapterIndex,
-      );
-      context.push(route);
-      return;
-    }
-
-    context.push(
-      buildBookDetailRoute(
-        bookId: record.bookId,
-        sourceId: record.sourceId,
-        detailUrl: record.detailUrl,
-        title: record.bookTitle,
-        author: record.bookAuthor,
-        coverUrl: record.coverUrl,
-      ),
-    );
+    context.push(route);
   }
 
   Future<void> _openDistributionCalendarSheet(
@@ -315,8 +283,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                 sessionSnapshot.data ??
                                 const <ReadingRecordSession>[];
                             return StreamBuilder<List<LocalBook>>(
-                              stream:
-                                  _readingBookStatusService.watchLocalBooks(),
+                              stream: _presentationService.watchLocalBooks(),
                               builder: (context, localBooksSnapshot) {
                                 final localBooks =
                                     localBooksSnapshot.data ??
@@ -325,8 +292,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                   List<BookMetadataOverride>
                                 >(
                                   stream:
-                                      AppDatabase.instance
-                                          .watchBookMetadataOverrides(),
+                                      _presentationService
+                                          .watchMetadataOverrides(),
                                   builder: (context, overrideSnapshot) {
                                     final overrides =
                                         overrideSnapshot.data ??
@@ -1948,39 +1915,6 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
         : '${hours.toStringAsFixed(1)}时';
   }
 
-  BookMetadataPresentation _resolvePresentation({
-    required String bookId,
-    required String? sourceId,
-    required String? detailUrl,
-    required String? title,
-    String? author,
-    String? intro,
-    String? coverUrl,
-  }) {
-    final normalizedBookId = bookId.trim();
-    final normalizedSourceId = (sourceId ?? '').trim();
-    final normalizedDetailUrl = (detailUrl ?? '').trim();
-    final localBook =
-        normalizedSourceId == LocalReaderIdentity.localSourceId
-            ? _localBooksById[normalizedBookId]
-            : null;
-    final overrideKey =
-        normalizedSourceId == LocalReaderIdentity.localSourceId
-            ? BookMetadataOverride.localTargetKey(normalizedBookId)
-            : BookMetadataOverride.remoteTargetKey(
-              sourceId: normalizedSourceId,
-              detailUrl: normalizedDetailUrl,
-            );
-    return _bookMetadataPresentationResolver.resolve(
-      fallbackTitle: title,
-      fallbackAuthor: author,
-      fallbackIntro: intro,
-      realCoverUrl: coverUrl,
-      localBook: localBook,
-      metadataOverride: _metadataOverridesByTargetKey[overrideKey],
-    );
-  }
-
   Widget _buildDurationRankingSection(
     List<ReadingDurationRankingItem> rankings,
   ) {
@@ -1998,14 +1932,12 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
           Builder(
             builder: (context) {
               final item = visibleItems[index];
-              final presentation = _resolvePresentation(
-                bookId: item.record.bookId,
-                sourceId: item.record.sourceId,
-                detailUrl: item.record.detailUrl,
-                title: item.record.bookTitle,
-                author: item.record.bookAuthor,
-                coverUrl: item.record.coverUrl,
-              );
+              final presentation = _presentationService
+                  .resolveRecordDisplayState(
+                    record: item.record,
+                    localBooksById: _localBooksById,
+                    metadataOverridesByTargetKey: _metadataOverridesByTargetKey,
+                  );
               return _buildRecordSurface(
                 InkWell(
                   borderRadius: BorderRadius.circular(18),
@@ -2621,6 +2553,28 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       width: width,
       height: height,
       borderRadius: BorderRadius.circular(10),
+    );
+  }
+
+  BookDisplayState _resolvePresentation({
+    required String bookId,
+    required String? sourceId,
+    required String? detailUrl,
+    required String? title,
+    String? author,
+    String? intro,
+    String? coverUrl,
+  }) {
+    return _presentationService.resolveSnapshotDisplayState(
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      title: title,
+      author: author,
+      intro: intro,
+      coverUrl: coverUrl,
+      localBooksById: _localBooksById,
+      metadataOverridesByTargetKey: _metadataOverridesByTargetKey,
     );
   }
 
