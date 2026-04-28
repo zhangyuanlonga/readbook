@@ -321,18 +321,12 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
       return;
     }
 
-    final visibleRanges = _visibleUnderlineRanges(text, start, end);
-    if (visibleRanges.isEmpty) {
-      return;
-    }
-    final boxes = <TextBox>[];
-    for (final range in visibleRanges) {
-      boxes.addAll(
-        textPainter.getBoxesForSelection(
-          TextSelection(baseOffset: range.start, extentOffset: range.end),
-        ),
-      );
-    }
+    final boxes = _visibleUnderlineBoxes(
+      text: text,
+      textPainter: textPainter,
+      start: start,
+      end: end,
+    );
     if (boxes.isEmpty) {
       return;
     }
@@ -446,30 +440,80 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
   }
 }
 
-List<ReaderWavyRange> _visibleUnderlineRanges(String text, int start, int end) {
-  final ranges = <ReaderWavyRange>[];
+List<TextBox> _visibleUnderlineBoxes({
+  required String text,
+  required TextPainter textPainter,
+  required int start,
+  required int end,
+}) {
+  final boxes = <TextBox>[];
   final safeStart = _clampInt(start, 0, text.length);
   final safeEnd = _clampInt(end, 0, text.length);
   if (safeEnd <= safeStart) {
-    return ranges;
+    return boxes;
   }
 
-  int? rangeStart;
   for (var index = safeStart; index < safeEnd; index += 1) {
     final char = text[index];
-    if (_isUnderlineVisibleCharacter(char)) {
-      rangeStart ??= index;
+    if (!_isUnderlineVisibleCharacter(char)) {
       continue;
     }
-    if (rangeStart != null) {
-      ranges.add(ReaderWavyRange(rangeStart, index));
-      rangeStart = null;
+    boxes.addAll(
+      textPainter.getBoxesForSelection(
+        TextSelection(baseOffset: index, extentOffset: index + 1),
+      ),
+    );
+  }
+  if (boxes.length <= 1) {
+    return boxes;
+  }
+
+  final merged = <TextBox>[];
+  Rect? currentRect;
+  TextDirection? currentDirection;
+  for (final box in boxes) {
+    final rect = box.toRect();
+    if (currentRect == null) {
+      currentRect = rect;
+      currentDirection = box.direction;
+      continue;
     }
+    final verticallyOverlaps =
+        currentRect.bottom > rect.top && currentRect.top < rect.bottom;
+    final horizontalGap = rect.left - currentRect.right;
+    if (verticallyOverlaps && horizontalGap <= 3.5) {
+      currentRect = Rect.fromLTRB(
+        currentRect.left,
+        math.min(currentRect.top, rect.top),
+        rect.right,
+        math.max(currentRect.bottom, rect.bottom),
+      );
+      continue;
+    }
+    merged.add(
+      TextBox.fromLTRBD(
+        currentRect.left,
+        currentRect.top,
+        currentRect.right,
+        currentRect.bottom,
+        currentDirection ?? TextDirection.ltr,
+      ),
+    );
+    currentRect = rect;
+    currentDirection = box.direction;
   }
-  if (rangeStart != null) {
-    ranges.add(ReaderWavyRange(rangeStart, safeEnd));
+  if (currentRect != null) {
+    merged.add(
+      TextBox.fromLTRBD(
+        currentRect.left,
+        currentRect.top,
+        currentRect.right,
+        currentRect.bottom,
+        currentDirection ?? TextDirection.ltr,
+      ),
+    );
   }
-  return ranges;
+  return merged;
 }
 
 bool _isUnderlineVisibleCharacter(String char) {

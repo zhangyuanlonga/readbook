@@ -101,6 +101,7 @@ void main() {
           paragraphIndent: 2,
           letterSpacing: 0.12,
           textFullJustifyEnabled: true,
+          textBottomJustifyEnabled: true,
           fontWeightLevel: ReaderFontWeightLevel.medium,
           fontWeightValue: 600,
           fontSource: ReaderFontSource.system,

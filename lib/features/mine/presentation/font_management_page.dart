@@ -7,12 +7,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../domain/entities/reader_settings.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../reader/application/reader_font_registry_service.dart';
+import '../../reader/application/reader_preferences_service.dart';
 import '../application/advanced_theme_provider.dart';
 
 class FontManagementPage extends ConsumerStatefulWidget {
@@ -25,12 +28,15 @@ class FontManagementPage extends ConsumerStatefulWidget {
 class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   final ReaderFontRegistryService _fontRegistryService =
       ReaderFontRegistryService();
+  final ReaderPreferencesService _readerPreferencesService =
+      ReaderPreferencesService();
 
   bool _isLoading = true;
   bool _isImporting = false;
   bool _isConsumingExternalImportPayloads = false;
   String? _errorText;
   List<ReaderCustomFontEntry> _fonts = const [];
+  ReaderSettings _readerSettings = const ReaderSettings();
   StreamSubscription<IncomingExternalImportPayload>? _importSubscription;
 
   @override
@@ -67,11 +73,13 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     });
     try {
       final fonts = await _fontRegistryService.listRegisteredFonts();
+      final readerSettings = await _readerPreferencesService.loadSettings();
       if (!mounted) {
         return;
       }
       setState(() {
         _fonts = fonts;
+        _readerSettings = readerSettings;
       });
     } catch (error) {
       if (!mounted) {
@@ -193,6 +201,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
@@ -278,15 +287,24 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                         else ...[
                           _buildLibraryHeader(context),
                           const SizedBox(height: 10),
-                          if (_fonts.isEmpty)
-                            _buildEmptyLibraryCard(context)
-                          else
-                            ..._fonts.map(
-                              (font) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _buildFontCard(context, font),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildSystemDefaultFontCard(
+                              context,
+                              interfaceFontSettings: interfaceFontSettings,
+                            ),
+                          ),
+                          ..._fonts.map(
+                            (font) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _buildFontCard(
+                                context,
+                                font,
+                                interfaceFontSettings: interfaceFontSettings,
                               ),
                             ),
+                          ),
+                          if (_fonts.isEmpty) _buildEmptyLibraryCard(context),
                         ],
                       ],
                     ),
@@ -458,13 +476,131 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     );
   }
 
-  Widget _buildFontCard(BuildContext context, ReaderCustomFontEntry font) {
+  Widget _buildSystemDefaultFontCard(
+    BuildContext context, {
+    required AppInterfaceFontSettings interfaceFontSettings,
+  }) {
+    final isReaderDefault =
+        _readerSettings.fontSource == ReaderFontSource.system &&
+        _readerSettings.systemFontPreset == ReaderSystemFontPreset.defaultSans;
+    final isInterfaceDefault =
+        interfaceFontSettings.fontSource == AppInterfaceFontSource.system &&
+        interfaceFontSettings.systemFontPreset ==
+            AppInterfaceSystemFontPreset.defaultSans;
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '系统默认字体',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '系统内置',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'set_reader_default') {
+                      unawaited(_setReaderDefaultSystemFont());
+                    }
+                    if (value == 'set_interface_default') {
+                      unawaited(_setInterfaceDefaultSystemFont());
+                    }
+                  },
+                  itemBuilder:
+                      (context) => const [
+                        PopupMenuItem<String>(
+                          value: 'set_reader_default',
+                          child: Text('设为阅读默认'),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'set_interface_default',
+                          child: Text('设为界面默认'),
+                        ),
+                      ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '阅读预览',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '今天的阅读不只是在翻页，也是在塑造自己的语言节奏。',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (isReaderDefault) const _FontMetaChip(text: '阅读默认'),
+                if (isInterfaceDefault) const _FontMetaChip(text: '界面默认'),
+                const _FontMetaChip(text: '系统内置'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFontCard(
+    BuildContext context,
+    ReaderCustomFontEntry font, {
+    required AppInterfaceFontSettings interfaceFontSettings,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final file = File(font.filePath);
     final exists = file.existsSync();
     final importedAt = DateTime.fromMillisecondsSinceEpoch(
       font.importedAtEpochMs,
     );
+    final isReaderDefault =
+        _readerSettings.fontSource == ReaderFontSource.custom &&
+        _readerSettings.fontFamilyKey == font.fontFamilyKey;
+    final isInterfaceDefault =
+        interfaceFontSettings.fontSource == AppInterfaceFontSource.custom &&
+        interfaceFontSettings.fontFamilyKey == font.fontFamilyKey;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -500,6 +636,12 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
+                    if (value == 'set_reader_default') {
+                      unawaited(_setReaderDefaultCustomFont(font));
+                    }
+                    if (value == 'set_interface_default') {
+                      unawaited(_setInterfaceDefaultCustomFont(font));
+                    }
                     if (value == 'rename') {
                       unawaited(_renameFont(font));
                     }
@@ -509,6 +651,14 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                   },
                   itemBuilder:
                       (context) => const [
+                        PopupMenuItem<String>(
+                          value: 'set_reader_default',
+                          child: Text('设为阅读默认'),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'set_interface_default',
+                          child: Text('设为界面默认'),
+                        ),
                         PopupMenuItem<String>(
                           value: 'rename',
                           child: Text('重命名'),
@@ -555,7 +705,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _FontMetaChip(text: '阅读正文'),
+                if (isReaderDefault) const _FontMetaChip(text: '阅读默认'),
+                if (isInterfaceDefault) const _FontMetaChip(text: '界面默认'),
                 _FontMetaChip(text: _formatTime(importedAt)),
               ],
             ),
@@ -616,6 +767,47 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('已删除字体：${font.displayName}')));
+  }
+
+  Future<void> _setReaderDefaultSystemFont() async {
+    final next = _readerSettings.copyWith(
+      fontSource: ReaderFontSource.system,
+      systemFontPreset: ReaderSystemFontPreset.defaultSans,
+      clearFontFamilyKey: true,
+      clearCustomFontPath: true,
+    );
+    await _readerPreferencesService.saveSettings(next);
+    await _reload();
+    _showSnackBar('已设为阅读默认：系统默认字体');
+  }
+
+  Future<void> _setInterfaceDefaultSystemFont() async {
+    await ref
+        .read(appInterfaceFontSettingsProvider.notifier)
+        .setSystemFont(AppInterfaceSystemFontPreset.defaultSans);
+    await _reload();
+    _showSnackBar('已设为界面默认：系统默认字体');
+  }
+
+  Future<void> _setReaderDefaultCustomFont(ReaderCustomFontEntry font) async {
+    final next = _readerSettings.copyWith(
+      fontSource: ReaderFontSource.custom,
+      fontFamilyKey: font.fontFamilyKey,
+      customFontPath: font.filePath,
+    );
+    await _readerPreferencesService.saveSettings(next);
+    await _reload();
+    _showSnackBar('已设为阅读默认：${font.displayName}');
+  }
+
+  Future<void> _setInterfaceDefaultCustomFont(
+    ReaderCustomFontEntry font,
+  ) async {
+    await ref
+        .read(appInterfaceFontSettingsProvider.notifier)
+        .setCustomFont(font);
+    await _reload();
+    _showSnackBar('已设为界面默认：${font.displayName}');
   }
 
   Future<void> _renameFont(ReaderCustomFontEntry font) async {

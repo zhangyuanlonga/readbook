@@ -6723,6 +6723,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         final children = <Widget>[
                           buildFontChoiceTile(
                             label: systemFontPresetLabel(
+                              ReaderSystemFontPreset.defaultSans,
+                            ),
+                            selected:
+                                draft.fontSource == ReaderFontSource.system &&
+                                draft.systemFontPreset ==
+                                    ReaderSystemFontPreset.defaultSans,
+                            icon: Icons.font_download_outlined,
+                            onTap:
+                                () => selectSystemFont(
+                                  ReaderSystemFontPreset.defaultSans,
+                                ),
+                          ),
+                          buildFontChoiceTile(
+                            label: systemFontPresetLabel(
                               ReaderSystemFontPreset.serif,
                             ),
                             selected:
@@ -9444,19 +9458,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ],
                   'interaction' => <Widget>[
                     buildCompactSettingsCard([
-                      buildCompactSectionTitle('阅读方式'),
+                      buildCompactSectionTitle('排版对齐'),
                       const SizedBox(height: 10),
-                      buildPageAnimationSelector(),
-                      const SizedBox(height: 8),
-                      Text(
-                        draft.pageTurnMode.usesScrollLayout
-                            ? '当前为滚动阅读。分页时默认固定为点按 + 滑动。'
-                            : '当前为分页阅读，默认固定使用点按 + 滑动翻页。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
+                      buildCompactToggleRow(
+                        label: '文字两端对齐',
+                        value: draft.textFullJustifyEnabled,
+                        onChanged: (enabled) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              textFullJustifyEnabled: enabled,
+                            );
+                          });
+                        },
                       ),
+                      buildSectionDivider(),
+                      buildCompactToggleRow(
+                        label: '文字底部对齐',
+                        value: draft.textBottomJustifyEnabled,
+                        onChanged:
+                            draft.pageTurnMode.usesScrollLayout
+                                ? null
+                                : (enabled) {
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      textBottomJustifyEnabled: enabled,
+                                    );
+                                  });
+                                },
+                      ),
+                      if (draft.pageTurnMode.usesScrollLayout) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '底部对齐仅在分页阅读下生效，滚动阅读不会分配页内剩余高度。',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
                       buildSectionDivider(),
                       buildCompactSectionTitle('音量键翻页'),
                       const SizedBox(height: 10),

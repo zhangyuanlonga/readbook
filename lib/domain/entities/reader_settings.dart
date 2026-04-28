@@ -81,13 +81,14 @@ class ReaderSettings {
     this.horizontalPadding = 16,
     this.paragraphSpacing = 2,
     this.paragraphIndent = 2,
-    this.textFullJustifyEnabled = false,
+    this.textFullJustifyEnabled = true,
+    this.textBottomJustifyEnabled = true,
     this.letterSpacing = defaultLetterSpacing,
     this.brightness = 1,
-    this.followSystemBrightness = false,
+    this.followSystemBrightness = true,
     this.themeMode = ReaderThemeMode.light,
     this.pageTurnMode = ReaderPageTurnMode.tapAndSwipe,
-    this.volumeKeyPageEnabled = false,
+    this.volumeKeyPageEnabled = true,
     this.autoReadEnabled = false,
     this.autoReadSpeed = defaultAutoReadSpeed,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
@@ -185,6 +186,7 @@ class ReaderSettings {
   final double paragraphSpacing;
   final double paragraphIndent;
   final bool textFullJustifyEnabled;
+  final bool textBottomJustifyEnabled;
   final double letterSpacing;
   final double brightness;
   final bool followSystemBrightness;
@@ -302,6 +304,7 @@ class ReaderSettings {
     double? paragraphSpacing,
     double? paragraphIndent,
     bool? textFullJustifyEnabled,
+    bool? textBottomJustifyEnabled,
     double? letterSpacing,
     double? brightness,
     bool? followSystemBrightness,
@@ -413,6 +416,8 @@ class ReaderSettings {
               .toDouble(),
       textFullJustifyEnabled:
           textFullJustifyEnabled ?? this.textFullJustifyEnabled,
+      textBottomJustifyEnabled:
+          textBottomJustifyEnabled ?? this.textBottomJustifyEnabled,
       letterSpacing:
           (letterSpacing ?? this.letterSpacing)
               .clamp(minLetterSpacing, maxLetterSpacing)
@@ -596,6 +601,7 @@ class ReaderSettings {
       'paragraphSpacing': paragraphSpacing,
       'paragraphIndent': paragraphIndent,
       'textFullJustifyEnabled': textFullJustifyEnabled,
+      'textBottomJustifyEnabled': textBottomJustifyEnabled,
       'letterSpacing': letterSpacing,
       'brightness': brightness,
       'followSystemBrightness': followSystemBrightness,
@@ -808,6 +814,8 @@ class ReaderSettings {
               .clamp(minParagraphIndent, maxParagraphIndent)
               .toDouble(),
       textFullJustifyEnabled: _asBool(json['textFullJustifyEnabled']) ?? false,
+      textBottomJustifyEnabled:
+          _asBool(json['textBottomJustifyEnabled']) ?? false,
       letterSpacing:
           (_asDouble(json['letterSpacing']) ?? defaultLetterSpacing)
               .clamp(minLetterSpacing, maxLetterSpacing)

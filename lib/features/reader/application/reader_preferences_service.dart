@@ -23,6 +23,8 @@ class ReaderPreferencesService {
   static const String _paragraphIndentKey = 'reader.settings.paragraphIndent';
   static const String _textFullJustifyEnabledKey =
       'reader.settings.textFullJustifyEnabled';
+  static const String _textBottomJustifyEnabledKey =
+      'reader.settings.textBottomJustifyEnabled';
   static const String _letterSpacingKey = 'reader.settings.letterSpacing';
   static const String _brightnessKey = 'reader.settings.brightness';
   static const String _followSystemBrightnessKey =
@@ -274,7 +276,9 @@ class ReaderPreferencesService {
       paragraphSpacing: prefs.getDouble(_paragraphSpacingKey) ?? 14,
       paragraphIndent: prefs.getDouble(_paragraphIndentKey) ?? 0,
       textFullJustifyEnabled:
-          prefs.getBool(_textFullJustifyEnabledKey) ?? false,
+          prefs.getBool(_textFullJustifyEnabledKey) ?? true,
+      textBottomJustifyEnabled:
+          prefs.getBool(_textBottomJustifyEnabledKey) ?? true,
       letterSpacing:
           (prefs.getDouble(_letterSpacingKey) ??
                   ReaderSettings.defaultLetterSpacing)
@@ -285,10 +289,10 @@ class ReaderPreferencesService {
               .toDouble(),
       brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
       followSystemBrightness:
-          prefs.getBool(_followSystemBrightnessKey) ?? false,
+          prefs.getBool(_followSystemBrightnessKey) ?? true,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
-      volumeKeyPageEnabled: prefs.getBool(_volumeKeyPageEnabledKey) ?? false,
+      volumeKeyPageEnabled: prefs.getBool(_volumeKeyPageEnabledKey) ?? true,
       autoReadEnabled: prefs.getBool(_autoReadEnabledKey) ?? false,
       autoReadSpeed:
           (prefs.getDouble(_autoReadSpeedKey) ??
@@ -482,6 +486,10 @@ class ReaderPreferencesService {
     await prefs.setBool(
       _textFullJustifyEnabledKey,
       settings.textFullJustifyEnabled,
+    );
+    await prefs.setBool(
+      _textBottomJustifyEnabledKey,
+      settings.textBottomJustifyEnabled,
     );
     await prefs.setDouble(_letterSpacingKey, settings.letterSpacing);
     await prefs.setDouble(_brightnessKey, settings.brightness);

@@ -8,6 +8,7 @@ class ReaderTypographySettings {
     required this.paragraphIndent,
     required this.letterSpacing,
     required this.textFullJustifyEnabled,
+    required this.textBottomJustifyEnabled,
     required this.fontWeightLevel,
     required this.fontWeightValue,
     required this.fontSource,
@@ -22,6 +23,7 @@ class ReaderTypographySettings {
   final double paragraphIndent;
   final double letterSpacing;
   final bool textFullJustifyEnabled;
+  final bool textBottomJustifyEnabled;
   final ReaderFontWeightLevel fontWeightLevel;
   final int? fontWeightValue;
   final ReaderFontSource fontSource;
@@ -164,6 +166,7 @@ class ReaderSettingsGroupingService {
         paragraphIndent: settings.paragraphIndent,
         letterSpacing: settings.letterSpacing,
         textFullJustifyEnabled: settings.textFullJustifyEnabled,
+        textBottomJustifyEnabled: settings.textBottomJustifyEnabled,
         fontWeightLevel: settings.fontWeightLevel,
         fontWeightValue: settings.fontWeightValue,
         fontSource: settings.fontSource,
@@ -238,6 +241,7 @@ class ReaderSettingsGroupingService {
       paragraphIndent: typography?.paragraphIndent,
       letterSpacing: typography?.letterSpacing,
       textFullJustifyEnabled: typography?.textFullJustifyEnabled,
+      textBottomJustifyEnabled: typography?.textBottomJustifyEnabled,
       fontWeightLevel: typography?.fontWeightLevel,
       fontWeightValue: typography?.fontWeightValue,
       fontSource: typography?.fontSource,

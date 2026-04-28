@@ -298,9 +298,14 @@ class ReaderPagedPageContent extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        var dy = 0.0;
+        final offsets = _computePageSliceOffsets(
+          page: page,
+          availableHeight: constraints.maxHeight,
+          settings: model.settings,
+        );
         final children = <Widget>[];
-        for (final slice in page.slices) {
+        for (var index = 0; index < page.slices.length; index += 1) {
+          final slice = page.slices[index];
           final child =
               resolvedSliceBuilder?.call(
                 context,
@@ -308,8 +313,9 @@ class ReaderPagedPageContent extends StatelessWidget {
                 _buildDefaultSlice(context, slice),
               ) ??
               _buildDefaultSlice(context, slice);
-          children.add(Positioned(top: dy, left: 0, right: 0, child: child));
-          dy += slice.measuredHeight + slice.spacingAfter;
+          children.add(
+            Positioned(top: offsets[index], left: 0, right: 0, child: child),
+          );
         }
         return ClipRect(
           child: SizedBox(
@@ -343,6 +349,42 @@ class ReaderPagedPageContent extends StatelessWidget {
       ),
     );
   }
+}
+
+List<double> _computePageSliceOffsets({
+  required ReaderPagedResolvedPage page,
+  required double availableHeight,
+  required ReaderSettings settings,
+}) {
+  final offsets = <double>[];
+  var dy = 0.0;
+  for (final slice in page.slices) {
+    offsets.add(dy);
+    dy += slice.measuredHeight + slice.spacingAfter;
+  }
+  if (!settings.textBottomJustifyEnabled || page.slices.length <= 1) {
+    return offsets;
+  }
+  final surplus = availableHeight - dy;
+  if (surplus <= 0) {
+    return offsets;
+  }
+  final lastSlice = page.slices.last;
+  final lineHeight =
+      (lastSlice.textStyle.fontSize ?? 18) *
+      (lastSlice.textStyle.height ?? settings.lineHeight);
+  if (surplus >= lineHeight) {
+    return offsets;
+  }
+  final perGap = surplus / (page.slices.length - 1);
+  if (perGap <= 0) {
+    return offsets;
+  }
+  return List<double>.generate(
+    page.slices.length,
+    (index) => offsets[index] + (perGap * index),
+    growable: false,
+  );
 }
 
 ReaderPagedResolvedSlice _resolveReaderPagedSlice({
