@@ -437,6 +437,8 @@ class AppAdvancedTheme {
     this.bottomNavGalleryId,
     this.coverGalleryId,
     this.launchImageGalleryId,
+    this.appInterfaceFontFamilyKey,
+    this.readerFontFamilyKey,
   });
 
   final String id;
@@ -449,6 +451,8 @@ class AppAdvancedTheme {
   // Fallback cover gallery used when a book has neither real nor custom cover.
   final String? coverGalleryId;
   final String? launchImageGalleryId;
+  final String? appInterfaceFontFamilyKey;
+  final String? readerFontFamilyKey;
 
   Map<String, dynamic> toJson() {
     return {
@@ -465,6 +469,11 @@ class AppAdvancedTheme {
       if (launchImageGalleryId != null &&
           launchImageGalleryId!.trim().isNotEmpty)
         'launchImageGalleryId': launchImageGalleryId,
+      if (appInterfaceFontFamilyKey != null &&
+          appInterfaceFontFamilyKey!.trim().isNotEmpty)
+        'appInterfaceFontFamilyKey': appInterfaceFontFamilyKey,
+      if (readerFontFamilyKey != null && readerFontFamilyKey!.trim().isNotEmpty)
+        'readerFontFamilyKey': readerFontFamilyKey,
     };
   }
 
@@ -502,6 +511,11 @@ class AppAdvancedTheme {
       bottomNavGalleryId: _readNullableString(json, 'bottomNavGalleryId'),
       coverGalleryId: _readNullableString(json, 'coverGalleryId'),
       launchImageGalleryId: _readNullableString(json, 'launchImageGalleryId'),
+      appInterfaceFontFamilyKey: _readNullableString(
+        json,
+        'appInterfaceFontFamilyKey',
+      ),
+      readerFontFamilyKey: _readNullableString(json, 'readerFontFamilyKey'),
     );
   }
 
@@ -518,6 +532,10 @@ class AppAdvancedTheme {
     bool clearCoverGalleryId = false,
     String? launchImageGalleryId,
     bool clearLaunchImageGalleryId = false,
+    String? appInterfaceFontFamilyKey,
+    bool clearAppInterfaceFontFamilyKey = false,
+    String? readerFontFamilyKey,
+    bool clearReaderFontFamilyKey = false,
   }) {
     return AppAdvancedTheme(
       id: id ?? this.id,
@@ -536,6 +554,14 @@ class AppAdvancedTheme {
           clearLaunchImageGalleryId
               ? null
               : (launchImageGalleryId ?? this.launchImageGalleryId),
+      appInterfaceFontFamilyKey:
+          clearAppInterfaceFontFamilyKey
+              ? null
+              : (appInterfaceFontFamilyKey ?? this.appInterfaceFontFamilyKey),
+      readerFontFamilyKey:
+          clearReaderFontFamilyKey
+              ? null
+              : (readerFontFamilyKey ?? this.readerFontFamilyKey),
     );
   }
 

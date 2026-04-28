@@ -61,7 +61,12 @@ class App extends ConsumerWidget {
       darkScheme,
       activeAdvancedTheme?.darkConfig,
     );
-    final fontFamily = resolveAppInterfaceFontFamily(interfaceFontSettings);
+    final themeBoundAppFontFamily =
+        activeAdvancedTheme?.appInterfaceFontFamilyKey?.trim();
+    final fontFamily =
+        themeBoundAppFontFamily != null && themeBoundAppFontFamily.isNotEmpty
+            ? themeBoundAppFontFamily
+            : resolveAppInterfaceFontFamily(interfaceFontSettings);
     final fontWeight = appInterfaceFontWeightValue(interfaceFontWeight);
 
     return MaterialApp.router(

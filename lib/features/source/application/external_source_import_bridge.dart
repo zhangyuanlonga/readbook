@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'external_import_diagnostics.dart';
 
-enum ExternalImportPayloadType { localBook, scriptSource, advancedTheme }
+enum ExternalImportPayloadType { localBook, scriptSource, advancedTheme, font }
 
 class IncomingExternalImportPayload {
   const IncomingExternalImportPayload.localBook({
@@ -26,6 +26,12 @@ class IncomingExternalImportPayload {
     required this.label,
     this.mimeType,
   }) : type = ExternalImportPayloadType.advancedTheme;
+
+  const IncomingExternalImportPayload.font({
+    required this.uri,
+    required this.label,
+    this.mimeType,
+  }) : type = ExternalImportPayloadType.font;
 
   final ExternalImportPayloadType type;
   final String label;
@@ -118,7 +124,8 @@ class ExternalImportBridge {
   ) async {
     if ((payload.type != ExternalImportPayloadType.localBook &&
             payload.type != ExternalImportPayloadType.scriptSource &&
-            payload.type != ExternalImportPayloadType.advancedTheme) ||
+            payload.type != ExternalImportPayloadType.advancedTheme &&
+            payload.type != ExternalImportPayloadType.font) ||
         payload.uri.trim().isEmpty) {
       return null;
     }
@@ -131,6 +138,7 @@ class ExternalImportBridge {
             ExternalImportPayloadType.localBook => 'localBook',
             ExternalImportPayloadType.scriptSource => 'scriptSource',
             ExternalImportPayloadType.advancedTheme => 'advancedTheme',
+            ExternalImportPayloadType.font => 'font',
           },
           'uri': payload.uri,
           'label': payload.label,
@@ -237,6 +245,22 @@ class ExternalImportBridge {
               ? mimeTypeRaw.trim()
               : null;
       return IncomingExternalImportPayload.advancedTheme(
+        uri: uriRaw,
+        label: label,
+        mimeType: mimeType,
+      );
+    }
+    if (typeRaw == 'font') {
+      final uriRaw = raw['uri']?.toString().trim() ?? '';
+      if (uriRaw.isEmpty) {
+        return null;
+      }
+      final mimeTypeRaw = raw['mimeType'];
+      final mimeType =
+          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
+              ? mimeTypeRaw.trim()
+              : null;
+      return IncomingExternalImportPayload.font(
         uri: uriRaw,
         label: label,
         mimeType: mimeType,

@@ -95,8 +95,10 @@ class _HomePageState extends ConsumerState<HomePage>
       showNavigationLabels: showLabels,
       standardAppearance: standardNavigationAppearance,
     );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('首页'),
         backgroundColor: Colors.transparent,
@@ -132,7 +134,7 @@ class _HomePageState extends ConsumerState<HomePage>
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
                           AppSpacing.pageHorizontal(context),
-                          8,
+                          topInset + 8,
                           AppSpacing.pageHorizontal(context),
                           bottomInset + 16,
                         ),

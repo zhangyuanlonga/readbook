@@ -179,8 +179,23 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       try {
         await _fontRegistryService.restoreRegisteredFonts();
         availableCustomFonts = await _fontRegistryService.listRegisteredFonts();
+        var fontSettingsBase = loadedSettings;
+        final themeReaderFontFamilyKey =
+            ref
+                .read(activeAdvancedThemeProvider)
+                .valueOrNull
+                ?.readerFontFamilyKey
+                ?.trim() ??
+            '';
+        if (themeReaderFontFamilyKey.isNotEmpty) {
+          fontSettingsBase = loadedSettings.copyWith(
+            fontSource: ReaderFontSource.custom,
+            fontFamilyKey: themeReaderFontFamilyKey,
+            clearCustomFontPath: true,
+          );
+        }
         normalizedSettings = await _fontRegistryService
-            .normalizeCustomFontSettings(loadedSettings);
+            .normalizeCustomFontSettings(fontSettingsBase);
       } catch (_) {
         normalizedSettings = loadedSettings.copyWith(
           fontSource: ReaderFontSource.system,

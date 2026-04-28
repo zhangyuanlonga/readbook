@@ -15,7 +15,7 @@ class ReaderLayoutResolver {
   double resolveChapterHeaderTopSpacing(ReaderSettings settings) {
     return settings.chapterHeaderVerticalOffset
         .clamp(
-          ReaderSettings.minChapterHeaderSpacing,
+          ReaderSettings.minChapterHeaderVerticalOffset,
           ReaderSettings.maxChapterHeaderSpacing,
         )
         .toDouble();

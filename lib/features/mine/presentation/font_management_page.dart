@@ -2,32 +2,59 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../source/application/external_import_catalog.dart';
+import '../../source/application/external_import_diagnostics.dart';
+import '../../source/application/external_source_import_bridge.dart';
 import '../../reader/application/reader_font_registry_service.dart';
+import '../application/advanced_theme_provider.dart';
 
-class FontManagementPage extends StatefulWidget {
+class FontManagementPage extends ConsumerStatefulWidget {
   const FontManagementPage({super.key});
 
   @override
-  State<FontManagementPage> createState() => _FontManagementPageState();
+  ConsumerState<FontManagementPage> createState() => _FontManagementPageState();
 }
 
-class _FontManagementPageState extends State<FontManagementPage> {
+class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   final ReaderFontRegistryService _fontRegistryService =
       ReaderFontRegistryService();
 
   bool _isLoading = true;
   bool _isImporting = false;
+  bool _isConsumingExternalImportPayloads = false;
   String? _errorText;
   List<ReaderCustomFontEntry> _fonts = const [];
+  StreamSubscription<IncomingExternalImportPayload>? _importSubscription;
 
   @override
   void initState() {
     super.initState();
     unawaited(_reload());
+    unawaited(ExternalImportBridge.instance.initialize());
+    _importSubscription = ExternalImportBridge.instance.payloadStream.listen((
+      payload,
+    ) {
+      if (payload.type != ExternalImportPayloadType.font) {
+        return;
+      }
+      unawaited(_consumePendingExternalImportPayloads());
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_consumePendingExternalImportPayloads());
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_importSubscription?.cancel());
+    super.dispose();
   }
 
   Future<void> _reload() async {
@@ -62,10 +89,114 @@ class _FontManagementPageState extends State<FontManagementPage> {
     }
   }
 
+  Future<void> _consumePendingExternalImportPayloads() async {
+    if (_isConsumingExternalImportPayloads || !mounted) {
+      return;
+    }
+
+    _isConsumingExternalImportPayloads = true;
+    try {
+      while (mounted) {
+        final payload = ExternalImportBridge.instance.consumePendingPayload(
+          type: ExternalImportPayloadType.font,
+        );
+        if (payload == null) {
+          break;
+        }
+        await _importFromExternalPayload(payload);
+      }
+    } finally {
+      _isConsumingExternalImportPayloads = false;
+    }
+  }
+
+  Future<void> _importFromExternalPayload(
+    IncomingExternalImportPayload payload,
+  ) async {
+    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
+      payload,
+    );
+    if (cached == null) {
+      ExternalImportDiagnostics.logCacheFailed(payload);
+      _showSnackBar(
+        ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        ),
+      );
+      return;
+    }
+
+    try {
+      if (!ExternalImportCatalog.supportsFileLabel(
+        ExternalImportPayloadType.font,
+        cached.label,
+      )) {
+        ExternalImportDiagnostics.logImportUnsupported(
+          ExternalImportPayloadType.font,
+          cached.label,
+        );
+        _showSnackBar(
+          ExternalImportCatalog.unsupportedFileMessage(
+            ExternalImportPayloadType.font,
+            cached.label,
+          ),
+        );
+        return;
+      }
+      final entry = await _fontRegistryService.importFontFile(
+        filePath: cached.path,
+        displayName: cached.label.replaceFirst(RegExp(r'\.[^.]+$'), ''),
+      );
+      await _reload();
+      if (!mounted) {
+        return;
+      }
+      ExternalImportDiagnostics.logImportSucceeded(
+        ExternalImportPayloadType.font,
+        entry.displayName,
+      );
+      _showSnackBar('已导入字体：${entry.displayName}');
+    } on ReaderFontRegistryException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.font,
+        cached.label,
+        error,
+      );
+      _showSnackBar(error.message);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.font,
+        cached.label,
+        error,
+      );
+      _showSnackBar(
+        ExternalImportDiagnostics.importFailedMessage(
+          ExternalImportPayloadType.font,
+          '$error',
+          label: cached.label,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -76,8 +207,12 @@ class _FontManagementPageState extends State<FontManagementPage> {
         context.go('/mine');
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
           title: const Text('字体管理'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
@@ -114,46 +249,47 @@ class _FontManagementPageState extends State<FontManagementPage> {
               context,
               maxWidth: AppLayout.systemSettingsContentMaxWidth,
             );
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: RefreshIndicator(
-                  onRefresh: _reload,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      12,
-                      horizontal,
-                      88 + bottomSafe,
-                    ),
-                    children: [
-                      _buildHero(context),
-                      const SizedBox(height: 12),
-                      _buildPlanSection(context),
-                      const SizedBox(height: 12),
-                      if (_isLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 32),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_errorText != null)
-                        _buildErrorCard(context)
-                      else ...[
-                        _buildLibraryHeader(context),
-                        const SizedBox(height: 10),
-                        if (_fonts.isEmpty)
-                          _buildEmptyLibraryCard(context)
-                        else
-                          ..._fonts.map(
-                            (font) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildFontCard(context, font),
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: RefreshIndicator(
+                    onRefresh: _reload,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        topInset + 12,
+                        horizontal,
+                        88 + bottomSafe,
+                      ),
+                      children: [
+                        _buildHero(context),
+                        const SizedBox(height: 12),
+                        if (_isLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 32),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (_errorText != null)
+                          _buildErrorCard(context)
+                        else ...[
+                          _buildLibraryHeader(context),
+                          const SizedBox(height: 10),
+                          if (_fonts.isEmpty)
+                            _buildEmptyLibraryCard(context)
+                          else
+                            ..._fonts.map(
+                              (font) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildFontCard(context, font),
+                              ),
                             ),
-                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -207,14 +343,6 @@ class _FontManagementPageState extends State<FontManagementPage> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '这版先把字体库、预览、导入删除和后续开发规划放到同一页，便于继续往“作用域配置”和“全局应用”推进。',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        height: 1.45,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -227,7 +355,6 @@ class _FontManagementPageState extends State<FontManagementPage> {
             children: [
               _buildHeroChip(context, '已导入 ${_fonts.length} 款'),
               _buildHeroChip(context, '支持 TTF / OTF'),
-              _buildHeroChip(context, '下一步：作用域配置'),
             ],
           ),
         ],
@@ -252,64 +379,7 @@ class _FontManagementPageState extends State<FontManagementPage> {
     );
   }
 
-  Widget _buildPlanSection(BuildContext context) {
-    final phases = const <_FontPlanPhase>[
-      _FontPlanPhase(
-        title: '阶段 1',
-        subtitle: '字体库与预览',
-        description: '当前页先把导入、删除、预览、文件状态和未来扩展位准备好。',
-      ),
-      _FontPlanPhase(
-        title: '阶段 2',
-        subtitle: '作用域配置',
-        description: '补齐“应用界面 / 阅读正文 / 标题装饰”三类使用范围切换。',
-      ),
-      _FontPlanPhase(
-        title: '阶段 3',
-        subtitle: '同步与推荐',
-        description: '后续接入字体分组、云端备份、多端恢复和默认方案推荐。',
-      ),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '开发梳理',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 8),
-        ...phases.map(
-          (phase) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                leading: CircleAvatar(
-                  radius: 18,
-                  child: Text(
-                    phase.title,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                title: Text(phase.subtitle),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(phase.description),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildLibraryHeader(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Expanded(
@@ -321,13 +391,6 @@ class _FontManagementPageState extends State<FontManagementPage> {
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '已导入字体会立即出现在这里，后续可继续扩展作用域和默认应用入口。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
               ),
             ],
           ),
@@ -384,10 +447,9 @@ class _FontManagementPageState extends State<FontManagementPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '可以先导入 `.ttf` 或 `.otf`，这里会直接展示预览效果。后续再把“应用界面”和“阅读器正文”的作用域切换接上。',
+              '导入 `.ttf` 或 `.otf` 后会在这里显示。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
-                height: 1.45,
               ),
             ),
           ],
@@ -438,12 +500,19 @@ class _FontManagementPageState extends State<FontManagementPage> {
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
+                    if (value == 'rename') {
+                      unawaited(_renameFont(font));
+                    }
                     if (value == 'delete') {
                       unawaited(_removeFont(font));
                     }
                   },
                   itemBuilder:
                       (context) => const [
+                        PopupMenuItem<String>(
+                          value: 'rename',
+                          child: Text('重命名'),
+                        ),
                         PopupMenuItem<String>(
                           value: 'delete',
                           child: Text('删除字体'),
@@ -487,7 +556,6 @@ class _FontManagementPageState extends State<FontManagementPage> {
               runSpacing: 8,
               children: [
                 _FontMetaChip(text: '阅读正文'),
-                _FontMetaChip(text: '应用界面（规划中）'),
                 _FontMetaChip(text: _formatTime(importedAt)),
               ],
             ),
@@ -550,6 +618,78 @@ class _FontManagementPageState extends State<FontManagementPage> {
     ).showSnackBar(SnackBar(content: Text('已删除字体：${font.displayName}')));
   }
 
+  Future<void> _renameFont(ReaderCustomFontEntry font) async {
+    final controller = TextEditingController(text: font.displayName);
+    final nextName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('重命名字体'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '显示名称',
+              hintText: '输入新的字体名称',
+            ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              Navigator.of(dialogContext).pop(controller.text.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed:
+                  () => Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (!mounted || nextName == null) {
+      return;
+    }
+    final normalized = nextName.trim();
+    if (normalized.isEmpty || normalized == font.displayName) {
+      return;
+    }
+    try {
+      await _fontRegistryService.renameFontDisplayName(
+        familyKey: font.fontFamilyKey,
+        displayName: normalized,
+      );
+      await _reload();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已重命名字体：$normalized')));
+    } on ReaderFontRegistryException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   String _formatTime(DateTime time) {
     final local = time.toLocal();
     final month = local.month.toString().padLeft(2, '0');
@@ -558,18 +698,6 @@ class _FontManagementPageState extends State<FontManagementPage> {
     final minute = local.minute.toString().padLeft(2, '0');
     return '${local.year}-$month-$day $hour:$minute';
   }
-}
-
-class _FontPlanPhase {
-  const _FontPlanPhase({
-    required this.title,
-    required this.subtitle,
-    required this.description,
-  });
-
-  final String title;
-  final String subtitle;
-  final String description;
 }
 
 class _FontMetaChip extends StatelessWidget {

@@ -41,6 +41,16 @@ enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 
 enum _ThemeImportPackageKind { official, red, rgshare }
 
+class _AdvancedThemeDeleteDecision {
+  const _AdvancedThemeDeleteDecision({
+    required this.confirmed,
+    required this.deleteAssociatedResources,
+  });
+
+  final bool confirmed;
+  final bool deleteAssociatedResources;
+}
+
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final AuthSessionStore _sessionStore;
   late final MembershipService _membershipService;
@@ -677,26 +687,62 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _deleteTheme(AppAdvancedTheme theme) async {
-    final confirmed = await showDialog<bool>(
+    final decision = await showDialog<_AdvancedThemeDeleteDecision>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('删除高级主题'),
-          content: Text('确定删除「${theme.name}」吗？浅色和深色壁纸都会一并移除。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
-            ),
-          ],
+        var deleteAssociatedResources = true;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('删除高级主题'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('确定删除「${theme.name}」吗？'),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    value: deleteAssociatedResources,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('同时删除配套内容'),
+                    subtitle: const Text('删除该主题绑定的浅色/深色壁纸和阅读器壁纸资源。'),
+                    onChanged: (value) {
+                      setState(() {
+                        deleteAssociatedResources = value ?? true;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      () => Navigator.of(dialogContext).pop(
+                        const _AdvancedThemeDeleteDecision(
+                          confirmed: false,
+                          deleteAssociatedResources: true,
+                        ),
+                      ),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed:
+                      () => Navigator.of(dialogContext).pop(
+                        _AdvancedThemeDeleteDecision(
+                          confirmed: true,
+                          deleteAssociatedResources: deleteAssociatedResources,
+                        ),
+                      ),
+                  child: const Text('删除'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
-    if (confirmed != true || _isSaving) {
+    if (decision == null || !decision.confirmed || _isSaving) {
       return;
     }
     setState(() {
@@ -705,7 +751,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     try {
       final wasActive = ref.read(activeAdvancedThemeIdProvider) == theme.id;
       final service = ref.read(advancedThemeServiceProvider);
-      await service.deleteTheme(theme.id);
+      await service.deleteTheme(
+        theme.id,
+        deleteAssociatedResources: decision.deleteAssociatedResources,
+      );
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       if (wasActive) {
         await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
@@ -714,7 +763,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       if (!mounted) {
         return;
       }
-      _showMessage('已删除主题「${theme.name}」');
+      _showMessage(
+        decision.deleteAssociatedResources
+            ? '已删除主题「${theme.name}」及配套内容'
+            : '已删除主题「${theme.name}」',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -1354,6 +1407,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
     if ((theme.bottomNavGalleryId?.trim().isNotEmpty ?? false)) {
       badges.add(_buildResourceBadge(context, label: '底栏'));
+    }
+    if ((theme.appInterfaceFontFamilyKey?.trim().isNotEmpty ?? false)) {
+      badges.add(_buildResourceBadge(context, label: '界面字体'));
+    }
+    if ((theme.readerFontFamilyKey?.trim().isNotEmpty ?? false)) {
+      badges.add(_buildResourceBadge(context, label: '阅读字体'));
     }
     if (badges.isEmpty) {
       badges.add(_buildResourceBadge(context, label: '仅颜色'));

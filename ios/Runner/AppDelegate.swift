@@ -26,6 +26,7 @@ private struct ExternalImportSpec {
   private let payloadTypeLocalBook = "localBook"
   private let payloadTypeScriptSource = "scriptSource"
   private let payloadTypeAdvancedTheme = "advancedTheme"
+  private let payloadTypeFont = "font"
   private let readerVolumeBaseline: Float = 0.5
 
   private var sourceImportMethodChannel: FlutterMethodChannel?
@@ -79,7 +80,20 @@ private struct ExternalImportSpec {
     ]
   )
 
+  private lazy var fontImportSpec = ExternalImportSpec(
+    type: payloadTypeFont,
+    extensions: ["ttf", "otf"],
+    mimeTypeToExtension: [
+      "font/ttf": "ttf",
+      "font/otf": "otf",
+      "application/font-sfnt": "otf",
+      "application/x-font-ttf": "ttf",
+      "application/x-font-opentype": "otf",
+    ]
+  )
+
   private lazy var externalImportSpecs = [
+    fontImportSpec,
     advancedThemeImportSpec,
     localBookImportSpec,
     scriptSourceImportSpec,
@@ -404,6 +418,13 @@ private struct ExternalImportSpec {
         "label": label,
         "mimeType": mimeType ?? "",
       ]
+    case payloadTypeFont:
+      return [
+        "type": payloadTypeFont,
+        "uri": url.absoluteString,
+        "label": label,
+        "mimeType": mimeType ?? "",
+      ]
     default:
       logSourceImport("Unsupported external file type for url=\(url.absoluteString)")
       return nil
@@ -552,6 +573,8 @@ private struct ExternalImportSpec {
       specs = [localBookImportSpec]
     case payloadTypeAdvancedTheme:
       specs = [advancedThemeImportSpec]
+    case payloadTypeFont:
+      specs = [fontImportSpec]
     default:
       specs = externalImportSpecs
     }

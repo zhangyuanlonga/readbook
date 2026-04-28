@@ -23,6 +23,7 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
+import '../../reader/application/reader_font_registry_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/app_background_service.dart';
 import '../application/cover_gallery_provider.dart';
@@ -54,6 +55,8 @@ class _AdvancedThemeEditorPageState
   late final CoverGalleryService _coverGalleryService;
   late final LaunchImageGalleryService _launchImageGalleryService;
   late final ReaderBackgroundService _readerBackgroundService;
+  final ReaderFontRegistryService _fontRegistryService =
+      ReaderFontRegistryService();
   final TextEditingController _nameController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
@@ -79,6 +82,7 @@ class _AdvancedThemeEditorPageState
       const <BottomNavIconGallery>[];
   List<CoverGallery> _coverGalleries = const <CoverGallery>[];
   List<LaunchImageGallery> _launchImageGalleries = const <LaunchImageGallery>[];
+  List<ReaderCustomFontEntry> _availableFonts = const <ReaderCustomFontEntry>[];
   String? _activeBottomNavGalleryName;
   bool _isEditingName = false;
   bool _isLoading = true;
@@ -219,6 +223,7 @@ class _AdvancedThemeEditorPageState
     final coverGalleries = await _coverGalleryService.loadGalleries();
     final launchImageGalleries =
         await _launchImageGalleryService.loadGalleries();
+    final fonts = await _fontRegistryService.listRegisteredFonts();
     if (!mounted) {
       return;
     }
@@ -228,6 +233,7 @@ class _AdvancedThemeEditorPageState
       _bottomNavGalleries = galleries;
       _coverGalleries = coverGalleries;
       _launchImageGalleries = launchImageGalleries;
+      _availableFonts = fonts;
       _activeBottomNavGalleryName = activeGallery?.name;
     });
   }
@@ -1129,6 +1135,257 @@ class _AdvancedThemeEditorPageState
       }
     }
     return null;
+  }
+
+  ReaderCustomFontEntry? _selectedAppInterfaceFont() {
+    final familyKey = _draft?.appInterfaceFontFamilyKey?.trim() ?? '';
+    if (familyKey.isEmpty) {
+      return null;
+    }
+    for (final entry in _availableFonts) {
+      if (entry.fontFamilyKey == familyKey) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  ReaderCustomFontEntry? _selectedReaderFont() {
+    final familyKey = _draft?.readerFontFamilyKey?.trim() ?? '';
+    if (familyKey.isEmpty) {
+      return null;
+    }
+    for (final entry in _availableFonts) {
+      if (entry.fontFamilyKey == familyKey) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  String _resolvedAppInterfaceFontName() {
+    final selected = _selectedAppInterfaceFont();
+    if (selected != null) {
+      return selected.displayName;
+    }
+    final familyKey = _draft?.appInterfaceFontFamilyKey?.trim() ?? '';
+    if (familyKey.isNotEmpty) {
+      return '已绑定字体不可用';
+    }
+    return _availableFonts.isEmpty ? '暂无已导入字体' : '未绑定界面字体';
+  }
+
+  String _resolvedReaderFontName() {
+    final selected = _selectedReaderFont();
+    if (selected != null) {
+      return selected.displayName;
+    }
+    final familyKey = _draft?.readerFontFamilyKey?.trim() ?? '';
+    if (familyKey.isNotEmpty) {
+      return '已绑定字体不可用';
+    }
+    return _availableFonts.isEmpty ? '暂无已导入字体' : '未绑定阅读字体';
+  }
+
+  Future<void> _pickThemeFont({required bool readerFont}) async {
+    if (_isSaving) {
+      return;
+    }
+    String? selectedId =
+        (readerFont
+                ? _draft?.readerFontFamilyKey
+                : _draft?.appInterfaceFontFamilyKey)
+            ?.trim();
+    final result = await showModalBottomSheet<_ThemeFontSelectionResult>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    readerFont ? '选择阅读字体' : '选择界面字体',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_availableFonts.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.font_download_outlined,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '还没有已导入字体',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '先去字体管理导入字体，再回来绑定。',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _availableFonts.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final entry = _availableFonts[index];
+                          final selected = entry.fontFamilyKey == selectedId;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              setSheetState(() {
+                                selectedId = entry.fontFamilyKey;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          entry.displayName,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelLarge?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            fontFamily: entry.fontFamilyKey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          readerFont
+                                              ? '阅读页启用主题时覆盖正文自定义字体'
+                                              : '界面启用主题时覆盖应用自定义字体',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (selected)
+                                    Icon(
+                                      Icons.check_rounded,
+                                      color: colorScheme.primary,
+                                      size: 18,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('取消'),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed:
+                            () => unawaited(
+                              _openRouteFromSheet(context, '/font-management'),
+                            ),
+                        child: const Text('去管理'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed:
+                            selectedId == null
+                                ? null
+                                : () => Navigator.of(context).pop(
+                                  const _ThemeFontSelectionResult(
+                                    applied: true,
+                                    familyKey: null,
+                                  ),
+                                ),
+                        child: const Text('取消绑定'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed:
+                            selectedId == null
+                                ? null
+                                : () => Navigator.of(context).pop(
+                                  _ThemeFontSelectionResult(
+                                    applied: true,
+                                    familyKey: selectedId,
+                                  ),
+                                ),
+                        child: const Text('应用'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (result == null || !result.applied || !mounted) {
+      return;
+    }
+    final draft = _draft;
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _draft =
+          result.familyKey == null
+              ? (readerFont
+                  ? draft.copyWith(clearReaderFontFamilyKey: true)
+                  : draft.copyWith(clearAppInterfaceFontFamilyKey: true))
+              : (readerFont
+                  ? draft.copyWith(readerFontFamilyKey: result.familyKey)
+                  : draft.copyWith(
+                    appInterfaceFontFamilyKey: result.familyKey,
+                  ));
+    });
   }
 
   File _resolveLocalImageFile(String path) {
@@ -2583,6 +2840,22 @@ class _AdvancedThemeEditorPageState
                 subtitle: _resolvedBottomNavGalleryName(),
                 onTap: _pickBottomNavGallery,
               ),
+              const Divider(height: 1),
+              _buildAppearanceLinkTile(
+                context,
+                icon: Icons.text_fields_rounded,
+                title: '界面字体',
+                subtitle: _resolvedAppInterfaceFontName(),
+                onTap: () => _pickThemeFont(readerFont: false),
+              ),
+              const Divider(height: 1),
+              _buildAppearanceLinkTile(
+                context,
+                icon: Icons.menu_book_outlined,
+                title: '阅读字体',
+                subtitle: _resolvedReaderFontName(),
+                onTap: () => _pickThemeFont(readerFont: true),
+              ),
             ],
           ),
         ),
@@ -3599,6 +3872,16 @@ class _LaunchImageGallerySelectionResult {
 
   final bool applied;
   final String? galleryId;
+}
+
+class _ThemeFontSelectionResult {
+  const _ThemeFontSelectionResult({
+    required this.applied,
+    required this.familyKey,
+  });
+
+  final bool applied;
+  final String? familyKey;
 }
 
 class _ThemeColorFieldSpec {

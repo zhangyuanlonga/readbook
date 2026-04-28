@@ -119,12 +119,31 @@ class ReaderFontRegistryService {
       return null;
     }
 
-    final extension = path.extension(pickedFile.name).toLowerCase();
+    return importFontFile(
+      filePath: pickedFile.path,
+      displayName: path.basenameWithoutExtension(pickedFile.name),
+    );
+  }
+
+  Future<ReaderCustomFontEntry> importFontFile({
+    required String filePath,
+    String? displayName,
+  }) async {
+    final normalizedPath = filePath.trim();
+    if (normalizedPath.isEmpty) {
+      throw ReaderFontRegistryException('字体文件路径无效。');
+    }
+    final sourceFile = File(normalizedPath);
+    if (!await sourceFile.exists()) {
+      throw ReaderFontRegistryException('字体文件不存在，无法导入。');
+    }
+
+    final extension = path.extension(sourceFile.path).toLowerCase();
     if (extension != '.ttf' && extension != '.otf') {
       throw ReaderFontRegistryException('仅支持 .ttf 或 .otf 字体文件。');
     }
 
-    final bytes = await pickedFile.readAsBytes();
+    final bytes = await sourceFile.readAsBytes();
     if (bytes.isEmpty) {
       throw ReaderFontRegistryException('字体文件为空，无法导入。');
     }
@@ -138,12 +157,12 @@ class ReaderFontRegistryService {
 
     await _registerFontFromBytes(familyKey: familyKey, bytes: bytes);
 
-    final displayName = _normalizeDisplayName(
-      path.basenameWithoutExtension(pickedFile.name),
+    final normalizedDisplayName = _normalizeDisplayName(
+      displayName ?? path.basenameWithoutExtension(sourceFile.path),
     );
     final entry = ReaderCustomFontEntry(
       fontFamilyKey: familyKey,
-      displayName: displayName,
+      displayName: normalizedDisplayName,
       filePath: targetFile.path,
       importedAtEpochMs: now,
     );
@@ -179,6 +198,32 @@ class ReaderFontRegistryService {
       _loadedFamilyKeys.remove(removed!.fontFamilyKey);
       await _saveRegistry(entries);
     }
+  }
+
+  Future<void> renameFontDisplayName({
+    required String familyKey,
+    required String displayName,
+  }) async {
+    final normalizedFamilyKey = familyKey.trim();
+    if (normalizedFamilyKey.isEmpty) {
+      throw ReaderFontRegistryException('字体标识无效。');
+    }
+    final normalizedDisplayName = _normalizeDisplayName(displayName);
+    final entries = await _loadRegistry();
+    final index = entries.indexWhere(
+      (entry) => entry.fontFamilyKey == normalizedFamilyKey,
+    );
+    if (index < 0) {
+      throw ReaderFontRegistryException('未找到要重命名的字体。');
+    }
+    final current = entries[index];
+    entries[index] = ReaderCustomFontEntry(
+      fontFamilyKey: current.fontFamilyKey,
+      displayName: normalizedDisplayName,
+      filePath: current.filePath,
+      importedAtEpochMs: current.importedAtEpochMs,
+    );
+    await _saveRegistry(entries);
   }
 
   Future<ReaderSettings> normalizeCustomFontSettings(

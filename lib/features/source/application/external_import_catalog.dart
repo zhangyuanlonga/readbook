@@ -102,11 +102,30 @@ class ExternalImportCatalog {
     uniformTypeIdentifiers: <String>['public.data'],
   );
 
+  static const XTypeGroup fontTypeGroup = XTypeGroup(
+    label: 'Font Files',
+    extensions: <String>['ttf', 'otf'],
+    mimeTypes: <String>[
+      'font/ttf',
+      'font/otf',
+      'application/font-sfnt',
+      'application/x-font-ttf',
+      'application/x-font-opentype',
+      'application/octet-stream',
+    ],
+    uniformTypeIdentifiers: <String>[
+      'public.truetype-ttf-font',
+      'public.opentype-font',
+      'public.data',
+    ],
+  );
+
   static String routeForPayloadType(ExternalImportPayloadType type) {
     return switch (type) {
       ExternalImportPayloadType.scriptSource => '/source',
       ExternalImportPayloadType.localBook => '/bookshelf',
       ExternalImportPayloadType.advancedTheme => '/appearance/advanced-themes',
+      ExternalImportPayloadType.font => '/font-management',
     };
   }
 
@@ -123,6 +142,7 @@ class ExternalImportCatalog {
       ),
       ExternalImportPayloadType.advancedTheme => _advancedThemeExtensions
           .contains(extension),
+      ExternalImportPayloadType.font => _fontExtensions.contains(extension),
     };
   }
 
@@ -134,6 +154,7 @@ class ExternalImportCatalog {
       ExternalImportPayloadType.scriptSource => '暂不支持导入该书源文件：$label',
       ExternalImportPayloadType.localBook => '暂不支持导入该文件：$label',
       ExternalImportPayloadType.advancedTheme => '暂不支持导入该主题文件：$label',
+      ExternalImportPayloadType.font => '暂不支持导入该字体文件：$label',
     };
   }
 
@@ -166,4 +187,6 @@ class ExternalImportCatalog {
     '.red',
     '.rgshare',
   };
+
+  static const Set<String> _fontExtensions = <String>{'.ttf', '.otf'};
 }

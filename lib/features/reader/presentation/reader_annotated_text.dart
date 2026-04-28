@@ -113,6 +113,7 @@ class ReaderAnnotatedText extends StatelessWidget {
             if (bodyDecorationEnabled) {
               painters.add(
                 ReaderBodyUnderlinePainter(
+                  text: displayText,
                   textPainter: textPainter,
                   start: indentLength,
                   end: displayText.length,
@@ -289,6 +290,7 @@ class ReaderCompositeTextDecorationPainter extends CustomPainter {
 
 class ReaderBodyUnderlinePainter extends CustomPainter {
   ReaderBodyUnderlinePainter({
+    required this.text,
     required this.textPainter,
     required this.start,
     required this.end,
@@ -301,6 +303,7 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
     required this.dashGapRatio,
   });
 
+  final String text;
   final TextPainter textPainter;
   final int start;
   final int end;
@@ -318,9 +321,18 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
       return;
     }
 
-    final boxes = textPainter.getBoxesForSelection(
-      TextSelection(baseOffset: start, extentOffset: end),
-    );
+    final visibleRanges = _visibleUnderlineRanges(text, start, end);
+    if (visibleRanges.isEmpty) {
+      return;
+    }
+    final boxes = <TextBox>[];
+    for (final range in visibleRanges) {
+      boxes.addAll(
+        textPainter.getBoxesForSelection(
+          TextSelection(baseOffset: range.start, extentOffset: range.end),
+        ),
+      );
+    }
     if (boxes.isEmpty) {
       return;
     }
@@ -404,22 +416,25 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
     required List<LineMetrics> lineMetrics,
   }) {
     if (lineMetrics.isEmpty) {
-      return rect.bottom + gap;
+      return rect.bottom - math.max(thickness * 0.5, 1.0);
     }
     final centerY = rect.center.dy;
     for (final line in lineMetrics) {
       final lineTop = line.baseline - line.ascent;
       final lineBottom = line.baseline + line.descent;
       if (centerY >= lineTop - 0.5 && centerY <= lineBottom + 0.5) {
-        return line.baseline + gap;
+        final desired = line.baseline + math.min(gap, line.descent * 0.25);
+        final maxY = rect.bottom - math.max(thickness * 0.5, 1.0);
+        return math.min(desired, maxY);
       }
     }
-    return rect.bottom + gap;
+    return rect.bottom - math.max(thickness * 0.5, 1.0);
   }
 
   @override
   bool shouldRepaint(covariant ReaderBodyUnderlinePainter oldDelegate) {
-    return oldDelegate.start != start ||
+    return oldDelegate.text != text ||
+        oldDelegate.start != start ||
         oldDelegate.end != end ||
         oldDelegate.excludedLeadingLength != excludedLeadingLength ||
         oldDelegate.color != color ||
@@ -429,6 +444,36 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
         oldDelegate.dashLength != dashLength ||
         oldDelegate.dashGapRatio != dashGapRatio;
   }
+}
+
+List<ReaderWavyRange> _visibleUnderlineRanges(String text, int start, int end) {
+  final ranges = <ReaderWavyRange>[];
+  final safeStart = _clampInt(start, 0, text.length);
+  final safeEnd = _clampInt(end, 0, text.length);
+  if (safeEnd <= safeStart) {
+    return ranges;
+  }
+
+  int? rangeStart;
+  for (var index = safeStart; index < safeEnd; index += 1) {
+    final char = text[index];
+    if (_isUnderlineVisibleCharacter(char)) {
+      rangeStart ??= index;
+      continue;
+    }
+    if (rangeStart != null) {
+      ranges.add(ReaderWavyRange(rangeStart, index));
+      rangeStart = null;
+    }
+  }
+  if (rangeStart != null) {
+    ranges.add(ReaderWavyRange(rangeStart, safeEnd));
+  }
+  return ranges;
+}
+
+bool _isUnderlineVisibleCharacter(String char) {
+  return char.trim().isNotEmpty;
 }
 
 class ReaderWavyUnderlinePainter extends CustomPainter {

@@ -11,6 +11,7 @@ class ExternalImportDiagnostics {
       ExternalImportPayloadType.scriptSource => '书源脚本',
       ExternalImportPayloadType.localBook => '本地图书',
       ExternalImportPayloadType.advancedTheme => '主题文件',
+      ExternalImportPayloadType.font => '字体文件',
     };
   }
 
@@ -30,6 +31,7 @@ class ExternalImportDiagnostics {
       ExternalImportPayloadType.scriptSource => '导入书源失败',
       ExternalImportPayloadType.localBook => '导入图书失败',
       ExternalImportPayloadType.advancedTheme => '导入主题失败',
+      ExternalImportPayloadType.font => '导入字体失败',
     };
     final normalizedDetail = detail.trim();
     if (normalizedDetail.isEmpty) {

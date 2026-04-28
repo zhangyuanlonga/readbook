@@ -41,6 +41,7 @@ class MainActivity : FlutterActivity() {
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
         private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
         private const val PAYLOAD_TYPE_ADVANCED_THEME = "advancedTheme"
+        private const val PAYLOAD_TYPE_FONT = "font"
         private val SCRIPT_SOURCE_IMPORT_SPEC = ExternalImportSpec(
             type = PAYLOAD_TYPE_SCRIPT_SOURCE,
             extensions = linkedSetOf("js", "mjs"),
@@ -86,7 +87,19 @@ class MainActivity : FlutterActivity() {
                 "application/x-zip-compressed" to "zip",
             )
         )
+        private val FONT_IMPORT_SPEC = ExternalImportSpec(
+            type = PAYLOAD_TYPE_FONT,
+            extensions = linkedSetOf("ttf", "otf"),
+            mimeTypeToExtension = linkedMapOf(
+                "font/ttf" to "ttf",
+                "font/otf" to "otf",
+                "application/font-sfnt" to "otf",
+                "application/x-font-ttf" to "ttf",
+                "application/x-font-opentype" to "otf",
+            )
+        )
         private val EXTERNAL_IMPORT_SPECS = listOf(
+            FONT_IMPORT_SPEC,
             ADVANCED_THEME_IMPORT_SPEC,
             LOCAL_BOOK_IMPORT_SPEC,
             SCRIPT_SOURCE_IMPORT_SPEC,
@@ -341,6 +354,12 @@ class MainActivity : FlutterActivity() {
                 "label" to label,
                 "mimeType" to (mimeType ?: ""),
             )
+            PAYLOAD_TYPE_FONT -> mapOf(
+                "type" to PAYLOAD_TYPE_FONT,
+                "uri" to uri.toString(),
+                "label" to label,
+                "mimeType" to (mimeType ?: ""),
+            )
             else -> null
         }
     }
@@ -452,6 +471,7 @@ class MainActivity : FlutterActivity() {
             PAYLOAD_TYPE_SCRIPT_SOURCE -> listOf(SCRIPT_SOURCE_IMPORT_SPEC)
             PAYLOAD_TYPE_LOCAL_BOOK -> listOf(LOCAL_BOOK_IMPORT_SPEC)
             PAYLOAD_TYPE_ADVANCED_THEME -> listOf(ADVANCED_THEME_IMPORT_SPEC)
+            PAYLOAD_TYPE_FONT -> listOf(FONT_IMPORT_SPEC)
             else -> EXTERNAL_IMPORT_SPECS
         }
         return resolveImportExtension(specs, uri, label, mimeType)

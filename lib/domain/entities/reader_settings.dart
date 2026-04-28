@@ -175,7 +175,7 @@ class ReaderSettings {
   static const double legacyMaxPinnedHeaderOffsetX = 160;
   static const double minPinnedHeaderOffsetY = -40;
   static const double maxPinnedHeaderOffsetY = 180;
-  static const double minChapterHeaderVerticalOffset = -20;
+  static const double minChapterHeaderVerticalOffset = -50;
   static const double minChapterHeaderSpacing = 0;
   static const double maxChapterHeaderSpacing = 40;
 

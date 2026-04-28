@@ -13,6 +13,7 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import 'cover_gallery_service.dart';
 import 'launch_image_gallery_service.dart';
+import '../../reader/application/reader_font_registry_service.dart';
 import 'reader_background_service.dart';
 
 class AdvancedThemeService {
@@ -125,7 +126,10 @@ class AdvancedThemeService {
     return normalized;
   }
 
-  Future<void> deleteTheme(String themeId) async {
+  Future<void> deleteTheme(
+    String themeId, {
+    bool deleteAssociatedResources = true,
+  }) async {
     final themes = await loadThemes();
     AppAdvancedTheme? removedTheme;
     final updated = themes
@@ -138,12 +142,14 @@ class AdvancedThemeService {
         })
         .toList(growable: false);
     await saveThemes(updated);
-    if (removedTheme != null) {
+    if (removedTheme != null && deleteAssociatedResources) {
       final targetTheme = removedTheme!;
       final paths = <String>{
         ...[
               targetTheme.lightConfig.wallpaperPath,
               targetTheme.darkConfig.wallpaperPath,
+              targetTheme.lightConfig.readerWallpaperPath,
+              targetTheme.darkConfig.readerWallpaperPath,
             ]
             .whereType<String>()
             .map((item) => item.trim())
@@ -153,9 +159,11 @@ class AdvancedThemeService {
         await deleteWallpaper(path);
       }
     }
-    final directory = await _themeDirectory(themeId);
-    if (await directory.exists()) {
-      await directory.delete(recursive: true);
+    if (deleteAssociatedResources) {
+      final directory = await _themeDirectory(themeId);
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
     }
   }
 
@@ -342,6 +350,11 @@ class AdvancedThemeService {
       manifest['bottomNavGallery'] = bottomNavManifest;
     }
 
+    final fontManifest = await _appendThemeFontsToArchive(archive, theme);
+    if (fontManifest != null) {
+      manifest['fonts'] = fontManifest;
+    }
+
     final manifestBytes = utf8.encode(
       const JsonEncoder.withIndent('  ').convert(manifest),
     );
@@ -389,6 +402,7 @@ class AdvancedThemeService {
     String? coverGalleryId;
     String? launchImageGalleryId;
     String? bottomNavGalleryId;
+    final importedFontFamilyKeys = <String>[];
     final sharedBackgroundPaths = <String>[];
     final sharedReaderBackgroundPaths = <String>[];
 
@@ -477,6 +491,12 @@ class AdvancedThemeService {
         archive,
         manifest['bottomNavGallery'],
       );
+      final importedFonts = await _importThemeFontsFromBundle(
+        archive,
+        themeDirectory,
+        manifest['fonts'],
+      );
+      importedFontFamilyKeys.addAll(importedFonts.importedFamilyKeys);
 
       final theme = importedTheme.copyWith(
         id: themeId,
@@ -501,6 +521,20 @@ class AdvancedThemeService {
         clearLaunchImageGalleryId: launchImageGalleryId == null,
         bottomNavGalleryId: bottomNavGalleryId,
         clearBottomNavGalleryId: bottomNavGalleryId == null,
+        appInterfaceFontFamilyKey:
+            importedFonts.hasManifest
+                ? importedFonts.appInterfaceFontFamilyKey
+                : importedTheme.appInterfaceFontFamilyKey,
+        clearAppInterfaceFontFamilyKey:
+            importedFonts.hasManifest &&
+            importedFonts.appInterfaceFontFamilyKey == null,
+        readerFontFamilyKey:
+            importedFonts.hasManifest
+                ? importedFonts.readerFontFamilyKey
+                : importedTheme.readerFontFamilyKey,
+        clearReaderFontFamilyKey:
+            importedFonts.hasManifest &&
+            importedFonts.readerFontFamilyKey == null,
       );
       return saveTheme(theme);
     } catch (_) {
@@ -509,6 +543,7 @@ class AdvancedThemeService {
         coverGalleryId: coverGalleryId,
         launchImageGalleryId: launchImageGalleryId,
         bottomNavGalleryId: bottomNavGalleryId,
+        importedFontFamilyKeys: importedFontFamilyKeys,
         sharedBackgroundPaths: sharedBackgroundPaths,
         sharedReaderBackgroundPaths: sharedReaderBackgroundPaths,
       );
@@ -1157,6 +1192,68 @@ class AdvancedThemeService {
     return <String, dynamic>{'name': normalizedName, 'images': bundlePaths};
   }
 
+  Future<Map<String, dynamic>?> _appendThemeFontsToArchive(
+    Archive archive,
+    AppAdvancedTheme theme,
+  ) async {
+    final boundFamilyKeys = <String>{
+      ...[theme.appInterfaceFontFamilyKey, theme.readerFontFamilyKey]
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty),
+    };
+    if (boundFamilyKeys.isEmpty) {
+      return null;
+    }
+
+    final fontService = ReaderFontRegistryService();
+    final fonts = await fontService.listRegisteredFonts();
+    final fontByFamilyKey = <String, ReaderCustomFontEntry>{
+      for (final entry in fonts) entry.fontFamilyKey: entry,
+    };
+    final entriesManifest = <String, Map<String, dynamic>>{};
+
+    for (final familyKey in boundFamilyKeys) {
+      final entry = fontByFamilyKey[familyKey];
+      if (entry == null) {
+        continue;
+      }
+      final file = File(entry.filePath);
+      if (!await file.exists()) {
+        continue;
+      }
+      final extension = p.extension(file.path);
+      final bundlePath =
+          'theme_fonts/$familyKey${extension.isEmpty ? '.ttf' : extension}';
+      archive.addFile(
+        ArchiveFile(bundlePath, await file.length(), await file.readAsBytes()),
+      );
+      entriesManifest[familyKey] = <String, dynamic>{
+        'displayName': entry.displayName,
+        'bundlePath': bundlePath,
+      };
+    }
+
+    if (entriesManifest.isEmpty) {
+      return null;
+    }
+
+    final bindings = <String, String>{};
+    final appKey = theme.appInterfaceFontFamilyKey?.trim() ?? '';
+    if (appKey.isNotEmpty && entriesManifest.containsKey(appKey)) {
+      bindings['appInterfaceFontFamilyKey'] = appKey;
+    }
+    final readerKey = theme.readerFontFamilyKey?.trim() ?? '';
+    if (readerKey.isNotEmpty && entriesManifest.containsKey(readerKey)) {
+      bindings['readerFontFamilyKey'] = readerKey;
+    }
+    if (bindings.isEmpty) {
+      return null;
+    }
+
+    return <String, dynamic>{'entries': entriesManifest, 'bindings': bindings};
+  }
+
   Future<BottomNavIconGallery?> _findBottomNavGallery(String? galleryId) async {
     final normalized = galleryId?.trim() ?? '';
     if (normalized.isEmpty) {
@@ -1353,6 +1450,70 @@ class AdvancedThemeService {
       await _safeDeleteCoverGallery(gallery.id);
       rethrow;
     }
+  }
+
+  Future<_ImportedThemeFonts> _importThemeFontsFromBundle(
+    Archive archive,
+    Directory themeDirectory,
+    Object? rawManifest,
+  ) async {
+    if (rawManifest is! Map) {
+      return const _ImportedThemeFonts();
+    }
+    final manifest = rawManifest.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final rawEntries = manifest['entries'];
+    final rawBindings = manifest['bindings'];
+    if (rawEntries is! Map || rawBindings is! Map) {
+      return const _ImportedThemeFonts(hasManifest: true);
+    }
+
+    final fontService = ReaderFontRegistryService();
+    final remappedFamilyKeys = <String, String>{};
+    final importedFamilyKeys = <String>[];
+
+    for (final rawEntry in rawEntries.entries) {
+      final oldFamilyKey = rawEntry.key.toString().trim();
+      if (oldFamilyKey.isEmpty || rawEntry.value is! Map) {
+        continue;
+      }
+      final entryMap = (rawEntry.value as Map).map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      final bundlePath = entryMap['bundlePath']?.toString().trim() ?? '';
+      if (bundlePath.isEmpty) {
+        continue;
+      }
+      final extractedPath = await _extractArchiveFileToThemeDirectory(
+        archive,
+        themeDirectory,
+        bundlePath,
+        targetNamePrefix: 'font_$oldFamilyKey',
+      );
+      if (extractedPath == null) {
+        continue;
+      }
+      final importedEntry = await fontService.importFontFile(
+        filePath: extractedPath,
+        displayName: entryMap['displayName']?.toString(),
+      );
+      remappedFamilyKeys[oldFamilyKey] = importedEntry.fontFamilyKey;
+      importedFamilyKeys.add(importedEntry.fontFamilyKey);
+    }
+
+    final bindings = rawBindings.map(
+      (key, value) => MapEntry(key.toString(), value?.toString().trim() ?? ''),
+    );
+    final appOldFamilyKey = bindings['appInterfaceFontFamilyKey'] ?? '';
+    final readerOldFamilyKey = bindings['readerFontFamilyKey'] ?? '';
+
+    return _ImportedThemeFonts(
+      hasManifest: true,
+      appInterfaceFontFamilyKey: remappedFamilyKeys[appOldFamilyKey],
+      readerFontFamilyKey: remappedFamilyKeys[readerOldFamilyKey],
+      importedFamilyKeys: importedFamilyKeys,
+    );
   }
 
   Future<String?> _importBottomNavGalleryFromBundle(
@@ -1849,6 +2010,7 @@ class AdvancedThemeService {
     String? coverGalleryId,
     String? launchImageGalleryId,
     String? bottomNavGalleryId,
+    List<String> importedFontFamilyKeys = const <String>[],
     List<String> sharedBackgroundPaths = const <String>[],
     List<String> sharedReaderBackgroundPaths = const <String>[],
   }) async {
@@ -1861,6 +2023,7 @@ class AdvancedThemeService {
     await _safeDeleteCoverGallery(coverGalleryId);
     await _safeDeleteLaunchGallery(launchImageGalleryId);
     await _safeDeleteBottomNavGallery(bottomNavGalleryId);
+    await _safeDeleteImportedFonts(importedFontFamilyKeys);
     if (await themeDirectory.exists()) {
       await themeDirectory.delete(recursive: true);
     }
@@ -1905,6 +2068,24 @@ class AdvancedThemeService {
       ).deleteGallery(normalized);
     } catch (_) {
       // Ignore rollback failures.
+    }
+  }
+
+  Future<void> _safeDeleteImportedFonts(List<String> familyKeys) async {
+    if (familyKeys.isEmpty) {
+      return;
+    }
+    final service = ReaderFontRegistryService();
+    for (final familyKey in familyKeys) {
+      final normalized = familyKey.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      try {
+        await service.removeFont(normalized);
+      } catch (_) {
+        // Ignore rollback failures.
+      }
     }
   }
 
@@ -2031,6 +2212,20 @@ class _BottomNavBundleImportAssignment {
   final BottomNavIconAssetRef? assetRef;
   final String? bundlePath;
   final BottomNavIconAssetFormat? format;
+}
+
+class _ImportedThemeFonts {
+  const _ImportedThemeFonts({
+    this.hasManifest = false,
+    this.appInterfaceFontFamilyKey,
+    this.readerFontFamilyKey,
+    this.importedFamilyKeys = const <String>[],
+  });
+
+  final bool hasManifest;
+  final String? appInterfaceFontFamilyKey;
+  final String? readerFontFamilyKey;
+  final List<String> importedFamilyKeys;
 }
 
 class _RedReaderSchemaImport {
