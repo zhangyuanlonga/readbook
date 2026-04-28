@@ -15,7 +15,7 @@ void main() {
 
       final state = container.read(appShellNavigationProvider);
       expect(state.showBookshelf, isTrue);
-      expect(state.showDiscover, isTrue);
+      expect(state.showDiscover, isFalse);
       expect(state.showStats, isTrue);
       expect(state.visibleTabCount, 4);
     });
@@ -30,7 +30,7 @@ void main() {
 
       final updated = container.read(appShellNavigationProvider);
       expect(updated.showDiscover, isFalse);
-      expect(updated.visibleTabCount, 3);
+      expect(updated.visibleTabCount, 4);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('app.shell.navigation.discover'), isFalse);

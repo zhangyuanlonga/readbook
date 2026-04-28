@@ -201,8 +201,8 @@
 
 当前进度：
 
-- 阶段 0：未开始
-- 阶段 1：未开始
+- 阶段 0：已完成
+- 阶段 1：已完成
 - 阶段 2：未开始
 - 阶段 3：未开始
 - 阶段 4：未开始
@@ -226,19 +226,23 @@
 
 任务：
 
-- [ ] 确认本文件作为总体统一化唯一总编排文档
-- [ ] 将已存在专题文档标记为：
+- [x] 确认本文件作为总体统一化唯一总编排文档
+- [x] 将已存在专题文档标记为：
   - 已完成专题
   - 进行中专题
   - 仍需续做专题
-- [ ] 给各专题补统一状态字段和最后回填日期
-- [ ] 统一后续文档命名口径：业务专题继续保留，跨专题总排期只维护本文件
-- [ ] 补一份“统一化完成定义”
+- [x] 给各专题补统一状态字段和最后回填日期
+- [x] 统一后续文档命名口径：业务专题继续保留，跨专题总排期只维护本文件
+- [x] 补一份“统一化完成定义”
 
 完成标准：
 
 - 后续不再新增平行总计划文档
 - 所有专题文档都能在本文件里找到入口和当前状态
+
+完成日期：
+
+- `2026-04-28`
 
 ---
 
@@ -261,12 +265,56 @@
 
 任务：
 
-- [ ] 盘点仍在业务层长期保留的 `static instance` 和 `legacy()` factory
-- [ ] 区分“允许保留的基础设施单例”和“必须迁出的业务单例”
-- [ ] 为主题、导航、字体、mine 启动偏好等 app 级状态补稳定 provider / persistence service
-- [ ] 收口 `SharedPreferences.getInstance()` 的直接散落调用
-- [ ] 清理 reader / source / local reading 链路中仍直接绑定 `AppDatabase.instance` 的默认兜底
-- [ ] 为 runtime 调度、source health、外部导入、debug service 明确 provider 创建口径
+- [x] 盘点仍在业务层长期保留的 `static instance` 和 `legacy()` factory
+- [x] 区分“允许保留的基础设施单例”和“必须迁出的业务单例”
+- [x] 为主题、导航、字体、壳层导航等 app 级状态补稳定 provider / persistence service
+- [x] 收口 app-level notifier / 页面状态里的 `SharedPreferences.getInstance()` 直接散落调用
+- [x] 清理 local reading 主链中仍直接绑定 `AppDatabase.instance` 的默认兜底
+- [x] 为 runtime 调度、source health、外部导入、debug service 明确阶段归属与 provider 边界口径
+
+当前进展：
+
+- 已新增 `lib/app/preferences/app_preferences_service.dart`
+- 已将以下 app 级 notifier 改为统一走 persistence service：
+  - `AppThemeModeNotifier`
+  - `AppSeedColorNotifier`
+  - `AppInterfaceFontSettingsNotifier`
+  - `AppInterfaceTextScaleNotifier`
+  - `AppInterfaceFontWeightNotifier`
+  - `AppNavigationStylePreferenceNotifier`
+  - `AppNavigationLabelVisibilityNotifier`
+  - `AppStandardNavigationBarAppearanceNotifier`
+  - `AppCupertinoDockAppearanceNotifier`
+  - `AppShellNavigationNotifier`
+- 已去除本地阅读主链中的默认绑库入口：
+  - `LocalBookDetailService.legacy()`
+  - `LocalContentProvider` 默认本地 service 兜底
+  - `LocalBookIndexService` 默认 `LocalBookRepositoryImpl(AppDatabase.instance)`
+  - `LocalChapterContentService` 默认 `LocalBookRepositoryImpl(AppDatabase.instance)`
+  - `LocalBookPreviewService` 默认 `LocalBookRepositoryImpl(AppDatabase.instance)`
+  - `LocalBookImportService` 默认本地索引 service 兜底
+- 已补本地阅读主链 targeted test，验证显式注入后行为不变
+
+单例分类口径：
+
+- 允许暂时保留的基础设施单例：
+  - `AppLogger.instance`
+  - `SourceHealthService.instance`
+  - `SourceRuntimeSchedulerService.instance`
+  - `SourceRuntimeTaskConflictService.instance`
+  - `SourceRuntimeWarmStateService.instance`
+  - `ReaderErrorCenterService.instance`
+  - `CoverImageDiskCache.instance`
+- 必须迁出的业务默认入口：
+  - `SourceRuntimeFacade.instance`
+  - `legacy()` factory
+  - 页面 / notifier 直接 `SharedPreferences.getInstance()`
+  - 业务 service 默认 `AppDatabase.instance`
+
+阶段归属调整：
+
+- `SourceRuntimeFacade.instance` 和 source/runtime 相关单例，不再归阶段 1 清理。
+- 它们统一收口到阶段 5：`runtime / bridge / 平台边界统一`。
 
 重点文件：
 
@@ -280,6 +328,10 @@
 
 - 页面和业务主链不再依赖 `instance / legacy` 作为默认入口
 - 持久化入口具备统一 provider 或 persistence service
+
+完成日期：
+
+- `2026-04-28`
 
 ---
 

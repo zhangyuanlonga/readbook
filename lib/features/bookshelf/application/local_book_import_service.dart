@@ -55,20 +55,13 @@ class LocalBookImportService {
     required LocalBookStorageService localBookStorageService,
     required AppLogger logger,
     required SourceLoginStateService sourceLoginStateService,
-    LocalBookIndexService? localBookIndexService,
+    required LocalBookIndexService localBookIndexService,
     Duration warmUpDelay = const Duration(milliseconds: 350),
   }) : _localBookRepository = localBookRepository,
        _bookshelfService = bookshelfService,
        _readerSystemSettingsService = readerSystemSettingsService,
        _localBookStorageService = localBookStorageService,
-       _localBookIndexService =
-           localBookIndexService ??
-           LocalBookIndexService(
-             localBookRepository: localBookRepository,
-             readerSystemSettingsService: readerSystemSettingsService,
-             storageService: localBookStorageService,
-             logger: logger,
-           ),
+       _localBookIndexService = localBookIndexService,
        _sourceLoginStateService = sourceLoginStateService,
        _logger = logger,
        _warmUpDelay = warmUpDelay;

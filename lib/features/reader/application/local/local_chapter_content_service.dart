@@ -4,8 +4,6 @@ import 'dart:io';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
-import '../../../../data/datasources/local/app_database.dart';
-import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
@@ -15,19 +13,12 @@ import 'local_text_encoding_detector.dart';
 
 class LocalChapterContentService {
   LocalChapterContentService({
-    LocalBookRepository? localBookRepository,
-    LocalBookIndexService? indexService,
-    LocalBookStorageService? storageService,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _indexService =
-           indexService ??
-           LocalBookIndexService(
-             localBookRepository:
-                 localBookRepository ??
-                 LocalBookRepositoryImpl(AppDatabase.instance),
-           ),
-       _storageService = storageService ?? LocalBookStorageService();
+    required LocalBookRepository localBookRepository,
+    required LocalBookIndexService indexService,
+    required LocalBookStorageService storageService,
+  }) : _localBookRepository = localBookRepository,
+       _indexService = indexService,
+       _storageService = storageService;
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;

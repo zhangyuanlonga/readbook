@@ -3,6 +3,7 @@
 更新时间：2026-04-27  
 目标：先收口应用内部的书籍身份语义，明确 `logicalBookId` 与 `sourceBookKey` 的概念边界。  
 执行边界：**本轮不改书源编写规范，不改书源标准 `Book` contract，不改 `detailUrl` 语义，不改书源 custom state 的存储键策略。**
+总计划状态：`进行中专题`
 
 关联文档：
 

@@ -16,8 +16,12 @@ import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../../book/application/local_book_detail_service.dart';
 import 'content_provider.dart';
 import 'local_content_provider.dart';
+import 'local/local_book_index_service.dart';
+import 'local/local_book_preview_service.dart';
+import 'local/local_chapter_content_service.dart';
 import 'local/local_book_storage_service.dart';
 import 'reader_error_center_service.dart';
 import 'reader_font_registry_service.dart';
@@ -88,22 +92,53 @@ final readerFeatureDependenciesFactoryProvider =
     Provider<ReaderFeatureDependenciesFactory>((ref) {
       return () {
         final database = AppDatabase.instance;
+        final localBookRepository = LocalBookRepositoryImpl(database);
+        final readerPreferencesService = ReaderPreferencesService();
+        final readerSystemSettingsService = ReaderSystemSettingsService();
+        final readerBackgroundService = ReaderBackgroundService();
+        final localBookStorageService = LocalBookStorageService();
+        final readingRecordService = ReadingRecordService(database: database);
+        final bookshelfService = BookshelfService();
+        final localBookIndexService = LocalBookIndexService(
+          localBookRepository: localBookRepository,
+          readerSystemSettingsService: readerSystemSettingsService,
+          storageService: localBookStorageService,
+          bookshelfService: bookshelfService,
+          readingRecordService: readingRecordService,
+        );
+        final localBookDetailService = LocalBookDetailService(
+          localBookRepository: localBookRepository,
+          indexService: localBookIndexService,
+        );
+        final localChapterContentService = LocalChapterContentService(
+          localBookRepository: localBookRepository,
+          indexService: localBookIndexService,
+          storageService: localBookStorageService,
+        );
+        final localBookPreviewService = LocalBookPreviewService(
+          localBookRepository: localBookRepository,
+          storageService: localBookStorageService,
+        );
         return ReaderFeatureDependencies(
           contentProviderRegistry: ContentProviderRegistry(
             providers: <ContentProvider>[
-              LocalContentProvider(),
+              LocalContentProvider(
+                detailService: localBookDetailService,
+                chapterContentService: localChapterContentService,
+                previewService: localBookPreviewService,
+              ),
               SourceContentProvider(),
             ],
           ),
-          preferencesService: ReaderPreferencesService(),
+          preferencesService: readerPreferencesService,
           fontRegistryService: ReaderFontRegistryService(),
           paginationCacheService: _sharedReaderPaginationCacheService,
-          systemSettingsService: ReaderSystemSettingsService(),
-          readerBackgroundService: ReaderBackgroundService(),
-          localBookStorageService: LocalBookStorageService(),
-          readingRecordService: ReadingRecordService(database: database),
+          systemSettingsService: readerSystemSettingsService,
+          readerBackgroundService: readerBackgroundService,
+          localBookStorageService: localBookStorageService,
+          readingRecordService: readingRecordService,
           imageSelectionService: ImageSelectionService(),
-          bookshelfService: BookshelfService(),
+          bookshelfService: bookshelfService,
           switchSourceSearchService: SearchService(),
           searchHitCacheService: SearchHitCacheService(),
           sourceHealthService: SourceHealthService.instance,
@@ -114,7 +149,7 @@ final readerFeatureDependenciesFactoryProvider =
           bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
             database,
           ),
-          localBookRepository: LocalBookRepositoryImpl(database),
+          localBookRepository: localBookRepository,
           cachedChapterStore: ReaderCachedChapterStore(database: database),
           readerErrorCenterService: ReaderErrorCenterService.instance,
           logger: AppLogger.instance,

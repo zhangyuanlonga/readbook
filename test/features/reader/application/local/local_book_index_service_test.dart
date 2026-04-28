@@ -8,6 +8,8 @@ import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
@@ -42,6 +44,22 @@ void main() {
       }
     });
 
+    LocalBookIndexService buildService({
+      required List<LocalBookParser> parsers,
+      ReaderSystemSettingsService? systemSettingsService,
+      LocalBookStorageService? localStorageService,
+    }) {
+      return LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: parsers,
+        readerSystemSettingsService:
+            systemSettingsService ?? ReaderSystemSettingsService(),
+        storageService: localStorageService ?? storageService,
+        bookshelfService: BookshelfService(),
+        readingRecordService: ReadingRecordService(database: database),
+      );
+    }
+
     test('writes parsed chapters and marks book ready', () async {
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final file = File('${tempDir.path}/index_1.txt');
@@ -58,11 +76,7 @@ void main() {
         ),
       );
 
-      final service = LocalBookIndexService(
-        localBookRepository: repository,
-        parsers: const [_FakeSuccessParser()],
-        storageService: storageService,
-      );
+      final service = buildService(parsers: const [_FakeSuccessParser()]);
 
       final chapters = await service.ensureIndexed(bookId: 'local_index_1');
 
@@ -91,11 +105,7 @@ void main() {
         ),
       );
 
-      final service = LocalBookIndexService(
-        localBookRepository: repository,
-        parsers: const [_FakeFailureParser()],
-        storageService: storageService,
-      );
+      final service = buildService(parsers: const [_FakeFailureParser()]);
 
       await expectLater(
         service.ensureIndexed(bookId: 'local_index_2'),
@@ -132,11 +142,9 @@ void main() {
       );
       await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
 
-      final service = LocalBookIndexService(
-        localBookRepository: repository,
+      final service = buildService(
         parsers: const [_FakeSuccessParser()],
-        readerSystemSettingsService: systemSettingsService,
-        storageService: storageService,
+        systemSettingsService: systemSettingsService,
       );
 
       await service.ensureIndexed(bookId: 'local_index_split_1');
@@ -176,11 +184,7 @@ void main() {
 
       await sourceFile.writeAsString('第一章\n源文件已变化');
 
-      final service = LocalBookIndexService(
-        localBookRepository: repository,
-        parsers: const [_FakeSuccessParser()],
-        storageService: storageService,
-      );
+      final service = buildService(parsers: const [_FakeSuccessParser()]);
       final refreshed = await service.refreshBookState(
         bookId: 'local_index_stale_1',
       );
@@ -213,10 +217,9 @@ void main() {
           ),
         );
 
-        final service = LocalBookIndexService(
-          localBookRepository: repository,
+        final service = buildService(
           parsers: const [_FakeSuccessParser()],
-          storageService: LocalBookStorageService(
+          localStorageService: LocalBookStorageService(
             supportDirectoryProvider: () async => supportDir,
           ),
         );
@@ -266,11 +269,7 @@ void main() {
           ],
         );
 
-        final service = LocalBookIndexService(
-          localBookRepository: repository,
-          parsers: const [_FakeSuccessParser()],
-          storageService: storageService,
-        );
+        final service = buildService(parsers: const [_FakeSuccessParser()]);
 
         final refreshed = await service.refreshBookState(
           bookId: 'local_index_legacy_txt',
@@ -320,11 +319,7 @@ void main() {
           ],
         );
 
-        final service = LocalBookIndexService(
-          localBookRepository: repository,
-          parsers: const [_FakeSuccessParser()],
-          storageService: storageService,
-        );
+        final service = buildService(parsers: const [_FakeSuccessParser()]);
 
         final refreshed = await service.refreshBookState(
           bookId: 'local_index_streamed_txt',
@@ -357,10 +352,8 @@ void main() {
         ),
       );
 
-      final service = LocalBookIndexService(
-        localBookRepository: repository,
+      final service = buildService(
         parsers: const <LocalBookParser>[TxtLocalBookParser()],
-        storageService: storageService,
       );
 
       await expectLater(

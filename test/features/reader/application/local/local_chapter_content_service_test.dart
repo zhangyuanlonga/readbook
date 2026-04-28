@@ -10,6 +10,9 @@ import 'package:shuxiang_reading_next/data/repositories/local_book_repository_im
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_chapter_content_service.dart';
@@ -43,7 +46,10 @@ void main() {
       indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: <LocalBookParser>[const TxtLocalBookParser()],
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         storageService: storageService,
+        bookshelfService: BookshelfService(),
+        readingRecordService: ReadingRecordService(database: database),
       );
       contentService = LocalChapterContentService(
         localBookRepository: repository,
@@ -323,7 +329,10 @@ $chapter2
       indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: const <LocalBookParser>[EpubLocalBookParser()],
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         storageService: storageService,
+        bookshelfService: BookshelfService(),
+        readingRecordService: ReadingRecordService(database: database),
       );
       contentService = LocalChapterContentService(
         localBookRepository: repository,
@@ -524,10 +533,17 @@ $chapter2
 
 class _TrackingLocalBookIndexService extends LocalBookIndexService {
   _TrackingLocalBookIndexService({
-    required super.localBookRepository,
+    required LocalBookRepositoryImpl localBookRepository,
     required super.storageService,
     this.refreshedBook,
-  });
+  }) : super(
+         localBookRepository: localBookRepository,
+         readerSystemSettingsService: ReaderSystemSettingsService(),
+         bookshelfService: BookshelfService(),
+         readingRecordService: ReadingRecordService(
+           database: AppDatabase(executor: NativeDatabase.memory()),
+         ),
+       );
 
   final LocalBook? refreshedBook;
   int ensureIndexedCallCount = 0;

@@ -3,8 +3,6 @@ import 'dart:async';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -20,16 +18,6 @@ class LocalBookDetailResult {
 enum LocalBookDetailLoadMode { directoryOnly, withContent }
 
 class LocalBookDetailService {
-  factory LocalBookDetailService.legacy() {
-    final localBookRepository = LocalBookRepositoryImpl(AppDatabase.instance);
-    return LocalBookDetailService(
-      localBookRepository: localBookRepository,
-      indexService: LocalBookIndexService(
-        localBookRepository: localBookRepository,
-      ),
-    );
-  }
-
   LocalBookDetailService({
     required LocalBookRepository localBookRepository,
     required LocalBookIndexService indexService,

@@ -5,8 +5,6 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../core/logging/app_logger.dart';
-import '../../../../data/datasources/local/app_database.dart';
-import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/bookshelf_book.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
@@ -26,15 +24,14 @@ import 'txt_local_book_parser.dart';
 
 class LocalBookIndexService {
   LocalBookIndexService({
-    LocalBookRepository? localBookRepository,
+    required LocalBookRepository localBookRepository,
     List<LocalBookParser>? parsers,
     AppLogger? logger,
-    ReaderSystemSettingsService? readerSystemSettingsService,
-    LocalBookStorageService? storageService,
-    BookshelfService? bookshelfService,
-    ReadingRecordService? readingRecordService,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
+    required ReaderSystemSettingsService readerSystemSettingsService,
+    required LocalBookStorageService storageService,
+    required BookshelfService bookshelfService,
+    required ReadingRecordService readingRecordService,
+  }) : _localBookRepository = localBookRepository,
        _parsers =
            parsers ??
            <LocalBookParser>[
@@ -45,12 +42,10 @@ class LocalBookIndexService {
              const PdfLocalBookParser(),
              const KindleLocalBookParser(),
            ],
-       _readerSystemSettingsService =
-           readerSystemSettingsService ?? ReaderSystemSettingsService(),
-       _storageService =
-           storageService ?? LocalBookStorageService(logger: logger),
-       _bookshelfService = bookshelfService ?? BookshelfService(),
-       _readingRecordService = readingRecordService ?? ReadingRecordService(),
+       _readerSystemSettingsService = readerSystemSettingsService,
+       _storageService = storageService,
+       _bookshelfService = bookshelfService,
+       _readingRecordService = readingRecordService,
        _logger = logger ?? AppLogger.instance;
 
   final LocalBookRepository _localBookRepository;

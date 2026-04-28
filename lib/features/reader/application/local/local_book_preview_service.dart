@@ -3,8 +3,6 @@ import 'dart:io';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
-import '../../../../data/datasources/local/app_database.dart';
-import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
@@ -13,12 +11,11 @@ import 'local_text_encoding_detector.dart';
 
 class LocalBookPreviewService {
   LocalBookPreviewService({
-    LocalBookRepository? localBookRepository,
-    LocalBookStorageService? storageService,
+    required LocalBookRepository localBookRepository,
+    required LocalBookStorageService storageService,
     LocalTextEncodingDetector? textEncodingDetector,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _storageService = storageService ?? LocalBookStorageService(),
+  }) : _localBookRepository = localBookRepository,
+       _storageService = storageService,
        _textEncodingDetector =
            textEncodingDetector ?? const LocalTextEncodingDetector();
 

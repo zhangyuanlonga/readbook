@@ -16,16 +16,15 @@ class LocalContentProvider extends ContentProvider {
     LocalBookDetailService? detailService,
     LocalChapterContentService? chapterContentService,
     LocalBookPreviewService? previewService,
-  }) : _detailService = detailService ?? LocalBookDetailService.legacy(),
-       _chapterContentService =
-           chapterContentService ?? LocalChapterContentService(),
-       _previewService = previewService ?? LocalBookPreviewService();
+  }) : _detailService = detailService,
+       _chapterContentService = chapterContentService,
+       _previewService = previewService;
 
   static const String sourceName = '本地导入';
 
-  final LocalBookDetailService _detailService;
-  final LocalChapterContentService _chapterContentService;
-  final LocalBookPreviewService _previewService;
+  final LocalBookDetailService? _detailService;
+  final LocalChapterContentService? _chapterContentService;
+  final LocalBookPreviewService? _previewService;
 
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
@@ -64,7 +63,7 @@ class LocalContentProvider extends ContentProvider {
       );
     }
 
-    final result = await _detailService.load(
+    final result = await _requireDetailService().load(
       bookId: resolvedBookId,
       mode: LocalBookDetailLoadMode.directoryOnly,
       forceReindex: forceRefresh,
@@ -143,10 +142,10 @@ class LocalContentProvider extends ContentProvider {
 
     final chapter =
         (resolvedChapterId?.trim().toLowerCase() == 'bootstrap')
-            ? await _previewService.loadTxtBootstrapPreview(
+            ? await _requirePreviewService().loadTxtBootstrapPreview(
               bookId: resolvedBookId,
             )
-            : await _chapterContentService.load(
+            : await _requireChapterContentService().load(
               bookId: resolvedBookId,
               chapterId: resolvedChapterId,
               chapterIndex: chapterIndex,
@@ -157,6 +156,36 @@ class LocalContentProvider extends ContentProvider {
       fromCache: true,
       imageUrls: chapter.imageUrls,
       document: chapter.document,
+    );
+  }
+
+  LocalBookDetailService _requireDetailService() {
+    final detailService = _detailService;
+    if (detailService != null) {
+      return detailService;
+    }
+    throw StateError(
+      'LocalBookDetailService is required to load local detail.',
+    );
+  }
+
+  LocalChapterContentService _requireChapterContentService() {
+    final chapterContentService = _chapterContentService;
+    if (chapterContentService != null) {
+      return chapterContentService;
+    }
+    throw StateError(
+      'LocalChapterContentService is required to load local chapter content.',
+    );
+  }
+
+  LocalBookPreviewService _requirePreviewService() {
+    final previewService = _previewService;
+    if (previewService != null) {
+      return previewService;
+    }
+    throw StateError(
+      'LocalBookPreviewService is required to load local bootstrap preview.',
     );
   }
 

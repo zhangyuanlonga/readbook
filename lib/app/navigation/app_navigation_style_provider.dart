@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../preferences/app_preferences_service.dart';
+
 enum AppNavigationStylePreference { followSystem, standard, cupertinoDock }
 
 enum AppNavigationStyle { standard, cupertinoDock }
@@ -79,7 +81,6 @@ class AppCupertinoDockAppearance {
 
 class AppNavigationStylePreferenceNotifier
     extends Notifier<AppNavigationStylePreference> {
-  static const String _navigationStyleKey = 'app.navigationStyle';
   static AppNavigationStylePreference? _primedPreference;
 
   bool _loadTriggered = false;
@@ -87,7 +88,7 @@ class AppNavigationStylePreferenceNotifier
 
   static void prime(SharedPreferences prefs) {
     _primedPreference = _preferenceFromRaw(
-      prefs.getString(_navigationStyleKey),
+      prefs.getString(appNavigationStylePreferenceKey),
     );
   }
 
@@ -105,8 +106,11 @@ class AppNavigationStylePreferenceNotifier
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final loaded = _preferenceFromRaw(prefs.getString(_navigationStyleKey));
+    final loaded = _preferenceFromRaw(
+      await ref
+          .read(appNavigationPreferencesServiceProvider)
+          .loadNavigationStyleRaw(),
+    );
     if (_hasExplicitSet) {
       return;
     }
@@ -122,8 +126,9 @@ class AppNavigationStylePreferenceNotifier
       state = preference;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_navigationStyleKey, _rawFromPreference(preference));
+    await ref
+        .read(appNavigationPreferencesServiceProvider)
+        .saveNavigationStyleRaw(_rawFromPreference(preference));
   }
 
   static AppNavigationStylePreference _preferenceFromRaw(String? raw) {
@@ -144,15 +149,15 @@ class AppNavigationStylePreferenceNotifier
 }
 
 class AppNavigationLabelVisibilityNotifier extends Notifier<bool> {
-  static const String _navigationLabelVisibilityKey =
-      'app.navigation.showLabels';
   static bool? _primedVisibility;
 
   bool _loadTriggered = false;
   bool _hasExplicitSet = false;
 
   static void prime(SharedPreferences prefs) {
-    _primedVisibility = prefs.getBool(_navigationLabelVisibilityKey);
+    _primedVisibility = prefs.getBool(
+      appNavigationLabelVisibilityPreferenceKey,
+    );
   }
 
   @override
@@ -169,8 +174,11 @@ class AppNavigationLabelVisibilityNotifier extends Notifier<bool> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final loaded = prefs.getBool(_navigationLabelVisibilityKey) ?? true;
+    final loaded =
+        await ref
+            .read(appNavigationPreferencesServiceProvider)
+            .loadLabelVisibility() ??
+        true;
     if (_hasExplicitSet) {
       return;
     }
@@ -186,16 +194,14 @@ class AppNavigationLabelVisibilityNotifier extends Notifier<bool> {
       state = visible;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_navigationLabelVisibilityKey, visible);
+    await ref
+        .read(appNavigationPreferencesServiceProvider)
+        .saveLabelVisibility(visible);
   }
 }
 
 class AppStandardNavigationBarAppearanceNotifier
     extends Notifier<AppStandardNavigationBarAppearance> {
-  static const String _floatingBarKey = 'app.navigation.standard.floatingBar';
-  static const String _frostedEffectKey =
-      'app.navigation.standard.frostedEffect';
   static AppStandardNavigationBarAppearance? _primedAppearance;
 
   bool _loadTriggered = false;
@@ -219,8 +225,7 @@ class AppStandardNavigationBarAppearanceNotifier
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final loaded = _readAppearance(prefs);
+    final loaded = await _loadAppearance();
     if (_hasExplicitSet) {
       return;
     }
@@ -246,25 +251,42 @@ class AppStandardNavigationBarAppearanceNotifier
     _primedAppearance = next;
     state = next;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_floatingBarKey, next.floatingBar);
-    await prefs.setBool(_frostedEffectKey, next.frostedEffect);
+    await ref
+        .read(appNavigationPreferencesServiceProvider)
+        .saveStandardNavigationBarAppearance(
+          AppStandardNavigationBarAppearanceSnapshot(
+            floatingBar: next.floatingBar,
+            frostedEffect: next.frostedEffect,
+          ),
+        );
   }
 
   static AppStandardNavigationBarAppearance _readAppearance(
     SharedPreferences prefs,
   ) {
     return AppStandardNavigationBarAppearance(
-      floatingBar: prefs.getBool(_floatingBarKey) ?? false,
-      frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
+      floatingBar:
+          prefs.getBool(appNavigationStandardFloatingBarPreferenceKey) ?? false,
+      frostedEffect:
+          prefs.getBool(appNavigationStandardFrostedEffectPreferenceKey) ??
+          false,
+    );
+  }
+
+  Future<AppStandardNavigationBarAppearance> _loadAppearance() async {
+    final snapshot =
+        await ref
+            .read(appNavigationPreferencesServiceProvider)
+            .loadStandardNavigationBarAppearance();
+    return AppStandardNavigationBarAppearance(
+      floatingBar: snapshot.floatingBar,
+      frostedEffect: snapshot.frostedEffect,
     );
   }
 }
 
 class AppCupertinoDockAppearanceNotifier
     extends Notifier<AppCupertinoDockAppearance> {
-  static const String _frostedEffectKey =
-      'app.navigation.cupertinoDock.frostedEffect';
   static AppCupertinoDockAppearance? _primedAppearance;
 
   bool _loadTriggered = false;
@@ -272,7 +294,9 @@ class AppCupertinoDockAppearanceNotifier
 
   static void prime(SharedPreferences prefs) {
     _primedAppearance = AppCupertinoDockAppearance(
-      frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
+      frostedEffect:
+          prefs.getBool(appNavigationCupertinoDockFrostedEffectPreferenceKey) ??
+          false,
     );
   }
 
@@ -290,9 +314,12 @@ class AppCupertinoDockAppearanceNotifier
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final snapshot =
+        await ref
+            .read(appNavigationPreferencesServiceProvider)
+            .loadCupertinoDockAppearance();
     final loaded = AppCupertinoDockAppearance(
-      frostedEffect: prefs.getBool(_frostedEffectKey) ?? false,
+      frostedEffect: snapshot.frostedEffect,
     );
     if (_hasExplicitSet) {
       return;
@@ -311,8 +338,11 @@ class AppCupertinoDockAppearanceNotifier
     _primedAppearance = next;
     state = next;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_frostedEffectKey, enabled);
+    await ref
+        .read(appNavigationPreferencesServiceProvider)
+        .saveCupertinoDockAppearance(
+          AppCupertinoDockAppearanceSnapshot(frostedEffect: enabled),
+        );
   }
 }
 

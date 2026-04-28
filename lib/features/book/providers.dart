@@ -7,6 +7,8 @@ import '../../domain/repositories/bookmark_repository.dart';
 import '../../domain/repositories/local_book_repository.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import '../reader/application/local/local_book_index_service.dart';
+import '../reader/application/local/local_book_preview_service.dart';
+import '../reader/application/local/local_chapter_content_service.dart';
 import '../reader/application/local/local_book_storage_service.dart';
 import '../reader/application/reader_system_settings_service.dart';
 import '../reader/application/reader_preferences_service.dart';
@@ -115,9 +117,34 @@ final bookDetailReadingRecordServiceProvider = Provider<ReadingRecordService>((
 
 final bookDetailLocalBookIndexServiceProvider = Provider<LocalBookIndexService>(
   (ref) {
-    return LocalBookIndexService();
+    return LocalBookIndexService(
+      localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+      readerSystemSettingsService: ref.watch(
+        bookDetailReaderSystemSettingsServiceProvider,
+      ),
+      storageService: ref.watch(bookDetailLocalBookStorageServiceProvider),
+      bookshelfService: ref.watch(bookDetailBookshelfServiceProvider),
+      readingRecordService: ref.watch(bookDetailReadingRecordServiceProvider),
+    );
   },
 );
+
+final bookDetailLocalChapterContentServiceProvider =
+    Provider<LocalChapterContentService>((ref) {
+      return LocalChapterContentService(
+        localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+        indexService: ref.watch(bookDetailLocalBookIndexServiceProvider),
+        storageService: ref.watch(bookDetailLocalBookStorageServiceProvider),
+      );
+    });
+
+final bookDetailLocalBookPreviewServiceProvider =
+    Provider<LocalBookPreviewService>((ref) {
+      return LocalBookPreviewService(
+        localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+        storageService: ref.watch(bookDetailLocalBookStorageServiceProvider),
+      );
+    });
 
 final bookDetailImageSelectionServiceProvider = Provider<ImageSelectionService>(
   (ref) {

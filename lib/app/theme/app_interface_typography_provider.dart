@@ -1,9 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../preferences/app_preferences_service.dart';
 import '../../features/reader/application/reader_font_registry_service.dart';
-import 'dart:io';
 
 enum AppInterfaceFontSource { system, custom }
 
@@ -132,9 +134,12 @@ class AppInterfaceFontSettingsNotifier
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final sourceRaw = prefs.getString(_fontSourceKey);
-    final systemPresetRaw = prefs.getString(_systemFontPresetKey);
+    final snapshot =
+        await ref
+            .read(appInterfaceTypographyPreferencesServiceProvider)
+            .loadFontSettings();
+    final sourceRaw = snapshot.fontSourceName;
+    final systemPresetRaw = snapshot.systemFontPresetName;
     final loaded = await _normalizeSettings(
       AppInterfaceFontSettings(
         fontSource: AppInterfaceFontSource.values.firstWhere(
@@ -145,8 +150,8 @@ class AppInterfaceFontSettingsNotifier
           (item) => item.name == systemPresetRaw,
           orElse: () => AppInterfaceSystemFontPreset.defaultSans,
         ),
-        fontFamilyKey: prefs.getString(_fontFamilyKeyKey),
-        customFontPath: prefs.getString(_customFontPathKey),
+        fontFamilyKey: snapshot.fontFamilyKey,
+        customFontPath: snapshot.customFontPath,
       ),
     );
     if (_hasExplicitSet || loaded == state) {
@@ -219,23 +224,16 @@ class AppInterfaceFontSettingsNotifier
   }
 
   Future<void> _persist(AppInterfaceFontSettings settings) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_fontSourceKey, settings.fontSource.name);
-    await prefs.setString(_systemFontPresetKey, settings.systemFontPreset.name);
-
-    final familyKey = settings.fontFamilyKey?.trim() ?? '';
-    if (familyKey.isEmpty) {
-      await prefs.remove(_fontFamilyKeyKey);
-    } else {
-      await prefs.setString(_fontFamilyKeyKey, familyKey);
-    }
-
-    final customPath = settings.customFontPath?.trim() ?? '';
-    if (customPath.isEmpty) {
-      await prefs.remove(_customFontPathKey);
-    } else {
-      await prefs.setString(_customFontPathKey, customPath);
-    }
+    await ref
+        .read(appInterfaceTypographyPreferencesServiceProvider)
+        .saveFontSettings(
+          AppInterfaceFontSettingsSnapshot(
+            fontSourceName: settings.fontSource.name,
+            systemFontPresetName: settings.systemFontPreset.name,
+            fontFamilyKey: settings.fontFamilyKey?.trim(),
+            customFontPath: settings.customFontPath?.trim(),
+          ),
+        );
   }
 }
 
@@ -268,8 +266,10 @@ class AppInterfaceTextScaleNotifier extends Notifier<double> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getDouble(_key);
+    final stored =
+        await ref
+            .read(appInterfaceTypographyPreferencesServiceProvider)
+            .loadTextScale();
     if (stored == null || _hasExplicitSet) {
       return;
     }
@@ -287,8 +287,9 @@ class AppInterfaceTextScaleNotifier extends Notifier<double> {
       state = normalized;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_key, normalized);
+    await ref
+        .read(appInterfaceTypographyPreferencesServiceProvider)
+        .saveTextScale(normalized);
   }
 
   static double _normalize(double value) {
@@ -325,8 +326,10 @@ class AppInterfaceFontWeightNotifier extends Notifier<int> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getInt(_key);
+    final stored =
+        await ref
+            .read(appInterfaceTypographyPreferencesServiceProvider)
+            .loadFontWeight();
     if (stored == null || _hasExplicitSet) {
       return;
     }
@@ -344,8 +347,9 @@ class AppInterfaceFontWeightNotifier extends Notifier<int> {
       state = normalized;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_key, normalized);
+    await ref
+        .read(appInterfaceTypographyPreferencesServiceProvider)
+        .saveFontWeight(normalized);
   }
 
   static int _normalize(int value) {

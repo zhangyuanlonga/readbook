@@ -4,9 +4,12 @@ import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:shuxiang_reading_next/features/book/application/local_book_detail_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -127,6 +130,9 @@ class _FakeLocalBookIndexService extends LocalBookIndexService {
   _FakeLocalBookIndexService(this._repository, AppDatabase database)
     : super(
         localBookRepository: _repository,
+        readerSystemSettingsService: ReaderSystemSettingsService(),
+        storageService: LocalBookStorageService(),
+        bookshelfService: BookshelfService(),
         readingRecordService: ReadingRecordService(database: database),
       );
 

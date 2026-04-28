@@ -14,6 +14,7 @@ import '../reader/application/local/local_book_storage_service.dart';
 import '../reader/application/reader_preferences_service.dart';
 import '../reader/application/reader_entry_route_resolver.dart';
 import '../reader/application/reader_system_settings_service.dart';
+import '../reader/application/reading_record_service.dart';
 import '../source/application/source_runtime_facade.dart';
 import '../source/application/source_login_state_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
@@ -78,7 +79,16 @@ final bookshelfReaderEntryRouteResolverProvider =
 final bookshelfLocalBookIndexServiceProvider = Provider<LocalBookIndexService>((
   ref,
 ) {
-  return LocalBookIndexService();
+  return LocalBookIndexService(
+    localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+    readerSystemSettingsService: ref.watch(
+      bookshelfReaderSystemSettingsServiceProvider,
+    ),
+    storageService: ref.watch(bookshelfLocalBookStorageServiceProvider),
+    bookshelfService: ref.watch(bookshelfServiceProvider),
+    readingRecordService: ref.watch(bookshelfReadingRecordServiceProvider),
+    logger: ref.watch(bookshelfLoggerProvider),
+  );
 });
 
 final bookshelfReaderSystemSettingsServiceProvider =
@@ -106,21 +116,29 @@ final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
   return BookDetailService();
 });
 
-final bookshelfReaderOpenServiceProvider = Provider<BookshelfReaderOpenService>((
+final bookshelfReadingRecordServiceProvider = Provider<ReadingRecordService>((
   ref,
 ) {
-  return BookshelfReaderOpenService(
-    readerPreferencesService: ref.watch(
-      bookshelfReaderPreferencesServiceProvider,
-    ),
-    readerEntryRouteResolver: ref.watch(
-      bookshelfReaderEntryRouteResolverProvider,
-    ),
-    localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
-    bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
-    logger: ref.watch(bookshelfLoggerProvider),
+  return ReadingRecordService(
+    database: ref.watch(app_providers.appDatabaseProvider),
   );
 });
+
+final bookshelfReaderOpenServiceProvider = Provider<BookshelfReaderOpenService>(
+  (ref) {
+    return BookshelfReaderOpenService(
+      readerPreferencesService: ref.watch(
+        bookshelfReaderPreferencesServiceProvider,
+      ),
+      readerEntryRouteResolver: ref.watch(
+        bookshelfReaderEntryRouteResolverProvider,
+      ),
+      localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+      bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
+      logger: ref.watch(bookshelfLoggerProvider),
+    );
+  },
+);
 
 final localBookImportServiceProvider = Provider<LocalBookImportService>((ref) {
   return LocalBookImportService(
@@ -136,6 +154,7 @@ final localBookImportServiceProvider = Provider<LocalBookImportService>((ref) {
     sourceLoginStateService: ref.watch(
       bookshelfSourceLoginStateServiceProvider,
     ),
+    localBookIndexService: ref.watch(bookshelfLocalBookIndexServiceProvider),
   );
 });
 

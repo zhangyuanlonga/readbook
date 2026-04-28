@@ -19,6 +19,7 @@ import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_login_state_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -52,14 +53,26 @@ void main() {
       required SharedPreferences preferences,
       LocalBookIndexService? localBookIndexService,
     }) {
+      final repository = LocalBookRepositoryImpl(database);
+      final bookshelfService = BookshelfService(preferences: preferences);
+      final readerSystemSettingsService = ReaderSystemSettingsService();
       return LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: preferences),
-        readerSystemSettingsService: ReaderSystemSettingsService(),
+        localBookRepository: repository,
+        bookshelfService: bookshelfService,
+        readerSystemSettingsService: readerSystemSettingsService,
         localBookStorageService: storageService,
         logger: AppLogger.instance,
         sourceLoginStateService: SourceLoginStateService(),
-        localBookIndexService: localBookIndexService,
+        localBookIndexService:
+            localBookIndexService ??
+            LocalBookIndexService(
+              localBookRepository: repository,
+              readerSystemSettingsService: readerSystemSettingsService,
+              storageService: storageService,
+              bookshelfService: bookshelfService,
+              readingRecordService: ReadingRecordService(database: database),
+              logger: AppLogger.instance,
+            ),
       );
     }
 
@@ -343,7 +356,10 @@ void main() {
       final indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: const <LocalBookParser>[_FakePdfSuccessParser()],
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         storageService: storageService,
+        bookshelfService: BookshelfService(preferences: prefs),
+        readingRecordService: ReadingRecordService(database: database),
       );
       final service = buildService(
         preferences: prefs,
@@ -507,7 +523,10 @@ void main() {
       final indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: const <LocalBookParser>[_FakeKindleSuccessParser()],
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         storageService: storageService,
+        bookshelfService: BookshelfService(preferences: prefs),
+        readingRecordService: ReadingRecordService(database: database),
       );
       final service = buildService(
         preferences: prefs,
@@ -537,7 +556,10 @@ void main() {
       final indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: const <LocalBookParser>[_FakeKindleSuccessParser()],
+        readerSystemSettingsService: ReaderSystemSettingsService(),
         storageService: storageService,
+        bookshelfService: BookshelfService(preferences: prefs),
+        readingRecordService: ReadingRecordService(database: database),
       );
       final service = buildService(
         preferences: prefs,
@@ -610,13 +632,23 @@ void main() {
       );
       await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
 
+      final repository = LocalBookRepositoryImpl(database);
+      final bookshelfService = BookshelfService(preferences: prefs);
       final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(preferences: prefs),
+        localBookRepository: repository,
+        bookshelfService: bookshelfService,
         readerSystemSettingsService: systemSettingsService,
         localBookStorageService: storageService,
         logger: AppLogger.instance,
         sourceLoginStateService: SourceLoginStateService(),
+        localBookIndexService: LocalBookIndexService(
+          localBookRepository: repository,
+          readerSystemSettingsService: systemSettingsService,
+          storageService: storageService,
+          bookshelfService: bookshelfService,
+          readingRecordService: ReadingRecordService(database: database),
+          logger: AppLogger.instance,
+        ),
       );
 
       final result = await service.importFromFile(filePath: sourceFile.path);
@@ -635,6 +667,7 @@ void main() {
 
         final indexCompleter = Completer<List<LocalChapter>>();
         final fakeIndexService = _FakeLocalBookIndexService(
+          database: database,
           localBookRepository: LocalBookRepositoryImpl(database),
           storageService: storageService,
           onEnsureIndexed: () => indexCompleter.future,
@@ -673,6 +706,7 @@ void main() {
 
       final logger = _RecordingLogger();
       final fakeIndexService = _FakeLocalBookIndexService(
+        database: database,
         localBookRepository: LocalBookRepositoryImpl(database),
         storageService: storageService,
         onEnsureIndexed:
@@ -712,6 +746,7 @@ void main() {
 
       final logger = _RecordingLogger();
       final fakeIndexService = _FakeLocalBookIndexService(
+        database: database,
         localBookRepository: LocalBookRepositoryImpl(database),
         storageService: storageService,
         onEnsureIndexed:
@@ -752,10 +787,16 @@ List<int> _utf8(String value) => utf8.encode(value);
 
 class _FakeLocalBookIndexService extends LocalBookIndexService {
   _FakeLocalBookIndexService({
+    required AppDatabase database,
     required super.localBookRepository,
     required super.storageService,
     required Future<List<LocalChapter>> Function() onEnsureIndexed,
-  }) : _onEnsureIndexed = onEnsureIndexed;
+  }) : _onEnsureIndexed = onEnsureIndexed,
+       super(
+         readerSystemSettingsService: ReaderSystemSettingsService(),
+         bookshelfService: BookshelfService(),
+         readingRecordService: ReadingRecordService(database: database),
+       );
 
   final Future<List<LocalChapter>> Function() _onEnsureIndexed;
   int ensureIndexedCallCount = 0;

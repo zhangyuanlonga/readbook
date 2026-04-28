@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'preferences/app_preferences_service.dart';
 
 enum AppShellTab { home, bookshelf, discover, stats, mine }
 
@@ -144,12 +145,6 @@ final appShellNavigationProvider =
     );
 
 class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
-  static const String _homeVisibleKey = 'app.shell.navigation.home';
-  static const String _bookshelfVisibleKey = 'app.shell.navigation.bookshelf';
-  static const String _discoverVisibleKey = 'app.shell.navigation.discover';
-  static const String _statsVisibleKey = 'app.shell.navigation.stats';
-  static const String _sourceVisibleKey = 'app.shell.navigation.source';
-
   bool _loadTriggered = false;
   bool _hasExplicitSet = false;
 
@@ -164,15 +159,17 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final snapshot =
+        await ref
+            .read(appShellNavigationPreferencesServiceProvider)
+            .loadShellNavigation();
     final loaded = AppShellNavigationState(
-      showHome: prefs.getBool(_homeVisibleKey) ?? true,
-      showBookshelf: prefs.getBool(_bookshelfVisibleKey) ?? true,
-      showDiscover: prefs.getBool(_discoverVisibleKey) ?? false,
-      showStats: prefs.getBool(_statsVisibleKey) ?? true,
+      showHome: snapshot.showHome,
+      showBookshelf: snapshot.showBookshelf,
+      showDiscover: snapshot.showDiscover,
+      showStats: snapshot.showStats,
     );
     final normalized = _normalizeState(loaded);
-    await prefs.remove(_sourceVisibleKey);
 
     if (_hasExplicitSet) {
       return;
@@ -183,7 +180,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     }
 
     if (normalized != loaded) {
-      await _persistState(prefs, normalized);
+      await _persistState(normalized);
     }
   }
 
@@ -203,6 +200,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     final next = _normalizeState(changed);
 
     if (next == state) {
+      await _persistState(next);
       return;
     }
 
@@ -210,8 +208,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     state = next;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await _persistState(prefs, next);
+      await _persistState(next);
     } catch (_) {
       if (state != previous) {
         state = previous;
@@ -227,14 +224,16 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     return input.copyWith(showHome: true);
   }
 
-  Future<void> _persistState(
-    SharedPreferences prefs,
-    AppShellNavigationState state,
-  ) async {
-    await prefs.setBool(_homeVisibleKey, state.showHome);
-    await prefs.setBool(_bookshelfVisibleKey, state.showBookshelf);
-    await prefs.setBool(_discoverVisibleKey, state.showDiscover);
-    await prefs.setBool(_statsVisibleKey, state.showStats);
-    await prefs.remove(_sourceVisibleKey);
+  Future<void> _persistState(AppShellNavigationState state) async {
+    await ref
+        .read(appShellNavigationPreferencesServiceProvider)
+        .saveShellNavigation(
+          AppShellNavigationSnapshot(
+            showHome: state.showHome,
+            showBookshelf: state.showBookshelf,
+            showDiscover: state.showDiscover,
+            showStats: state.showStats,
+          ),
+        );
   }
 }

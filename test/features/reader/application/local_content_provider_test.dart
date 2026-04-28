@@ -1,14 +1,28 @@
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_chapter_content_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_preview_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_reader_identity.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local_content_provider.dart';
+import 'package:shuxiang_reading_next/features/book/application/local_book_detail_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/native.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeLocalChapterContentService extends LocalChapterContentService {
-  _FakeLocalChapterContentService(this.chapter);
+  _FakeLocalChapterContentService(this.chapter)
+    : super(
+        localBookRepository: _placeholderRepository,
+        indexService: _placeholderIndexService,
+        storageService: _placeholderStorageService,
+      );
 
   final LocalChapter chapter;
 
@@ -30,7 +44,11 @@ class _FakeLocalChapterContentService extends LocalChapterContentService {
 }
 
 class _FakeLocalBookPreviewService extends LocalBookPreviewService {
-  _FakeLocalBookPreviewService(this.chapter);
+  _FakeLocalBookPreviewService(this.chapter)
+    : super(
+        localBookRepository: _placeholderRepository,
+        storageService: _placeholderStorageService,
+      );
 
   final LocalChapter chapter;
   String? bookId;
@@ -41,6 +59,30 @@ class _FakeLocalBookPreviewService extends LocalBookPreviewService {
     return chapter;
   }
 }
+
+class _FakeLocalBookDetailService extends LocalBookDetailService {
+  _FakeLocalBookDetailService()
+    : super(
+        localBookRepository: _placeholderRepository,
+        indexService: _placeholderIndexService,
+      );
+}
+
+final AppDatabase _placeholderDatabase = AppDatabase(
+  executor: NativeDatabase.memory(),
+);
+final LocalBookRepositoryImpl _placeholderRepository = LocalBookRepositoryImpl(
+  _placeholderDatabase,
+);
+final LocalBookStorageService _placeholderStorageService =
+    LocalBookStorageService();
+final LocalBookIndexService _placeholderIndexService = LocalBookIndexService(
+  localBookRepository: _placeholderRepository,
+  readerSystemSettingsService: ReaderSystemSettingsService(),
+  storageService: _placeholderStorageService,
+  bookshelfService: BookshelfService(),
+  readingRecordService: ReadingRecordService(database: _placeholderDatabase),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -64,7 +106,10 @@ void main() {
         updatedAt: now,
       ),
     );
-    final provider = LocalContentProvider(chapterContentService: fakeService);
+    final provider = LocalContentProvider(
+      detailService: _FakeLocalBookDetailService(),
+      chapterContentService: fakeService,
+    );
 
     final result = await provider.loadChapterContent(
       sourceId: LocalReaderIdentity.localSourceId,
@@ -97,7 +142,10 @@ void main() {
         updatedAt: now,
       ),
     );
-    final provider = LocalContentProvider(chapterContentService: fakeService);
+    final provider = LocalContentProvider(
+      detailService: _FakeLocalBookDetailService(),
+      chapterContentService: fakeService,
+    );
 
     final result = await provider.loadChapterContent(
       sourceId: LocalReaderIdentity.localSourceId,
@@ -133,7 +181,10 @@ void main() {
         ),
       ),
     );
-    final provider = LocalContentProvider(chapterContentService: fakeService);
+    final provider = LocalContentProvider(
+      detailService: _FakeLocalBookDetailService(),
+      chapterContentService: fakeService,
+    );
 
     final result = await provider.loadChapterContent(
       sourceId: LocalReaderIdentity.localSourceId,
@@ -176,6 +227,7 @@ void main() {
         ),
       );
       final provider = LocalContentProvider(
+        detailService: _FakeLocalBookDetailService(),
         chapterContentService: fakeContentService,
         previewService: fakePreviewService,
       );

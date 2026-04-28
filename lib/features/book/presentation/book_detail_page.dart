@@ -265,6 +265,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       providers: [
         LocalContentProvider(
           detailService: ref.read(bookLocalBookDetailServiceProvider),
+          chapterContentService: ref.read(
+            bookDetailLocalChapterContentServiceProvider,
+          ),
+          previewService: ref.read(bookDetailLocalBookPreviewServiceProvider),
         ),
         _sourceContentProvider,
       ],
