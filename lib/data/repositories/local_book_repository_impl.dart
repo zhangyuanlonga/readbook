@@ -43,6 +43,13 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
       );
 
   @override
+  Future<LocalChapter?> getChapterMetaByIndex(String bookId, int chapterIndex) =>
+      _database.getLocalChapterMetaByIndex(
+        bookId: bookId,
+        chapterIndex: chapterIndex,
+      );
+
+  @override
   Future<void> updateChapterContent({
     required String chapterId,
     required String content,

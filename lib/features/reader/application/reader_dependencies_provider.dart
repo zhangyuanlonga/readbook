@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/book_metadata_override_repository_impl.dart';
@@ -51,6 +52,7 @@ class ReaderFeatureDependencies {
     required this.localBookRepository,
     required this.cachedChapterStore,
     required this.readerErrorCenterService,
+    required this.logger,
   });
 
   final ContentProviderRegistry contentProviderRegistry;
@@ -74,6 +76,7 @@ class ReaderFeatureDependencies {
   final LocalBookRepository localBookRepository;
   final ReaderCachedChapterStore cachedChapterStore;
   final ReaderErrorCenterService readerErrorCenterService;
+  final AppLogger logger;
 }
 
 typedef ReaderFeatureDependenciesFactory = ReaderFeatureDependencies Function();
@@ -114,6 +117,7 @@ final readerFeatureDependenciesFactoryProvider =
           localBookRepository: LocalBookRepositoryImpl(database),
           cachedChapterStore: ReaderCachedChapterStore(database: database),
           readerErrorCenterService: ReaderErrorCenterService.instance,
+          logger: AppLogger.instance,
         );
       };
     });

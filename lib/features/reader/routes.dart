@@ -75,6 +75,10 @@ final List<RouteBase> readerRoutes = <RouteBase>[
       final sourceId = state.uri.queryParameters['sourceId'];
       final detailUrl = state.uri.queryParameters['detailUrl'];
       final bookmarkId = state.uri.queryParameters['bookmarkId'];
+      final openRequestedAtMs = int.tryParse(
+        state.uri.queryParameters['openRequestedAtMs'] ?? '',
+      );
+      final openRouteKind = state.uri.queryParameters['openRouteKind'];
       final chapterIndex = int.tryParse(
         state.uri.queryParameters['chapterIndex'] ?? '',
       );
@@ -89,6 +93,8 @@ final List<RouteBase> readerRoutes = <RouteBase>[
         detailUrl: detailUrl,
         chapterIndex: chapterIndex,
         bookmarkId: bookmarkId,
+        openRequestedAtMs: openRequestedAtMs,
+        openRouteKind: openRouteKind,
       );
     },
   ),
@@ -104,6 +110,8 @@ Widget _buildReaderRoutePage(
   String? detailUrl,
   int? chapterIndex,
   String? bookmarkId,
+  int? openRequestedAtMs,
+  String? openRouteKind,
 }) {
   return Consumer(
     builder: (context, ref, _) {
@@ -126,6 +134,8 @@ Widget _buildReaderRoutePage(
             detailUrl: detailUrl,
             chapterIndex: chapterIndex,
             bookmarkId: bookmarkId,
+            openRequestedAtMs: openRequestedAtMs,
+            openRouteKind: openRouteKind,
           ),
         ),
       );

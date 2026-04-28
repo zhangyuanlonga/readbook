@@ -142,6 +142,16 @@ void main() {
       expect(chapter.document, isNotNull);
       expect(chapter.document!.blocks.last, isA<ReaderImageBlock>());
 
+      final chapterMeta = await database.getLocalChapterMetaByIndex(
+        bookId: 'local_2',
+        chapterIndex: 1,
+      );
+      expect(chapterMeta, isNotNull);
+      expect(chapterMeta!.title, '第二章');
+      expect(chapterMeta.content, isEmpty);
+      expect(chapterMeta.document, isNull);
+      expect(chapterMeta.sourceRef, 'OPS/chapter2.xhtml');
+
       final book = await database.getLocalBookById('local_2');
       expect(book, isNotNull);
       expect(book!.chapterCount, 2);

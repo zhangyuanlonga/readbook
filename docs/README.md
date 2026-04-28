@@ -1,6 +1,6 @@
 # 项目文档入口
 
-更新时间：2026-04-26
+更新时间：2026-04-28
 用途：当前项目文档总入口。
 
 当前文档按“主线文档 + 历史归档”两组维护。
@@ -24,6 +24,8 @@
   自适应落地策略，统一官方推荐、国内常用做法和本项目后续改造口径。
 - `docs/reader_multimodal_plan.md`
   阅读器多内容形态统一规划，覆盖文本、漫画与未来听书模式的壳层、状态、界面与动画分层。
+- `docs/bookshelf_reader_open_latency_execution_plan.md`
+  书架点击书籍加载卡顿治理执行方案，覆盖点击前阻塞链路、阅读页恢复、章节查询瘦身和专项回填口径。
 - `docs/local_multi_format_reading_plan.md`
   本地多格式阅读开发方案，覆盖 `txt`、`epub`、`md`、`html`、`pdf`、`mobi`、`azw`、`azw3` 的架构原则、阶段计划与风险边界。
 - `docs/cross_platform_boundary_refactor_plan.md`

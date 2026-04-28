@@ -32,6 +32,8 @@ abstract class LocalBookRepository {
 
   Future<LocalChapter?> getChapterByIndex(String bookId, int chapterIndex);
 
+  Future<LocalChapter?> getChapterMetaByIndex(String bookId, int chapterIndex);
+
   Future<void> updateChapterContent({
     required String chapterId,
     required String content,

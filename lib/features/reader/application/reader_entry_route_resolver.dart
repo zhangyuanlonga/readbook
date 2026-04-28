@@ -17,6 +17,8 @@ class ReaderEntryRouteResolver {
     String? chapterTitle,
     int? chapterIndex,
     String? bookmarkId,
+    int? openRequestedAtMs,
+    String? openRouteKind,
   }) {
     final normalizedSourceId = (sourceId ?? '').trim();
     return buildReaderRoute(
@@ -36,10 +38,16 @@ class ReaderEntryRouteResolver {
       ),
       chapterIndex: chapterIndex,
       bookmarkId: bookmarkId,
+      openRequestedAtMs: openRequestedAtMs,
+      openRouteKind: openRouteKind,
     );
   }
 
-  String buildRouteFromProgress(ReadingProgress progress) {
+  String buildRouteFromProgress(
+    ReadingProgress progress, {
+    int? openRequestedAtMs,
+    String? openRouteKind,
+  }) {
     return buildChapterRoute(
       bookId: progress.bookId,
       chapterId: progress.chapterId,
@@ -48,16 +56,24 @@ class ReaderEntryRouteResolver {
       sourceId: progress.sourceId,
       detailUrl: progress.detailUrl,
       chapterIndex: progress.chapterIndex,
+      openRequestedAtMs: openRequestedAtMs,
+      openRouteKind: openRouteKind,
     );
   }
 
-  String buildRouteFromBookshelfFallback(BookshelfBook book) {
+  String buildRouteFromBookshelfFallback(
+    BookshelfBook book, {
+    int? openRequestedAtMs,
+    String? openRouteKind,
+  }) {
     return buildChapterRoute(
       bookId: book.bookId,
       chapterId: 'bootstrap',
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       chapterTitle: book.title,
+      openRequestedAtMs: openRequestedAtMs,
+      openRouteKind: openRouteKind,
     );
   }
 
@@ -66,6 +82,8 @@ class ReaderEntryRouteResolver {
     required String sourceId,
     required String detailUrl,
     required Chapter chapter,
+    int? openRequestedAtMs,
+    String? openRouteKind,
   }) {
     return buildChapterRoute(
       bookId: bookId,
@@ -75,6 +93,8 @@ class ReaderEntryRouteResolver {
       sourceId: sourceId,
       detailUrl: detailUrl,
       chapterIndex: chapter.index,
+      openRequestedAtMs: openRequestedAtMs,
+      openRouteKind: openRouteKind,
     );
   }
 

@@ -19,6 +19,7 @@ import '../source/application/source_login_state_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
 import 'application/bookshelf_presentation_query_service.dart';
+import 'application/bookshelf_reader_open_service.dart';
 import 'application/bookshelf_service.dart';
 import 'application/bookshelf_system_settings_service.dart';
 import 'application/local_book_import_service.dart';
@@ -31,6 +32,8 @@ class BookshelfPageDependencies {
     required this.readerEntryRouteResolver,
     required this.localBookIndexService,
     required this.bookDetailService,
+    required this.readerOpenService,
+    required this.logger,
     required this.localBookImportService,
     required this.imageSelectionService,
     required this.customCoverStorageService,
@@ -44,6 +47,8 @@ class BookshelfPageDependencies {
   final ReaderEntryRouteResolver readerEntryRouteResolver;
   final LocalBookIndexService localBookIndexService;
   final BookDetailService bookDetailService;
+  final BookshelfReaderOpenService readerOpenService;
+  final AppLogger logger;
   final LocalBookImportService localBookImportService;
   final ImageSelectionService imageSelectionService;
   final CustomCoverStorageService customCoverStorageService;
@@ -101,6 +106,22 @@ final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
   return BookDetailService();
 });
 
+final bookshelfReaderOpenServiceProvider = Provider<BookshelfReaderOpenService>((
+  ref,
+) {
+  return BookshelfReaderOpenService(
+    readerPreferencesService: ref.watch(
+      bookshelfReaderPreferencesServiceProvider,
+    ),
+    readerEntryRouteResolver: ref.watch(
+      bookshelfReaderEntryRouteResolverProvider,
+    ),
+    localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+    bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
+    logger: ref.watch(bookshelfLoggerProvider),
+  );
+});
+
 final localBookImportServiceProvider = Provider<LocalBookImportService>((ref) {
   return LocalBookImportService(
     localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
@@ -154,6 +175,8 @@ final bookshelfPageDependenciesProvider = Provider<BookshelfPageDependencies>((
     ),
     localBookIndexService: ref.watch(bookshelfLocalBookIndexServiceProvider),
     bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
+    readerOpenService: ref.watch(bookshelfReaderOpenServiceProvider),
+    logger: ref.watch(bookshelfLoggerProvider),
     localBookImportService: ref.watch(localBookImportServiceProvider),
     imageSelectionService: ref.watch(bookshelfImageSelectionServiceProvider),
     customCoverStorageService: ref.watch(

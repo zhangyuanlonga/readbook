@@ -7,6 +7,8 @@ String buildReaderRoute({
   String? detailUrl,
   int? chapterIndex,
   String? bookmarkId,
+  int? openRequestedAtMs,
+  String? openRouteKind,
 }) {
   final normalizedBookId = bookId.trim();
   final normalizedChapterId = chapterId.trim();
@@ -29,8 +31,12 @@ String buildReaderRoute({
   putIfNotBlank('sourceId', sourceId);
   putIfNotBlank('detailUrl', detailUrl);
   putIfNotBlank('bookmarkId', bookmarkId);
+  putIfNotBlank('openRouteKind', openRouteKind);
   if (chapterIndex != null) {
     query['chapterIndex'] = chapterIndex.toString();
+  }
+  if (openRequestedAtMs != null && openRequestedAtMs > 0) {
+    query['openRequestedAtMs'] = openRequestedAtMs.toString();
   }
 
   return Uri(

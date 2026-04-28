@@ -162,6 +162,33 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
   Future<void> _bootstrap() async {
     _cancelBackgroundRefreshConflictForCurrentBook();
+    final bootstrapStopwatch = Stopwatch()..start();
+    final tapToBootstrapStartMs = _tapTraceElapsedMs();
+    var progressLoadMs = 0;
+    var progressHit = false;
+    var tocSnapshotLoadMs = 0;
+    var tocSnapshotHit = false;
+    var visibleCacheLoadMs = 0;
+    var visibleCacheHit = false;
+    var detailLoadMs = 0;
+    var detailLoaded = false;
+    var chapterLoadMs = 0;
+    var chapterLoaded = false;
+    var bootstrapSucceeded = false;
+    int? tapToVisibleMs;
+    _logger.info(
+      'Reader bootstrap started',
+      context: <String, Object?>{
+        'chain': 'reader_open',
+        'step': 'bootstrap_start',
+        'bookId': _currentBookId,
+        'sourceId': _sourceId,
+        'detailUrl': _detailUrl,
+        'chapterId': _chapterId,
+        'openRouteKind': widget.openRouteKind,
+        'tapToBootstrapStartMs': tapToBootstrapStartMs,
+      },
+    );
     try {
       final loadedSettings = await _preferencesService.loadSettings();
       var normalizedSettings = _typographyMetricsResolver.normalizeSettings(
@@ -310,20 +337,33 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _readingRecordEnabled = true;
       }
 
+      final progressLoadStopwatch = Stopwatch()..start();
       final progress = await _preferencesService.loadProgress(_currentBookId);
+      progressLoadMs = progressLoadStopwatch.elapsedMilliseconds;
       _bootstrapProgress = progress;
+      progressHit = progress != null;
 
       if (progress != null) {
         _applyProgressFallback(progress);
       }
 
       _applyLocalSchemeFallback();
+      final tocSnapshotStopwatch = Stopwatch()..start();
       final hydratedTocSnapshot = await _tryHydrateTocSnapshot();
-      await _tryHydrateVisibleContentFromCache();
+      tocSnapshotLoadMs = tocSnapshotStopwatch.elapsedMilliseconds;
+      tocSnapshotHit = hydratedTocSnapshot;
+      final visibleCacheStopwatch = Stopwatch()..start();
+      final hydratedVisibleContent = await _tryHydrateVisibleContentFromCache();
+      visibleCacheLoadMs = visibleCacheStopwatch.elapsedMilliseconds;
+      visibleCacheHit = hydratedVisibleContent;
+      if (_hasVisibleReaderContent) {
+        tapToVisibleMs ??= _tapTraceElapsedMs();
+      }
 
       if (hydratedTocSnapshot) {
         await _refreshBookshelfState();
         if (_hasVisibleReaderContent) {
+          bootstrapSucceeded = true;
           await _consumePendingBookmarkJump();
           return;
         }
@@ -331,10 +371,17 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         final bootstrapProgress = _bootstrapProgressForCurrentChapter(
           consume: true,
         );
+        final chapterLoadStopwatch = Stopwatch()..start();
         final loaded = await _loadCurrentChapter(
           initialScrollRatio: bootstrapProgress?.chapterPositionRatio,
           initialLogicalPosition: bootstrapProgress?.logicalPosition,
         );
+        chapterLoadMs = chapterLoadStopwatch.elapsedMilliseconds;
+        chapterLoaded = loaded;
+        bootstrapSucceeded = loaded;
+        if (loaded && _hasVisibleReaderContent) {
+          tapToVisibleMs ??= _tapTraceElapsedMs();
+        }
         if (loaded) {
           await _consumePendingBookmarkJump();
         }
@@ -357,12 +404,15 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         stage: ErrorStage.detail,
       );
 
+      final detailLoadStopwatch = Stopwatch()..start();
       final detailResult = await detailProvider.loadDetail(
         sourceId: _sourceId!,
         bookId: _currentBookId,
         detailUrl: _detailUrl!,
         fallbackTitle: _chapterTitle,
       );
+      detailLoadMs = detailLoadStopwatch.elapsedMilliseconds;
+      detailLoaded = true;
       await _persistTocSnapshot(detailResult);
 
       _bookTitle = detailResult.detail.title;
@@ -397,10 +447,17 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       final bootstrapProgress = _bootstrapProgressForCurrentChapter(
         consume: true,
       );
+      final chapterLoadStopwatch = Stopwatch()..start();
       final loaded = await _loadCurrentChapter(
         initialScrollRatio: bootstrapProgress?.chapterPositionRatio,
         initialLogicalPosition: bootstrapProgress?.logicalPosition,
       );
+      chapterLoadMs = chapterLoadStopwatch.elapsedMilliseconds;
+      chapterLoaded = loaded;
+      bootstrapSucceeded = loaded;
+      if (loaded && _hasVisibleReaderContent) {
+        tapToVisibleMs ??= _tapTraceElapsedMs();
+      }
       if (loaded) {
         await _consumePendingBookmarkJump();
       }
@@ -424,6 +481,34 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _errorText = fallbackError;
       });
     } finally {
+      _logger.info(
+        'Reader bootstrap finished',
+        context: <String, Object?>{
+          'chain': 'reader_open',
+          'step': 'bootstrap_finish',
+          'bookId': _currentBookId,
+          'sourceId': _sourceId,
+          'detailUrl': _detailUrl,
+          'chapterId': _chapterId,
+          'openRouteKind': widget.openRouteKind,
+          'success': bootstrapSucceeded,
+          'progressHit': progressHit,
+          'tocSnapshotHit': tocSnapshotHit,
+          'visibleCacheHit': visibleCacheHit,
+          'detailLoaded': detailLoaded,
+          'chapterLoaded': chapterLoaded,
+          'progressLoadMs': progressLoadMs,
+          'tocSnapshotLoadMs': tocSnapshotLoadMs,
+          'visibleCacheLoadMs': visibleCacheLoadMs,
+          'detailLoadMs': detailLoadMs,
+          'chapterLoadMs': chapterLoadMs,
+          'totalMs': bootstrapStopwatch.elapsedMilliseconds,
+          'tapToVisibleMs': tapToVisibleMs,
+          'tapToBootstrapDoneMs': _tapTraceElapsedMs(),
+          'hasVisibleReaderContent': _hasVisibleReaderContent,
+          'errorText': _errorText,
+        },
+      );
       _clearDelayedLoadingUi();
       if (mounted) {
         setState(() {
@@ -434,6 +519,18 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _reconcileAutoRead(restart: true);
       }
     }
+  }
+
+  int? _tapTraceElapsedMs() {
+    final requestedAtMs = widget.openRequestedAtMs;
+    if (requestedAtMs == null || requestedAtMs <= 0) {
+      return null;
+    }
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (nowMs < requestedAtMs) {
+      return null;
+    }
+    return nowMs - requestedAtMs;
   }
 
   Future<bool> _tryHydrateTocSnapshot() async {

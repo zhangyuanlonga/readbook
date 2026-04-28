@@ -210,6 +210,12 @@ class _NoopLocalBookRepository implements LocalBookRepository {
   ) async => null;
 
   @override
+  Future<LocalChapter?> getChapterMetaByIndex(
+    String bookId,
+    int chapterIndex,
+  ) async => null;
+
+  @override
   Future<List<LocalChapter>> getChapterMetas(String bookId) async =>
       const <LocalChapter>[];
 

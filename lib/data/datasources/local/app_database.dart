@@ -1534,6 +1534,51 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalChapter(row);
   }
 
+  Future<LocalChapter?> getLocalChapterMetaByIndex({
+    required String bookId,
+    required int chapterIndex,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+
+    final query =
+        selectOnly(storedLocalChapters)
+          ..addColumns([
+            storedLocalChapters.id,
+            storedLocalChapters.bookId,
+            storedLocalChapters.chapterIndex,
+            storedLocalChapters.title,
+            storedLocalChapters.sourceRef,
+            storedLocalChapters.startOffset,
+            storedLocalChapters.endOffset,
+            storedLocalChapters.createdAt,
+            storedLocalChapters.updatedAt,
+          ])
+          ..where(storedLocalChapters.bookId.equals(normalizedBookId))
+          ..where(storedLocalChapters.chapterIndex.equals(chapterIndex))
+          ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    return LocalChapter(
+      id: row.read(storedLocalChapters.id)!,
+      bookId: row.read(storedLocalChapters.bookId)!,
+      chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
+      title: row.read(storedLocalChapters.title)!,
+      content: '',
+      sourceRef: row.read(storedLocalChapters.sourceRef),
+      createdAt: row.read(storedLocalChapters.createdAt)!,
+      updatedAt: row.read(storedLocalChapters.updatedAt)!,
+      startOffset: row.read(storedLocalChapters.startOffset),
+      endOffset: row.read(storedLocalChapters.endOffset),
+    );
+  }
+
   Future<LocalChapter?> getLocalChapterById(String chapterId) async {
     final normalizedId = chapterId.trim();
     if (normalizedId.isEmpty) {

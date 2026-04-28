@@ -62,6 +62,12 @@ class _FakeLocalBookRepository implements LocalBookRepository {
       throw UnimplementedError();
 
   @override
+  Future<LocalChapter?> getChapterMetaByIndex(
+    String bookId,
+    int chapterIndex,
+  ) => throw UnimplementedError();
+
+  @override
   Future<List<LocalChapter>> getChapterMetas(String bookId) =>
       throw UnimplementedError();
 

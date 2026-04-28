@@ -30,6 +30,7 @@ import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
@@ -149,6 +150,8 @@ class ReaderPage extends ConsumerStatefulWidget {
     this.detailUrl,
     this.chapterIndex,
     this.bookmarkId,
+    this.openRequestedAtMs,
+    this.openRouteKind,
   });
 
   final String bookId;
@@ -159,6 +162,8 @@ class ReaderPage extends ConsumerStatefulWidget {
   final String? detailUrl;
   final int? chapterIndex;
   final String? bookmarkId;
+  final int? openRequestedAtMs;
+  final String? openRouteKind;
 
   @override
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
@@ -252,6 +257,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ScrollTextReaderRenderer();
   final PagedTextReaderRenderer _pagedTextRenderer =
       const PagedTextReaderRenderer();
+  late final AppLogger _logger;
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
   final GlobalKey _readerBodyKey = GlobalKey();
@@ -1123,6 +1129,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         dependencies.bookMetadataOverrideRepository;
     _localBookRepository = dependencies.localBookRepository;
     _cachedChapterStore = dependencies.cachedChapterStore;
+    _logger = dependencies.logger;
   }
 
   @override

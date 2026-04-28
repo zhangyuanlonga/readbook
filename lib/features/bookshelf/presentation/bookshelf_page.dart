@@ -15,10 +15,10 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
-import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
@@ -29,6 +29,7 @@ import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/bookshelf_external_import_coordinator.dart';
 import '../application/bookshelf_presentation_query_service.dart';
+import '../application/bookshelf_reader_open_service.dart';
 import '../application/local_book_import_service.dart';
 import '../providers.dart';
 import '../../reader/application/reader_preferences_service.dart';
@@ -257,6 +258,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final BookMetadataPresentationResolver _bookMetadataPresentationResolver =
       const BookMetadataPresentationResolver();
   late final BookDetailService _bookDetailService;
+  late final BookshelfReaderOpenService _readerOpenService;
+  late final AppLogger _logger;
   final TextEditingController _bookshelfSearchController =
       TextEditingController();
   final FocusNode _bookshelfSearchFocusNode = FocusNode();
@@ -385,6 +388,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _readerEntryRouteResolver = dependencies.readerEntryRouteResolver;
     _localBookIndexService = dependencies.localBookIndexService;
     _bookDetailService = dependencies.bookDetailService;
+    _readerOpenService = dependencies.readerOpenService;
+    _logger = dependencies.logger;
     _localBookImportService = dependencies.localBookImportService;
     _imageSelectionService = dependencies.imageSelectionService;
     _customCoverStorageService = dependencies.customCoverStorageService;
@@ -5612,116 +5617,86 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
 
     try {
+      final openRequestedAtMs = DateTime.now().millisecondsSinceEpoch;
+      final openStopwatch = Stopwatch()..start();
       final localBook =
           book.sourceId == _kLocalBookSourceId
               ? (_localBooksById[book.bookId.trim()] ??
                   await _localBookRepository.getBookById(book.bookId.trim()))
               : null;
-      if (localBook != null &&
-          localBook.format == LocalBookFormat.txt &&
-          localBook.indexStatus != LocalBookIndexStatus.ready) {
+      final bookKey = _bookKey(book);
+      final plan = await _readerOpenService.resolve(
+        book: book,
+        openRequestedAtMs: openRequestedAtMs,
+        progressHint: progress,
+        localBookHint: localBook,
+      );
+
+      final latestProgress = plan.latestProgress;
+      if (mounted &&
+          latestProgress != null &&
+          _progressByBookKey[bookKey] != latestProgress) {
+        setState(() {
+          _progressByBookKey = Map<String, ReadingProgress>.from(
+            _progressByBookKey,
+          )..[bookKey] = latestProgress;
+        });
+      }
+
+      if (plan.shouldStartBackgroundIndex && plan.localBook != null) {
         unawaited(() async {
           try {
-            await _localBookIndexService.ensureIndexed(bookId: localBook.id);
+            await _localBookIndexService.ensureIndexed(
+              bookId: plan.localBook!.id,
+            );
           } catch (_) {
             // Keep reading available even if background indexing fails.
           }
         }());
-        _openReaderFallbackForSourceSwitch(book);
-        _showMessage('正文已打开，目录会在后台继续解析。');
-        return;
-      }
-      if (localBook != null &&
-          localBook.indexStatus != LocalBookIndexStatus.ready) {
-        _handleNonReadyLocalBookOpen(book, localBook);
-        return;
       }
 
-      ReadingProgress? latestProgress;
-      final bookKey = _bookKey(book);
-      try {
-        final loadedProgress = await _readerPreferencesService
-            .loadProgress(book.bookId)
-            .timeout(_kProgressLoadTimeout);
-        if (loadedProgress != null &&
-            _isProgressMatchingBook(loadedProgress, book)) {
-          latestProgress = loadedProgress;
-        } else {
-          latestProgress = null;
-        }
-      } catch (_) {
-        latestProgress = null;
-      }
-
-      final effectiveProgress = latestProgress ?? progress;
-      if (effectiveProgress != null) {
-        if (mounted &&
-            latestProgress != null &&
-            _progressByBookKey[bookKey] != latestProgress) {
-          setState(() {
-            _progressByBookKey = Map<String, ReadingProgress>.from(
-              _progressByBookKey,
-            )..[bookKey] = latestProgress!;
-          });
-        }
-        _continueReading(effectiveProgress);
-        return;
-      }
-
-      if (book.sourceId == _kLocalBookSourceId) {
-        if (localBook == null) {
+      switch (plan.action) {
+        case BookshelfReaderOpenAction.openDetail:
+          _logger.info(
+            'Bookshelf reader open delegated to detail',
+            context: <String, Object?>{
+              'chain': 'reader_open',
+              'step': 'open_detail',
+              'bookId': book.bookId,
+              'sourceId': book.sourceId,
+              'detailUrl': book.detailUrl,
+              'kind': plan.kind.name,
+              'tapToActionMs': openStopwatch.elapsedMilliseconds,
+            },
+          );
           _openBookDetail(book);
-          _showMessage('未找到本地图书记录，请检查导入是否完成。');
+          if (plan.feedbackMessage != null) {
+            _showMessage(plan.feedbackMessage!);
+          }
           return;
-        }
-
-        final chapters = await _localBookRepository.getChapters(book.bookId);
-        if (chapters.isEmpty) {
-          _openBookDetail(book);
-          _showMessage('本地图书目录尚未建立完成，请先在详情页重建目录。');
+        case BookshelfReaderOpenAction.openReader:
+          final route = plan.readerRoute;
+          if (route == null || !mounted) {
+            return;
+          }
+          _logger.info(
+            'Bookshelf reader route push',
+            context: <String, Object?>{
+              'chain': 'reader_open',
+              'step': 'push',
+              'bookId': book.bookId,
+              'sourceId': book.sourceId,
+              'detailUrl': book.detailUrl,
+              'kind': plan.kind.name,
+              'tapToPushMs': openStopwatch.elapsedMilliseconds,
+            },
+          );
+          context.push(route);
+          if (plan.feedbackMessage != null) {
+            _showMessage(plan.feedbackMessage!);
+          }
           return;
-        }
-
-        final firstChapter = Chapter(
-          id: chapters.first.id,
-          bookId: chapters.first.bookId,
-          title: chapters.first.title,
-          chapterUrl: 'local://chapter/${chapters.first.id}',
-          index: chapters.first.chapterIndex,
-        );
-        final route = _readerEntryRouteResolver.buildRouteFromChapter(
-          bookId: firstChapter.bookId,
-          sourceId: book.sourceId,
-          detailUrl: book.detailUrl,
-          chapter: firstChapter,
-        );
-        if (!mounted) {
-          return;
-        }
-        context.push(route);
-        return;
       }
-
-      final detailResult = await _bookDetailService.load(
-        sourceId: book.sourceId,
-        bookId: book.bookId,
-        detailUrl: book.detailUrl,
-        fallbackTitle: book.title,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      final chapter = detailResult.chapters.first;
-      final route = _readerEntryRouteResolver.buildRouteFromChapter(
-        bookId: chapter.bookId,
-        sourceId: book.sourceId,
-        detailUrl: book.detailUrl,
-        chapter: chapter,
-      );
-
-      context.push(route);
     } on AppException {
       if (!mounted) {
         return;
@@ -5740,29 +5715,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           _openingBookId = null;
         });
       }
-    }
-  }
-
-  void _handleNonReadyLocalBookOpen(BookshelfBook book, LocalBook localBook) {
-    switch (localBook.indexStatus) {
-      case LocalBookIndexStatus.pending:
-        _openBookDetail(book);
-        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
-        return;
-      case LocalBookIndexStatus.indexing:
-        _openBookDetail(book);
-        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
-        return;
-      case LocalBookIndexStatus.stale:
-        _openBookDetail(book);
-        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
-        return;
-      case LocalBookIndexStatus.failed:
-        _openBookDetail(book);
-        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
-        return;
-      case LocalBookIndexStatus.ready:
-        return;
     }
   }
 
