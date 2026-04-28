@@ -3585,6 +3585,49 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final taskId = ++_paginationTaskId;
+    unawaited(
+      _restoreOrPaginateCurrentChapter(taskId: taskId, spec: spec, plan: plan),
+    );
+  }
+
+  Future<void> _restoreOrPaginateCurrentChapter({
+    required int taskId,
+    required ReaderPaginationSpec spec,
+    required ReaderPaginationEnsurePlan plan,
+  }) async {
+    final sourceId = (_sourceId ?? '').trim();
+    final chapterUrl = (_chapterUrl ?? '').trim();
+
+    if (sourceId.isNotEmpty && chapterUrl.isNotEmpty) {
+      final cachedLayout = await _loadPrecomputedChapterLayout(
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: plan.signature,
+      );
+      if (!mounted || taskId != _paginationTaskId) {
+        return;
+      }
+      if (cachedLayout != null && cachedLayout.pagedPages.isNotEmpty) {
+        final targetIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
+          targetRatio: plan.preservedRatio,
+          pageCount: cachedLayout.pagedPages.length,
+        );
+        setState(() {
+          _pagedPages = cachedLayout.pagedPages;
+          _currentPageIndex = targetIndex;
+          _pagedPaginationState = ReaderPaginationSessionState(
+            signature: cachedLayout.paginationSignature,
+          );
+          if (_paragraphs.isEmpty && cachedLayout.paragraphs.isNotEmpty) {
+            _paragraphs = List<String>.unmodifiable(cachedLayout.paragraphs);
+          }
+          _resetPagedTransitionState();
+          _resetCurlAnimationState();
+        });
+        return;
+      }
+    }
+
     _resetPagedTransitionState();
     _resetCurlAnimationState();
 
@@ -3594,12 +3637,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _currentPageIndex = 0;
     });
 
-    unawaited(
-      _paginateCurrentChapter(
-        taskId: taskId,
-        spec: spec,
-        signature: plan.signature,
-      ),
+    await _paginateCurrentChapter(
+      taskId: taskId,
+      spec: spec,
+      signature: plan.signature,
     );
   }
 

@@ -78,6 +78,9 @@ class ReaderFeatureDependencies {
 
 typedef ReaderFeatureDependenciesFactory = ReaderFeatureDependencies Function();
 
+final ReaderPaginationCacheService _sharedReaderPaginationCacheService =
+    ReaderPaginationCacheService();
+
 final readerFeatureDependenciesFactoryProvider =
     Provider<ReaderFeatureDependenciesFactory>((ref) {
       return () {
@@ -91,7 +94,7 @@ final readerFeatureDependenciesFactoryProvider =
           ),
           preferencesService: ReaderPreferencesService(),
           fontRegistryService: ReaderFontRegistryService(),
-          paginationCacheService: ReaderPaginationCacheService(),
+          paginationCacheService: _sharedReaderPaginationCacheService,
           systemSettingsService: ReaderSystemSettingsService(),
           readerBackgroundService: ReaderBackgroundService(),
           localBookStorageService: LocalBookStorageService(),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -1520,18 +1521,31 @@ class _DebugInputCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
               children: [
-                Text(
-                  '调试参数',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '调试参数',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Chip(label: Text(modeLabel)),
+                    ],
                   ),
                 ),
-                Chip(label: Text(modeLabel)),
+                _CopyCardButton(
+                  text: _buildInputCardCopyText(
+                    controller: controller,
+                    selectedLevel: selectedLevel,
+                    mode: mode,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -1593,11 +1607,32 @@ class _SummaryCard extends StatelessWidget {
         margin: EdgeInsets.zero,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(
-            '输入关键词后执行调试，页面会先给出标准结论，再展开详细日志和阶段输出。',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(height: 1.5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '调试结论',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const _CopyCardButton(
+                    text: '输入关键词后执行调试，页面会先给出标准结论，再展开详细日志和阶段输出。',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '输入关键词后执行调试，页面会先给出标准结论，再展开详细日志和阶段输出。',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(height: 1.5),
+              ),
+            ],
           ),
         ),
       );
@@ -1619,22 +1654,29 @@ class _SummaryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _checkStatusLabel(summary.status),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _checkStatusLabel(summary.status),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                _CopyCardButton(text: _buildSummaryCardCopyText(report!)),
               ],
             ),
             const SizedBox(height: 10),
@@ -1706,21 +1748,28 @@ class _StageCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    shape: BoxShape.circle,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${stage.title} · ${_stageOutcomeLabel(stage.outcome)}',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${stage.title} · ${_stageOutcomeLabel(stage.outcome)}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                _CopyCardButton(text: _buildStageCardCopyText(stage, formatJson)),
               ],
             ),
             const SizedBox(height: 8),
@@ -1871,13 +1920,141 @@ class _EmptyState extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Text(
-          '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '阶段明细',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const _CopyCardButton(
+                  text: '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。',
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _CopyCardButton extends StatelessWidget {
+  const _CopyCardButton({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: '复制',
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.content_copy_rounded, size: 18),
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: text));
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('已复制')));
+      },
+    );
+  }
+}
+
+String _buildInputCardCopyText({
+  required TextEditingController controller,
+  required SourceCheckLevel selectedLevel,
+  required _DebugMode mode,
+}) {
+  final modeLabel = switch (mode) {
+    _DebugMode.installedSource => '标准检测模式',
+    _DebugMode.draft => '草稿调试模式',
+  };
+  return [
+    '调试参数',
+    '模式：$modeLabel',
+    '关键词：${controller.text.trim()}',
+    '检测级别：${_checkLevelLabel(selectedLevel)}',
+  ].join('\n');
+}
+
+String _buildSummaryCardCopyText(_RunReport report) {
+  final summary = report.summary;
+  return [
+    '调试结论',
+    '书源：${report.sourceName}',
+    '关键词：${report.keyword}',
+    '级别：${_checkLevelLabel(report.level)}',
+    '状态：${_checkStatusLabel(summary.status)}',
+    '步骤：${_checkStepLabel(summary.stepReached)}',
+    '耗时：${_formatDuration(summary.duration)}',
+    '浏览器风险：${summary.needsBrowser ? '是' : '否'}',
+    '',
+    summary.message,
+  ].join('\n');
+}
+
+String _buildStageCardCopyText(
+  _StageReport stage,
+  String Function(Object? value) formatJson,
+) {
+  final buffer = StringBuffer()
+    ..writeln('${stage.title} · ${_stageOutcomeLabel(stage.outcome)}')
+    ..writeln(stage.summary);
+
+  if (stage.highlights.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('亮点')
+      ..writeln(stage.highlights.map((item) => '- $item').join('\n'));
+  }
+
+  if (stage.entries.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('执行时间线');
+    for (final entry in stage.entries) {
+      buffer.writeln('[${_formatOffset(entry.offset)}] ${entry.message}');
+      final detail = entry.detail?.trim() ?? '';
+      if (detail.isNotEmpty) {
+        buffer.writeln('  $detail');
+      }
+    }
+  }
+
+  buffer
+    ..writeln()
+    ..writeln('原始输出')
+    ..writeln(formatJson(stage.payload));
+
+  if (stage.rawLogs.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('结构化日志')
+      ..writeln(formatJson(stage.rawLogs));
+  }
+
+  if (stage.rawTraces.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('结构化轨迹')
+      ..writeln(formatJson(stage.rawTraces));
+  }
+
+  return buffer.toString().trimRight();
 }
 
 String _checkLevelLabel(SourceCheckLevel level) {

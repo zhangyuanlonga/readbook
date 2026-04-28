@@ -44,12 +44,11 @@ private struct ExternalImportSpec {
 
   private lazy var scriptSourceImportSpec = ExternalImportSpec(
     type: payloadTypeScriptSource,
-    extensions: ["js", "mjs", "txt"],
+    extensions: ["js", "mjs"],
     mimeTypeToExtension: [
       "application/javascript": "js",
       "text/javascript": "js",
       "application/x-javascript": "js",
-      "text/plain": "txt",
     ]
   )
 
@@ -82,8 +81,8 @@ private struct ExternalImportSpec {
 
   private lazy var externalImportSpecs = [
     advancedThemeImportSpec,
-    scriptSourceImportSpec,
     localBookImportSpec,
+    scriptSourceImportSpec,
   ]
 
   private func logSourceImport(_ message: String) {

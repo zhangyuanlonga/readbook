@@ -44,6 +44,13 @@ void main() {
       expect(
         ExternalImportCatalog.supportsFileLabel(
           ExternalImportPayloadType.scriptSource,
+          'demo.txt',
+        ),
+        isFalse,
+      );
+      expect(
+        ExternalImportCatalog.supportsFileLabel(
+          ExternalImportPayloadType.scriptSource,
           'demo.epub',
         ),
         isFalse,
@@ -51,6 +58,13 @@ void main() {
     });
 
     test('validates local book extensions consistently', () {
+      expect(
+        ExternalImportCatalog.supportsFileLabel(
+          ExternalImportPayloadType.localBook,
+          'novel.txt',
+        ),
+        isTrue,
+      );
       expect(
         ExternalImportCatalog.supportsFileLabel(
           ExternalImportPayloadType.localBook,

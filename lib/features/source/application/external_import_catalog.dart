@@ -7,12 +7,11 @@ class ExternalImportCatalog {
 
   static const XTypeGroup scriptSourceTypeGroup = XTypeGroup(
     label: 'Script Sources',
-    extensions: <String>['js', 'mjs', 'txt'],
+    extensions: <String>['js', 'mjs'],
     mimeTypes: <String>[
       'text/javascript',
       'application/javascript',
       'application/x-javascript',
-      'text/plain',
       'application/octet-stream',
     ],
     uniformTypeIdentifiers: <String>[
@@ -146,11 +145,7 @@ class ExternalImportCatalog {
     return normalized.substring(normalized.lastIndexOf('.'));
   }
 
-  static const Set<String> _scriptSourceExtensions = <String>{
-    '.js',
-    '.mjs',
-    '.txt',
-  };
+  static const Set<String> _scriptSourceExtensions = <String>{'.js', '.mjs'};
 
   static const Set<String> _localBookExtensions = <String>{
     '.txt',

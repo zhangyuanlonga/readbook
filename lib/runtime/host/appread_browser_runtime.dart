@@ -228,6 +228,9 @@ class InAppWebViewCookieSynchronizer implements BrowserCookieSynchronizer {
   }) async {
     final webUri = WebUri.uri(uri);
     for (final cookie in session.cookieEntriesForUri(uri)) {
+      if (cookie.name.trim().isEmpty || cookie.value.isEmpty) {
+        continue;
+      }
       await _manager.setCookie(
         url: webUri,
         name: cookie.name,

@@ -177,6 +177,42 @@ void main() {
     expect(sharedCall.isHttpOnly, isTrue);
   });
 
+  test('skips empty-value cookies when syncing to webview', () async {
+    final platform = _RecordingPlatformCookieManager();
+    final synchronizer = InAppWebViewCookieSynchronizer(
+      cookieManager: CookieManager.fromPlatform(platform),
+    );
+    final session = SourceSession(sourceId: 'source_qidian');
+    session.setCookie(
+      'x-waf-captcha-referer',
+      '',
+      uri: Uri.parse('https://www.qidian.com/so/test.html'),
+    );
+    session.setCookie(
+      'valid_cookie',
+      'ok',
+      uri: Uri.parse('https://www.qidian.com/so/test.html'),
+    );
+
+    await synchronizer.syncSessionToBrowser(
+      uri: Uri.parse('https://www.qidian.com/so/test.html'),
+      session: session,
+    );
+
+    expect(
+      platform.setCookieCalls.any(
+        (_RecordedSetCookieCall call) => call.name == 'x-waf-captcha-referer',
+      ),
+      isFalse,
+    );
+    expect(
+      platform.setCookieCalls.any(
+        (_RecordedSetCookieCall call) => call.name == 'valid_cookie',
+      ),
+      isTrue,
+    );
+  });
+
   test('rejects interactive challenge when session disallows it', () async {
     final session = SourceSession(sourceId: 'source_auto_switch');
     session.set('__allow_interactive_challenge__', false);

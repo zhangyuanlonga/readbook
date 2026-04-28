@@ -43,12 +43,11 @@ class MainActivity : FlutterActivity() {
         private const val PAYLOAD_TYPE_ADVANCED_THEME = "advancedTheme"
         private val SCRIPT_SOURCE_IMPORT_SPEC = ExternalImportSpec(
             type = PAYLOAD_TYPE_SCRIPT_SOURCE,
-            extensions = linkedSetOf("js", "mjs", "txt"),
+            extensions = linkedSetOf("js", "mjs"),
             mimeTypeToExtension = linkedMapOf(
                 "application/javascript" to "js",
                 "text/javascript" to "js",
                 "application/x-javascript" to "js",
-                "text/plain" to "txt",
             )
         )
         private val LOCAL_BOOK_IMPORT_SPEC = ExternalImportSpec(
@@ -89,8 +88,8 @@ class MainActivity : FlutterActivity() {
         )
         private val EXTERNAL_IMPORT_SPECS = listOf(
             ADVANCED_THEME_IMPORT_SPEC,
-            SCRIPT_SOURCE_IMPORT_SPEC,
             LOCAL_BOOK_IMPORT_SPEC,
+            SCRIPT_SOURCE_IMPORT_SPEC,
         )
     }
 
