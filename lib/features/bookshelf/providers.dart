@@ -19,6 +19,7 @@ import '../source/application/source_runtime_facade.dart';
 import '../source/application/source_login_state_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
+import 'application/bookshelf_flow_coordinator.dart';
 import 'application/bookshelf_page_route_service.dart';
 import 'application/bookshelf_presentation_query_service.dart';
 import 'application/bookshelf_reader_open_service.dart';
@@ -41,6 +42,7 @@ class BookshelfPageDependencies {
     required this.customCoverStorageService,
     required this.announcementService,
     required this.announcementReadStateService,
+    required this.flowCoordinator,
   });
 
   final BookshelfService bookshelfService;
@@ -56,6 +58,7 @@ class BookshelfPageDependencies {
   final CustomCoverStorageService customCoverStorageService;
   final AnnouncementService announcementService;
   final AnnouncementReadStateService announcementReadStateService;
+  final BookshelfFlowCoordinator flowCoordinator;
 }
 
 final bookshelfServiceProvider = Provider<BookshelfService>((ref) {
@@ -217,7 +220,14 @@ final bookshelfPageDependenciesProvider = Provider<BookshelfPageDependencies>((
     announcementReadStateService: ref.watch(
       bookshelfAnnouncementReadStateServiceProvider,
     ),
+    flowCoordinator: ref.watch(bookshelfFlowCoordinatorProvider),
   );
+});
+
+final bookshelfFlowCoordinatorProvider = Provider<BookshelfFlowCoordinator>((
+  ref,
+) {
+  return const BookshelfFlowCoordinator();
 });
 
 final bookshelfLocalBookRepositoryProvider = Provider<LocalBookRepository>((

@@ -1148,6 +1148,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _deleteManagedBackgroundFileIfNeeded(String source) =>
       _deleteManagedBackgroundFileIfNeededImpl(source);
 
+  Future<List<String>> _loadUnifiedCustomBackgrounds() =>
+      _loadUnifiedCustomBackgroundsImpl();
+
   Future<void> _refreshSharedReaderAssets({
     void Function(VoidCallback fn)? updateModalState,
   }) => _refreshSharedReaderAssetsImpl(updateModalState: updateModalState);

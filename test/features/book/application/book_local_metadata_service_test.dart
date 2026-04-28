@@ -50,6 +50,10 @@ class _FakeLocalBookRepository implements LocalBookRepository {
   Future<List<LocalBook>> getAllBooks() => throw UnimplementedError();
 
   @override
+  Stream<List<LocalBook>> watchAllBooks() =>
+      const Stream<List<LocalBook>>.empty();
+
+  @override
   Future<LocalBook?> getBookBySourcePath(String sourcePath) =>
       throw UnimplementedError();
 

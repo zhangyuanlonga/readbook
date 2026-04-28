@@ -284,13 +284,14 @@
 
 - [x] 新增 `BookshelfPageRouteService`
 - [x] 最近阅读 / 进度阅读 / fallback / 详情路由决策已从页面移出
+- [x] 搜索与筛选 glue 已迁到独立 flow part
+- [x] 选中态与批量操作 glue 已迁到独立 selection part
+- [x] 外部导入与本地导入交互 glue 已迁到独立 flow part
+- [x] 新增 `BookshelfFlowCoordinator`
 
 当前剩余项：
 
-- [ ] 搜索与筛选 glue 下沉
-- [ ] 选中态与批量操作 glue 下沉
-- [ ] 外部导入与本地导入交互 glue 下沉
-- [ ] 建立更明确的 `bookshelf flow coordinator`
+- 无，`7.2 Bookshelf` 本轮已完成；后续若继续压薄设置面板或卡片渲染，再单独回挂
 
 ### 7.3 Book Detail
 

@@ -163,6 +163,10 @@ class _NoopBookMetadataOverrideRepository
       const <BookMetadataOverride>[];
 
   @override
+  Stream<List<BookMetadataOverride>> watchAll() =>
+      const Stream<List<BookMetadataOverride>>.empty();
+
+  @override
   Future<void> deleteByLocalBookId(String bookId) async {}
 
   @override
@@ -225,6 +229,10 @@ class _NoopLocalBookRepository implements LocalBookRepository {
 
   @override
   Future<List<LocalBook>> getAllBooks() async => const <LocalBook>[];
+
+  @override
+  Stream<List<LocalBook>> watchAllBooks() =>
+      const Stream<List<LocalBook>>.empty();
 
   @override
   Future<void> replaceChapters({
