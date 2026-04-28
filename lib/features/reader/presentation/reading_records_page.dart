@@ -14,7 +14,6 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
-import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
@@ -22,12 +21,13 @@ import '../../book/application/book_display_state.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
 import '../application/reading_records_page_dependencies_provider.dart';
+import '../application/reading_records_page_state_service.dart';
 import '../application/reading_book_status_service.dart';
 import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reading_records_query_service.dart';
+import '../application/reading_records_stats_presenter.dart';
 import '../application/reading_record_service.dart';
-import '../application/reading_stats_work_identity_service.dart';
 import '../application/reader_system_settings_service.dart';
 
 enum _HeatmapRangeMode { threeMonths, sixMonths, oneYear, all }
@@ -70,8 +70,9 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   late final ReadingBookStatusService _readingBookStatusService;
   late final ReadingRecordOpenRouteService _recordOpenRouteService;
   late final ReadingRecordsPresentationService _presentationService;
+  late final ReadingRecordsPageStateService _pageStateService;
+  late final ReadingRecordsStatsPresenter _statsPresenter;
   late final Stream<bool> _readRecordEnabledStream;
-  late final ReadingStatsWorkIdentityService _workIdentityService;
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
       const <String, BookMetadataOverride>{};
@@ -104,7 +105,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
             ));
     _presentationService =
         widget._presentationService ?? dependencies.presentationService;
-    _workIdentityService = dependencies.workIdentityService;
+    _pageStateService = dependencies.pageStateService;
+    _statsPresenter = dependencies.statsPresenter;
     _period = widget.initialPeriod ?? _period;
     _readRecordEnabledStream =
         _readerSystemSettingsService.watchReadRecordEnabled();
@@ -266,172 +268,86 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child: StreamBuilder<List<ReadingRecord>>(
-                  stream: _readingRecordService.watchLatestRecords(),
-                  builder: (context, latestSnapshot) {
-                    final latestRecords =
-                        latestSnapshot.data ?? const <ReadingRecord>[];
-                    return StreamBuilder<List<ReadingRecordDay>>(
-                      stream: _readingRecordService.watchDailyRecords(),
-                      builder: (context, dailySnapshot) {
-                        final dailyRecords =
-                            dailySnapshot.data ?? const <ReadingRecordDay>[];
-                        return StreamBuilder<List<ReadingRecordSession>>(
-                          stream: _readingRecordService.watchSessions(),
-                          builder: (context, sessionSnapshot) {
-                            final sessions =
-                                sessionSnapshot.data ??
-                                const <ReadingRecordSession>[];
-                            return StreamBuilder<List<LocalBook>>(
-                              stream: _presentationService.watchLocalBooks(),
-                              builder: (context, localBooksSnapshot) {
-                                final localBooks =
-                                    localBooksSnapshot.data ??
-                                    const <LocalBook>[];
-                                return StreamBuilder<
-                                  List<BookMetadataOverride>
-                                >(
-                                  stream:
-                                      _presentationService
-                                          .watchMetadataOverrides(),
-                                  builder: (context, overrideSnapshot) {
-                                    final overrides =
-                                        overrideSnapshot.data ??
-                                        const <BookMetadataOverride>[];
-                                    _localBooksById = <String, LocalBook>{
-                                      for (final book in localBooks)
-                                        book.id.trim(): book,
-                                    };
-                                    _metadataOverridesByTargetKey =
-                                        <String, BookMetadataOverride>{
-                                          for (final item in overrides)
-                                            item.targetKey: item,
-                                        };
-                                    return StreamBuilder<
-                                      List<ReadingBookStatusEntry>
-                                    >(
-                                      stream:
-                                          _readingBookStatusService
-                                              .watchManualStatuses(),
-                                      builder: (context, statusSnapshot) {
-                                        final manualStatuses =
-                                            statusSnapshot.data ??
-                                            const <ReadingBookStatusEntry>[];
-                                        final resolvedStatusesByBookId =
-                                            _readingBookStatusService
-                                                .resolveStatuses(
-                                                  latestRecords: latestRecords,
-                                                  localBooks: localBooks,
-                                                  manualStatuses:
-                                                      manualStatuses,
-                                                );
-                                        final queryView =
-                                            _readingRecordsQueryService
-                                                .buildQueryView(
-                                                  latestRecords: latestRecords,
-                                                  dailyRecords: dailyRecords,
-                                                  sessions: sessions,
-                                                  period: _period,
-                                                  anchor: _periodAnchor,
-                                                  resolvedStatusesByBookId:
-                                                      resolvedStatusesByBookId,
-                                                );
-                                        final showRanking =
-                                            _period ==
-                                                ReadingRecordsPeriod.day ||
-                                            _period ==
-                                                ReadingRecordsPeriod.week ||
-                                            _period ==
-                                                ReadingRecordsPeriod.month ||
-                                            _period ==
-                                                ReadingRecordsPeriod.year ||
-                                            _period == ReadingRecordsPeriod.all;
-                                        final showWeekActivity =
-                                            _period ==
-                                            ReadingRecordsPeriod.week;
-                                        final showCalendar =
-                                            _period ==
-                                            ReadingRecordsPeriod.month;
-                                        final showHeatmap =
-                                            _period ==
-                                                ReadingRecordsPeriod.year ||
-                                            _period == ReadingRecordsPeriod.all;
+                child: StreamBuilder<ReadingRecordsPageState>(
+                  stream: _pageStateService.watchPageState(
+                    latestRecordsStream:
+                        _readingRecordService.watchLatestRecords(),
+                    dailyRecordsStream: _readingRecordService.watchDailyRecords(),
+                    sessionsStream: _readingRecordService.watchSessions(),
+                    localBooksStream: _presentationService.watchLocalBooks(),
+                    metadataOverridesStream:
+                        _presentationService.watchMetadataOverrides(),
+                    manualStatusesStream:
+                        _readingBookStatusService.watchManualStatuses(),
+                    period: _period,
+                    anchor: _periodAnchor,
+                  ),
+                  builder: (context, snapshot) {
+                    final pageState = snapshot.data;
+                    if (pageState == null) {
+                      return const SizedBox.shrink();
+                    }
+                    _localBooksById = pageState.localBooksById;
+                    _metadataOverridesByTargetKey =
+                        pageState.metadataOverridesByTargetKey;
+                    final queryView = pageState.queryView;
+                    final visibleSections = pageState.visibleSections;
 
-                                        return ListView(
-                                          padding:
-                                              mobileBottomNavigationBodyPadding(
-                                                context,
-                                                style: effectiveNavigationStyle,
-                                                showNavigationLabels:
-                                                    showNavigationLabels,
-                                                standardAppearance: ref.watch(
-                                                  appStandardNavigationBarAppearanceProvider,
-                                                ),
-                                                left: horizontal,
-                                                top: topInset + 12,
-                                                right: horizontal,
-                                                bottom: _kStatsPageBottomGap,
-                                              ),
-                                          children: [
-                                            _buildControlsCard(),
-                                            const SizedBox(height: 6),
-                                            _buildSummaryCard(
-                                              summary: queryView.summary,
-                                            ),
-                                            const SizedBox(height: 10),
-                                            _buildSectionHeading(
-                                              queryView.distribution.title,
-                                              subtitle: '当前周期内的阅读时长变化',
-                                            ),
-                                            _buildDurationDistributionCard(
-                                              queryView.distribution,
-                                              calendar:
-                                                  queryView
-                                                      .distributionCalendar,
-                                            ),
-                                            if (showWeekActivity) ...[
-                                              const SizedBox(height: 10),
-                                              _buildWeeklyActivityCard(
-                                                periodRange:
-                                                    queryView.periodRange,
-                                                dailyRecords: dailyRecords,
-                                                sessions: sessions,
-                                              ),
-                                            ],
-                                            if (showCalendar) ...[
-                                              const SizedBox(height: 10),
-                                              _buildReadingCalendarCard(
-                                                queryView.distributionCalendar,
-                                                dailyRecords: dailyRecords,
-                                                sessions: sessions,
-                                              ),
-                                            ],
-                                            if (showRanking) ...[
-                                              const SizedBox(height: 10),
-                                              _buildDurationRankingSection(
-                                                queryView.rankings,
-                                              ),
-                                            ],
-                                            if (showHeatmap) ...[
-                                              const SizedBox(height: 10),
-                                              _buildHeatmapCard(
-                                                dailyRecords,
-                                                sessions: sessions,
-                                                periodRange:
-                                                    queryView.periodRange,
-                                              ),
-                                            ],
-                                          ],
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
+                    return ListView(
+                      padding: mobileBottomNavigationBodyPadding(
+                        context,
+                        style: effectiveNavigationStyle,
+                        showNavigationLabels: showNavigationLabels,
+                        standardAppearance: ref.watch(
+                          appStandardNavigationBarAppearanceProvider,
+                        ),
+                        left: horizontal,
+                        top: topInset + 12,
+                        right: horizontal,
+                        bottom: _kStatsPageBottomGap,
+                      ),
+                      children: [
+                        _buildControlsCard(),
+                        const SizedBox(height: 6),
+                        _buildSummaryCard(summary: queryView.summary),
+                        const SizedBox(height: 10),
+                        _buildSectionHeading(
+                          queryView.distribution.title,
+                          subtitle: '当前周期内的阅读时长变化',
+                        ),
+                        _buildDurationDistributionCard(
+                          queryView.distribution,
+                          calendar: queryView.distributionCalendar,
+                        ),
+                        if (visibleSections.showWeekActivity) ...[
+                          const SizedBox(height: 10),
+                          _buildWeeklyActivityCard(
+                            periodRange: queryView.periodRange,
+                            dailyRecords: pageState.dailyRecords,
+                            sessions: pageState.sessions,
+                          ),
+                        ],
+                        if (visibleSections.showCalendar) ...[
+                          const SizedBox(height: 10),
+                          _buildReadingCalendarCard(
+                            queryView.distributionCalendar,
+                            dailyRecords: pageState.dailyRecords,
+                            sessions: pageState.sessions,
+                          ),
+                        ],
+                        if (visibleSections.showRanking) ...[
+                          const SizedBox(height: 10),
+                          _buildDurationRankingSection(queryView.rankings),
+                        ],
+                        if (visibleSections.showHeatmap) ...[
+                          const SizedBox(height: 10),
+                          _buildHeatmapCard(
+                            pageState.dailyRecords,
+                            sessions: pageState.sessions,
+                            periodRange: queryView.periodRange,
+                          ),
+                        ],
+                      ],
                     );
                   },
                 ),
@@ -1399,131 +1315,68 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     required List<ReadingRecordDay> dailyRecords,
     required List<ReadingRecordSession> sessions,
   }) {
-    final totalReadMillisByDate = <String, int>{};
-    final totalReadCharsByDate = <String, int>{};
-    final daysByDate = <String, List<ReadingRecordDay>>{};
-    final sessionsByDate = <String, List<ReadingRecordSession>>{};
-
-    for (final day in dailyRecords) {
-      if (!allowedDateKeys.contains(day.dateKey)) {
-        continue;
-      }
-      daysByDate.putIfAbsent(day.dateKey, () => <ReadingRecordDay>[]).add(day);
-      totalReadMillisByDate[day.dateKey] =
-          (totalReadMillisByDate[day.dateKey] ?? 0) + day.readMillis;
-      totalReadCharsByDate[day.dateKey] =
-          (totalReadCharsByDate[day.dateKey] ?? 0) + day.readChars;
-    }
-
-    final sessionCountByDate = <String, int>{};
-    for (final session in sessions) {
-      final dateKey = _dateKeyFor(session.startAt);
-      if (!allowedDateKeys.contains(dateKey)) {
-        continue;
-      }
-      sessionsByDate
-          .putIfAbsent(dateKey, () => <ReadingRecordSession>[])
-          .add(session);
-      sessionCountByDate[dateKey] = (sessionCountByDate[dateKey] ?? 0) + 1;
-    }
-
-    final details = <String, _ReadingCalendarDayDetail>{};
-    for (final dateKey in allowedDateKeys) {
-      final books = _buildReadingCalendarBooksForDate(
-        sessionsByDate[dateKey] ?? const <ReadingRecordSession>[],
-      );
-      details[dateKey] = _ReadingCalendarDayDetail(
-        dateKey: dateKey,
-        readMillis: totalReadMillisByDate[dateKey] ?? 0,
-        readChars: totalReadCharsByDate[dateKey] ?? 0,
-        sessionCount: sessionCountByDate[dateKey] ?? 0,
-        workCount: math.max(
-          _workIdentityService.countDistinctWorks(
-            items: daysByDate[dateKey] ?? const <ReadingRecordDay>[],
-            titleOf: (item) => item.bookTitle,
-            authorOf: (item) => item.bookAuthor,
-            fallbackIdOf: (item) => item.bookId,
-          ),
-          books.length,
-        ),
-        books: books,
-      );
-    }
-    return details;
-  }
-
-  List<_ReadingCalendarBookDetail> _buildReadingCalendarBooksForDate(
-    List<ReadingRecordSession> sessions,
-  ) {
-    final groups = _workIdentityService.groupItems(
-      items: sessions,
-      titleOf: (item) => item.bookTitle,
-      authorOf: (item) => item.bookAuthor,
-      fallbackIdOf: (item) => item.bookId,
+    final details = _statsPresenter.buildCalendarDetailsByDate(
+      allowedDateKeys: allowedDateKeys,
+      dailyRecords: dailyRecords,
+      sessions: sessions,
     );
-    final books = groups.values
-        .map((items) {
-          final latest = _latestSession(items);
-          final preferredChapter = items
-              .map((item) => item.chapterTitle?.trim() ?? '')
-              .firstWhere((item) => item.isNotEmpty, orElse: () => '');
-          return _ReadingCalendarBookDetail(
-            bookId: latest.bookId,
-            title: latest.bookTitle,
-            author: latest.bookAuthor,
-            coverUrl: latest.coverUrl,
-            readMillis: items.fold<int>(
-              0,
-              (sum, item) => sum + item.durationMillis,
-            ),
-            readChars: items.fold<int>(0, (sum, item) => sum + item.readChars),
-            chapterTitle: preferredChapter.isEmpty ? null : preferredChapter,
-          );
-        })
-        .toList(growable: true);
-    books.sort((a, b) => b.readMillis.compareTo(a.readMillis));
-    return books;
-  }
-
-  ReadingRecordSession _latestSession(List<ReadingRecordSession> sessions) {
-    var latest = sessions.first;
-    for (final session in sessions.skip(1)) {
-      if (session.endAt.isAfter(latest.endAt)) {
-        latest = session;
-      }
-    }
-    return latest;
+    return <String, _ReadingCalendarDayDetail>{
+      for (final entry in details.entries)
+        entry.key: _ReadingCalendarDayDetail(
+          dateKey: entry.value.dateKey,
+          readMillis: entry.value.readMillis,
+          readChars: entry.value.readChars,
+          sessionCount: entry.value.sessionCount,
+          workCount: entry.value.workCount,
+          books: entry.value.books
+              .map(
+                (item) => _ReadingCalendarBookDetail(
+                  bookId: item.bookId,
+                  title: item.title,
+                  author: item.author,
+                  coverUrl: item.coverUrl,
+                  readMillis: item.readMillis,
+                  readChars: item.readChars,
+                  chapterTitle: item.chapterTitle,
+                ),
+              )
+              .toList(growable: false),
+        ),
+    };
   }
 
   DateTime _resolveReadingCalendarSelectedDate({
     required List<DateTime> currentMonthDays,
     required Map<String, _ReadingCalendarDayDetail> detailsByDate,
   }) {
-    final selected = _selectedCalendarDate;
-    if (selected != null) {
-      for (final day in currentMonthDays) {
-        if (_dateKeyFor(day) == _dateKeyFor(selected)) {
-          return day;
-        }
-      }
-    }
-
-    final sortedDays = List<DateTime>.from(currentMonthDays)
-      ..sort((a, b) => b.compareTo(a));
-    for (final day in sortedDays) {
-      final detail = detailsByDate[_dateKeyFor(day)];
-      if (detail != null && detail.readMillis > 0) {
-        return day;
-      }
-    }
-
-    final today = _stripDate(DateTime.now());
-    for (final day in currentMonthDays) {
-      if (_dateKeyFor(day) == _dateKeyFor(today)) {
-        return day;
-      }
-    }
-    return currentMonthDays.first;
+    final detailMap = <String, ReadingCalendarDayDetail>{
+      for (final entry in detailsByDate.entries)
+        entry.key: ReadingCalendarDayDetail(
+          dateKey: entry.value.dateKey,
+          readMillis: entry.value.readMillis,
+          readChars: entry.value.readChars,
+          sessionCount: entry.value.sessionCount,
+          workCount: entry.value.workCount,
+          books: entry.value.books
+              .map(
+                (item) => ReadingCalendarBookDetail(
+                  bookId: item.bookId,
+                  title: item.title,
+                  author: item.author,
+                  coverUrl: item.coverUrl,
+                  readMillis: item.readMillis,
+                  readChars: item.readChars,
+                  chapterTitle: item.chapterTitle,
+                ),
+              )
+              .toList(growable: false),
+        ),
+    };
+    return _statsPresenter.resolveSelectedCalendarDate(
+      candidateDays: currentMonthDays,
+      detailsByDate: detailMap,
+      selectedDate: _selectedCalendarDate,
+    );
   }
 
   Widget _buildReadingCalendarDayCell({

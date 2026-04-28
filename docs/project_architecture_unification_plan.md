@@ -320,11 +320,14 @@
 - [x] `ReadingRecordsPage` 新增 dependencies / open-route / presentation service
 - [x] `ReadingRecordsPage` 不再直接订阅 `AppDatabase.instance.watchBookMetadataOverrides()`
 - [x] `HomePage` 继续阅读卡片改为消费统一展示态标题/作者
+- [x] 新增 `ReadingRecordsPageStateService`
+- [x] 新增 `ReadingRecordsStatsPresenter`
+- [x] `ReadingRecordsPage` 多层 stream/query assembly 已收口到单一 page state stream
+- [x] 日历明细与 section 可见性等 stats glue 已迁到 service / presenter
 
 当前剩余项：
 
-- [ ] 继续减少 `ReadingRecordsPage` 页面内的 query/view assembly
-- [ ] 把剩余 stats 相关 glue 继续往 service / presenter 下沉
+- 无，`7.4 Reading Records / Bookmarks / Home` 本轮已完成
 
 ### 7.5 Mine Appearance / Advanced Theme
 

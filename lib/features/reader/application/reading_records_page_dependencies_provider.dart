@@ -15,6 +15,8 @@ import 'reader_entry_route_resolver.dart';
 import 'reader_preferences_service.dart';
 import 'reading_record_service.dart';
 import 'reading_records_query_service.dart';
+import 'reading_records_page_state_service.dart';
+import 'reading_records_stats_presenter.dart';
 import 'reading_stats_work_identity_service.dart';
 import 'reader_system_settings_service.dart';
 
@@ -27,6 +29,8 @@ class ReadingRecordsPageDependencies {
     required this.recordOpenRouteService,
     required this.presentationService,
     required this.workIdentityService,
+    required this.pageStateService,
+    required this.statsPresenter,
   });
 
   final ReadingRecordService readingRecordService;
@@ -36,6 +40,8 @@ class ReadingRecordsPageDependencies {
   final ReadingRecordOpenRouteService recordOpenRouteService;
   final ReadingRecordsPresentationService presentationService;
   final ReadingStatsWorkIdentityService workIdentityService;
+  final ReadingRecordsPageStateService pageStateService;
+  final ReadingRecordsStatsPresenter statsPresenter;
 }
 
 final readingRecordsReadingRecordServiceProvider =
@@ -107,8 +113,26 @@ final readingRecordsPageDependenciesProvider = Provider<
     ),
     presentationService: ref.watch(readingRecordsPresentationServiceProvider),
     workIdentityService: const ReadingStatsWorkIdentityService(),
+    pageStateService: ref.watch(readingRecordsPageStateServiceProvider),
+    statsPresenter: ref.watch(readingRecordsStatsPresenterProvider),
   );
 });
+
+final readingRecordsStatsPresenterProvider =
+    Provider<ReadingRecordsStatsPresenter>((ref) {
+      return const ReadingRecordsStatsPresenter();
+    });
+
+final readingRecordsPageStateServiceProvider =
+    Provider<ReadingRecordsPageStateService>((ref) {
+      return ReadingRecordsPageStateService(
+        queryService: ref.watch(readingRecordsQueryServiceProvider),
+        readingBookStatusService: ref.watch(
+          readingRecordsReadingBookStatusServiceProvider,
+        ),
+        statsPresenter: ref.watch(readingRecordsStatsPresenterProvider),
+      );
+    });
 
 class ReadingRecordOpenRouteService {
   const ReadingRecordOpenRouteService({
