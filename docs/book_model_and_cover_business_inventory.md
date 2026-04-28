@@ -478,6 +478,11 @@
   - `realCoverUrl`
   - `customCoverPath`
 
+当前进度：
+
+- 已由 `BookMetadataPresentation` 统一承载展示态
+- 已补充 `displayCoverSource` 用于表达当前命中的封面来源类型
+
 ### 8.4 把详情页里的编辑/封面变更编排下沉到 application
 
 建议抽出：

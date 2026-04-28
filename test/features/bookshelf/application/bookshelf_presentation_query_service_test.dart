@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/book_metadata_override_repository_impl.dart';
 import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_metadata_override.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
@@ -32,7 +33,9 @@ void main() {
       service = BookshelfPresentationQueryService(
         database: database,
         bookPresentationQueryService: BookPresentationQueryService(
-          database: database,
+          bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
+            database,
+          ),
         ),
         localBookRepository: LocalBookRepositoryImpl(database),
         sourceRuntimeFacade: _FakeSourceRuntimeFacade(

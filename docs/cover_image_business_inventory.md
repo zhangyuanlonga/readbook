@@ -331,15 +331,19 @@
 
 #### A. feature application 直接依赖 `AppDatabase`
 
-典型位置：
+历史位置：
 
 - `lib/features/book/application/book_presentation_query_service.dart`
 - `lib/features/mine/application/cache_management_service.dart`
 
-问题：
+当前进度：
 
-- 按 guardrails，feature application 应优先依赖 domain repository 或稳定 service
-- 不应直接拿 data 层数据库细节做业务查询编排
+- [x] 已完成整改
+
+当前口径：
+
+- `BookPresentationQueryService` 改为依赖 `BookMetadataOverrideRepository`
+- `CacheManagementService` 改为依赖 repository / stable service 组合
 
 #### B. feature application 跨 feature 依赖业务常量
 
@@ -358,17 +362,22 @@
 
 - `lib/features/book/presentation/book_detail_page.dart`
 
-当前页面直接负责：
+历史问题：
 
 - 拉起图片选择
 - 调用封面文件持久化
 - 决定远程书写 override 还是本地图书写 localBook
 - 直接写 repository
 
-问题：
+当前进度：
 
-- 这已经不是单纯的 UI 交互分发，而是完整业务编排
-- 与 guardrails 中“页面只负责渲染、交互分发、订阅状态”不一致
+- [x] 已完成第一轮下沉
+
+当前口径：
+
+- `BookMetadataEditService` 负责封面/metadata 保存与重置
+- `BookPresentationSyncService` 负责快照同步
+- 页面保留消息提示、弹窗确认与交互分发
 
 ---
 

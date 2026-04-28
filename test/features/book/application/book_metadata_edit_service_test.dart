@@ -159,6 +159,10 @@ class _FakeCustomCoverStorageService extends CustomCoverStorageService {
 class _NoopBookMetadataOverrideRepository
     implements BookMetadataOverrideRepository {
   @override
+  Future<List<BookMetadataOverride>> getAll() async =>
+      const <BookMetadataOverride>[];
+
+  @override
   Future<void> deleteByLocalBookId(String bookId) async {}
 
   @override

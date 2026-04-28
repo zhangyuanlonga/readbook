@@ -167,12 +167,25 @@
 
 任务：
 
-- [ ] `BookPresentationQueryService` 不再直接依赖 `AppDatabase`
-- [ ] `CacheManagementService` 不再直接依赖 `AppDatabase`
-- [ ] 封面展示态相关查询改走 repository / stable service
-- [ ] 本地书 sourceId 常量不再跨 feature 直接引用实现类
-- [ ] 对齐 `docs/development_architecture_guardrails.md` 约束
-- [ ] 补 provider / repository 层测试
+- [x] `BookPresentationQueryService` 不再直接依赖 `AppDatabase`
+- [x] `CacheManagementService` 不再直接依赖 `AppDatabase`
+- [x] 封面展示态相关查询改走 repository / stable service
+- [x] 本地书 sourceId 常量不再跨 feature 直接引用实现类
+- [x] 对齐 `docs/development_architecture_guardrails.md` 约束
+- [x] 补 provider / repository 层测试
+
+当前说明：
+
+- `BookPresentationQueryService` 已改为依赖 `BookMetadataOverrideRepository`
+- `CacheManagementService` 已改为依赖：
+  - `ReadingRecordService`
+  - `LocalBookRepository`
+  - `BookMetadataOverrideRepository`
+  - `ChapterCacheService`
+- 已补测试：
+  - `test/features/book/application/book_presentation_query_service_test.dart`
+  - `test/features/mine/application/cache_management_service_test.dart`
+  - `test/features/book/application/book_provider_smoke_test.dart`
 
 验收标准：
 
@@ -189,14 +202,25 @@
 
 任务：
 
-- [ ] 明确哪些字段属于事实数据
-- [ ] 明确哪些字段属于书架快照
-- [ ] 明确哪些字段属于阅读记录快照
-- [ ] 统一封面变更后的快照同步时机
-- [ ] 验证详情页改封面后书架同步
-- [ ] 验证详情页改封面后阅读记录同步
-- [ ] 验证本地图书重新索引后封面同步
-- [ ] 补同步链路测试
+- [x] 明确哪些字段属于事实数据
+- [x] 明确哪些字段属于书架快照
+- [x] 明确哪些字段属于阅读记录快照
+- [x] 统一封面变更后的快照同步时机
+- [x] 验证详情页改封面后书架同步
+- [x] 验证详情页改封面后阅读记录同步
+- [x] 验证本地图书重新索引后封面同步
+- [x] 补同步链路测试
+
+当前说明：
+
+- 快照同步已收口到 `BookPresentationSyncService`
+- 详情页 metadata 保存/重置后，不再由页面分别写：
+  - `ReaderTocSnapshot`
+  - `ReadingRecord`
+  - `BookshelfBook`
+- 本地图书重新索引后的封面同步继续由 `LocalBookIndexService` 负责，与新的展示态口径兼容
+- 已补测试：
+  - `test/features/book/application/book_presentation_sync_service_test.dart`
 
 验收标准：
 
@@ -212,12 +236,19 @@
 
 任务：
 
-- [ ] 更新封面业务梳理文档为最终状态
-- [ ] 更新书模型与封面模型文档为最终状态
-- [ ] 补充“封面优先级唯一口径”
-- [ ] 补充“页面不得自行拼装封面规则”
-- [ ] 输出验收清单
-- [ ] 搜索/发现/书架/阅读记录/详情页抽样验收
+- [x] 更新封面业务梳理文档为最终状态
+- [x] 更新书模型与封面模型文档为最终状态
+- [x] 补充“封面优先级唯一口径”
+- [x] 补充“页面不得自行拼装封面规则”
+- [x] 输出验收清单
+- [x] 搜索/发现/书架/阅读记录/详情页抽样验收
+
+当前验收结果：
+
+- 最终渲染入口统一：`自定义 > 真实 > 图库 > 占位`
+- 页面展示入口统一消费 `BookMetadataPresentation`
+- 详情页编辑/写回编排已下沉到 application service
+- `BookPresentationQueryService` / `CacheManagementService` 已去除 `AppDatabase` 直连
 
 验收标准：
 

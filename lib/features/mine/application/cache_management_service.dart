@@ -1,10 +1,13 @@
 import '../../../core/cache/cover_image_disk_cache.dart';
-import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
+import '../../../domain/repositories/book_metadata_override_repository.dart';
+import '../../../domain/repositories/local_book_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
+import '../../reader/application/chapter_cache_service.dart';
 import '../../reader/application/local/local_reader_identity.dart';
+import '../../reader/application/reading_record_service.dart';
 
 class CachedBookPresentation {
   const CachedBookPresentation({
@@ -41,27 +44,42 @@ class CachedBookSummary {
 class CacheManagementService {
   CacheManagementService({
     BookshelfService? bookshelfService,
-    AppDatabase? database,
+    ReadingRecordService? readingRecordService,
+    LocalBookRepository? localBookRepository,
+    BookMetadataOverrideRepository? bookMetadataOverrideRepository,
+    ChapterCacheService? chapterCacheService,
     BookMetadataPresentationResolver resolver =
         const BookMetadataPresentationResolver(),
     CoverImageDiskCache? coverImageDiskCache,
   }) : _bookshelfService = bookshelfService ?? BookshelfService(),
-       _database = database ?? AppDatabase.instance,
+       _readingRecordService = readingRecordService ?? ReadingRecordService(),
+       _localBookRepository = localBookRepository,
+       _bookMetadataOverrideRepository = bookMetadataOverrideRepository,
+       _chapterCacheService = chapterCacheService ?? ChapterCacheService(),
        _resolver = resolver,
        _coverImageDiskCache =
            coverImageDiskCache ?? CoverImageDiskCache.instance;
 
   final BookshelfService _bookshelfService;
-  final AppDatabase _database;
+  final ReadingRecordService _readingRecordService;
+  final LocalBookRepository? _localBookRepository;
+  final BookMetadataOverrideRepository? _bookMetadataOverrideRepository;
+  final ChapterCacheService _chapterCacheService;
   final BookMetadataPresentationResolver _resolver;
   final CoverImageDiskCache _coverImageDiskCache;
 
   Future<Map<String, CachedBookPresentation>>
   buildBookPresentationIndex() async {
     final items = await _bookshelfService.getAll();
-    final records = await _database.listLatestReadingRecords();
-    final localBooks = await _database.getAllLocalBooks();
-    final metadataOverrides = await _database.getAllBookMetadataOverrides();
+    final records = await _readingRecordService.listLatestRecords();
+    final localBooks =
+        await (_localBookRepository?.getAllBooks() ??
+            Future<List<LocalBook>>.value(const <LocalBook>[]));
+    final metadataOverrides =
+        await (_bookMetadataOverrideRepository?.getAll() ??
+            Future<List<BookMetadataOverride>>.value(
+              const <BookMetadataOverride>[],
+            ));
     final localBooksById = <String, LocalBook>{
       for (final book in localBooks) book.id.trim(): book,
     };
@@ -75,10 +93,8 @@ class CacheManagementService {
       if (bookId.isEmpty) {
         continue;
       }
-      final presentation = _resolver.resolve(
-        fallbackTitle: record.bookTitle.trim(),
-        fallbackAuthor: record.bookAuthor,
-        realCoverUrl: record.coverUrl,
+      final presentation = _resolver.resolveReadingRecord(
+        record: record,
         localBook:
             record.sourceId == LocalReaderIdentity.localSourceId
                 ? localBooksById[bookId]
@@ -111,10 +127,8 @@ class CacheManagementService {
       if (bookId.isEmpty) {
         continue;
       }
-      final presentation = _resolver.resolve(
-        fallbackTitle: item.title,
-        fallbackAuthor: item.author,
-        realCoverUrl: item.coverUrl,
+      final presentation = _resolver.resolveBookshelfBook(
+        book: item,
         localBook:
             item.sourceId == LocalReaderIdentity.localSourceId
                 ? localBooksById[bookId]
@@ -146,7 +160,7 @@ class CacheManagementService {
   }
 
   Stream<List<CachedBookSummary>> watchCachedBooks() {
-    return _database.watchCachedBooks().map(
+    return _chapterCacheService.watchCachedBooks().map(
       (items) => items
           .map(
             (item) => CachedBookSummary(
@@ -160,7 +174,7 @@ class CacheManagementService {
   }
 
   Future<int> clearAllCaches() async {
-    await _database.clearChapterCaches();
+    await _chapterCacheService.clearAllCaches();
     return _coverImageDiskCache.clearAll();
   }
 
@@ -168,7 +182,7 @@ class CacheManagementService {
     required String bookId,
     String? coverUrl,
   }) async {
-    await _database.deleteChapterCachesByBookId(bookId);
+    await _chapterCacheService.clearBookCache(bookId);
     return _coverImageDiskCache.clearByUrl(coverUrl ?? '');
   }
 }

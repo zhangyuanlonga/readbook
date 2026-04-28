@@ -43,6 +43,10 @@ class BookMetadataOverrideRepositoryImpl
       _database.getBookMetadataOverrideByTargetKey(targetKey);
 
   @override
+  Future<List<BookMetadataOverride>> getAll() =>
+      _database.getAllBookMetadataOverrides();
+
+  @override
   Future<void> upsert(BookMetadataOverride metadataOverride) =>
       _database.upsertBookMetadataOverride(metadataOverride);
 }

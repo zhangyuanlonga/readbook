@@ -53,8 +53,10 @@ class ChapterCacheService {
     int? maxConcurrentLoads,
   }) : _database = database ?? AppDatabase.instance,
        _contentService = contentService ?? ChapterContentService(),
-       _sourceRuntimeFacade = sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
-       _sourceHealthService = sourceHealthService ?? SourceHealthService.instance,
+       _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
+       _sourceHealthService =
+           sourceHealthService ?? SourceHealthService.instance,
        _logger = logger ?? AppLogger.instance,
        _maxConcurrentLoads = _resolveMaxConcurrentLoads(maxConcurrentLoads);
 
@@ -64,6 +66,18 @@ class ChapterCacheService {
   final SourceHealthService _sourceHealthService;
   final AppLogger _logger;
   final int _maxConcurrentLoads;
+
+  Stream<List<ChapterCacheBookSummary>> watchCachedBooks() {
+    return _database.watchCachedBooks();
+  }
+
+  Future<void> clearAllCaches() {
+    return _database.clearChapterCaches();
+  }
+
+  Future<void> clearBookCache(String bookId) {
+    return _database.deleteChapterCachesByBookId(bookId);
+  }
 
   static int _resolveMaxConcurrentLoads(int? override) {
     final value =
@@ -126,27 +140,31 @@ class ChapterCacheService {
     }
 
     if (normalizedBookId.isEmpty || normalizedSourceId.isEmpty) {
-      emit(const ChapterCacheProgress(
-        done: 0,
-        total: 0,
-        failed: 0,
-        cachedBefore: 0,
-        isCancelled: false,
-        isCompleted: true,
-      ));
+      emit(
+        const ChapterCacheProgress(
+          done: 0,
+          total: 0,
+          failed: 0,
+          cachedBefore: 0,
+          isCancelled: false,
+          isCompleted: true,
+        ),
+      );
       await controller.close();
       return;
     }
 
     if (chapters.isEmpty) {
-      emit(const ChapterCacheProgress(
-        done: 0,
-        total: 0,
-        failed: 0,
-        cachedBefore: 0,
-        isCancelled: false,
-        isCompleted: true,
-      ));
+      emit(
+        const ChapterCacheProgress(
+          done: 0,
+          total: 0,
+          failed: 0,
+          cachedBefore: 0,
+          isCancelled: false,
+          isCompleted: true,
+        ),
+      );
       await controller.close();
       return;
     }
@@ -180,14 +198,16 @@ class ChapterCacheService {
       chapterCount: targetChapters.length,
     );
 
-    emit(ChapterCacheProgress(
-      done: done,
-      total: targetChapters.length,
-      failed: failed,
-      cachedBefore: cachedBefore,
-      isCancelled: cancellationToken?.isCancelled ?? false,
-      isCompleted: false,
-    ));
+    emit(
+      ChapterCacheProgress(
+        done: done,
+        total: targetChapters.length,
+        failed: failed,
+        cachedBefore: cachedBefore,
+        isCancelled: cancellationToken?.isCancelled ?? false,
+        isCompleted: false,
+      ),
+    );
 
     Future<void> processChapter(Chapter chapter) async {
       final chapterUrl = chapter.chapterUrl.trim();
@@ -300,14 +320,16 @@ class ChapterCacheService {
       List<Future<void>>.generate(parallelism, (_) => worker()),
     );
 
-    emit(ChapterCacheProgress(
-      done: done,
-      total: targetChapters.length,
-      failed: failed,
-      cachedBefore: cachedBefore,
-      isCancelled: cancellationToken?.isCancelled ?? false,
-      isCompleted: true,
-    ));
+    emit(
+      ChapterCacheProgress(
+        done: done,
+        total: targetChapters.length,
+        failed: failed,
+        cachedBefore: cachedBefore,
+        isCancelled: cancellationToken?.isCancelled ?? false,
+        isCompleted: true,
+      ),
+    );
     await controller.close();
   }
 

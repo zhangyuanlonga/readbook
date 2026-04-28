@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/book_metadata_override_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_metadata_override.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
@@ -23,7 +24,11 @@ void main() {
         updatedAt: now,
       ),
     );
-    final service = BookPresentationQueryService(database: database);
+    final service = BookPresentationQueryService(
+      bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
+        database,
+      ),
+    );
 
     final presentation = await service.resolveRemoteBook(
       const Book(
@@ -64,7 +69,11 @@ void main() {
           updatedAt: now,
         ),
       );
-      final service = BookPresentationQueryService(database: database);
+      final service = BookPresentationQueryService(
+        bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
+          database,
+        ),
+      );
 
       final result = await service
           .loadMetadataOverrideMapForBooks(<BookshelfBook>[

@@ -46,7 +46,9 @@ final appSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
 final bookPresentationQueryServiceProvider =
     Provider<BookPresentationQueryService>((ref) {
       return BookPresentationQueryService(
-        database: ref.watch(appDatabaseProvider),
+        bookMetadataOverrideRepository: ref.watch(
+          bookMetadataOverrideRepositoryProvider,
+        ),
       );
     });
 

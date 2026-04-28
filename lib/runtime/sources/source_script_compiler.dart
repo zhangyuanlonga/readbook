@@ -1875,12 +1875,19 @@ BrowserOpenRequest _openRequestFromMap(Map<String, dynamic> map) {
 
 BrowserEvalRequest _evalRequestFromMap(Map<String, dynamic> map) {
   final url = map['url']?.toString() ?? '';
+  final webViewDelayMs = _readInt(
+    map['webViewDelay'] ?? map['webviewDelay'] ?? map['web_view_delay'],
+  );
   return BrowserEvalRequest(
     uri: Uri.parse(url),
     script: map['script']?.toString() ?? '',
     timeout: Duration(
       milliseconds: _readInt(map['timeoutMs'], fallback: 10000)!,
     ),
+    webViewDelay:
+        webViewDelayMs == null || webViewDelayMs < 0
+            ? null
+            : Duration(milliseconds: webViewDelayMs),
   );
 }
 

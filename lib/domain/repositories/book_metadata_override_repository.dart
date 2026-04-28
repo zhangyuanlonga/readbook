@@ -10,6 +10,8 @@ abstract class BookMetadataOverrideRepository {
     required String detailUrl,
   });
 
+  Future<List<BookMetadataOverride>> getAll();
+
   Future<void> upsert(BookMetadataOverride metadataOverride);
 
   Future<void> deleteByTargetKey(String targetKey);

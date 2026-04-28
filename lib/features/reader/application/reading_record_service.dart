@@ -119,6 +119,10 @@ class ReadingRecordService {
 
   Stream<int> watchTotalReadMillis() => _database.watchTotalReadingMillis();
 
+  Future<List<ReadingRecord>> listLatestRecords({String query = ''}) {
+    return _database.listLatestReadingRecords(query: query);
+  }
+
   Future<ReadingRecordMergeCandidatesResult> getMergeCandidates(
     ReadingRecord target,
   ) async {

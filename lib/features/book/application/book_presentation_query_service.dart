@@ -1,23 +1,23 @@
-import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
 import 'book_metadata_presentation_resolver.dart';
 
 class BookPresentationQueryService {
   BookPresentationQueryService({
-    required AppDatabase database,
+    required BookMetadataOverrideRepository bookMetadataOverrideRepository,
     BookMetadataPresentationResolver resolver =
         const BookMetadataPresentationResolver(),
-  }) : _database = database,
+  }) : _bookMetadataOverrideRepository = bookMetadataOverrideRepository,
        _resolver = resolver;
 
-  final AppDatabase _database;
+  final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   final BookMetadataPresentationResolver _resolver;
 
   Future<BookMetadataPresentation> resolveRemoteBook(Book book) async {
-    final override = await _database.getBookMetadataOverrideByRemoteBook(
+    final override = await _bookMetadataOverrideRepository.getByRemoteBook(
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
     );
@@ -31,7 +31,7 @@ class BookPresentationQueryService {
       return const <String, BookMetadataOverride>{};
     }
 
-    final overrides = await _database.getAllBookMetadataOverrides();
+    final overrides = await _bookMetadataOverrideRepository.getAll();
     final validKeys =
         books
             .map(metadataTargetKeyForBookshelfBook)

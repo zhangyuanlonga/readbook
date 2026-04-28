@@ -35,11 +35,13 @@ class BrowserEvalRequest {
     required this.uri,
     required this.script,
     this.timeout = const Duration(seconds: 10),
+    this.webViewDelay,
   });
 
   final Uri uri;
   final String script;
   final Duration timeout;
+  final Duration? webViewDelay;
 }
 
 abstract class BrowserRuntime {

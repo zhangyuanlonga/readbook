@@ -1138,6 +1138,7 @@ await ctx.browser.eval(options)
 - `options.url`
 - `options.script`
 - `options.timeoutMs`
+- `options.webViewDelay`
 
 #### 返回值
 
@@ -1149,6 +1150,7 @@ await ctx.browser.eval(options)
 const token = await ctx.browser.eval({
   url: 'https://example.com/profile',
   script: "localStorage.getItem('token')",
+  webViewDelay: 1200,
 });
 ```
 
@@ -1156,6 +1158,7 @@ const token = await ctx.browser.eval({
 
 - `eval(...)` 通常应显式传 `url`
 - 如果只取一个明确值，优先用 `eval(...)`
+- 遇到前端异步渲染页时，可增加 `webViewDelay` 等待页面脚本完成挂载
 
 ### 方法：`ctx.browser.waitForUrl(options)`
 

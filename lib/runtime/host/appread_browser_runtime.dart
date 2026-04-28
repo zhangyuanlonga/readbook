@@ -114,6 +114,7 @@ class AppReadBrowserRuntime implements BrowserRuntime {
             stage: defaultStage,
             sourceId: session?.sourceId,
             timeout: request.timeout,
+            webViewDelay: request.webViewDelay,
             webJs: request.script,
           ),
         );

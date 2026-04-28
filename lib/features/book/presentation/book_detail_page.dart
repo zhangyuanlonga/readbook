@@ -25,10 +25,8 @@ import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
-import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
-import '../../../domain/repositories/local_book_repository.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../providers.dart';
@@ -1573,11 +1571,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     if (mounted) {
       _showMessage(message);
     }
-  }
-
-  String? _normalizeOptionalText(String? value) {
-    final normalized = (value ?? '').trim();
-    return normalized.isEmpty ? null : normalized;
   }
 
   Future<void> _handleShareAction() async {

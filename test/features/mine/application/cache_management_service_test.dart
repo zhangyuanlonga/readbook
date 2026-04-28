@@ -2,6 +2,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/book_metadata_override_repository_impl.dart';
+import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_metadata_override.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
@@ -9,6 +11,8 @@ import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_import_service.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/cache_management_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/chapter_cache_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -27,7 +31,12 @@ void main() {
       coverCache = _FakeCoverImageDiskCache();
       service = CacheManagementService(
         bookshelfService: bookshelfService,
-        database: database,
+        readingRecordService: ReadingRecordService(database: database),
+        localBookRepository: LocalBookRepositoryImpl(database),
+        bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
+          database,
+        ),
+        chapterCacheService: ChapterCacheService(database: database),
         coverImageDiskCache: coverCache,
       );
     });
