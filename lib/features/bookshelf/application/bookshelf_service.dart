@@ -285,6 +285,26 @@ class BookshelfService {
     await removeBookCategory(sourceId: sourceId, detailUrl: detailUrl);
   }
 
+  Future<void> replaceAllForSync(List<BookshelfBook> books) async {
+    await _save(books);
+  }
+
+  Future<void> replaceTagMapForSync(Map<String, List<String>> tagMap) async {
+    final normalized = <String, List<String>>{};
+    for (final entry in tagMap.entries) {
+      final key = entry.key.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      final tags = _normalizeTags(entry.value);
+      if (tags.isEmpty) {
+        continue;
+      }
+      normalized[key] = tags;
+    }
+    await _saveTagMap(normalized);
+  }
+
   Future<bool> contains({
     required String sourceId,
     required String detailUrl,

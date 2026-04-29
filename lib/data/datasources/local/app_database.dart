@@ -257,6 +257,87 @@ class StoredScriptSources extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class StoredSyncProfiles extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get driverType => text()();
+  TextColumn get endpointUrl => text()();
+  TextColumn get basePath => text()();
+  TextColumn get username => text()();
+  TextColumn get secretRef => text().nullable()();
+  TextColumn get enabledScopesJson =>
+      text().withDefault(const Constant('[]'))();
+  TextColumn get scopeConfigJson => text().nullable()();
+  BoolColumn get isAutoSyncEnabled =>
+      boolean().withDefault(const Constant(false))();
+  DateTimeColumn get lastSyncAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'sync_profiles';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class StoredSyncScopeStates extends Table {
+  TextColumn get profileId => text()();
+  TextColumn get scope => text()();
+  TextColumn get lastBaseSnapshotJson => text().nullable()();
+  TextColumn get lastRemoteRevision => text().nullable()();
+  TextColumn get lastRemoteHash => text().nullable()();
+  TextColumn get lastLocalHash => text().nullable()();
+  DateTimeColumn get lastSyncedAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'sync_scope_states';
+
+  @override
+  Set<Column<Object>> get primaryKey => {profileId, scope};
+}
+
+class StoredSyncJobs extends Table {
+  TextColumn get id => text()();
+  TextColumn get profileId => text()();
+  TextColumn get triggerKind => text()();
+  TextColumn get direction =>
+      text().withDefault(const Constant('bidirectional'))();
+  TextColumn get status => text()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get endedAt => dateTime().nullable()();
+  TextColumn get summaryJson => text().nullable()();
+  TextColumn get errorMessage => text().nullable()();
+
+  @override
+  String get tableName => 'sync_jobs';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class StoredSyncConflicts extends Table {
+  TextColumn get id => text()();
+  TextColumn get profileId => text()();
+  TextColumn get scope => text()();
+  TextColumn get recordKey => text()();
+  TextColumn get basePayloadJson => text().nullable()();
+  TextColumn get localPayloadJson => text().nullable()();
+  TextColumn get remotePayloadJson => text().nullable()();
+  TextColumn get resolution =>
+      text().withDefault(const Constant('unresolved'))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get resolvedAt => dateTime().nullable()();
+
+  @override
+  String get tableName => 'sync_conflicts';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class ChapterCacheBookSummary {
   const ChapterCacheBookSummary({
     required this.bookId,
@@ -308,6 +389,10 @@ class SearchSourceHitUpsert {
     StoredReadingBookStatuses,
     SearchSourceHits,
     StoredScriptSources,
+    StoredSyncProfiles,
+    StoredSyncScopeStates,
+    StoredSyncJobs,
+    StoredSyncConflicts,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -319,7 +404,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   @override
   MigrationStrategy get migration {
@@ -488,6 +573,12 @@ class AppDatabase extends _$AppDatabase {
             addColumn:
                 () => migrator.addColumn(storedBookmarks, storedBookmarks.note),
           );
+        }
+        if (from < 25) {
+          await migrator.createTable(storedSyncProfiles);
+          await migrator.createTable(storedSyncScopeStates);
+          await migrator.createTable(storedSyncJobs);
+          await migrator.createTable(storedSyncConflicts);
         }
         if (from < 13) {
           await _addColumnIfMissing(
@@ -742,6 +833,121 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> clearScriptSources() => delete(storedScriptSources).go();
+
+  Future<List<StoredSyncProfile>> getAllSyncProfiles() {
+    return (select(storedSyncProfiles)
+      ..orderBy([(table) => OrderingTerm.asc(table.name)])).get();
+  }
+
+  Stream<List<StoredSyncProfile>> watchAllSyncProfiles() {
+    final query = select(storedSyncProfiles)
+      ..orderBy([(table) => OrderingTerm.asc(table.name)]);
+    return query.watch();
+  }
+
+  Future<StoredSyncProfile?> getSyncProfileById(String id) {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return Future<StoredSyncProfile?>.value(null);
+    }
+    return (select(storedSyncProfiles)
+      ..where((table) => table.id.equals(normalized))).getSingleOrNull();
+  }
+
+  Future<void> upsertSyncProfile(StoredSyncProfilesCompanion companion) {
+    return into(storedSyncProfiles).insertOnConflictUpdate(companion);
+  }
+
+  Future<void> deleteSyncProfile(String id) {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return Future<void>.value();
+    }
+    return (delete(storedSyncProfiles)
+      ..where((table) => table.id.equals(normalized))).go();
+  }
+
+  Future<List<StoredSyncScopeState>> listSyncScopeStatesByProfileId(
+    String profileId,
+  ) {
+    final normalized = profileId.trim();
+    if (normalized.isEmpty) {
+      return Future<List<StoredSyncScopeState>>.value(
+        const <StoredSyncScopeState>[],
+      );
+    }
+    return (select(storedSyncScopeStates)
+          ..where((table) => table.profileId.equals(normalized))
+          ..orderBy([(table) => OrderingTerm.asc(table.scope)]))
+        .get();
+  }
+
+  Future<StoredSyncScopeState?> getSyncScopeState({
+    required String profileId,
+    required String scope,
+  }) {
+    final normalizedProfileId = profileId.trim();
+    final normalizedScope = scope.trim();
+    if (normalizedProfileId.isEmpty || normalizedScope.isEmpty) {
+      return Future<StoredSyncScopeState?>.value(null);
+    }
+    return (select(storedSyncScopeStates)
+          ..where((table) => table.profileId.equals(normalizedProfileId))
+          ..where((table) => table.scope.equals(normalizedScope)))
+        .getSingleOrNull();
+  }
+
+  Future<void> upsertSyncScopeState(StoredSyncScopeStatesCompanion companion) {
+    return into(storedSyncScopeStates).insertOnConflictUpdate(companion);
+  }
+
+  Future<List<StoredSyncJob>> listSyncJobs({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncJobs)
+      ..orderBy([(table) => OrderingTerm.desc(table.startedAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.get();
+  }
+
+  Stream<List<StoredSyncJob>> watchSyncJobs({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncJobs)
+      ..orderBy([(table) => OrderingTerm.desc(table.startedAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.watch();
+  }
+
+  Future<void> upsertSyncJob(StoredSyncJobsCompanion companion) {
+    return into(storedSyncJobs).insertOnConflictUpdate(companion);
+  }
+
+  Future<List<StoredSyncConflict>> listSyncConflicts({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncConflicts)
+      ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.get();
+  }
+
+  Stream<List<StoredSyncConflict>> watchSyncConflicts({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncConflicts)
+      ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.watch();
+  }
+
+  Future<void> upsertSyncConflict(StoredSyncConflictsCompanion companion) {
+    return into(storedSyncConflicts).insertOnConflictUpdate(companion);
+  }
 
   Future<ChapterCache?> getChapterCache(String cacheKey) {
     final normalizedKey = cacheKey.trim();
@@ -2060,6 +2266,22 @@ class AppDatabase extends _$AppDatabase {
     return rows.map(_mapRowToReadingRecordSession).toList(growable: false);
   }
 
+  Future<List<ReadingRecordSession>> listAllReadingRecordSessions() async {
+    final rows =
+        await (select(storedReadingRecordSessions)
+          ..orderBy([(table) => OrderingTerm.asc(table.startAt)])).get();
+    return rows.map(_mapRowToReadingRecordSession).toList(growable: false);
+  }
+
+  Future<List<ReadingRecordDay>> listAllReadingRecordDays() async {
+    final rows =
+        await (select(storedReadingRecordDays)..orderBy([
+          (table) => OrderingTerm.desc(table.dateKey),
+          (table) => OrderingTerm.desc(table.lastReadAt),
+        ])).get();
+    return rows.map(_mapRowToReadingRecordDay).toList(growable: false);
+  }
+
   Future<List<ReadingRecordSession>> listReadingRecordSessionsByBookIdAndDate({
     required String bookId,
     required String dateKey,
@@ -2180,6 +2402,15 @@ class AppDatabase extends _$AppDatabase {
           .map<ReadingBookStatusEntry>(_mapRowToReadingBookStatus)
           .toList(growable: false),
     );
+  }
+
+  Future<List<ReadingBookStatusEntry>> listReadingBookStatuses() async {
+    final rows =
+        await (select(storedReadingBookStatuses)
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
+    return rows
+        .map<ReadingBookStatusEntry>(_mapRowToReadingBookStatus)
+        .toList(growable: false);
   }
 
   Future<void> upsertReadingBookStatus(ReadingBookStatusEntry status) async {

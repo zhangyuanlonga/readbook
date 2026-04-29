@@ -123,6 +123,14 @@ class ReadingRecordService {
     return _database.listLatestReadingRecords(query: query);
   }
 
+  Future<List<ReadingRecordDay>> listAllDays() {
+    return _database.listAllReadingRecordDays();
+  }
+
+  Future<List<ReadingRecordSession>> listAllSessions() {
+    return _database.listAllReadingRecordSessions();
+  }
+
   Future<ReadingRecordMergeCandidatesResult> getMergeCandidates(
     ReadingRecord target,
   ) async {
@@ -643,6 +651,75 @@ class ReadingRecordService {
             endPositionRatio: session.endPositionRatio,
           ),
         );
+      }
+    });
+  }
+
+  Future<void> replaceRemoteScopedHistoryFromSync(
+    List<ReadingRecordSession> syncedSessions,
+  ) async {
+    final existingSessions = await _database.listAllReadingRecordSessions();
+    final existingRemoteBookIds =
+        existingSessions
+            .where((item) => item.sourceId.trim() != '__local_book__')
+            .map((item) => item.bookId.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    final nextRemoteBookIds =
+        syncedSessions
+            .where((item) => item.sourceId.trim() != '__local_book__')
+            .map((item) => item.bookId.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    final affectedBookIds = <String>{
+      ...existingRemoteBookIds,
+      ...nextRemoteBookIds,
+    };
+    if (affectedBookIds.isEmpty) {
+      return;
+    }
+
+    final sessionsByBookId = <String, List<ReadingRecordSession>>{};
+    for (final session in syncedSessions) {
+      final normalizedBookId = session.bookId.trim();
+      if (normalizedBookId.isEmpty ||
+          session.sourceId.trim() == '__local_book__') {
+        continue;
+      }
+      sessionsByBookId
+          .putIfAbsent(normalizedBookId, () => <ReadingRecordSession>[])
+          .add(session);
+    }
+
+    await _database.transaction(() async {
+      for (final bookId in affectedBookIds) {
+        await _database.deleteReadingRecordsByBookId(bookId);
+      }
+      for (final entry in sessionsByBookId.entries) {
+        for (final session in entry.value) {
+          await _database.insertReadingRecordSession(
+            ReadingRecordSession(
+              id: 0,
+              bookId: session.bookId,
+              sourceId: session.sourceId,
+              detailUrl: session.detailUrl,
+              bookTitle: session.bookTitle,
+              bookAuthor: session.bookAuthor,
+              coverUrl: session.coverUrl,
+              chapterId: session.chapterId,
+              chapterTitle: session.chapterTitle,
+              chapterIndex: session.chapterIndex,
+              chapterUrl: session.chapterUrl,
+              startAt: session.startAt,
+              endAt: session.endAt,
+              durationMillis: session.durationMillis,
+              readChars: session.readChars,
+              startPositionRatio: session.startPositionRatio,
+              endPositionRatio: session.endPositionRatio,
+            ),
+          );
+        }
+        await _rebuildAggregatesForBook(entry.key);
       }
     });
   }

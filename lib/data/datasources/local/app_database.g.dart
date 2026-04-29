@@ -8278,6 +8278,2647 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
   }
 }
 
+class $StoredSyncProfilesTable extends StoredSyncProfiles
+    with TableInfo<$StoredSyncProfilesTable, StoredSyncProfile> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredSyncProfilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _driverTypeMeta = const VerificationMeta(
+    'driverType',
+  );
+  @override
+  late final GeneratedColumn<String> driverType = GeneratedColumn<String>(
+    'driver_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endpointUrlMeta = const VerificationMeta(
+    'endpointUrl',
+  );
+  @override
+  late final GeneratedColumn<String> endpointUrl = GeneratedColumn<String>(
+    'endpoint_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _basePathMeta = const VerificationMeta(
+    'basePath',
+  );
+  @override
+  late final GeneratedColumn<String> basePath = GeneratedColumn<String>(
+    'base_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _usernameMeta = const VerificationMeta(
+    'username',
+  );
+  @override
+  late final GeneratedColumn<String> username = GeneratedColumn<String>(
+    'username',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _secretRefMeta = const VerificationMeta(
+    'secretRef',
+  );
+  @override
+  late final GeneratedColumn<String> secretRef = GeneratedColumn<String>(
+    'secret_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledScopesJsonMeta = const VerificationMeta(
+    'enabledScopesJson',
+  );
+  @override
+  late final GeneratedColumn<String> enabledScopesJson =
+      GeneratedColumn<String>(
+        'enabled_scopes_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('[]'),
+      );
+  static const VerificationMeta _scopeConfigJsonMeta = const VerificationMeta(
+    'scopeConfigJson',
+  );
+  @override
+  late final GeneratedColumn<String> scopeConfigJson = GeneratedColumn<String>(
+    'scope_config_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isAutoSyncEnabledMeta = const VerificationMeta(
+    'isAutoSyncEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> isAutoSyncEnabled = GeneratedColumn<bool>(
+    'is_auto_sync_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_auto_sync_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastSyncAtMeta = const VerificationMeta(
+    'lastSyncAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncAt = GeneratedColumn<DateTime>(
+    'last_sync_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    driverType,
+    endpointUrl,
+    basePath,
+    username,
+    secretRef,
+    enabledScopesJson,
+    scopeConfigJson,
+    isAutoSyncEnabled,
+    lastSyncAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_profiles';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSyncProfile> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('driver_type')) {
+      context.handle(
+        _driverTypeMeta,
+        driverType.isAcceptableOrUnknown(data['driver_type']!, _driverTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_driverTypeMeta);
+    }
+    if (data.containsKey('endpoint_url')) {
+      context.handle(
+        _endpointUrlMeta,
+        endpointUrl.isAcceptableOrUnknown(
+          data['endpoint_url']!,
+          _endpointUrlMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_endpointUrlMeta);
+    }
+    if (data.containsKey('base_path')) {
+      context.handle(
+        _basePathMeta,
+        basePath.isAcceptableOrUnknown(data['base_path']!, _basePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_basePathMeta);
+    }
+    if (data.containsKey('username')) {
+      context.handle(
+        _usernameMeta,
+        username.isAcceptableOrUnknown(data['username']!, _usernameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_usernameMeta);
+    }
+    if (data.containsKey('secret_ref')) {
+      context.handle(
+        _secretRefMeta,
+        secretRef.isAcceptableOrUnknown(data['secret_ref']!, _secretRefMeta),
+      );
+    }
+    if (data.containsKey('enabled_scopes_json')) {
+      context.handle(
+        _enabledScopesJsonMeta,
+        enabledScopesJson.isAcceptableOrUnknown(
+          data['enabled_scopes_json']!,
+          _enabledScopesJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('scope_config_json')) {
+      context.handle(
+        _scopeConfigJsonMeta,
+        scopeConfigJson.isAcceptableOrUnknown(
+          data['scope_config_json']!,
+          _scopeConfigJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_auto_sync_enabled')) {
+      context.handle(
+        _isAutoSyncEnabledMeta,
+        isAutoSyncEnabled.isAcceptableOrUnknown(
+          data['is_auto_sync_enabled']!,
+          _isAutoSyncEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_sync_at')) {
+      context.handle(
+        _lastSyncAtMeta,
+        lastSyncAt.isAcceptableOrUnknown(
+          data['last_sync_at']!,
+          _lastSyncAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredSyncProfile map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSyncProfile(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      name:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}name'],
+          )!,
+      driverType:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}driver_type'],
+          )!,
+      endpointUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}endpoint_url'],
+          )!,
+      basePath:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}base_path'],
+          )!,
+      username:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}username'],
+          )!,
+      secretRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}secret_ref'],
+      ),
+      enabledScopesJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}enabled_scopes_json'],
+          )!,
+      scopeConfigJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope_config_json'],
+      ),
+      isAutoSyncEnabled:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_auto_sync_enabled'],
+          )!,
+      lastSyncAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_sync_at'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredSyncProfilesTable createAlias(String alias) {
+    return $StoredSyncProfilesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSyncProfile extends DataClass
+    implements Insertable<StoredSyncProfile> {
+  final String id;
+  final String name;
+  final String driverType;
+  final String endpointUrl;
+  final String basePath;
+  final String username;
+  final String? secretRef;
+  final String enabledScopesJson;
+  final String? scopeConfigJson;
+  final bool isAutoSyncEnabled;
+  final DateTime? lastSyncAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const StoredSyncProfile({
+    required this.id,
+    required this.name,
+    required this.driverType,
+    required this.endpointUrl,
+    required this.basePath,
+    required this.username,
+    this.secretRef,
+    required this.enabledScopesJson,
+    this.scopeConfigJson,
+    required this.isAutoSyncEnabled,
+    this.lastSyncAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['driver_type'] = Variable<String>(driverType);
+    map['endpoint_url'] = Variable<String>(endpointUrl);
+    map['base_path'] = Variable<String>(basePath);
+    map['username'] = Variable<String>(username);
+    if (!nullToAbsent || secretRef != null) {
+      map['secret_ref'] = Variable<String>(secretRef);
+    }
+    map['enabled_scopes_json'] = Variable<String>(enabledScopesJson);
+    if (!nullToAbsent || scopeConfigJson != null) {
+      map['scope_config_json'] = Variable<String>(scopeConfigJson);
+    }
+    map['is_auto_sync_enabled'] = Variable<bool>(isAutoSyncEnabled);
+    if (!nullToAbsent || lastSyncAt != null) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredSyncProfilesCompanion toCompanion(bool nullToAbsent) {
+    return StoredSyncProfilesCompanion(
+      id: Value(id),
+      name: Value(name),
+      driverType: Value(driverType),
+      endpointUrl: Value(endpointUrl),
+      basePath: Value(basePath),
+      username: Value(username),
+      secretRef:
+          secretRef == null && nullToAbsent
+              ? const Value.absent()
+              : Value(secretRef),
+      enabledScopesJson: Value(enabledScopesJson),
+      scopeConfigJson:
+          scopeConfigJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(scopeConfigJson),
+      isAutoSyncEnabled: Value(isAutoSyncEnabled),
+      lastSyncAt:
+          lastSyncAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastSyncAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredSyncProfile.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSyncProfile(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      driverType: serializer.fromJson<String>(json['driverType']),
+      endpointUrl: serializer.fromJson<String>(json['endpointUrl']),
+      basePath: serializer.fromJson<String>(json['basePath']),
+      username: serializer.fromJson<String>(json['username']),
+      secretRef: serializer.fromJson<String?>(json['secretRef']),
+      enabledScopesJson: serializer.fromJson<String>(json['enabledScopesJson']),
+      scopeConfigJson: serializer.fromJson<String?>(json['scopeConfigJson']),
+      isAutoSyncEnabled: serializer.fromJson<bool>(json['isAutoSyncEnabled']),
+      lastSyncAt: serializer.fromJson<DateTime?>(json['lastSyncAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'driverType': serializer.toJson<String>(driverType),
+      'endpointUrl': serializer.toJson<String>(endpointUrl),
+      'basePath': serializer.toJson<String>(basePath),
+      'username': serializer.toJson<String>(username),
+      'secretRef': serializer.toJson<String?>(secretRef),
+      'enabledScopesJson': serializer.toJson<String>(enabledScopesJson),
+      'scopeConfigJson': serializer.toJson<String?>(scopeConfigJson),
+      'isAutoSyncEnabled': serializer.toJson<bool>(isAutoSyncEnabled),
+      'lastSyncAt': serializer.toJson<DateTime?>(lastSyncAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredSyncProfile copyWith({
+    String? id,
+    String? name,
+    String? driverType,
+    String? endpointUrl,
+    String? basePath,
+    String? username,
+    Value<String?> secretRef = const Value.absent(),
+    String? enabledScopesJson,
+    Value<String?> scopeConfigJson = const Value.absent(),
+    bool? isAutoSyncEnabled,
+    Value<DateTime?> lastSyncAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => StoredSyncProfile(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    driverType: driverType ?? this.driverType,
+    endpointUrl: endpointUrl ?? this.endpointUrl,
+    basePath: basePath ?? this.basePath,
+    username: username ?? this.username,
+    secretRef: secretRef.present ? secretRef.value : this.secretRef,
+    enabledScopesJson: enabledScopesJson ?? this.enabledScopesJson,
+    scopeConfigJson:
+        scopeConfigJson.present ? scopeConfigJson.value : this.scopeConfigJson,
+    isAutoSyncEnabled: isAutoSyncEnabled ?? this.isAutoSyncEnabled,
+    lastSyncAt: lastSyncAt.present ? lastSyncAt.value : this.lastSyncAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredSyncProfile copyWithCompanion(StoredSyncProfilesCompanion data) {
+    return StoredSyncProfile(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      driverType:
+          data.driverType.present ? data.driverType.value : this.driverType,
+      endpointUrl:
+          data.endpointUrl.present ? data.endpointUrl.value : this.endpointUrl,
+      basePath: data.basePath.present ? data.basePath.value : this.basePath,
+      username: data.username.present ? data.username.value : this.username,
+      secretRef: data.secretRef.present ? data.secretRef.value : this.secretRef,
+      enabledScopesJson:
+          data.enabledScopesJson.present
+              ? data.enabledScopesJson.value
+              : this.enabledScopesJson,
+      scopeConfigJson:
+          data.scopeConfigJson.present
+              ? data.scopeConfigJson.value
+              : this.scopeConfigJson,
+      isAutoSyncEnabled:
+          data.isAutoSyncEnabled.present
+              ? data.isAutoSyncEnabled.value
+              : this.isAutoSyncEnabled,
+      lastSyncAt:
+          data.lastSyncAt.present ? data.lastSyncAt.value : this.lastSyncAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncProfile(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('driverType: $driverType, ')
+          ..write('endpointUrl: $endpointUrl, ')
+          ..write('basePath: $basePath, ')
+          ..write('username: $username, ')
+          ..write('secretRef: $secretRef, ')
+          ..write('enabledScopesJson: $enabledScopesJson, ')
+          ..write('scopeConfigJson: $scopeConfigJson, ')
+          ..write('isAutoSyncEnabled: $isAutoSyncEnabled, ')
+          ..write('lastSyncAt: $lastSyncAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    driverType,
+    endpointUrl,
+    basePath,
+    username,
+    secretRef,
+    enabledScopesJson,
+    scopeConfigJson,
+    isAutoSyncEnabled,
+    lastSyncAt,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSyncProfile &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.driverType == this.driverType &&
+          other.endpointUrl == this.endpointUrl &&
+          other.basePath == this.basePath &&
+          other.username == this.username &&
+          other.secretRef == this.secretRef &&
+          other.enabledScopesJson == this.enabledScopesJson &&
+          other.scopeConfigJson == this.scopeConfigJson &&
+          other.isAutoSyncEnabled == this.isAutoSyncEnabled &&
+          other.lastSyncAt == this.lastSyncAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredSyncProfilesCompanion extends UpdateCompanion<StoredSyncProfile> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> driverType;
+  final Value<String> endpointUrl;
+  final Value<String> basePath;
+  final Value<String> username;
+  final Value<String?> secretRef;
+  final Value<String> enabledScopesJson;
+  final Value<String?> scopeConfigJson;
+  final Value<bool> isAutoSyncEnabled;
+  final Value<DateTime?> lastSyncAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredSyncProfilesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.driverType = const Value.absent(),
+    this.endpointUrl = const Value.absent(),
+    this.basePath = const Value.absent(),
+    this.username = const Value.absent(),
+    this.secretRef = const Value.absent(),
+    this.enabledScopesJson = const Value.absent(),
+    this.scopeConfigJson = const Value.absent(),
+    this.isAutoSyncEnabled = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredSyncProfilesCompanion.insert({
+    required String id,
+    required String name,
+    required String driverType,
+    required String endpointUrl,
+    required String basePath,
+    required String username,
+    this.secretRef = const Value.absent(),
+    this.enabledScopesJson = const Value.absent(),
+    this.scopeConfigJson = const Value.absent(),
+    this.isAutoSyncEnabled = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       driverType = Value(driverType),
+       endpointUrl = Value(endpointUrl),
+       basePath = Value(basePath),
+       username = Value(username);
+  static Insertable<StoredSyncProfile> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? driverType,
+    Expression<String>? endpointUrl,
+    Expression<String>? basePath,
+    Expression<String>? username,
+    Expression<String>? secretRef,
+    Expression<String>? enabledScopesJson,
+    Expression<String>? scopeConfigJson,
+    Expression<bool>? isAutoSyncEnabled,
+    Expression<DateTime>? lastSyncAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (driverType != null) 'driver_type': driverType,
+      if (endpointUrl != null) 'endpoint_url': endpointUrl,
+      if (basePath != null) 'base_path': basePath,
+      if (username != null) 'username': username,
+      if (secretRef != null) 'secret_ref': secretRef,
+      if (enabledScopesJson != null) 'enabled_scopes_json': enabledScopesJson,
+      if (scopeConfigJson != null) 'scope_config_json': scopeConfigJson,
+      if (isAutoSyncEnabled != null) 'is_auto_sync_enabled': isAutoSyncEnabled,
+      if (lastSyncAt != null) 'last_sync_at': lastSyncAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredSyncProfilesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? driverType,
+    Value<String>? endpointUrl,
+    Value<String>? basePath,
+    Value<String>? username,
+    Value<String?>? secretRef,
+    Value<String>? enabledScopesJson,
+    Value<String?>? scopeConfigJson,
+    Value<bool>? isAutoSyncEnabled,
+    Value<DateTime?>? lastSyncAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredSyncProfilesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      driverType: driverType ?? this.driverType,
+      endpointUrl: endpointUrl ?? this.endpointUrl,
+      basePath: basePath ?? this.basePath,
+      username: username ?? this.username,
+      secretRef: secretRef ?? this.secretRef,
+      enabledScopesJson: enabledScopesJson ?? this.enabledScopesJson,
+      scopeConfigJson: scopeConfigJson ?? this.scopeConfigJson,
+      isAutoSyncEnabled: isAutoSyncEnabled ?? this.isAutoSyncEnabled,
+      lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (driverType.present) {
+      map['driver_type'] = Variable<String>(driverType.value);
+    }
+    if (endpointUrl.present) {
+      map['endpoint_url'] = Variable<String>(endpointUrl.value);
+    }
+    if (basePath.present) {
+      map['base_path'] = Variable<String>(basePath.value);
+    }
+    if (username.present) {
+      map['username'] = Variable<String>(username.value);
+    }
+    if (secretRef.present) {
+      map['secret_ref'] = Variable<String>(secretRef.value);
+    }
+    if (enabledScopesJson.present) {
+      map['enabled_scopes_json'] = Variable<String>(enabledScopesJson.value);
+    }
+    if (scopeConfigJson.present) {
+      map['scope_config_json'] = Variable<String>(scopeConfigJson.value);
+    }
+    if (isAutoSyncEnabled.present) {
+      map['is_auto_sync_enabled'] = Variable<bool>(isAutoSyncEnabled.value);
+    }
+    if (lastSyncAt.present) {
+      map['last_sync_at'] = Variable<DateTime>(lastSyncAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncProfilesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('driverType: $driverType, ')
+          ..write('endpointUrl: $endpointUrl, ')
+          ..write('basePath: $basePath, ')
+          ..write('username: $username, ')
+          ..write('secretRef: $secretRef, ')
+          ..write('enabledScopesJson: $enabledScopesJson, ')
+          ..write('scopeConfigJson: $scopeConfigJson, ')
+          ..write('isAutoSyncEnabled: $isAutoSyncEnabled, ')
+          ..write('lastSyncAt: $lastSyncAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredSyncScopeStatesTable extends StoredSyncScopeStates
+    with TableInfo<$StoredSyncScopeStatesTable, StoredSyncScopeState> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredSyncScopeStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastBaseSnapshotJsonMeta =
+      const VerificationMeta('lastBaseSnapshotJson');
+  @override
+  late final GeneratedColumn<String> lastBaseSnapshotJson =
+      GeneratedColumn<String>(
+        'last_base_snapshot_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastRemoteRevisionMeta =
+      const VerificationMeta('lastRemoteRevision');
+  @override
+  late final GeneratedColumn<String> lastRemoteRevision =
+      GeneratedColumn<String>(
+        'last_remote_revision',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastRemoteHashMeta = const VerificationMeta(
+    'lastRemoteHash',
+  );
+  @override
+  late final GeneratedColumn<String> lastRemoteHash = GeneratedColumn<String>(
+    'last_remote_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastLocalHashMeta = const VerificationMeta(
+    'lastLocalHash',
+  );
+  @override
+  late final GeneratedColumn<String> lastLocalHash = GeneratedColumn<String>(
+    'last_local_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSyncedAtMeta = const VerificationMeta(
+    'lastSyncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncedAt = GeneratedColumn<DateTime>(
+    'last_synced_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    profileId,
+    scope,
+    lastBaseSnapshotJson,
+    lastRemoteRevision,
+    lastRemoteHash,
+    lastLocalHash,
+    lastSyncedAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_scope_states';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSyncScopeState> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_profileIdMeta);
+    }
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('last_base_snapshot_json')) {
+      context.handle(
+        _lastBaseSnapshotJsonMeta,
+        lastBaseSnapshotJson.isAcceptableOrUnknown(
+          data['last_base_snapshot_json']!,
+          _lastBaseSnapshotJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_remote_revision')) {
+      context.handle(
+        _lastRemoteRevisionMeta,
+        lastRemoteRevision.isAcceptableOrUnknown(
+          data['last_remote_revision']!,
+          _lastRemoteRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_remote_hash')) {
+      context.handle(
+        _lastRemoteHashMeta,
+        lastRemoteHash.isAcceptableOrUnknown(
+          data['last_remote_hash']!,
+          _lastRemoteHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_local_hash')) {
+      context.handle(
+        _lastLocalHashMeta,
+        lastLocalHash.isAcceptableOrUnknown(
+          data['last_local_hash']!,
+          _lastLocalHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_synced_at')) {
+      context.handle(
+        _lastSyncedAtMeta,
+        lastSyncedAt.isAcceptableOrUnknown(
+          data['last_synced_at']!,
+          _lastSyncedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {profileId, scope};
+  @override
+  StoredSyncScopeState map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSyncScopeState(
+      profileId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}profile_id'],
+          )!,
+      scope:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}scope'],
+          )!,
+      lastBaseSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_base_snapshot_json'],
+      ),
+      lastRemoteRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_remote_revision'],
+      ),
+      lastRemoteHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_remote_hash'],
+      ),
+      lastLocalHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_local_hash'],
+      ),
+      lastSyncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_synced_at'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredSyncScopeStatesTable createAlias(String alias) {
+    return $StoredSyncScopeStatesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSyncScopeState extends DataClass
+    implements Insertable<StoredSyncScopeState> {
+  final String profileId;
+  final String scope;
+  final String? lastBaseSnapshotJson;
+  final String? lastRemoteRevision;
+  final String? lastRemoteHash;
+  final String? lastLocalHash;
+  final DateTime? lastSyncedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const StoredSyncScopeState({
+    required this.profileId,
+    required this.scope,
+    this.lastBaseSnapshotJson,
+    this.lastRemoteRevision,
+    this.lastRemoteHash,
+    this.lastLocalHash,
+    this.lastSyncedAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['profile_id'] = Variable<String>(profileId);
+    map['scope'] = Variable<String>(scope);
+    if (!nullToAbsent || lastBaseSnapshotJson != null) {
+      map['last_base_snapshot_json'] = Variable<String>(lastBaseSnapshotJson);
+    }
+    if (!nullToAbsent || lastRemoteRevision != null) {
+      map['last_remote_revision'] = Variable<String>(lastRemoteRevision);
+    }
+    if (!nullToAbsent || lastRemoteHash != null) {
+      map['last_remote_hash'] = Variable<String>(lastRemoteHash);
+    }
+    if (!nullToAbsent || lastLocalHash != null) {
+      map['last_local_hash'] = Variable<String>(lastLocalHash);
+    }
+    if (!nullToAbsent || lastSyncedAt != null) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredSyncScopeStatesCompanion toCompanion(bool nullToAbsent) {
+    return StoredSyncScopeStatesCompanion(
+      profileId: Value(profileId),
+      scope: Value(scope),
+      lastBaseSnapshotJson:
+          lastBaseSnapshotJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastBaseSnapshotJson),
+      lastRemoteRevision:
+          lastRemoteRevision == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastRemoteRevision),
+      lastRemoteHash:
+          lastRemoteHash == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastRemoteHash),
+      lastLocalHash:
+          lastLocalHash == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastLocalHash),
+      lastSyncedAt:
+          lastSyncedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastSyncedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredSyncScopeState.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSyncScopeState(
+      profileId: serializer.fromJson<String>(json['profileId']),
+      scope: serializer.fromJson<String>(json['scope']),
+      lastBaseSnapshotJson: serializer.fromJson<String?>(
+        json['lastBaseSnapshotJson'],
+      ),
+      lastRemoteRevision: serializer.fromJson<String?>(
+        json['lastRemoteRevision'],
+      ),
+      lastRemoteHash: serializer.fromJson<String?>(json['lastRemoteHash']),
+      lastLocalHash: serializer.fromJson<String?>(json['lastLocalHash']),
+      lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'profileId': serializer.toJson<String>(profileId),
+      'scope': serializer.toJson<String>(scope),
+      'lastBaseSnapshotJson': serializer.toJson<String?>(lastBaseSnapshotJson),
+      'lastRemoteRevision': serializer.toJson<String?>(lastRemoteRevision),
+      'lastRemoteHash': serializer.toJson<String?>(lastRemoteHash),
+      'lastLocalHash': serializer.toJson<String?>(lastLocalHash),
+      'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredSyncScopeState copyWith({
+    String? profileId,
+    String? scope,
+    Value<String?> lastBaseSnapshotJson = const Value.absent(),
+    Value<String?> lastRemoteRevision = const Value.absent(),
+    Value<String?> lastRemoteHash = const Value.absent(),
+    Value<String?> lastLocalHash = const Value.absent(),
+    Value<DateTime?> lastSyncedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => StoredSyncScopeState(
+    profileId: profileId ?? this.profileId,
+    scope: scope ?? this.scope,
+    lastBaseSnapshotJson:
+        lastBaseSnapshotJson.present
+            ? lastBaseSnapshotJson.value
+            : this.lastBaseSnapshotJson,
+    lastRemoteRevision:
+        lastRemoteRevision.present
+            ? lastRemoteRevision.value
+            : this.lastRemoteRevision,
+    lastRemoteHash:
+        lastRemoteHash.present ? lastRemoteHash.value : this.lastRemoteHash,
+    lastLocalHash:
+        lastLocalHash.present ? lastLocalHash.value : this.lastLocalHash,
+    lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredSyncScopeState copyWithCompanion(StoredSyncScopeStatesCompanion data) {
+    return StoredSyncScopeState(
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      scope: data.scope.present ? data.scope.value : this.scope,
+      lastBaseSnapshotJson:
+          data.lastBaseSnapshotJson.present
+              ? data.lastBaseSnapshotJson.value
+              : this.lastBaseSnapshotJson,
+      lastRemoteRevision:
+          data.lastRemoteRevision.present
+              ? data.lastRemoteRevision.value
+              : this.lastRemoteRevision,
+      lastRemoteHash:
+          data.lastRemoteHash.present
+              ? data.lastRemoteHash.value
+              : this.lastRemoteHash,
+      lastLocalHash:
+          data.lastLocalHash.present
+              ? data.lastLocalHash.value
+              : this.lastLocalHash,
+      lastSyncedAt:
+          data.lastSyncedAt.present
+              ? data.lastSyncedAt.value
+              : this.lastSyncedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncScopeState(')
+          ..write('profileId: $profileId, ')
+          ..write('scope: $scope, ')
+          ..write('lastBaseSnapshotJson: $lastBaseSnapshotJson, ')
+          ..write('lastRemoteRevision: $lastRemoteRevision, ')
+          ..write('lastRemoteHash: $lastRemoteHash, ')
+          ..write('lastLocalHash: $lastLocalHash, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    profileId,
+    scope,
+    lastBaseSnapshotJson,
+    lastRemoteRevision,
+    lastRemoteHash,
+    lastLocalHash,
+    lastSyncedAt,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSyncScopeState &&
+          other.profileId == this.profileId &&
+          other.scope == this.scope &&
+          other.lastBaseSnapshotJson == this.lastBaseSnapshotJson &&
+          other.lastRemoteRevision == this.lastRemoteRevision &&
+          other.lastRemoteHash == this.lastRemoteHash &&
+          other.lastLocalHash == this.lastLocalHash &&
+          other.lastSyncedAt == this.lastSyncedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredSyncScopeStatesCompanion
+    extends UpdateCompanion<StoredSyncScopeState> {
+  final Value<String> profileId;
+  final Value<String> scope;
+  final Value<String?> lastBaseSnapshotJson;
+  final Value<String?> lastRemoteRevision;
+  final Value<String?> lastRemoteHash;
+  final Value<String?> lastLocalHash;
+  final Value<DateTime?> lastSyncedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredSyncScopeStatesCompanion({
+    this.profileId = const Value.absent(),
+    this.scope = const Value.absent(),
+    this.lastBaseSnapshotJson = const Value.absent(),
+    this.lastRemoteRevision = const Value.absent(),
+    this.lastRemoteHash = const Value.absent(),
+    this.lastLocalHash = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredSyncScopeStatesCompanion.insert({
+    required String profileId,
+    required String scope,
+    this.lastBaseSnapshotJson = const Value.absent(),
+    this.lastRemoteRevision = const Value.absent(),
+    this.lastRemoteHash = const Value.absent(),
+    this.lastLocalHash = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : profileId = Value(profileId),
+       scope = Value(scope);
+  static Insertable<StoredSyncScopeState> custom({
+    Expression<String>? profileId,
+    Expression<String>? scope,
+    Expression<String>? lastBaseSnapshotJson,
+    Expression<String>? lastRemoteRevision,
+    Expression<String>? lastRemoteHash,
+    Expression<String>? lastLocalHash,
+    Expression<DateTime>? lastSyncedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (profileId != null) 'profile_id': profileId,
+      if (scope != null) 'scope': scope,
+      if (lastBaseSnapshotJson != null)
+        'last_base_snapshot_json': lastBaseSnapshotJson,
+      if (lastRemoteRevision != null)
+        'last_remote_revision': lastRemoteRevision,
+      if (lastRemoteHash != null) 'last_remote_hash': lastRemoteHash,
+      if (lastLocalHash != null) 'last_local_hash': lastLocalHash,
+      if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredSyncScopeStatesCompanion copyWith({
+    Value<String>? profileId,
+    Value<String>? scope,
+    Value<String?>? lastBaseSnapshotJson,
+    Value<String?>? lastRemoteRevision,
+    Value<String?>? lastRemoteHash,
+    Value<String?>? lastLocalHash,
+    Value<DateTime?>? lastSyncedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredSyncScopeStatesCompanion(
+      profileId: profileId ?? this.profileId,
+      scope: scope ?? this.scope,
+      lastBaseSnapshotJson: lastBaseSnapshotJson ?? this.lastBaseSnapshotJson,
+      lastRemoteRevision: lastRemoteRevision ?? this.lastRemoteRevision,
+      lastRemoteHash: lastRemoteHash ?? this.lastRemoteHash,
+      lastLocalHash: lastLocalHash ?? this.lastLocalHash,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (profileId.present) {
+      map['profile_id'] = Variable<String>(profileId.value);
+    }
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (lastBaseSnapshotJson.present) {
+      map['last_base_snapshot_json'] = Variable<String>(
+        lastBaseSnapshotJson.value,
+      );
+    }
+    if (lastRemoteRevision.present) {
+      map['last_remote_revision'] = Variable<String>(lastRemoteRevision.value);
+    }
+    if (lastRemoteHash.present) {
+      map['last_remote_hash'] = Variable<String>(lastRemoteHash.value);
+    }
+    if (lastLocalHash.present) {
+      map['last_local_hash'] = Variable<String>(lastLocalHash.value);
+    }
+    if (lastSyncedAt.present) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncScopeStatesCompanion(')
+          ..write('profileId: $profileId, ')
+          ..write('scope: $scope, ')
+          ..write('lastBaseSnapshotJson: $lastBaseSnapshotJson, ')
+          ..write('lastRemoteRevision: $lastRemoteRevision, ')
+          ..write('lastRemoteHash: $lastRemoteHash, ')
+          ..write('lastLocalHash: $lastLocalHash, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredSyncJobsTable extends StoredSyncJobs
+    with TableInfo<$StoredSyncJobsTable, StoredSyncJob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredSyncJobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _triggerKindMeta = const VerificationMeta(
+    'triggerKind',
+  );
+  @override
+  late final GeneratedColumn<String> triggerKind = GeneratedColumn<String>(
+    'trigger_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _directionMeta = const VerificationMeta(
+    'direction',
+  );
+  @override
+  late final GeneratedColumn<String> direction = GeneratedColumn<String>(
+    'direction',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('bidirectional'),
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endedAtMeta = const VerificationMeta(
+    'endedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> endedAt = GeneratedColumn<DateTime>(
+    'ended_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _summaryJsonMeta = const VerificationMeta(
+    'summaryJson',
+  );
+  @override
+  late final GeneratedColumn<String> summaryJson = GeneratedColumn<String>(
+    'summary_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _errorMessageMeta = const VerificationMeta(
+    'errorMessage',
+  );
+  @override
+  late final GeneratedColumn<String> errorMessage = GeneratedColumn<String>(
+    'error_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    profileId,
+    triggerKind,
+    direction,
+    status,
+    startedAt,
+    endedAt,
+    summaryJson,
+    errorMessage,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_jobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSyncJob> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_profileIdMeta);
+    }
+    if (data.containsKey('trigger_kind')) {
+      context.handle(
+        _triggerKindMeta,
+        triggerKind.isAcceptableOrUnknown(
+          data['trigger_kind']!,
+          _triggerKindMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_triggerKindMeta);
+    }
+    if (data.containsKey('direction')) {
+      context.handle(
+        _directionMeta,
+        direction.isAcceptableOrUnknown(data['direction']!, _directionMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('ended_at')) {
+      context.handle(
+        _endedAtMeta,
+        endedAt.isAcceptableOrUnknown(data['ended_at']!, _endedAtMeta),
+      );
+    }
+    if (data.containsKey('summary_json')) {
+      context.handle(
+        _summaryJsonMeta,
+        summaryJson.isAcceptableOrUnknown(
+          data['summary_json']!,
+          _summaryJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('error_message')) {
+      context.handle(
+        _errorMessageMeta,
+        errorMessage.isAcceptableOrUnknown(
+          data['error_message']!,
+          _errorMessageMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredSyncJob map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSyncJob(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      profileId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}profile_id'],
+          )!,
+      triggerKind:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}trigger_kind'],
+          )!,
+      direction:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}direction'],
+          )!,
+      status:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}status'],
+          )!,
+      startedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}started_at'],
+          )!,
+      endedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}ended_at'],
+      ),
+      summaryJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}summary_json'],
+      ),
+      errorMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_message'],
+      ),
+    );
+  }
+
+  @override
+  $StoredSyncJobsTable createAlias(String alias) {
+    return $StoredSyncJobsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSyncJob extends DataClass implements Insertable<StoredSyncJob> {
+  final String id;
+  final String profileId;
+  final String triggerKind;
+  final String direction;
+  final String status;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final String? summaryJson;
+  final String? errorMessage;
+  const StoredSyncJob({
+    required this.id,
+    required this.profileId,
+    required this.triggerKind,
+    required this.direction,
+    required this.status,
+    required this.startedAt,
+    this.endedAt,
+    this.summaryJson,
+    this.errorMessage,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['profile_id'] = Variable<String>(profileId);
+    map['trigger_kind'] = Variable<String>(triggerKind);
+    map['direction'] = Variable<String>(direction);
+    map['status'] = Variable<String>(status);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    if (!nullToAbsent || endedAt != null) {
+      map['ended_at'] = Variable<DateTime>(endedAt);
+    }
+    if (!nullToAbsent || summaryJson != null) {
+      map['summary_json'] = Variable<String>(summaryJson);
+    }
+    if (!nullToAbsent || errorMessage != null) {
+      map['error_message'] = Variable<String>(errorMessage);
+    }
+    return map;
+  }
+
+  StoredSyncJobsCompanion toCompanion(bool nullToAbsent) {
+    return StoredSyncJobsCompanion(
+      id: Value(id),
+      profileId: Value(profileId),
+      triggerKind: Value(triggerKind),
+      direction: Value(direction),
+      status: Value(status),
+      startedAt: Value(startedAt),
+      endedAt:
+          endedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(endedAt),
+      summaryJson:
+          summaryJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(summaryJson),
+      errorMessage:
+          errorMessage == null && nullToAbsent
+              ? const Value.absent()
+              : Value(errorMessage),
+    );
+  }
+
+  factory StoredSyncJob.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSyncJob(
+      id: serializer.fromJson<String>(json['id']),
+      profileId: serializer.fromJson<String>(json['profileId']),
+      triggerKind: serializer.fromJson<String>(json['triggerKind']),
+      direction: serializer.fromJson<String>(json['direction']),
+      status: serializer.fromJson<String>(json['status']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      endedAt: serializer.fromJson<DateTime?>(json['endedAt']),
+      summaryJson: serializer.fromJson<String?>(json['summaryJson']),
+      errorMessage: serializer.fromJson<String?>(json['errorMessage']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'profileId': serializer.toJson<String>(profileId),
+      'triggerKind': serializer.toJson<String>(triggerKind),
+      'direction': serializer.toJson<String>(direction),
+      'status': serializer.toJson<String>(status),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'endedAt': serializer.toJson<DateTime?>(endedAt),
+      'summaryJson': serializer.toJson<String?>(summaryJson),
+      'errorMessage': serializer.toJson<String?>(errorMessage),
+    };
+  }
+
+  StoredSyncJob copyWith({
+    String? id,
+    String? profileId,
+    String? triggerKind,
+    String? direction,
+    String? status,
+    DateTime? startedAt,
+    Value<DateTime?> endedAt = const Value.absent(),
+    Value<String?> summaryJson = const Value.absent(),
+    Value<String?> errorMessage = const Value.absent(),
+  }) => StoredSyncJob(
+    id: id ?? this.id,
+    profileId: profileId ?? this.profileId,
+    triggerKind: triggerKind ?? this.triggerKind,
+    direction: direction ?? this.direction,
+    status: status ?? this.status,
+    startedAt: startedAt ?? this.startedAt,
+    endedAt: endedAt.present ? endedAt.value : this.endedAt,
+    summaryJson: summaryJson.present ? summaryJson.value : this.summaryJson,
+    errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
+  );
+  StoredSyncJob copyWithCompanion(StoredSyncJobsCompanion data) {
+    return StoredSyncJob(
+      id: data.id.present ? data.id.value : this.id,
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      triggerKind:
+          data.triggerKind.present ? data.triggerKind.value : this.triggerKind,
+      direction: data.direction.present ? data.direction.value : this.direction,
+      status: data.status.present ? data.status.value : this.status,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      endedAt: data.endedAt.present ? data.endedAt.value : this.endedAt,
+      summaryJson:
+          data.summaryJson.present ? data.summaryJson.value : this.summaryJson,
+      errorMessage:
+          data.errorMessage.present
+              ? data.errorMessage.value
+              : this.errorMessage,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncJob(')
+          ..write('id: $id, ')
+          ..write('profileId: $profileId, ')
+          ..write('triggerKind: $triggerKind, ')
+          ..write('direction: $direction, ')
+          ..write('status: $status, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('summaryJson: $summaryJson, ')
+          ..write('errorMessage: $errorMessage')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    profileId,
+    triggerKind,
+    direction,
+    status,
+    startedAt,
+    endedAt,
+    summaryJson,
+    errorMessage,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSyncJob &&
+          other.id == this.id &&
+          other.profileId == this.profileId &&
+          other.triggerKind == this.triggerKind &&
+          other.direction == this.direction &&
+          other.status == this.status &&
+          other.startedAt == this.startedAt &&
+          other.endedAt == this.endedAt &&
+          other.summaryJson == this.summaryJson &&
+          other.errorMessage == this.errorMessage);
+}
+
+class StoredSyncJobsCompanion extends UpdateCompanion<StoredSyncJob> {
+  final Value<String> id;
+  final Value<String> profileId;
+  final Value<String> triggerKind;
+  final Value<String> direction;
+  final Value<String> status;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> endedAt;
+  final Value<String?> summaryJson;
+  final Value<String?> errorMessage;
+  final Value<int> rowid;
+  const StoredSyncJobsCompanion({
+    this.id = const Value.absent(),
+    this.profileId = const Value.absent(),
+    this.triggerKind = const Value.absent(),
+    this.direction = const Value.absent(),
+    this.status = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endedAt = const Value.absent(),
+    this.summaryJson = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredSyncJobsCompanion.insert({
+    required String id,
+    required String profileId,
+    required String triggerKind,
+    this.direction = const Value.absent(),
+    required String status,
+    required DateTime startedAt,
+    this.endedAt = const Value.absent(),
+    this.summaryJson = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       profileId = Value(profileId),
+       triggerKind = Value(triggerKind),
+       status = Value(status),
+       startedAt = Value(startedAt);
+  static Insertable<StoredSyncJob> custom({
+    Expression<String>? id,
+    Expression<String>? profileId,
+    Expression<String>? triggerKind,
+    Expression<String>? direction,
+    Expression<String>? status,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? endedAt,
+    Expression<String>? summaryJson,
+    Expression<String>? errorMessage,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (profileId != null) 'profile_id': profileId,
+      if (triggerKind != null) 'trigger_kind': triggerKind,
+      if (direction != null) 'direction': direction,
+      if (status != null) 'status': status,
+      if (startedAt != null) 'started_at': startedAt,
+      if (endedAt != null) 'ended_at': endedAt,
+      if (summaryJson != null) 'summary_json': summaryJson,
+      if (errorMessage != null) 'error_message': errorMessage,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredSyncJobsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? profileId,
+    Value<String>? triggerKind,
+    Value<String>? direction,
+    Value<String>? status,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? endedAt,
+    Value<String?>? summaryJson,
+    Value<String?>? errorMessage,
+    Value<int>? rowid,
+  }) {
+    return StoredSyncJobsCompanion(
+      id: id ?? this.id,
+      profileId: profileId ?? this.profileId,
+      triggerKind: triggerKind ?? this.triggerKind,
+      direction: direction ?? this.direction,
+      status: status ?? this.status,
+      startedAt: startedAt ?? this.startedAt,
+      endedAt: endedAt ?? this.endedAt,
+      summaryJson: summaryJson ?? this.summaryJson,
+      errorMessage: errorMessage ?? this.errorMessage,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (profileId.present) {
+      map['profile_id'] = Variable<String>(profileId.value);
+    }
+    if (triggerKind.present) {
+      map['trigger_kind'] = Variable<String>(triggerKind.value);
+    }
+    if (direction.present) {
+      map['direction'] = Variable<String>(direction.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (endedAt.present) {
+      map['ended_at'] = Variable<DateTime>(endedAt.value);
+    }
+    if (summaryJson.present) {
+      map['summary_json'] = Variable<String>(summaryJson.value);
+    }
+    if (errorMessage.present) {
+      map['error_message'] = Variable<String>(errorMessage.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncJobsCompanion(')
+          ..write('id: $id, ')
+          ..write('profileId: $profileId, ')
+          ..write('triggerKind: $triggerKind, ')
+          ..write('direction: $direction, ')
+          ..write('status: $status, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('summaryJson: $summaryJson, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredSyncConflictsTable extends StoredSyncConflicts
+    with TableInfo<$StoredSyncConflictsTable, StoredSyncConflict> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredSyncConflictsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _recordKeyMeta = const VerificationMeta(
+    'recordKey',
+  );
+  @override
+  late final GeneratedColumn<String> recordKey = GeneratedColumn<String>(
+    'record_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _basePayloadJsonMeta = const VerificationMeta(
+    'basePayloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> basePayloadJson = GeneratedColumn<String>(
+    'base_payload_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _localPayloadJsonMeta = const VerificationMeta(
+    'localPayloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> localPayloadJson = GeneratedColumn<String>(
+    'local_payload_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remotePayloadJsonMeta = const VerificationMeta(
+    'remotePayloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> remotePayloadJson =
+      GeneratedColumn<String>(
+        'remote_payload_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _resolutionMeta = const VerificationMeta(
+    'resolution',
+  );
+  @override
+  late final GeneratedColumn<String> resolution = GeneratedColumn<String>(
+    'resolution',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('unresolved'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _resolvedAtMeta = const VerificationMeta(
+    'resolvedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> resolvedAt = GeneratedColumn<DateTime>(
+    'resolved_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    profileId,
+    scope,
+    recordKey,
+    basePayloadJson,
+    localPayloadJson,
+    remotePayloadJson,
+    resolution,
+    createdAt,
+    resolvedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_conflicts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSyncConflict> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_profileIdMeta);
+    }
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('record_key')) {
+      context.handle(
+        _recordKeyMeta,
+        recordKey.isAcceptableOrUnknown(data['record_key']!, _recordKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_recordKeyMeta);
+    }
+    if (data.containsKey('base_payload_json')) {
+      context.handle(
+        _basePayloadJsonMeta,
+        basePayloadJson.isAcceptableOrUnknown(
+          data['base_payload_json']!,
+          _basePayloadJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('local_payload_json')) {
+      context.handle(
+        _localPayloadJsonMeta,
+        localPayloadJson.isAcceptableOrUnknown(
+          data['local_payload_json']!,
+          _localPayloadJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_payload_json')) {
+      context.handle(
+        _remotePayloadJsonMeta,
+        remotePayloadJson.isAcceptableOrUnknown(
+          data['remote_payload_json']!,
+          _remotePayloadJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('resolution')) {
+      context.handle(
+        _resolutionMeta,
+        resolution.isAcceptableOrUnknown(data['resolution']!, _resolutionMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('resolved_at')) {
+      context.handle(
+        _resolvedAtMeta,
+        resolvedAt.isAcceptableOrUnknown(data['resolved_at']!, _resolvedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredSyncConflict map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSyncConflict(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      profileId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}profile_id'],
+          )!,
+      scope:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}scope'],
+          )!,
+      recordKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}record_key'],
+          )!,
+      basePayloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}base_payload_json'],
+      ),
+      localPayloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_payload_json'],
+      ),
+      remotePayloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_payload_json'],
+      ),
+      resolution:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}resolution'],
+          )!,
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      resolvedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}resolved_at'],
+      ),
+    );
+  }
+
+  @override
+  $StoredSyncConflictsTable createAlias(String alias) {
+    return $StoredSyncConflictsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSyncConflict extends DataClass
+    implements Insertable<StoredSyncConflict> {
+  final String id;
+  final String profileId;
+  final String scope;
+  final String recordKey;
+  final String? basePayloadJson;
+  final String? localPayloadJson;
+  final String? remotePayloadJson;
+  final String resolution;
+  final DateTime createdAt;
+  final DateTime? resolvedAt;
+  const StoredSyncConflict({
+    required this.id,
+    required this.profileId,
+    required this.scope,
+    required this.recordKey,
+    this.basePayloadJson,
+    this.localPayloadJson,
+    this.remotePayloadJson,
+    required this.resolution,
+    required this.createdAt,
+    this.resolvedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['profile_id'] = Variable<String>(profileId);
+    map['scope'] = Variable<String>(scope);
+    map['record_key'] = Variable<String>(recordKey);
+    if (!nullToAbsent || basePayloadJson != null) {
+      map['base_payload_json'] = Variable<String>(basePayloadJson);
+    }
+    if (!nullToAbsent || localPayloadJson != null) {
+      map['local_payload_json'] = Variable<String>(localPayloadJson);
+    }
+    if (!nullToAbsent || remotePayloadJson != null) {
+      map['remote_payload_json'] = Variable<String>(remotePayloadJson);
+    }
+    map['resolution'] = Variable<String>(resolution);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || resolvedAt != null) {
+      map['resolved_at'] = Variable<DateTime>(resolvedAt);
+    }
+    return map;
+  }
+
+  StoredSyncConflictsCompanion toCompanion(bool nullToAbsent) {
+    return StoredSyncConflictsCompanion(
+      id: Value(id),
+      profileId: Value(profileId),
+      scope: Value(scope),
+      recordKey: Value(recordKey),
+      basePayloadJson:
+          basePayloadJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(basePayloadJson),
+      localPayloadJson:
+          localPayloadJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(localPayloadJson),
+      remotePayloadJson:
+          remotePayloadJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(remotePayloadJson),
+      resolution: Value(resolution),
+      createdAt: Value(createdAt),
+      resolvedAt:
+          resolvedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(resolvedAt),
+    );
+  }
+
+  factory StoredSyncConflict.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSyncConflict(
+      id: serializer.fromJson<String>(json['id']),
+      profileId: serializer.fromJson<String>(json['profileId']),
+      scope: serializer.fromJson<String>(json['scope']),
+      recordKey: serializer.fromJson<String>(json['recordKey']),
+      basePayloadJson: serializer.fromJson<String?>(json['basePayloadJson']),
+      localPayloadJson: serializer.fromJson<String?>(json['localPayloadJson']),
+      remotePayloadJson: serializer.fromJson<String?>(
+        json['remotePayloadJson'],
+      ),
+      resolution: serializer.fromJson<String>(json['resolution']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      resolvedAt: serializer.fromJson<DateTime?>(json['resolvedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'profileId': serializer.toJson<String>(profileId),
+      'scope': serializer.toJson<String>(scope),
+      'recordKey': serializer.toJson<String>(recordKey),
+      'basePayloadJson': serializer.toJson<String?>(basePayloadJson),
+      'localPayloadJson': serializer.toJson<String?>(localPayloadJson),
+      'remotePayloadJson': serializer.toJson<String?>(remotePayloadJson),
+      'resolution': serializer.toJson<String>(resolution),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'resolvedAt': serializer.toJson<DateTime?>(resolvedAt),
+    };
+  }
+
+  StoredSyncConflict copyWith({
+    String? id,
+    String? profileId,
+    String? scope,
+    String? recordKey,
+    Value<String?> basePayloadJson = const Value.absent(),
+    Value<String?> localPayloadJson = const Value.absent(),
+    Value<String?> remotePayloadJson = const Value.absent(),
+    String? resolution,
+    DateTime? createdAt,
+    Value<DateTime?> resolvedAt = const Value.absent(),
+  }) => StoredSyncConflict(
+    id: id ?? this.id,
+    profileId: profileId ?? this.profileId,
+    scope: scope ?? this.scope,
+    recordKey: recordKey ?? this.recordKey,
+    basePayloadJson:
+        basePayloadJson.present ? basePayloadJson.value : this.basePayloadJson,
+    localPayloadJson:
+        localPayloadJson.present
+            ? localPayloadJson.value
+            : this.localPayloadJson,
+    remotePayloadJson:
+        remotePayloadJson.present
+            ? remotePayloadJson.value
+            : this.remotePayloadJson,
+    resolution: resolution ?? this.resolution,
+    createdAt: createdAt ?? this.createdAt,
+    resolvedAt: resolvedAt.present ? resolvedAt.value : this.resolvedAt,
+  );
+  StoredSyncConflict copyWithCompanion(StoredSyncConflictsCompanion data) {
+    return StoredSyncConflict(
+      id: data.id.present ? data.id.value : this.id,
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      scope: data.scope.present ? data.scope.value : this.scope,
+      recordKey: data.recordKey.present ? data.recordKey.value : this.recordKey,
+      basePayloadJson:
+          data.basePayloadJson.present
+              ? data.basePayloadJson.value
+              : this.basePayloadJson,
+      localPayloadJson:
+          data.localPayloadJson.present
+              ? data.localPayloadJson.value
+              : this.localPayloadJson,
+      remotePayloadJson:
+          data.remotePayloadJson.present
+              ? data.remotePayloadJson.value
+              : this.remotePayloadJson,
+      resolution:
+          data.resolution.present ? data.resolution.value : this.resolution,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      resolvedAt:
+          data.resolvedAt.present ? data.resolvedAt.value : this.resolvedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncConflict(')
+          ..write('id: $id, ')
+          ..write('profileId: $profileId, ')
+          ..write('scope: $scope, ')
+          ..write('recordKey: $recordKey, ')
+          ..write('basePayloadJson: $basePayloadJson, ')
+          ..write('localPayloadJson: $localPayloadJson, ')
+          ..write('remotePayloadJson: $remotePayloadJson, ')
+          ..write('resolution: $resolution, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('resolvedAt: $resolvedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    profileId,
+    scope,
+    recordKey,
+    basePayloadJson,
+    localPayloadJson,
+    remotePayloadJson,
+    resolution,
+    createdAt,
+    resolvedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSyncConflict &&
+          other.id == this.id &&
+          other.profileId == this.profileId &&
+          other.scope == this.scope &&
+          other.recordKey == this.recordKey &&
+          other.basePayloadJson == this.basePayloadJson &&
+          other.localPayloadJson == this.localPayloadJson &&
+          other.remotePayloadJson == this.remotePayloadJson &&
+          other.resolution == this.resolution &&
+          other.createdAt == this.createdAt &&
+          other.resolvedAt == this.resolvedAt);
+}
+
+class StoredSyncConflictsCompanion extends UpdateCompanion<StoredSyncConflict> {
+  final Value<String> id;
+  final Value<String> profileId;
+  final Value<String> scope;
+  final Value<String> recordKey;
+  final Value<String?> basePayloadJson;
+  final Value<String?> localPayloadJson;
+  final Value<String?> remotePayloadJson;
+  final Value<String> resolution;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> resolvedAt;
+  final Value<int> rowid;
+  const StoredSyncConflictsCompanion({
+    this.id = const Value.absent(),
+    this.profileId = const Value.absent(),
+    this.scope = const Value.absent(),
+    this.recordKey = const Value.absent(),
+    this.basePayloadJson = const Value.absent(),
+    this.localPayloadJson = const Value.absent(),
+    this.remotePayloadJson = const Value.absent(),
+    this.resolution = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.resolvedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredSyncConflictsCompanion.insert({
+    required String id,
+    required String profileId,
+    required String scope,
+    required String recordKey,
+    this.basePayloadJson = const Value.absent(),
+    this.localPayloadJson = const Value.absent(),
+    this.remotePayloadJson = const Value.absent(),
+    this.resolution = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.resolvedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       profileId = Value(profileId),
+       scope = Value(scope),
+       recordKey = Value(recordKey);
+  static Insertable<StoredSyncConflict> custom({
+    Expression<String>? id,
+    Expression<String>? profileId,
+    Expression<String>? scope,
+    Expression<String>? recordKey,
+    Expression<String>? basePayloadJson,
+    Expression<String>? localPayloadJson,
+    Expression<String>? remotePayloadJson,
+    Expression<String>? resolution,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? resolvedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (profileId != null) 'profile_id': profileId,
+      if (scope != null) 'scope': scope,
+      if (recordKey != null) 'record_key': recordKey,
+      if (basePayloadJson != null) 'base_payload_json': basePayloadJson,
+      if (localPayloadJson != null) 'local_payload_json': localPayloadJson,
+      if (remotePayloadJson != null) 'remote_payload_json': remotePayloadJson,
+      if (resolution != null) 'resolution': resolution,
+      if (createdAt != null) 'created_at': createdAt,
+      if (resolvedAt != null) 'resolved_at': resolvedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredSyncConflictsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? profileId,
+    Value<String>? scope,
+    Value<String>? recordKey,
+    Value<String?>? basePayloadJson,
+    Value<String?>? localPayloadJson,
+    Value<String?>? remotePayloadJson,
+    Value<String>? resolution,
+    Value<DateTime>? createdAt,
+    Value<DateTime?>? resolvedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredSyncConflictsCompanion(
+      id: id ?? this.id,
+      profileId: profileId ?? this.profileId,
+      scope: scope ?? this.scope,
+      recordKey: recordKey ?? this.recordKey,
+      basePayloadJson: basePayloadJson ?? this.basePayloadJson,
+      localPayloadJson: localPayloadJson ?? this.localPayloadJson,
+      remotePayloadJson: remotePayloadJson ?? this.remotePayloadJson,
+      resolution: resolution ?? this.resolution,
+      createdAt: createdAt ?? this.createdAt,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (profileId.present) {
+      map['profile_id'] = Variable<String>(profileId.value);
+    }
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (recordKey.present) {
+      map['record_key'] = Variable<String>(recordKey.value);
+    }
+    if (basePayloadJson.present) {
+      map['base_payload_json'] = Variable<String>(basePayloadJson.value);
+    }
+    if (localPayloadJson.present) {
+      map['local_payload_json'] = Variable<String>(localPayloadJson.value);
+    }
+    if (remotePayloadJson.present) {
+      map['remote_payload_json'] = Variable<String>(remotePayloadJson.value);
+    }
+    if (resolution.present) {
+      map['resolution'] = Variable<String>(resolution.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (resolvedAt.present) {
+      map['resolved_at'] = Variable<DateTime>(resolvedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSyncConflictsCompanion(')
+          ..write('id: $id, ')
+          ..write('profileId: $profileId, ')
+          ..write('scope: $scope, ')
+          ..write('recordKey: $recordKey, ')
+          ..write('basePayloadJson: $basePayloadJson, ')
+          ..write('localPayloadJson: $localPayloadJson, ')
+          ..write('remotePayloadJson: $remotePayloadJson, ')
+          ..write('resolution: $resolution, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('resolvedAt: $resolvedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -8305,6 +10946,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $StoredScriptSourcesTable storedScriptSources =
       $StoredScriptSourcesTable(this);
+  late final $StoredSyncProfilesTable storedSyncProfiles =
+      $StoredSyncProfilesTable(this);
+  late final $StoredSyncScopeStatesTable storedSyncScopeStates =
+      $StoredSyncScopeStatesTable(this);
+  late final $StoredSyncJobsTable storedSyncJobs = $StoredSyncJobsTable(this);
+  late final $StoredSyncConflictsTable storedSyncConflicts =
+      $StoredSyncConflictsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -8321,6 +10969,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedReadingBookStatuses,
     searchSourceHits,
     storedScriptSources,
+    storedSyncProfiles,
+    storedSyncScopeStates,
+    storedSyncJobs,
+    storedSyncConflicts,
   ];
 }
 
@@ -12391,6 +15043,1334 @@ typedef $$StoredScriptSourcesTableProcessedTableManager =
       StoredScriptSource,
       PrefetchHooks Function()
     >;
+typedef $$StoredSyncProfilesTableCreateCompanionBuilder =
+    StoredSyncProfilesCompanion Function({
+      required String id,
+      required String name,
+      required String driverType,
+      required String endpointUrl,
+      required String basePath,
+      required String username,
+      Value<String?> secretRef,
+      Value<String> enabledScopesJson,
+      Value<String?> scopeConfigJson,
+      Value<bool> isAutoSyncEnabled,
+      Value<DateTime?> lastSyncAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredSyncProfilesTableUpdateCompanionBuilder =
+    StoredSyncProfilesCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> driverType,
+      Value<String> endpointUrl,
+      Value<String> basePath,
+      Value<String> username,
+      Value<String?> secretRef,
+      Value<String> enabledScopesJson,
+      Value<String?> scopeConfigJson,
+      Value<bool> isAutoSyncEnabled,
+      Value<DateTime?> lastSyncAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredSyncProfilesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredSyncProfilesTable> {
+  $$StoredSyncProfilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get driverType => $composableBuilder(
+    column: $table.driverType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get endpointUrl => $composableBuilder(
+    column: $table.endpointUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get basePath => $composableBuilder(
+    column: $table.basePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get username => $composableBuilder(
+    column: $table.username,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get secretRef => $composableBuilder(
+    column: $table.secretRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get enabledScopesJson => $composableBuilder(
+    column: $table.enabledScopesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scopeConfigJson => $composableBuilder(
+    column: $table.scopeConfigJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isAutoSyncEnabled => $composableBuilder(
+    column: $table.isAutoSyncEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredSyncProfilesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredSyncProfilesTable> {
+  $$StoredSyncProfilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get driverType => $composableBuilder(
+    column: $table.driverType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get endpointUrl => $composableBuilder(
+    column: $table.endpointUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get basePath => $composableBuilder(
+    column: $table.basePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get username => $composableBuilder(
+    column: $table.username,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get secretRef => $composableBuilder(
+    column: $table.secretRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get enabledScopesJson => $composableBuilder(
+    column: $table.enabledScopesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scopeConfigJson => $composableBuilder(
+    column: $table.scopeConfigJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isAutoSyncEnabled => $composableBuilder(
+    column: $table.isAutoSyncEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredSyncProfilesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredSyncProfilesTable> {
+  $$StoredSyncProfilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get driverType => $composableBuilder(
+    column: $table.driverType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get endpointUrl => $composableBuilder(
+    column: $table.endpointUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get basePath =>
+      $composableBuilder(column: $table.basePath, builder: (column) => column);
+
+  GeneratedColumn<String> get username =>
+      $composableBuilder(column: $table.username, builder: (column) => column);
+
+  GeneratedColumn<String> get secretRef =>
+      $composableBuilder(column: $table.secretRef, builder: (column) => column);
+
+  GeneratedColumn<String> get enabledScopesJson => $composableBuilder(
+    column: $table.enabledScopesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get scopeConfigJson => $composableBuilder(
+    column: $table.scopeConfigJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isAutoSyncEnabled => $composableBuilder(
+    column: $table.isAutoSyncEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredSyncProfilesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredSyncProfilesTable,
+          StoredSyncProfile,
+          $$StoredSyncProfilesTableFilterComposer,
+          $$StoredSyncProfilesTableOrderingComposer,
+          $$StoredSyncProfilesTableAnnotationComposer,
+          $$StoredSyncProfilesTableCreateCompanionBuilder,
+          $$StoredSyncProfilesTableUpdateCompanionBuilder,
+          (
+            StoredSyncProfile,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredSyncProfilesTable,
+              StoredSyncProfile
+            >,
+          ),
+          StoredSyncProfile,
+          PrefetchHooks Function()
+        > {
+  $$StoredSyncProfilesTableTableManager(
+    _$AppDatabase db,
+    $StoredSyncProfilesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredSyncProfilesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredSyncProfilesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredSyncProfilesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> driverType = const Value.absent(),
+                Value<String> endpointUrl = const Value.absent(),
+                Value<String> basePath = const Value.absent(),
+                Value<String> username = const Value.absent(),
+                Value<String?> secretRef = const Value.absent(),
+                Value<String> enabledScopesJson = const Value.absent(),
+                Value<String?> scopeConfigJson = const Value.absent(),
+                Value<bool> isAutoSyncEnabled = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncProfilesCompanion(
+                id: id,
+                name: name,
+                driverType: driverType,
+                endpointUrl: endpointUrl,
+                basePath: basePath,
+                username: username,
+                secretRef: secretRef,
+                enabledScopesJson: enabledScopesJson,
+                scopeConfigJson: scopeConfigJson,
+                isAutoSyncEnabled: isAutoSyncEnabled,
+                lastSyncAt: lastSyncAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String driverType,
+                required String endpointUrl,
+                required String basePath,
+                required String username,
+                Value<String?> secretRef = const Value.absent(),
+                Value<String> enabledScopesJson = const Value.absent(),
+                Value<String?> scopeConfigJson = const Value.absent(),
+                Value<bool> isAutoSyncEnabled = const Value.absent(),
+                Value<DateTime?> lastSyncAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncProfilesCompanion.insert(
+                id: id,
+                name: name,
+                driverType: driverType,
+                endpointUrl: endpointUrl,
+                basePath: basePath,
+                username: username,
+                secretRef: secretRef,
+                enabledScopesJson: enabledScopesJson,
+                scopeConfigJson: scopeConfigJson,
+                isAutoSyncEnabled: isAutoSyncEnabled,
+                lastSyncAt: lastSyncAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredSyncProfilesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredSyncProfilesTable,
+      StoredSyncProfile,
+      $$StoredSyncProfilesTableFilterComposer,
+      $$StoredSyncProfilesTableOrderingComposer,
+      $$StoredSyncProfilesTableAnnotationComposer,
+      $$StoredSyncProfilesTableCreateCompanionBuilder,
+      $$StoredSyncProfilesTableUpdateCompanionBuilder,
+      (
+        StoredSyncProfile,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredSyncProfilesTable,
+          StoredSyncProfile
+        >,
+      ),
+      StoredSyncProfile,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredSyncScopeStatesTableCreateCompanionBuilder =
+    StoredSyncScopeStatesCompanion Function({
+      required String profileId,
+      required String scope,
+      Value<String?> lastBaseSnapshotJson,
+      Value<String?> lastRemoteRevision,
+      Value<String?> lastRemoteHash,
+      Value<String?> lastLocalHash,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredSyncScopeStatesTableUpdateCompanionBuilder =
+    StoredSyncScopeStatesCompanion Function({
+      Value<String> profileId,
+      Value<String> scope,
+      Value<String?> lastBaseSnapshotJson,
+      Value<String?> lastRemoteRevision,
+      Value<String?> lastRemoteHash,
+      Value<String?> lastLocalHash,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredSyncScopeStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredSyncScopeStatesTable> {
+  $$StoredSyncScopeStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastBaseSnapshotJson => $composableBuilder(
+    column: $table.lastBaseSnapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastRemoteRevision => $composableBuilder(
+    column: $table.lastRemoteRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastRemoteHash => $composableBuilder(
+    column: $table.lastRemoteHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastLocalHash => $composableBuilder(
+    column: $table.lastLocalHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredSyncScopeStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredSyncScopeStatesTable> {
+  $$StoredSyncScopeStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastBaseSnapshotJson => $composableBuilder(
+    column: $table.lastBaseSnapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastRemoteRevision => $composableBuilder(
+    column: $table.lastRemoteRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastRemoteHash => $composableBuilder(
+    column: $table.lastRemoteHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastLocalHash => $composableBuilder(
+    column: $table.lastLocalHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredSyncScopeStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredSyncScopeStatesTable> {
+  $$StoredSyncScopeStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get profileId =>
+      $composableBuilder(column: $table.profileId, builder: (column) => column);
+
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get lastBaseSnapshotJson => $composableBuilder(
+    column: $table.lastBaseSnapshotJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastRemoteRevision => $composableBuilder(
+    column: $table.lastRemoteRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastRemoteHash => $composableBuilder(
+    column: $table.lastRemoteHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastLocalHash => $composableBuilder(
+    column: $table.lastLocalHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredSyncScopeStatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredSyncScopeStatesTable,
+          StoredSyncScopeState,
+          $$StoredSyncScopeStatesTableFilterComposer,
+          $$StoredSyncScopeStatesTableOrderingComposer,
+          $$StoredSyncScopeStatesTableAnnotationComposer,
+          $$StoredSyncScopeStatesTableCreateCompanionBuilder,
+          $$StoredSyncScopeStatesTableUpdateCompanionBuilder,
+          (
+            StoredSyncScopeState,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredSyncScopeStatesTable,
+              StoredSyncScopeState
+            >,
+          ),
+          StoredSyncScopeState,
+          PrefetchHooks Function()
+        > {
+  $$StoredSyncScopeStatesTableTableManager(
+    _$AppDatabase db,
+    $StoredSyncScopeStatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredSyncScopeStatesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredSyncScopeStatesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredSyncScopeStatesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> profileId = const Value.absent(),
+                Value<String> scope = const Value.absent(),
+                Value<String?> lastBaseSnapshotJson = const Value.absent(),
+                Value<String?> lastRemoteRevision = const Value.absent(),
+                Value<String?> lastRemoteHash = const Value.absent(),
+                Value<String?> lastLocalHash = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncScopeStatesCompanion(
+                profileId: profileId,
+                scope: scope,
+                lastBaseSnapshotJson: lastBaseSnapshotJson,
+                lastRemoteRevision: lastRemoteRevision,
+                lastRemoteHash: lastRemoteHash,
+                lastLocalHash: lastLocalHash,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String profileId,
+                required String scope,
+                Value<String?> lastBaseSnapshotJson = const Value.absent(),
+                Value<String?> lastRemoteRevision = const Value.absent(),
+                Value<String?> lastRemoteHash = const Value.absent(),
+                Value<String?> lastLocalHash = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncScopeStatesCompanion.insert(
+                profileId: profileId,
+                scope: scope,
+                lastBaseSnapshotJson: lastBaseSnapshotJson,
+                lastRemoteRevision: lastRemoteRevision,
+                lastRemoteHash: lastRemoteHash,
+                lastLocalHash: lastLocalHash,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredSyncScopeStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredSyncScopeStatesTable,
+      StoredSyncScopeState,
+      $$StoredSyncScopeStatesTableFilterComposer,
+      $$StoredSyncScopeStatesTableOrderingComposer,
+      $$StoredSyncScopeStatesTableAnnotationComposer,
+      $$StoredSyncScopeStatesTableCreateCompanionBuilder,
+      $$StoredSyncScopeStatesTableUpdateCompanionBuilder,
+      (
+        StoredSyncScopeState,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredSyncScopeStatesTable,
+          StoredSyncScopeState
+        >,
+      ),
+      StoredSyncScopeState,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredSyncJobsTableCreateCompanionBuilder =
+    StoredSyncJobsCompanion Function({
+      required String id,
+      required String profileId,
+      required String triggerKind,
+      Value<String> direction,
+      required String status,
+      required DateTime startedAt,
+      Value<DateTime?> endedAt,
+      Value<String?> summaryJson,
+      Value<String?> errorMessage,
+      Value<int> rowid,
+    });
+typedef $$StoredSyncJobsTableUpdateCompanionBuilder =
+    StoredSyncJobsCompanion Function({
+      Value<String> id,
+      Value<String> profileId,
+      Value<String> triggerKind,
+      Value<String> direction,
+      Value<String> status,
+      Value<DateTime> startedAt,
+      Value<DateTime?> endedAt,
+      Value<String?> summaryJson,
+      Value<String?> errorMessage,
+      Value<int> rowid,
+    });
+
+class $$StoredSyncJobsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredSyncJobsTable> {
+  $$StoredSyncJobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get triggerKind => $composableBuilder(
+    column: $table.triggerKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get summaryJson => $composableBuilder(
+    column: $table.summaryJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredSyncJobsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredSyncJobsTable> {
+  $$StoredSyncJobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get triggerKind => $composableBuilder(
+    column: $table.triggerKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get summaryJson => $composableBuilder(
+    column: $table.summaryJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredSyncJobsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredSyncJobsTable> {
+  $$StoredSyncJobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get profileId =>
+      $composableBuilder(column: $table.profileId, builder: (column) => column);
+
+  GeneratedColumn<String> get triggerKind => $composableBuilder(
+    column: $table.triggerKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get direction =>
+      $composableBuilder(column: $table.direction, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endedAt =>
+      $composableBuilder(column: $table.endedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get summaryJson => $composableBuilder(
+    column: $table.summaryJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => column,
+  );
+}
+
+class $$StoredSyncJobsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredSyncJobsTable,
+          StoredSyncJob,
+          $$StoredSyncJobsTableFilterComposer,
+          $$StoredSyncJobsTableOrderingComposer,
+          $$StoredSyncJobsTableAnnotationComposer,
+          $$StoredSyncJobsTableCreateCompanionBuilder,
+          $$StoredSyncJobsTableUpdateCompanionBuilder,
+          (
+            StoredSyncJob,
+            BaseReferences<_$AppDatabase, $StoredSyncJobsTable, StoredSyncJob>,
+          ),
+          StoredSyncJob,
+          PrefetchHooks Function()
+        > {
+  $$StoredSyncJobsTableTableManager(
+    _$AppDatabase db,
+    $StoredSyncJobsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredSyncJobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () =>
+                  $$StoredSyncJobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer:
+              () => $$StoredSyncJobsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> profileId = const Value.absent(),
+                Value<String> triggerKind = const Value.absent(),
+                Value<String> direction = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<String?> summaryJson = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncJobsCompanion(
+                id: id,
+                profileId: profileId,
+                triggerKind: triggerKind,
+                direction: direction,
+                status: status,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                summaryJson: summaryJson,
+                errorMessage: errorMessage,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String profileId,
+                required String triggerKind,
+                Value<String> direction = const Value.absent(),
+                required String status,
+                required DateTime startedAt,
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<String?> summaryJson = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncJobsCompanion.insert(
+                id: id,
+                profileId: profileId,
+                triggerKind: triggerKind,
+                direction: direction,
+                status: status,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                summaryJson: summaryJson,
+                errorMessage: errorMessage,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredSyncJobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredSyncJobsTable,
+      StoredSyncJob,
+      $$StoredSyncJobsTableFilterComposer,
+      $$StoredSyncJobsTableOrderingComposer,
+      $$StoredSyncJobsTableAnnotationComposer,
+      $$StoredSyncJobsTableCreateCompanionBuilder,
+      $$StoredSyncJobsTableUpdateCompanionBuilder,
+      (
+        StoredSyncJob,
+        BaseReferences<_$AppDatabase, $StoredSyncJobsTable, StoredSyncJob>,
+      ),
+      StoredSyncJob,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredSyncConflictsTableCreateCompanionBuilder =
+    StoredSyncConflictsCompanion Function({
+      required String id,
+      required String profileId,
+      required String scope,
+      required String recordKey,
+      Value<String?> basePayloadJson,
+      Value<String?> localPayloadJson,
+      Value<String?> remotePayloadJson,
+      Value<String> resolution,
+      Value<DateTime> createdAt,
+      Value<DateTime?> resolvedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredSyncConflictsTableUpdateCompanionBuilder =
+    StoredSyncConflictsCompanion Function({
+      Value<String> id,
+      Value<String> profileId,
+      Value<String> scope,
+      Value<String> recordKey,
+      Value<String?> basePayloadJson,
+      Value<String?> localPayloadJson,
+      Value<String?> remotePayloadJson,
+      Value<String> resolution,
+      Value<DateTime> createdAt,
+      Value<DateTime?> resolvedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredSyncConflictsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredSyncConflictsTable> {
+  $$StoredSyncConflictsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recordKey => $composableBuilder(
+    column: $table.recordKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get basePayloadJson => $composableBuilder(
+    column: $table.basePayloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localPayloadJson => $composableBuilder(
+    column: $table.localPayloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remotePayloadJson => $composableBuilder(
+    column: $table.remotePayloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resolution => $composableBuilder(
+    column: $table.resolution,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredSyncConflictsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredSyncConflictsTable> {
+  $$StoredSyncConflictsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recordKey => $composableBuilder(
+    column: $table.recordKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get basePayloadJson => $composableBuilder(
+    column: $table.basePayloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localPayloadJson => $composableBuilder(
+    column: $table.localPayloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remotePayloadJson => $composableBuilder(
+    column: $table.remotePayloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resolution => $composableBuilder(
+    column: $table.resolution,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredSyncConflictsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredSyncConflictsTable> {
+  $$StoredSyncConflictsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get profileId =>
+      $composableBuilder(column: $table.profileId, builder: (column) => column);
+
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get recordKey =>
+      $composableBuilder(column: $table.recordKey, builder: (column) => column);
+
+  GeneratedColumn<String> get basePayloadJson => $composableBuilder(
+    column: $table.basePayloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get localPayloadJson => $composableBuilder(
+    column: $table.localPayloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remotePayloadJson => $composableBuilder(
+    column: $table.remotePayloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get resolution => $composableBuilder(
+    column: $table.resolution,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$StoredSyncConflictsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredSyncConflictsTable,
+          StoredSyncConflict,
+          $$StoredSyncConflictsTableFilterComposer,
+          $$StoredSyncConflictsTableOrderingComposer,
+          $$StoredSyncConflictsTableAnnotationComposer,
+          $$StoredSyncConflictsTableCreateCompanionBuilder,
+          $$StoredSyncConflictsTableUpdateCompanionBuilder,
+          (
+            StoredSyncConflict,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredSyncConflictsTable,
+              StoredSyncConflict
+            >,
+          ),
+          StoredSyncConflict,
+          PrefetchHooks Function()
+        > {
+  $$StoredSyncConflictsTableTableManager(
+    _$AppDatabase db,
+    $StoredSyncConflictsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredSyncConflictsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredSyncConflictsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredSyncConflictsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> profileId = const Value.absent(),
+                Value<String> scope = const Value.absent(),
+                Value<String> recordKey = const Value.absent(),
+                Value<String?> basePayloadJson = const Value.absent(),
+                Value<String?> localPayloadJson = const Value.absent(),
+                Value<String?> remotePayloadJson = const Value.absent(),
+                Value<String> resolution = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> resolvedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncConflictsCompanion(
+                id: id,
+                profileId: profileId,
+                scope: scope,
+                recordKey: recordKey,
+                basePayloadJson: basePayloadJson,
+                localPayloadJson: localPayloadJson,
+                remotePayloadJson: remotePayloadJson,
+                resolution: resolution,
+                createdAt: createdAt,
+                resolvedAt: resolvedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String profileId,
+                required String scope,
+                required String recordKey,
+                Value<String?> basePayloadJson = const Value.absent(),
+                Value<String?> localPayloadJson = const Value.absent(),
+                Value<String?> remotePayloadJson = const Value.absent(),
+                Value<String> resolution = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> resolvedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSyncConflictsCompanion.insert(
+                id: id,
+                profileId: profileId,
+                scope: scope,
+                recordKey: recordKey,
+                basePayloadJson: basePayloadJson,
+                localPayloadJson: localPayloadJson,
+                remotePayloadJson: remotePayloadJson,
+                resolution: resolution,
+                createdAt: createdAt,
+                resolvedAt: resolvedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredSyncConflictsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredSyncConflictsTable,
+      StoredSyncConflict,
+      $$StoredSyncConflictsTableFilterComposer,
+      $$StoredSyncConflictsTableOrderingComposer,
+      $$StoredSyncConflictsTableAnnotationComposer,
+      $$StoredSyncConflictsTableCreateCompanionBuilder,
+      $$StoredSyncConflictsTableUpdateCompanionBuilder,
+      (
+        StoredSyncConflict,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredSyncConflictsTable,
+          StoredSyncConflict
+        >,
+      ),
+      StoredSyncConflict,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -12431,4 +16411,12 @@ class $AppDatabaseManager {
       $$SearchSourceHitsTableTableManager(_db, _db.searchSourceHits);
   $$StoredScriptSourcesTableTableManager get storedScriptSources =>
       $$StoredScriptSourcesTableTableManager(_db, _db.storedScriptSources);
+  $$StoredSyncProfilesTableTableManager get storedSyncProfiles =>
+      $$StoredSyncProfilesTableTableManager(_db, _db.storedSyncProfiles);
+  $$StoredSyncScopeStatesTableTableManager get storedSyncScopeStates =>
+      $$StoredSyncScopeStatesTableTableManager(_db, _db.storedSyncScopeStates);
+  $$StoredSyncJobsTableTableManager get storedSyncJobs =>
+      $$StoredSyncJobsTableTableManager(_db, _db.storedSyncJobs);
+  $$StoredSyncConflictsTableTableManager get storedSyncConflicts =>
+      $$StoredSyncConflictsTableTableManager(_db, _db.storedSyncConflicts);
 }

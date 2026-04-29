@@ -13,6 +13,7 @@ import '../features/mine/providers.dart';
 import '../features/reader/routes.dart';
 import '../features/search/routes.dart';
 import '../features/source/routes.dart';
+import '../features/sync/routes.dart';
 import 'shell_scaffold.dart';
 
 GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
@@ -44,6 +45,7 @@ final GoRouter appRouter = GoRouter(
     ...announcementRoutes,
     ...authRoutes,
     ...sourceRoutes,
+    ...syncRoutes,
     ...searchRoutes,
     ...bookshelfRoutes,
     ...bookRoutes,

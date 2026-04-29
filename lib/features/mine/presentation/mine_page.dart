@@ -364,7 +364,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   void _handleSyncTap() {
     if (_hasMembership) {
-      _showMessage('多端同步计划开发中，后续将优先向高级会员开放。');
+      context.push('/sync');
       return;
     }
     unawaited(_showMembershipPrompt('多端同步为会员计划功能，当前正在开发中。'));

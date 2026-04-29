@@ -844,6 +844,37 @@ class ReaderPreferencesService {
     await prefs.remove('$_progressPrefix$normalizedBookId');
   }
 
+  Future<List<ReadingProgress>> loadAllProgresses() async {
+    final prefs = await _preferencesFuture;
+    final results = <ReadingProgress>[];
+    for (final key in prefs.getKeys()) {
+      if (!key.startsWith(_progressPrefix)) {
+        continue;
+      }
+      final raw = prefs.getString(key);
+      if (raw == null || raw.trim().isEmpty) {
+        continue;
+      }
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) {
+          continue;
+        }
+        results.add(
+          ReadingProgress.fromJson(
+            decoded.map(
+              (nestedKey, value) => MapEntry(nestedKey.toString(), value),
+            ),
+          ),
+        );
+      } on FormatException {
+        continue;
+      }
+    }
+    results.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return List<ReadingProgress>.unmodifiable(results);
+  }
+
   Future<void> migrateProgress({
     required String previousBookId,
     required ReadingProgress nextProgress,

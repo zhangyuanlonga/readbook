@@ -15,6 +15,10 @@ class ReadingBookStatusService {
     return _database.watchReadingBookStatuses();
   }
 
+  Future<List<ReadingBookStatusEntry>> listManualStatuses() {
+    return _database.listReadingBookStatuses();
+  }
+
   Stream<List<LocalBook>> watchLocalBooks() {
     return _database.watchAllLocalBooks();
   }
@@ -33,6 +37,10 @@ class ReadingBookStatusService {
         updatedAt: DateTime.now(),
       ),
     );
+  }
+
+  Future<void> upsertManualStatus(ReadingBookStatusEntry entry) {
+    return _database.upsertReadingBookStatus(entry);
   }
 
   Future<void> clearManualStatus(String bookId) {
