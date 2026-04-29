@@ -90,6 +90,9 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   AppAdvancedThemeModeConfig? _effectiveReaderBackgroundThemeConfig() {
+    if (_visualOverrides.hasBackgroundImageOverride) {
+      return null;
+    }
     final activeThemeAsync = ref.read(activeAdvancedThemeProvider);
     final activeTheme = activeThemeAsync.valueOrNull;
     if (activeTheme != null) {
@@ -108,10 +111,6 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   String? _effectiveReaderBackgroundPath() {
-    final themeModeConfig = _effectiveReaderBackgroundThemeConfig();
-    if (themeModeConfig != null) {
-      return themeModeConfig.readerWallpaperPath?.trim();
-    }
     final ownBackground = _settings.backgroundImageBase64?.trim();
     if (ownBackground == null || ownBackground.isEmpty) {
       return null;
@@ -983,6 +982,4 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       isLast: false,
     ).indentLength;
   }
-
-
 }

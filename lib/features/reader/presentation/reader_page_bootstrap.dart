@@ -197,6 +197,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       var normalizedSettings = _typographyMetricsResolver.normalizeSettings(
         loadedSettings,
       );
+      var loadedVisualOverrides = await _visualOverridesService.loadOverrides();
       var availableCustomFonts = const <ReaderCustomFontEntry>[];
       var storedCustomBackgrounds = const <String>[];
 
@@ -209,25 +210,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       try {
         await _fontRegistryService.restoreRegisteredFonts();
         availableCustomFonts = await _fontRegistryService.listRegisteredFonts();
-        var fontSettingsBase = loadedSettings;
-        final themeReaderFontFamilyKey =
-            ref
-                .read(activeAdvancedThemeProvider)
-                .valueOrNull
-                ?.readerFontFamilyKey
-                ?.trim() ??
-            '';
-        if (themeReaderFontFamilyKey.isNotEmpty) {
-          fontSettingsBase = loadedSettings.copyWith(
-            fontSource: ReaderFontSource.custom,
-            fontFamilyKey: themeReaderFontFamilyKey,
-            clearCustomFontPath: true,
-          );
-        }
         normalizedSettings = await _fontRegistryService
-            .normalizeCustomFontSettings(fontSettingsBase);
+            .normalizeCustomFontSettings(normalizedSettings);
       } catch (_) {
-        normalizedSettings = loadedSettings.copyWith(
+        normalizedSettings = normalizedSettings.copyWith(
           fontSource: ReaderFontSource.system,
           clearFontFamilyKey: true,
           clearCustomFontPath: true,
@@ -286,10 +272,23 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         await _preferencesService.saveSettings(normalizedSettings);
       }
 
-      final bootSettings = normalizedSettings.copyWith(autoReadEnabled: false);
+      _persistedReaderSettings = normalizedSettings;
+      _visualOverrides = loadedVisualOverrides;
+      final activeTheme = _currentActiveAdvancedTheme();
+      final appThemeMode = _currentAppThemeMode();
+      final platformBrightness = _currentPlatformBrightness();
+      final bootSettings = _resolveReaderSettingsLayers(
+        persistedSettings: normalizedSettings,
+        visualOverrides: loadedVisualOverrides,
+        activeTheme: activeTheme,
+        appThemeMode: appThemeMode,
+        platformBrightness: platformBrightness,
+      ).copyWith(autoReadEnabled: false);
       _debugLogReaderBackground('bootstrap', bootSettings);
       if (mounted) {
         setState(() {
+          _persistedReaderSettings = normalizedSettings;
+          _visualOverrides = loadedVisualOverrides;
           _settings = bootSettings;
           _customFonts = availableCustomFonts;
           _customBackgroundImages = storedCustomBackgrounds;
@@ -304,10 +303,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
-      await _syncReaderThemeModeWithAppTheme(
-        ref.read(appThemeModeProvider),
-        persist: true,
-      );
       try {
         final recentColors =
             await _preferencesService.loadRecentBodyTextColors();
@@ -427,17 +422,19 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
       final cachedDetail = _peekCachedDetailResult();
       detailCacheHit = cachedDetail != null;
-      final detailResult = cachedDetail ?? await () async {
-        final detailLoadStopwatch = Stopwatch()..start();
-        final loaded = await detailProvider.loadDetail(
-          sourceId: _sourceId!,
-          bookId: _currentBookId,
-          detailUrl: _detailUrl!,
-          fallbackTitle: _chapterTitle,
-        );
-        detailLoadMs = detailLoadStopwatch.elapsedMilliseconds;
-        return loaded;
-      }();
+      final detailResult =
+          cachedDetail ??
+          await () async {
+            final detailLoadStopwatch = Stopwatch()..start();
+            final loaded = await detailProvider.loadDetail(
+              sourceId: _sourceId!,
+              bookId: _currentBookId,
+              detailUrl: _detailUrl!,
+              fallbackTitle: _chapterTitle,
+            );
+            detailLoadMs = detailLoadStopwatch.elapsedMilliseconds;
+            return loaded;
+          }();
       detailLoaded = true;
       await _persistTocSnapshot(detailResult);
 
@@ -584,10 +581,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     if (provider is! SourceContentProvider) {
       return null;
     }
-    return provider.peekCachedDetail(
-      sourceId: sourceId,
-      detailUrl: detailUrl,
-    );
+    return provider.peekCachedDetail(sourceId: sourceId, detailUrl: detailUrl);
   }
 
   String _resolveNoReadableChapterMessage({

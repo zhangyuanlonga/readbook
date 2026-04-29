@@ -6,6 +6,7 @@ class _ReaderPageDependencyBinder {
   void bind(_ReaderPageState state, ReaderFeatureDependencies dependencies) {
     state._contentProviderRegistry = dependencies.contentProviderRegistry;
     state._preferencesService = dependencies.preferencesService;
+    state._visualOverridesService = dependencies.visualOverridesService;
     state._platformBridgeService = dependencies.platformBridgeService;
     state._fontRegistryService = dependencies.fontRegistryService;
     state._paginationCacheService = dependencies.paginationCacheService;
@@ -75,14 +76,9 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
     _scrollController.addListener(_onScrollChanged);
     _selectionNotifier.addListener(_handleSelectionNotifierChanged);
-    _appThemeModeSubscription = ref.listenManual<ThemeMode>(
-      appThemeModeProvider,
-      (previous, next) {
-        unawaited(_syncReaderThemeModeWithAppTheme(next));
-      },
-    );
     if (_platformBridgeService.isVolumeKeyPagingSupported) {
-      _volumeKeyEventSubscription = _platformBridgeService.volumeKeyEvents.listen(
+      _volumeKeyEventSubscription = _platformBridgeService.volumeKeyEvents
+          .listen(
             (event) => unawaited(_handleVolumeKeyEvent(event)),
             onError: (_) {},
           );
@@ -103,7 +99,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   }
 
   void _handlePlatformBrightnessChange() {
-    final appThemeMode = ref.read(appThemeModeProvider);
+    // Reader theme is persisted independently from the app shell theme.
+    // Platform brightness changes only affect reader brightness-following UI.
     if (_settings.followSystemBrightness &&
         _lifecycleDelegate.shouldSyncThemeOnPlatformBrightness(
           mounted: mounted,
@@ -111,16 +108,10 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
         )) {
       _updateReaderState(() {});
     }
-    if (appThemeMode != ThemeMode.system) {
-      return;
-    }
-    unawaited(_syncReaderThemeModeWithAppTheme(appThemeMode));
   }
 
   void _disposeReaderPage() {
     WidgetsBinding.instance.removeObserver(this);
-    _appThemeModeSubscription?.close();
-    _appThemeModeSubscription = null;
     _cancelActiveSwitchSourceSearch();
     _chapterContentRequestToken += 1;
     final sourceId = (_sourceId ?? '').trim();

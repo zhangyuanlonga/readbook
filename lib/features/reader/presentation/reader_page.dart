@@ -39,6 +39,7 @@ import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
+import '../../../domain/entities/reader_visual_overrides.dart';
 import '../../../domain/entities/source_health.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
@@ -87,10 +88,12 @@ import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
 import '../application/reader_platform_bridge_service.dart';
 import '../application/reader_settings_groups.dart';
+import '../application/reader_settings_resolution_service.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_visual_overrides_service.dart';
 import '../application/reader_session_state.dart';
 import '../application/reader_session_state_resolver.dart';
 import '../application/reader_source_switch_coordinator.dart';
@@ -187,6 +190,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   late final ContentProviderRegistry _contentProviderRegistry;
   late final ReaderPreferencesService _preferencesService;
+  late final ReaderVisualOverridesService _visualOverridesService;
   late final ReaderPlatformBridgeService _platformBridgeService;
   late final ReaderFontRegistryService _fontRegistryService;
   final ReaderTypographyResolver _typographyResolver =
@@ -246,6 +250,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderPageLifecycleDelegate();
   final ReaderSettingsPresenter _readerSettingsPresenter =
       const ReaderSettingsPresenter();
+  final ReaderSettingsResolutionService _readerSettingsResolutionService =
+      const ReaderSettingsResolutionService();
   final ReaderContentSessionResolver _contentSessionResolver =
       const ReaderContentSessionResolver();
   final ReaderSessionStateResolver _sessionStateResolver =
@@ -305,6 +311,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _bookCustomCoverPath;
 
   ReaderSettings _settings = const ReaderSettings();
+  ReaderSettings _persistedReaderSettings = const ReaderSettings();
+  ReaderVisualOverrides _visualOverrides = ReaderVisualOverrides.empty;
   List<Chapter> _chapters = const [];
   int? _currentIndex;
 
@@ -394,7 +402,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   _CurlTransitionState _curlTransition = const _CurlTransitionState();
   bool _isSystemUiVisible = true;
   bool _isVolumeKeyPageInterceptionEnabled = false;
-  ProviderSubscription<ThemeMode>? _appThemeModeSubscription;
   late final AnimationController _overlayControlsController;
   late final AnimationController _pagedTransitionController;
   late final AnimationController _curlAutoTurnController;
@@ -1385,29 +1392,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required ReaderRenderBlockItem item,
     required bool isLast,
     required _ReaderThemeColors colors,
-  }) => _ReaderPageContentRenderingExtension(this)
-      ._buildSelectableReaderBlockItem(
-        item: item,
-        isLast: isLast,
-        colors: colors,
-      );
+  }) => _ReaderPageContentRenderingExtension(
+    this,
+  )._buildSelectableReaderBlockItem(item: item, isLast: isLast, colors: colors);
 
   Widget _buildAutoReadIndicator(_ReaderThemeColors colors) =>
-      _ReaderPageContentRenderingExtension(this)._buildAutoReadIndicator(
-        colors,
-      );
+      _ReaderPageContentRenderingExtension(
+        this,
+      )._buildAutoReadIndicator(colors);
 
   Widget _buildInlineImageParagraphItem({
     required String imageUrl,
     required bool isLast,
     required _ReaderThemeColors colors,
-  }) => _ReaderPageContentRenderingExtension(
-    this,
-  )._buildInlineImageParagraphItem(
-    imageUrl: imageUrl,
-    isLast: isLast,
-    colors: colors,
-  );
+  }) =>
+      _ReaderPageContentRenderingExtension(this)._buildInlineImageParagraphItem(
+        imageUrl: imageUrl,
+        isLast: isLast,
+        colors: colors,
+      );
 
   Widget _buildInlineReaderImageCard({
     required String imageUrl,
@@ -1664,9 +1667,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String sourceUrl,
     required _ReaderThemeColors colors,
     required int retryNonce,
-  }) => _ReaderPageContentRenderingExtension(
-    this,
-  )._buildReaderImageWidget(
+  }) => _ReaderPageContentRenderingExtension(this)._buildReaderImageWidget(
     requestUrl: requestUrl,
     sourceUrl: sourceUrl,
     colors: colors,
@@ -1680,39 +1681,159 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.themeMode;
   }
 
-  ReaderThemeMode _readerThemeModeForAppTheme(ThemeMode appThemeMode) {
-    final brightness = switch (appThemeMode) {
-      ThemeMode.dark => Brightness.dark,
-      ThemeMode.light => Brightness.light,
-      ThemeMode.system =>
-        WidgetsBinding.instance.platformDispatcher.platformBrightness,
-    };
-    return brightness == Brightness.dark
-        ? ReaderThemeMode.dark
-        : ReaderThemeMode.light;
+  Brightness _currentPlatformBrightness() {
+    return WidgetsBinding.instance.platformDispatcher.platformBrightness;
   }
 
-  Future<void> _syncReaderThemeModeWithAppTheme(
-    ThemeMode appThemeMode, {
-    bool persist = true,
-  }) async {
-    final targetMode = _readerThemeModeForAppTheme(appThemeMode);
-    if (_settings.themeMode == targetMode) {
-      return;
-    }
+  ThemeMode _currentAppThemeMode() {
+    return ref.read(appThemeModeProvider);
+  }
 
-    final nextSettings = _settings.copyWith(themeMode: targetMode);
-    if (mounted) {
-      setState(() {
-        _settings = nextSettings;
-      });
+  AppAdvancedTheme? _currentActiveAdvancedTheme() {
+    return ref.read(activeAdvancedThemeProvider).valueOrNull;
+  }
+
+  ReaderSettings _resolveReaderSettingsLayers({
+    ReaderSettings? persistedSettings,
+    ReaderVisualOverrides? visualOverrides,
+    AppAdvancedTheme? activeTheme,
+    ThemeMode? appThemeMode,
+    Brightness? platformBrightness,
+  }) {
+    return _readerSettingsResolutionService.resolve(
+      persistedSettings: persistedSettings ?? _persistedReaderSettings,
+      visualOverrides: visualOverrides ?? _visualOverrides,
+      activeTheme: activeTheme ?? _currentActiveAdvancedTheme(),
+      appThemeMode: appThemeMode ?? _currentAppThemeMode(),
+      platformBrightness: platformBrightness ?? _currentPlatformBrightness(),
+    );
+  }
+
+  String? _normalizeOptionalVisualValue(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  bool _matchesThemeReaderFontBinding(
+    ReaderSettings settings,
+    String themeFontFamilyKey,
+  ) {
+    return settings.fontSource == ReaderFontSource.custom &&
+        _normalizeOptionalVisualValue(settings.fontFamilyKey) ==
+            themeFontFamilyKey &&
+        _normalizeOptionalVisualValue(settings.customFontPath) == null;
+  }
+
+  Future<void> _persistResolvedReaderSettingsLayers(
+    ReaderSettings resolvedSettings,
+  ) async {
+    final activeTheme = _currentActiveAdvancedTheme();
+    final appThemeMode = _currentAppThemeMode();
+    final platformBrightness = _currentPlatformBrightness();
+    final themeReaderBackgroundPath = _readerSettingsResolutionService
+        .resolveThemeReaderBackgroundPath(
+          activeTheme: activeTheme,
+          appThemeMode: appThemeMode,
+          platformBrightness: platformBrightness,
+        );
+    final themeReaderFontFamilyKey = _readerSettingsResolutionService
+        .resolveThemeReaderFontFamilyKey(activeTheme);
+
+    var nextPersisted = resolvedSettings;
+    var nextVisualOverrides = _visualOverrides;
+
+    if (themeReaderBackgroundPath != null) {
+      final persistedBackground = _normalizeOptionalVisualValue(
+        _persistedReaderSettings.backgroundImageBase64,
+      );
+      nextPersisted = nextPersisted.copyWith(
+        backgroundImageBase64: persistedBackground,
+        clearBackgroundImage: persistedBackground == null,
+      );
+
+      final selectedBackground = _normalizeOptionalVisualValue(
+        resolvedSettings.backgroundImageBase64,
+      );
+      if (selectedBackground == themeReaderBackgroundPath) {
+        nextVisualOverrides = nextVisualOverrides.copyWith(
+          clearBackgroundImageOverride: true,
+        );
+      } else {
+        nextVisualOverrides = nextVisualOverrides.copyWith(
+          hasBackgroundImageOverride: true,
+          backgroundImageBase64: selectedBackground,
+        );
+      }
     } else {
-      _settings = nextSettings;
+      nextVisualOverrides = nextVisualOverrides.copyWith(
+        clearBackgroundImageOverride: true,
+      );
     }
 
-    if (persist) {
-      await _preferencesService.saveSettings(nextSettings);
+    if (themeReaderFontFamilyKey != null) {
+      final persistedFontFamilyKey = _normalizeOptionalVisualValue(
+        _persistedReaderSettings.fontFamilyKey,
+      );
+      final persistedCustomFontPath = _normalizeOptionalVisualValue(
+        _persistedReaderSettings.customFontPath,
+      );
+      nextPersisted = nextPersisted.copyWith(
+        fontSource: _persistedReaderSettings.fontSource,
+        systemFontPreset: _persistedReaderSettings.systemFontPreset,
+        fontFamilyKey: persistedFontFamilyKey,
+        clearFontFamilyKey: persistedFontFamilyKey == null,
+        customFontPath: persistedCustomFontPath,
+        clearCustomFontPath: persistedCustomFontPath == null,
+      );
+
+      if (_matchesThemeReaderFontBinding(
+        resolvedSettings,
+        themeReaderFontFamilyKey,
+      )) {
+        nextVisualOverrides = nextVisualOverrides.copyWith(
+          clearFontSource: true,
+          clearSystemFontPreset: true,
+          clearFontFamilyKeyOverride: true,
+          clearCustomFontPathOverride: true,
+        );
+      } else {
+        nextVisualOverrides = nextVisualOverrides.copyWith(
+          fontSource: resolvedSettings.fontSource,
+          systemFontPreset: resolvedSettings.systemFontPreset,
+          hasFontFamilyKeyOverride: true,
+          fontFamilyKey: _normalizeOptionalVisualValue(
+            resolvedSettings.fontFamilyKey,
+          ),
+          hasCustomFontPathOverride: true,
+          customFontPath: _normalizeOptionalVisualValue(
+            resolvedSettings.customFontPath,
+          ),
+        );
+      }
+    } else {
+      nextVisualOverrides = nextVisualOverrides.copyWith(
+        clearFontSource: true,
+        clearSystemFontPreset: true,
+        clearFontFamilyKeyOverride: true,
+        clearCustomFontPathOverride: true,
+      );
     }
+
+    await _preferencesService.saveSettings(nextPersisted);
+    await _visualOverridesService.saveOverrides(nextVisualOverrides);
+
+    _persistedReaderSettings = nextPersisted;
+    _visualOverrides = nextVisualOverrides;
+    _settings = _resolveReaderSettingsLayers(
+      persistedSettings: nextPersisted,
+      visualOverrides: nextVisualOverrides,
+      activeTheme: activeTheme,
+      appThemeMode: appThemeMode,
+      platformBrightness: platformBrightness,
+    );
   }
 
   ReaderPageAnimationStyle _currentPagedAnimationStyle() {
@@ -1753,9 +1874,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required Size pageSize,
     required ReaderTextPagedViewModel pagedViewModel,
     bool includeBackgroundDecoration = false,
-  }) => _ReaderPageContentRenderingExtension(
-    this,
-  )._buildPagedPageContainer(
+  }) => _ReaderPageContentRenderingExtension(this)._buildPagedPageContainer(
     colors: colors,
     pageIndex: pageIndex,
     total: total,
@@ -1776,9 +1895,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int index,
     required int total,
     required ReaderSurfaceMetrics layoutMetrics,
-  }) => _ReaderPageContentRenderingExtension(
-    this,
-  )._buildPagedFooterSection(
+  }) => _ReaderPageContentRenderingExtension(this)._buildPagedFooterSection(
     colors: colors,
     index: index,
     total: total,
@@ -1791,16 +1908,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int total,
     required double bottomInset,
     double? safeBottomInset,
-  }) => _ReaderPageContentRenderingExtension(
-    this,
-  )._buildPageIndexOverlay(
+  }) => _ReaderPageContentRenderingExtension(this)._buildPageIndexOverlay(
     colors: colors,
     index: index,
     total: total,
     bottomInset: bottomInset,
     safeBottomInset: safeBottomInset,
   );
-
 
   void _updateCurlPreviewProgress(Size viewportSize) {
     if (_isCurlAutoTurning) {

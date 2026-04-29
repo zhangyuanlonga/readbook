@@ -31,6 +31,7 @@ import 'reader_font_registry_service.dart';
 import 'reader_pagination_cache_service.dart';
 import 'reader_platform_bridge_service.dart';
 import 'reader_preferences_service.dart';
+import 'reader_visual_overrides_service.dart';
 import 'reader_system_settings_service.dart';
 import 'reading_record_service.dart';
 import 'reader_cached_chapter_store.dart';
@@ -41,6 +42,7 @@ class ReaderFeatureDependencies {
   const ReaderFeatureDependencies({
     required this.contentProviderRegistry,
     required this.preferencesService,
+    required this.visualOverridesService,
     required this.platformBridgeService,
     required this.fontRegistryService,
     required this.paginationCacheService,
@@ -68,6 +70,7 @@ class ReaderFeatureDependencies {
 
   final ContentProviderRegistry contentProviderRegistry;
   final ReaderPreferencesService preferencesService;
+  final ReaderVisualOverridesService visualOverridesService;
   final ReaderPlatformBridgeService platformBridgeService;
   final ReaderFontRegistryService fontRegistryService;
   final ReaderPaginationCacheService paginationCacheService;
@@ -104,6 +107,7 @@ final readerFeatureDependenciesFactoryProvider =
         final database = AppDatabase.instance;
         final localBookRepository = LocalBookRepositoryImpl(database);
         final readerPreferencesService = ReaderPreferencesService();
+        final readerVisualOverridesService = ReaderVisualOverridesService();
         final readerPlatformBridgeService = ReaderPlatformBridgeService();
         final readerSystemSettingsService = ReaderSystemSettingsService();
         final readerBackgroundService = ReaderBackgroundService();
@@ -142,6 +146,7 @@ final readerFeatureDependenciesFactoryProvider =
             ],
           ),
           preferencesService: readerPreferencesService,
+          visualOverridesService: readerVisualOverridesService,
           platformBridgeService: readerPlatformBridgeService,
           fontRegistryService: ReaderFontRegistryService(),
           paginationCacheService: _sharedReaderPaginationCacheService,

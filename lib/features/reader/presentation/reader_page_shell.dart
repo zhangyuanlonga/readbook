@@ -463,7 +463,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     setState(() {
       _settings = result.nextSettings;
     });
-    await _preferencesService.saveSettings(result.nextSettings);
+    await _persistResolvedReaderSettingsLayers(result.nextSettings);
     await ref
         .read(appThemeModeProvider.notifier)
         .setThemeMode(result.nextAppThemeMode);

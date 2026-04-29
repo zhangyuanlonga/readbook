@@ -1,6 +1,6 @@
 # 项目架构统一化总计划
 
-更新时间：2026-04-28  
+更新时间：2026-04-29  
 用途：作为当前项目“整体收口”的唯一总编排文档，统一阶段目标、任务范围、已完成项、剩余项、完成标准与文档回填口径。  
 后续所有跨专题结构治理，一律以本文件为总看板，再下钻到对应专题文档。
 
@@ -19,6 +19,7 @@
 - `docs/cross_platform_boundary_refactor_plan.md`
 - `docs/reader_mode_rearchitecture_plan.md`
 - `docs/local_text_epub_execution_plan.md`
+- `docs/architecture_guard_automation_plan.md`
 
 ---
 
@@ -110,15 +111,15 @@
 
 ## 3. 当前结构热点
 
-截至 `2026-04-28`，当前最重的页面文件包括：
+截至 `2026-04-29`，当前最重的页面文件包括：
 
-- `lib/features/reader/presentation/reader_page.dart`：`12276` 行
-- `lib/features/bookshelf/presentation/bookshelf_page.dart`：`5790` 行
-- `lib/features/mine/presentation/advanced_theme_editor_page.dart`：`3897` 行
-- `lib/features/book/presentation/book_detail_page.dart`：`3496` 行
-- `lib/features/reader/presentation/reading_records_page.dart`：`2889` 行
-- `lib/features/source/presentation/source_page.dart`：`2623` 行
-- `lib/features/source/presentation/script_source_debug_page.dart`：`2111` 行
+- `lib/features/reader/presentation/reader_page.dart`：`4969` 行
+- `lib/features/bookshelf/presentation/bookshelf_page.dart`：`3907` 行
+- `lib/features/mine/presentation/advanced_theme_editor_page.dart`：`3729` 行
+- `lib/features/reader/presentation/reading_records_page.dart`：`2696` 行
+- `lib/features/book/presentation/book_detail_page.dart`：`2328` 行
+- `lib/features/source/presentation/script_source_debug_page.dart`：`942` 行
+- `lib/features/source/presentation/source_page.dart`：`239` 行
 
 当前最重的 application 文件包括：
 
@@ -131,10 +132,9 @@
 
 当前主要偏差：
 
-1. 页面仍然过重
-2. 依赖入口还没完全统一
-3. 共享语义尚未完全统一
-4. 资源系统仍是平行实现
+1. 少数核心页面虽然已完成一轮压薄，但体量仍偏大
+2. 阶段 6 的 analyze / test 绿集与结构守卫自动化尚未收口
+3. 总计划与专题文档的状态回填曾出现滞后，需继续按回填规则维护
 
 ---
 
@@ -144,11 +144,11 @@
 
 - 阶段 0：已完成
 - 阶段 1：已完成
-- 阶段 2：进行中
-- 阶段 3：进行中
-- 阶段 4：未开始
-- 阶段 5：未开始
-- 阶段 6：未开始
+- 阶段 2：已完成
+- 阶段 3：已完成
+- 阶段 4：已完成
+- 阶段 5：已完成
+- 阶段 6：进行中
 
 ### 4.2 阶段完成定义
 
@@ -234,7 +234,8 @@
 
 ## 7. 阶段 2：超大页面和 Glue Code 下沉
 
-状态：`已完成`
+状态：`已完成`  
+完成日期：`2026-04-28`
 
 目标：
 
@@ -368,7 +369,8 @@
 
 ## 8. 阶段 3：共享业务语义统一
 
-状态：`进行中`
+状态：`已完成`  
+完成日期：`2026-04-29`
 
 目标：
 
@@ -409,23 +411,37 @@
 
 ### 8.3 快照语义
 
+已完成：
+
+- [x] 已明确 `BookshelfBook / ReadingRecord / LocalBook / BookDetail` 的事实字段与快照字段
+- [x] 已补充快照迁移和同步口径
+
 当前剩余项：
 
-- [ ] 明确 `BookshelfBook / ReadingRecord / LocalBook / BookDetail` 的事实字段与快照字段
-- [ ] 补充快照迁移和同步口径
+- 无，`8.3 快照语义` 已由 `docs/book_model_and_cover_business_inventory.md` 与 `docs/cover_image_execution_plan.md` 回填完成
 
 ### 8.4 资源绑定语义
 
+已完成：
+
+- [x] 已明确主题绑定字段和事实资源字段边界
+- [x] 已为阶段 4 的资源系统统一提供语义基线
+
 当前剩余项：
 
-- [ ] 明确主题绑定字段和事实资源字段边界
-- [ ] 为阶段 4 的资源系统统一提供语义基线
+- 无，`8.4 资源绑定语义` 已由 `docs/managed_asset_system_execution_plan.md` 回填完成
+
+阶段结果：
+
+- `8.1 ~ 8.4` 当前定义任务已全部关闭
+- 共享语义主线已收口到 identity / display state / snapshot / managed asset binding 四条语义基线
 
 ---
 
 ## 9. 阶段 4：资源系统统一
 
-状态：`进行中`
+状态：`已完成`  
+完成日期：`2026-04-28`
 
 目标：
 
@@ -469,7 +485,8 @@
 
 ## 10. 阶段 5：Runtime / Bridge / 平台边界统一
 
-状态：`已完成`
+状态：`已完成`  
+完成日期：`2026-04-28`
 
 目标：
 
@@ -500,19 +517,29 @@
 
 ## 11. 阶段 6：测试、验收与守卫自动化
 
-状态：`未开始`
+状态：`进行中`
 
 目标：
 
 - 让统一化不依赖人工记忆，而是有自动化守卫
 
-剩余任务：
+关联专题：
 
-- [ ] 建立关键阶段的 analyze/test 绿色集合
-- [ ] 增加 dependency violation 检查脚本
-- [ ] 增加超大文件预警
-- [ ] 增加关键共享模型回归测试
-- [ ] 建立文档回填检查口径
+- `docs/architecture_guard_automation_plan.md`
+
+已完成项：
+
+- [x] 已补关键共享模型回归测试
+- [x] 已建立阶段 6 专题文档并拆分执行线
+- [x] 已补并验证最小绿色集合执行入口
+- [x] 已补并验证结构守卫脚本骨架
+
+当前剩余项：
+
+- [ ] 扩大关键阶段 analyze/test 绿色集合覆盖面
+- [ ] 继续补强 dependency violation 规则
+- [ ] 根据后续拆分继续收紧超大文件阈值
+- [ ] 扩展专题文档回填交叉检查
 
 完成标准：
 
@@ -525,19 +552,16 @@
 
 后续执行顺序固定为：
 
-1. Reader 阶段 2 剩余项
-2. Bookshelf / Book Detail 阶段 2 剩余项
-3. Mine Appearance / Source 阶段 2
-4. 阶段 3 剩余语义统一
-5. 阶段 4 资源系统统一
-6. 阶段 5 runtime / bridge
-7. 阶段 6 测试与守卫
+1. 阶段 6：建立关键 analyze / test 绿色集合
+2. 阶段 6：补 dependency violation 检查脚本
+3. 阶段 6：补超大文件预警
+4. 阶段 6：补文档回填检查口径
 
 原因：
 
-- 阶段 2 不收完，阶段 3、4 的统一模型会持续被页面层反向污染
-- 阶段 3 不收完，阶段 4 的资源系统会继续语义混乱
-- 阶段 5、6 更适合建立在前四阶段明确之后再统一处理
+- 阶段 `2 ~ 5` 已完成，当前唯一未闭环主线是自动化守卫
+- 关键共享模型测试已初步铺开，但还缺少统一绿集、越界检查和文件体量预警
+- 只有把阶段 6 收完，整体统一化才算真正可持续维护
 
 ---
 

@@ -18,7 +18,7 @@ void main() {
       final first = factory();
       final second = factory();
       final runtimeService = container.read(sourceLoginRuntimeServiceProvider);
-      const browserService = SourceLoginBrowserService();
+      final browserService = SourceLoginBrowserService();
 
       expect(first, isNot(same(second)));
       expect(runtimeService, isNotNull);

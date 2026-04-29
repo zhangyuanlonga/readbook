@@ -40,7 +40,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
 
       isPersistingDraft = true;
       try {
-        await _preferencesService.saveSettings(normalized);
+        await _persistResolvedReaderSettingsLayers(normalized);
         persistedFingerprint = nextFingerprint;
       } catch (_) {
         // Keep in-memory preview even when persistence fails.
@@ -2806,9 +2806,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           buildCompactSectionTitle('背景图'),
                           SizedBox(height: compactScaleValue(10)),
                           ScrollConfiguration(
-                            behavior: ScrollConfiguration.of(
-                              context,
-                            ).copyWith(
+                            behavior: ScrollConfiguration.of(context).copyWith(
                               dragDevices: _ReaderPageState._kScrollDragDevices,
                             ),
                             child: SingleChildScrollView(
@@ -5100,7 +5098,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     });
     _syncContinuousTextFlowAfterSettingsApplied();
     _clearSelectionState();
-    await _preferencesService.saveSettings(appliedResult);
+    await _persistResolvedReaderSettingsLayers(appliedResult);
 
     if (shouldEnableAutoRead && mounted) {
       await _toggleAutoReadSession();
@@ -5323,5 +5321,4 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
       unit: 'px',
     );
   }
-
 }
