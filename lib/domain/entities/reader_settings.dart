@@ -170,6 +170,7 @@ class ReaderSettings {
   static const double maxInfoBarPadding = 24;
   static const double minLayoutMargin = 0;
   static const double maxLayoutMargin = 40;
+  static const double maxInfoFooterHorizontalMargin = 80;
   static const double minPinnedHeaderOffsetX = 0;
   static const double maxPinnedHeaderOffsetX = 1;
   static const double legacyMinPinnedHeaderOffsetX = -80;
@@ -558,11 +559,11 @@ class ReaderSettings {
               .toDouble(),
       infoFooterMarginLeft:
           (infoFooterMarginLeft ?? this.infoFooterMarginLeft)
-              .clamp(minLayoutMargin, maxLayoutMargin)
+              .clamp(minLayoutMargin, maxInfoFooterHorizontalMargin)
               .toDouble(),
       infoFooterMarginRight:
           (infoFooterMarginRight ?? this.infoFooterMarginRight)
-              .clamp(minLayoutMargin, maxLayoutMargin)
+              .clamp(minLayoutMargin, maxInfoFooterHorizontalMargin)
               .toDouble(),
       showChapterHeader: showChapterHeader ?? this.showChapterHeader,
       chapterHeaderHorizontalOffset:
@@ -940,11 +941,11 @@ class ReaderSettings {
               .toDouble(),
       infoFooterMarginLeft:
           (_asDouble(json['infoFooterMarginLeft']) ?? legacyHorizontalPadding)
-              .clamp(minLayoutMargin, maxLayoutMargin)
+              .clamp(minLayoutMargin, maxInfoFooterHorizontalMargin)
               .toDouble(),
       infoFooterMarginRight:
           (_asDouble(json['infoFooterMarginRight']) ?? legacyHorizontalPadding)
-              .clamp(minLayoutMargin, maxLayoutMargin)
+              .clamp(minLayoutMargin, maxInfoFooterHorizontalMargin)
               .toDouble(),
       showChapterHeader:
           _asBool(json['showChapterHeader']) ??

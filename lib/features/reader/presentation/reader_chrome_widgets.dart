@@ -264,10 +264,7 @@ class ReaderInfoBarModel {
           extraOuterPadding,
       innerHorizontalPadding: innerHorizontalPadding,
       verticalPadding: verticalPadding,
-      showDivider:
-          isHeader
-              ? settings.infoHeaderDividerEnabled
-              : settings.infoFooterDividerEnabled,
+      showDivider: isHeader ? settings.infoHeaderDividerEnabled : false,
     );
   }
 

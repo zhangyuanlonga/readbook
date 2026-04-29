@@ -40,18 +40,22 @@ class ReaderLayoutResolver {
     required bool isHeader,
   }) {
     return EdgeInsets.fromLTRB(
-      _clampLayoutMargin(
-        isHeader
-            ? settings.infoHeaderMarginLeft
-            : settings.infoFooterMarginLeft,
+      _clampInfoBarHorizontalMargin(
+        isHeader: isHeader,
+        value:
+            isHeader
+                ? settings.infoHeaderMarginLeft
+                : settings.infoFooterMarginLeft,
       ),
       _clampLayoutMargin(
         isHeader ? settings.infoHeaderMarginTop : settings.infoFooterMarginTop,
       ),
-      _clampLayoutMargin(
-        isHeader
-            ? settings.infoHeaderMarginRight
-            : settings.infoFooterMarginRight,
+      _clampInfoBarHorizontalMargin(
+        isHeader: isHeader,
+        value:
+            isHeader
+                ? settings.infoHeaderMarginRight
+                : settings.infoFooterMarginRight,
       ),
       _clampLayoutMargin(
         isHeader
@@ -149,5 +153,16 @@ class ReaderLayoutResolver {
     return value
         .clamp(ReaderSettings.minLayoutMargin, ReaderSettings.maxLayoutMargin)
         .toDouble();
+  }
+
+  double _clampInfoBarHorizontalMargin({
+    required bool isHeader,
+    required double value,
+  }) {
+    final maxValue =
+        isHeader
+            ? ReaderSettings.maxLayoutMargin
+            : ReaderSettings.maxInfoFooterHorizontalMargin;
+    return value.clamp(ReaderSettings.minLayoutMargin, maxValue).toDouble();
   }
 }

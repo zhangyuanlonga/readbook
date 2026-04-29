@@ -368,6 +368,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   _ScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const _ScrollEdgeAdvanceState();
   double? _swipeDragStartDx;
+  double? _swipeDragStartDy;
   double? _swipeDragCurrentDx;
   double? _swipeDragCurrentDy;
   int? _tapPointerId;
@@ -429,6 +430,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kBackgroundTileHeight = 44;
   static const double _kSwipeTurnDistanceThreshold = 42;
   static const double _kSwipeTurnVelocityThreshold = 120;
+  static const double _kPagedPullRefreshDistanceThreshold = 48;
   static const double _kSystemBackGestureGuardMin = 44;
   static const double _kSystemBackGestureGuardRatio = 0.06;
   static const Duration _kBackNavigationInteractionCooldown = Duration(
@@ -478,6 +480,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kScrollAdvanceOverscrollTrigger = 56;
   static const double _kScrollAdvanceEdgeTolerance = 2;
   static const double _kScrollAdvanceNearEdgeThreshold = 24;
+  static const int _kScrollRefreshCurrentChapterAction = -2;
   static const Set<PointerDeviceKind> _kScrollDragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -828,11 +831,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _settings.infoShowChapter;
 
   bool _showsOuterFooterInfoBarFor(ReaderModeViewportKind viewportKind) {
-    return _showsOuterInfoBarsFor(viewportKind) &&
-        (_settings.infoFooterEnabled ||
-            (!_settings.infoHeaderEnabled &&
-                !_settings.infoFooterEnabled &&
-                _hasReaderInfoItems));
+    return _showsOuterInfoBarsFor(viewportKind) && _settings.infoFooterEnabled;
   }
 
   bool _reservesPinnedHeaderSpaceFor(ReaderModeViewportKind viewportKind) {
@@ -874,7 +873,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_isBootstrapping || _isLoadingContent || _isSwitchSourceLoading) {
       return;
     }
-    await _loadCurrentChapter(initialScrollRatio: null);
+    final initialScrollRatio =
+        _hasVisibleReaderContent ? _currentScrollRatio() : null;
+    await _loadCurrentChapter(initialScrollRatio: initialScrollRatio);
   }
 
   void _resetScrollEdgeAdvanceState() {
@@ -1062,7 +1063,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _hasPagedInfoOverlay() {
-    return _hasReaderInfoItems;
+    return _settings.infoFooterEnabled && _hasReaderInfoItems;
   }
 
   String _formatLayoutMarginValue(double value) =>
@@ -1538,7 +1539,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (notification.direction == ScrollDirection.reverse && nearBottom) {
         _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: 1);
       } else if (notification.direction == ScrollDirection.forward && nearTop) {
-        _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: -1);
+        _updateScrollEdgeAdvanceState(
+          isArmed: true,
+          actionDirection: _kScrollRefreshCurrentChapterAction,
+        );
       } else if (notification.direction == ScrollDirection.forward) {
         _updateScrollEdgeAdvanceState(isArmed: false, actionDirection: 0);
       } else if (notification.direction == ScrollDirection.idle) {
@@ -1563,7 +1567,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (nearBottom && delta >= 0) {
         _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: 1);
       } else if (nearTop && delta <= 0) {
-        _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: -1);
+        _updateScrollEdgeAdvanceState(
+          isArmed: true,
+          actionDirection: _kScrollRefreshCurrentChapterAction,
+        );
       }
     }
 
@@ -1573,7 +1580,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           notification.overscroll > 0 && atBottom
               ? 1
               : notification.overscroll < 0 && atTop
-              ? -1
+              ? _kScrollRefreshCurrentChapterAction
               : 0;
       if (direction != 0) {
         _updateScrollEdgeAdvanceState(
@@ -1610,14 +1617,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       // to next/previous chapter instead of requiring another overscroll.
       if (!shouldAdvance && isDragEnd) {
         if (actionDirection == 0 && endVelocityDy.abs() >= 36) {
-          actionDirection = endVelocityDy < 0 ? 1 : -1;
+          actionDirection =
+              endVelocityDy < 0 ? 1 : _kScrollRefreshCurrentChapterAction;
           shouldAdvance = true;
         } else if (atBottom) {
           shouldAdvance = true;
           actionDirection = 1;
         } else if (atTop) {
           shouldAdvance = true;
-          actionDirection = -1;
+          actionDirection = _kScrollRefreshCurrentChapterAction;
         }
       }
       _resetScrollEdgeAdvanceState();
@@ -1631,6 +1639,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _handleScrollEdgeChapterAction(int direction) async {
     if (direction == 0) {
+      return;
+    }
+    if (direction == _kScrollRefreshCurrentChapterAction) {
+      await _reloadCurrentChapterFromPullToRefresh();
       return;
     }
     if (_shouldUseContinuousTextFlow) {
@@ -2320,6 +2332,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _tapPointerMoved = false;
             if (enableSwipeTurn) {
               _swipeDragStartDx = event.localPosition.dx;
+              _swipeDragStartDy = event.localPosition.dy;
               _swipeDragCurrentDx = event.localPosition.dx;
               _swipeDragCurrentDy = event.localPosition.dy;
             }
@@ -2365,6 +2378,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             final dx =
                 (_swipeDragCurrentDx ?? event.localPosition.dx) -
                 (_swipeDragStartDx ?? event.localPosition.dx);
+            final dy =
+                (_swipeDragCurrentDy ?? event.localPosition.dy) -
+                (_swipeDragStartDy ?? event.localPosition.dy);
             final velocity = elapsedMs <= 0 ? 0.0 : dx / (elapsedMs / 1000.0);
 
             if (enableSwipeTurn &&
@@ -2384,6 +2400,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   primaryVelocity: velocity,
                 );
                 _onSwipePaginationDragEnd(dragDetails, size);
+                _resetPointerTracking();
+                return;
+              }
+              final isPagedPullRefresh =
+                  (_currentViewportKind == ReaderModeViewportKind.textPaged ||
+                      _currentViewportKind ==
+                          ReaderModeViewportKind.imagePaged) &&
+                  dy >= _kPagedPullRefreshDistanceThreshold &&
+                  dy.abs() > dx.abs() * 1.2;
+              if (isPagedPullRefresh) {
+                unawaited(_reloadCurrentChapterFromPullToRefresh());
                 _resetPointerTracking();
                 return;
               }
@@ -2419,6 +2446,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final startDx = _swipeDragStartDx;
     final currentDx = _swipeDragCurrentDx;
     _swipeDragStartDx = null;
+    _swipeDragStartDy = null;
     _swipeDragCurrentDx = null;
     _swipeDragCurrentDy = null;
 
@@ -2481,6 +2509,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _tapPointerDownTime = null;
     _tapPointerMoved = false;
     _swipeDragStartDx = null;
+    _swipeDragStartDy = null;
     _swipeDragCurrentDx = null;
     _swipeDragCurrentDy = null;
   }

@@ -20,7 +20,7 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     );
     final useEdgeToEdgeSheet = MediaQuery.sizeOf(context).width < 840;
     final radius = useEdgeToEdgeSheet ? 24.0 : 28.0;
-    final horizontalInset = useEdgeToEdgeSheet ? 8.0 : sheetHorizontal;
+    final horizontalInset = useEdgeToEdgeSheet ? 0.0 : sheetHorizontal;
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
@@ -45,28 +45,23 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
                   useEdgeToEdgeSheet
                       ? BorderRadius.vertical(top: Radius.circular(radius))
                       : BorderRadius.circular(radius),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: floatingColor,
-                    borderRadius:
-                        useEdgeToEdgeSheet
-                            ? BorderRadius.vertical(
-                              top: Radius.circular(radius),
-                            )
-                            : BorderRadius.circular(radius),
-                    border: Border.all(color: borderColor),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 28,
-                        offset: const Offset(0, 16),
-                      ),
-                    ],
-                  ),
-                  child: child,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: floatingColor,
+                  borderRadius:
+                      useEdgeToEdgeSheet
+                          ? BorderRadius.vertical(top: Radius.circular(radius))
+                          : BorderRadius.circular(radius),
+                  border: Border.all(color: borderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 28,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
                 ),
+                child: child,
               ),
             ),
           ),

@@ -707,7 +707,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     required int total,
     required ReaderSurfaceMetrics layoutMetrics,
   }) {
-    if (layoutMetrics.pagedFooterReserve <= 0) {
+    if (!_settings.infoFooterEnabled || layoutMetrics.pagedFooterReserve <= 0) {
       return const SizedBox.shrink();
     }
     final overlayModel = ReaderPageIndexOverlayModel.fromSettings(
@@ -732,8 +732,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
             .toDouble() *
         3.2;
     const footerInnerVerticalPadding = 3.0;
-    final footerTopPadding =
-        layoutMetrics.footerPadding.top + footerInnerVerticalPadding;
+    final footerTopOffset = layoutMetrics.footerPadding.top;
     final footerBottomPadding =
         layoutMetrics.safeInsets.bottom +
         layoutMetrics.footerPadding.bottom +
@@ -743,50 +742,46 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           overlayModel.horizontalPadding + footerInnerHorizontalPadding,
-          footerTopPadding,
+          0,
           overlayModel.horizontalPadding + footerInnerHorizontalPadding,
           footerBottomPadding,
         ),
-        child: Opacity(
-          opacity: overlayModel.opacity,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (overlayModel.showProgress)
-                ReaderPageIndexBadge(
-                  model: overlayModel.badge,
-                  palette: _chromePalette(colors),
-                ),
-              if (overlayModel.rightLabel.isNotEmpty)
-                Expanded(
-                  child: Text(
-                    overlayModel.rightLabel,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: colors.meta.withValues(alpha: 0.9),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Transform.translate(
+            offset: Offset(0, footerTopOffset),
+            child: Opacity(
+              opacity: overlayModel.opacity,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (overlayModel.showProgress)
+                    ReaderPageIndexBadge(
+                      model: overlayModel.badge,
+                      palette: _chromePalette(colors),
                     ),
-                  ),
-                )
-              else
-                const Spacer(),
-            ],
+                  if (overlayModel.rightLabel.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        overlayModel.rightLabel,
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: colors.meta.withValues(alpha: 0.9),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
-    if (!_settings.infoFooterDividerEnabled) {
-      return footer;
-    }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colors.divider.withValues(alpha: 0.22)),
-        ),
-      ),
-      child: footer,
-    );
+    return footer;
   }
 
   Widget _buildPageIndexOverlay({

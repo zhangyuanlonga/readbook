@@ -201,6 +201,22 @@ void main() {
       },
     );
 
+    test('preserves wide footer horizontal margins after reload', () async {
+      final service = await _createService();
+
+      await service.saveSettings(
+        const ReaderSettings(
+          infoFooterMarginLeft: 72,
+          infoFooterMarginRight: 80,
+        ),
+      );
+
+      final restored = await service.loadSettings();
+
+      expect(restored.infoFooterMarginLeft, 72);
+      expect(restored.infoFooterMarginRight, 80);
+    });
+
     test('saving settings clears legacy storage keys', () async {
       SharedPreferences.setMockInitialValues({
         'reader.settings.bodyMarginMode': 'preset',

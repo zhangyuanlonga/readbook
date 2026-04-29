@@ -440,7 +440,7 @@ class ReaderPreferencesService {
           (prefs.getDouble(_infoFooterMarginLeftKey) ?? legacyHorizontalPadding)
               .clamp(
                 ReaderSettings.minLayoutMargin,
-                ReaderSettings.maxLayoutMargin,
+                ReaderSettings.maxInfoFooterHorizontalMargin,
               )
               .toDouble(),
       infoFooterMarginRight:
@@ -448,7 +448,7 @@ class ReaderPreferencesService {
                   legacyHorizontalPadding)
               .clamp(
                 ReaderSettings.minLayoutMargin,
-                ReaderSettings.maxLayoutMargin,
+                ReaderSettings.maxInfoFooterHorizontalMargin,
               )
               .toDouble(),
       showChapterHeader:
