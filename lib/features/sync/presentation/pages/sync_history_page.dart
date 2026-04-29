@@ -1,21 +1,153 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SyncHistoryPage extends StatelessWidget {
+import '../../domain/sync_conflict.dart';
+import '../../domain/sync_job.dart';
+import '../../domain/sync_scope.dart';
+import '../../providers.dart';
+
+class SyncHistoryPage extends ConsumerWidget {
   const SyncHistoryPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final jobsAsync = ref.watch(syncJobsProvider);
+    final conflictsAsync = ref.watch(syncConflictsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('同步历史')),
-      body: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('阶段 1 只建立了页面骨架。后续阶段会在这里接入同步任务列表、状态、错误和变更摘要。'),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _Section(
+            title: '最近任务',
+            child: jobsAsync.when(
+              data: (jobs) {
+                if (jobs.isEmpty) {
+                  return const Text('当前没有同步任务。');
+                }
+                return Column(
+                  children: [
+                    for (final job in jobs.take(20)) _JobTile(job: job),
+                  ],
+                );
+              },
+              error: (error, _) => Text('加载任务失败：$error'),
+              loading: () => const _LoadingLine('正在加载任务…'),
+            ),
           ),
+          const SizedBox(height: 12),
+          _Section(
+            title: '最近冲突',
+            child: conflictsAsync.when(
+              data: (conflicts) {
+                if (conflicts.isEmpty) {
+                  return const Text('当前没有冲突记录。');
+                }
+                return Column(
+                  children: [
+                    for (final conflict in conflicts.take(20))
+                      _ConflictTile(conflict: conflict),
+                  ],
+                );
+              },
+              error: (error, _) => Text('加载冲突失败：$error'),
+              loading: () => const _LoadingLine('正在加载冲突…'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            child,
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _JobTile extends StatelessWidget {
+  const _JobTile({required this.job});
+
+  final SyncJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(job.profileId),
+      subtitle: Text(
+        '${job.status.name} · ${job.startedAt.toLocal()}'
+        '${job.errorMessage == null ? '' : '\n${job.errorMessage}'}',
+      ),
+      trailing:
+          job.status == SyncJobStatus.success
+              ? const Icon(Icons.check_circle_outline)
+              : job.status == SyncJobStatus.failed
+              ? const Icon(Icons.error_outline)
+              : const Icon(Icons.sync),
+    );
+  }
+}
+
+class _ConflictTile extends StatelessWidget {
+  const _ConflictTile({required this.conflict});
+
+  final SyncConflict conflict;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(conflict.scope.productLabel),
+      subtitle: Text(
+        '${conflict.recordKey}\n${conflict.resolution.name} · ${conflict.createdAt.toLocal()}',
+      ),
+      trailing: const Icon(Icons.compare_arrows_outlined),
+    );
+  }
+}
+
+class _LoadingLine extends StatelessWidget {
+  const _LoadingLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
     );
   }
 }

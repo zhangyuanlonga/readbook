@@ -16,6 +16,10 @@ class WebDavSyncRemoteDriver implements SyncRemoteDriver {
     Dio? dio,
     AppLogger? logger,
   }) : _endpointUri = _normalizeEndpoint(endpointUrl),
+       _endpointPathSegments = _normalizeEndpoint(endpointUrl).pathSegments
+           .map((item) => item.trim())
+           .where((item) => item.isNotEmpty)
+           .toList(growable: false),
        _basePathSegments = _normalizeSegments(basePath),
        _username = username.trim(),
        _password = password.trim(),
@@ -23,6 +27,7 @@ class WebDavSyncRemoteDriver implements SyncRemoteDriver {
        _logger = logger ?? AppLogger.instance;
 
   final Uri _endpointUri;
+  final List<String> _endpointPathSegments;
   final List<String> _basePathSegments;
   final String _username;
   final String _password;
@@ -206,6 +211,7 @@ class WebDavSyncRemoteDriver implements SyncRemoteDriver {
 
   Uri _buildScopedUri(String relativePath, {required bool directory}) {
     return _buildAbsoluteUri(<String>[
+      ..._endpointPathSegments,
       ..._basePathSegments,
       ..._normalizeSegments(relativePath),
     ], directory: directory);

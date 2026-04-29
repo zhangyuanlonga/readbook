@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -10,6 +13,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/managed_asset.dart';
 import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../../domain/entities/reading_progress.dart';
@@ -103,7 +107,9 @@ class SyncStage4Service {
     SyncScope.scriptSources,
     SyncScope.readingBookStatuses,
     SyncScope.bookMetadataOverrides,
+    SyncScope.bookMetadataAssets,
     SyncScope.advancedThemePresets,
+    SyncScope.advancedThemeAssets,
     SyncScope.readingHistory,
     SyncScope.readingStats,
     SyncScope.bookshelfCollection,
@@ -128,7 +134,7 @@ class SyncStage4Service {
         .where((scope) => profile.enabledScopes.contains(scope))
         .toList(growable: false);
     if (enabledScopes.isEmpty) {
-      throw const FormatException('当前配置未启用任何阶段 4 scope。');
+      throw const FormatException('当前配置未启用任何已实现的同步项。');
     }
 
     final runningJob = SyncJob(
@@ -181,8 +187,12 @@ class SyncStage4Service {
             );
           case SyncScope.bookMetadataOverrides:
             await _syncBookMetadataOverrides(profile: profile, driver: driver);
+          case SyncScope.bookMetadataAssets:
+            await _syncBookMetadataAssets(profile: profile, driver: driver);
           case SyncScope.advancedThemePresets:
             await _syncAdvancedThemePresets(profile: profile, driver: driver);
+          case SyncScope.advancedThemeAssets:
+            await _syncAdvancedThemeAssets(profile: profile, driver: driver);
           case SyncScope.readingHistory:
             await _syncReadingHistory(
               profile: profile,
@@ -218,8 +228,7 @@ class SyncStage4Service {
       return SyncRunResult(
         job: completed,
         succeeded: true,
-        message:
-            '阶段 4 同步已完成：${enabledScopes.map((item) => item.name).join(', ')}',
+        message: '同步已完成：${enabledScopes.map((item) => item.name).join(', ')}',
       );
     } catch (error) {
       final failed = runningJob.copyWith(
@@ -238,7 +247,7 @@ class SyncStage4Service {
       return SyncRunResult(
         job: failed,
         succeeded: false,
-        message: '阶段 4 同步失败：$error',
+        message: '同步失败：$error',
       );
     }
   }
@@ -494,6 +503,50 @@ class SyncStage4Service {
       previousRemoteRevision: remoteStat?.revision,
       payload: envelope,
       previousState: state,
+    );
+  }
+
+  Future<void> _syncBookMetadataAssets({
+    required SyncProfile profile,
+    required SyncRemoteDriver driver,
+  }) async {
+    final localAssets = await _loadLocalBookMetadataAssets();
+    await _syncScope<_SyncAssetItem>(
+      profile: profile,
+      scope: SyncScope.bookMetadataAssets,
+      driver: driver,
+      localItems: localAssets,
+      keyOf: (item) => item.relativePath,
+      updatedAtOf: (item) => item.updatedAt,
+      toJson: (item) => item.toJson(),
+      fromJson: (json) => _SyncAssetItem.fromJson(json),
+      applyMerged: (merged) async {
+        for (final item in merged) {
+          await _writeAssetItem(item);
+        }
+      },
+    );
+  }
+
+  Future<void> _syncAdvancedThemeAssets({
+    required SyncProfile profile,
+    required SyncRemoteDriver driver,
+  }) async {
+    final localAssets = await _loadLocalAdvancedThemeAssets();
+    await _syncScope<_SyncAssetItem>(
+      profile: profile,
+      scope: SyncScope.advancedThemeAssets,
+      driver: driver,
+      localItems: localAssets,
+      keyOf: (item) => item.relativePath,
+      updatedAtOf: (item) => item.updatedAt,
+      toJson: (item) => item.toJson(),
+      fromJson: (json) => _SyncAssetItem.fromJson(json),
+      applyMerged: (merged) async {
+        for (final item in merged) {
+          await _writeAssetItem(item);
+        }
+      },
     );
   }
 
@@ -957,6 +1010,123 @@ class SyncStage4Service {
     );
   }
 
+  Future<List<_SyncAssetItem>> _loadLocalBookMetadataAssets() async {
+    final overrides = await _bookMetadataOverrideRepository.getAll();
+    final results = <_SyncAssetItem>[];
+    for (final item in overrides) {
+      if (item.isLocalScope) {
+        continue;
+      }
+      final relativePath = item.coverPath?.trim() ?? '';
+      if (relativePath.isEmpty) {
+        continue;
+      }
+      final asset = await _readAssetItem(
+        relativePath: relativePath,
+        root: ManagedAssetRoot.support,
+        type: ManagedAssetType.customBookCover,
+        scope: ManagedAssetScope.bookshelfBook,
+      );
+      if (asset != null) {
+        results.add(asset);
+      }
+    }
+    return List<_SyncAssetItem>.unmodifiable(results);
+  }
+
+  Future<List<_SyncAssetItem>> _loadLocalAdvancedThemeAssets() async {
+    final themes = await _advancedThemeService.loadThemes();
+    final results = <_SyncAssetItem>[];
+    final seen = <String>{};
+    for (final theme in themes) {
+      for (final ref in <ManagedAssetRef?>[
+        theme.lightConfig.wallpaperAsset,
+        theme.lightConfig.readerWallpaperAsset,
+        theme.darkConfig.wallpaperAsset,
+        theme.darkConfig.readerWallpaperAsset,
+      ]) {
+        if (ref == null) {
+          continue;
+        }
+        final relativePath = ref.relativePath.trim();
+        if (relativePath.isEmpty || seen.contains(relativePath)) {
+          continue;
+        }
+        final asset = await _readAssetItem(
+          relativePath: relativePath,
+          root: ref.root,
+          type: ref.type,
+          scope: ref.scope,
+          collectionId: ref.collectionId,
+          assetId: ref.assetId,
+          displayName: ref.displayName,
+        );
+        if (asset != null) {
+          results.add(asset);
+          seen.add(relativePath);
+        }
+      }
+    }
+    return List<_SyncAssetItem>.unmodifiable(results);
+  }
+
+  Future<_SyncAssetItem?> _readAssetItem({
+    required String relativePath,
+    required ManagedAssetRoot root,
+    required ManagedAssetType type,
+    required ManagedAssetScope scope,
+    String? collectionId,
+    String? assetId,
+    String? displayName,
+  }) async {
+    final absolutePath = await _resolveAbsolutePath(
+      root: root,
+      relativePath: relativePath,
+    );
+    final file = File(absolutePath);
+    if (!await file.exists()) {
+      return null;
+    }
+    final bytes = await file.readAsBytes();
+    final stat = await file.stat();
+    return _SyncAssetItem(
+      relativePath: relativePath,
+      root: root,
+      type: type,
+      scope: scope,
+      collectionId: collectionId,
+      assetId: assetId,
+      displayName: displayName,
+      fileName: p.basename(relativePath),
+      bytesBase64: base64Encode(bytes),
+      updatedAt: stat.modified.toUtc(),
+    );
+  }
+
+  Future<void> _writeAssetItem(_SyncAssetItem item) async {
+    final absolutePath = await _resolveAbsolutePath(
+      root: item.root,
+      relativePath: item.relativePath,
+    );
+    final file = File(absolutePath);
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+    await file.writeAsBytes(base64Decode(item.bytesBase64), flush: true);
+  }
+
+  Future<String> _resolveAbsolutePath({
+    required ManagedAssetRoot root,
+    required String relativePath,
+  }) async {
+    final baseDirectory = switch (root) {
+      ManagedAssetRoot.documents => await getApplicationDocumentsDirectory(),
+      ManagedAssetRoot.support => await getApplicationSupportDirectory(),
+      ManagedAssetRoot.bundled => await getApplicationSupportDirectory(),
+    };
+    return p.normalize(p.join(baseDirectory.path, relativePath));
+  }
+
   bool _looksLikeLocalScopedBook({
     required String bookId,
     required String sourceId,
@@ -1351,6 +1521,73 @@ class SyncStage4Service {
       result.add(normalized);
     }
     return List<String>.unmodifiable(result);
+  }
+}
+
+class _SyncAssetItem {
+  const _SyncAssetItem({
+    required this.relativePath,
+    required this.root,
+    required this.type,
+    required this.scope,
+    required this.fileName,
+    required this.bytesBase64,
+    required this.updatedAt,
+    this.collectionId,
+    this.assetId,
+    this.displayName,
+  });
+
+  final String relativePath;
+  final ManagedAssetRoot root;
+  final ManagedAssetType type;
+  final ManagedAssetScope scope;
+  final String fileName;
+  final String bytesBase64;
+  final DateTime updatedAt;
+  final String? collectionId;
+  final String? assetId;
+  final String? displayName;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'relativePath': relativePath,
+      'root': root.name,
+      'type': type.name,
+      'scope': scope.name,
+      'fileName': fileName,
+      'bytesBase64': bytesBase64,
+      'updatedAt': updatedAt.toIso8601String(),
+      'collectionId': collectionId,
+      'assetId': assetId,
+      'displayName': displayName,
+    };
+  }
+
+  factory _SyncAssetItem.fromJson(Map<String, dynamic> json) {
+    return _SyncAssetItem(
+      relativePath: (json['relativePath'] ?? '').toString().trim(),
+      root: ManagedAssetRoot.values.firstWhere(
+        (item) => item.name == (json['root'] ?? '').toString().trim(),
+        orElse: () => ManagedAssetRoot.support,
+      ),
+      type: ManagedAssetType.values.firstWhere(
+        (item) => item.name == (json['type'] ?? '').toString().trim(),
+        orElse: () => ManagedAssetType.customBookCover,
+      ),
+      scope: ManagedAssetScope.values.firstWhere(
+        (item) => item.name == (json['scope'] ?? '').toString().trim(),
+        orElse: () => ManagedAssetScope.bookshelfBook,
+      ),
+      fileName: (json['fileName'] ?? '').toString().trim(),
+      bytesBase64: (json['bytesBase64'] ?? '').toString().trim(),
+      updatedAt:
+          DateTime.tryParse((json['updatedAt'] ?? '').toString().trim()) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      collectionId: _SyncHistorySessionItem._jsonString(json['collectionId']),
+      assetId: _SyncHistorySessionItem._jsonString(json['assetId']),
+      displayName: _SyncHistorySessionItem._jsonString(json['displayName']),
+    );
   }
 }
 

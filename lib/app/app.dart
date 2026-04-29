@@ -16,6 +16,7 @@ import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/source/application/external_import_catalog.dart';
 import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
+import '../features/sync/providers.dart';
 import 'lifecycle/app_lifecycle_coordinator.dart';
 import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
@@ -191,6 +192,9 @@ class _SystemUiOverlayWrapperState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _lifecycleCoordinator.handleAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(syncAutoSyncServiceProvider).handleAppResumed());
+    }
   }
 
   @override

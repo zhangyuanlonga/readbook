@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../application/sync_scope_catalog_service.dart';
 import '../../domain/sync_scope.dart';
 import '../../domain/sync_job.dart';
 import '../../domain/sync_profile.dart';
 import '../../providers.dart';
+
+enum _SyncPanel { account, content, history }
 
 class SyncSettingsPage extends ConsumerStatefulWidget {
   const SyncSettingsPage({super.key});
@@ -16,7 +19,8 @@ class SyncSettingsPage extends ConsumerStatefulWidget {
   ConsumerState<SyncSettingsPage> createState() => _SyncSettingsPageState();
 }
 
-class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
+class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
+    with SingleTickerProviderStateMixin {
   late final TextEditingController _nameController;
   late final TextEditingController _endpointController;
   late final TextEditingController _basePathController;
@@ -26,6 +30,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
   bool _saving = false;
   bool _testingDraft = false;
   String? _runningProfileId;
+  late Set<SyncScope> _selectedScopes;
+  bool _autoSyncEnabled = false;
+  _SyncPanel _activePanel = _SyncPanel.account;
+  late Set<String> _expandedGroupTitles;
+  late final AnimationController _syncButtonController;
 
   @override
   void initState() {
@@ -35,6 +44,14 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     _basePathController = TextEditingController(text: 'selune-sync/v1');
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
+    _selectedScopes = <SyncScope>{
+      ...ref.read(syncScopeCatalogServiceProvider).firstBatchScopes,
+    };
+    _expandedGroupTitles = <String>{'核心阅读资产', '会员外观'};
+    _syncButtonController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    )..repeat();
   }
 
   @override
@@ -44,6 +61,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     _basePathController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _syncButtonController.dispose();
     super.dispose();
   }
 
@@ -53,154 +71,307 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
     final groups = catalog.buildGroups();
     final profilesAsync = ref.watch(syncProfilesProvider);
     final jobsAsync = ref.watch(syncJobsProvider);
+    final selectableGroups = groups
+        .where((group) => group.title != '明确排除')
+        .toList(growable: false);
+    final savedProfiles = profilesAsync.valueOrNull ?? const <SyncProfile>[];
+    final primaryProfile = savedProfiles.isEmpty ? null : savedProfiles.first;
 
     return Scaffold(
       appBar: AppBar(title: const Text('同步')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          _SectionCard(
-            title: 'WebDAV 配置',
-            child: Column(
-              children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: '配置名称'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _endpointController,
-                  decoration: const InputDecoration(
-                    labelText: '地址',
-                    hintText: 'https://dav.example.com/webdav',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _basePathController,
-                  decoration: const InputDecoration(
-                    labelText: '根目录',
-                    hintText: 'selune-sync/v1',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(labelText: '用户名'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: '密码'),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _saving ? null : _handleSaveProfile,
-                        child: Text(_saving ? '保存中…' : '保存本地配置'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.tonal(
-                        onPressed: _testingDraft ? null : _handleTestDraft,
-                        child: Text(_testingDraft ? '测试中…' : '测试草稿连接'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: '已保存配置',
-            child: profilesAsync.when(
-              data: (profiles) {
-                if (profiles.isEmpty) {
-                  return const Text('当前还没有已保存的同步配置。');
-                }
-                return Column(
-                  children: [
-                    for (final profile in profiles)
-                      _SavedProfileTile(
-                        profile: profile,
-                        onTest: () => _handleTestSavedProfile(profile.id),
-                        onSync: () => _handleRunStage4(profile.id),
-                        isRunning: _runningProfileId == profile.id,
-                      ),
-                  ],
-                );
-              },
-              error: (error, _) => Text('加载配置失败：$error'),
-              loading: () => const _LoadingLine('正在加载配置…'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: '阶段状态',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                _StatusLine('阶段 0：scope / dataset 命名已冻结'),
-                _StatusLine('阶段 1：sync feature 骨架已落地'),
-                _StatusLine('阶段 4：首批轻量 scope 已接入手动同步'),
-                _StatusLine('阶段 5 / 6：配置、历史、书架组织已接入手动同步'),
-                _StatusLine('后续阶段仍按执行计划推进'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: '首批 Scope',
-            child: Column(
-              children: [
-                for (final scope in catalog.firstBatchScopes)
-                  _ScopeTile(scope: scope),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: '最近任务',
-            child: jobsAsync.when(
-              data: (jobs) {
-                if (jobs.isEmpty) {
-                  return const Text('当前还没有同步任务记录。');
-                }
-                return Column(
-                  children: [
-                    for (final job in jobs.take(5)) _JobTile(job: job),
-                  ],
-                );
-              },
-              error: (error, _) => Text('加载任务失败：$error'),
-              loading: () => const _LoadingLine('正在加载任务…'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          for (final group in groups) ...[
-            _SectionCard(
-              title: group.title,
-              child: Column(
-                children: [
-                  for (final scope in group.scopes) _ScopeTile(scope: scope),
-                ],
-              ),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '同步中心',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
+            SegmentedButton<_SyncPanel>(
+              segments: const [
+                ButtonSegment<_SyncPanel>(
+                  value: _SyncPanel.account,
+                  icon: Icon(Icons.cloud_outlined),
+                  label: Text('连接 / 账号'),
+                ),
+                ButtonSegment<_SyncPanel>(
+                  value: _SyncPanel.content,
+                  icon: Icon(Icons.tune_rounded),
+                  label: Text('同步内容'),
+                ),
+                ButtonSegment<_SyncPanel>(
+                  value: _SyncPanel.history,
+                  icon: Icon(Icons.history_rounded),
+                  label: Text('同步历史'),
+                ),
+              ],
+              selected: <_SyncPanel>{_activePanel},
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) {
+                  return;
+                }
+                setState(() {
+                  _activePanel = selection.first;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+            _SyncHeroButton(
+              controller: _syncButtonController,
+              profile: primaryProfile,
+              isRunning: _runningProfileId != null,
+              onPressed:
+                  primaryProfile == null
+                      ? null
+                      : () => _handleRunStage4(primaryProfile.id),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: switch (_activePanel) {
+                  _SyncPanel.account => _buildAccountPanel(
+                    context,
+                    profilesAsync: profilesAsync,
+                  ),
+                  _SyncPanel.content => _buildContentPanel(
+                    context,
+                    catalog: catalog,
+                    selectableGroups: selectableGroups,
+                  ),
+                  _SyncPanel.history => _buildHistoryPanel(
+                    context,
+                    jobsAsync: jobsAsync,
+                  ),
+                },
+              ),
+            ),
           ],
-          FilledButton.tonal(
-            onPressed: () {
-              context.push('/sync/history');
-            },
-            child: const Text('查看同步历史占位页'),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildAccountPanel(
+    BuildContext context, {
+    required AsyncValue<List<SyncProfile>> profilesAsync,
+  }) {
+    return ListView(
+      key: const ValueKey<String>('account'),
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        _SectionCard(
+          title: 'WebDAV 连接',
+          child: Column(
+            children: [
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: '配置名称'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _endpointController,
+                decoration: const InputDecoration(
+                  labelText: '地址',
+                  hintText: 'https://dav.example.com/webdav',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _basePathController,
+                decoration: const InputDecoration(
+                  labelText: '根目录',
+                  hintText: 'selune-sync/v1',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _usernameController,
+                decoration: const InputDecoration(labelText: '用户名'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: '密码'),
+              ),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('开启自动同步'),
+                subtitle: const Text('当前最小实现会在应用恢复前台时尝试自动同步。'),
+                value: _autoSyncEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _autoSyncEnabled = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _saving ? null : _handleSaveProfile,
+                      child: Text(_saving ? '保存中…' : '保存本地配置'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.tonal(
+                      onPressed: _testingDraft ? null : _handleTestDraft,
+                      child: Text(_testingDraft ? '测试中…' : '测试草稿连接'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: '已保存配置',
+          child: profilesAsync.when(
+            data: (profiles) {
+              if (profiles.isEmpty) {
+                return const Text('当前还没有已保存的同步配置。');
+              }
+              return Column(
+                children: [
+                  for (final profile in profiles)
+                    _SavedProfileTile(
+                      profile: profile,
+                      onTest: () => _handleTestSavedProfile(profile.id),
+                      onSync: () => _handleRunStage4(profile.id),
+                      isRunning: _runningProfileId == profile.id,
+                    ),
+                ],
+              );
+            },
+            error: (error, _) => Text('加载配置失败：$error'),
+            loading: () => const _LoadingLine('正在加载配置…'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContentPanel(
+    BuildContext context, {
+    required SyncScopeCatalogService catalog,
+    required List<SyncScopeCatalogGroup> selectableGroups,
+  }) {
+    final selectedCount = _selectedScopes.length;
+    return ListView(
+      key: const ValueKey<String>('content'),
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        _SectionCard(
+          title: '同步内容',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '按功能分组选择同步内容。每组都可以折叠，展开后再勾选具体项。',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _InfoChip(
+                    icon: Icons.checklist_rounded,
+                    label: '已选 $selectedCount 项',
+                  ),
+                  _InfoChip(
+                    icon: Icons.layers_outlined,
+                    label: '${selectableGroups.length} 个分组',
+                  ),
+                  _InfoChip(
+                    icon: Icons.bolt_rounded,
+                    label: '${catalog.firstBatchScopes.length} 项已实现',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final group in selectableGroups) ...[
+          _ScopeGroupCard(
+            title: group.title,
+            scopes: group.scopes,
+            expanded: _expandedGroupTitles.contains(group.title),
+            selectedScopes: _selectedScopes,
+            onToggleExpanded: () => _toggleGroupExpanded(group.title),
+            onToggleScope: _toggleScope,
+            description: _groupDescription(group.title),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  String _groupDescription(String title) {
+    return switch (title) {
+      '核心阅读资产' => '书架、阅读记录、书签、书源和资料编辑等核心内容。',
+      '会员外观' => '高级主题配置和资源类内容。',
+      '应用与阅读偏好' => '阅读器设置、导航、Mine 页偏好和历史记录等。',
+      '资源扩展' => '图集、字体和外观资源库。',
+      '延后评估' => '当前默认不优先同步，但保留后续评估空间。',
+      _ => '展开后查看具体同步项。',
+    };
+  }
+
+  void _toggleGroupExpanded(String title) {
+    setState(() {
+      final next = <String>{..._expandedGroupTitles};
+      if (next.contains(title)) {
+        next.remove(title);
+      } else {
+        next.add(title);
+      }
+      _expandedGroupTitles = next;
+    });
+  }
+
+  Widget _buildHistoryPanel(
+    BuildContext context, {
+    required AsyncValue<List<SyncJob>> jobsAsync,
+  }) {
+    return ListView(
+      key: const ValueKey<String>('history'),
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        _SectionCard(
+          title: '最近任务',
+          child: jobsAsync.when(
+            data: (jobs) {
+              if (jobs.isEmpty) {
+                return const Text('当前还没有同步任务记录。');
+              }
+              return Column(
+                children: [for (final job in jobs.take(8)) _JobTile(job: job)],
+              );
+            },
+            error: (error, _) => Text('加载任务失败：$error'),
+            loading: () => const _LoadingLine('正在加载任务…'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.tonal(
+          onPressed: () {
+            context.push('/sync/history');
+          },
+          child: const Text('查看完整同步历史'),
+        ),
+      ],
     );
   }
 
@@ -209,7 +380,6 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
       _saving = true;
     });
     try {
-      final catalog = ref.read(syncScopeCatalogServiceProvider);
       final profile = await ref
           .read(syncProfileServiceProvider)
           .saveProfile(
@@ -218,7 +388,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
             basePath: _basePathController.text,
             username: _usernameController.text,
             password: _passwordController.text,
-            enabledScopes: catalog.firstBatchScopes,
+            enabledScopes: _selectedScopes.toList(growable: false),
+            isAutoSyncEnabled: _autoSyncEnabled,
           );
       if (!mounted) {
         return;
@@ -316,6 +487,248 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage> {
       }
     }
   }
+
+  void _toggleScope(SyncScope scope) {
+    setState(() {
+      final next = <SyncScope>{..._selectedScopes};
+      if (next.contains(scope)) {
+        next.remove(scope);
+        for (final item in SyncScope.values) {
+          if (item.dependencies.contains(scope)) {
+            next.remove(item);
+          }
+        }
+      } else {
+        next.add(scope);
+        next.addAll(scope.dependencies);
+        final companion = scope.suggestedCompanionScope;
+        if (companion != null) {
+          next.add(companion);
+        }
+      }
+      _selectedScopes = next;
+    });
+  }
+}
+
+class _SyncHeroButton extends StatelessWidget {
+  const _SyncHeroButton({
+    required this.controller,
+    required this.profile,
+    required this.isRunning,
+    required this.onPressed,
+  });
+
+  final AnimationController controller;
+  final SyncProfile? profile;
+  final bool isRunning;
+  final Future<void> Function()? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasProfile = profile != null;
+    final buttonLabel = switch ((hasProfile, isRunning)) {
+      (false, _) => '先保存一个同步配置',
+      (true, true) => '同步进行中',
+      (true, false) => '立即同步',
+    };
+    final subLabel =
+        hasProfile
+            ? '${profile!.name} · ${profile!.endpointUrl}'
+            : '保存 WebDAV 配置后，这里会变成主同步按钮';
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        final t = controller.value;
+        final glowScale = 0.94 + (0.08 * (0.5 - (t - 0.5).abs()) * 2);
+        final sheenOffset = (t * 1.8) - 0.9;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Transform.scale(
+              scale: isRunning ? 1.0 : glowScale,
+              child: Container(
+                height: 112,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.primary.withValues(alpha: 0.16),
+                      blurRadius: 36,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(28),
+                onTap:
+                    onPressed == null
+                        ? null
+                        : () {
+                          unawaited(onPressed!());
+                        },
+                child: Ink(
+                  height: 112,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: LinearGradient(
+                      colors:
+                          hasProfile
+                              ? <Color>[
+                                colorScheme.primary,
+                                Color.lerp(
+                                      colorScheme.primary,
+                                      colorScheme.tertiary,
+                                      0.45,
+                                    ) ??
+                                    colorScheme.primary,
+                                colorScheme.tertiary,
+                              ]
+                              : <Color>[
+                                colorScheme.surfaceContainerHighest,
+                                colorScheme.surfaceContainer,
+                              ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(
+                      color:
+                          hasProfile
+                              ? Colors.white.withValues(alpha: 0.18)
+                              : colorScheme.outlineVariant.withValues(
+                                alpha: 0.45,
+                              ),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left:
+                              (MediaQuery.sizeOf(context).width * sheenOffset) -
+                              90,
+                          top: -20,
+                          bottom: -20,
+                          child: IgnorePointer(
+                            child: Transform.rotate(
+                              angle: -0.22,
+                              child: Container(
+                                width: 92,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.white.withValues(alpha: 0.0),
+                                      Colors.white.withValues(alpha: 0.18),
+                                      Colors.white.withValues(alpha: 0.0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(
+                                    alpha: hasProfile ? 0.16 : 0.65,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child:
+                                      isRunning
+                                          ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.4,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                          : Icon(
+                                            hasProfile
+                                                ? Icons.sync_rounded
+                                                : Icons.settings_rounded,
+                                            size: 28,
+                                            color:
+                                                hasProfile
+                                                    ? Colors.white
+                                                    : colorScheme.onSurface,
+                                          ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      buttonLabel,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge?.copyWith(
+                                        color:
+                                            hasProfile
+                                                ? Colors.white
+                                                : colorScheme.onSurface,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      subLabel,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium?.copyWith(
+                                        color:
+                                            hasProfile
+                                                ? Colors.white.withValues(
+                                                  alpha: 0.88,
+                                                )
+                                                : colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color:
+                                    hasProfile
+                                        ? Colors.white
+                                        : colorScheme.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _SectionCard extends StatelessWidget {
@@ -355,27 +768,30 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _StatusLine extends StatelessWidget {
-  const _StatusLine(this.text);
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
 
-  final String text;
+  final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 18,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text)),
-        ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(label),
+          ],
+        ),
       ),
     );
   }
@@ -445,6 +861,107 @@ class _SavedProfileTile extends StatelessWidget {
   }
 }
 
+class _ScopeGroupCard extends StatelessWidget {
+  const _ScopeGroupCard({
+    required this.title,
+    required this.scopes,
+    required this.expanded,
+    required this.selectedScopes,
+    required this.onToggleExpanded,
+    required this.onToggleScope,
+    required this.description,
+  });
+
+  final String title;
+  final List<SyncScope> scopes;
+  final bool expanded;
+  final Set<SyncScope> selectedScopes;
+  final VoidCallback onToggleExpanded;
+  final void Function(SyncScope scope) onToggleScope;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedCount = scopes.where(selectedScopes.contains).length;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onToggleExpanded,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$description\n已选 $selectedCount / ${scopes.length}',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState:
+                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                children: [
+                  const Divider(height: 1),
+                  const SizedBox(height: 8),
+                  for (final scope in scopes)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: selectedScopes.contains(scope),
+                      title: Text(scope.productLabel),
+                      subtitle: Text(
+                        scope.dependencies.isEmpty
+                            ? 'dataset: ${scope.datasetFileName}'
+                            : '依赖: ${scope.dependencies.map((item) => item.name).join(', ')}',
+                      ),
+                      onChanged: (_) => onToggleScope(scope),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _JobTile extends StatelessWidget {
   const _JobTile({required this.job});
 
@@ -462,30 +979,6 @@ class _JobTile extends StatelessWidget {
               : job.status == SyncJobStatus.failed
               ? const Icon(Icons.error_outline)
               : const Icon(Icons.sync),
-    );
-  }
-}
-
-class _ScopeTile extends StatelessWidget {
-  const _ScopeTile({required this.scope});
-
-  final SyncScope scope;
-
-  @override
-  Widget build(BuildContext context) {
-    final dependencies = scope.dependencies;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(scope.productLabel),
-      subtitle: Text(
-        dependencies.isEmpty
-            ? 'dataset: ${scope.datasetFileName}'
-            : 'dataset: ${scope.datasetFileName} · 依赖: ${dependencies.map((item) => item.name).join(', ')}',
-      ),
-      trailing:
-          scope.isFirstBatch
-              ? const Icon(Icons.bolt_rounded)
-              : const Icon(Icons.chevron_right_rounded),
     );
   }
 }

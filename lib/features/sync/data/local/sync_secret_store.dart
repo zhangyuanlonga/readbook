@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
 
 abstract class SyncSecretStore {
   Future<void> writeSecret({required String secretRef, required String secret});
@@ -20,7 +21,11 @@ class FlutterSecureSyncSecretStore implements SyncSecretStore {
     if (normalized.isEmpty) {
       return;
     }
-    await _storage.delete(key: normalized);
+    try {
+      await _storage.delete(key: normalized);
+    } on MissingPluginException catch (_) {
+      throw StateError('当前运行中的应用尚未加载安全存储插件，请完整重启应用后再试。');
+    }
   }
 
   @override
@@ -29,7 +34,12 @@ class FlutterSecureSyncSecretStore implements SyncSecretStore {
     if (normalized.isEmpty) {
       return null;
     }
-    final value = await _storage.read(key: normalized);
+    String? value;
+    try {
+      value = await _storage.read(key: normalized);
+    } on MissingPluginException catch (_) {
+      throw StateError('当前运行中的应用尚未加载安全存储插件，请完整重启应用后再试。');
+    }
     final trimmed = value?.trim() ?? '';
     return trimmed.isEmpty ? null : trimmed;
   }
@@ -48,6 +58,10 @@ class FlutterSecureSyncSecretStore implements SyncSecretStore {
       await _storage.delete(key: normalizedRef);
       return;
     }
-    await _storage.write(key: normalizedRef, value: normalizedSecret);
+    try {
+      await _storage.write(key: normalizedRef, value: normalizedSecret);
+    } on MissingPluginException catch (_) {
+      throw StateError('当前运行中的应用尚未加载安全存储插件，请完整重启应用后再试。');
+    }
   }
 }

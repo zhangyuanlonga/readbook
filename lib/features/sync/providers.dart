@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/composition/app_providers.dart' as app_providers;
 import '../../core/device/device_identity_service.dart';
 import '../../core/logging/app_logger.dart';
+import 'application/sync_auto_sync_service.dart';
 import 'application/sync_connection_service.dart';
 import 'application/sync_profile_service.dart';
 import 'application/sync_remote_bootstrap_service.dart';
@@ -10,6 +11,7 @@ import 'application/sync_scope_catalog_service.dart';
 import 'application/sync_stage4_service.dart';
 import 'data/local/sync_local_store.dart';
 import 'data/local/sync_secret_store.dart';
+import 'domain/sync_conflict.dart';
 import 'domain/sync_job.dart';
 import 'domain/sync_profile.dart';
 import '../bookshelf/application/bookshelf_service.dart';
@@ -97,4 +99,15 @@ final syncProfilesProvider = StreamProvider<List<SyncProfile>>((ref) {
 
 final syncJobsProvider = StreamProvider<List<SyncJob>>((ref) {
   return ref.watch(syncConnectionServiceProvider).watchJobs();
+});
+
+final syncConflictsProvider = StreamProvider<List<SyncConflict>>((ref) {
+  return ref.watch(syncLocalStoreProvider).watchConflicts();
+});
+
+final syncAutoSyncServiceProvider = Provider<SyncAutoSyncService>((ref) {
+  return SyncAutoSyncService(
+    profileService: ref.watch(syncProfileServiceProvider),
+    syncService: ref.watch(syncStage4ServiceProvider),
+  );
 });
