@@ -78,103 +78,6 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     return _readerSettingsPresenter.layoutMarginValueLabel(value);
   }
 
-  Widget _buildSettingLineImpl({
-    required BuildContext context,
-    required String label,
-    required Widget child,
-    double labelWidth = 42,
-    String? helpText,
-    bool stackOnCompact = false,
-  }) {
-    final useStackLayout =
-        stackOnCompact && AppLayout.isBelowPhoneLargeWidth(context);
-    final labelWidget = _buildSettingLineLabel(
-      context: context,
-      label: label,
-      helpText: helpText,
-      maxLines: useStackLayout ? 2 : 1,
-    );
-
-    if (useStackLayout) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [labelWidget, const SizedBox(height: 8), child],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: labelWidth,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: labelWidget,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingLineLabelImpl({
-    required BuildContext context,
-    required String label,
-    String? helpText,
-    required int maxLines,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            maxLines: maxLines,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        if (helpText != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 4, top: 1),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                showDialog<void>(
-                  context: context,
-                  builder:
-                      (context) => AlertDialog(
-                        title: Text(label),
-                        content: Text(helpText),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('知道了'),
-                          ),
-                        ],
-                      ),
-                );
-              },
-              child: Icon(
-                Icons.help_outline_rounded,
-                size: 16,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
   List<_ReaderBackgroundColorOption> _readerBackgroundColorOptionsImpl() {
     return <_ReaderBackgroundColorOption>[
       _createReaderBackgroundColorOption(
@@ -230,20 +133,6 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
         backgroundTone: ReaderBackgroundTone.pureBlack,
       ),
     ];
-  }
-
-  Widget _buildBackgroundColorChoiceChipImpl({
-    required ReaderSettings draft,
-    required _ReaderBackgroundColorOption option,
-    required ValueChanged<ReaderSettings> onChanged,
-  }) {
-    return ChoiceChip(
-      label: Text(option.label),
-      selected: _isReaderBackgroundColorOptionSelected(draft, option),
-      onSelected: (_) {
-        onChanged(_applyReaderBackgroundColorOption(draft, option));
-      },
-    );
   }
 
   Widget _buildThemeColorDotImpl({
@@ -344,9 +233,11 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
                         label,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           fontSize:
-                              (Theme.of(context).textTheme.labelSmall?.fontSize ??
-                                      11) *
-                                  scale,
+                              (Theme.of(
+                                    context,
+                                  ).textTheme.labelSmall?.fontSize ??
+                                  11) *
+                              scale,
                         ),
                       ),
                     ],
@@ -356,7 +247,8 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
                   label,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     fontSize:
-                        (Theme.of(context).textTheme.labelSmall?.fontSize ?? 11) *
+                        (Theme.of(context).textTheme.labelSmall?.fontSize ??
+                            11) *
                         scale,
                   ),
                 ))
@@ -382,8 +274,8 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
                         color: Colors.white,
                         fontSize:
                             (Theme.of(context).textTheme.labelSmall?.fontSize ??
-                                    11) *
-                                scale,
+                                11) *
+                            scale,
                       ),
                     ),
                   ),

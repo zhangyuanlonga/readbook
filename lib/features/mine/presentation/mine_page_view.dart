@@ -1017,5 +1017,4 @@ extension on _MinePageState {
       activeTheme,
     );
   }
-
 }

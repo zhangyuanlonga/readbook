@@ -20,7 +20,6 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
@@ -63,7 +62,6 @@ import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
 import '../application/paged_transition_controller.dart';
 import '../application/reader_auto_read_coordinator.dart';
-import '../application/reader_animation_policy.dart';
 import '../application/reader_cache_feedback_resolver.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_content_mode_resolver.dart';
@@ -199,8 +197,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderTypographyMetricsResolver();
   final ReaderAutoReadCoordinator _autoReadCoordinator =
       const ReaderAutoReadCoordinator();
-  final ReaderAnimationPolicyResolver _animationPolicyResolver =
-      const ReaderAnimationPolicyResolver();
   final ReaderCacheFeedbackResolver _readerCacheFeedbackResolver =
       const ReaderCacheFeedbackResolver();
   final ReaderContentLoadingController _contentLoadingController =
@@ -1841,25 +1837,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ReaderPageAnimationStyle.none;
   }
 
-  ReaderAnimationPolicy _resolveAnimationPolicy({
-    ReaderContentMode? modeOverride,
-    ReaderPageTurnMode? pageTurnModeOverride,
-  }) {
-    final effectiveMode = modeOverride ?? _currentContentMode;
-    final effectiveSettings =
-        pageTurnModeOverride == null
-            ? _settings
-            : _settings.copyWith(pageTurnMode: pageTurnModeOverride);
-    final resolvedMode = _resolveReaderModeFor(
-      effectiveSettings,
-      contentMode: effectiveMode,
-    );
-    return _animationPolicyResolver.resolve(
-      mode: resolvedMode,
-      hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
-    );
-  }
-
   bool _currentChapterHasInlineImageParagraphs() {
     return _paragraphs.any(_isInlineImageParagraph);
   }
@@ -3319,10 +3296,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return '$_bookTitle · 第 $chapter / $total 章';
-  }
-
-  String _bodyMarginDisplayValue(ReaderSettings settings) {
-    return '上${settings.bodyMarginTop.round()} 下${settings.bodyMarginBottom.round()} 左${settings.bodyMarginLeft.round()} 右${settings.bodyMarginRight.round()}';
   }
 
   String _toUserReadableError(AppException error) {
