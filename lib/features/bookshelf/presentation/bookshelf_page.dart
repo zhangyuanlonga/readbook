@@ -279,6 +279,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final AnnouncementReadStateService _announcementReadStateService;
   late final SourceRuntimeTaskConflictService _taskConflictService;
   StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
+  StreamSubscription<BookshelfCollectionChange>? _collectionChangeSub;
 
   bool _isLoading = true;
   List<BookshelfBook> _books = const <BookshelfBook>[];
@@ -418,6 +419,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _taxonomyChangeSub = BookshelfService.watchTaxonomyChanges.listen(
       _handleTaxonomyChange,
     );
+    _collectionChangeSub = BookshelfService.watchCollectionChanges.listen(
+      _handleCollectionChange,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -457,6 +461,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _routeInformationProvider = null;
     unawaited(_externalImportCoordinator.dispose());
     _taxonomyChangeSub?.cancel();
+    _collectionChangeSub?.cancel();
     _bookshelfSearchFocusNode.removeListener(
       _handleBookshelfSearchFocusChanged,
     );
@@ -813,6 +818,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
 
     unawaited(_loadBookshelfMetadata(_books, ticket: _loadTicket));
+  }
+
+  void _handleCollectionChange(BookshelfCollectionChange change) {
+    if (!mounted) {
+      return;
+    }
+    unawaited(_loadBookshelf(force: true));
   }
 
   Future<void> _maybeAutoRefreshOnTabActivated() async {

@@ -79,34 +79,62 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
   AppAdvancedThemeModeConfig? modeConfig,
 ) {
   final colors = modeConfig?.colors;
+  final backgroundColor =
+      colors?.backgroundColorValue != null
+          ? Color(colors!.backgroundColorValue!)
+          : colorScheme.surface;
+  final surfaceColor =
+      colors?.surfaceColorValue != null
+          ? Color(colors!.surfaceColorValue!)
+          : colorScheme.surfaceContainerLow;
+  final searchFieldBackgroundColor =
+      colors?.searchFieldBackgroundColorValue != null
+          ? Color(colors!.searchFieldBackgroundColorValue!)
+          : colorScheme.surfaceContainerHighest;
+  final elevatedSurfaceColor =
+      colors?.elevatedSurfaceColorValue != null
+          ? Color(colors!.elevatedSurfaceColorValue!)
+          : colorScheme.surfaceContainerHigh;
+  final cardColor =
+      colors?.cardColorValue != null
+          ? Color(colors!.cardColorValue!)
+          : colorScheme.surface;
+  final textPrimaryColor =
+      colors?.textPrimaryColorValue != null
+          ? Color(colors!.textPrimaryColorValue!)
+          : _resolveReadableOnColor(<Color>[
+            backgroundColor,
+            surfaceColor,
+            searchFieldBackgroundColor,
+            cardColor,
+          ]);
+  final textSecondaryColor =
+      colors?.textSecondaryColorValue != null
+          ? Color(colors!.textSecondaryColorValue!)
+          : _resolveMutedTextColor(
+            foreground: textPrimaryColor,
+            background: surfaceColor,
+          );
+  final primaryColor =
+      colors?.primaryColorValue != null
+          ? Color(colors!.primaryColorValue!)
+          : colorScheme.primary;
+  final cardTextColor =
+      colors?.cardTextColorValue != null
+          ? Color(colors!.cardTextColorValue!)
+          : _resolveReadableOnColor(
+            <Color>[cardColor],
+            fallbackLight: textPrimaryColor,
+            fallbackDark: textPrimaryColor,
+          );
 
   return ResolvedAdvancedThemePalette(
-    backgroundColor:
-        colors?.backgroundColorValue != null
-            ? Color(colors!.backgroundColorValue!)
-            : colorScheme.surface,
-    surfaceColor:
-        colors?.surfaceColorValue != null
-            ? Color(colors!.surfaceColorValue!)
-            : colorScheme.surfaceContainerLow,
-    searchFieldBackgroundColor:
-        colors?.searchFieldBackgroundColorValue != null
-            ? Color(colors!.searchFieldBackgroundColorValue!)
-            : colorScheme.surfaceContainerHighest,
-    elevatedSurfaceColor:
-        colors?.elevatedSurfaceColorValue != null
-            ? Color(colors!.elevatedSurfaceColorValue!)
-            : colorScheme.surfaceContainerHigh,
-    cardColor:
-        colors?.cardColorValue != null
-            ? Color(colors!.cardColorValue!)
-            : colorScheme.surface,
-    cardTextColor:
-        colors?.cardTextColorValue != null
-            ? Color(colors!.cardTextColorValue!)
-            : (colors?.textPrimaryColorValue != null
-                ? Color(colors!.textPrimaryColorValue!)
-                : colorScheme.onSurface),
+    backgroundColor: backgroundColor,
+    surfaceColor: surfaceColor,
+    searchFieldBackgroundColor: searchFieldBackgroundColor,
+    elevatedSurfaceColor: elevatedSurfaceColor,
+    cardColor: cardColor,
+    cardTextColor: cardTextColor,
     cardBorderColor:
         colors?.cardBorderColorValue != null
             ? Color(colors!.cardBorderColorValue!)
@@ -122,18 +150,9 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
               colorScheme.onSurface.withValues(alpha: 0.04),
               colorScheme.surface,
             ),
-    textPrimaryColor:
-        colors?.textPrimaryColorValue != null
-            ? Color(colors!.textPrimaryColorValue!)
-            : colorScheme.onSurface,
-    textSecondaryColor:
-        colors?.textSecondaryColorValue != null
-            ? Color(colors!.textSecondaryColorValue!)
-            : colorScheme.onSurfaceVariant,
-    primaryColor:
-        colors?.primaryColorValue != null
-            ? Color(colors!.primaryColorValue!)
-            : colorScheme.primary,
+    textPrimaryColor: textPrimaryColor,
+    textSecondaryColor: textSecondaryColor,
+    primaryColor: primaryColor,
     primaryContainerColor:
         colors?.primaryContainerColorValue != null
             ? Color(colors!.primaryContainerColorValue!)
@@ -145,7 +164,7 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
     buttonTextColor:
         colors?.buttonTextColorValue != null
             ? Color(colors!.buttonTextColorValue!)
-            : colorScheme.onPrimary,
+            : _resolveReadableOnColor(<Color>[primaryColor]),
     shadowColor:
         colors?.shadowColorValue != null
             ? Color(colors!.shadowColorValue!)
@@ -208,4 +227,53 @@ AppAdvancedThemeModeConfig? _modeConfigForActiveTheme(
     _ when colorScheme.brightness == Brightness.dark => activeTheme.darkConfig,
     _ => activeTheme.lightConfig,
   };
+}
+
+Color _resolveReadableOnColor(
+  List<Color> backgrounds, {
+  Color fallbackLight = Colors.white,
+  Color fallbackDark = const Color(0xFF111111),
+}) {
+  final candidates = <Color>[fallbackLight, fallbackDark];
+  Color? bestColor;
+  var bestScore = -1.0;
+  for (final candidate in candidates) {
+    final score = backgrounds.fold<double>(double.infinity, (
+      current,
+      background,
+    ) {
+      final next = _contrastRatio(candidate, background);
+      return current < next ? current : next;
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      bestColor = candidate;
+    }
+  }
+  return bestColor ?? fallbackDark;
+}
+
+Color _resolveMutedTextColor({
+  required Color foreground,
+  required Color background,
+}) {
+  final alpha =
+      ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+          ? 0.72
+          : 0.62;
+  return Color.alphaBlend(foreground.withValues(alpha: alpha), background);
+}
+
+double _contrastRatio(Color foreground, Color background) {
+  final foregroundLuminance = foreground.computeLuminance();
+  final backgroundLuminance = background.computeLuminance();
+  final lighter =
+      foregroundLuminance > backgroundLuminance
+          ? foregroundLuminance
+          : backgroundLuminance;
+  final darker =
+      foregroundLuminance > backgroundLuminance
+          ? backgroundLuminance
+          : foregroundLuminance;
+  return (lighter + 0.05) / (darker + 0.05);
 }

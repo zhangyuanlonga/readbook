@@ -8,6 +8,8 @@ import '../../../domain/entities/bookshelf_book.dart';
 
 enum BookshelfTaxonomyKind { tag, category }
 
+enum BookshelfCollectionAction { upsert, replace, remove }
+
 enum BookshelfTaxonomyAction {
   create,
   rename,
@@ -28,6 +30,20 @@ class BookshelfTaxonomyChange {
   final BookshelfTaxonomyAction action;
   final String? previousName;
   final String? currentName;
+}
+
+class BookshelfCollectionChange {
+  const BookshelfCollectionChange({
+    required this.action,
+    required this.sourceId,
+    required this.detailUrl,
+    this.bookId,
+  });
+
+  final BookshelfCollectionAction action;
+  final String sourceId;
+  final String detailUrl;
+  final String? bookId;
 }
 
 class BookshelfService {
@@ -104,9 +120,14 @@ class BookshelfService {
   static final StreamController<BookshelfTaxonomyChange>
   _taxonomyChangeController =
       StreamController<BookshelfTaxonomyChange>.broadcast();
+  static final StreamController<BookshelfCollectionChange>
+  _collectionChangeController =
+      StreamController<BookshelfCollectionChange>.broadcast();
 
   static Stream<BookshelfTaxonomyChange> get watchTaxonomyChanges =>
       _taxonomyChangeController.stream;
+  static Stream<BookshelfCollectionChange> get watchCollectionChanges =>
+      _collectionChangeController.stream;
 
   Future<List<BookshelfBook>> getAll() async {
     final prefs = await _preferencesFuture;
@@ -147,6 +168,14 @@ class BookshelfService {
     all.insert(0, value);
 
     await _save(all);
+    _emitCollectionChange(
+      BookshelfCollectionChange(
+        action: BookshelfCollectionAction.upsert,
+        sourceId: value.sourceId,
+        detailUrl: value.detailUrl,
+        bookId: value.bookId,
+      ),
+    );
   }
 
   Future<void> replace({
@@ -199,6 +228,14 @@ class BookshelfService {
       ),
     );
     await _save(all);
+    _emitCollectionChange(
+      BookshelfCollectionChange(
+        action: BookshelfCollectionAction.replace,
+        sourceId: nextBook.sourceId,
+        detailUrl: nextBook.detailUrl,
+        bookId: nextBook.bookId,
+      ),
+    );
 
     final tagMap = Map<String, List<String>>.from(await getTagMap());
     final previousTags =
@@ -237,6 +274,13 @@ class BookshelfService {
         )
         .toList(growable: false);
     await _save(all);
+    _emitCollectionChange(
+      BookshelfCollectionChange(
+        action: BookshelfCollectionAction.remove,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      ),
+    );
     await removeBookTags(sourceId: sourceId, detailUrl: detailUrl);
     await removeBookCategory(sourceId: sourceId, detailUrl: detailUrl);
   }
@@ -928,6 +972,13 @@ class BookshelfService {
       return;
     }
     _taxonomyChangeController.add(change);
+  }
+
+  void _emitCollectionChange(BookshelfCollectionChange change) {
+    if (_collectionChangeController.isClosed) {
+      return;
+    }
+    _collectionChangeController.add(change);
   }
 
   static String _bookKey({

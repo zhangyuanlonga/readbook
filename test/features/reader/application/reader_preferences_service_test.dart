@@ -186,6 +186,21 @@ void main() {
       },
     );
 
+    test(
+      'preserves negative chapter header vertical offset after reload',
+      () async {
+        final service = await _createService();
+
+        await service.saveSettings(
+          const ReaderSettings(chapterHeaderVerticalOffset: -18),
+        );
+
+        final restored = await service.loadSettings();
+
+        expect(restored.chapterHeaderVerticalOffset, -18);
+      },
+    );
+
     test('saving settings clears legacy storage keys', () async {
       SharedPreferences.setMockInitialValues({
         'reader.settings.bodyMarginMode': 'preset',

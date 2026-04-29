@@ -11,12 +11,11 @@ class ReaderPreferencesService {
   ReaderPreferencesService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _assetStore = assetStore ?? ManagedAssetStore();
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
@@ -282,8 +281,7 @@ class ReaderPreferencesService {
       horizontalPadding: ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       paragraphSpacing: prefs.getDouble(_paragraphSpacingKey) ?? 14,
       paragraphIndent: prefs.getDouble(_paragraphIndentKey) ?? 0,
-      textFullJustifyEnabled:
-          prefs.getBool(_textFullJustifyEnabledKey) ?? true,
+      textFullJustifyEnabled: prefs.getBool(_textFullJustifyEnabledKey) ?? true,
       textBottomJustifyEnabled:
           prefs.getBool(_textBottomJustifyEnabledKey) ?? true,
       letterSpacing:
@@ -295,8 +293,7 @@ class ReaderPreferencesService {
               )
               .toDouble(),
       brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
-      followSystemBrightness:
-          prefs.getBool(_followSystemBrightnessKey) ?? true,
+      followSystemBrightness: prefs.getBool(_followSystemBrightnessKey) ?? true,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
       volumeKeyPageEnabled: prefs.getBool(_volumeKeyPageEnabledKey) ?? true,
@@ -474,7 +471,7 @@ class ReaderPreferencesService {
                   (prefs.getDouble(_chapterHeaderTopSpacingKey) ??
                       (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8)))
               .clamp(
-                ReaderSettings.minChapterHeaderSpacing,
+                ReaderSettings.minChapterHeaderVerticalOffset,
                 ReaderSettings.maxChapterHeaderSpacing,
               )
               .toDouble(),

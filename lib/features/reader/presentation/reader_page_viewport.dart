@@ -105,6 +105,10 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             ReaderModeViewportKind.textScroll => _buildReaderList(colors),
           },
       onRetry: () => unawaited(_loadCurrentChapter(initialScrollRatio: null)),
+      onPullToRefresh:
+          _supportsChapterPullToRefresh
+              ? () => _reloadCurrentChapterFromPullToRefresh()
+              : null,
       onCopyDiagnostics: _copyLocalReaderDiagnostics,
       onSwitchSource: () => unawaited(_showSwitchSourceSheet()),
       isLocalContent: _isLocalContent,
@@ -191,9 +195,6 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   }
 
   Widget _buildPagedTextViewport(_ReaderThemeColors colors) {
-    final paragraphs =
-        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
-
     return _viewportBuilder.buildPagedViewport(
       builder: (context, constraints, palette) {
         final layoutMetrics = _resolvePagedLayoutMetrics(context, constraints);
@@ -230,26 +231,14 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
                 child: Padding(
                   padding: layoutMetrics.effectivePagePadding,
                   child: ReaderBodyRegion(
-                    model: ReaderBodyRegionModel.stateCard(
-                      stateCard: ReaderBodyRegionStateCard(
-                        title: '正在分页',
-                        message:
-                            paragraphs.length <= 1
-                                ? '正在为你生成阅读页面...'
-                                : '正在生成 ${paragraphs.length} 段正文的分页...',
-                        icon: const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ),
+                    model: const ReaderBodyRegionModel.content(),
                     palette: ReaderBodyRegionPalette(
                       textColor: colors.text,
                       metaColor: colors.meta,
                       overlayColor: colors.overlay,
                       dividerColor: colors.divider,
                     ),
+                    child: const ReaderViewportLoadingPlaceholder(),
                   ),
                 ),
               ),

@@ -77,6 +77,34 @@ void main() {
       expect(all, isEmpty);
     });
 
+    test('emits collection changes for add and remove operations', () async {
+      final service = BookshelfService();
+      final book = BookshelfBook(
+        bookId: 'book_1',
+        sourceId: 'src_1',
+        title: '凡人修仙传',
+        detailUrl: 'https://example.com/detail/1',
+        addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+      );
+
+      final addFuture = BookshelfService.watchCollectionChanges.first;
+      await service.upsert(book);
+      final addChange = await addFuture;
+      expect(addChange.action, BookshelfCollectionAction.upsert);
+      expect(addChange.sourceId, 'src_1');
+      expect(addChange.detailUrl, 'https://example.com/detail/1');
+
+      final removeFuture = BookshelfService.watchCollectionChanges.first;
+      await service.remove(
+        sourceId: 'src_1',
+        detailUrl: 'https://example.com/detail/1',
+      );
+      final removeChange = await removeFuture;
+      expect(removeChange.action, BookshelfCollectionAction.remove);
+      expect(removeChange.sourceId, 'src_1');
+      expect(removeChange.detailUrl, 'https://example.com/detail/1');
+    });
+
     test('persists bookshelf sort mode', () async {
       final service = BookshelfService();
 

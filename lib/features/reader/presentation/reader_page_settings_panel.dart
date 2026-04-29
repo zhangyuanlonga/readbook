@@ -9,11 +9,12 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     required double sheetHorizontal,
     required double maxWidth,
     required double heightFactor,
+    Color? backgroundColor,
     required Widget child,
   }) {
-    final floatingColor = readerModalTheme.colorScheme.surface.withValues(
-      alpha: 0.9,
-    );
+    final floatingColor =
+        backgroundColor ??
+        readerModalTheme.colorScheme.surface.withValues(alpha: 0.9);
     final borderColor = readerModalTheme.colorScheme.outlineVariant.withValues(
       alpha: 0.35,
     );

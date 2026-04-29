@@ -81,8 +81,8 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      showDragHandle: false,
+      useSafeArea: false,
       backgroundColor: Colors.transparent,
       clipBehavior: Clip.antiAlias,
       shape: const RoundedRectangleBorder(
@@ -95,20 +95,6 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
             builder: (context, setModalState) {
               final sheetSurfaceColor = readerModalTheme.colorScheme.surface
                   .withValues(alpha: isSliderInteracting ? 0.42 : 1.0);
-
-              Widget wrapSheetSurface(Widget child) {
-                return AnimatedTheme(
-                  duration: const Duration(milliseconds: 160),
-                  data: readerModalTheme.copyWith(
-                    bottomSheetTheme: readerModalTheme.bottomSheetTheme
-                        .copyWith(
-                          backgroundColor: sheetSurfaceColor,
-                          modalBackgroundColor: sheetSurfaceColor,
-                        ),
-                  ),
-                  child: Material(color: sheetSurfaceColor, child: child),
-                );
-              }
 
               final activeBackgroundBase64 =
                   draft.backgroundImageBase64?.trim();
@@ -2998,6 +2984,81 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           });
                         },
                       ),
+                      const SizedBox(height: 10),
+                      buildCompactSectionTitle('页脚外距'),
+                      const SizedBox(height: 8),
+                      buildTypographySliderRow(
+                        label: '顶部',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions:
+                            ReaderSettings.maxLayoutMargin.toInt() -
+                            ReaderSettings.minLayoutMargin.toInt(),
+                        value: draft.infoFooterMarginTop,
+                        step: 1,
+                        valueLabel:
+                            draft.infoFooterMarginTop.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(infoFooterMarginTop: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '底部',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions:
+                            ReaderSettings.maxLayoutMargin.toInt() -
+                            ReaderSettings.minLayoutMargin.toInt(),
+                        value: draft.infoFooterMarginBottom,
+                        step: 1,
+                        valueLabel:
+                            draft.infoFooterMarginBottom.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              infoFooterMarginBottom: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '左侧',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions:
+                            ReaderSettings.maxLayoutMargin.toInt() -
+                            ReaderSettings.minLayoutMargin.toInt(),
+                        value: draft.infoFooterMarginLeft,
+                        step: 1,
+                        valueLabel:
+                            draft.infoFooterMarginLeft.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(infoFooterMarginLeft: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '右侧',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions:
+                            ReaderSettings.maxLayoutMargin.toInt() -
+                            ReaderSettings.minLayoutMargin.toInt(),
+                        value: draft.infoFooterMarginRight,
+                        step: 1,
+                        valueLabel:
+                            draft.infoFooterMarginRight.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              infoFooterMarginRight: value,
+                            );
+                          });
+                        },
+                      ),
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton.icon(
@@ -3008,6 +3069,14 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                 infoFooterDividerEnabled:
                                     defaults.infoFooterDividerEnabled,
                                 infoFooterPadding: defaults.infoFooterPadding,
+                                infoFooterMarginTop:
+                                    defaults.infoFooterMarginTop,
+                                infoFooterMarginBottom:
+                                    defaults.infoFooterMarginBottom,
+                                infoFooterMarginLeft:
+                                    defaults.infoFooterMarginLeft,
+                                infoFooterMarginRight:
+                                    defaults.infoFooterMarginRight,
                               );
                             });
                           },
@@ -3017,7 +3086,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '页脚内距只控制左右向内收缩，拉高后页脚信息会从两边明显往中间聚拢。',
+                        '页脚内距控制内容在信息条内部的收缩；外距控制整条页脚相对阅读区域的上下左右位置。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           height: 1.35,
@@ -3203,88 +3272,84 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                   maxWidth: 760,
                 );
 
-                return AnimatedPadding(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.only(bottom: keyboardInset),
-                  child: SafeArea(
-                    child: FractionallySizedBox(
-                      heightFactor: _adaptiveReaderSheetHeightFactor(
-                        context,
-                        compact: 0.84,
-                        regular: 0.76,
-                        large: 0.7,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: textSheetMaxWidth,
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              sheetHorizontal,
-                              8,
-                              sheetHorizontal,
-                              14,
-                            ),
-                            child: Column(
-                              children: [
-                                SizedBox(
-                                  height: 40,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      if (activeSettingsGroupKey != null)
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: IconButton(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            onPressed: () {
-                                              setModalState(() {
-                                                activeSettingsGroupKey = null;
-                                              });
-                                            },
-                                            icon: const Icon(
-                                              Icons.arrow_back_rounded,
-                                            ),
-                                          ),
-                                        ),
-                                      Center(
-                                        child: Text(
-                                          sheetTitle,
-                                          textAlign: TextAlign.center,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Expanded(
-                                  child: ListView(
-                                    padding: EdgeInsets.only(
-                                      bottom: safeBottom + 12,
-                                    ),
-                                    children: selectedCards,
-                                  ),
-                                ),
-                              ],
-                            ),
+                return _buildFloatingReaderSettingsSheet(
+                  context: context,
+                  readerModalTheme: readerModalTheme,
+                  keyboardInset: keyboardInset,
+                  safeBottom: safeBottom,
+                  sheetHorizontal: sheetHorizontal,
+                  maxWidth: textSheetMaxWidth,
+                  heightFactor: _adaptiveReaderSheetHeightFactor(
+                    context,
+                    compact: 0.84,
+                    regular: 0.76,
+                    large: 0.7,
+                  ),
+                  backgroundColor: sheetSurfaceColor,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      8,
+                      16,
+                      max(14.0, safeBottom + 6),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.outlineVariant.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                         ),
-                      ),
+                        SizedBox(
+                          height: 40,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              if (activeSettingsGroupKey != null)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () {
+                                      setModalState(() {
+                                        activeSettingsGroupKey = null;
+                                      });
+                                    },
+                                    icon: const Icon(Icons.arrow_back_rounded),
+                                  ),
+                                ),
+                              Center(
+                                child: Text(
+                                  sheetTitle,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            children: selectedCards,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
               }
 
               previewDraftSettings();
-              return wrapSheetSurface(buildTextReaderSettingsSheet());
+              return buildTextReaderSettingsSheet();
             },
           ),
         );

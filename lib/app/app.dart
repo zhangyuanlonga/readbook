@@ -125,7 +125,7 @@ class _SystemUiOverlayWrapper extends ConsumerStatefulWidget {
 class _SystemUiOverlayWrapperState
     extends ConsumerState<_SystemUiOverlayWrapper>
     with WidgetsBindingObserver {
-  Brightness? _lastBrightness;
+  Color? _lastOverlayBaseColor;
   bool _isStartupReady = false;
   late final AppLifecycleCoordinator _lifecycleCoordinator;
   late final AppAnnouncementCoordinator _announcementCoordinator;
@@ -237,14 +237,16 @@ class _SystemUiOverlayWrapperState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final brightness = Theme.of(context).brightness;
-    if (_lastBrightness == brightness) {
+    final theme = Theme.of(context);
+    final backgroundColor =
+        theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor;
+    if (_lastOverlayBaseColor?.toARGB32() == backgroundColor.toARGB32()) {
       return;
     }
-    _lastBrightness = brightness;
+    _lastOverlayBaseColor = backgroundColor;
 
     final base =
-        brightness == Brightness.dark
+        ThemeData.estimateBrightnessForColor(backgroundColor) == Brightness.dark
             ? SystemUiOverlayStyle.light
             : SystemUiOverlayStyle.dark;
 

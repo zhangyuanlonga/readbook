@@ -49,6 +49,7 @@ class ReaderViewportBuilder {
     required ReaderViewportTapAwareBuilder tapAwareBuilder,
     required ReaderViewportBuilderCallback contentBuilder,
     required VoidCallback onRetry,
+    Future<void> Function()? onPullToRefresh,
     required VoidCallback onCopyDiagnostics,
     required VoidCallback onSwitchSource,
     required bool isLocalContent,
@@ -73,81 +74,90 @@ class ReaderViewportBuilder {
     }
 
     if (state.showHiddenLoading) {
-      return ReaderBodyRegion(
-        model: const ReaderBodyRegionModel.hidden(),
-        palette: palette,
+      return tapAwareBuilder(
+        child: ReaderBodyRegion(
+          model: const ReaderBodyRegionModel.content(),
+          palette: palette,
+          child: const ReaderViewportLoadingPlaceholder(),
+        ),
       );
     }
 
     if (state.errorText != null) {
-      return tapAwareBuilder(
-        child: ReaderBodyRegion(
-          model: ReaderBodyRegionModel.stateCard(
-            stateCard: ReaderBodyRegionStateCard(
-              title: '加载失败',
-              message: state.errorText!,
-              icon: Icon(
-                Icons.warning_amber_rounded,
-                color: palette.metaColor,
-                size: 20,
-              ),
-              action: Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  FilledButton.tonal(
-                    onPressed: state.isSwitchSourceLoading ? null : onRetry,
-                    child: const Text('重试'),
+      final child = ReaderBodyRegion(
+        model: ReaderBodyRegionModel.stateCard(
+          stateCard: ReaderBodyRegionStateCard(
+            title: '加载失败',
+            message: state.errorText!,
+            icon: Icon(
+              Icons.warning_amber_rounded,
+              color: palette.metaColor,
+              size: 20,
+            ),
+            action: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                FilledButton.tonal(
+                  onPressed: state.isSwitchSourceLoading ? null : onRetry,
+                  child: const Text('重试'),
+                ),
+                if (isLocalContent)
+                  OutlinedButton.icon(
+                    onPressed: onCopyDiagnostics,
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text('复制诊断信息'),
                   ),
-                  if (isLocalContent)
-                    OutlinedButton.icon(
-                      onPressed: onCopyDiagnostics,
-                      icon: const Icon(Icons.copy_rounded, size: 16),
-                      label: const Text('复制诊断信息'),
+                if (state.canSwitchSource)
+                  OutlinedButton.icon(
+                    onPressed:
+                        state.isSwitchSourceLoading ? null : onSwitchSource,
+                    icon:
+                        state.isSwitchSourceLoading
+                            ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.swap_horiz_rounded),
+                    label: Text(
+                      state.isSwitchSourceLoading ? '换源中...' : '切换书源',
                     ),
-                  if (state.canSwitchSource)
-                    OutlinedButton.icon(
-                      onPressed:
-                          state.isSwitchSourceLoading ? null : onSwitchSource,
-                      icon:
-                          state.isSwitchSourceLoading
-                              ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Icon(Icons.swap_horiz_rounded),
-                      label: Text(
-                        state.isSwitchSourceLoading ? '换源中...' : '切换书源',
-                      ),
-                    ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
-          palette: palette,
+        ),
+        palette: palette,
+      );
+      return tapAwareBuilder(
+        child: _wrapRefreshableState(
+          child: child,
+          onPullToRefresh: onPullToRefresh,
         ),
       );
     }
 
     if (!state.hasRenderableContent) {
-      return tapAwareBuilder(
-        child: ReaderBodyRegion(
-          model: ReaderBodyRegionModel.stateCard(
-            stateCard: ReaderBodyRegionStateCard(
-              title: '暂无正文',
-              message: '当前章节没有可展示的内容。',
-              icon: Icon(
-                Icons.article_outlined,
-                color: palette.metaColor,
-                size: 20,
-              ),
+      final child = ReaderBodyRegion(
+        model: ReaderBodyRegionModel.stateCard(
+          stateCard: ReaderBodyRegionStateCard(
+            title: '暂无正文',
+            message: '当前章节没有可展示的内容。',
+            icon: Icon(
+              Icons.article_outlined,
+              color: palette.metaColor,
+              size: 20,
             ),
           ),
-          palette: palette,
+        ),
+        palette: palette,
+      );
+      return tapAwareBuilder(
+        child: _wrapRefreshableState(
+          child: child,
+          onPullToRefresh: onPullToRefresh,
         ),
       );
     }
@@ -157,6 +167,22 @@ class ReaderViewportBuilder {
         model: const ReaderBodyRegionModel.content(),
         palette: palette,
         child: contentBuilder(),
+      ),
+    );
+  }
+
+  Widget _wrapRefreshableState({
+    required Widget child,
+    required Future<void> Function()? onPullToRefresh,
+  }) {
+    if (onPullToRefresh == null) {
+      return child;
+    }
+    return RefreshIndicator(
+      onRefresh: onPullToRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [SizedBox(height: 520, child: child)],
       ),
     );
   }
@@ -268,6 +294,70 @@ class ReaderViewportBuilder {
       document: document,
       surfaceMetrics: surfaceMetrics,
       palette: palette,
+    );
+  }
+}
+
+class ReaderViewportLoadingPlaceholder extends StatelessWidget {
+  const ReaderViewportLoadingPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final divider = colorScheme.outlineVariant.withValues(alpha: 0.28);
+    final fill = colorScheme.onSurface.withValues(alpha: 0.06);
+    final accent = colorScheme.primary.withValues(alpha: 0.55);
+
+    Widget line(double widthFactor, {double height = 12}) {
+      return FractionallySizedBox(
+        widthFactor: widthFactor,
+        alignment: Alignment.centerLeft,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      );
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+          child: Column(
+            key: const Key('reader_viewport_loading_placeholder'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 72,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 20),
+              line(0.48, height: 18),
+              const SizedBox(height: 18),
+              line(1),
+              const SizedBox(height: 10),
+              line(0.94),
+              const SizedBox(height: 10),
+              line(0.98),
+              const SizedBox(height: 10),
+              line(0.86),
+              const SizedBox(height: 10),
+              line(0.66),
+              const SizedBox(height: 18),
+              Divider(height: 1, color: divider),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

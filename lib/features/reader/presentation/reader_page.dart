@@ -866,6 +866,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _showBlockingLoadingCard && _needsBlockingLoadingUi;
   }
 
+  bool get _supportsChapterPullToRefresh {
+    return _errorText != null || !_hasVisibleReaderContent;
+  }
+
+  Future<void> _reloadCurrentChapterFromPullToRefresh() async {
+    if (_isBootstrapping || _isLoadingContent || _isSwitchSourceLoading) {
+      return;
+    }
+    await _loadCurrentChapter(initialScrollRatio: null);
+  }
+
   void _resetScrollEdgeAdvanceState() {
     _scrollEdgeAdvanceState = const _ScrollEdgeAdvanceState();
   }
@@ -1017,6 +1028,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double sheetHorizontal,
     required double maxWidth,
     required double heightFactor,
+    Color? backgroundColor,
     required Widget child,
   }) => _buildFloatingReaderSettingsSheetImpl(
     context: context,
@@ -1026,6 +1038,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     sheetHorizontal: sheetHorizontal,
     maxWidth: maxWidth,
     heightFactor: heightFactor,
+    backgroundColor: backgroundColor,
     child: child,
   );
 

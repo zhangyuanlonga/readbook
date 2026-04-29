@@ -70,5 +70,65 @@ void main() {
       expect(find.text('复制诊断信息'), findsOneWidget);
       expect(find.text('切换书源'), findsOneWidget);
     });
+
+    testWidgets('wraps error state with refresh indicator when enabled', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: builder.buildBody(
+              state: const ReaderViewportBodyState(
+                showBlockingLoading: false,
+                showHiddenLoading: false,
+                hasRenderableContent: true,
+                errorText: '加载失败',
+              ),
+              palette: palette,
+              tapAwareBuilder: ({required child}) => child,
+              contentBuilder: () => const SizedBox.shrink(),
+              onRetry: () {},
+              onPullToRefresh: () async {},
+              onCopyDiagnostics: () {},
+              onSwitchSource: () {},
+              isLocalContent: false,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(RefreshIndicator), findsOneWidget);
+    });
+
+    testWidgets('renders loading placeholder instead of hidden blank state', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: builder.buildBody(
+              state: const ReaderViewportBodyState(
+                showBlockingLoading: false,
+                showHiddenLoading: true,
+                hasRenderableContent: false,
+              ),
+              palette: palette,
+              tapAwareBuilder: ({required child}) => child,
+              contentBuilder: () => const SizedBox.shrink(),
+              onRetry: () {},
+              onCopyDiagnostics: () {},
+              onSwitchSource: () {},
+              isLocalContent: false,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const Key('reader_viewport_loading_placeholder')),
+        findsOneWidget,
+      );
+      expect(find.text('暂无正文'), findsNothing);
+    });
   });
 }

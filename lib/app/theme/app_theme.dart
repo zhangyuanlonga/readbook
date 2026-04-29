@@ -22,7 +22,6 @@ class AppTheme {
               palette: advancedPalette,
               backdrop: advancedBackdrop,
             );
-    final overlayStyle = _overlayStyleFor(effectiveColorScheme.brightness);
     final scaffoldBackgroundColor =
         advancedBackdrop?.backgroundColor ?? effectiveColorScheme.surface;
     final appBarBackgroundColor = scaffoldBackgroundColor;
@@ -30,6 +29,7 @@ class AppTheme {
         advancedPalette?.textPrimaryColor ?? effectiveColorScheme.onSurface;
     final cardColor =
         advancedPalette?.cardColor ?? effectiveColorScheme.surface;
+    final overlayStyle = _overlayStyleForColor(appBarBackgroundColor);
 
     final baseTheme = ThemeData(
       useMaterial3: true,
@@ -159,7 +159,8 @@ class AppTheme {
     );
   }
 
-  static SystemUiOverlayStyle _overlayStyleFor(Brightness brightness) {
+  static SystemUiOverlayStyle _overlayStyleForColor(Color backgroundColor) {
+    final brightness = ThemeData.estimateBrightnessForColor(backgroundColor);
     final base =
         brightness == Brightness.dark
             ? SystemUiOverlayStyle.light

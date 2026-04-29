@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:shuxiang_reading_next/app/theme/app_advanced_theme_tokens.dart';
 import 'package:shuxiang_reading_next/app/theme/app_theme.dart';
 import 'package:shuxiang_reading_next/app/theme/app_theme_palette.dart';
+import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 
 void main() {
   test('AppTheme input decoration is transparent by default', () {
@@ -89,4 +91,51 @@ void main() {
     expect(darkScheme.onSurface, const Color(0xFFF5EEE4));
     expect(darkScheme.surfaceTint, Colors.transparent);
   });
+
+  test(
+    'advanced theme app bar overlay style follows actual background color',
+    () {
+      final theme = AppTheme.build(
+        ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.light,
+        ),
+        advancedPalette: const ResolvedAdvancedThemePalette(
+          backgroundColor: Color(0xFF141414),
+          surfaceColor: Color(0xFF181818),
+          searchFieldBackgroundColor: Color(0xFF222222),
+          elevatedSurfaceColor: Color(0xFF202020),
+          cardColor: Color(0xFF1C1C1C),
+          cardTextColor: Colors.white,
+          cardBorderColor: Color(0xFF2F2F2F),
+          outlineColor: Color(0xFF3A3A3A),
+          iconBackgroundColor: Color(0xFF242424),
+          textPrimaryColor: Colors.white,
+          textSecondaryColor: Color(0xFFBDBDBD),
+          primaryColor: Color(0xFF3D8BFF),
+          primaryContainerColor: Color(0xFF16335B),
+          secondaryColor: Color(0xFF7CB8FF),
+          buttonTextColor: Colors.white,
+          shadowColor: Color(0x66000000),
+          noticeAccentColor: Color(0xFFFFB74D),
+          noticeSurfaceColor: Color(0xFF4A3412),
+        ),
+        advancedBackdrop: const ResolvedAdvancedThemeBackdrop(
+          backgroundColor: Color(0xFF141414),
+          surfaceColor: Color(0xFF181818),
+          wallpaperPath: null,
+          wallpaperOpacity: 1,
+          wallpaperBlurSigma: 0,
+          wallpaperFit: AppAdvancedThemeWallpaperFit.cover,
+          wallpaperOverlayColor: Color(0xFF141414),
+          wallpaperOverlayOpacity: 0.32,
+        ),
+      );
+
+      expect(
+        theme.appBarTheme.systemOverlayStyle?.statusBarIconBrightness,
+        Brightness.light,
+      );
+    },
+  );
 }
