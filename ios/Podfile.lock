@@ -18,6 +18,8 @@ PODS:
     - Flutter
   - flutter_js (0.1.0):
     - Flutter
+  - flutter_secure_storage (6.0.0):
+    - Flutter
   - image_picker_ios (0.0.1):
     - Flutter
   - integration_test (0.0.1):
@@ -47,6 +49,7 @@ DEPENDENCIES:
   - flutter_charset_detector_ios (from `.symlinks/plugins/flutter_charset_detector_ios/ios`)
   - flutter_inappwebview_ios (from `.symlinks/plugins/flutter_inappwebview_ios/ios`)
   - flutter_js (from `.symlinks/plugins/flutter_js/ios`)
+  - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
@@ -77,6 +80,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_inappwebview_ios/ios"
   flutter_js:
     :path: ".symlinks/plugins/flutter_js/ios"
+  flutter_secure_storage:
+    :path: ".symlinks/plugins/flutter_secure_storage/ios"
   image_picker_ios:
     :path: ".symlinks/plugins/image_picker_ios/ios"
   integration_test:
@@ -103,6 +108,7 @@ SPEC CHECKSUMS:
   flutter_charset_detector_ios: 44497a50ef93045686b1900df36a1556c8d8fe54
   flutter_inappwebview_ios: e2843d446f4acf6fb86ca7f8499f392049e2f2c2
   flutter_js: 867813c1830e1d9b2c5d547cdb6f61801e2f2145
+  flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499

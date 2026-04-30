@@ -74,8 +74,8 @@ class SyncProfileService {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
-    await _localStore.saveProfile(profile);
     await _secretStore.writeSecret(secretRef: secretRef, secret: password);
+    await _localStore.saveProfile(profile);
     return profile;
   }
 

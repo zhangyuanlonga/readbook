@@ -33,7 +33,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
   late Set<SyncScope> _selectedScopes;
   bool _autoSyncEnabled = false;
   _SyncPanel _activePanel = _SyncPanel.account;
-  late Set<String> _expandedGroupTitles;
+  late final Set<String> _expandedGroupTitles;
   late final AnimationController _syncButtonController;
 
   @override
@@ -78,46 +78,44 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     final primaryProfile = savedProfiles.isEmpty ? null : savedProfiles.first;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('同步')),
+      appBar: AppBar(title: const Text('同步中心')),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '同步中心',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<_SyncPanel>(
-              segments: const [
-                ButtonSegment<_SyncPanel>(
-                  value: _SyncPanel.account,
-                  icon: Icon(Icons.cloud_outlined),
-                  label: Text('连接 / 账号'),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: SegmentedButton<_SyncPanel>(
+                  segments: const [
+                    ButtonSegment<_SyncPanel>(
+                      value: _SyncPanel.account,
+                      icon: Icon(Icons.cloud_outlined),
+                      label: Text('连接 / 账号'),
+                    ),
+                    ButtonSegment<_SyncPanel>(
+                      value: _SyncPanel.content,
+                      icon: Icon(Icons.tune_rounded),
+                      label: Text('同步内容'),
+                    ),
+                    ButtonSegment<_SyncPanel>(
+                      value: _SyncPanel.history,
+                      icon: Icon(Icons.history_rounded),
+                      label: Text('同步历史'),
+                    ),
+                  ],
+                  selected: <_SyncPanel>{_activePanel},
+                  onSelectionChanged: (selection) {
+                    if (selection.isEmpty) {
+                      return;
+                    }
+                    setState(() {
+                      _activePanel = selection.first;
+                    });
+                  },
                 ),
-                ButtonSegment<_SyncPanel>(
-                  value: _SyncPanel.content,
-                  icon: Icon(Icons.tune_rounded),
-                  label: Text('同步内容'),
-                ),
-                ButtonSegment<_SyncPanel>(
-                  value: _SyncPanel.history,
-                  icon: Icon(Icons.history_rounded),
-                  label: Text('同步历史'),
-                ),
-              ],
-              selected: <_SyncPanel>{_activePanel},
-              onSelectionChanged: (selection) {
-                if (selection.isEmpty) {
-                  return;
-                }
-                setState(() {
-                  _activePanel = selection.first;
-                });
-              },
+              ),
             ),
             const SizedBox(height: 14),
             _SyncHeroButton(
@@ -203,7 +201,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('开启自动同步'),
-                subtitle: const Text('当前最小实现会在应用恢复前台时尝试自动同步。'),
+                subtitle: const Text('应用尝试自动同步。'),
                 value: _autoSyncEnabled,
                 onChanged: (value) {
                   setState(() {
@@ -217,14 +215,14 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
                   Expanded(
                     child: FilledButton(
                       onPressed: _saving ? null : _handleSaveProfile,
-                      child: Text(_saving ? '保存中…' : '保存本地配置'),
+                      child: Text(_saving ? '保存中…' : '保存配置'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.tonal(
                       onPressed: _testingDraft ? null : _handleTestDraft,
-                      child: Text(_testingDraft ? '测试中…' : '测试草稿连接'),
+                      child: Text(_testingDraft ? '测试中…' : '测试连接'),
                     ),
                   ),
                 ],
@@ -247,6 +245,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
                       profile: profile,
                       onTest: () => _handleTestSavedProfile(profile.id),
                       onSync: () => _handleRunStage4(profile.id),
+                      onDelete: () => _handleDeleteProfile(profile.id),
                       isRunning: _runningProfileId == profile.id,
                     ),
                 ],
@@ -276,27 +275,13 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '按功能分组选择同步内容。每组都可以折叠，展开后再勾选具体项。',
+                '可勾选需要同步的项目进行同步操作',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _InfoChip(
-                    icon: Icons.checklist_rounded,
-                    label: '已选 $selectedCount 项',
-                  ),
-                  _InfoChip(
-                    icon: Icons.layers_outlined,
-                    label: '${selectableGroups.length} 个分组',
-                  ),
-                  _InfoChip(
-                    icon: Icons.bolt_rounded,
-                    label: '${catalog.firstBatchScopes.length} 项已实现',
-                  ),
-                ],
+              const SizedBox(height: 8),
+              Text(
+                '当前已选 $selectedCount 项',
+                style: Theme.of(context).textTheme.labelLarge,
               ),
             ],
           ),
@@ -310,6 +295,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
             selectedScopes: _selectedScopes,
             onToggleExpanded: () => _toggleGroupExpanded(group.title),
             onToggleScope: _toggleScope,
+            onToggleGroup: () => _toggleScopeGroup(group.scopes),
             description: _groupDescription(group.title),
           ),
           const SizedBox(height: 12),
@@ -337,7 +323,31 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
       } else {
         next.add(title);
       }
-      _expandedGroupTitles = next;
+      _expandedGroupTitles
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  void _toggleScopeGroup(List<SyncScope> scopes) {
+    setState(() {
+      final next = <SyncScope>{..._selectedScopes};
+      final allSelected = scopes.every(next.contains);
+      if (allSelected) {
+        for (final scope in scopes) {
+          next.remove(scope);
+        }
+      } else {
+        for (final scope in scopes) {
+          next.add(scope);
+          next.addAll(scope.dependencies);
+          final companion = scope.suggestedCompanionScope;
+          if (companion != null) {
+            next.add(companion);
+          }
+        }
+      }
+      _selectedScopes = next;
     });
   }
 
@@ -350,7 +360,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
       padding: const EdgeInsets.only(bottom: 24),
       children: [
         _SectionCard(
-          title: '最近任务',
+          title: '最近同步任务',
           child: jobsAsync.when(
             data: (jobs) {
               if (jobs.isEmpty) {
@@ -488,6 +498,47 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     }
   }
 
+  Future<void> _handleDeleteProfile(String profileId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('删除配置'),
+          content: const Text('删除后需要重新填写连接信息，是否继续？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await ref.read(syncProfileServiceProvider).deleteProfile(profileId);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已删除配置')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除失败：$error')));
+    }
+  }
+
   void _toggleScope(SyncScope scope) {
     setState(() {
       final next = <SyncScope>{..._selectedScopes};
@@ -533,10 +584,7 @@ class _SyncHeroButton extends StatelessWidget {
       (true, true) => '同步进行中',
       (true, false) => '立即同步',
     };
-    final subLabel =
-        hasProfile
-            ? '${profile!.name} · ${profile!.endpointUrl}'
-            : '保存 WebDAV 配置后，这里会变成主同步按钮';
+    final subLabel = hasProfile ? '点击后即可同步内容' : '保存配置即可使用同步功能';
 
     return AnimatedBuilder(
       animation: controller,
@@ -768,35 +816,6 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(label),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _LoadingLine extends StatelessWidget {
   const _LoadingLine(this.text);
 
@@ -823,12 +842,14 @@ class _SavedProfileTile extends StatelessWidget {
     required this.profile,
     required this.onTest,
     required this.onSync,
+    required this.onDelete,
     required this.isRunning,
   });
 
   final SyncProfile profile;
   final Future<void> Function() onTest;
   final Future<void> Function() onSync;
+  final Future<void> Function() onDelete;
   final bool isRunning;
 
   @override
@@ -837,25 +858,36 @@ class _SavedProfileTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       title: Text(profile.name),
       subtitle: Text('${profile.endpointUrl} · ${profile.basePath}'),
-      trailing: Wrap(
-        spacing: 8,
-        children: [
-          TextButton(
-            onPressed: () {
+      trailing: PopupMenuButton<_ProfileAction>(
+        onSelected: (action) {
+          switch (action) {
+            case _ProfileAction.test:
               unawaited(onTest());
-            },
-            child: const Text('测试连接'),
-          ),
-          FilledButton.tonal(
-            onPressed:
-                isRunning
-                    ? null
-                    : () {
-                      unawaited(onSync());
-                    },
-            child: Text(isRunning ? '同步中…' : '执行同步'),
-          ),
-        ],
+            case _ProfileAction.sync:
+              if (!isRunning) {
+                unawaited(onSync());
+              }
+            case _ProfileAction.delete:
+              unawaited(onDelete());
+          }
+        },
+        itemBuilder:
+            (context) => [
+              const PopupMenuItem(
+                value: _ProfileAction.test,
+                child: Text('测试连接'),
+              ),
+              PopupMenuItem(
+                value: _ProfileAction.sync,
+                enabled: !isRunning,
+                child: Text(isRunning ? '同步中…' : '执行同步'),
+              ),
+              const PopupMenuItem(
+                value: _ProfileAction.delete,
+                child: Text('删除配置'),
+              ),
+            ],
+        child: const Icon(Icons.more_horiz_rounded),
       ),
     );
   }
@@ -869,6 +901,7 @@ class _ScopeGroupCard extends StatelessWidget {
     required this.selectedScopes,
     required this.onToggleExpanded,
     required this.onToggleScope,
+    required this.onToggleGroup,
     required this.description,
   });
 
@@ -878,11 +911,15 @@ class _ScopeGroupCard extends StatelessWidget {
   final Set<SyncScope> selectedScopes;
   final VoidCallback onToggleExpanded;
   final void Function(SyncScope scope) onToggleScope;
+  final VoidCallback onToggleGroup;
   final String description;
 
   @override
   Widget build(BuildContext context) {
     final selectedCount = scopes.where(selectedScopes.contains).length;
+    final allSelected = selectedCount == scopes.length && scopes.isNotEmpty;
+    final partiallySelected =
+        selectedCount > 0 && selectedCount < scopes.length;
     final colorScheme = Theme.of(context).colorScheme;
 
     return DecoratedBox(
@@ -895,38 +932,54 @@ class _ScopeGroupCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: onToggleExpanded,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$description\n已选 $selectedCount / ${scopes.length}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Row(
+              children: [
+                _CategoryToggle(
+                  selected: allSelected,
+                  partial: partiallySelected,
+                  onTap: onToggleGroup,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: onToggleExpanded,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 6,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$description\n已选 $selectedCount / ${scopes.length}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  Icon(
+                ),
+                IconButton(
+                  onPressed: onToggleExpanded,
+                  icon: Icon(
                     expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
+                        ? Icons.unfold_less_rounded
+                        : Icons.unfold_more_rounded,
                   ),
-                ],
-              ),
+                  tooltip: expanded ? '收起' : '展开',
+                ),
+              ],
             ),
           ),
           AnimatedCrossFade(
@@ -941,22 +994,85 @@ class _ScopeGroupCard extends StatelessWidget {
                   const Divider(height: 1),
                   const SizedBox(height: 8),
                   for (final scope in scopes)
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: selectedScopes.contains(scope),
-                      title: Text(scope.productLabel),
-                      subtitle: Text(
-                        scope.dependencies.isEmpty
-                            ? 'dataset: ${scope.datasetFileName}'
-                            : '依赖: ${scope.dependencies.map((item) => item.name).join(', ')}',
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        checkboxShape: const StadiumBorder(),
+                        value: selectedScopes.contains(scope),
+                        secondary: Icon(
+                          selectedScopes.contains(scope)
+                              ? Icons.task_alt_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                        ),
+                        title: Text(scope.productLabel),
+                        subtitle: Text(
+                          scope.dependencies.isEmpty
+                              ? 'dataset: ${scope.datasetFileName}'
+                              : '依赖: ${scope.dependencies.map((item) => item.name).join(', ')}',
+                        ),
+                        onChanged: (_) => onToggleScope(scope),
                       ),
-                      onChanged: (_) => onToggleScope(scope),
                     ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+enum _ProfileAction { test, sync, delete }
+
+class _CategoryToggle extends StatelessWidget {
+  const _CategoryToggle({
+    required this.selected,
+    required this.partial,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final bool partial;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final active = selected || partial;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color:
+              active
+                  ? colorScheme.primary.withValues(alpha: 0.14)
+                  : colorScheme.surface,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color:
+                active
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant.withValues(alpha: 0.7),
+            width: active ? 1.4 : 1,
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            selected
+                ? Icons.check_rounded
+                : partial
+                ? Icons.remove_rounded
+                : Icons.circle_outlined,
+            size: selected || partial ? 16 : 12,
+            color: active ? colorScheme.primary : colorScheme.outline,
+          ),
+        ),
       ),
     );
   }

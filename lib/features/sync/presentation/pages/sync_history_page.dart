@@ -99,16 +99,83 @@ class _JobTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(job.profileId),
-      subtitle: Text(
-        '${job.status.name} · ${job.startedAt.toLocal()}'
-        '${job.errorMessage == null ? '' : '\n${job.errorMessage}'}',
-      ),
+      subtitle: Text('${job.status.name} · ${job.startedAt.toLocal()}'),
+      onTap: () => _showJobDetail(context),
       trailing:
           job.status == SyncJobStatus.success
               ? const Icon(Icons.check_circle_outline)
               : job.status == SyncJobStatus.failed
               ? const Icon(Icons.error_outline)
               : const Icon(Icons.sync),
+    );
+  }
+
+  void _showJobDetail(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '任务详情',
+                  style: Theme.of(
+                    sheetContext,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 16),
+                _JobDetailLine(label: '配置', value: job.profileId),
+                _JobDetailLine(label: '状态', value: job.status.name),
+                _JobDetailLine(label: '触发方式', value: job.triggerKind.name),
+                _JobDetailLine(
+                  label: '开始时间',
+                  value: job.startedAt.toLocal().toString(),
+                ),
+                if (job.endedAt != null)
+                  _JobDetailLine(
+                    label: '结束时间',
+                    value: job.endedAt!.toLocal().toString(),
+                  ),
+                if ((job.summaryJson ?? '').trim().isNotEmpty)
+                  _JobDetailLine(label: '摘要', value: job.summaryJson!),
+                if ((job.errorMessage ?? '').trim().isNotEmpty)
+                  _JobDetailLine(label: '错误', value: job.errorMessage!),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _JobDetailLine extends StatelessWidget {
+  const _JobDetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(value),
+        ],
+      ),
     );
   }
 }

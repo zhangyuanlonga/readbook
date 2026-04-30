@@ -58,7 +58,7 @@ class SyncConnectionService {
     }
     final password = await _profileService.loadPassword(secretRef);
     if (password == null || password.isEmpty) {
-      throw const FormatException('未找到同步配置对应的密码。');
+      throw const FormatException('未找到同步配置对应的密码，请重新保存一次配置。');
     }
     return _runConnectionTest(profile: profile, password: password);
   }

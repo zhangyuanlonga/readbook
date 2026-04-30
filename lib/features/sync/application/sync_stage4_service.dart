@@ -127,7 +127,7 @@ class SyncStage4Service {
     }
     final password = await _profileService.loadPassword(secretRef);
     if (password == null || password.isEmpty) {
-      throw const FormatException('未找到同步密码。');
+      throw const FormatException('未找到同步密码，请重新保存一次配置。');
     }
 
     final enabledScopes = _supportedScopes
