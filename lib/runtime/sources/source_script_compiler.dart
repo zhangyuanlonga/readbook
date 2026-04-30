@@ -151,6 +151,7 @@ class SourceScriptCompiler {
           inspection.hasLogin ||
           inspection.hasLoginUi ||
           inspection.hasLoginUrlProperty,
+      webLoginUrl: inspection.webLoginUrl,
       loginUi:
           inspection.hasLoginUi || inspection.hasLoginUrlProperty
               ? (
@@ -220,6 +221,18 @@ const __inspection = {
   hasLogin: typeof __source?.login === 'function',
   hasLoginUi: typeof __source?.loginUi !== 'undefined',
   hasLoginUrlProperty: typeof __source?.loginUrl !== 'undefined',
+  webLoginUrl: (() => {
+    const __loginUrlValue = __source?.loginUrl;
+    if (typeof __loginUrlValue !== 'string') {
+      return null;
+    }
+    const __rawValue = __loginUrlValue.trim();
+    if (__rawValue === '') {
+      return null;
+    }
+    const __script = __resolveScriptProperty(__loginUrlValue);
+    return __script == null ? __rawValue : null;
+  })(),
 };
 return globalThis.__appreadEncodeHostSuccess(__inspection);
 ''');
@@ -1470,6 +1483,7 @@ class _SourceInspection {
     required this.hasLogin,
     required this.hasLoginUi,
     required this.hasLoginUrlProperty,
+    required this.webLoginUrl,
   });
 
   final Map<String, dynamic> meta;
@@ -1483,6 +1497,7 @@ class _SourceInspection {
   final bool hasLogin;
   final bool hasLoginUi;
   final bool hasLoginUrlProperty;
+  final String? webLoginUrl;
 
   factory _SourceInspection.fromMap(Map<String, dynamic> map) {
     return _SourceInspection(
@@ -1497,8 +1512,17 @@ class _SourceInspection {
       hasLogin: map['hasLogin'] == true,
       hasLoginUi: map['hasLoginUi'] == true,
       hasLoginUrlProperty: map['hasLoginUrlProperty'] == true,
+      webLoginUrl: _optionalTrimmedString(map['webLoginUrl']),
     );
   }
+}
+
+String? _optionalTrimmedString(Object? value) {
+  final normalized = value?.toString().trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
 }
 
 class _HtmlHandleStore {

@@ -1109,41 +1109,57 @@ extension on _SourcePageState {
   }
 
   Future<void> _openLoginPage(ScriptSource source) async {
-    final supported = await _sourceLoginRuntimeService.supportsLogin(source.id);
+    final resolution = await _sourceLoginEntryResolver.resolve(source.id);
     if (!mounted) {
       return;
     }
-    if (!supported) {
-      _showMessage('当前书源未声明登录面板。');
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-        return Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.82,
-            minChildSize: 0.55,
-            maxChildSize: 1.0,
-            snap: true,
-            snapSizes: const <double>[0.82, 1.0],
-            builder: (context, scrollController) {
-              return SourceLoginPage(
-                sourceId: source.id,
-                embedded: true,
-                parentScrollController: scrollController,
-              );
-            },
-          ),
+    switch (resolution.mode) {
+      case SourceLoginEntryMode.form:
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          showDragHandle: true,
+          builder: (sheetContext) {
+            final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.82,
+                minChildSize: 0.55,
+                maxChildSize: 1.0,
+                snap: true,
+                snapSizes: const <double>[0.82, 1.0],
+                builder: (context, scrollController) {
+                  return SourceLoginPage(
+                    sourceId: source.id,
+                    embedded: true,
+                    parentScrollController: scrollController,
+                  );
+                },
+              ),
+            );
+          },
         );
-      },
-    );
+        return;
+      case SourceLoginEntryMode.web:
+        if (widget.enableRouterNavigation) {
+          await context.push(
+            '/source/web-login?id=${Uri.encodeQueryComponent(source.id)}',
+          );
+        } else {
+          await Navigator.of(context).push<bool>(
+            MaterialPageRoute<bool>(
+              builder: (_) => SourceWebLoginPage(sourceId: source.id),
+            ),
+          );
+        }
+        return;
+      case SourceLoginEntryMode.unsupported:
+        _showMessage(resolution.message ?? '当前书源未声明可用的登录入口。');
+        return;
+    }
   }
 
   List<ScriptSource> _resolveVisibleSources(List<ScriptSource> sources) {
@@ -1197,9 +1213,9 @@ extension on _SourcePageState {
   }
 
   bool _hasUngrouped(List<ScriptSource> sources) {
-      return sources.any(
-        (source) => _groupKeyOf(source) == _SourcePageState._ungroupedGroupKey,
-      );
+    return sources.any(
+      (source) => _groupKeyOf(source) == _SourcePageState._ungroupedGroupKey,
+    );
   }
 
   bool _hasDuplicateSources(List<ScriptSource> sources) {
@@ -1820,5 +1836,4 @@ extension on _SourcePageState {
       }
     }
   }
-
 }

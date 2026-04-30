@@ -6,6 +6,7 @@ import '../../core/mobile_features/mobile_feature_service.dart';
 import 'application/source_check_service.dart';
 import 'application/source_health_service.dart';
 import 'application/source_login_browser_service.dart';
+import 'application/source_login_entry_resolver.dart';
 import 'application/source_login_runtime_service.dart';
 import 'application/source_page_access_service.dart';
 import 'application/source_page_flow_coordinator.dart';
@@ -57,17 +58,29 @@ final sourceLoginBrowserServiceProvider = Provider<SourceLoginBrowserService>((
   );
 });
 
-final sourcePageAccessServiceProvider = Provider<SourcePageAccessService>((ref) {
+final sourceLoginEntryResolverProvider = Provider<SourceLoginEntryResolver>((
+  ref,
+) {
+  return SourceLoginEntryResolver(
+    sourceRuntimeFacade: ref.watch(sourceRuntimeFacadeProvider),
+    sourceLoginRuntimeService: ref.watch(sourceLoginRuntimeServiceProvider),
+  );
+});
+
+final sourcePageAccessServiceProvider = Provider<SourcePageAccessService>((
+  ref,
+) {
   return SourcePageAccessService(
     authSessionStore: ref.watch(sourceAuthSessionStoreProvider),
     mobileFeatureService: ref.watch(sourceMobileFeatureServiceProvider),
   );
 });
 
-final sourceScriptImportServiceProvider =
-    Provider<SourceScriptImportService>((ref) {
-      return const SourceScriptImportService();
-    });
+final sourceScriptImportServiceProvider = Provider<SourceScriptImportService>((
+  ref,
+) {
+  return const SourceScriptImportService();
+});
 
 typedef SourcePageFlowCoordinatorFactory = SourcePageFlowCoordinator Function();
 

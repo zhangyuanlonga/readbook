@@ -5,6 +5,7 @@ import 'presentation/script_source_editor_page.dart';
 import 'presentation/script_source_paste_import_page.dart';
 import 'presentation/source_login_page.dart';
 import 'presentation/source_page.dart';
+import 'presentation/source_web_login_page.dart';
 
 final List<RouteBase> sourceRoutes = <RouteBase>[
   GoRoute(
@@ -18,6 +19,14 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     builder: (context, state) {
       final sourceId = state.uri.queryParameters['id'] ?? '';
       return SourceLoginPage(sourceId: sourceId);
+    },
+  ),
+  GoRoute(
+    path: '/source/web-login',
+    name: 'script-source-web-login',
+    builder: (context, state) {
+      final sourceId = state.uri.queryParameters['id'] ?? '';
+      return SourceWebLoginPage(sourceId: sourceId);
     },
   ),
   GoRoute(

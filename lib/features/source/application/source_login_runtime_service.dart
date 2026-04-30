@@ -110,6 +110,20 @@ class SourceLoginActionResult {
   final Map<String, String> formPatch;
 }
 
+class SourceWebLoginRequest {
+  const SourceWebLoginRequest({
+    required this.sourceId,
+    required this.sourceName,
+    required this.uri,
+    this.headers = const <String, String>{},
+  });
+
+  final String sourceId;
+  final String sourceName;
+  final Uri uri;
+  final Map<String, String> headers;
+}
+
 class SourceLoginRuntimeService {
   SourceLoginRuntimeService({required SourceRuntimeFacade sourceRuntimeFacade})
     : _sourceRuntimeFacade = sourceRuntimeFacade;
@@ -230,6 +244,52 @@ class SourceLoginRuntimeService {
       message: message,
       formPatch: formPatch,
     );
+  }
+
+  Future<SourceWebLoginRequest?> prepareWebLogin(String sourceId) async {
+    final registered = await _sourceRuntimeFacade
+        .ensureRegisteredScriptSourceById(sourceId);
+    if (registered == null || !registered.definition.supportsLogin) {
+      return null;
+    }
+    final rawLoginUrl = registered.definition.webLoginUrl?.trim() ?? '';
+    if (rawLoginUrl.isEmpty) {
+      return null;
+    }
+
+    final persistedSource = await _sourceRuntimeFacade.getScriptSourceById(
+      sourceId,
+    );
+    final resolvedUri = _resolveWebLoginUri(
+      rawLoginUrl,
+      registered: registered,
+      fallbackPrimaryHost: persistedSource?.primaryHost,
+    );
+    final context = _createBoundContext(
+      registered,
+      ui: const SourceUiContext(),
+    );
+    await _syncSessionCookiesToBrowser(context, resolvedUri);
+    final headers = await context.sourceLogin.getHeaderMap();
+    return SourceWebLoginRequest(
+      sourceId: sourceId,
+      sourceName: registered.runtime.name,
+      uri: resolvedUri,
+      headers: headers,
+    );
+  }
+
+  Future<void> completeWebLogin(
+    String sourceId, {
+    required Uri currentUri,
+  }) async {
+    final registered = await _requireRegistered(sourceId);
+    final context = _createBoundContext(
+      registered,
+      ui: const SourceUiContext(),
+    );
+    await _syncBrowserCookiesFromBrowser(context, currentUri);
+    await _persistBrowserCookies(context: context, uri: currentUri);
   }
 
   Future<List<SourceLoginField>?> _resolveFields({
@@ -470,6 +530,32 @@ class SourceLoginRuntimeService {
       throw StateError('当前书源未实现登录能力。');
     }
     return registered;
+  }
+
+  Uri _resolveWebLoginUri(
+    String rawLoginUrl, {
+    required RegisteredSource registered,
+    String? fallbackPrimaryHost,
+  }) {
+    final normalized = rawLoginUrl.trim();
+    final direct = Uri.tryParse(normalized);
+    if (direct != null && direct.hasScheme && direct.host.trim().isNotEmpty) {
+      return direct;
+    }
+
+    final manifestHomepage = registered.definition.manifest.homepage?.trim();
+    final fallbackBase =
+        manifestHomepage?.isNotEmpty == true
+            ? manifestHomepage
+            : (fallbackPrimaryHost?.trim().isNotEmpty == true
+                ? 'https://${fallbackPrimaryHost!.trim()}'
+                : null);
+    final base = Uri.tryParse(fallbackBase ?? '');
+    if (base != null && base.hasScheme && base.host.trim().isNotEmpty) {
+      return base.resolve(normalized);
+    }
+
+    throw StateError('当前书源的 loginUrl 不是绝对地址，且缺少可用的主页基址。');
   }
 
   String _encodeFormData(Map<String, String> formData) {

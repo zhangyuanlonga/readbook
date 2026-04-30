@@ -77,8 +77,8 @@ class SourceHttpContext {
   Future<RuntimeHttpResponse> request(RuntimeHttpRequest request) async {
     final startedAt = DateTime.now();
     final resolvedUri = request.resolvedUri;
-    final sourceHeaders = await _sourceLogin?.getHeaderMap() ??
-        const <String, String>{};
+    final sourceHeaders =
+        await _sourceLogin?.getHeaderMap() ?? const <String, String>{};
     final mergedHeaders = <String, String>{
       ...sourceHeaders,
       ...request.headers,
@@ -91,9 +91,7 @@ class SourceHttpContext {
         !request.headers.keys.any((key) => key.toLowerCase() == 'cookie')) {
       mergedHeaders['cookie'] = domainCookie.trim();
     }
-    final mergedRequest = request.copyWith(
-      headers: mergedHeaders,
-    );
+    final mergedRequest = request.copyWith(headers: mergedHeaders);
     try {
       if (mergedRequest.execution == RuntimeRequestExecution.browser) {
         final response = await _requestInBrowser(mergedRequest);
@@ -1147,6 +1145,7 @@ class RuntimeSourceDefinition {
     this.discoverCategories,
     this.discoverBooks,
     this.supportsLogin = false,
+    this.webLoginUrl,
     this.loginUi,
     this.loginAction,
     this.dispose,
@@ -1161,6 +1160,7 @@ class RuntimeSourceDefinition {
   final SourceChaptersHandler chapters;
   final SourceContentHandler content;
   final bool supportsLogin;
+  final String? webLoginUrl;
   final SourceLoginUiHandler? loginUi;
   final SourceLoginActionHandler? loginAction;
   final void Function()? dispose;

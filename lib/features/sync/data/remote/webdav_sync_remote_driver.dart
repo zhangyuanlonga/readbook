@@ -211,7 +211,6 @@ class WebDavSyncRemoteDriver implements SyncRemoteDriver {
 
   Uri _buildScopedUri(String relativePath, {required bool directory}) {
     return _buildAbsoluteUri(<String>[
-      ..._endpointPathSegments,
       ..._basePathSegments,
       ..._normalizeSegments(relativePath),
     ], directory: directory);
@@ -219,8 +218,9 @@ class WebDavSyncRemoteDriver implements SyncRemoteDriver {
 
   Uri _buildAbsoluteUri(List<String> segments, {required bool directory}) {
     var path = '/';
-    if (segments.isNotEmpty) {
-      path = '/${segments.join('/')}';
+    final allSegments = <String>[..._endpointPathSegments, ...segments];
+    if (allSegments.isNotEmpty) {
+      path = '/${allSegments.join('/')}';
     }
     if (directory && !path.endsWith('/')) {
       path = '$path/';

@@ -24,6 +24,7 @@ import '../application/external_import_catalog.dart';
 import '../application/external_import_diagnostics.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_health_action_policy_service.dart';
+import '../application/source_login_entry_resolver.dart';
 import '../application/source_login_runtime_service.dart';
 import '../application/source_check_service.dart';
 import '../application/source_page_access_service.dart';
@@ -33,6 +34,7 @@ import '../application/source_script_import_service.dart';
 import '../application/source_runtime_facade.dart';
 import '../providers.dart';
 import 'source_login_page.dart';
+import 'source_web_login_page.dart';
 import 'script_source_debug_page.dart';
 
 part 'source_page_dialogs.dart';
@@ -160,6 +162,7 @@ class _SourcePageState extends ConsumerState<SourcePage> {
   late final SourceHealthActionPolicyService _policyService;
   late final TextEditingController _searchController;
   late final SourceLoginRuntimeService _sourceLoginRuntimeService;
+  late final SourceLoginEntryResolver _sourceLoginEntryResolver;
   late final SourcePageFlowCoordinator _pageFlowCoordinator;
   late final SourcePageAccessService _accessService;
   late final SourceScriptImportService _importService;
@@ -189,6 +192,7 @@ class _SourcePageState extends ConsumerState<SourcePage> {
         widget.sourceHealthService ?? ref.read(sourceHealthServiceProvider);
     _policyService = const SourceHealthActionPolicyService();
     _sourceLoginRuntimeService = ref.read(sourceLoginRuntimeServiceProvider);
+    _sourceLoginEntryResolver = ref.read(sourceLoginEntryResolverProvider);
     _pageFlowCoordinator = ref.read(sourcePageFlowCoordinatorFactoryProvider)();
     _accessService = ref.read(sourcePageAccessServiceProvider);
     _importService = ref.read(sourceScriptImportServiceProvider);
