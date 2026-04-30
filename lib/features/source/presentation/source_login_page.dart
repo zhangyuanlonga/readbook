@@ -380,6 +380,12 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
       longToastHandler: (message) => _showLongToast(message),
       openUrlHandler:
           ({required url, title}) => _openUrl(url: url, title: title),
+      alertHandler:
+          ({required message, title, confirmText}) => _showAlert(
+            message: message,
+            title: title,
+            confirmText: confirmText,
+          ),
       confirmHandler:
           ({required message, title, confirmText, cancelText}) =>
               _confirmAction(
@@ -471,6 +477,34 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
       },
     );
     return result ?? false;
+  }
+
+  Future<void> _showAlert({
+    required String message,
+    String? title,
+    String? confirmText,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            (title?.trim().isNotEmpty ?? false) ? title!.trim() : '提示',
+          ),
+          content: Text(message.trim()),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                (confirmText?.trim().isNotEmpty ?? false)
+                    ? confirmText!.trim()
+                    : '知道了',
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<String?> _promptValue({

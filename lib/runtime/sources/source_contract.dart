@@ -952,6 +952,7 @@ class SourceUiContext {
     this.toastHandler,
     this.longToastHandler,
     this.openUrlHandler,
+    this.alertHandler,
     this.confirmHandler,
     this.promptHandler,
     this.openBrowserAwaitHandler,
@@ -962,6 +963,12 @@ class SourceUiContext {
   final Future<void> Function(String message)? longToastHandler;
   final Future<void> Function({required String url, String? title})?
   openUrlHandler;
+  final Future<void> Function({
+    required String message,
+    String? title,
+    String? confirmText,
+  })?
+  alertHandler;
   final Future<bool> Function({
     required String message,
     String? title,
@@ -997,6 +1004,18 @@ class SourceUiContext {
 
   Future<void> openUrl({required String url, String? title}) async {
     await openUrlHandler?.call(url: url, title: title);
+  }
+
+  Future<void> alert({
+    required String message,
+    String? title,
+    String? confirmText,
+  }) async {
+    await alertHandler?.call(
+      message: message,
+      title: title,
+      confirmText: confirmText,
+    );
   }
 
   Future<bool> confirm({

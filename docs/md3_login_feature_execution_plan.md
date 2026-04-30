@@ -11,6 +11,7 @@
 - `docs/cross_platform_boundary_refactor_plan.md`
 - `docs/archive/script_sources/source_login_design_plan.md`
 - `docs/archive/script_sources/source_login_full_compat_matrix.md`
+- `docs/md3_login_host_interaction_phase4_inventory.md`
 - `docs/md3_login_ui_phase1_inventory.md`
 - `docs/script_sources/official-source-author-guide.md`
 - `/Users/zhangyuanlong/Downloads/legado-with-MD3-main/app/src/main/java/io/legado/app/ui/login/`
@@ -91,7 +92,7 @@
 - [x] 阶段 1：`loginUi` 现状收口与缺口确认
 - [ ] 阶段 2：纯 `loginUrl` 网页登录模式补齐
 - [ ] 阶段 3：`loginCheckJs` 兼容层补齐
-- [ ] 阶段 4：MD3 登录宿主交互补齐与校正
+- [x] 阶段 4：MD3 登录宿主交互补齐与校正
 - [ ] 阶段 5：MD3 登录编写与调试体验补强
 - [ ] 阶段 6：样本源验证、测试与文档验收
 
@@ -198,17 +199,28 @@
 
 执行清单：
 
-- [ ] 梳理 MD3 `loginCheckJs` 的实际职责和使用模式
-- [ ] 设计当前项目内 `loginCheckJs` 的唯一运行时落点
-- [ ] 为请求执行链增加“结果检测 -> 登录态更新 -> 重放请求”流程
-- [ ] 明确 `loginCheckJs` 可读写的上下文范围
-- [ ] 避免普通源请求链路被强行复杂化
+- [x] 梳理 MD3 `loginCheckJs` 的实际职责和使用模式
+- [x] 设计当前项目内 `loginCheckJs` 的唯一运行时落点
+- [x] 为请求执行链增加“结果检测 -> 登录态更新 -> 重放请求”流程
+- [x] 明确 `loginCheckJs` 可读写的上下文范围
+- [x] 避免普通源请求链路被强行复杂化
 - [ ] 选择至少一个样本源验证 `loginCheckJs`
 
 阶段完成定义：
 
-- [ ] 当前项目具备最小 `loginCheckJs` 兼容能力
-- [ ] 高级源可利用该能力补登录并继续请求
+- [x] 当前项目具备最小 `loginCheckJs` 兼容能力
+- [x] 高级源可利用该能力补登录并继续请求
+
+当前实现说明：
+
+- `loginCheckJs` 当前运行在 `ctx.http.request()` 的 JS 包装层
+- 只有声明了 `loginCheckJs` 的源才会进入该链路
+- 请求重放通过 `java.getResponse()` / `java.getStrResponse()` 完成
+- 重放请求内部会携带 `__skipLoginCheck`，避免登录检测递归
+
+阶段完成记录：
+
+- `2026-04-30`：已完成最小 `loginCheckJs` 兼容层与 runtime 回归测试；真实 MD3 样本源验证仍保留到阶段 6。
 
 ---
 
@@ -220,22 +232,26 @@
 
 执行清单：
 
-- [ ] 梳理当前项目已支持宿主交互：
+- [x] 梳理当前项目已支持宿主交互：
   - `toast`
   - `longToast`
   - `openBrowserAwait`
   - `verificationCode`
   - `confirm`
   - `prompt`
-- [ ] 对照 MD3 校正宿主交互的参数与行为
-- [ ] 明确哪些能力已等价，哪些只是基础版
-- [ ] 补齐登录专题高频缺失交互
-- [ ] 保持这些交互继续通过 `SourceUiContext` 暴露
+- [x] 对照 MD3 校正宿主交互的参数与行为
+- [x] 明确哪些能力已等价，哪些只是基础版
+- [x] 补齐登录专题高频缺失交互
+- [x] 保持这些交互继续通过 `SourceUiContext` 暴露
 
 阶段完成定义：
 
-- [ ] 高级源常用登录交互能力达到可迁移水平
-- [ ] 登录脚本不再频繁因宿主交互缺失而中断
+- [x] 高级源常用登录交互能力达到可迁移水平
+- [x] 登录脚本不再频繁因宿主交互缺失而中断
+
+阶段完成记录：
+
+- `2026-04-30`：已补齐 `ctx.ui.alert(...)`，并产出 `docs/md3_login_host_interaction_phase4_inventory.md` 固定当前宿主交互等价范围。
 
 ---
 

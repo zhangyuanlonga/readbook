@@ -221,6 +221,7 @@ const __inspection = {
   hasLogin: typeof __source?.login === 'function',
   hasLoginUi: typeof __source?.loginUi !== 'undefined',
   hasLoginUrlProperty: typeof __source?.loginUrl !== 'undefined',
+  hasLoginCheckJs: typeof __source?.loginCheckJs !== 'undefined',
   webLoginUrl: (() => {
     const __loginUrlValue = __source?.loginUrl;
     if (typeof __loginUrlValue !== 'string') {
@@ -1012,6 +1013,15 @@ try {
       );
       return <String, Object?>{'ok': true};
     });
+    runtime.registerBridge('__ctx_ui_alert', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.ui.alert(
+        message: payload['message']?.toString() ?? '',
+        title: payload['title']?.toString(),
+        confirmText: payload['confirmText']?.toString(),
+      );
+      return <String, Object?>{'ok': true};
+    });
     runtime.registerBridge('__ctx_ui_confirm', (dynamic args) async {
       final payload = _asMap(args);
       return await ctx.ui.confirm(
@@ -1483,6 +1493,7 @@ class _SourceInspection {
     required this.hasLogin,
     required this.hasLoginUi,
     required this.hasLoginUrlProperty,
+    required this.hasLoginCheckJs,
     required this.webLoginUrl,
   });
 
@@ -1497,6 +1508,7 @@ class _SourceInspection {
   final bool hasLogin;
   final bool hasLoginUi;
   final bool hasLoginUrlProperty;
+  final bool hasLoginCheckJs;
   final String? webLoginUrl;
 
   factory _SourceInspection.fromMap(Map<String, dynamic> map) {
@@ -1512,6 +1524,7 @@ class _SourceInspection {
       hasLogin: map['hasLogin'] == true,
       hasLoginUi: map['hasLoginUi'] == true,
       hasLoginUrlProperty: map['hasLoginUrlProperty'] == true,
+      hasLoginCheckJs: map['hasLoginCheckJs'] == true,
       webLoginUrl: _optionalTrimmedString(map['webLoginUrl']),
     );
   }
@@ -1798,6 +1811,8 @@ RuntimeHttpRequest _requestFromMap(Map<String, dynamic> map) {
       webView: map['webView'] == true,
     ),
     proxy: map['proxy']?.toString(),
+    skipLoginCheck:
+        map['skipLoginCheck'] == true || map['__skipLoginCheck'] == true,
   );
 }
 
@@ -2252,6 +2267,29 @@ var chapter = undefined;
       `
     );
     return await __runner(globalThis.ctx, globalThis.source, resultValue, currentBook, currentChapter, isLongClick);
+  }
+
+  async function __runLoginCheckScript(script, sourceValue, resultValue, requestValue, javaValue) {
+    const __runner = new Function(
+      '__ctx',
+      '__source',
+      '__result',
+      '__request',
+      '__java',
+      `
+        return (async function() {
+          var ctx = __ctx;
+          var source = __source;
+          var result = __result;
+          var request = __request;
+          var java = __java;
+          var url = __request?.url || '';
+          ${script}
+          return typeof result === 'undefined' ? null : result;
+        }).call(__source);
+      `
+    );
+    return await __runner(globalThis.ctx, sourceValue, resultValue, requestValue, javaValue);
   }
 
   function normalizeBookIdentity(target) {
@@ -2740,12 +2778,251 @@ var chapter = undefined;
     };
   }
 
+  function wrapHttpHeaders(initialHeaders) {
+    const rawHeaders = { ...(initialHeaders || {}) };
+
+    function findKey(name) {
+      const normalized = String(name || '').trim().toLowerCase();
+      if (!normalized) {
+        return null;
+      }
+      return Object.keys(rawHeaders).find((key) => key.toLowerCase() === normalized) || null;
+    }
+
+    return {
+      get(name) {
+        const matchedKey = findKey(name);
+        return matchedKey == null ? null : rawHeaders[matchedKey];
+      },
+      put(name, value) {
+        const normalizedName = String(name || '').trim();
+        if (!normalizedName) {
+          return this;
+        }
+        rawHeaders[normalizedName] = value == null ? '' : String(value);
+        return this;
+      },
+      putAll(nextHeaders) {
+        Object.entries(nextHeaders || {}).forEach(([key, value]) => {
+          const normalizedName = String(key || '').trim();
+          if (!normalizedName) {
+            return;
+          }
+          rawHeaders[normalizedName] = value == null ? '' : String(value);
+        });
+        return this;
+      },
+      remove(name) {
+        const matchedKey = findKey(name);
+        if (matchedKey != null) {
+          delete rawHeaders[matchedKey];
+        }
+        return this;
+      },
+      toMap() {
+        return { ...rawHeaders };
+      }
+    };
+  }
+
+  function wrapHttpResponse(rawResponse) {
+    const responseMap = { ...(rawResponse || {}) };
+    const headers = wrapHttpHeaders(responseMap.headers || {});
+    const bodyText =
+      typeof responseMap.text === 'string'
+        ? responseMap.text
+        : responseMap.text == null
+          ? ''
+          : String(responseMap.text);
+    return {
+      __rawResponseMap: responseMap,
+      ok: !!responseMap.ok,
+      status: Number(responseMap.status || 0),
+      redirected: !!responseMap.redirected,
+      url: String(responseMap.url || ''),
+      headers() {
+        return headers;
+      },
+      body() {
+        return bodyText;
+      },
+      text() {
+        return bodyText;
+      },
+      json() {
+        if (responseMap.json !== undefined && responseMap.json !== null) {
+          return responseMap.json;
+        }
+        if (!bodyText) {
+          return null;
+        }
+        try {
+          return JSON.parse(bodyText);
+        } catch (_) {
+          return null;
+        }
+      },
+      code() {
+        return Number(responseMap.status || 0);
+      },
+      toMap() {
+        return {
+          ...responseMap,
+          headers: headers.toMap(),
+        };
+      }
+    };
+  }
+
+  function createLoginCheckSource(sourceDefinition, ctx) {
+    return Object.assign(
+      Object.create(sourceDefinition || null),
+      sourceDefinition || {},
+      {
+        getLoginHeader() {
+          return ctx.sourceLogin.getHeader();
+        },
+        getLoginHeaderMap() {
+          return ctx.sourceLogin.getHeaderMap();
+        },
+        putLoginHeader(value) {
+          return ctx.sourceLogin.putHeader(value);
+        },
+        removeLoginHeader() {
+          return ctx.sourceLogin.removeHeader();
+        },
+        getLoginInfo() {
+          return ctx.sourceLogin.getInfo();
+        },
+        getLoginInfoMap() {
+          return ctx.sourceLogin.getInfoMap();
+        },
+        removeLoginInfo() {
+          return ctx.sourceLogin.removeInfo();
+        },
+        getVariable() {
+          return ctx.sourceLogin.getVariable();
+        },
+        setVariable(value) {
+          return ctx.sourceLogin.setVariable(value);
+        }
+      }
+    );
+  }
+
+  function createLoginCheckJava(ctx, requestState) {
+    const headerMap = wrapHttpHeaders(requestState.headers || {});
+    requestState.headers = headerMap.toMap();
+    return {
+      getHeaderMap() {
+        return {
+          get(name) {
+            return headerMap.get(name);
+          },
+          put(name, value) {
+            headerMap.put(name, value);
+            requestState.headers = headerMap.toMap();
+            return this;
+          },
+          putAll(nextHeaders) {
+            headerMap.putAll(nextHeaders);
+            requestState.headers = headerMap.toMap();
+            return this;
+          },
+          remove(name) {
+            headerMap.remove(name);
+            requestState.headers = headerMap.toMap();
+            return this;
+          },
+          toMap() {
+            return headerMap.toMap();
+          }
+        };
+      },
+      initUrl() {
+        return requestState.url;
+      },
+      async getResponse() {
+        const nextResponse = await hostCall('__ctx_http_request', {
+          options: {
+            ...requestState,
+            headers: headerMap.toMap(),
+            __skipLoginCheck: true
+          }
+        });
+        return wrapHttpResponse(nextResponse);
+      },
+      async getStrResponse(jsStr = null, sourceRegex = null) {
+        const nextResponse = await hostCall('__ctx_http_request', {
+          options: {
+            ...requestState,
+            headers: headerMap.toMap(),
+            __skipLoginCheck: true
+          }
+        });
+        return wrapHttpResponse(nextResponse);
+      }
+    };
+  }
+
+  async function runLoginCheckIfNeeded(ctx, requestOptions, responsePayload) {
+    const sourceDefinition = globalThis.__sourceDefinition;
+    const checkValue = sourceDefinition?.loginCheckJs;
+    if (checkValue === undefined || checkValue === null || checkValue === '') {
+      return responsePayload;
+    }
+    if (
+      requestOptions?.skipLoginCheck === true ||
+      requestOptions?.__skipLoginCheck === true
+    ) {
+      return responsePayload;
+    }
+
+    const sourceValue = createLoginCheckSource(sourceDefinition, ctx);
+    const requestState = { ...(requestOptions || {}) };
+    const responseValue = wrapHttpResponse(responsePayload);
+    const javaValue = createLoginCheckJava(ctx, requestState);
+    let nextResult = responseValue;
+
+    if (typeof checkValue === 'function') {
+      nextResult = await checkValue.apply(sourceValue, [
+        ctx,
+        responseValue,
+        requestState,
+        javaValue
+      ]);
+    } else {
+      const script = __resolveScriptProperty(checkValue);
+      if (script != null) {
+        nextResult = await __runLoginCheckScript(
+          script,
+          sourceValue,
+          responseValue,
+          requestState,
+          javaValue
+        );
+      }
+    }
+
+    if (nextResult == null) {
+      return responsePayload;
+    }
+    if (nextResult && typeof nextResult === 'object' && nextResult.__rawResponseMap) {
+      return nextResult.__rawResponseMap;
+    }
+    return nextResult;
+  }
+
   globalThis.__createSourceCtx = function(sourceInfo) {
     return {
       source: sourceInfo,
       http: {
-        request(options) {
-          return hostCall('__ctx_http_request', { options });
+        async request(options) {
+          const normalizedOptions = options || {};
+          const response = await hostCall('__ctx_http_request', {
+            options: normalizedOptions
+          });
+          return await runLoginCheckIfNeeded(globalThis.ctx, normalizedOptions, response);
         },
         isHtml(response) {
           return !!hostCall('__ctx_http_is_html', { response });
@@ -3077,6 +3354,12 @@ var chapter = undefined;
         openUrl(url, title = null) {
           return hostCall('__ctx_ui_open_url', { url, title });
         },
+        alert(options = {}) {
+          if (typeof options === 'string') {
+            return hostCall('__ctx_ui_alert', { message: options });
+          }
+          return hostCall('__ctx_ui_alert', options || {});
+        },
         confirm(options = {}) {
           if (typeof options === 'string') {
             return hostCall('__ctx_ui_confirm', { message: options });
@@ -3352,5 +3635,9 @@ var chapter = undefined;
       }
     };
   };
+
+  globalThis.__wrapHttpResponse = wrapHttpResponse;
+  globalThis.__createLoginCheckJava = createLoginCheckJava;
+  globalThis.__createLoginCheckSource = createLoginCheckSource;
 })();
 ''';

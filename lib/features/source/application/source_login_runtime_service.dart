@@ -571,6 +571,7 @@ class SourceLoginRuntimeService {
     final boundUi = SourceUiContext(
       toastHandler: ui.toastHandler,
       longToastHandler: ui.longToastHandler,
+      alertHandler: ui.alertHandler,
       confirmHandler: ui.confirmHandler,
       promptHandler: ui.promptHandler,
       verificationCodeHandler: ui.verificationCodeHandler,

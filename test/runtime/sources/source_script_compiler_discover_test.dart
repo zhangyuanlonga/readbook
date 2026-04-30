@@ -175,51 +175,91 @@ void main() {
       );
     });
 
-    test('extended login and ui helper apis are available to source scripts', () async {
-      final definition = await compiler.compile(_sourceWithExtendedHelpers);
-      final events = <String>[];
-      final context = _buildRuntimeContext(
-        ui: SourceUiContext(
-          openUrlHandler: ({required String url, String? title}) async {
-            events.add('open:$url|$title');
-          },
-          confirmHandler: ({
-            required String message,
-            String? title,
-            String? confirmText,
-            String? cancelText,
-          }) async {
-            events.add('confirm:$message|$title|$confirmText|$cancelText');
-            return true;
-          },
-          promptHandler: ({
-            required String message,
-            String? title,
-            String? initialValue,
-            String? confirmText,
-            String? cancelText,
-            bool obscureText = false,
-          }) async {
-            events.add('prompt:$message|$title|$initialValue|$confirmText|$cancelText|$obscureText');
-            return 'typed';
-          },
+    test(
+      'extended login and ui helper apis are available to source scripts',
+      () async {
+        final definition = await compiler.compile(_sourceWithExtendedHelpers);
+        final events = <String>[];
+        final context = _buildRuntimeContext(
+          ui: SourceUiContext(
+            openUrlHandler: ({required String url, String? title}) async {
+              events.add('open:$url|$title');
+            },
+            alertHandler: ({
+              required String message,
+              String? title,
+              String? confirmText,
+            }) async {
+              events.add('alert:$message|$title|$confirmText');
+            },
+            confirmHandler: ({
+              required String message,
+              String? title,
+              String? confirmText,
+              String? cancelText,
+            }) async {
+              events.add('confirm:$message|$title|$confirmText|$cancelText');
+              return true;
+            },
+            promptHandler: ({
+              required String message,
+              String? title,
+              String? initialValue,
+              String? confirmText,
+              String? cancelText,
+              bool obscureText = false,
+            }) async {
+              events.add(
+                'prompt:$message|$title|$initialValue|$confirmText|$cancelText|$obscureText',
+              );
+              return 'typed';
+            },
+          ),
+        );
+
+        final books = await definition.search(context, '任意');
+
+        expect(books.single.title, 'bar|小说|vip|typed');
+        expect(
+          events,
+          containsAll(<String>[
+            'open:https://example.com/help|帮助',
+            'alert:当前仅支持最小宿主提示|提示|知道了',
+            'confirm:确认清空？|提示|确认|取消',
+            'prompt:请输入验证码|验证码|1234|确定|返回|false',
+          ]),
+        );
+      },
+    );
+
+    test('loginCheckJs can update login state and replay request', () async {
+      final definition = await compiler.compile(_sourceWithLoginCheckHelpers);
+      final engine = _FakeSequenceRequestEngine(<RuntimeHttpResponse>[
+        RuntimeHttpResponse(
+          ok: true,
+          status: 200,
+          uri: Uri.parse('https://example.com/search'),
+          headers: const <String, String>{'content-type': 'application/json'},
+          text: '{"statusCode":301}',
         ),
+        RuntimeHttpResponse(
+          ok: true,
+          status: 200,
+          uri: Uri.parse('https://example.com/search'),
+          headers: const <String, String>{'content-type': 'text/plain'},
+          text: 'ok-search',
+        ),
+      ]);
+      final context = _buildRuntimeContext(
+        requestEngine: engine,
+        sourceId: 'login_check_source',
       );
 
       final books = await definition.search(context, '任意');
 
-      expect(
-        books.single.title,
-        'bar|小说|vip|typed',
-      );
-      expect(
-        events,
-        containsAll(<String>[
-          'open:https://example.com/help|帮助',
-          'confirm:确认清空？|提示|确认|取消',
-          'prompt:请输入验证码|验证码|1234|确定|返回|false',
-        ]),
-      );
+      expect(books.single.title, 'ok-search|{"Authorization":"Bearer ok"}');
+      expect(engine.requests, hasLength(2));
+      expect(engine.requests.last.headers['Authorization'], 'Bearer ok');
     });
   });
 
@@ -404,25 +444,26 @@ void main() {
 
 SourceRuntimeContext _buildRuntimeContext({
   SourceUiContext ui = const SourceUiContext(),
+  RequestEngine requestEngine = const _FakeRequestEngine(),
+  String sourceId = 'test_source',
 }) {
-  final session = SourceSession(sourceId: 'test_source');
+  final session = SourceSession(sourceId: sourceId);
   final manifest = const SourceManifest(
     name: '测试源',
     group: '测试',
     author: 'tester',
     description: '',
   );
-  final sourceLogin = SourceLoginContext(sourceId: 'test_source');
-
+  final sourceLogin = SourceLoginContext(sourceId: sourceId);
   return SourceRuntimeContext(
-    source: const SourceRuntimeInfo(
-      id: 'test_source',
+    source: SourceRuntimeInfo(
+      id: sourceId,
       name: '测试源',
       group: '测试',
       revision: 'test',
     ),
     http: SourceHttpContext(
-      requestEngine: const _FakeRequestEngine(),
+      requestEngine: requestEngine,
       session: session,
       manifest: manifest,
       browserRuntime: const UnsupportedBrowserRuntime(),
@@ -437,7 +478,7 @@ SourceRuntimeContext _buildRuntimeContext({
     cookie: SourceCookieContext(session: session),
     cache: SourceCacheContext(
       cacheStore: CacheStoreContext(cacheManager: InMemoryCacheManager()),
-      sourceId: 'test_source',
+      sourceId: sourceId,
     ),
     html: const DefaultHtmlRuntime(),
     session: session,
@@ -682,6 +723,11 @@ export default {
       extra: { bookId: 'book_1' },
     });
     await ctx.ui.openUrl('https://example.com/help', '帮助');
+    await ctx.ui.alert({
+      message: '当前仅支持最小宿主提示',
+      title: '提示',
+      confirmText: '知道了',
+    });
     await ctx.ui.confirm({
       message: '确认清空？',
       title: '提示',
@@ -719,6 +765,40 @@ export default {
 };
 ''';
 
+const String _sourceWithLoginCheckHelpers = '''
+export default {
+  meta: {
+    name: '登录检测测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  loginCheckJs: `<js>
+    const payload = result.json() || JSON.parse(result.body() || '{}');
+    if (payload.statusCode === 301) {
+      await ctx.sourceLogin.putHeader(JSON.stringify({ Authorization: 'Bearer ok' }));
+      java.getHeaderMap().put('Authorization', 'Bearer ok');
+      result = await java.getResponse();
+    }
+    result;
+  </js>`,
+  async search(ctx, keyword) {
+    const response = await ctx.http.request({
+      url: 'https://example.com/search',
+      responseType: 'text',
+    });
+    return [{
+      title: String(response.text || '') + '|' + await ctx.sourceLogin.getHeader(),
+      detailUrl: 'https://book/login-check',
+    }];
+  },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''';
+
 class _FakeRequestEngine implements RequestEngine {
   const _FakeRequestEngine();
 
@@ -728,6 +808,43 @@ class _FakeRequestEngine implements RequestEngine {
     SourceSession? session,
   }) async {
     throw UnimplementedError();
+  }
+
+  @override
+  bool isHtml(RuntimeHttpResponse response) => false;
+
+  @override
+  bool isJson(RuntimeHttpResponse response) => false;
+
+  @override
+  bool isRedirect(RuntimeHttpResponse response) => false;
+
+  @override
+  bool isChallenge(RuntimeHttpResponse response) => false;
+
+  @override
+  ChallengeDetectionResult detectChallenge(RuntimeHttpResponse response) {
+    return const ChallengeDetectionResult(isChallenge: false);
+  }
+}
+
+class _FakeSequenceRequestEngine implements RequestEngine {
+  _FakeSequenceRequestEngine(List<RuntimeHttpResponse> responses)
+    : _responses = List<RuntimeHttpResponse>.from(responses);
+
+  final List<RuntimeHttpResponse> _responses;
+  final List<RuntimeHttpRequest> requests = <RuntimeHttpRequest>[];
+
+  @override
+  Future<RuntimeHttpResponse> request(
+    RuntimeHttpRequest request, {
+    SourceSession? session,
+  }) async {
+    requests.add(request);
+    if (_responses.isEmpty) {
+      throw StateError('No fake responses remaining.');
+    }
+    return _responses.removeAt(0);
   }
 
   @override
