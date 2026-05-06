@@ -509,11 +509,15 @@ class AppAdvancedTheme {
     required this.updatedAt,
     required this.lightConfig,
     required this.darkConfig,
+    this.category,
     this.bottomNavGalleryId,
     this.coverGalleryId,
+    this.lightCoverGalleryId,
+    this.darkCoverGalleryId,
     this.launchImageGalleryId,
     this.appInterfaceFontFamilyKey,
     this.readerFontFamilyKey,
+    this.importFingerprint,
   });
 
   final String id;
@@ -522,12 +526,16 @@ class AppAdvancedTheme {
   final DateTime updatedAt;
   final AppAdvancedThemeModeConfig lightConfig;
   final AppAdvancedThemeModeConfig darkConfig;
+  final String? category;
   final String? bottomNavGalleryId;
   // Fallback cover gallery used when a book has neither real nor custom cover.
   final String? coverGalleryId;
+  final String? lightCoverGalleryId;
+  final String? darkCoverGalleryId;
   final String? launchImageGalleryId;
   final String? appInterfaceFontFamilyKey;
   final String? readerFontFamilyKey;
+  final String? importFingerprint;
 
   Map<String, dynamic> toJson() {
     return {
@@ -537,10 +545,15 @@ class AppAdvancedTheme {
       'updatedAt': updatedAt.toIso8601String(),
       'lightConfig': lightConfig.toJson(),
       'darkConfig': darkConfig.toJson(),
+      if (category != null && category!.trim().isNotEmpty) 'category': category,
       if (bottomNavGalleryId != null && bottomNavGalleryId!.trim().isNotEmpty)
         'bottomNavGalleryId': bottomNavGalleryId,
       if (coverGalleryId != null && coverGalleryId!.trim().isNotEmpty)
         'coverGalleryId': coverGalleryId,
+      if (lightCoverGalleryId != null && lightCoverGalleryId!.trim().isNotEmpty)
+        'lightCoverGalleryId': lightCoverGalleryId,
+      if (darkCoverGalleryId != null && darkCoverGalleryId!.trim().isNotEmpty)
+        'darkCoverGalleryId': darkCoverGalleryId,
       if (launchImageGalleryId != null &&
           launchImageGalleryId!.trim().isNotEmpty)
         'launchImageGalleryId': launchImageGalleryId,
@@ -549,6 +562,8 @@ class AppAdvancedTheme {
         'appInterfaceFontFamilyKey': appInterfaceFontFamilyKey,
       if (readerFontFamilyKey != null && readerFontFamilyKey!.trim().isNotEmpty)
         'readerFontFamilyKey': readerFontFamilyKey,
+      if (importFingerprint != null && importFingerprint!.trim().isNotEmpty)
+        'importFingerprint': importFingerprint,
     };
   }
 
@@ -583,14 +598,18 @@ class AppAdvancedTheme {
         fallbackColors: legacyColors,
         fallbackWallpaperPath: legacyWallpaperPath,
       ),
+      category: _readNullableString(json, 'category'),
       bottomNavGalleryId: _readNullableString(json, 'bottomNavGalleryId'),
       coverGalleryId: _readNullableString(json, 'coverGalleryId'),
+      lightCoverGalleryId: _readNullableString(json, 'lightCoverGalleryId'),
+      darkCoverGalleryId: _readNullableString(json, 'darkCoverGalleryId'),
       launchImageGalleryId: _readNullableString(json, 'launchImageGalleryId'),
       appInterfaceFontFamilyKey: _readNullableString(
         json,
         'appInterfaceFontFamilyKey',
       ),
       readerFontFamilyKey: _readNullableString(json, 'readerFontFamilyKey'),
+      importFingerprint: _readNullableString(json, 'importFingerprint'),
     );
   }
 
@@ -601,16 +620,24 @@ class AppAdvancedTheme {
     DateTime? updatedAt,
     AppAdvancedThemeModeConfig? lightConfig,
     AppAdvancedThemeModeConfig? darkConfig,
+    String? category,
+    bool clearCategory = false,
     String? bottomNavGalleryId,
     bool clearBottomNavGalleryId = false,
     String? coverGalleryId,
     bool clearCoverGalleryId = false,
+    String? lightCoverGalleryId,
+    bool clearLightCoverGalleryId = false,
+    String? darkCoverGalleryId,
+    bool clearDarkCoverGalleryId = false,
     String? launchImageGalleryId,
     bool clearLaunchImageGalleryId = false,
     String? appInterfaceFontFamilyKey,
     bool clearAppInterfaceFontFamilyKey = false,
     String? readerFontFamilyKey,
     bool clearReaderFontFamilyKey = false,
+    String? importFingerprint,
+    bool clearImportFingerprint = false,
   }) {
     return AppAdvancedTheme(
       id: id ?? this.id,
@@ -619,12 +646,21 @@ class AppAdvancedTheme {
       updatedAt: updatedAt ?? this.updatedAt,
       lightConfig: lightConfig ?? this.lightConfig,
       darkConfig: darkConfig ?? this.darkConfig,
+      category: clearCategory ? null : (category ?? this.category),
       bottomNavGalleryId:
           clearBottomNavGalleryId
               ? null
               : (bottomNavGalleryId ?? this.bottomNavGalleryId),
       coverGalleryId:
           clearCoverGalleryId ? null : (coverGalleryId ?? this.coverGalleryId),
+      lightCoverGalleryId:
+          clearLightCoverGalleryId
+              ? null
+              : (lightCoverGalleryId ?? this.lightCoverGalleryId),
+      darkCoverGalleryId:
+          clearDarkCoverGalleryId
+              ? null
+              : (darkCoverGalleryId ?? this.darkCoverGalleryId),
       launchImageGalleryId:
           clearLaunchImageGalleryId
               ? null
@@ -637,7 +673,50 @@ class AppAdvancedTheme {
           clearReaderFontFamilyKey
               ? null
               : (readerFontFamilyKey ?? this.readerFontFamilyKey),
+      importFingerprint:
+          clearImportFingerprint
+              ? null
+              : (importFingerprint ?? this.importFingerprint),
     );
+  }
+
+  String? coverGalleryIdFor(AppAdvancedThemeMode mode) {
+    final scoped = switch (mode) {
+      AppAdvancedThemeMode.light => lightCoverGalleryId,
+      AppAdvancedThemeMode.dark => darkCoverGalleryId,
+    };
+    final normalizedScoped = scoped?.trim();
+    if (normalizedScoped != null && normalizedScoped.isNotEmpty) {
+      return normalizedScoped;
+    }
+    final normalizedFallback = coverGalleryId?.trim();
+    if (normalizedFallback != null && normalizedFallback.isNotEmpty) {
+      return normalizedFallback;
+    }
+    return null;
+  }
+
+  bool get hasCoverGalleryBinding {
+    return (coverGalleryId?.trim().isNotEmpty ?? false) ||
+        (lightCoverGalleryId?.trim().isNotEmpty ?? false) ||
+        (darkCoverGalleryId?.trim().isNotEmpty ?? false);
+  }
+
+  AppAdvancedTheme copyWithCoverGalleryForMode(
+    AppAdvancedThemeMode mode, {
+    String? galleryId,
+    bool clear = false,
+  }) {
+    return switch (mode) {
+      AppAdvancedThemeMode.light => copyWith(
+        lightCoverGalleryId: galleryId,
+        clearLightCoverGalleryId: clear,
+      ),
+      AppAdvancedThemeMode.dark => copyWith(
+        darkCoverGalleryId: galleryId,
+        clearDarkCoverGalleryId: clear,
+      ),
+    };
   }
 
   AppAdvancedThemeModeConfig configFor(AppAdvancedThemeMode mode) {

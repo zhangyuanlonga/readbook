@@ -917,6 +917,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                       galleries:
                           ref.read(coverGalleriesProvider).valueOrNull ??
                           const [],
+                      brightness: Theme.of(context).brightness,
                       bookId: currentBookId,
                     );
                     return ResolvedBookCoverView(

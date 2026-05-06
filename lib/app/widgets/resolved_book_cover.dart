@@ -36,12 +36,14 @@ class ResolvedBookCover {
 
 final ManagedFilePathResolver _managedFilePathResolver =
     ManagedFilePathResolver();
+final Map<String, String?> _resolvedFilePathCache = <String, String?>{};
 
 ResolvedBookCover resolveBookCover({
   String? realCoverUrl,
   String? customCoverPath,
   AppAdvancedTheme? activeTheme,
   Iterable<CoverGallery> galleries = const <CoverGallery>[],
+  Brightness? brightness,
   String? bookId,
   String? sourceId,
   String? detailUrl,
@@ -56,7 +58,11 @@ ResolvedBookCover resolveBookCover({
     return resolvedReal;
   }
 
-  final galleryId = activeTheme?.coverGalleryId?.trim() ?? '';
+  final mode =
+      brightness == Brightness.dark
+          ? AppAdvancedThemeMode.dark
+          : AppAdvancedThemeMode.light;
+  final galleryId = activeTheme?.coverGalleryIdFor(mode)?.trim() ?? '';
   if (galleryId.isNotEmpty) {
     final gallery = _findGalleryById(galleries, galleryId);
     final galleryPath = _resolveGalleryImagePath(
@@ -140,8 +146,7 @@ ResolvedBookCover? _resolveRealCover(String? realCoverUrl) {
     return null;
   }
   if (uri.scheme == 'file') {
-    final resolvedPath = _managedFilePathResolver
-        .tryResolveExistingFilePathSync(File.fromUri(uri).path);
+    final resolvedPath = _resolveManagedFilePathSync(File.fromUri(uri).path);
     if (resolvedPath == null) {
       return null;
     }
@@ -151,13 +156,26 @@ ResolvedBookCover? _resolveRealCover(String? realCoverUrl) {
 }
 
 ResolvedBookCover? _resolveCustomCover(String? customCoverPath) {
-  final normalized = _managedFilePathResolver.tryResolveExistingFilePathSync(
-    customCoverPath,
-  );
+  final normalized = _resolveManagedFilePathSync(customCoverPath);
   if (normalized == null || normalized.isEmpty) {
     return null;
   }
   return ResolvedBookCover.custom(normalized);
+}
+
+String? _resolveManagedFilePathSync(String? rawPath) {
+  final normalizedKey = rawPath?.trim() ?? '';
+  if (normalizedKey.isEmpty) {
+    return null;
+  }
+  if (_resolvedFilePathCache.containsKey(normalizedKey)) {
+    return _resolvedFilePathCache[normalizedKey];
+  }
+  final resolved = _managedFilePathResolver.tryResolveExistingFilePathSync(
+    rawPath,
+  );
+  _resolvedFilePathCache[normalizedKey] = resolved;
+  return resolved;
 }
 
 CoverGallery? _findGalleryById(
@@ -183,9 +201,7 @@ String? _resolveGalleryImagePath(
   }
 
   final validPaths = gallery.imagePaths
-      .map(
-        (path) => _managedFilePathResolver.tryResolveExistingFilePathSync(path),
-      )
+      .map((path) => _resolveManagedFilePathSync(path))
       .whereType<String>()
       .toList(growable: false);
   if (validPaths.isEmpty) {

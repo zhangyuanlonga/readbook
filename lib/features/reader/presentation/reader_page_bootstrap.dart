@@ -193,16 +193,22 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       },
     );
     try {
-      final loadedSettings = await _preferencesService.loadSettings();
+      final loadedSettingsFuture = _preferencesService.loadSettings();
+      final loadedVisualOverridesFuture =
+          _visualOverridesService.loadOverrides();
+      final storedCustomBackgroundsFuture = _loadUnifiedCustomBackgrounds();
+      final progressFuture = _preferencesService.loadProgress(_currentBookId);
+
+      final loadedSettings = await loadedSettingsFuture;
       var normalizedSettings = _typographyMetricsResolver.normalizeSettings(
         loadedSettings,
       );
-      var loadedVisualOverrides = await _visualOverridesService.loadOverrides();
+      var loadedVisualOverrides = await loadedVisualOverridesFuture;
       var availableCustomFonts = const <ReaderCustomFontEntry>[];
       var storedCustomBackgrounds = const <String>[];
 
       try {
-        storedCustomBackgrounds = await _loadUnifiedCustomBackgrounds();
+        storedCustomBackgrounds = await storedCustomBackgroundsFuture;
       } catch (_) {
         storedCustomBackgrounds = const <String>[];
       }
@@ -303,9 +309,13 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
+      final recentColorsFuture = _preferencesService.loadRecentBodyTextColors();
+      final autoSwitchSourceOnFailureFuture =
+          _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
+      final readingRecordEnabledFuture =
+          _systemSettingsService.loadReadRecordEnabled();
       try {
-        final recentColors =
-            await _preferencesService.loadRecentBodyTextColors();
+        final recentColors = await recentColorsFuture;
         if (mounted) {
           setState(() {
             _recentBodyTextColors = recentColors;
@@ -318,19 +328,18 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       }
       try {
         _autoSwitchSourceOnFailureEnabled =
-            await _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
+            await autoSwitchSourceOnFailureFuture;
       } catch (_) {
         _autoSwitchSourceOnFailureEnabled = false;
       }
       try {
-        _readingRecordEnabled =
-            await _systemSettingsService.loadReadRecordEnabled();
+        _readingRecordEnabled = await readingRecordEnabledFuture;
       } catch (_) {
         _readingRecordEnabled = true;
       }
 
       final progressLoadStopwatch = Stopwatch()..start();
-      final progress = await _preferencesService.loadProgress(_currentBookId);
+      final progress = await progressFuture;
       progressLoadMs = progressLoadStopwatch.elapsedMilliseconds;
       _bootstrapProgress = progress;
       progressHit = progress != null;

@@ -1,6 +1,16 @@
 part of 'appearance_page.dart';
 
 extension on _AppearancePageState {
+  List<String> get _visibleBackgroundPaths {
+    final keyword = _backgroundSearchQuery.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return _backgroundPaths;
+    }
+    return _backgroundPaths
+        .where((path) => p.basename(path).toLowerCase().contains(keyword))
+        .toList(growable: false);
+  }
+
   Widget _buildAppearancePage(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final selectedThemeMode = ref.watch(appThemeModeProvider);
@@ -429,22 +439,38 @@ extension on _AppearancePageState {
     final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final coverGalleries =
         ref.watch(coverGalleriesProvider).valueOrNull ?? const [];
-    final activeGalleryId = activeTheme?.coverGalleryId?.trim() ?? '';
-    final activeGalleryName = coverGalleries
-        .where((gallery) => gallery.id == activeGalleryId)
-        .map((gallery) => gallery.name.trim())
-        .where((name) => name.isNotEmpty)
-        .cast<String?>()
-        .firstWhere((name) => name != null, orElse: () => null);
+    String? resolveGalleryName(String? galleryId) {
+      final normalizedId = galleryId?.trim() ?? '';
+      if (normalizedId.isEmpty) {
+        return null;
+      }
+      return coverGalleries
+          .where((gallery) => gallery.id == normalizedId)
+          .map((gallery) => gallery.name.trim())
+          .where((name) => name.isNotEmpty)
+          .cast<String?>()
+          .firstWhere((name) => name != null, orElse: () => null);
+    }
+
+    final lightGalleryName = resolveGalleryName(
+      activeTheme?.coverGalleryIdFor(AppAdvancedThemeMode.light),
+    );
+    final darkGalleryName = resolveGalleryName(
+      activeTheme?.coverGalleryIdFor(AppAdvancedThemeMode.dark),
+    );
+    final coverSubtitle = switch ((lightGalleryName, darkGalleryName)) {
+      (null, null) => '预览当前高级主题的实际封面效果，未绑定图集时会回退为文字封面。',
+      (final light?, final dark?) when light == dark => '当前高级主题已绑定：$light',
+      (final light?, final dark?) => '当前高级主题已绑定：浅色 $light / 深色 $dark',
+      (final light?, null) => '当前高级主题已绑定：浅色 $light',
+      (null, final dark?) => '当前高级主题已绑定：深色 $dark',
+    };
 
     return _buildSectionCard(
       context,
       icon: Icons.photo_library_outlined,
       title: '封面图集',
-      subtitle:
-          activeGalleryName == null
-              ? '预览当前高级主题的实际封面效果，未绑定图集时会回退为文字封面。'
-              : '当前高级主题已绑定：$activeGalleryName',
+      subtitle: coverSubtitle,
       child: LayoutBuilder(
         builder: (context, constraints) {
           const spacing = 10.0;
@@ -468,6 +494,7 @@ extension on _AppearancePageState {
                           cover: resolveBookCover(
                             activeTheme: activeTheme,
                             galleries: coverGalleries,
+                            brightness: Theme.of(context).brightness,
                             bookId: 'appearance_cover_sample_$sample',
                             sourceId: 'appearance.preview',
                             detailUrl:
@@ -859,6 +886,32 @@ extension on _AppearancePageState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        TextField(
+          controller: _backgroundSearchController,
+          onChanged: (value) {
+            _updateBackgroundSearchState(() {
+              _backgroundSearchQuery = value;
+            });
+          },
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search_rounded),
+            hintText: '搜索应用背景文件名',
+            suffixIcon:
+                _backgroundSearchQuery.trim().isEmpty
+                    ? null
+                    : IconButton(
+                      tooltip: '清空搜索',
+                      onPressed: () {
+                        _backgroundSearchController.clear();
+                        _updateBackgroundSearchState(() {
+                          _backgroundSearchQuery = '';
+                        });
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+          ),
+        ),
+        const SizedBox(height: 10),
         if (_isLoadingBackgrounds)
           const SizedBox(
             height: 80,
@@ -872,7 +925,7 @@ extension on _AppearancePageState {
               final itemWidth =
                   (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
 
-              if (_backgroundPaths.isEmpty) {
+              if (_visibleBackgroundPaths.isEmpty) {
                 return const SizedBox(
                   width: double.infinity,
                   child: ImageResourceEmptyStateCard(
@@ -886,7 +939,7 @@ extension on _AppearancePageState {
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
-                children: _backgroundPaths
+                children: _visibleBackgroundPaths
                     .map((path) {
                       return GestureDetector(
                         onTap: () => _previewBackground(path),
@@ -1340,10 +1393,9 @@ class _AppearanceNavigationVisibilityPanelState
     });
 
     try {
-      await ref.read(appShellNavigationProvider.notifier).setTabVisible(
-            tab,
-            enabled,
-          );
+      await ref
+          .read(appShellNavigationProvider.notifier)
+          .setTabVisible(tab, enabled);
     } finally {
       if (mounted) {
         setState(() {
@@ -1416,5 +1468,4 @@ class _AppearanceNavigationVisibilityPanelState
       ),
     );
   }
-
 }

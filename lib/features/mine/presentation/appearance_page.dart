@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -19,6 +20,7 @@ import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/appearance_page_resource_service.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_provider.dart';
@@ -59,7 +61,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       ReaderFontRegistryService();
   late final ImageSelectionService _imageSelectionService;
   late final AppearancePageResourceService _resourceService;
+  final TextEditingController _backgroundSearchController =
+      TextEditingController();
   List<ReaderCustomFontEntry> _availableCustomFonts = const [];
+  String _backgroundSearchQuery = '';
 
   @override
   void initState() {
@@ -90,6 +95,19 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     setState(() {
       _availableCustomFonts = resources.availableFonts.toList(growable: false);
     });
+  }
+
+  void _updateBackgroundSearchState(VoidCallback mutation) {
+    if (!mounted) {
+      return;
+    }
+    setState(mutation);
+  }
+
+  @override
+  void dispose() {
+    _backgroundSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _uploadBackground() async {

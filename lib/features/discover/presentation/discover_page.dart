@@ -17,6 +17,7 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/source_health.dart';
 import '../../book/application/book_presentation_query_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
@@ -91,6 +92,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   List<ExploreCategoryItem> _categories = const <ExploreCategoryItem>[];
   int _selectedCategoryIndex = -1;
   List<Book> _books = const <Book>[];
+  Map<String, BookDisplayState> _bookPresentationByTargetKey =
+      const <String, BookDisplayState>{};
   Map<String, SourceHealthSnapshot> _sourceHealthById =
       const <String, SourceHealthSnapshot>{};
 
@@ -1035,163 +1038,154 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     final palette = _resolvedPalette(context);
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
+    final targetKey = BookMetadataOverride.remoteTargetKey(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+    );
+    final presented = _bookPresentationByTargetKey[targetKey];
+    final displayTitle =
+        presented?.displayTitle.trim().isNotEmpty == true
+            ? presented!.displayTitle
+            : book.title;
+    final displayAuthor = _normalizeSnippet(
+      presented?.displayAuthor ?? book.author,
+    );
+    final displayIntro = _normalizeSnippet(
+      presented?.displayIntro ?? book.intro,
+    );
+    final displayCover = presented?.displayCover ?? book.coverUrl;
 
-    return FutureBuilder<BookDisplayState>(
-      future: _resolvePresentedBook(book),
-      builder: (context, snapshot) {
-        final presented = snapshot.data;
-        final displayTitle =
-            presented?.displayTitle.trim().isNotEmpty == true
-                ? presented!.displayTitle
-                : book.title;
-        final displayAuthor = _normalizeSnippet(
-          presented?.displayAuthor ?? book.author,
-        );
-        final displayIntro = _normalizeSnippet(
-          presented?.displayIntro ?? book.intro,
-        );
-        final displayCover = presented?.displayCover ?? book.coverUrl;
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final useCondensedPhoneDensity =
-                AppLayout.useCondensedPhoneDensityForWidth(
-                  constraints.maxWidth,
-                );
-            final cardVerticalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
-            final cardHorizontalPadding =
-                useCondensedPhoneDensity ? 10.0 : 12.0;
-            final cardBottomMargin = useCondensedPhoneDensity ? 8.0 : 10.0;
-            final coverWidth = useCondensedPhoneDensity ? 46.0 : 52.0;
-            final coverHeight = useCondensedPhoneDensity ? 64.0 : 72.0;
-            final introMaxLines = useCondensedPhoneDensity ? 1 : 2;
-            final sectionGap = useCondensedPhoneDensity ? 5.0 : 6.0;
-            final compactPill = useCondensedPhoneDensity;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useCondensedPhoneDensity =
+            AppLayout.useCondensedPhoneDensityForWidth(constraints.maxWidth);
+        final cardVerticalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
+        final cardHorizontalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
+        final cardBottomMargin = useCondensedPhoneDensity ? 8.0 : 10.0;
+        final coverWidth = useCondensedPhoneDensity ? 46.0 : 52.0;
+        final coverHeight = useCondensedPhoneDensity ? 64.0 : 72.0;
+        final introMaxLines = useCondensedPhoneDensity ? 1 : 2;
+        final sectionGap = useCondensedPhoneDensity ? 5.0 : 6.0;
+        final compactPill = useCondensedPhoneDensity;
 
-            return Card(
-              color: palette.cardColor,
-              shape: _cardShape(context),
-              margin: EdgeInsets.only(bottom: cardBottomMargin),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => _openBookDetail(book, heroTag: heroTag),
-                borderRadius: BorderRadius.circular(12),
-                mouseCursor: SystemMouseCursors.click,
-                hoverColor: palette.primaryColor.withValues(alpha: 0.06),
-                focusColor: palette.primaryColor.withValues(alpha: 0.1),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: cardHorizontalPadding,
-                    vertical: cardVerticalPadding,
+        return Card(
+          color: palette.cardColor,
+          shape: _cardShape(context),
+          margin: EdgeInsets.only(bottom: cardBottomMargin),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _openBookDetail(book, heroTag: heroTag),
+            borderRadius: BorderRadius.circular(12),
+            mouseCursor: SystemMouseCursors.click,
+            hoverColor: palette.primaryColor.withValues(alpha: 0.06),
+            focusColor: palette.primaryColor.withValues(alpha: 0.1),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: cardHorizontalPadding,
+                vertical: cardVerticalPadding,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  _buildCoverPreview(
+                    realCoverUrl: displayCover,
+                    title: displayTitle,
+                    author: displayAuthor,
+                    bookId: book.id,
+                    sourceId: book.sourceId,
+                    detailUrl: book.detailUrl,
+                    heroTag: heroTag,
+                    width: coverWidth,
+                    height: coverHeight,
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      _buildCoverPreview(
-                        realCoverUrl: displayCover,
-                        title: displayTitle,
-                        author: displayAuthor,
-                        bookId: book.id,
-                        sourceId: book.sourceId,
-                        detailUrl: book.detailUrl,
-                        heroTag: heroTag,
-                        width: coverWidth,
-                        height: coverHeight,
-                      ),
-                      SizedBox(width: useCondensedPhoneDensity ? 10 : 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  SizedBox(width: useCondensedPhoneDensity ? 10 : 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          displayTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.cardTextColor,
+                          ),
+                        ),
+                        SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
                           children: <Widget>[
-                            Text(
-                              displayTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
+                            _buildInfoPill(
+                              context,
+                              label: '来源',
+                              value: _selectedSource?.name ?? book.sourceId,
+                              compact: compactPill,
+                            ),
+                            if (displayAuthor != null &&
+                                displayAuthor.isNotEmpty)
+                              _buildInfoPill(
                                 context,
-                              ).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: palette.cardTextColor,
-                              ),
-                            ),
-                            SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: <Widget>[
-                                _buildInfoPill(
-                                  context,
-                                  label: '来源',
-                                  value: _selectedSource?.name ?? book.sourceId,
-                                  compact: compactPill,
-                                ),
-                                if (displayAuthor != null &&
-                                    displayAuthor.isNotEmpty)
-                                  _buildInfoPill(
-                                    context,
-                                    label: '作者',
-                                    value: displayAuthor,
-                                    compact: compactPill,
-                                  ),
-                              ],
-                            ),
-                            if (latestChapter != null &&
-                                latestChapter.isNotEmpty)
-                              Padding(
-                                padding: EdgeInsets.only(top: sectionGap),
-                                child: Text(
-                                  '最新章节: $latestChapter',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ),
-                            if (displayIntro != null && displayIntro.isNotEmpty)
-                              Padding(
-                                padding: EdgeInsets.only(top: sectionGap),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: useCondensedPhoneDensity ? 5 : 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: palette.elevatedSurfaceColor,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    displayIntro,
-                                    maxLines: introMaxLines,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(
-                                      color: palette.textSecondaryColor,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ),
+                                label: '作者',
+                                value: displayAuthor,
+                                compact: compactPill,
                               ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: palette.textSecondaryColor,
-                      ),
-                    ],
+                        if (latestChapter != null && latestChapter.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(top: sectionGap),
+                            child: Text(
+                              '最新章节: $latestChapter',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        if (displayIntro != null && displayIntro.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(top: sectionGap),
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: useCondensedPhoneDensity ? 5 : 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.elevatedSurfaceColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                displayIntro,
+                                maxLines: introMaxLines,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: palette.textSecondaryColor,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: palette.textSecondaryColor,
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
-  }
-
-  Future<BookDisplayState> _resolvePresentedBook(Book book) async {
-    return _bookPresentationService.resolveRemoteBook(book);
   }
 
   Widget _buildCoverPreview({
@@ -1209,6 +1203,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       realCoverUrl: realCoverUrl,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,
@@ -1594,6 +1589,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       if (reset) {
         _isLoadingBooks = true;
         _books = const <Book>[];
+        _bookPresentationByTargetKey = const <String, BookDisplayState>{};
         _nextPage = 1;
         _hasMore = false;
       } else {
@@ -1625,6 +1621,12 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         _isLoadingMore = false;
         _refreshSourceHealth(source.id);
       });
+      unawaited(
+        _refreshBookPresentationMap(
+          books: deduplicatedBooks,
+          requestToken: requestToken,
+        ),
+      );
     } catch (error) {
       if (!mounted || requestToken != _bookRequestToken) {
         return;
@@ -1636,6 +1638,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         _hasMore = !reset;
         if (reset) {
           _books = const <Book>[];
+          _bookPresentationByTargetKey = const <String, BookDisplayState>{};
         }
         _bookErrorText = message;
         _refreshSourceHealth(source.id);
@@ -1643,6 +1646,20 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     } finally {
       lease.release();
     }
+  }
+
+  Future<void> _refreshBookPresentationMap({
+    required List<Book> books,
+    required int requestToken,
+  }) async {
+    final presentationMap = await _bookPresentationService
+        .loadRemotePresentationMap(books);
+    if (!mounted || requestToken != _bookRequestToken) {
+      return;
+    }
+    setState(() {
+      _bookPresentationByTargetKey = presentationMap;
+    });
   }
 
   Future<void> _refreshCurrentView() async {

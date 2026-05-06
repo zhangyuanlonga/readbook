@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,12 +30,11 @@ class AdvancedThemeService {
   AdvancedThemeService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _assetStore = assetStore ?? ManagedAssetStore();
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
@@ -97,15 +97,16 @@ class AdvancedThemeService {
     }
     final persistedThemes = <Map<String, dynamic>>[];
     for (final theme in themes) {
-      persistedThemes.add((await _normalizeThemeForPersistence(theme)).toJson());
+      persistedThemes.add(
+        (await _normalizeThemeForPersistence(theme)).toJson(),
+      );
     }
-    await prefs.setString(
-      _themesKey,
-      jsonEncode(persistedThemes),
-    );
+    await prefs.setString(_themesKey, jsonEncode(persistedThemes));
   }
 
-  Future<AppAdvancedTheme> _normalizeThemeForRuntime(AppAdvancedTheme theme) async {
+  Future<AppAdvancedTheme> _normalizeThemeForRuntime(
+    AppAdvancedTheme theme,
+  ) async {
     return theme.copyWith(
       lightConfig: await _normalizeModeConfigForRuntime(theme.lightConfig),
       darkConfig: await _normalizeModeConfigForRuntime(theme.darkConfig),
@@ -158,15 +159,24 @@ class AdvancedThemeService {
         original.lightConfig.wallpaperAsset?.normalizedResolvedPath !=
             normalized.lightConfig.wallpaperAsset?.normalizedResolvedPath ||
         original.lightConfig.readerWallpaperAsset?.normalizedRelativePath !=
-            normalized.lightConfig.readerWallpaperAsset?.normalizedRelativePath ||
+            normalized
+                .lightConfig
+                .readerWallpaperAsset
+                ?.normalizedRelativePath ||
         original.lightConfig.readerWallpaperAsset?.normalizedResolvedPath !=
-            normalized.lightConfig.readerWallpaperAsset?.normalizedResolvedPath ||
+            normalized
+                .lightConfig
+                .readerWallpaperAsset
+                ?.normalizedResolvedPath ||
         original.darkConfig.wallpaperAsset?.normalizedRelativePath !=
             normalized.darkConfig.wallpaperAsset?.normalizedRelativePath ||
         original.darkConfig.wallpaperAsset?.normalizedResolvedPath !=
             normalized.darkConfig.wallpaperAsset?.normalizedResolvedPath ||
         original.darkConfig.readerWallpaperAsset?.normalizedRelativePath !=
-            normalized.darkConfig.readerWallpaperAsset?.normalizedRelativePath ||
+            normalized
+                .darkConfig
+                .readerWallpaperAsset
+                ?.normalizedRelativePath ||
         original.darkConfig.readerWallpaperAsset?.normalizedResolvedPath !=
             normalized.darkConfig.readerWallpaperAsset?.normalizedResolvedPath;
   }
@@ -233,10 +243,17 @@ class AdvancedThemeService {
     await saveThemes(updated);
     if (removedTheme != null && deleteAssociatedResources) {
       final targetTheme = removedTheme!;
-      final paths = <String>{
+      final appearancePaths = <String>{
         ...[
               targetTheme.lightConfig.wallpaperPath,
               targetTheme.darkConfig.wallpaperPath,
+            ]
+            .whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty),
+      };
+      final readerPaths = <String>{
+        ...[
               targetTheme.lightConfig.readerWallpaperPath,
               targetTheme.darkConfig.readerWallpaperPath,
             ]
@@ -244,8 +261,34 @@ class AdvancedThemeService {
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty),
       };
-      for (final path in paths) {
-        await deleteWallpaper(path);
+      final coverGalleryIds = _coverGalleryIdsForTheme(targetTheme);
+      final launchGalleryId = targetTheme.launchImageGalleryId?.trim();
+      final bottomNavGalleryId = targetTheme.bottomNavGalleryId?.trim();
+
+      for (final path in appearancePaths) {
+        if (!_isAppearanceBackgroundReferenced(updated, path)) {
+          await deleteWallpaper(path);
+        }
+      }
+      for (final path in readerPaths) {
+        if (!_isReaderBackgroundReferenced(updated, path)) {
+          await ReaderBackgroundService().deleteBackground(path);
+        }
+      }
+      for (final galleryId in coverGalleryIds) {
+        if (!_isCoverGalleryReferenced(updated, galleryId)) {
+          await _safeDeleteCoverGallery(galleryId);
+        }
+      }
+      if (launchGalleryId != null &&
+          launchGalleryId.isNotEmpty &&
+          !_isLaunchGalleryReferenced(updated, launchGalleryId)) {
+        await _safeDeleteLaunchGallery(launchGalleryId);
+      }
+      if (bottomNavGalleryId != null &&
+          bottomNavGalleryId.isNotEmpty &&
+          !_isBottomNavGalleryReferenced(updated, bottomNavGalleryId)) {
+        await _safeDeleteBottomNavGallery(bottomNavGalleryId);
       }
     }
     if (deleteAssociatedResources) {
@@ -316,6 +359,8 @@ class AdvancedThemeService {
   }
 
   Future<AppAdvancedTheme> importThemeColorJson(String rawJson) async {
+    final fingerprint = _computeImportFingerprint(utf8.encode(rawJson));
+    await _ensureImportFingerprintAvailable(fingerprint);
     final decoded = jsonDecode(rawJson);
     if (decoded is! Map) {
       throw const FormatException('Invalid theme JSON.');
@@ -357,6 +402,7 @@ class AdvancedThemeService {
       updatedAt: now,
       lightConfig: lightConfig,
       darkConfig: darkConfig,
+      importFingerprint: fingerprint,
     );
     return saveTheme(importedTheme);
   }
@@ -407,17 +453,52 @@ class AdvancedThemeService {
     final coverService = CoverGalleryService(
       preferences: await _preferencesFuture,
     );
-    final coverGallery = await coverService.loadGallery(
-      theme.coverGalleryId ?? '',
+    final lightCoverGalleryId = theme.coverGalleryIdFor(
+      AppAdvancedThemeMode.light,
     );
-    final coverManifest = await _appendImageGalleryToArchive(
-      archive,
-      folder: 'cover_gallery',
-      imagePaths: coverGallery?.imagePaths ?? const <String>[],
-      name: coverGallery?.name,
+    final darkCoverGalleryId = theme.coverGalleryIdFor(
+      AppAdvancedThemeMode.dark,
     );
-    if (coverManifest != null) {
-      manifest['coverGallery'] = coverManifest;
+    if (lightCoverGalleryId != null &&
+        darkCoverGalleryId != null &&
+        lightCoverGalleryId == darkCoverGalleryId) {
+      final coverGallery = await coverService.loadGallery(lightCoverGalleryId);
+      final coverManifest = await _appendImageGalleryToArchive(
+        archive,
+        folder: 'cover_gallery',
+        imagePaths: coverGallery?.imagePaths ?? const <String>[],
+        name: coverGallery?.name,
+      );
+      if (coverManifest != null) {
+        manifest['coverGallery'] = coverManifest;
+      }
+    } else {
+      final lightCoverGallery =
+          lightCoverGalleryId == null
+              ? null
+              : await coverService.loadGallery(lightCoverGalleryId);
+      final darkCoverGallery =
+          darkCoverGalleryId == null
+              ? null
+              : await coverService.loadGallery(darkCoverGalleryId);
+      final lightCoverManifest = await _appendImageGalleryToArchive(
+        archive,
+        folder: 'cover_gallery_light',
+        imagePaths: lightCoverGallery?.imagePaths ?? const <String>[],
+        name: lightCoverGallery?.name,
+      );
+      if (lightCoverManifest != null) {
+        manifest['lightCoverGallery'] = lightCoverManifest;
+      }
+      final darkCoverManifest = await _appendImageGalleryToArchive(
+        archive,
+        folder: 'cover_gallery_dark',
+        imagePaths: darkCoverGallery?.imagePaths ?? const <String>[],
+        name: darkCoverGallery?.name,
+      );
+      if (darkCoverManifest != null) {
+        manifest['darkCoverGallery'] = darkCoverManifest;
+      }
     }
 
     final launchService = LaunchImageGalleryService(
@@ -462,6 +543,8 @@ class AdvancedThemeService {
   }
 
   Future<AppAdvancedTheme> importThemeBundleZipBytes(List<int> bytes) async {
+    final fingerprint = _computeImportFingerprint(bytes);
+    await _ensureImportFingerprintAvailable(fingerprint);
     final archive = _decodeZipArchiveBytes(bytes);
     final manifestFile = archive.findFile('manifest.json');
     if (manifestFile == null) {
@@ -497,6 +580,8 @@ class AdvancedThemeService {
     final now = DateTime.now().toUtc();
     final themeDirectory = await _themeDirectory(themeId);
     String? coverGalleryId;
+    String? lightCoverGalleryId;
+    String? darkCoverGalleryId;
     String? launchImageGalleryId;
     String? bottomNavGalleryId;
     final importedFontFamilyKeys = <String>[];
@@ -587,6 +672,21 @@ class AdvancedThemeService {
         manifest['coverGallery'],
         isLaunchGallery: false,
       );
+      if (coverGalleryId != null) {
+        lightCoverGalleryId = coverGalleryId;
+        darkCoverGalleryId = coverGalleryId;
+      } else {
+        lightCoverGalleryId = await _importImageGalleryFromBundle(
+          archive,
+          manifest['lightCoverGallery'],
+          isLaunchGallery: false,
+        );
+        darkCoverGalleryId = await _importImageGalleryFromBundle(
+          archive,
+          manifest['darkCoverGallery'],
+          isLaunchGallery: false,
+        );
+      }
       launchImageGalleryId = await _importImageGalleryFromBundle(
         archive,
         manifest['launchImageGallery'],
@@ -620,8 +720,20 @@ class AdvancedThemeService {
           readerWallpaperPath: importedDarkReaderWallpaperPath,
           clearReaderWallpaperPath: importedDarkReaderWallpaperPath == null,
         ),
-        coverGalleryId: coverGalleryId,
-        clearCoverGalleryId: coverGalleryId == null,
+        coverGalleryId:
+            lightCoverGalleryId != null &&
+                    darkCoverGalleryId != null &&
+                    lightCoverGalleryId == darkCoverGalleryId
+                ? lightCoverGalleryId
+                : null,
+        clearCoverGalleryId:
+            !(lightCoverGalleryId != null &&
+                darkCoverGalleryId != null &&
+                lightCoverGalleryId == darkCoverGalleryId),
+        lightCoverGalleryId: lightCoverGalleryId,
+        clearLightCoverGalleryId: lightCoverGalleryId == null,
+        darkCoverGalleryId: darkCoverGalleryId,
+        clearDarkCoverGalleryId: darkCoverGalleryId == null,
         launchImageGalleryId: launchImageGalleryId,
         clearLaunchImageGalleryId: launchImageGalleryId == null,
         bottomNavGalleryId: bottomNavGalleryId,
@@ -640,12 +752,17 @@ class AdvancedThemeService {
         clearReaderFontFamilyKey:
             importedFonts.hasManifest &&
             importedFonts.readerFontFamilyKey == null,
+        importFingerprint: fingerprint,
       );
       return saveTheme(theme);
     } catch (_) {
       await _cleanupImportedThemeBundleArtifacts(
         themeDirectory: themeDirectory,
-        coverGalleryId: coverGalleryId,
+        coverGalleryIds: <String?>[
+          coverGalleryId,
+          lightCoverGalleryId,
+          darkCoverGalleryId,
+        ],
         launchImageGalleryId: launchImageGalleryId,
         bottomNavGalleryId: bottomNavGalleryId,
         importedFontFamilyKeys: importedFontFamilyKeys,
@@ -657,6 +774,8 @@ class AdvancedThemeService {
   }
 
   Future<AppAdvancedTheme> importRedThemePackageBytes(List<int> bytes) async {
+    final fingerprint = _computeImportFingerprint(bytes);
+    await _ensureImportFingerprintAvailable(fingerprint);
     final archive = _decodeRedThemeArchiveBytes(bytes);
     final themeFile = archive.findFile('theme.json');
     if (themeFile == null) {
@@ -678,6 +797,8 @@ class AdvancedThemeService {
     final now = DateTime.now().toUtc();
     final themeDirectory = await _themeDirectory(themeId);
     String? coverGalleryId;
+    String? lightCoverGalleryId;
+    String? darkCoverGalleryId;
     String? bottomNavGalleryId;
     final sharedBackgroundPaths = <String>[];
     final sharedReaderBackgroundPaths = <String>[];
@@ -740,7 +861,10 @@ class AdvancedThemeService {
           lightReaderSchema?.backgroundPath == null
               ? null
               : await ReaderBackgroundService().importBackground(
-                bytes: await File(lightReaderSchema!.backgroundPath!).readAsBytes(),
+                bytes:
+                    await File(
+                      lightReaderSchema!.backgroundPath!,
+                    ).readAsBytes(),
                 fileName: p.basename(lightReaderSchema.backgroundPath!),
               );
       if (importedLightReaderBackgroundPath != null) {
@@ -750,7 +874,8 @@ class AdvancedThemeService {
           darkReaderSchema?.backgroundPath == null
               ? null
               : await ReaderBackgroundService().importBackground(
-                bytes: await File(darkReaderSchema!.backgroundPath!).readAsBytes(),
+                bytes:
+                    await File(darkReaderSchema!.backgroundPath!).readAsBytes(),
                 fileName: p.basename(darkReaderSchema.backgroundPath!),
               );
       if (importedDarkReaderBackgroundPath != null) {
@@ -777,14 +902,30 @@ class AdvancedThemeService {
                 overlayOpacity: darkReaderSchema.overlayOpacity,
               );
 
-      coverGalleryId = await _importRedCoverGallery(
+      final lightRawCoverGalleryId =
+          lightSection['coverGalleryId']?.toString().trim() ?? '';
+      final darkRawCoverGalleryId =
+          darkSection['coverGalleryId']?.toString().trim() ?? '';
+      lightCoverGalleryId = await _importRedCoverGallery(
         archive,
-        galleryIds: <String>{
-          lightSection['coverGalleryId']?.toString().trim() ?? '',
-          darkSection['coverGalleryId']?.toString().trim() ?? '',
-        },
-        fallbackName: rawName.isEmpty ? 'Red 主题封面' : '$rawName 封面',
+        galleryIds: <String>{lightRawCoverGalleryId},
+        fallbackName: rawName.isEmpty ? 'Red 日间封面' : '$rawName 日间封面',
       );
+      if (lightRawCoverGalleryId.isNotEmpty &&
+          lightRawCoverGalleryId == darkRawCoverGalleryId) {
+        darkCoverGalleryId = lightCoverGalleryId;
+      } else {
+        darkCoverGalleryId = await _importRedCoverGallery(
+          archive,
+          galleryIds: <String>{darkRawCoverGalleryId},
+          fallbackName: rawName.isEmpty ? 'Red 夜间封面' : '$rawName 夜间封面',
+        );
+      }
+      if (lightCoverGalleryId != null &&
+          darkCoverGalleryId != null &&
+          lightCoverGalleryId == darkCoverGalleryId) {
+        coverGalleryId = lightCoverGalleryId;
+      }
       bottomNavGalleryId = await _importRedBottomNavGallery(
         archive,
         lightPackId: lightSection['navbarPackId']?.toString(),
@@ -808,13 +949,20 @@ class AdvancedThemeService {
           readerSchema: resolvedDarkReaderSchema,
         ),
         coverGalleryId: coverGalleryId,
+        lightCoverGalleryId: lightCoverGalleryId,
+        darkCoverGalleryId: darkCoverGalleryId,
         bottomNavGalleryId: bottomNavGalleryId,
+        importFingerprint: fingerprint,
       );
       return saveTheme(theme);
     } catch (_) {
       await _cleanupImportedThemeBundleArtifacts(
         themeDirectory: themeDirectory,
-        coverGalleryId: coverGalleryId,
+        coverGalleryIds: <String?>[
+          coverGalleryId,
+          lightCoverGalleryId,
+          darkCoverGalleryId,
+        ],
         bottomNavGalleryId: bottomNavGalleryId,
         sharedBackgroundPaths: sharedBackgroundPaths,
         sharedReaderBackgroundPaths: sharedReaderBackgroundPaths,
@@ -826,6 +974,8 @@ class AdvancedThemeService {
   Future<AppAdvancedTheme> importRgShareThemePackageBytes(
     List<int> bytes,
   ) async {
+    final fingerprint = _computeImportFingerprint(bytes);
+    await _ensureImportFingerprintAvailable(fingerprint);
     final archive = _decodeZipArchiveBytes(bytes);
     final themeFile = archive.findFile('theme.json');
     if (themeFile == null) {
@@ -913,6 +1063,7 @@ class AdvancedThemeService {
           wallpaperPath: importedDarkWallpaperPath,
           isDark: true,
         ),
+        importFingerprint: fingerprint,
       );
       return saveTheme(theme);
     } catch (_) {
@@ -991,6 +1142,26 @@ class AdvancedThemeService {
       return 'png';
     }
     return extension.toLowerCase();
+  }
+
+  String _computeImportFingerprint(List<int> bytes) {
+    return crypto.sha256.convert(bytes).toString();
+  }
+
+  Future<void> _ensureImportFingerprintAvailable(String fingerprint) async {
+    if (fingerprint.trim().isEmpty) {
+      return;
+    }
+    final themes = await loadThemes();
+    for (final theme in themes) {
+      final existing = theme.importFingerprint?.trim() ?? '';
+      if (existing.isEmpty) {
+        continue;
+      }
+      if (existing == fingerprint) {
+        throw FormatException('已导入重复主题「${theme.name}」');
+      }
+    }
   }
 
   AppAdvancedThemeColors _readExportedColors(
@@ -2140,9 +2311,114 @@ class AdvancedThemeService {
     return List<int>.from(file.content);
   }
 
+  Set<String> _coverGalleryIdsForTheme(AppAdvancedTheme theme) {
+    return <String>{
+      ...[
+            theme.coverGalleryId,
+            theme.coverGalleryIdFor(AppAdvancedThemeMode.light),
+            theme.coverGalleryIdFor(AppAdvancedThemeMode.dark),
+          ]
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty),
+    };
+  }
+
+  bool _isAppearanceBackgroundReferenced(
+    List<AppAdvancedTheme> themes,
+    String targetPath,
+  ) {
+    final normalizedTarget = targetPath.trim();
+    if (normalizedTarget.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      final paths = <String?>[
+        theme.lightConfig.wallpaperPath,
+        theme.darkConfig.wallpaperPath,
+      ];
+      for (final path in paths) {
+        if ((path?.trim() ?? '') == normalizedTarget) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isReaderBackgroundReferenced(
+    List<AppAdvancedTheme> themes,
+    String targetPath,
+  ) {
+    final normalizedTarget = targetPath.trim();
+    if (normalizedTarget.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      final paths = <String?>[
+        theme.lightConfig.readerWallpaperPath,
+        theme.darkConfig.readerWallpaperPath,
+      ];
+      for (final path in paths) {
+        if ((path?.trim() ?? '') == normalizedTarget) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isCoverGalleryReferenced(
+    List<AppAdvancedTheme> themes,
+    String galleryId,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if (_coverGalleryIdsForTheme(theme).contains(normalizedId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isLaunchGalleryReferenced(
+    List<AppAdvancedTheme> themes,
+    String galleryId,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if ((theme.launchImageGalleryId?.trim() ?? '') == normalizedId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isBottomNavGalleryReferenced(
+    List<AppAdvancedTheme> themes,
+    String galleryId,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if ((theme.bottomNavGalleryId?.trim() ?? '') == normalizedId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> _cleanupImportedThemeBundleArtifacts({
     required Directory themeDirectory,
-    String? coverGalleryId,
+    List<String?> coverGalleryIds = const <String?>[],
     String? launchImageGalleryId,
     String? bottomNavGalleryId,
     List<String> importedFontFamilyKeys = const <String>[],
@@ -2155,7 +2431,13 @@ class AdvancedThemeService {
     for (final path in sharedReaderBackgroundPaths) {
       await _safeDeleteReaderBackground(path);
     }
-    await _safeDeleteCoverGallery(coverGalleryId);
+    for (final galleryId
+        in coverGalleryIds.map((item) => item?.trim() ?? '').toSet()) {
+      if (galleryId.isEmpty) {
+        continue;
+      }
+      await _safeDeleteCoverGallery(galleryId);
+    }
     await _safeDeleteLaunchGallery(launchImageGalleryId);
     await _safeDeleteBottomNavGallery(bottomNavGalleryId);
     await _safeDeleteImportedFonts(importedFontFamilyKeys);

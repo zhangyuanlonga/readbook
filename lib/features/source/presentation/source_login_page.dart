@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -32,6 +34,8 @@ class SourceLoginPage extends ConsumerStatefulWidget {
   ConsumerState<SourceLoginPage> createState() => _SourceLoginPageState();
 }
 
+enum _SourceLoginMenuAction { showHeader, clearHeader }
+
 class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
   late final SourceLoginRuntimeService _sourceLoginRuntimeService;
   late final SourceLoginBrowserService _sourceLoginBrowserService;
@@ -47,6 +51,8 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
   final Map<String, String> _selectValues = <String, String>{};
   final Map<String, String> _toggleValues = <String, String>{};
   final Map<String, String> _baselineValues = <String, String>{};
+  final Map<String, String> _runtimeLabelOverrides = <String, String>{};
+  bool _isPersistingDraftOnClose = false;
 
   @override
   void initState() {
@@ -62,6 +68,15 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
 
   @override
   void dispose() {
+    if (!_isPersistingDraftOnClose && _hasPendingDraftChanges()) {
+      _isPersistingDraftOnClose = true;
+      unawaited(
+        _sourceLoginRuntimeService.saveDraftFormData(
+          widget.sourceId,
+          _currentFormData(),
+        ),
+      );
+    }
     for (final controller in _controllers.values) {
       controller.dispose();
     }
@@ -206,7 +221,121 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     return data;
   }
 
-  Future<void> _submit({String? actionCode, bool isLongClick = false}) async {
+  bool _hasPendingDraftChanges() {
+    final presentation = _presentation;
+    if (presentation == null) {
+      return false;
+    }
+    final current = _currentFormData();
+    final persisted = presentation.formData;
+    if (current.length != persisted.length) {
+      return true;
+    }
+    for (final entry in current.entries) {
+      if ((persisted[entry.key] ?? '') != entry.value) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _applyRuntimeUiDataPatch(
+    Map<String, String?>? data, {
+    required bool resetToDefaults,
+  }) {
+    final presentation = _presentation;
+    if (presentation == null) {
+      return;
+    }
+    if (resetToDefaults) {
+      _runtimeLabelOverrides.clear();
+      for (final field in presentation.fields) {
+        if (field.type == SourceLoginFieldType.button) {
+          continue;
+        }
+        final fallback = field.defaultValue ?? '';
+        switch (field.type) {
+          case SourceLoginFieldType.text:
+          case SourceLoginFieldType.password:
+          case SourceLoginFieldType.textarea:
+            _controllers[field.name]?.text = fallback;
+            _baselineValues[field.name] = fallback;
+            break;
+          case SourceLoginFieldType.select:
+            _selectValues[field.name] = fallback;
+            _baselineValues[field.name] = fallback;
+            break;
+          case SourceLoginFieldType.toggle:
+            final next =
+                fallback.isNotEmpty ? fallback : _toggleDefaultValue(field);
+            _toggleValues[field.name] = next;
+            _baselineValues[field.name] = next;
+            break;
+          case SourceLoginFieldType.note:
+          case SourceLoginFieldType.divider:
+          case SourceLoginFieldType.button:
+            break;
+        }
+      }
+    }
+
+    if (data == null || data.isEmpty) {
+      return;
+    }
+
+    final fieldByName = <String, SourceLoginField>{
+      for (final field in presentation.fields) field.name: field,
+    };
+    data.forEach((key, value) {
+      final field = fieldByName[key];
+      if (field == null) {
+        return;
+      }
+      switch (field.type) {
+        case SourceLoginFieldType.text:
+        case SourceLoginFieldType.password:
+        case SourceLoginFieldType.textarea:
+          final next = value ?? field.defaultValue ?? '';
+          _controllers[key]?.text = next;
+          _baselineValues[key] = next;
+          break;
+        case SourceLoginFieldType.select:
+          final next = value ?? field.defaultValue ?? '';
+          _selectValues[key] = next;
+          _baselineValues[key] = next;
+          break;
+        case SourceLoginFieldType.toggle:
+          final next =
+              value ?? field.defaultValue ?? _toggleDefaultValue(field);
+          _toggleValues[key] = next;
+          _baselineValues[key] = next;
+          break;
+        case SourceLoginFieldType.button:
+          final next = (value ?? '').trim();
+          if (next.isEmpty) {
+            _runtimeLabelOverrides.remove(key);
+          } else {
+            _runtimeLabelOverrides[key] = next;
+          }
+          break;
+        case SourceLoginFieldType.note:
+        case SourceLoginFieldType.divider:
+          final next = (value ?? '').trim();
+          if (next.isEmpty) {
+            _runtimeLabelOverrides.remove(key);
+          } else {
+            _runtimeLabelOverrides[key] = next;
+          }
+          break;
+      }
+    });
+  }
+
+  Future<void> _submit({
+    String? actionCode,
+    bool isLongClick = false,
+    bool persistFormBeforeAction = true,
+  }) async {
     final presentation = _presentation;
     if (presentation == null || _isSubmitting) {
       return;
@@ -223,13 +352,18 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
         ui: _buildUiContext(),
         actionCode: actionCode,
         isLongClick: isLongClick,
+        persistFormBeforeAction: persistFormBeforeAction,
       );
       if (!mounted) {
         return;
       }
       _syncFormState(result.presentation);
+      _presentation = result.presentation;
+      _applyRuntimeUiDataPatch(
+        result.uiDataPatch,
+        resetToDefaults: result.resetUiData,
+      );
       setState(() {
-        _presentation = result.presentation;
         _statusText = result.message ?? (actionCode == null ? '操作已完成。' : null);
         _statusTone = _MessageTone.success;
       });
@@ -342,6 +476,21 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
                             )
                             : const Icon(Icons.check_rounded),
                   ),
+                  PopupMenuButton<_SourceLoginMenuAction>(
+                    enabled: !_isSubmitting,
+                    onSelected: _handleMenuAction,
+                    itemBuilder:
+                        (context) => const [
+                          PopupMenuItem(
+                            value: _SourceLoginMenuAction.showHeader,
+                            child: Text('查看登录头'),
+                          ),
+                          PopupMenuItem(
+                            value: _SourceLoginMenuAction.clearHeader,
+                            child: Text('清空登录头'),
+                          ),
+                        ],
+                  ),
                 ],
               ),
             ),
@@ -367,7 +516,21 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
                     )
                     : const Icon(Icons.check_rounded),
           ),
-          const SizedBox(width: 8),
+          PopupMenuButton<_SourceLoginMenuAction>(
+            enabled: !_isSubmitting,
+            onSelected: _handleMenuAction,
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem(
+                    value: _SourceLoginMenuAction.showHeader,
+                    child: Text('查看登录头'),
+                  ),
+                  PopupMenuItem(
+                    value: _SourceLoginMenuAction.clearHeader,
+                    child: Text('清空登录头'),
+                  ),
+                ],
+          ),
         ],
       ),
       body: body,
@@ -410,6 +573,26 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
             cancelText: cancelText,
             obscureText: obscureText,
           ),
+      loginUiDataHandler: (data) async {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _applyRuntimeUiDataPatch(data, resetToDefaults: data == null);
+        });
+      },
+      loginUiReloadHandler: () async {
+        await _load();
+      },
+      copyTextHandler: (text) async {
+        await Clipboard.setData(ClipboardData(text: text));
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板。')));
+      },
       openBrowserAwaitHandler: ({
         required String url,
         String? title,
@@ -589,6 +772,40 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     );
   }
 
+  Future<void> _showLoginHeader() async {
+    final header = await _sourceLoginRuntimeService.readLoginHeader(
+      widget.sourceId,
+    );
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('登录头'),
+          content: SelectableText(header.trim().isEmpty ? '当前没有登录头。' : header),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _clearLoginHeader() async {
+    await _sourceLoginRuntimeService.clearLoginHeader(widget.sourceId);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已清空登录头。')));
+  }
+
   Future<String> _promptVerificationCode(String imageUrl) async {
     final controller = TextEditingController();
     try {
@@ -648,9 +865,23 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     return Image.network(trimmed, fit: BoxFit.contain, height: 120);
   }
 
+  Future<void> _handleMenuAction(_SourceLoginMenuAction action) async {
+    switch (action) {
+      case _SourceLoginMenuAction.showHeader:
+        await _showLoginHeader();
+        return;
+      case _SourceLoginMenuAction.clearHeader:
+        await _clearLoginHeader();
+        return;
+    }
+  }
+
   Widget _buildField(BuildContext context, SourceLoginField field) {
+    final overrideLabel = _runtimeLabelOverrides[field.name]?.trim();
     final label =
-        field.label?.trim().isNotEmpty == true
+        overrideLabel?.isNotEmpty == true
+            ? overrideLabel!
+            : field.label?.trim().isNotEmpty == true
             ? field.label!.trim()
             : field.name;
     return switch (field.type) {
@@ -1014,7 +1245,7 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
       return;
     }
     _baselineValues[field.name] = current;
-    await _submit(actionCode: action);
+    await _submit(actionCode: action, persistFormBeforeAction: false);
   }
 
   Future<void> _handleTextFieldCommitByName(String fieldName) async {

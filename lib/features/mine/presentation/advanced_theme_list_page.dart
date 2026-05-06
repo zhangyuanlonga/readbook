@@ -55,7 +55,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final AuthSessionStore _sessionStore;
   late final MembershipService _membershipService;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
+  final TextEditingController _searchController = TextEditingController();
   List<AppAdvancedTheme> _themes = const <AppAdvancedTheme>[];
+  String _searchQuery = '';
+  String? _selectedCategory;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isConsumingExternalImportPayloads = false;
@@ -120,6 +123,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }
@@ -151,8 +155,42 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     });
     setState(() {
       _themes = sortedThemes;
+      if (_selectedCategory != null &&
+          !_availableCategories.contains(_selectedCategory)) {
+        _selectedCategory = null;
+      }
       _isLoading = false;
     });
+  }
+
+  List<String> get _availableCategories {
+    final categories = _themes
+      .map((theme) => theme.category?.trim() ?? '')
+      .where((category) => category.isNotEmpty)
+      .toSet()
+      .toList(growable: false)..sort();
+    return categories;
+  }
+
+  List<AppAdvancedTheme> get _visibleThemes {
+    final keyword = _searchQuery.trim().toLowerCase();
+    final selectedCategory = _selectedCategory?.trim() ?? '';
+    return _themes
+        .where((theme) {
+          if (selectedCategory.isNotEmpty &&
+              (theme.category?.trim() ?? '') != selectedCategory) {
+            return false;
+          }
+          if (keyword.isEmpty) {
+            return true;
+          }
+          final haystacks = <String>[
+            theme.name,
+            theme.category ?? '',
+          ].map((item) => item.toLowerCase());
+          return haystacks.any((item) => item.contains(keyword));
+        })
+        .toList(growable: false);
   }
 
   Future<void> _openEditor([AppAdvancedTheme? theme]) async {
@@ -706,7 +744,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                     contentPadding: EdgeInsets.zero,
                     controlAffinity: ListTileControlAffinity.leading,
                     title: const Text('同时删除配套内容'),
-                    subtitle: const Text('删除该主题绑定的浅色/深色壁纸和阅读器壁纸资源。'),
+                    subtitle: const Text(
+                      '删除该主题独占绑定的壁纸、封面图集、启动图集和底栏图集；若其他主题仍在使用，会自动保留。',
+                    ),
                     onChanged: (value) {
                       setState(() {
                         deleteAssociatedResources = value ?? true;
@@ -857,6 +897,17 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       child: Scaffold(
         extendBodyBehindAppBar: true,
         appBar: AppBar(
+          leading: IconButton(
+            tooltip: '返回',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+                return;
+              }
+              context.go('/appearance?section=appearance');
+            },
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          ),
           title: const Text('高级主题'),
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
@@ -901,10 +952,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                             children: [
                               _buildIntroCard(context, activeThemeAsync),
                               const SizedBox(height: 10),
-                              if (_themes.isEmpty)
+                              _buildSearchBar(context),
+                              const SizedBox(height: 10),
+                              if (_availableCategories.isNotEmpty)
+                                _buildCategoryChips(context),
+                              if (_availableCategories.isNotEmpty)
+                                const SizedBox(height: 10),
+                              if (_visibleThemes.isEmpty)
                                 _buildEmptyState(context)
                               else
-                                ..._themes.map(
+                                ..._visibleThemes.map(
                                   (theme) => Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
                                     child: _buildThemeCard(
@@ -1056,8 +1113,72 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
+  Widget _buildSearchBar(BuildContext context) {
+    return TextField(
+      controller: _searchController,
+      onChanged: (value) {
+        setState(() {
+          _searchQuery = value;
+        });
+      },
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.search_rounded),
+        hintText: '搜索主题名称或分类',
+        suffixIcon:
+            _searchQuery.trim().isEmpty
+                ? null
+                : IconButton(
+                  tooltip: '清空搜索',
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                  icon: const Icon(Icons.close_rounded),
+                ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ChoiceChip(
+            label: const Text('全部'),
+            selected: _selectedCategory == null,
+            onSelected: (_) {
+              setState(() {
+                _selectedCategory = null;
+              });
+            },
+          ),
+          const SizedBox(width: 8),
+          for (final category in _availableCategories) ...[
+            ChoiceChip(
+              label: Text(category),
+              selected: _selectedCategory == category,
+              onSelected: (_) {
+                setState(() {
+                  _selectedCategory =
+                      _selectedCategory == category ? null : category;
+                });
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isFiltering =
+        _searchQuery.trim().isNotEmpty ||
+        (_selectedCategory?.trim().isNotEmpty ?? false);
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
       decoration: BoxDecoration(
@@ -1072,14 +1193,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           Icon(Icons.palette_outlined, size: 34, color: colorScheme.primary),
           const SizedBox(height: 10),
           Text(
-            '还没有高级主题',
+            isFiltering ? '没有匹配的主题' : '还没有高级主题',
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Text(
-            '点击右上角新增，就可以分别配置浅色和深色主题。',
+            isFiltering ? '换个关键词或分类试试。' : '点击右上角新增，就可以分别配置浅色和深色主题。',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
@@ -1392,6 +1513,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     AppAdvancedTheme theme,
   ) {
     final badges = <Widget>[];
+    final category = theme.category?.trim();
+    if (category != null && category.isNotEmpty) {
+      badges.add(_buildResourceBadge(context, label: '分类：$category'));
+    }
     if (theme.lightConfig.hasWallpaper || theme.darkConfig.hasWallpaper) {
       badges.add(_buildResourceBadge(context, label: '壁纸'));
     }
@@ -1399,7 +1524,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         theme.darkConfig.hasReaderWallpaper) {
       badges.add(_buildResourceBadge(context, label: '阅读器背景'));
     }
-    if ((theme.coverGalleryId?.trim().isNotEmpty ?? false)) {
+    if (theme.hasCoverGalleryBinding) {
       badges.add(_buildResourceBadge(context, label: '封面'));
     }
     if ((theme.launchImageGalleryId?.trim().isNotEmpty ?? false)) {

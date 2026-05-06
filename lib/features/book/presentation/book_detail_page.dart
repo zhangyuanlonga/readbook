@@ -300,6 +300,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
     final hydratedFromCache = _hydrateCachedDetailIfAvailable();
+    if (!hydratedFromCache) {
+      _updatePresentationState(
+        _presentationState.copyWith(isLoading: true, clearErrorText: true),
+      );
+    }
     _localIndexEventSubscription = LocalBookIndexService.watchEvents.listen(
       _handleLocalIndexEvent,
     );
@@ -364,9 +369,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     setState(mutation);
   }
 
-  BookDisplayState _resolvePresentedMetadata({
-    BookDetailLoadResult? result,
-  }) {
+  BookDisplayState _resolvePresentedMetadata({BookDetailLoadResult? result}) {
     final activeResult = result ?? _result;
     final detail = activeResult?.detail;
     return _bookMetadataPresentationResolver.resolve(

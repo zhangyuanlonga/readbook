@@ -1,5 +1,6 @@
 import '../../../data/datasources/local/app_database.dart';
 import '../../book/application/book_presentation_query_service.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
@@ -24,6 +25,8 @@ class BookshelfPresentationQueryService {
   final BookPresentationQueryService _bookPresentationQueryService;
   final LocalBookRepository _localBookRepository;
   final SourceRuntimeFacade _sourceRuntimeFacade;
+  final BookDisplayStateResolver _presentationResolver =
+      const BookDisplayStateResolver();
 
   Future<Map<String, BookMetadataOverride>> loadBookMetadataOverrideMap(
     List<BookshelfBook> books,
@@ -52,6 +55,37 @@ class BookshelfPresentationQueryService {
       for (final book in localBooks)
         if (localBookIds.contains(book.id)) book.id: book,
     };
+  }
+
+  Map<String, BookDisplayState> buildBookshelfPresentationMap({
+    required List<BookshelfBook> books,
+    required Map<String, LocalBook> localBooksById,
+    required Map<String, BookMetadataOverride> metadataOverridesByTargetKey,
+  }) {
+    if (books.isEmpty) {
+      return const <String, BookDisplayState>{};
+    }
+
+    final result = <String, BookDisplayState>{};
+    for (final book in books) {
+      final localBook =
+          book.sourceId == LocalBookImportService.localBookSourceId
+              ? localBooksById[book.bookId.trim()]
+              : null;
+      final targetKey =
+          book.sourceId == LocalBookImportService.localBookSourceId
+              ? BookMetadataOverride.localTargetKey(book.bookId)
+              : BookMetadataOverride.remoteTargetKey(
+                sourceId: book.sourceId,
+                detailUrl: book.detailUrl,
+              );
+      result[_bookKey(book)] = _presentationResolver.resolveBookshelfBook(
+        book: book,
+        localBook: localBook,
+        metadataOverride: metadataOverridesByTargetKey[targetKey],
+      );
+    }
+    return result;
   }
 
   Future<Map<String, String>> loadLatestCachedChapterTitles(
@@ -98,5 +132,9 @@ class BookshelfPresentationQueryService {
     }
 
     return sourceTypeBySourceId;
+  }
+
+  String _bookKey(BookshelfBook book) {
+    return '${book.sourceId.trim()}::${book.bookId.trim()}::${book.detailUrl.trim()}';
   }
 }

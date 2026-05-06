@@ -25,8 +25,10 @@ class LaunchImageGalleryPage extends ConsumerStatefulWidget {
 class _LaunchImageGalleryPageState
     extends ConsumerState<LaunchImageGalleryPage> {
   late final LaunchImageGalleryService _service;
+  final TextEditingController _searchController = TextEditingController();
 
   List<LaunchImageGallery> _galleries = const <LaunchImageGallery>[];
+  String _searchQuery = '';
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -76,6 +78,22 @@ class _LaunchImageGalleryPageState
   Future<void> _openGalleryEditor(LaunchImageGallery gallery) async {
     await context.push('/appearance/launch-image/editor?id=${gallery.id}');
     await _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LaunchImageGallery> get _visibleGalleries {
+    final keyword = _searchQuery.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return _galleries;
+    }
+    return _galleries
+        .where((gallery) => gallery.name.toLowerCase().contains(keyword))
+        .toList(growable: false);
   }
 
   @override
@@ -135,10 +153,38 @@ class _LaunchImageGalleryPageState
                               16 + bottomSafe,
                             ),
                             children: [
-                              if (_galleries.isEmpty)
+                              TextField(
+                                controller: _searchController,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  prefixIcon: const Icon(Icons.search_rounded),
+                                  hintText: '搜索启动图集',
+                                  suffixIcon:
+                                      _searchQuery.trim().isEmpty
+                                          ? null
+                                          : IconButton(
+                                            tooltip: '清空搜索',
+                                            onPressed: () {
+                                              _searchController.clear();
+                                              setState(() {
+                                                _searchQuery = '';
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                            ),
+                                          ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (_visibleGalleries.isEmpty)
                                 _buildEmptyState(context)
                               else
-                                ..._galleries.map(
+                                ..._visibleGalleries.map(
                                   (gallery) => Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
                                     child: _buildGalleryCard(context, gallery),

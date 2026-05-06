@@ -117,6 +117,7 @@ class _FakeSourceLoginRuntimeService extends SourceLoginRuntimeService {
     chapter,
     String? actionCode,
     bool isLongClick = false,
+    bool persistFormBeforeAction = true,
   }) async {
     submitCount += 1;
     lastActionCode = actionCode;

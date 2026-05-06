@@ -24,9 +24,11 @@ enum _GalleryAction { activate, edit, rename, duplicate, delete }
 
 class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   final BottomNavIconGalleryService _service = BottomNavIconGalleryService();
+  final TextEditingController _searchController = TextEditingController();
 
   List<BottomNavIconGallery> _galleries = const <BottomNavIconGallery>[];
   String? _activeGalleryId;
+  String _searchQuery = '';
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -244,6 +246,22 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<BottomNavIconGallery> get _visibleGalleries {
+    final keyword = _searchQuery.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return _galleries;
+    }
+    return _galleries
+        .where((gallery) => gallery.name.toLowerCase().contains(keyword))
+        .toList(growable: false);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer(
       builder: (context, ref, _) {
@@ -304,6 +322,36 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                   16 + bottomSafe,
                                 ),
                                 children: [
+                                  TextField(
+                                    controller: _searchController,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _searchQuery = value;
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      prefixIcon: const Icon(
+                                        Icons.search_rounded,
+                                      ),
+                                      hintText: '搜索底栏图集',
+                                      suffixIcon:
+                                          _searchQuery.trim().isEmpty
+                                              ? null
+                                              : IconButton(
+                                                tooltip: '清空搜索',
+                                                onPressed: () {
+                                                  _searchController.clear();
+                                                  setState(() {
+                                                    _searchQuery = '';
+                                                  });
+                                                },
+                                                icon: const Icon(
+                                                  Icons.close_rounded,
+                                                ),
+                                              ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
                                   Text(
                                     '支持切换默认图集，也可以新增、复制、重命名或删除自定义图集。',
                                     style: Theme.of(context).textTheme.bodySmall
@@ -312,19 +360,20 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                   const SizedBox(height: 12),
                                   for (
                                     var index = 0;
-                                    index < _galleries.length;
+                                    index < _visibleGalleries.length;
                                     index++
                                   )
                                     Padding(
                                       padding: EdgeInsets.only(
                                         bottom:
-                                            index == _galleries.length - 1
+                                            index ==
+                                                    _visibleGalleries.length - 1
                                                 ? 0
                                                 : 10,
                                       ),
                                       child: _buildGalleryCard(
                                         context,
-                                        gallery: _galleries[index],
+                                        gallery: _visibleGalleries[index],
                                       ),
                                     ),
                                 ],

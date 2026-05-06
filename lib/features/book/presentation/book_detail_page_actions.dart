@@ -173,6 +173,7 @@ extension on _BookDetailPageState {
           customCoverPath: customCoverPath ?? _localBookMeta?.coverPath,
           activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
           galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+          brightness: Theme.of(context).brightness,
           bookId: bookId,
           sourceId: sourceId,
           detailUrl: detailUrl,
@@ -558,5 +559,4 @@ extension on _BookDetailPageState {
       }
     }
   }
-
 }

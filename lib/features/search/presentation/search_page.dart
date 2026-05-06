@@ -15,7 +15,10 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../runtime/sources/source_registry.dart';
+import '../../book/application/book_display_state.dart';
+import '../../book/application/book_presentation_query_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
@@ -46,6 +49,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   final FocusNode _searchFocusNode = FocusNode();
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final SearchService _searchService;
+  late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
 
@@ -81,6 +85,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Set<String> _selectedSourceIds = <String>{};
   final ScrollController _pageScrollController = ScrollController();
   bool _isAppendingResults = false;
+  Map<String, BookDisplayState> _bookPresentationByTargetKey =
+      const <String, BookDisplayState>{};
   SearchExecutionReport? _pendingProgressReport;
   Timer? _progressUiTimer;
   DateTime? _lastProgressUiUpdateAt;
@@ -99,6 +105,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     super.initState();
     _sourceRuntimeFacade = ref.read(searchSourceRuntimeFacadeProvider);
     _searchService = ref.read(searchServiceProvider);
+    _bookPresentationQueryService = ref.read(
+      searchBookPresentationQueryServiceProvider,
+    );
     _historyService = ref.read(searchHistoryServiceProvider);
     _searchSystemSettingsService = ref.read(
       searchSystemSettingsServiceProvider,
@@ -348,6 +357,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                     final sourceName =
                                         report.sourceNames[book.sourceId] ??
                                         book.sourceId;
+                                    final targetKey =
+                                        BookMetadataOverride.remoteTargetKey(
+                                          sourceId: book.sourceId,
+                                          detailUrl: book.detailUrl,
+                                        );
                                     final heroTag = _buildBookCoverHeroTag(
                                       book: book,
                                       listIndex: index - 1,
@@ -355,6 +369,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
                                     return SearchBookCard(
                                       book: book,
+                                      presentation:
+                                          _bookPresentationByTargetKey[targetKey] ??
+                                          const BookDisplayState(
+                                            displayTitle: '',
+                                          ),
                                       sourceName: sourceName,
                                       sourceHitCount: report.sourceHitCountOf(
                                         book,
@@ -823,6 +842,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _clearPendingSearchCompletion();
     _progressReportNotifier.value = null;
     _renderStateController.clear();
+    _bookPresentationByTargetKey = const <String, BookDisplayState>{};
   }
 
   Future<void> _prepareRenderState({
@@ -839,6 +859,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       token: token,
       force: force,
     );
+    final renderState = _renderStateController.renderStateNotifier.value;
+    if (renderState != null) {
+      final presentationMap = await _bookPresentationQueryService
+          .loadRemotePresentationMap(renderState.visibleBooks);
+      if (!mounted || sessionId != _searchSessionId) {
+        return;
+      }
+      setState(() {
+        _bookPresentationByTargetKey = presentationMap;
+      });
+    }
     _scheduleAutoAppendIfNeeded();
   }
 

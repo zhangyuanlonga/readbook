@@ -261,6 +261,40 @@ void main() {
       expect(engine.requests, hasLength(2));
       expect(engine.requests.last.headers['Authorization'], 'Bearer ok');
     });
+
+    test('login ui java bridges are available to action scripts', () async {
+      final definition = await compiler.compile(_sourceWithLoginUiJavaHelpers);
+      final events = <String>[];
+      final uiDataEvents = <Map<String, String?>?>[];
+      var reloaded = false;
+      final context = _buildRuntimeContext(
+        ui: SourceUiContext(
+          loginUiDataHandler: (data) async {
+            uiDataEvents.add(data == null ? null : <String, String?>{...data});
+          },
+          loginUiReloadHandler: () async {
+            reloaded = true;
+          },
+          copyTextHandler: (text) async {
+            events.add('copy:$text');
+          },
+        ),
+      );
+
+      final result = await definition.loginAction!(
+        context,
+        const <String, String>{'账号': 'before'},
+        actionCode: 'changeUi()',
+        isLongClick: false,
+      );
+
+      expect(result, isTrue);
+      expect(uiDataEvents, hasLength(1));
+      expect(uiDataEvents.single?['账号'], 'after');
+      expect(uiDataEvents.single?['发送验证码'], '重新发送');
+      expect(reloaded, isTrue);
+      expect(events, contains('copy:copied-text'));
+    });
   });
 
   group('SourceScriptCompiler runtime isolation', () {
@@ -793,6 +827,37 @@ export default {
       detailUrl: 'https://book/login-check',
     }];
   },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''';
+
+const String _sourceWithLoginUiJavaHelpers = '''
+export default {
+  meta: {
+    name: '登录UI Java桥接测试源',
+    group: '测试',
+    author: 'tester',
+    description: '',
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  loginUi: [
+    { name: '账号', type: 'text' },
+    { name: '发送验证码', type: 'button', action: 'changeUi()' },
+  ],
+  loginUrl: `<js>
+    function changeUi() {
+      java.upLoginData({
+        '账号': 'after',
+        '发送验证码': '重新发送',
+      });
+      java.copyText('copied-text');
+      java.reLoginView();
+      result = true;
+    }
+  </js>`,
+  async search(ctx, keyword) { return []; },
   async detail(ctx, book) { return book; },
   async chapters(ctx, book) { return []; },
   async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },

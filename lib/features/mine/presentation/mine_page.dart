@@ -59,7 +59,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   String? _userId;
   String? _username;
   String? _localAvatarPath;
-  bool _isLoadingSession = true;
   bool _isCheckingUpdate = false;
   bool _showSourceEntry = false;
   bool _hasMembership = false;
@@ -150,11 +149,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _reloadSession({required bool showLoading}) async {
-    if (showLoading && mounted) {
-      setState(() {
-        _isLoadingSession = true;
-      });
-    }
     final snapshot = await _sessionService.loadSession();
     if (!mounted) {
       return;
@@ -167,7 +161,6 @@ class _MinePageState extends ConsumerState<MinePage> {
       _hasThemeCustom = snapshot.hasThemeCustom;
       _sourceImportLimit = snapshot.sourceImportLimit;
       _localAvatarPath = snapshot.localAvatarPath;
-      _isLoadingSession = false;
     });
     if (snapshot.session == null) {
       return;

@@ -151,9 +151,9 @@ class SourceScriptCompiler {
           inspection.hasLogin ||
           inspection.hasLoginUi ||
           inspection.hasLoginUrlProperty,
-      webLoginUrl: inspection.webLoginUrl,
+      webLoginUrl: _resolveRawWebLoginUrl(normalizedSource),
       loginUi:
-          inspection.hasLoginUi || inspection.hasLoginUrlProperty
+          inspection.hasLoginUi
               ? (
                 SourceRuntimeContext ctx,
                 Map<String, String> formData, {
@@ -222,18 +222,6 @@ const __inspection = {
   hasLoginUi: typeof __source?.loginUi !== 'undefined',
   hasLoginUrlProperty: typeof __source?.loginUrl !== 'undefined',
   hasLoginCheckJs: typeof __source?.loginCheckJs !== 'undefined',
-  webLoginUrl: (() => {
-    const __loginUrlValue = __source?.loginUrl;
-    if (typeof __loginUrlValue !== 'string') {
-      return null;
-    }
-    const __rawValue = __loginUrlValue.trim();
-    if (__rawValue === '') {
-      return null;
-    }
-    const __script = __resolveScriptProperty(__loginUrlValue);
-    return __script == null ? __rawValue : null;
-  })(),
 };
 return globalThis.__appreadEncodeHostSuccess(__inspection);
 ''');
@@ -1059,6 +1047,26 @@ try {
         payload['imageUrl']?.toString() ?? '',
       );
     });
+    runtime.registerBridge('__ctx_login_ui_up_data', (dynamic args) async {
+      final payload = _asMap(args);
+      final rawData = payload['data'];
+      if (rawData == null) {
+        await ctx.ui.updateLoginUiData(null);
+        return <String, Object?>{'ok': true};
+      }
+      final map = _stringNullableMap(rawData);
+      await ctx.ui.updateLoginUiData(map);
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_login_ui_reload', (_) async {
+      await ctx.ui.reloadLoginUi();
+      return <String, Object?>{'ok': true};
+    });
+    runtime.registerBridge('__ctx_ui_copy_text', (dynamic args) async {
+      final payload = _asMap(args);
+      await ctx.ui.copyText(payload['text']?.toString() ?? '');
+      return <String, Object?>{'ok': true};
+    });
     runtime.registerBridge('__ctx_crypto_md5', (dynamic args) {
       final payload = _asMap(args);
       return ctx.crypto.md5(
@@ -1394,7 +1402,13 @@ return globalThis.__appreadEncodeHostSuccess(__rawResult, '__login_ui__');
 const __actionCode = $encodedActionCode;
 let __rawResult = null;
 if (__actionCode != null && __actionCode !== '') {
-  __rawResult = await __runPropertyScript(__actionCode, __result, __currentBook, __currentChapter, ${isLongClick ? 'true' : 'false'});
+  const __loginUrlValue = __source?.loginUrl;
+  const __loginUrlScript = __resolveScriptProperty(__loginUrlValue);
+  if (__loginUrlScript != null) {
+    __rawResult = await __runLoginActionScript(__loginUrlScript, __actionCode, __result, __currentBook, __currentChapter, ${isLongClick ? 'true' : 'false'});
+  } else {
+    __rawResult = await __runPropertyScript(__actionCode, __result, __currentBook, __currentChapter, ${isLongClick ? 'true' : 'false'});
+  }
 } else if (typeof __source?.login === 'function') {
   __rawResult = await __source.login.apply(__source, [__ctx, __result, __currentBook, __currentChapter]);
 } else {
@@ -1436,14 +1450,17 @@ const __source = globalThis.__sourceDefinition;
 const __result = $encodedFormData;
 const __currentBook = $encodedBook;
 const __currentChapter = $encodedChapter;
+const __java = globalThis.__createLoginUiJava(__ctx);
 ctx = __ctx;
 source = __source;
 book = __currentBook;
 chapter = __currentChapter;
+java = __java;
 globalThis.ctx = __ctx;
 globalThis.source = __source;
 globalThis.book = __currentBook;
 globalThis.chapter = __currentChapter;
+globalThis.java = __java;
 try {
   $body
 } catch (error) {
@@ -1453,10 +1470,12 @@ try {
   source = undefined;
   book = undefined;
   chapter = undefined;
+  java = undefined;
   globalThis.ctx = undefined;
   globalThis.source = undefined;
   globalThis.book = undefined;
   globalThis.chapter = undefined;
+  globalThis.java = undefined;
 }
 ''');
 
@@ -1494,7 +1513,6 @@ class _SourceInspection {
     required this.hasLoginUi,
     required this.hasLoginUrlProperty,
     required this.hasLoginCheckJs,
-    required this.webLoginUrl,
   });
 
   final Map<String, dynamic> meta;
@@ -1509,7 +1527,6 @@ class _SourceInspection {
   final bool hasLoginUi;
   final bool hasLoginUrlProperty;
   final bool hasLoginCheckJs;
-  final String? webLoginUrl;
 
   factory _SourceInspection.fromMap(Map<String, dynamic> map) {
     return _SourceInspection(
@@ -1525,7 +1542,6 @@ class _SourceInspection {
       hasLoginUi: map['hasLoginUi'] == true,
       hasLoginUrlProperty: map['hasLoginUrlProperty'] == true,
       hasLoginCheckJs: map['hasLoginCheckJs'] == true,
-      webLoginUrl: _optionalTrimmedString(map['webLoginUrl']),
     );
   }
 }
@@ -1536,6 +1552,36 @@ String? _optionalTrimmedString(Object? value) {
     return null;
   }
   return normalized;
+}
+
+String? _resolveRawWebLoginUrl(String normalizedSource) {
+  final rawValue = _extractLiteralPropertyString(normalizedSource, 'loginUrl');
+  final normalized = _optionalTrimmedString(rawValue);
+  if (normalized == null) {
+    return null;
+  }
+  if (normalized.startsWith('@js:') || normalized.startsWith('<js>')) {
+    return null;
+  }
+  return normalized;
+}
+
+String? _extractLiteralPropertyString(String sourceCode, String fieldName) {
+  final pattern = RegExp(
+    "\\b$fieldName\\s*:\\s*(['\"])((?:\\\\.|(?!\\1)[\\s\\S])*)\\1",
+    multiLine: true,
+  );
+  final match = pattern.firstMatch(sourceCode);
+  final rawValue = match?.group(2);
+  if (rawValue == null) {
+    return null;
+  }
+  return rawValue
+      .replaceAll(r"\'", "'")
+      .replaceAll(r'\"', '"')
+      .replaceAll(r'\n', '\n')
+      .replaceAll(r'\r', '\r')
+      .replaceAll(r'\t', '\t');
 }
 
 class _HtmlHandleStore {
@@ -1951,6 +1997,19 @@ Map<String, String> _stringMap(dynamic value) {
   return <String, String>{};
 }
 
+Map<String, String?> _stringNullableMap(dynamic value) {
+  if (value is Map<String, String?>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map(
+      (dynamic key, dynamic mapValue) =>
+          MapEntry(key.toString(), mapValue?.toString()),
+    );
+  }
+  return <String, String?>{};
+}
+
 Map<String, Object?> _sourceInfoToMap(SourceRuntimeInfo source) {
   return <String, Object?>{
     'id': source.id,
@@ -2262,6 +2321,31 @@ var chapter = undefined;
           var chapter = __chapter;
           var isLongClick = __isLongClick;
           ${script}
+          return typeof result === 'undefined' ? null : result;
+        }).call(__source);
+      `
+    );
+    return await __runner(globalThis.ctx, globalThis.source, resultValue, currentBook, currentChapter, isLongClick);
+  }
+
+  async function __runLoginActionScript(preludeScript, actionScript, resultValue, currentBook, currentChapter, isLongClick = false) {
+    const __runner = new Function(
+      '__ctx',
+      '__source',
+      '__result',
+      '__book',
+      '__chapter',
+      '__isLongClick',
+      `
+        return (async function() {
+          var ctx = __ctx;
+          var source = __source;
+          var result = __result;
+          var book = __book;
+          var chapter = __chapter;
+          var isLongClick = __isLongClick;
+          ${preludeScript}
+          ${actionScript}
           return typeof result === 'undefined' ? null : result;
         }).call(__source);
       `
@@ -2908,6 +2992,56 @@ var chapter = undefined;
         }
       }
     );
+  }
+
+  function createLoginUiJava(ctx) {
+    return {
+      toast(message) {
+        return ctx.ui.toast(String(message ?? ''));
+      },
+      longToast(message) {
+        return ctx.ui.longToast(String(message ?? ''));
+      },
+      openUrl(url, title = null) {
+        return ctx.ui.openUrl(String(url ?? ''), title == null ? null : String(title));
+      },
+      startBrowser(url, title = null) {
+        return ctx.ui.openUrl(String(url ?? ''), title == null ? null : String(title));
+      },
+      startBrowserAwait(url, title = null, refetchAfterSuccess = true, html = null) {
+        return ctx.ui.openBrowserAwait({
+          url: String(url ?? ''),
+          title: title == null ? null : String(title),
+          refetchAfterSuccess: refetchAfterSuccess !== false,
+          html,
+        });
+      },
+      showBrowser(url, html = null, preloadJs = null, config = null) {
+        return ctx.ui.openBrowserAwait({
+          url: String(url ?? ''),
+          html,
+          refetchAfterSuccess: false,
+        });
+      },
+      alert(message, title = null) {
+        return ctx.ui.alert({
+          message: String(message ?? ''),
+          title: title == null ? null : String(title),
+        });
+      },
+      upLoginData(data = null) {
+        return hostCall('__ctx_login_ui_up_data', { data });
+      },
+      reLoginView() {
+        return hostCall('__ctx_login_ui_reload', {});
+      },
+      refreshExplore() {
+        return hostCall('__ctx_login_ui_reload', {});
+      },
+      copyText(text) {
+        return hostCall('__ctx_ui_copy_text', { text: String(text ?? '') });
+      }
+    };
   }
 
   function createLoginCheckJava(ctx, requestState) {
@@ -3639,5 +3773,9 @@ var chapter = undefined;
   globalThis.__wrapHttpResponse = wrapHttpResponse;
   globalThis.__createLoginCheckJava = createLoginCheckJava;
   globalThis.__createLoginCheckSource = createLoginCheckSource;
+  globalThis.__createLoginUiJava = createLoginUiJava;
+  globalThis.__resolveScriptProperty = __resolveScriptProperty;
+  globalThis.__runPropertyScript = __runPropertyScript;
+  globalThis.__runLoginActionScript = __runLoginActionScript;
 })();
 ''';

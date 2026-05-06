@@ -385,6 +385,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       realCoverUrl: realCoverUrl,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,

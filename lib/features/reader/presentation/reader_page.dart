@@ -439,13 +439,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kCurlPreviewStartThreshold = 8;
   static const double _kOverlayScrimMaxAlpha = 0.14;
   static const Duration _kOverlayControlsShowDuration = Duration(
-    milliseconds: 280,
-  );
-  static const Duration _kOverlayControlsHideDuration = Duration(
     milliseconds: 220,
   );
-  static const double _kShellOverlayTranslateDistance = 18;
-  static const double _kShellOverlayCollapsedScale = 0.985;
+  static const Duration _kOverlayControlsHideDuration = Duration(
+    milliseconds: 180,
+  );
+  static const double _kShellOverlayTranslateDistance = 12;
   static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 560);
   static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 300);
   static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
@@ -2888,7 +2887,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               edge: _OverlayEdge.top,
               child: ClipRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -3047,7 +3046,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               edge: _OverlayEdge.bottom,
               child: ClipRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -3229,14 +3228,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         (edge == _OverlayEdge.top ? -1 : 1) *
         (1 - slideProgress) *
         _kShellOverlayTranslateDistance;
-    final scale = lerpDouble(_kShellOverlayCollapsedScale, 1.0, slideProgress)!;
 
     return Transform.translate(
       offset: Offset(0, translateY),
-      child: Opacity(
-        opacity: fadeProgress,
-        child: Transform.scale(scale: scale, child: child),
-      ),
+      child: Opacity(opacity: fadeProgress, child: child),
     );
   }
 

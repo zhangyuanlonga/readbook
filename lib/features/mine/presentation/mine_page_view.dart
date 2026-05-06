@@ -196,7 +196,7 @@ extension on _MinePageState {
           context,
           palette: palette,
           icon: Icons.sync_rounded,
-          label: _isLoadingSession ? '同步中' : '同步',
+          label: '同步',
           tagText: 'VIP',
           onTap: _handleSyncTap,
         ),
@@ -902,9 +902,6 @@ extension on _MinePageState {
   }
 
   String _buildProfileSignature() {
-    if (_isLoadingSession) {
-      return '正在同步账号状态与阅读数据。';
-    }
     if (_userId == null) {
       return '登录后可同步阅读进度、书架和个性设置。';
     }
@@ -915,9 +912,6 @@ extension on _MinePageState {
   }
 
   String _buildProfileStatusLabel() {
-    if (_isLoadingSession) {
-      return '同步中';
-    }
     if (_userId == null) {
       return '未登录';
     }

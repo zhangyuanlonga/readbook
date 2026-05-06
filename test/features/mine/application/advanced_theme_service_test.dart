@@ -134,6 +134,68 @@ void main() {
     expect(themes, hasLength(1));
     expect(themes.first.launchImageGalleryId, 'launch_gallery_a');
   });
+
+  test(
+    'persists theme category and mode-specific cover gallery bindings',
+    () async {
+      final service = AdvancedThemeService(
+        assetStore: await _createAssetStore(),
+      );
+      final theme = AppAdvancedTheme(
+        id: 'theme_cover_modes',
+        name: '双封面主题',
+        createdAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+        category: '护眼',
+        lightCoverGalleryId: 'cover_gallery_light',
+        darkCoverGalleryId: 'cover_gallery_dark',
+      );
+
+      await service.saveTheme(theme);
+      final themes = await service.loadThemes();
+
+      expect(themes, hasLength(1));
+      expect(themes.first.category, '护眼');
+      expect(
+        themes.first.coverGalleryIdFor(AppAdvancedThemeMode.light),
+        'cover_gallery_light',
+      );
+      expect(
+        themes.first.coverGalleryIdFor(AppAdvancedThemeMode.dark),
+        'cover_gallery_dark',
+      );
+    },
+  );
+
+  test('rejects importing duplicate theme payload by fingerprint', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final payload = jsonEncode(<String, dynamic>{
+      'type': 'advanced_theme_colors',
+      'version': 2,
+      'name': '薄雾灰',
+      'lightConfig': <String, dynamic>{
+        'colors': <String, dynamic>{'primaryColorValue': 0xFF556677},
+      },
+      'darkConfig': <String, dynamic>{
+        'colors': <String, dynamic>{'primaryColorValue': 0xFF99AABB},
+      },
+    });
+
+    await service.importThemeColorJson(payload);
+
+    await expectLater(
+      () => service.importThemeColorJson(payload),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('已导入重复主题'),
+        ),
+      ),
+    );
+  });
 }
 
 Future<ManagedAssetStore> _createAssetStore() async {

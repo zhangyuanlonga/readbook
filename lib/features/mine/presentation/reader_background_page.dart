@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -28,8 +29,10 @@ class ReaderBackgroundPage extends ConsumerStatefulWidget {
 class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
   late final ReaderBackgroundService _service;
   late final ImageSelectionService _imageSelectionService;
+  final TextEditingController _searchController = TextEditingController();
 
   List<String> _backgroundPaths = const <String>[];
+  String _searchQuery = '';
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -224,6 +227,22 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
     );
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _visibleBackgroundPaths {
+    final keyword = _searchQuery.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return _backgroundPaths;
+    }
+    return _backgroundPaths
+        .where((path) => p.basename(path).toLowerCase().contains(keyword))
+        .toList(growable: false);
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -282,35 +301,79 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
               child:
                   _isLoading
                       ? const Center(child: CircularProgressIndicator())
-                      : _backgroundPaths.isEmpty
-                      ? ListView(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          topInset + 12,
-                          horizontal,
-                          16 + bottomSafe,
-                        ),
-                        children: [_buildEmptyState(context)],
-                      )
-                      : GridView.builder(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          topInset + 12,
-                          horizontal,
-                          16 + bottomSafe,
-                        ),
-                        itemCount: _backgroundPaths.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                              childAspectRatio: 0.78,
+                      : Column(
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + 12,
+                              horizontal,
+                              10,
                             ),
-                        itemBuilder: (context, index) {
-                          final path = _backgroundPaths[index];
-                          return _buildBackgroundCard(context, path);
-                        },
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: (value) {
+                                setState(() {
+                                  _searchQuery = value;
+                                });
+                              },
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                hintText: '搜索阅读背景文件名',
+                                suffixIcon:
+                                    _searchQuery.trim().isEmpty
+                                        ? null
+                                        : IconButton(
+                                          tooltip: '清空搜索',
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() {
+                                              _searchQuery = '';
+                                            });
+                                          },
+                                          icon: const Icon(Icons.close_rounded),
+                                        ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child:
+                                _visibleBackgroundPaths.isEmpty
+                                    ? ListView(
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontal,
+                                        0,
+                                        horizontal,
+                                        16 + bottomSafe,
+                                      ),
+                                      children: [_buildEmptyState(context)],
+                                    )
+                                    : GridView.builder(
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontal,
+                                        0,
+                                        horizontal,
+                                        16 + bottomSafe,
+                                      ),
+                                      itemCount: _visibleBackgroundPaths.length,
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 2,
+                                            crossAxisSpacing: 10,
+                                            mainAxisSpacing: 10,
+                                            childAspectRatio: 0.78,
+                                          ),
+                                      itemBuilder: (context, index) {
+                                        final path =
+                                            _visibleBackgroundPaths[index];
+                                        return _buildBackgroundCard(
+                                          context,
+                                          path,
+                                        );
+                                      },
+                                    ),
+                          ),
+                        ],
                       ),
             ),
           ),

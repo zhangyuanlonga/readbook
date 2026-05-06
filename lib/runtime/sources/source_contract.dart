@@ -957,6 +957,9 @@ class SourceUiContext {
     this.promptHandler,
     this.openBrowserAwaitHandler,
     this.verificationCodeHandler,
+    this.loginUiDataHandler,
+    this.loginUiReloadHandler,
+    this.copyTextHandler,
   });
 
   final Future<void> Function(String message)? toastHandler;
@@ -993,6 +996,9 @@ class SourceUiContext {
   })?
   openBrowserAwaitHandler;
   final Future<String> Function(String imageUrl)? verificationCodeHandler;
+  final Future<void> Function(Map<String, String?>? data)? loginUiDataHandler;
+  final Future<void> Function()? loginUiReloadHandler;
+  final Future<void> Function(String text)? copyTextHandler;
 
   Future<void> toast(String message) async {
     await toastHandler?.call(message);
@@ -1078,6 +1084,18 @@ class SourceUiContext {
       return '';
     }
     return await verificationCodeHandler!(imageUrl);
+  }
+
+  Future<void> updateLoginUiData(Map<String, String?>? data) async {
+    await loginUiDataHandler?.call(data);
+  }
+
+  Future<void> reloadLoginUi() async {
+    await loginUiReloadHandler?.call();
+  }
+
+  Future<void> copyText(String text) async {
+    await copyTextHandler?.call(text);
   }
 }
 

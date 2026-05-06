@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/router_transitions.dart';
 import '../../app/theme/app_interface_typography_provider.dart';
 import '../../app/theme/app_theme.dart';
 import '../../domain/entities/book_identity.dart';
@@ -48,26 +49,32 @@ final List<RouteBase> readerRoutes = <RouteBase>[
         bookmarkId: query['bookmarkId'],
       );
     },
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
       final chapterId =
           state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
       final bookmarkId = state.uri.queryParameters['bookmarkId'];
-      return _buildReaderRoutePage(
-        context,
-        bookId: bookId,
-        chapterId: chapterId,
-        sourceId: LocalBookImportService.localBookSourceId,
-        detailUrl: buildLocalBookDetailUrl(bookId),
-        chapterUrl: buildLocalChapterUrl(chapterId),
-        bookmarkId: bookmarkId,
+      return buildFadeTransitionPage(
+        state: state,
+        transitionDuration: const Duration(milliseconds: 180),
+        reverseTransitionDuration: const Duration(milliseconds: 140),
+        beginOpacity: 0.88,
+        child: _buildReaderRoutePage(
+          context,
+          bookId: bookId,
+          chapterId: chapterId,
+          sourceId: LocalBookImportService.localBookSourceId,
+          detailUrl: buildLocalBookDetailUrl(bookId),
+          chapterUrl: buildLocalChapterUrl(chapterId),
+          bookmarkId: bookmarkId,
+        ),
       );
     },
   ),
   GoRoute(
     path: '/reader/:bookId/:chapterId',
     name: 'reader',
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final bookId = state.pathParameters['bookId'] ?? 'unknown-book';
       final chapterId = state.pathParameters['chapterId'] ?? 'unknown-chapter';
       final chapterUrl = state.uri.queryParameters['chapterUrl'];
@@ -83,18 +90,24 @@ final List<RouteBase> readerRoutes = <RouteBase>[
         state.uri.queryParameters['chapterIndex'] ?? '',
       );
 
-      return _buildReaderRoutePage(
-        context,
-        bookId: bookId,
-        chapterId: chapterId,
-        chapterUrl: chapterUrl,
-        chapterTitle: chapterTitle,
-        sourceId: sourceId,
-        detailUrl: detailUrl,
-        chapterIndex: chapterIndex,
-        bookmarkId: bookmarkId,
-        openRequestedAtMs: openRequestedAtMs,
-        openRouteKind: openRouteKind,
+      return buildFadeTransitionPage(
+        state: state,
+        transitionDuration: const Duration(milliseconds: 180),
+        reverseTransitionDuration: const Duration(milliseconds: 140),
+        beginOpacity: 0.88,
+        child: _buildReaderRoutePage(
+          context,
+          bookId: bookId,
+          chapterId: chapterId,
+          chapterUrl: chapterUrl,
+          chapterTitle: chapterTitle,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+          chapterIndex: chapterIndex,
+          bookmarkId: bookmarkId,
+          openRequestedAtMs: openRequestedAtMs,
+          openRouteKind: openRouteKind,
+        ),
       );
     },
   ),

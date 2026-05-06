@@ -47,6 +47,7 @@ class _AdvancedThemeEditorPageState
   late final AdvancedThemeService _service;
   late final AdvancedThemeEditorStateService _stateService;
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _categoryController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
     vsync: this,
@@ -96,6 +97,7 @@ class _AdvancedThemeEditorPageState
     _modeTabController.removeListener(_handleModeTabChanged);
     _modeTabController.dispose();
     _nameController.dispose();
+    _categoryController.dispose();
     for (final controllers in _colorControllersByMode.values) {
       for (final controller in controllers.values) {
         controller.dispose();
@@ -165,6 +167,7 @@ class _AdvancedThemeEditorPageState
 
   void _syncControllersFromDraft(AppAdvancedTheme theme) {
     _nameController.text = theme.name;
+    _categoryController.text = theme.category?.trim() ?? '';
     for (final mode in AppAdvancedThemeMode.values) {
       for (final slot in _ThemeColorSlot.values) {
         _colorControllersByMode[mode]![slot]!.text = _formatHex(
@@ -508,7 +511,7 @@ class _AdvancedThemeEditorPageState
       return;
     }
 
-    String? selectedId = _draft?.coverGalleryId?.trim();
+    String? selectedId = _draft?.coverGalleryIdFor(_selectedMode)?.trim();
     final result = await showModalBottomSheet<_CoverGallerySelectionResult>(
       context: context,
       showDragHandle: true,
@@ -527,7 +530,7 @@ class _AdvancedThemeEditorPageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '选择封面图集',
+                      '选择${_modeLabel(_selectedMode)}封面图集',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -710,8 +713,11 @@ class _AdvancedThemeEditorPageState
     setState(() {
       _draft =
           result.galleryId == null
-              ? draft.copyWith(clearCoverGalleryId: true)
-              : draft.copyWith(coverGalleryId: result.galleryId);
+              ? draft.copyWithCoverGalleryForMode(_selectedMode, clear: true)
+              : draft.copyWithCoverGalleryForMode(
+                _selectedMode,
+                galleryId: result.galleryId,
+              );
     });
   }
 
@@ -884,7 +890,7 @@ class _AdvancedThemeEditorPageState
   }
 
   CoverGallery? _selectedCoverGallery() {
-    final selectedId = _draft?.coverGalleryId?.trim();
+    final selectedId = _draft?.coverGalleryIdFor(_selectedMode)?.trim();
     if (selectedId == null || selectedId.isEmpty) {
       return null;
     }
@@ -901,7 +907,7 @@ class _AdvancedThemeEditorPageState
     if (selectedGallery != null) {
       return selectedGallery.name;
     }
-    final selectedId = _draft?.coverGalleryId?.trim();
+    final selectedId = _draft?.coverGalleryIdFor(_selectedMode)?.trim();
     if (selectedId != null && selectedId.isNotEmpty) {
       return '已绑定图集不可用';
     }
@@ -1945,6 +1951,20 @@ class _AdvancedThemeEditorPageState
     });
   }
 
+  void _applyCategoryFromController(String value) {
+    final draft = _draft;
+    if (draft == null) {
+      return;
+    }
+    final normalized = value.trim();
+    setState(() {
+      _draft =
+          normalized.isEmpty
+              ? draft.copyWith(clearCategory: true)
+              : draft.copyWith(category: normalized);
+    });
+  }
+
   Future<void> _pickColorForSlot(_ThemeColorSlot slot) async {
     final controller = _currentControllers[slot]!;
     final current = _parseHexColor(controller.text.trim());
@@ -2228,6 +2248,8 @@ class _AdvancedThemeEditorPageState
                             10 + bottomSafe + keyboardInset,
                           ),
                           children: [
+                            _buildMetadataSection(context, draft),
+                            const SizedBox(height: sectionGap),
                             _buildColorsSection(context),
                             const SizedBox(height: sectionGap),
                             _buildResourceSection(context, draft),
@@ -2375,6 +2397,40 @@ class _AdvancedThemeEditorPageState
                 context,
                 label: '卡片背景模糊',
                 description: '当前暂未独立支持，后续再补成单独效果项',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetadataSection(BuildContext context, AppAdvancedTheme draft) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel(context, '主题信息'),
+        const SizedBox(height: 2),
+        _buildSectionDescription(context, '分类用于主题列表筛选，当前封面绑定会按浅色和深色模式分别生效。'),
+        const SizedBox(height: 4),
+        _buildPanel(
+          context,
+          child: Column(
+            children: [
+              TextField(
+                controller: _categoryController,
+                onChanged: _applyCategoryFromController,
+                decoration: const InputDecoration(
+                  labelText: '主题分类',
+                  hintText: '例如：护眼 / 极简 / 漫画',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildInfoRow(
+                context,
+                label: '当前模式封面绑定',
+                description: _resolvedCoverGalleryName(),
               ),
             ],
           ),

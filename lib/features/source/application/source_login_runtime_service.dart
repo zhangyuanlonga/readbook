@@ -103,11 +103,17 @@ class SourceLoginActionResult {
     required this.presentation,
     this.message,
     this.formPatch = const <String, String>{},
+    this.uiDataPatch,
+    this.resetUiData = false,
+    this.requestedReload = false,
   });
 
   final SourceLoginPresentation presentation;
   final String? message;
   final Map<String, String> formPatch;
+  final Map<String, String?>? uiDataPatch;
+  final bool resetUiData;
+  final bool requestedReload;
 }
 
 class SourceWebLoginRequest {
@@ -122,6 +128,12 @@ class SourceWebLoginRequest {
   final String sourceName;
   final Uri uri;
   final Map<String, String> headers;
+}
+
+class _LoginUiActionEffects {
+  Map<String, String?>? uiDataPatch;
+  bool resetUiData = false;
+  bool requestedReload = false;
 }
 
 class SourceLoginRuntimeService {
@@ -193,11 +205,15 @@ class SourceLoginRuntimeService {
     runtime_models.Chapter? chapter,
     String? actionCode,
     bool isLongClick = false,
+    bool persistFormBeforeAction = true,
   }) async {
     final registered = await _requireRegistered(sourceId);
-    final context = _createBoundContext(registered, ui: ui);
+    final effects = _LoginUiActionEffects();
+    final context = _createBoundContext(registered, ui: ui, effects: effects);
     final mergedFormData = <String, String>{...formData};
-    await context.sourceLogin.putInfo(_encodeFormData(mergedFormData));
+    if (persistFormBeforeAction) {
+      await context.sourceLogin.putInfo(_encodeFormData(mergedFormData));
+    }
 
     Object? rawResult;
     if (_looksLikeAbsoluteUrl(actionCode)) {
@@ -219,8 +235,12 @@ class SourceLoginRuntimeService {
     }
 
     final formPatch = _coerceFormPatch(rawResult);
+    final acceptedFieldAction =
+        persistFormBeforeAction || _isAcceptedFieldActionResult(rawResult);
     if (formPatch.isNotEmpty) {
       mergedFormData.addAll(formPatch);
+    }
+    if (formPatch.isNotEmpty || acceptedFieldAction) {
       await context.sourceLogin.putInfo(_encodeFormData(mergedFormData));
     }
     final message = _coerceMessage(rawResult);
@@ -243,6 +263,9 @@ class SourceLoginRuntimeService {
       presentation: presentation,
       message: message,
       formPatch: formPatch,
+      uiDataPatch: effects.uiDataPatch,
+      resetUiData: effects.resetUiData,
+      requestedReload: effects.requestedReload,
     );
   }
 
@@ -290,6 +313,36 @@ class SourceLoginRuntimeService {
     );
     await _syncBrowserCookiesFromBrowser(context, currentUri);
     await _persistBrowserCookies(context: context, uri: currentUri);
+  }
+
+  Future<void> saveDraftFormData(
+    String sourceId,
+    Map<String, String> formData,
+  ) async {
+    final registered = await _requireRegistered(sourceId);
+    final context = _createBoundContext(
+      registered,
+      ui: const SourceUiContext(),
+    );
+    await context.sourceLogin.putInfo(_encodeFormData(formData));
+  }
+
+  Future<String> readLoginHeader(String sourceId) async {
+    final registered = await _requireRegistered(sourceId);
+    final context = _createBoundContext(
+      registered,
+      ui: const SourceUiContext(),
+    );
+    return await context.sourceLogin.getHeader();
+  }
+
+  Future<void> clearLoginHeader(String sourceId) async {
+    final registered = await _requireRegistered(sourceId);
+    final context = _createBoundContext(
+      registered,
+      ui: const SourceUiContext(),
+    );
+    await context.sourceLogin.removeHeader();
   }
 
   Future<List<SourceLoginField>?> _resolveFields({
@@ -565,6 +618,7 @@ class SourceLoginRuntimeService {
   SourceRuntimeContext _createBoundContext(
     RegisteredSource registered, {
     required SourceUiContext ui,
+    _LoginUiActionEffects? effects,
   }) {
     final base = _sourceRuntimeFacade.createRuntimeContext(registered);
     unawaited(_hydratePersistedBrowserCookies(base));
@@ -575,6 +629,23 @@ class SourceLoginRuntimeService {
       confirmHandler: ui.confirmHandler,
       promptHandler: ui.promptHandler,
       verificationCodeHandler: ui.verificationCodeHandler,
+      loginUiDataHandler: (data) async {
+        if (effects != null) {
+          effects.resetUiData = data == null;
+          effects.uiDataPatch =
+              data == null ? null : <String, String?>{...data};
+        }
+        await ui.updateLoginUiData(data);
+      },
+      loginUiReloadHandler: () async {
+        if (effects != null) {
+          effects.requestedReload = true;
+        }
+        await ui.reloadLoginUi();
+      },
+      copyTextHandler: (text) async {
+        await ui.copyText(text);
+      },
       openUrlHandler: ({required String url, String? title}) async {
         final normalized = url.trim();
         if (normalized.isEmpty) {
@@ -744,6 +815,9 @@ class SourceLoginRuntimeService {
   }
 
   String? _coerceMessage(Object? raw) {
+    if (raw is bool || raw is num) {
+      return null;
+    }
     if (raw is Map) {
       final message =
           raw['message'] ?? raw['_message'] ?? raw['toast'] ?? raw['tip'];
@@ -810,6 +884,20 @@ class SourceLoginRuntimeService {
         normalized == '_message' ||
         normalized == 'toast' ||
         normalized == 'tip';
+  }
+
+  bool _isAcceptedFieldActionResult(Object? raw) {
+    if (raw is bool) {
+      return raw;
+    }
+    if (raw is num) {
+      return raw != 0;
+    }
+    final normalized = (raw?.toString() ?? '').trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 'ok' ||
+        normalized == 'yes';
   }
 
   bool _looksLikeAbsoluteUrl(String? raw) {

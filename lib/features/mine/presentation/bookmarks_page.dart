@@ -456,6 +456,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       realCoverUrl: realCoverUrl,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,

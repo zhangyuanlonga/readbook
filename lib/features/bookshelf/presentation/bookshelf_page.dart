@@ -198,6 +198,19 @@ class _BookshelfProgressDisplay {
   final String summaryText;
   final String trailingLabel;
   final bool hasProgress;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _BookshelfProgressDisplay &&
+        other.progressValue == progressValue &&
+        other.summaryText == summaryText &&
+        other.trailingLabel == trailingLabel &&
+        other.hasProgress == hasProgress;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(progressValue, summaryText, trailingLabel, hasProgress);
 }
 
 class _BookshelfBookCardState {
@@ -206,12 +219,14 @@ class _BookshelfBookCardState {
     this.latestCachedChapterTitle,
     this.cachedChapterCount = 0,
     this.localBook,
+    this.presentation,
   });
 
   final ReadingProgress? progress;
   final String? latestCachedChapterTitle;
   final int cachedChapterCount;
   final LocalBook? localBook;
+  final BookDisplayState? presentation;
 
   _BookshelfBookCardState copyWith({
     ReadingProgress? progress,
@@ -221,6 +236,8 @@ class _BookshelfBookCardState {
     int? cachedChapterCount,
     LocalBook? localBook,
     bool clearLocalBook = false,
+    BookDisplayState? presentation,
+    bool clearPresentation = false,
   }) {
     return _BookshelfBookCardState(
       progress: clearProgress ? null : (progress ?? this.progress),
@@ -230,8 +247,29 @@ class _BookshelfBookCardState {
               : (latestCachedChapterTitle ?? this.latestCachedChapterTitle),
       cachedChapterCount: cachedChapterCount ?? this.cachedChapterCount,
       localBook: clearLocalBook ? null : (localBook ?? this.localBook),
+      presentation:
+          clearPresentation ? null : (presentation ?? this.presentation),
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _BookshelfBookCardState &&
+        other.progress == progress &&
+        other.latestCachedChapterTitle == latestCachedChapterTitle &&
+        other.cachedChapterCount == cachedChapterCount &&
+        other.localBook == localBook &&
+        other.presentation == presentation;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    progress,
+    latestCachedChapterTitle,
+    cachedChapterCount,
+    localBook,
+    presentation,
+  );
 }
 
 class BookshelfPage extends ConsumerStatefulWidget {
@@ -293,6 +331,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
       const <String, BookMetadataOverride>{};
+  Map<String, BookDisplayState> _bookPresentationByKey =
+      const <String, BookDisplayState>{};
+  Map<String, String> _displayTitleByBookKey = const <String, String>{};
+  Map<String, String> _displayAuthorByBookKey = const <String, String>{};
+  Map<String, String> _titleTextByBookKey = const <String, String>{};
+  Map<String, String> _authorLineByBookKey = const <String, String>{};
+  Map<String, String> _latestLineByBookKey = const <String, String>{};
+  Map<String, String> _searchTextByBookKey = const <String, String>{};
+  Map<String, _BookshelfProgressDisplay> _progressDisplayByBookKey =
+      const <String, _BookshelfProgressDisplay>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
   List<String> _tagOrder = const <String>[];
   Map<String, String> _bookCategoriesByKey = const <String, String>{};
@@ -478,7 +526,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget build(BuildContext context) {
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
-    ref.watch(coverGalleriesProvider);
     final backdrop = _resolvedBackdrop(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
@@ -1141,27 +1188,32 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     const coverAspectRatio = 68 / 96;
     final progress = cardState.progress;
     final localBook = cardState.localBook;
-    final progressDisplay = _resolveBookshelfProgressDisplay(
-      book,
-      progress: progress,
-      localBook: localBook,
-      cachedChapterCount: cardState.cachedChapterCount,
-    );
+    final bookKey = _bookKey(book);
+    final progressDisplay =
+        _progressDisplayByBookKey[bookKey] ??
+        _resolveBookshelfProgressDisplay(
+          book,
+          progress: progress,
+          localBook: localBook,
+          cachedChapterCount: cardState.cachedChapterCount,
+        );
     final colorScheme = Theme.of(context).colorScheme;
     final palette = _resolvedPalette(context);
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
-    final displayTitle = _displayBookTitle(book, localBook: localBook);
-    final displayAuthor = _displayBookAuthor(book, localBook: localBook);
-    final titleText = _toSingleLineText(displayTitle);
-    final authorText = _toSingleLineText(displayAuthor ?? '');
-    final latestChapterText = _toSingleLineText(
-      cardState.latestCachedChapterTitle ?? book.latestChapter ?? '',
+    final displayTitle =
+        cardState.presentation?.displayTitle ??
+        _displayBookTitle(book, localBook: localBook);
+    final displayAuthor = _displayBookAuthor(
+      book,
+      localBook: localBook,
+      presentation: cardState.presentation,
     );
+    final titleText =
+        _titleTextByBookKey[bookKey] ?? _toSingleLineText(displayTitle);
     final coverHeroTag = _buildBookCoverHeroTag(book);
-    final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
-    final latestLine =
-        latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无缓存章节';
+    final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
+    final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
 
     return Material(
       color: Colors.transparent,
@@ -1217,6 +1269,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               sourceId: book.sourceId,
                               detailUrl: book.detailUrl,
                               heroTag: coverHeroTag,
+                              presentation: cardState.presentation,
                               width: constraints.maxWidth,
                               height: constraints.maxHeight,
                             );
@@ -1382,27 +1435,32 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }) {
     final progress = cardState.progress;
     final localBook = cardState.localBook;
-    final progressDisplay = _resolveBookshelfProgressDisplay(
-      book,
-      progress: progress,
-      localBook: localBook,
-      cachedChapterCount: cardState.cachedChapterCount,
-    );
+    final presentation = cardState.presentation;
+    final bookKey = _bookKey(book);
+    final progressDisplay =
+        _progressDisplayByBookKey[bookKey] ??
+        _resolveBookshelfProgressDisplay(
+          book,
+          progress: progress,
+          localBook: localBook,
+          cachedChapterCount: cardState.cachedChapterCount,
+        );
     final palette = _resolvedPalette(context);
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
-    final displayTitle = _displayBookTitle(book, localBook: localBook);
-    final displayAuthor = _displayBookAuthor(book, localBook: localBook);
-    final titleText = _toSingleLineText(displayTitle);
-    final authorText = _toSingleLineText(displayAuthor ?? '');
-    final latestChapterText = _toSingleLineText(
-      cardState.latestCachedChapterTitle ?? book.latestChapter ?? '',
+    final displayTitle =
+        presentation?.displayTitle ??
+        _displayBookTitle(book, localBook: localBook);
+    final displayAuthor = _displayBookAuthor(
+      book,
+      localBook: localBook,
+      presentation: presentation,
     );
+    final titleText =
+        _titleTextByBookKey[bookKey] ?? _toSingleLineText(displayTitle);
     final coverHeroTag = _buildBookCoverHeroTag(book);
-    final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
-    final latestLine =
-        latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无章节';
-    final progressLine = progressDisplay.summaryText;
+    final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
+    final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
     final isEditingSelected = _isSelectionMode && isSelected;
 
     return Card(
@@ -1472,6 +1530,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           sourceId: book.sourceId,
                           detailUrl: book.detailUrl,
                           heroTag: coverHeroTag,
+                          presentation: presentation,
                           width: 68,
                           height: 96,
                         ),
@@ -1577,7 +1636,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ],
                       const SizedBox(height: 4),
                       Text(
-                        progressLine,
+                        progressDisplay.summaryText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1696,20 +1755,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (keyword.isEmpty) {
       return true;
     }
-
-    final localBook = _bookshelfLocalBook(book);
     final bookKey = _bookKey(book);
-    final candidates = <String>[
-      _displayBookTitle(book, localBook: localBook),
-      _displayBookAuthor(book, localBook: localBook) ?? '',
-      _categoryOfBook(book) ?? book.category ?? '',
-      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
-      ..._tagsOfBook(book),
-    ];
-
-    return candidates.any(
-      (candidate) => _normalizeBookshelfSearchText(candidate).contains(keyword),
-    );
+    final searchText = _searchTextByBookKey[bookKey] ?? '';
+    return searchText.contains(keyword);
   }
 
   bool _bookMatchesStaticFilter(BookshelfBook book, _BookshelfFilter filter) {
@@ -1756,6 +1804,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _sortMode,
       searchKeyword,
       identityHashCode(_books),
+      identityHashCode(_bookPresentationByKey),
       identityHashCode(_progressByBookKey),
       identityHashCode(_latestCachedChapterByBookKey),
       identityHashCode(_cachedChapterCountByBookKey),
@@ -1788,11 +1837,76 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       counts: categoryCounts,
       order: _categoryOrder,
     );
+    final displayTitles = <String, String>{};
+    final displayAuthors = <String, String>{};
+    final titleTexts = <String, String>{};
+    final authorLines = <String, String>{};
+    final latestLines = <String, String>{};
+    final progressDisplays = <String, _BookshelfProgressDisplay>{};
+    final searchTextByBookKey = <String, String>{};
+    for (final book in _books) {
+      final bookKey = _bookKey(book);
+      if (bookKey.isEmpty) {
+        continue;
+      }
+      final localBook = _bookshelfLocalBook(book);
+      final presentation = _bookPresentationByKey[bookKey];
+      final displayTitle =
+          presentation?.displayTitle ??
+          _displayBookTitle(book, localBook: localBook);
+      final displayAuthor =
+          (presentation?.displayAuthor ??
+                  _displayBookAuthor(
+                    book,
+                    localBook: localBook,
+                    presentation: presentation,
+                  ) ??
+                  '')
+              .trim();
+      final latestChapter =
+          _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '';
+      final titleText = _toSingleLineText(displayTitle);
+      final authorText = _toSingleLineText(displayAuthor);
+      final latestChapterText = _toSingleLineText(latestChapter);
+      final progressDisplay = _resolveBookshelfProgressDisplay(
+        book,
+        progress: _progressByBookKey[bookKey],
+        localBook: localBook,
+        cachedChapterCount: _cachedChapterCountByBookKey[bookKey],
+      );
+      displayTitles[bookKey] = displayTitle;
+      displayAuthors[bookKey] = displayAuthor;
+      titleTexts[bookKey] = titleText;
+      authorLines[bookKey] =
+          authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
+      latestLines[bookKey] =
+          latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无章节';
+      progressDisplays[bookKey] = progressDisplay;
+      searchTextByBookKey[bookKey] = _normalizeBookshelfSearchText(
+        <String>[
+          displayTitle,
+          displayAuthor,
+          _categoryOfBook(book) ?? book.category ?? '',
+          latestChapter,
+          ..._tagsOfBook(book),
+        ].join(' '),
+      );
+    }
 
     _tagBookCountCache = Map<String, int>.unmodifiable(counts);
     _categoryBookCountCache = Map<String, int>.unmodifiable(categoryCounts);
     _userTagsCache = List<String>.unmodifiable(tags);
     _userCategoriesCache = List<String>.unmodifiable(categories);
+    _displayTitleByBookKey = Map<String, String>.unmodifiable(displayTitles);
+    _displayAuthorByBookKey = Map<String, String>.unmodifiable(displayAuthors);
+    _titleTextByBookKey = Map<String, String>.unmodifiable(titleTexts);
+    _authorLineByBookKey = Map<String, String>.unmodifiable(authorLines);
+    _latestLineByBookKey = Map<String, String>.unmodifiable(latestLines);
+    _searchTextByBookKey = Map<String, String>.unmodifiable(
+      searchTextByBookKey,
+    );
+    _progressDisplayByBookKey =
+        Map<String, _BookshelfProgressDisplay>.unmodifiable(progressDisplays);
     final filteredBooks = _books
       .where(
         (book) =>
@@ -2016,19 +2130,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         .toString();
   }
 
-  bool _hasUsableLocalCustomCover(String? url) {
-    final normalized = url?.trim() ?? '';
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final uri = Uri.tryParse(normalized);
-    if (uri == null || uri.scheme != 'file') {
-      return false;
-    }
-    final file = File.fromUri(uri);
-    return file.existsSync();
-  }
-
   String _toSingleLineText(String text) {
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
@@ -2053,50 +2154,73 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     String? sourceId,
     String? detailUrl,
     String? heroTag,
+    BookDisplayState? presentation,
     double width = 78,
     double height = 108,
   }) {
     final normalizedBookId = (bookId ?? '').trim();
-    final localBook =
-        normalizedBookId.isNotEmpty ? _localBooksById[normalizedBookId] : null;
-    final override =
-        normalizedBookId.isNotEmpty
-            ? (sourceId == _kLocalBookSourceId
-                ? _metadataOverridesByTargetKey[BookMetadataOverride.localTargetKey(
-                  normalizedBookId,
-                )]
-                : _metadataOverridesByTargetKey[BookMetadataOverride.remoteTargetKey(
-                  sourceId: sourceId ?? '',
-                  detailUrl: detailUrl ?? '',
-                )])
-            : null;
-    final presentation = _bookMetadataPresentationResolver.resolve(
-      fallbackTitle: title,
-      fallbackAuthor: author,
-      realCoverUrl: realCoverUrl,
-      localBook: localBook,
-      metadataOverride: override,
-    );
-    final resolvedCover = resolveBookCover(
-      realCoverUrl: presentation.displayCover,
-      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
-      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
-      bookId: bookId,
-      sourceId: sourceId,
-      detailUrl: detailUrl,
-    );
-    final coverView = ResolvedBookCoverView(
-      cover: resolvedCover,
-      title: presentation.displayTitle,
-      author: presentation.displayAuthor,
-      width: width,
-      height: height,
-      borderRadius: BorderRadius.circular(12),
+    final cachedPresentation =
+        presentation ??
+        _bookPresentationByKey[_bookKeyByParams(
+          sourceId: sourceId,
+          bookId: normalizedBookId,
+          detailUrl: detailUrl,
+        )];
+    final resolvedPresentation =
+        cachedPresentation ??
+        _bookMetadataPresentationResolver.resolve(
+          fallbackTitle: title,
+          fallbackAuthor: author,
+          realCoverUrl: realCoverUrl,
+          localBook:
+              normalizedBookId.isNotEmpty
+                  ? _localBooksById[normalizedBookId]
+                  : null,
+          metadataOverride:
+              normalizedBookId.isNotEmpty
+                  ? (sourceId == _kLocalBookSourceId
+                      ? _metadataOverridesByTargetKey[BookMetadataOverride.localTargetKey(
+                        normalizedBookId,
+                      )]
+                      : _metadataOverridesByTargetKey[BookMetadataOverride.remoteTargetKey(
+                        sourceId: sourceId ?? '',
+                        detailUrl: detailUrl ?? '',
+                      )])
+                  : null,
+        );
+    final coverView = Consumer(
+      builder: (context, ref, _) {
+        final resolvedCover = resolveBookCover(
+          realCoverUrl: resolvedPresentation.displayCover,
+          activeTheme: ref.watch(activeAdvancedThemeProvider).valueOrNull,
+          galleries: ref.watch(coverGalleriesProvider).valueOrNull ?? const [],
+          brightness: Theme.of(context).brightness,
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
+        return ResolvedBookCoverView(
+          cover: resolvedCover,
+          title: resolvedPresentation.displayTitle,
+          author: resolvedPresentation.displayAuthor,
+          width: width,
+          height: height,
+          borderRadius: BorderRadius.circular(12),
+        );
+      },
     );
     if (heroTag == null || heroTag.trim().isEmpty) {
       return coverView;
     }
     return Hero(tag: heroTag.trim(), child: coverView);
+  }
+
+  String _bookKeyByParams({
+    required String? sourceId,
+    required String? bookId,
+    required String? detailUrl,
+  }) {
+    return '${(sourceId ?? '').trim()}::${(bookId ?? '').trim()}::${(detailUrl ?? '').trim()}';
   }
 
   ValueNotifier<_BookshelfBookCardState> _ensureBookCardStateNotifier(
@@ -2116,6 +2240,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       latestCachedChapterTitle: _latestCachedChapterByBookKey[key],
       cachedChapterCount: _cachedChapterCountByBookKey[key] ?? 0,
       localBook: _bookshelfLocalBook(book),
+      presentation: _bookPresentationByKey[key],
     );
   }
 
@@ -2130,7 +2255,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
     for (final book in books) {
       final notifier = _ensureBookCardStateNotifier(book);
-      notifier.value = _createBookCardState(book);
+      final nextState = _createBookCardState(book);
+      if (notifier.value != nextState) {
+        notifier.value = nextState;
+      }
     }
   }
 
@@ -2143,9 +2271,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     int? cachedChapterCount,
     LocalBook? localBook,
     bool clearLocalBook = false,
+    BookDisplayState? presentation,
+    bool clearPresentation = false,
   }) {
     final notifier = _ensureBookCardStateNotifier(book);
-    notifier.value = notifier.value.copyWith(
+    final nextState = notifier.value.copyWith(
       progress: progress,
       clearProgress: clearProgress,
       latestCachedChapterTitle: latestCachedChapterTitle,
@@ -2153,7 +2283,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       cachedChapterCount: cachedChapterCount,
       localBook: localBook,
       clearLocalBook: clearLocalBook,
+      presentation: presentation,
+      clearPresentation: clearPresentation,
     );
+    if (notifier.value != nextState) {
+      notifier.value = nextState;
+    }
   }
 
   void _updateBookCardStatesForBooks(
@@ -2162,6 +2297,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     Map<String, String>? latestCachedChapterByKey,
     Map<String, int>? cachedChapterCountByKey,
     Map<String, LocalBook>? localBooksById,
+    Map<String, BookDisplayState>? presentationByKey,
   }) {
     for (final book in books) {
       final key = _bookKey(book);
@@ -2188,6 +2324,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         clearLocalBook:
             localBooksById != null &&
             !localBooksById.containsKey(book.bookId.trim()),
+        presentation: presentationByKey == null ? null : presentationByKey[key],
+        clearPresentation:
+            presentationByKey != null && !presentationByKey.containsKey(key),
       );
     }
   }
@@ -2211,6 +2350,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   String _displayBookTitle(BookshelfBook book, {LocalBook? localBook}) {
+    final cachedTitle = _displayTitleByBookKey[_bookKey(book)];
+    if (cachedTitle != null && cachedTitle.isNotEmpty) {
+      return cachedTitle;
+    }
     final presentation = _bookMetadataPresentationResolver.resolve(
       fallbackTitle: book.title,
       fallbackAuthor: book.author,
@@ -2225,15 +2368,28 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return 'book_cover_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
   }
 
-  String? _displayBookAuthor(BookshelfBook book, {LocalBook? localBook}) {
-    final presentation = _bookMetadataPresentationResolver.resolve(
+  String? _displayBookAuthor(
+    BookshelfBook book, {
+    LocalBook? localBook,
+    BookDisplayState? presentation,
+  }) {
+    final cachedAuthor = _displayAuthorByBookKey[_bookKey(book)];
+    if (cachedAuthor != null) {
+      return cachedAuthor.isEmpty ? null : cachedAuthor;
+    }
+    final resolvedPresentation =
+        presentation ?? _bookPresentationByKey[_bookKey(book)];
+    if (resolvedPresentation != null) {
+      return resolvedPresentation.displayAuthor;
+    }
+    final fallbackPresentation = _bookMetadataPresentationResolver.resolve(
       fallbackTitle: book.title,
       fallbackAuthor: book.author,
       realCoverUrl: book.coverUrl,
       localBook: localBook ?? _bookshelfLocalBook(book),
       metadataOverride: _bookshelfMetadataOverride(book),
     );
-    return presentation.displayAuthor;
+    return fallbackPresentation.displayAuthor;
   }
 
   Widget _buildSourceBadge(BookshelfBook book, {bool compact = false}) {
@@ -2472,6 +2628,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final sourceTypeMap = await sourceTypeFuture;
     final localBooksById = await localBooksFuture;
     final metadataOverridesByTargetKey = await metadataOverridesFuture;
+    final bookPresentationByKey = _bookshelfPresentationQueryService
+        .buildBookshelfPresentationMap(
+          books: books,
+          localBooksById: localBooksById,
+          metadataOverridesByTargetKey: metadataOverridesByTargetKey,
+        );
     final rawTagMap = await rawTagMapFuture;
     final tagOrder = await tagOrderFuture;
     final rawCategoryMap = await rawCategoryMapFuture;
@@ -2510,6 +2672,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _sourceTypeBySourceId = sourceTypeMap;
       _localBooksById = localBooksById;
       _metadataOverridesByTargetKey = metadataOverridesByTargetKey;
+      _bookPresentationByKey = bookPresentationByKey;
       _bookTagsByKey = tagMap;
       _tagOrder = _normalizeTags(tagOrder);
       _bookCategoriesByKey = categoryMap;
@@ -2528,7 +2691,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _bookshelfMetadataReady = true;
       _ensureFilterStillValid();
     });
-    _updateBookCardStatesForBooks(books, localBooksById: localBooksById);
+    _updateBookCardStatesForBooks(
+      books,
+      localBooksById: localBooksById,
+      presentationByKey: bookPresentationByKey,
+    );
     _syncSelectionWithBooks();
   }
 
@@ -2747,9 +2914,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         final currentAuthor = book.author?.trim();
         final currentTitle = book.title.trim();
         final currentCoverUrl = book.coverUrl?.trim();
-        final preserveLocalCustomCover = _hasUsableLocalCustomCover(
-          currentCoverUrl,
-        );
+        final preserveLocalCustomCover =
+            _bookPresentationByKey[_bookKey(book)]?.displayCoverSource ==
+            BookDisplayCoverSource.localManaged;
         final effectiveNextCoverUrl =
             preserveLocalCustomCover ? currentCoverUrl : normalizedCoverUrl;
         final normalizedCoverCompareKey = _coverUrlCompareKey(

@@ -272,7 +272,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                   stream: _pageStateService.watchPageState(
                     latestRecordsStream:
                         _readingRecordService.watchLatestRecords(),
-                    dailyRecordsStream: _readingRecordService.watchDailyRecords(),
+                    dailyRecordsStream:
+                        _readingRecordService.watchDailyRecords(),
                     sessionsStream: _readingRecordService.watchSessions(),
                     localBooksStream: _presentationService.watchLocalBooks(),
                     metadataOverridesStream:
@@ -2395,6 +2396,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       realCoverUrl: presentation.displayCover,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,

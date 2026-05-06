@@ -14,13 +14,52 @@ class BookPresentationQueryService {
 
   final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   final BookDisplayStateResolver _resolver;
+  final Map<String, Future<BookDisplayState>> _remoteBookFutureCache =
+      <String, Future<BookDisplayState>>{};
 
   Future<BookDisplayState> resolveRemoteBook(Book book) async {
-    final override = await _bookMetadataOverrideRepository.getByRemoteBook(
+    final cacheKey = BookMetadataOverride.remoteTargetKey(
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
     );
-    return _resolver.resolveRemoteBook(book: book, metadataOverride: override);
+    final cachedFuture = _remoteBookFutureCache[cacheKey];
+    if (cachedFuture != null) {
+      return cachedFuture;
+    }
+    final future = _resolveRemoteBookInternal(book);
+    _remoteBookFutureCache[cacheKey] = future;
+    try {
+      return await future;
+    } catch (_) {
+      if (identical(_remoteBookFutureCache[cacheKey], future)) {
+        _remoteBookFutureCache.remove(cacheKey);
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, BookDisplayState>> loadRemotePresentationMap(
+    List<Book> books,
+  ) async {
+    if (books.isEmpty) {
+      return const <String, BookDisplayState>{};
+    }
+    final overrides = await _bookMetadataOverrideRepository.getAll();
+    final overrideByTargetKey = <String, BookMetadataOverride>{
+      for (final item in overrides) item.targetKey: item,
+    };
+    final result = <String, BookDisplayState>{};
+    for (final book in books) {
+      final targetKey = BookMetadataOverride.remoteTargetKey(
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+      );
+      result[targetKey] = _resolver.resolveRemoteBook(
+        book: book,
+        metadataOverride: overrideByTargetKey[targetKey],
+      );
+    }
+    return result;
   }
 
   Future<Map<String, BookMetadataOverride>> loadMetadataOverrideMapForBooks(
@@ -59,5 +98,13 @@ class BookPresentationQueryService {
       sourceId: book.sourceId,
       detailUrl: detailUrl,
     );
+  }
+
+  Future<BookDisplayState> _resolveRemoteBookInternal(Book book) async {
+    final override = await _bookMetadataOverrideRepository.getByRemoteBook(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+    );
+    return _resolver.resolveRemoteBook(book: book, metadataOverride: override);
   }
 }

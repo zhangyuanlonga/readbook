@@ -505,6 +505,7 @@ class _HomePageState extends ConsumerState<HomePage>
       realCoverUrl: displayState.displayCover,
       activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
       galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: theme.brightness,
       bookId: record.bookId,
       sourceId: record.sourceId,
       detailUrl: record.detailUrl,
