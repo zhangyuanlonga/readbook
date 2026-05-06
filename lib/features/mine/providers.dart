@@ -14,6 +14,7 @@ import '../../features/reader/application/reading_record_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
 import 'application/advanced_theme_provider.dart';
+import 'application/advanced_theme_resource_reference_service.dart';
 import 'application/advanced_theme_editor_state_service.dart';
 import 'application/appearance_page_resource_service.dart';
 import 'application/app_background_service.dart';
@@ -117,6 +118,11 @@ final advancedThemeEditorStateServiceProvider =
         readerBackgroundService: ref.watch(readerBackgroundServiceProvider),
         fontRegistryService: ReaderFontRegistryService(),
       );
+    });
+
+final advancedThemeResourceReferenceServiceProvider =
+    Provider<AdvancedThemeResourceReferenceService>((ref) {
+      return AdvancedThemeResourceReferenceService();
     });
 
 final minePageSessionServiceProvider = Provider<MinePageSessionService>((ref) {

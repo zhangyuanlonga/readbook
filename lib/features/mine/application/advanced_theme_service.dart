@@ -14,6 +14,7 @@ import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/managed_asset.dart';
+import 'advanced_theme_resource_reference_service.dart';
 import 'cover_gallery_service.dart';
 import 'launch_image_gallery_service.dart';
 import '../../reader/application/reader_font_registry_service.dart';
@@ -86,6 +87,35 @@ class AdvancedThemeService {
       return normalizedThemes;
     } catch (_) {
       return const <AppAdvancedTheme>[];
+    }
+  }
+
+  Future<List<AdvancedThemeSummary>> loadThemeSummaries() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_themesKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <AdvancedThemeSummary>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <AdvancedThemeSummary>[];
+      }
+      final summaries = decoded
+          .whereType<Map>()
+          .map(
+            (item) => AdvancedThemeSummary.fromTheme(
+              AppAdvancedTheme.fromJson(
+                item.map((key, value) => MapEntry(key.toString(), value)),
+              ),
+            ),
+          )
+          .toList(growable: false);
+      summaries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return summaries;
+    } catch (_) {
+      return const <AdvancedThemeSummary>[];
     }
   }
 
@@ -201,13 +231,38 @@ class AdvancedThemeService {
     if (activeId == null) {
       return null;
     }
-    final themes = await loadThemes();
-    for (final theme in themes) {
-      if (theme.id == activeId) {
-        return theme;
-      }
+    return loadThemeById(activeId);
+  }
+
+  Future<AppAdvancedTheme?> loadThemeById(String themeId) async {
+    final normalizedThemeId = themeId.trim();
+    if (normalizedThemeId.isEmpty) {
+      return null;
     }
-    return null;
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_themesKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return null;
+      }
+      for (final item in decoded.whereType<Map>()) {
+        final theme = AppAdvancedTheme.fromJson(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        );
+        if (theme.id != normalizedThemeId) {
+          continue;
+        }
+        return _normalizeThemeForRuntime(theme);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<AppAdvancedTheme> saveTheme(AppAdvancedTheme theme) async {
@@ -315,9 +370,12 @@ class AdvancedThemeService {
         await _safeDeleteBottomNavGallery(bottomNavGalleryId);
       }
       if (resolvedDeleteOptions.deleteFonts) {
-        final removableFontKeys = fontFamilyKeys
-            .where((familyKey) => !_isThemeFontReferenced(updated, familyKey))
-            .toList(growable: false);
+        final removableFontKeys = await AdvancedThemeResourceReferenceService(
+          preferences: await _preferencesFuture,
+        ).filterRemovableFontFamilyKeys(
+          fontFamilyKeys: fontFamilyKeys,
+          remainingThemes: updated,
+        );
         await _safeDeleteImportedFonts(removableFontKeys);
       }
       if (resolvedDeleteOptions.deleteAppearanceWallpapers) {
@@ -2498,21 +2556,6 @@ class AdvancedThemeService {
     return false;
   }
 
-  bool _isThemeFontReferenced(List<AppAdvancedTheme> themes, String familyKey) {
-    final normalizedFamilyKey = familyKey.trim();
-    if (normalizedFamilyKey.isEmpty) {
-      return false;
-    }
-    for (final theme in themes) {
-      if ((theme.appInterfaceFontFamilyKey?.trim() ?? '') ==
-              normalizedFamilyKey ||
-          (theme.readerFontFamilyKey?.trim() ?? '') == normalizedFamilyKey) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   Future<void> _cleanupImportedThemeBundleArtifacts({
     required Directory themeDirectory,
     List<String?> coverGalleryIds = const <String?>[],
@@ -2765,6 +2808,98 @@ class AdvancedThemeDeleteOptions {
         deleteLaunchImageGallery ||
         deleteBottomNavGallery ||
         deleteFonts;
+  }
+}
+
+class AdvancedThemeModeSummary {
+  const AdvancedThemeModeSummary({
+    required this.primaryColorValue,
+    required this.backgroundColorValue,
+    required this.surfaceColorValue,
+    required this.cardColorValue,
+    required this.cardTextColorValue,
+    required this.textSecondaryColorValue,
+    required this.hasWallpaper,
+    required this.hasReaderWallpaper,
+    required this.configuredColorCount,
+  });
+
+  factory AdvancedThemeModeSummary.fromConfig(
+    AppAdvancedThemeModeConfig config,
+  ) {
+    final colors = config.colors;
+    return AdvancedThemeModeSummary(
+      primaryColorValue: colors.primaryColorValue,
+      backgroundColorValue: colors.backgroundColorValue,
+      surfaceColorValue: colors.surfaceColorValue,
+      cardColorValue: colors.cardColorValue,
+      cardTextColorValue: colors.cardTextColorValue,
+      textSecondaryColorValue: colors.textSecondaryColorValue,
+      hasWallpaper: config.hasWallpaper,
+      hasReaderWallpaper: config.hasReaderWallpaper,
+      configuredColorCount: colors.configuredColorCount,
+    );
+  }
+
+  final int? primaryColorValue;
+  final int? backgroundColorValue;
+  final int? surfaceColorValue;
+  final int? cardColorValue;
+  final int? cardTextColorValue;
+  final int? textSecondaryColorValue;
+  final bool hasWallpaper;
+  final bool hasReaderWallpaper;
+  final int configuredColorCount;
+}
+
+class AdvancedThemeSummary {
+  const AdvancedThemeSummary({
+    required this.id,
+    required this.name,
+    required this.updatedAt,
+    required this.lightMode,
+    required this.darkMode,
+    this.category,
+    this.hasCoverGalleryBinding = false,
+    this.hasLaunchImageGallery = false,
+    this.hasBottomNavGallery = false,
+    this.hasAppInterfaceFont = false,
+    this.hasReaderFont = false,
+  });
+
+  factory AdvancedThemeSummary.fromTheme(AppAdvancedTheme theme) {
+    return AdvancedThemeSummary(
+      id: theme.id,
+      name: theme.name,
+      category: theme.category?.trim(),
+      updatedAt: theme.updatedAt,
+      lightMode: AdvancedThemeModeSummary.fromConfig(theme.lightConfig),
+      darkMode: AdvancedThemeModeSummary.fromConfig(theme.darkConfig),
+      hasCoverGalleryBinding: theme.hasCoverGalleryBinding,
+      hasLaunchImageGallery:
+          theme.launchImageGalleryId?.trim().isNotEmpty ?? false,
+      hasBottomNavGallery: theme.bottomNavGalleryId?.trim().isNotEmpty ?? false,
+      hasAppInterfaceFont:
+          theme.appInterfaceFontFamilyKey?.trim().isNotEmpty ?? false,
+      hasReaderFont: theme.readerFontFamilyKey?.trim().isNotEmpty ?? false,
+    );
+  }
+
+  final String id;
+  final String name;
+  final String? category;
+  final DateTime updatedAt;
+  final AdvancedThemeModeSummary lightMode;
+  final AdvancedThemeModeSummary darkMode;
+  final bool hasCoverGalleryBinding;
+  final bool hasLaunchImageGallery;
+  final bool hasBottomNavGallery;
+  final bool hasAppInterfaceFont;
+  final bool hasReaderFont;
+
+  bool get hasBothModesConfigured {
+    return lightMode.configuredColorCount > 0 &&
+        darkMode.configuredColorCount > 0;
   }
 }
 

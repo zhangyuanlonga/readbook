@@ -136,6 +136,78 @@ void main() {
   });
 
   test(
+    'loads theme by id without requiring full theme scan by caller',
+    () async {
+      final service = AdvancedThemeService(
+        assetStore: await _createAssetStore(),
+      );
+      final lightTheme = AppAdvancedTheme(
+        id: 'theme_light',
+        name: '浅色主题',
+        createdAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-04-22T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+      );
+      final darkTheme = AppAdvancedTheme(
+        id: 'theme_dark',
+        name: '深色主题',
+        createdAt: DateTime.parse('2026-04-23T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-04-23T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+      );
+
+      await service.saveTheme(lightTheme);
+      await service.saveTheme(darkTheme);
+
+      final loaded = await service.loadThemeById('theme_dark');
+
+      expect(loaded, isNotNull);
+      expect(loaded!.id, 'theme_dark');
+      expect(loaded.name, '深色主题');
+    },
+  );
+
+  test('loads lightweight summaries for theme list rendering', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final theme = AppAdvancedTheme(
+      id: 'theme_summary',
+      name: '摘要主题',
+      createdAt: DateTime.parse('2026-04-23T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-04-23T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(
+        colors: AppAdvancedThemeColors(
+          primaryColorValue: 0xFF112233,
+          backgroundColorValue: 0xFFF4F1EA,
+        ),
+        wallpaperPath: '/tmp/light_wallpaper.png',
+      ),
+      darkConfig: AppAdvancedThemeModeConfig(
+        colors: AppAdvancedThemeColors(
+          primaryColorValue: 0xFFCCDDEE,
+          backgroundColorValue: 0xFF101820,
+        ),
+      ),
+      category: '护眼',
+      launchImageGalleryId: 'launch_gallery_1',
+      appInterfaceFontFamilyKey: 'font_ui_1',
+    );
+
+    await service.saveTheme(theme);
+    final summaries = await service.loadThemeSummaries();
+
+    expect(summaries, hasLength(1));
+    expect(summaries.first.id, 'theme_summary');
+    expect(summaries.first.name, '摘要主题');
+    expect(summaries.first.category, '护眼');
+    expect(summaries.first.lightMode.hasWallpaper, isTrue);
+    expect(summaries.first.darkMode.hasWallpaper, isFalse);
+    expect(summaries.first.hasLaunchImageGallery, isTrue);
+    expect(summaries.first.hasAppInterfaceFont, isTrue);
+  });
+
+  test(
     'persists theme category and mode-specific cover gallery bindings',
     () async {
       final service = AdvancedThemeService(

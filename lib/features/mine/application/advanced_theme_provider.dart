@@ -27,13 +27,7 @@ final activeAdvancedThemeProvider = FutureProvider<AppAdvancedTheme?>((
     return null;
   }
   final service = ref.watch(advancedThemeServiceProvider);
-  final themes = await service.loadThemes();
-  for (final theme in themes) {
-    if (theme.id == activeId) {
-      return theme;
-    }
-  }
-  return null;
+  return service.loadThemeById(activeId);
 });
 
 class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {

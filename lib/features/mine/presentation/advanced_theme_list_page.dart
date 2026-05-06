@@ -22,6 +22,7 @@ import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
+import '../application/advanced_theme_resource_reference_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_import_catalog.dart';
@@ -57,7 +58,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final MembershipService _membershipService;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
   final TextEditingController _searchController = TextEditingController();
-  List<AppAdvancedTheme> _themes = const <AppAdvancedTheme>[];
+  List<AdvancedThemeSummary> _themeSummaries = const <AdvancedThemeSummary>[];
   String _searchQuery = '';
   String? _selectedCategory;
   bool _isLoading = true;
@@ -141,12 +142,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Future<void> _load() async {
     final service = ref.read(advancedThemeServiceProvider);
-    final themes = await service.loadThemes();
+    final themes = await service.loadThemeSummaries();
     if (!mounted) {
       return;
     }
     final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
-    final sortedThemes = List<AppAdvancedTheme>.from(themes)..sort((a, b) {
+    final sortedThemes = List<AdvancedThemeSummary>.from(themes)..sort((a, b) {
       final aIsActive = a.id == activeThemeId;
       final bIsActive = b.id == activeThemeId;
       if (aIsActive != bIsActive) {
@@ -155,7 +156,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return b.updatedAt.compareTo(a.updatedAt);
     });
     setState(() {
-      _themes = sortedThemes;
+      _themeSummaries = sortedThemes;
       if (_selectedCategory != null &&
           !_availableCategories.contains(_selectedCategory)) {
         _selectedCategory = null;
@@ -165,7 +166,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   List<String> get _availableCategories {
-    final categories = _themes
+    final categories = _themeSummaries
       .map((theme) => theme.category?.trim() ?? '')
       .where((category) => category.isNotEmpty)
       .toSet()
@@ -173,10 +174,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     return categories;
   }
 
-  List<AppAdvancedTheme> get _visibleThemes {
+  List<AdvancedThemeSummary> get _visibleThemes {
     final keyword = _searchQuery.trim().toLowerCase();
     final selectedCategory = _selectedCategory?.trim() ?? '';
-    return _themes
+    return _themeSummaries
         .where((theme) {
           if (selectedCategory.isNotEmpty &&
               (theme.category?.trim() ?? '') != selectedCategory) {
@@ -194,11 +195,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         .toList(growable: false);
   }
 
-  Future<void> _openEditor([AppAdvancedTheme? theme]) async {
+  Future<AppAdvancedTheme?> _loadThemeDetail(String themeId) {
+    return ref.read(advancedThemeServiceProvider).loadThemeById(themeId);
+  }
+
+  Future<void> _openEditor([String? themeId]) async {
     final result = await context.push<String>(
-      theme == null
+      themeId == null || themeId.trim().isEmpty
           ? '/appearance/advanced-themes/editor'
-          : '/appearance/advanced-themes/editor?id=${theme.id}',
+          : '/appearance/advanced-themes/editor?id=$themeId',
     );
     await _load();
     if (!mounted || result == null || result.trim().isEmpty) {
@@ -207,7 +212,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     _showMessage(result);
   }
 
-  Future<void> _duplicateTheme(AppAdvancedTheme theme) async {
+  Future<void> _duplicateTheme(String themeId) async {
     if (_isSaving) {
       return;
     }
@@ -216,6 +221,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
+      final theme = await _loadThemeDetail(themeId);
+      if (theme == null) {
+        if (mounted) {
+          _showMessage('主题不存在或已被删除');
+        }
+        return;
+      }
       final duplicated = await service.duplicateTheme(theme);
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       await _load();
@@ -232,7 +244,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
-  Future<void> _exportTheme(AppAdvancedTheme theme) async {
+  Future<void> _exportTheme(String themeId) async {
     if (_isSaving) {
       return;
     }
@@ -241,6 +253,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
+      final theme = await _loadThemeDetail(themeId);
+      if (theme == null) {
+        if (mounted) {
+          _showMessage('主题不存在或已被删除');
+        }
+        return;
+      }
       final fileName = '${_normalizedFileName(theme.name)}.json';
       final content = service.encodeThemeColorJson(theme);
       var completed = false;
@@ -287,7 +306,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
-  Future<void> _exportThemeBundle(AppAdvancedTheme theme) async {
+  Future<void> _exportThemeBundle(String themeId) async {
     if (_isSaving) {
       return;
     }
@@ -296,6 +315,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
+      final theme = await _loadThemeDetail(themeId);
+      if (theme == null) {
+        if (mounted) {
+          _showMessage('主题不存在或已被删除');
+        }
+        return;
+      }
       final fileName = '${_normalizedFileName(theme.name)}.zip';
       final bytes = await service.encodeThemeBundleZip(theme);
       var completed = false;
@@ -726,161 +752,19 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _deleteTheme(AppAdvancedTheme theme) async {
-    final hasWallpaper =
-        theme.lightConfig.hasWallpaper || theme.darkConfig.hasWallpaper;
-    final hasReaderWallpaper =
-        theme.lightConfig.hasReaderWallpaper ||
-        theme.darkConfig.hasReaderWallpaper;
-    final hasCoverGallery = theme.hasCoverGalleryBinding;
-    final hasLaunchGallery =
-        theme.launchImageGalleryId?.trim().isNotEmpty ?? false;
-    final hasBottomNavGallery =
-        theme.bottomNavGalleryId?.trim().isNotEmpty ?? false;
-    final hasFonts =
-        (theme.appInterfaceFontFamilyKey?.trim().isNotEmpty ?? false) ||
-        (theme.readerFontFamilyKey?.trim().isNotEmpty ?? false);
-    final decision = await showDialog<_AdvancedThemeDeleteDecision>(
-      context: context,
-      builder: (dialogContext) {
-        var deleteAppearanceWallpapers = hasWallpaper;
-        var deleteReaderWallpapers = hasReaderWallpaper;
-        var deleteCoverGalleries = hasCoverGallery;
-        var deleteLaunchImageGallery = hasLaunchGallery;
-        var deleteBottomNavGallery = hasBottomNavGallery;
-        var deleteFonts = false;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('删除高级主题'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('确定删除「${theme.name}」吗？'),
-                  if (hasWallpaper ||
-                      hasReaderWallpaper ||
-                      hasCoverGallery ||
-                      hasLaunchGallery ||
-                      hasBottomNavGallery ||
-                      hasFonts) ...[
-                    const SizedBox(height: 12),
-                    const Text('可选删除绑定资源。若其他主题仍在使用同一资源，服务层会自动保留。'),
-                    const SizedBox(height: 8),
-                    if (hasWallpaper)
-                      CheckboxListTile(
-                        value: deleteAppearanceWallpapers,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('删除主题壁纸'),
-                        subtitle: const Text('删除该主题浅色 / 深色页面壁纸文件。'),
-                        onChanged: (value) {
-                          setState(() {
-                            deleteAppearanceWallpapers = value ?? false;
-                          });
-                        },
-                      ),
-                    if (hasReaderWallpaper)
-                      CheckboxListTile(
-                        value: deleteReaderWallpapers,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('删除阅读器背景'),
-                        subtitle: const Text('删除该主题绑定的阅读器背景资源。'),
-                        onChanged: (value) {
-                          setState(() {
-                            deleteReaderWallpapers = value ?? false;
-                          });
-                        },
-                      ),
-                    if (hasCoverGallery)
-                      CheckboxListTile(
-                        value: deleteCoverGalleries,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('删除封面图集'),
-                        subtitle: const Text('仅在没有其他主题引用时实际删除。'),
-                        onChanged: (value) {
-                          setState(() {
-                            deleteCoverGalleries = value ?? false;
-                          });
-                        },
-                      ),
-                    if (hasLaunchGallery)
-                      CheckboxListTile(
-                        value: deleteLaunchImageGallery,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('删除启动图集'),
-                        subtitle: const Text('仅在没有其他主题引用时实际删除。'),
-                        onChanged: (value) {
-                          setState(() {
-                            deleteLaunchImageGallery = value ?? false;
-                          });
-                        },
-                      ),
-                    if (hasBottomNavGallery)
-                      CheckboxListTile(
-                        value: deleteBottomNavGallery,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('删除底栏图集'),
-                        subtitle: const Text('仅在没有其他主题引用时实际删除。'),
-                        onChanged: (value) {
-                          setState(() {
-                            deleteBottomNavGallery = value ?? false;
-                          });
-                        },
-                      ),
-                    if (hasFonts)
-                      CheckboxListTile(
-                        value: deleteFonts,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('删除主题字体'),
-                        subtitle: const Text('只检查是否被其他主题引用，不检查手动阅读设置是否仍在使用。'),
-                        onChanged: (value) {
-                          setState(() {
-                            deleteFonts = value ?? false;
-                          });
-                        },
-                      ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      () => Navigator.of(dialogContext).pop(
-                        const _AdvancedThemeDeleteDecision(
-                          confirmed: false,
-                          deleteOptions: AdvancedThemeDeleteOptions.none(),
-                        ),
-                      ),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed:
-                      () => Navigator.of(dialogContext).pop(
-                        _AdvancedThemeDeleteDecision(
-                          confirmed: true,
-                          deleteOptions: AdvancedThemeDeleteOptions(
-                            deleteAppearanceWallpapers:
-                                deleteAppearanceWallpapers,
-                            deleteReaderWallpapers: deleteReaderWallpapers,
-                            deleteCoverGalleries: deleteCoverGalleries,
-                            deleteLaunchImageGallery: deleteLaunchImageGallery,
-                            deleteBottomNavGallery: deleteBottomNavGallery,
-                            deleteFonts: deleteFonts,
-                          ),
-                        ),
-                      ),
-                  child: const Text('删除'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final themeService = ref.read(advancedThemeServiceProvider);
+    final remainingThemes = (await themeService.loadThemes())
+        .where((item) => item.id != theme.id)
+        .toList(growable: false);
+    final preview = await ref
+        .read(advancedThemeResourceReferenceServiceProvider)
+        .buildDeletePreview(theme: theme, remainingThemes: remainingThemes);
+    if (!mounted) {
+      return;
+    }
+    final decision = await _showDeleteThemeSheet(
+      theme: theme,
+      preview: preview,
     );
     if (decision == null || !decision.confirmed || _isSaving) {
       return;
@@ -917,6 +801,204 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
+  Future<void> _handleDeleteThemeById(String themeId) async {
+    final theme = await _loadThemeDetail(themeId);
+    if (theme == null) {
+      if (mounted) {
+        _showMessage('主题不存在或已被删除');
+      }
+      return;
+    }
+    await _deleteTheme(theme);
+  }
+
+  Future<_AdvancedThemeDeleteDecision?> _showDeleteThemeSheet({
+    required AppAdvancedTheme theme,
+    required AdvancedThemeDeletePreview preview,
+  }) {
+    return showModalBottomSheet<_AdvancedThemeDeleteDecision>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final colorScheme = Theme.of(sheetContext).colorScheme;
+        final selections = <AdvancedThemeDeleteOptionKind, bool>{
+          for (final section in preview.sections)
+            section.kind: section.defaultSelected,
+        };
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  16,
+                  16 + MediaQuery.viewPaddingOf(context).bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '删除高级主题',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '即将删除「${theme.name}」。',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        preview.hasAssociatedResources
+                            ? '下面列的是该主题当前绑定的实际资源。共享资源即使勾选，也只有在没有其他主题或设置引用时才会真正删除。'
+                            : '该主题没有额外绑定资源，只会删除主题实体本身。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.45,
+                        ),
+                      ),
+                      if (preview.sections.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        for (final section in preview.sections) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.45,
+                                ),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                14,
+                                12,
+                                14,
+                                12,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CheckboxListTile(
+                                    value: selections[section.kind] ?? false,
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(
+                                      section.title,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    subtitle: Text(section.helperText),
+                                    onChanged: (value) {
+                                      setSheetState(() {
+                                        selections[section.kind] =
+                                            value ?? false;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 4),
+                                  for (final item in section.items)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        left: 8,
+                                        bottom: 6,
+                                      ),
+                                      child: Text(
+                                        '• $item',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed:
+                                  () => Navigator.of(sheetContext).pop(
+                                    const _AdvancedThemeDeleteDecision(
+                                      confirmed: false,
+                                      deleteOptions:
+                                          AdvancedThemeDeleteOptions.none(),
+                                    ),
+                                  ),
+                              child: const Text('取消'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop(
+                                  _AdvancedThemeDeleteDecision(
+                                    confirmed: true,
+                                    deleteOptions: AdvancedThemeDeleteOptions(
+                                      deleteAppearanceWallpapers:
+                                          selections[AdvancedThemeDeleteOptionKind
+                                              .appearanceWallpapers] ??
+                                          false,
+                                      deleteReaderWallpapers:
+                                          selections[AdvancedThemeDeleteOptionKind
+                                              .readerWallpapers] ??
+                                          false,
+                                      deleteCoverGalleries:
+                                          selections[AdvancedThemeDeleteOptionKind
+                                              .coverGalleries] ??
+                                          false,
+                                      deleteLaunchImageGallery:
+                                          selections[AdvancedThemeDeleteOptionKind
+                                              .launchImageGallery] ??
+                                          false,
+                                      deleteBottomNavGallery:
+                                          selections[AdvancedThemeDeleteOptionKind
+                                              .bottomNavGallery] ??
+                                          false,
+                                      deleteFonts:
+                                          selections[AdvancedThemeDeleteOptionKind
+                                              .fonts] ??
+                                          false,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Text('删除'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _applyTheme(AppAdvancedTheme theme) async {
     if (_isSaving) {
       return;
@@ -939,6 +1021,17 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         });
       }
     }
+  }
+
+  Future<void> _applyThemeById(String themeId) async {
+    final theme = await _loadThemeDetail(themeId);
+    if (theme == null) {
+      if (mounted) {
+        _showMessage('主题不存在或已被删除');
+      }
+      return;
+    }
+    await _applyTheme(theme);
   }
 
   Future<void> _disableActiveTheme() async {
@@ -1042,36 +1135,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                           ? const Center(child: CircularProgressIndicator())
                           : !_canUseAdvancedThemes
                           ? _buildVipLockedState(context, topInset: topInset)
-                          : ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              topInset + 12,
-                              horizontal,
-                              16 + bottomSafe,
-                            ),
-                            children: [
-                              _buildIntroCard(context, activeThemeAsync),
-                              const SizedBox(height: 10),
-                              _buildSearchBar(context),
-                              const SizedBox(height: 10),
-                              if (_availableCategories.isNotEmpty)
-                                _buildCategoryChips(context),
-                              if (_availableCategories.isNotEmpty)
-                                const SizedBox(height: 10),
-                              if (_visibleThemes.isEmpty)
-                                _buildEmptyState(context)
-                              else
-                                ..._visibleThemes.map(
-                                  (theme) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _buildThemeCard(
-                                      context,
-                                      theme,
-                                      isActive: activeThemeId == theme.id,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          : _buildThemeListView(
+                            context,
+                            activeThemeAsync: activeThemeAsync,
+                            activeThemeId: activeThemeId,
+                            horizontal: horizontal,
+                            bottomSafe: bottomSafe,
+                            topInset: topInset,
                           ),
                 ),
               ),
@@ -1146,6 +1216,76 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildThemeListView(
+    BuildContext context, {
+    required AsyncValue<AppAdvancedTheme?> activeThemeAsync,
+    required String? activeThemeId,
+    required double horizontal,
+    required double bottomSafe,
+    required double topInset,
+  }) {
+    final visibleThemes = _visibleThemes;
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + 12,
+            horizontal,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _buildIntroCard(context, activeThemeAsync),
+                const SizedBox(height: 10),
+                _buildSearchBar(context),
+                const SizedBox(height: 10),
+                if (_availableCategories.isNotEmpty)
+                  _buildCategoryChips(context),
+                if (_availableCategories.isNotEmpty) const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ),
+        if (visibleThemes.isEmpty)
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              0,
+              horizontal,
+              16 + bottomSafe,
+            ),
+            sliver: SliverToBoxAdapter(child: _buildEmptyState(context)),
+          )
+        else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              0,
+              horizontal,
+              16 + bottomSafe,
+            ),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final theme = visibleThemes[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == visibleThemes.length - 1 ? 0 : 10,
+                  ),
+                  child: _buildThemeCard(
+                    context,
+                    theme,
+                    isActive: activeThemeId == theme.id,
+                  ),
+                );
+              }, childCount: visibleThemes.length),
+            ),
+          ),
       ],
     );
   }
@@ -1314,13 +1454,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Widget _buildThemeCard(
     BuildContext context,
-    AppAdvancedTheme theme, {
+    AdvancedThemeSummary theme, {
     required bool isActive,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: _isSaving ? null : () => _openEditor(theme),
+      onTap: _isSaving ? null : () => _openEditor(theme.id),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
@@ -1386,15 +1526,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   onSelected: (action) {
                     switch (action) {
                       case _AdvancedThemeAction.edit:
-                        _openEditor(theme);
+                        _openEditor(theme.id);
                       case _AdvancedThemeAction.duplicate:
-                        _duplicateTheme(theme);
+                        unawaited(_duplicateTheme(theme.id));
                       case _AdvancedThemeAction.exportJson:
-                        _exportTheme(theme);
+                        unawaited(_exportTheme(theme.id));
                       case _AdvancedThemeAction.exportZip:
-                        _exportThemeBundle(theme);
+                        unawaited(_exportThemeBundle(theme.id));
                       case _AdvancedThemeAction.delete:
-                        _deleteTheme(theme);
+                        unawaited(_handleDeleteThemeById(theme.id));
                     }
                   },
                   itemBuilder:
@@ -1440,7 +1580,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         ? null
                         : isActive
                         ? _disableActiveTheme
-                        : () => _applyTheme(theme),
+                        : () => unawaited(_applyThemeById(theme.id)),
                 child: Text(isActive ? '停用主题' : '应用主题'),
               ),
             ),
@@ -1452,7 +1592,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Widget _buildDualModePreviewStrip(
     BuildContext context,
-    AppAdvancedTheme theme,
+    AdvancedThemeSummary theme,
   ) {
     return Container(
       height: 112,
@@ -1473,7 +1613,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               _buildPreviewSegment(
                 context,
                 mode: AppAdvancedThemeMode.light,
-                config: theme.lightConfig,
+                config: theme.lightMode,
                 isLeft: true,
               ),
               ClipPath(
@@ -1481,7 +1621,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 child: _buildPreviewSegment(
                   context,
                   mode: AppAdvancedThemeMode.dark,
-                  config: theme.darkConfig,
+                  config: theme.darkMode,
                   isLeft: false,
                 ),
               ),
@@ -1504,22 +1644,25 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Widget _buildPreviewSegment(
     BuildContext context, {
     required AppAdvancedThemeMode mode,
-    required AppAdvancedThemeModeConfig config,
+    required AdvancedThemeModeSummary config,
     required bool isLeft,
   }) {
     final defaultScheme = _defaultSchemeFor(context, mode);
+    final previewConfig = _summaryToPreviewModeConfig(config);
     final palette = resolveAdvancedThemePaletteFromModeConfig(
       defaultScheme,
-      config,
-    );
-    final backdrop = resolveAdvancedThemeBackdropFromModeConfig(
-      defaultScheme,
-      config,
+      previewConfig,
     );
     final label = mode == AppAdvancedThemeMode.light ? '浅色' : '深色';
 
     return Container(
-      decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[palette.backgroundColor, palette.surfaceColor],
+        ),
+      ),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1541,6 +1684,21 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const Spacer(),
+              if (config.hasWallpaper)
+                Icon(
+                  Icons.wallpaper_outlined,
+                  size: 14,
+                  color: palette.textSecondaryColor,
+                ),
+              if (config.hasWallpaper && config.hasReaderWallpaper)
+                const SizedBox(width: 4),
+              if (config.hasReaderWallpaper)
+                Icon(
+                  Icons.chrome_reader_mode_outlined,
+                  size: 14,
+                  color: palette.textSecondaryColor,
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1610,39 +1768,57 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   List<Widget> _buildResourceBadges(
     BuildContext context,
-    AppAdvancedTheme theme,
+    AdvancedThemeSummary theme,
   ) {
     final badges = <Widget>[];
     final category = theme.category?.trim();
     if (category != null && category.isNotEmpty) {
       badges.add(_buildResourceBadge(context, label: '分类：$category'));
     }
-    if (theme.lightConfig.hasWallpaper || theme.darkConfig.hasWallpaper) {
+    if (theme.lightMode.hasWallpaper || theme.darkMode.hasWallpaper) {
       badges.add(_buildResourceBadge(context, label: '壁纸'));
     }
-    if (theme.lightConfig.hasReaderWallpaper ||
-        theme.darkConfig.hasReaderWallpaper) {
+    if (theme.lightMode.hasReaderWallpaper ||
+        theme.darkMode.hasReaderWallpaper) {
       badges.add(_buildResourceBadge(context, label: '阅读器背景'));
     }
     if (theme.hasCoverGalleryBinding) {
       badges.add(_buildResourceBadge(context, label: '封面'));
     }
-    if ((theme.launchImageGalleryId?.trim().isNotEmpty ?? false)) {
+    if (theme.hasLaunchImageGallery) {
       badges.add(_buildResourceBadge(context, label: '启动图'));
     }
-    if ((theme.bottomNavGalleryId?.trim().isNotEmpty ?? false)) {
+    if (theme.hasBottomNavGallery) {
       badges.add(_buildResourceBadge(context, label: '底栏'));
     }
-    if ((theme.appInterfaceFontFamilyKey?.trim().isNotEmpty ?? false)) {
+    if (theme.hasAppInterfaceFont) {
       badges.add(_buildResourceBadge(context, label: '界面字体'));
     }
-    if ((theme.readerFontFamilyKey?.trim().isNotEmpty ?? false)) {
+    if (theme.hasReaderFont) {
       badges.add(_buildResourceBadge(context, label: '阅读字体'));
+    }
+    if (theme.hasBothModesConfigured) {
+      badges.add(_buildResourceBadge(context, label: '双模式完整'));
     }
     if (badges.isEmpty) {
       badges.add(_buildResourceBadge(context, label: '仅颜色'));
     }
     return badges;
+  }
+
+  AppAdvancedThemeModeConfig _summaryToPreviewModeConfig(
+    AdvancedThemeModeSummary summary,
+  ) {
+    return AppAdvancedThemeModeConfig(
+      colors: AppAdvancedThemeColors(
+        primaryColorValue: summary.primaryColorValue,
+        backgroundColorValue: summary.backgroundColorValue,
+        surfaceColorValue: summary.surfaceColorValue,
+        cardColorValue: summary.cardColorValue,
+        cardTextColorValue: summary.cardTextColorValue,
+        textSecondaryColorValue: summary.textSecondaryColorValue,
+      ),
+    );
   }
 
   Widget _buildResourceBadge(BuildContext context, {required String label}) {

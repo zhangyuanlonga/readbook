@@ -138,4 +138,149 @@ void main() {
       );
     },
   );
+
+  testWidgets('advanced theme uses light config in ThemeMode.light', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ThemeModeHarness(
+        themeMode: ThemeMode.light,
+        platformBrightness: Brightness.dark,
+      ),
+    );
+
+    final text = tester.widget<Text>(find.byKey(const Key('theme-mode-color')));
+    expect(text.data, 'fff5f1e8');
+  });
+
+  testWidgets('advanced theme uses dark config in ThemeMode.dark', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ThemeModeHarness(
+        themeMode: ThemeMode.dark,
+        platformBrightness: Brightness.light,
+      ),
+    );
+
+    final text = tester.widget<Text>(find.byKey(const Key('theme-mode-color')));
+    expect(text.data, 'ff121a24');
+  });
+
+  testWidgets(
+    'advanced theme uses dark config in ThemeMode.system on dark platform',
+    (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+      await tester.pumpWidget(
+        _ThemeModeHarness(
+          themeMode: ThemeMode.system,
+          platformBrightness: Brightness.dark,
+        ),
+      );
+
+      final text = tester.widget<Text>(
+        find.byKey(const Key('theme-mode-color')),
+      );
+      expect(text.data, 'ff121a24');
+    },
+  );
+
+  testWidgets(
+    'advanced theme uses light config in ThemeMode.system on light platform',
+    (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+      await tester.pumpWidget(
+        _ThemeModeHarness(
+          themeMode: ThemeMode.system,
+          platformBrightness: Brightness.light,
+        ),
+      );
+
+      final text = tester.widget<Text>(
+        find.byKey(const Key('theme-mode-color')),
+      );
+      expect(text.data, 'fff5f1e8');
+    },
+  );
+}
+
+class _ThemeModeHarness extends StatelessWidget {
+  const _ThemeModeHarness({
+    required this.themeMode,
+    required this.platformBrightness,
+  });
+
+  final ThemeMode themeMode;
+  final Brightness platformBrightness;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeTheme = AppAdvancedTheme(
+      id: 'theme_mode_harness',
+      name: '模式验证',
+      createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(
+        colors: AppAdvancedThemeColors(
+          backgroundColorValue: 0xFFF5F1E8,
+          surfaceColorValue: 0xFFF0E9DC,
+          primaryColorValue: 0xFF8A5B24,
+        ),
+      ),
+      darkConfig: AppAdvancedThemeModeConfig(
+        colors: AppAdvancedThemeColors(
+          backgroundColorValue: 0xFF121A24,
+          surfaceColorValue: 0xFF1B2633,
+          primaryColorValue: 0xFF8EB8FF,
+        ),
+      ),
+    );
+
+    final lightScheme = buildAppLightColorScheme(const Color(0xFF336699));
+    final darkScheme = buildAppDarkColorScheme(const Color(0xFF336699));
+
+    return MediaQuery(
+      data: MediaQueryData(platformBrightness: platformBrightness),
+      child: MaterialApp(
+        theme: AppTheme.build(
+          lightScheme,
+          advancedPalette: resolveAdvancedThemePaletteFromModeConfig(
+            lightScheme,
+            activeTheme.lightConfig,
+          ),
+          advancedBackdrop: resolveAdvancedThemeBackdropFromModeConfig(
+            lightScheme,
+            activeTheme.lightConfig,
+          ),
+        ),
+        darkTheme: AppTheme.build(
+          darkScheme,
+          advancedPalette: resolveAdvancedThemePaletteFromModeConfig(
+            darkScheme,
+            activeTheme.darkConfig,
+          ),
+          advancedBackdrop: resolveAdvancedThemeBackdropFromModeConfig(
+            darkScheme,
+            activeTheme.darkConfig,
+          ),
+        ),
+        themeMode: themeMode,
+        home: Builder(
+          builder: (context) {
+            return Text(
+              Theme.of(
+                context,
+              ).scaffoldBackgroundColor.toARGB32().toRadixString(16),
+              key: const Key('theme-mode-color'),
+              textDirection: TextDirection.ltr,
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
