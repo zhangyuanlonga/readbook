@@ -1109,17 +1109,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final raw = settings.backgroundImageBase64?.trim();
     final hasBackgroundImage = raw != null && raw.isNotEmpty;
     final isManaged = _isManagedBackgroundPath(raw);
-    final fileExists =
-        isManaged
-            ? (raw!.startsWith('file://')
-                ? File(Uri.parse(raw).toFilePath()).existsSync()
-                : File(raw).existsSync())
-            : null;
     debugPrint(
       '[reader-bg][$tag] image=$raw '
       'hasImage=$hasBackgroundImage '
       'isManaged=$isManaged '
-      'fileExists=$fileExists '
       'style=${settings.backgroundStyle.name} '
       'tone=${settings.backgroundTone.name} '
       'mode=${settings.themeMode.name} '

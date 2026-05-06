@@ -7,6 +7,9 @@ class _ReaderBackgroundAssetStore {
   final List<_ReaderBackgroundPreset> presets = <_ReaderBackgroundPreset>[];
   String? cachedBackgroundImageKey;
   MemoryImage? cachedBackgroundImage;
+  String? cachedManagedBackgroundPath;
+  FileImage? cachedManagedBackgroundImage;
+  bool? cachedManagedBackgroundExists;
 }
 
 extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
@@ -34,6 +37,27 @@ extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
 
   set _cachedBackgroundImage(MemoryImage? value) {
     _backgroundAssets.cachedBackgroundImage = value;
+  }
+
+  String? get _cachedManagedBackgroundPath =>
+      _backgroundAssets.cachedManagedBackgroundPath;
+
+  set _cachedManagedBackgroundPath(String? value) {
+    _backgroundAssets.cachedManagedBackgroundPath = value;
+  }
+
+  FileImage? get _cachedManagedBackgroundImage =>
+      _backgroundAssets.cachedManagedBackgroundImage;
+
+  set _cachedManagedBackgroundImage(FileImage? value) {
+    _backgroundAssets.cachedManagedBackgroundImage = value;
+  }
+
+  bool? get _cachedManagedBackgroundExists =>
+      _backgroundAssets.cachedManagedBackgroundExists;
+
+  set _cachedManagedBackgroundExists(bool? value) {
+    _backgroundAssets.cachedManagedBackgroundExists = value;
   }
 }
 
@@ -89,6 +113,9 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
     if (_isPresetBackgroundAssetPathImpl(raw)) {
       _cachedBackgroundImageKey = null;
       _cachedBackgroundImage = null;
+      _cachedManagedBackgroundPath = null;
+      _cachedManagedBackgroundImage = null;
+      _cachedManagedBackgroundExists = null;
       return _ResolvedReaderBackgroundVisual(
         imageProvider: AssetImage(raw),
         fit: fit,
@@ -99,17 +126,24 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
     }
 
     if (_isManagedBackgroundPathImpl(raw)) {
-      final file =
-          raw.startsWith('file://')
-              ? File(Uri.parse(raw).toFilePath())
-              : File(raw);
-      if (!file.existsSync()) {
+      if (_cachedManagedBackgroundPath != raw) {
+        final file =
+            raw.startsWith('file://')
+                ? File(Uri.parse(raw).toFilePath())
+                : File(raw);
+        final exists = file.existsSync();
+        _cachedManagedBackgroundPath = raw;
+        _cachedManagedBackgroundExists = exists;
+        _cachedManagedBackgroundImage = exists ? FileImage(file) : null;
+      }
+      if (_cachedManagedBackgroundExists != true ||
+          _cachedManagedBackgroundImage == null) {
         _cachedBackgroundImageKey = null;
         _cachedBackgroundImage = null;
         return null;
       }
       return _ResolvedReaderBackgroundVisual(
-        imageProvider: FileImage(file),
+        imageProvider: _cachedManagedBackgroundImage!,
         fit: fit,
         opacity: opacity,
         blurSigma: blurSigma,
@@ -118,6 +152,9 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
     }
 
     if (_cachedBackgroundImageKey != raw || _cachedBackgroundImage == null) {
+      _cachedManagedBackgroundPath = null;
+      _cachedManagedBackgroundImage = null;
+      _cachedManagedBackgroundExists = null;
       final bytes = _tryDecodeBase64Impl(raw);
       if (bytes == null) {
         _cachedBackgroundImageKey = null;

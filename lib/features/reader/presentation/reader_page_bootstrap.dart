@@ -204,26 +204,12 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         loadedSettings,
       );
       var loadedVisualOverrides = await loadedVisualOverridesFuture;
-      var availableCustomFonts = const <ReaderCustomFontEntry>[];
       var storedCustomBackgrounds = const <String>[];
 
       try {
         storedCustomBackgrounds = await storedCustomBackgroundsFuture;
       } catch (_) {
         storedCustomBackgrounds = const <String>[];
-      }
-
-      try {
-        await _fontRegistryService.restoreRegisteredFonts();
-        availableCustomFonts = await _fontRegistryService.listRegisteredFonts();
-        normalizedSettings = await _fontRegistryService
-            .normalizeCustomFontSettings(normalizedSettings);
-      } catch (_) {
-        normalizedSettings = normalizedSettings.copyWith(
-          fontSource: ReaderFontSource.system,
-          clearFontFamilyKey: true,
-          clearCustomFontPath: true,
-        );
       }
 
       normalizedSettings = _typographyMetricsResolver.normalizeSettings(
@@ -296,7 +282,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           _persistedReaderSettings = normalizedSettings;
           _visualOverrides = loadedVisualOverrides;
           _settings = bootSettings;
-          _customFonts = availableCustomFonts;
+          _customFonts = const <ReaderCustomFontEntry>[];
           _customBackgroundImages = storedCustomBackgrounds;
         });
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
@@ -304,39 +290,12 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         unawaited(_syncVolumeKeyPageInterception());
       } else {
         _settings = bootSettings;
-        _customFonts = availableCustomFonts;
+        _customFonts = const <ReaderCustomFontEntry>[];
         _customBackgroundImages = storedCustomBackgrounds;
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
-      final recentColorsFuture = _preferencesService.loadRecentBodyTextColors();
-      final autoSwitchSourceOnFailureFuture =
-          _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
-      final readingRecordEnabledFuture =
-          _systemSettingsService.loadReadRecordEnabled();
-      try {
-        final recentColors = await recentColorsFuture;
-        if (mounted) {
-          setState(() {
-            _recentBodyTextColors = recentColors;
-          });
-        } else {
-          _recentBodyTextColors = recentColors;
-        }
-      } catch (_) {
-        _recentBodyTextColors = const <int>[];
-      }
-      try {
-        _autoSwitchSourceOnFailureEnabled =
-            await autoSwitchSourceOnFailureFuture;
-      } catch (_) {
-        _autoSwitchSourceOnFailureEnabled = false;
-      }
-      try {
-        _readingRecordEnabled = await readingRecordEnabledFuture;
-      } catch (_) {
-        _readingRecordEnabled = true;
-      }
+      unawaited(_runDeferredBootstrapWarmup());
 
       final progressLoadStopwatch = Stopwatch()..start();
       final progress = await progressFuture;
@@ -349,10 +308,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       }
 
       _applyLocalSchemeFallback();
-      final tocSnapshotStopwatch = Stopwatch()..start();
-      final hydratedTocSnapshot = await _tryHydrateTocSnapshot();
-      tocSnapshotLoadMs = tocSnapshotStopwatch.elapsedMilliseconds;
-      tocSnapshotHit = hydratedTocSnapshot;
       final visibleCacheStopwatch = Stopwatch()..start();
       final hydratedVisibleContent = await _tryHydrateVisibleContentFromCache();
       visibleCacheLoadMs = visibleCacheStopwatch.elapsedMilliseconds;
@@ -360,6 +315,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       if (_hasVisibleReaderContent) {
         tapToVisibleMs ??= _tapTraceElapsedMs();
       }
+      final tocSnapshotStopwatch = Stopwatch()..start();
+      final hydratedTocSnapshot = await _tryHydrateTocSnapshot();
+      tocSnapshotLoadMs = tocSnapshotStopwatch.elapsedMilliseconds;
+      tocSnapshotHit = hydratedTocSnapshot;
 
       if (hydratedTocSnapshot) {
         await _refreshBookshelfState();
@@ -568,6 +527,59 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       return null;
     }
     return nowMs - requestedAtMs;
+  }
+
+  Future<void> _runDeferredBootstrapWarmup() async {
+    final fontRestoreFuture = () async {
+      await _fontRegistryService.restoreRegisteredFonts();
+      return _fontRegistryService.listRegisteredFonts();
+    }();
+    final recentColorsFuture = _preferencesService.loadRecentBodyTextColors();
+    final autoSwitchSourceOnFailureFuture =
+        _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
+    final readingRecordEnabledFuture =
+        _systemSettingsService.loadReadRecordEnabled();
+
+    var availableCustomFonts = const <ReaderCustomFontEntry>[];
+    var recentColors = const <int>[];
+    var autoSwitchSourceOnFailureEnabled = false;
+    var readingRecordEnabled = true;
+
+    try {
+      availableCustomFonts = await fontRestoreFuture;
+    } catch (_) {
+      availableCustomFonts = const <ReaderCustomFontEntry>[];
+    }
+    try {
+      recentColors = await recentColorsFuture;
+    } catch (_) {
+      recentColors = const <int>[];
+    }
+    try {
+      autoSwitchSourceOnFailureEnabled = await autoSwitchSourceOnFailureFuture;
+    } catch (_) {
+      autoSwitchSourceOnFailureEnabled = false;
+    }
+    try {
+      readingRecordEnabled = await readingRecordEnabledFuture;
+    } catch (_) {
+      readingRecordEnabled = true;
+    }
+
+    if (!mounted) {
+      _customFonts = availableCustomFonts;
+      _recentBodyTextColors = recentColors;
+      _autoSwitchSourceOnFailureEnabled = autoSwitchSourceOnFailureEnabled;
+      _readingRecordEnabled = readingRecordEnabled;
+      return;
+    }
+
+    setState(() {
+      _customFonts = availableCustomFonts;
+      _recentBodyTextColors = recentColors;
+      _autoSwitchSourceOnFailureEnabled = autoSwitchSourceOnFailureEnabled;
+      _readingRecordEnabled = readingRecordEnabled;
+    });
   }
 
   bool _shouldTryLocalBootstrapPreview() {
