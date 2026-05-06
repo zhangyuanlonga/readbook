@@ -44,7 +44,8 @@ class BottomNavIconView extends StatelessWidget {
             fit: BoxFit.contain,
           );
         }
-      } else if (assetRef.format == BottomNavIconAssetFormat.png) {
+      } else if (assetRef.format == BottomNavIconAssetFormat.png ||
+          assetRef.format == BottomNavIconAssetFormat.gif) {
         if (assetRef.isAsset) {
           return Image.asset(
             assetRef.path,

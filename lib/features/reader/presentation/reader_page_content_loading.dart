@@ -575,6 +575,20 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
               pageCount: pages.length,
             );
             precomputedPaginationSignature = signature;
+            final normalizedSourceId = (_sourceId ?? '').trim();
+            final normalizedChapterUrl = chapterUrl.trim();
+            if (normalizedSourceId.isNotEmpty &&
+                normalizedChapterUrl.isNotEmpty) {
+              _storePrecomputedChapterLayout(
+                sourceId: normalizedSourceId,
+                chapterUrl: normalizedChapterUrl,
+                layout: ReaderPrecomputedChapterLayout(
+                  paragraphs: effectiveParagraphs,
+                  pagedPages: pages,
+                  paginationSignature: signature,
+                ),
+              );
+            }
           }
         }
       }
@@ -638,8 +652,88 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
   Future<bool> _tryHydrateVisibleContentFromCacheFlow() async {
     final sourceId = (_sourceId ?? '').trim();
+    if (sourceId.isEmpty) {
+      return false;
+    }
+
+    if (LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      final chapterId = _chapterId.trim();
+      if (chapterId.isEmpty || chapterId.toLowerCase() == 'bootstrap') {
+        return false;
+      }
+
+      try {
+        final chapter = await _localBookRepository.getChapterById(chapterId);
+        if (chapter == null || !chapter.hasReadablePayload) {
+          return false;
+        }
+
+        final previewProgress = _bootstrapProgressForCurrentChapter();
+        var previewRatio = 0.0;
+        if (!mounted) {
+          return false;
+        }
+
+        final resolvedCurrentChapter =
+            _currentIndex != null &&
+                    _currentIndex! >= 0 &&
+                    _currentIndex! < _chapters.length
+                ? _chapters[_currentIndex!]
+                : null;
+
+        _updateReaderState(() {
+          _isCurrentChapterCached = true;
+          _errorText = null;
+          _setContentFlow(
+            chapter.content,
+            imageUrls: chapter.imageUrls,
+            document: chapter.document,
+          );
+          previewRatio = _resolveDocumentRestoreRatio(
+            progress: previewProgress,
+          );
+          if (resolvedCurrentChapter != null &&
+              _shouldUseContinuousTextFlow &&
+              chapter.imageUrls.isEmpty &&
+              chapter.content.trim().isNotEmpty) {
+            _continuousTextChapters = <_ContinuousTextChapter>[
+              _ContinuousTextChapter(
+                chapterId: chapter.id,
+                chapterUrl: (_chapterUrl ?? '').trim(),
+                chapterTitle: resolvedCurrentChapter.title.trim(),
+                displayTitle:
+                    (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
+                chapterIndex: _currentIndex!,
+                content: chapter.content,
+                document: _document,
+                paragraphs:
+                    _paragraphs.isEmpty
+                        ? List<String>.unmodifiable(<String>[chapter.content])
+                        : List<String>.unmodifiable(_paragraphs),
+                isCached: true,
+              ),
+            ];
+          } else {
+            _continuousTextChapters = const <_ContinuousTextChapter>[];
+          }
+          _pagedPaginationState = _pagedPaginationState.copyWith(
+            pendingRestoreRatio: previewRatio,
+          );
+        });
+
+        if (previewProgress != null) {
+          _bootstrapProgress = null;
+        }
+        _restoreScrollPosition(previewRatio);
+        _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     final chapterUrl = (_chapterUrl ?? '').trim();
-    if (sourceId.isEmpty || chapterUrl.isEmpty) {
+    if (chapterUrl.isEmpty) {
       return false;
     }
 
@@ -769,6 +863,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _isLoadingContent = true;
       _errorText = null;
     });
+    _scheduleHiddenLoadingPlaceholder();
     if (suppressLoadingUi) {
       _clearDelayedLoadingUi();
     } else {

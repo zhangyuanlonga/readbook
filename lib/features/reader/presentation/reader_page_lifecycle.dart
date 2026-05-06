@@ -135,6 +135,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _readerInfoClockTimer?.cancel();
     _chapterLoadingIndicatorTimer?.cancel();
     _blockingLoadingCardTimer?.cancel();
+    _hiddenLoadingPlaceholderTimer?.cancel();
     _readingRecordAutoCommitTimer?.cancel();
     _volumeKeyEventSubscription?.cancel();
     _volumeKeyEventSubscription = null;

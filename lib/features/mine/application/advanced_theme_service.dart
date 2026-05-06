@@ -1082,7 +1082,14 @@ class AdvancedThemeService {
     final themeId = createThemeId();
     final now = DateTime.now().toUtc();
     final themeDirectory = await _themeDirectory(themeId);
+    String? coverGalleryId;
+    String? lightCoverGalleryId;
+    String? darkCoverGalleryId;
+    String? bottomNavGalleryId;
+    String? readerFontFamilyKey;
+    final importedFontFamilyKeys = <String>[];
     final sharedBackgroundPaths = <String>[];
+    final sharedReaderBackgroundPaths = <String>[];
 
     try {
       if (!await themeDirectory.exists()) {
@@ -1135,6 +1142,32 @@ class AdvancedThemeService {
         sharedBackgroundPaths.add(importedDarkWallpaperPath);
       }
 
+      final meta = await _readOptionalArchiveJsonFile(archive, 'meta.json');
+      coverGalleryId = await _importRgShareCoverGallery(
+        archive,
+        meta['cover'],
+        fallbackName: rawName.isEmpty ? 'RGShare 封面图集' : rawName,
+      );
+      if (coverGalleryId != null) {
+        lightCoverGalleryId = coverGalleryId;
+        darkCoverGalleryId = coverGalleryId;
+      }
+      bottomNavGalleryId = await _importRgShareBottomNavGallery(
+        archive,
+        meta['tabBarProfile'],
+        fallbackName: rawName.isEmpty ? 'RGShare 底栏' : '$rawName 底栏',
+      );
+      final readerThemeImport = await _importRgShareReaderTheme(
+        archive,
+        themeDirectory,
+        meta['readerTheme'],
+      );
+      readerFontFamilyKey = readerThemeImport.readerFontFamilyKey;
+      importedFontFamilyKeys.addAll(readerThemeImport.importedFontFamilyKeys);
+      if (readerThemeImport.backgroundPath != null) {
+        sharedReaderBackgroundPaths.add(readerThemeImport.backgroundPath!);
+      }
+
       final colors = _readOptionalMap(manifest['2']);
       final theme = AppAdvancedTheme(
         id: themeId,
@@ -1145,19 +1178,38 @@ class AdvancedThemeService {
           colors,
           wallpaperPath: importedLightWallpaperPath,
           isDark: false,
+        ).copyWith(
+          readerWallpaperPath: readerThemeImport.backgroundPath,
+          clearReaderWallpaperPath: readerThemeImport.backgroundPath == null,
         ),
         darkConfig: _buildModeConfigFromRgShare(
           colors,
           wallpaperPath: importedDarkWallpaperPath,
           isDark: true,
+        ).copyWith(
+          readerWallpaperPath: readerThemeImport.backgroundPath,
+          clearReaderWallpaperPath: readerThemeImport.backgroundPath == null,
         ),
+        coverGalleryId: coverGalleryId,
+        lightCoverGalleryId: lightCoverGalleryId,
+        darkCoverGalleryId: darkCoverGalleryId,
+        bottomNavGalleryId: bottomNavGalleryId,
+        readerFontFamilyKey: readerFontFamilyKey,
         importFingerprint: fingerprint,
       );
       return saveTheme(theme);
     } catch (_) {
       await _cleanupImportedThemeBundleArtifacts(
         themeDirectory: themeDirectory,
+        coverGalleryIds: <String?>[
+          coverGalleryId,
+          lightCoverGalleryId,
+          darkCoverGalleryId,
+        ],
+        bottomNavGalleryId: bottomNavGalleryId,
+        importedFontFamilyKeys: importedFontFamilyKeys,
         sharedBackgroundPaths: sharedBackgroundPaths,
+        sharedReaderBackgroundPaths: sharedReaderBackgroundPaths,
       );
       rethrow;
     }
@@ -1589,6 +1641,265 @@ class AdvancedThemeService {
       return candidates.first;
     }
     return isDark ? candidates.last : candidates.first;
+  }
+
+  Future<Map<String, dynamic>> _readOptionalArchiveJsonFile(
+    Archive archive,
+    String path,
+  ) async {
+    final file = archive.findFile(path);
+    if (file == null) {
+      return const <String, dynamic>{};
+    }
+    try {
+      final decoded = jsonDecode(
+        utf8.decode(_archiveFileBytes(file), allowMalformed: true),
+      );
+      return _readOptionalMap(decoded);
+    } catch (_) {
+      return const <String, dynamic>{};
+    }
+  }
+
+  Future<String?> _importRgShareCoverGallery(
+    Archive archive,
+    Object? rawMeta, {
+    required String fallbackName,
+  }) async {
+    final meta = _readOptionalMap(rawMeta);
+    final files = meta['files'];
+    final galleryFiles =
+        files is List
+            ? files
+                .map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false)
+            : const <String>[];
+    final name = meta['name']?.toString().trim();
+    if (galleryFiles.isEmpty) {
+      return null;
+    }
+
+    final service = CoverGalleryService(preferences: await _preferencesFuture);
+    final gallery = await service.createGallery(
+      name: name == null || name.isEmpty ? fallbackName : name,
+    );
+    try {
+      for (final bundlePath in galleryFiles) {
+        final file = archive.findFile(bundlePath);
+        if (file == null) {
+          continue;
+        }
+        await service.importImage(
+          galleryId: gallery.id,
+          bytes: _archiveFileBytes(file),
+          fileName: p.basename(bundlePath),
+        );
+      }
+      final savedGallery = await service.loadGallery(gallery.id);
+      if (savedGallery == null || savedGallery.imagePaths.isEmpty) {
+        await service.deleteGallery(gallery.id);
+        return null;
+      }
+      return gallery.id;
+    } catch (_) {
+      await _safeDeleteCoverGallery(gallery.id);
+      rethrow;
+    }
+  }
+
+  Future<_RgShareReaderThemeImport> _importRgShareReaderTheme(
+    Archive archive,
+    Directory themeDirectory,
+    Object? rawMeta,
+  ) async {
+    final meta = _readOptionalMap(rawMeta);
+    final filePath = meta['filePath']?.toString().trim() ?? '';
+    final backgroundPath = meta['backgroundImagePath']?.toString().trim() ?? '';
+    final fonts =
+        meta['fonts'] is List
+            ? (meta['fonts'] as List)
+                .map((item) => _readOptionalMap(item))
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false)
+            : const <Map<String, dynamic>>[];
+    if (filePath.isEmpty && backgroundPath.isEmpty && fonts.isEmpty) {
+      return const _RgShareReaderThemeImport();
+    }
+
+    final themeJson = await _readOptionalArchiveJsonFile(archive, filePath);
+    final remappedFontKeys = <String, String>{};
+    final importedFontFamilyKeys = <String>[];
+    final fontService = ReaderFontRegistryService();
+    for (final font in fonts) {
+      final oldId = font['id']?.toString().trim() ?? '';
+      final fontFilePath = font['filePath']?.toString().trim() ?? '';
+      if (oldId.isEmpty || fontFilePath.isEmpty) {
+        continue;
+      }
+      final extractedFontPath =
+          await _extractOptionalArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            fontFilePath,
+            targetNamePrefix: 'rgshare_font_$oldId',
+          );
+      if (extractedFontPath == null) {
+        continue;
+      }
+      try {
+        final importedEntry = await fontService.importFontFile(
+          filePath: extractedFontPath,
+          displayName: font['name']?.toString(),
+        );
+        remappedFontKeys[oldId] = importedEntry.fontFamilyKey;
+        importedFontFamilyKeys.add(importedEntry.fontFamilyKey);
+      } catch (_) {
+        // Ignore a single broken font and keep importing the theme.
+      }
+    }
+
+    String? importedBackgroundPath;
+    if (backgroundPath.isNotEmpty) {
+      final extractedBackgroundPath =
+          await _extractOptionalArchiveFileToThemeDirectory(
+            archive,
+            themeDirectory,
+            backgroundPath,
+            targetNamePrefix: 'reader_wallpaper_rgshare',
+          );
+      if (extractedBackgroundPath != null) {
+        importedBackgroundPath = await ReaderBackgroundService()
+            .importBackground(
+              bytes: await File(extractedBackgroundPath).readAsBytes(),
+              fileName: p.basename(extractedBackgroundPath),
+            );
+      }
+    }
+    final bodyFontId = themeJson['bodyFont']?.toString().trim() ?? '';
+    return _RgShareReaderThemeImport(
+      backgroundPath: importedBackgroundPath,
+      readerFontFamilyKey:
+          bodyFontId.isEmpty ? null : remappedFontKeys[bodyFontId],
+      importedFontFamilyKeys: importedFontFamilyKeys,
+    );
+  }
+
+  Future<String?> _importRgShareBottomNavGallery(
+    Archive archive,
+    Object? rawMeta, {
+    required String fallbackName,
+  }) async {
+    final meta = _readOptionalMap(rawMeta);
+    final profilePath = meta['filePath']?.toString().trim() ?? '';
+    final profile = await _readOptionalArchiveJsonFile(archive, profilePath);
+    final name = meta['name']?.toString().trim();
+    final rawItems = profile['items'];
+    if (rawItems is! List || rawItems.isEmpty) {
+      return null;
+    }
+
+    final service = BottomNavIconGalleryService(
+      preferences: await _preferencesFuture,
+    );
+    var gallery = await service.createGallery(
+      name: name == null || name.isEmpty ? fallbackName : name,
+    );
+    var nextItems = Map<BottomNavIconGalleryTab, BottomNavIconSet>.from(
+      gallery.items,
+    );
+    final tempDirectory = await Directory.systemTemp.createTemp(
+      'rgshare_nav_import_',
+    );
+    try {
+      for (final rawItem in rawItems) {
+        final item = _readOptionalMap(rawItem);
+        final tabs = _rgShareTabsFromProfileName(
+          item['tab']?.toString().trim() ?? '',
+        );
+        if (tabs.isEmpty) {
+          continue;
+        }
+        final iconSource = _readOptionalMap(item['iconSource']);
+        final value = iconSource['value']?.toString().trim() ?? '';
+        if ((iconSource['type']?.toString().trim() ?? '') != 'customImage' ||
+            value.isEmpty) {
+          continue;
+        }
+        final bundlePath = 'resources/tabbar/$value';
+        final archiveFile = archive.findFile(bundlePath);
+        if (archiveFile == null) {
+          continue;
+        }
+        final extension = p.extension(value).replaceFirst('.', '').trim();
+        final format = _bottomNavFormatFromName(extension);
+        if (format == null) {
+          continue;
+        }
+        final tempPath = p.join(tempDirectory.path, p.basename(bundlePath));
+        await File(
+          tempPath,
+        ).writeAsBytes(_archiveFileBytes(archiveFile), flush: true);
+
+        for (final tab in tabs) {
+          final importedAsset = await service.importIconAsset(
+            galleryId: gallery.id,
+            tab: tab,
+            slot: BottomNavIconVariantSlot.lightUnselected,
+            sourcePath: tempPath,
+            format: format,
+          );
+          final currentSet = nextItems[tab] ?? const BottomNavIconSet();
+          nextItems[tab] = currentSet.copyWith(
+            lightUnselected: importedAsset,
+            lightSelected: importedAsset,
+            darkUnselected: importedAsset,
+            darkSelected: importedAsset,
+          );
+        }
+      }
+      gallery = await service.saveGallery(gallery.copyWith(items: nextItems));
+      final hasAnyIcon = gallery.items.values.any(
+        (set) =>
+            set.lightUnselected != null ||
+            set.lightSelected != null ||
+            set.darkUnselected != null ||
+            set.darkSelected != null,
+      );
+      if (!hasAnyIcon) {
+        await service.deleteGallery(gallery.id);
+        return null;
+      }
+      return gallery.id;
+    } catch (_) {
+      await _safeDeleteBottomNavGallery(gallery.id);
+      rethrow;
+    } finally {
+      if (await tempDirectory.exists()) {
+        await tempDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  List<BottomNavIconGalleryTab> _rgShareTabsFromProfileName(String raw) {
+    return switch (raw.trim().toLowerCase()) {
+      'shelf' => const <BottomNavIconGalleryTab>[
+        BottomNavIconGalleryTab.bookshelf,
+      ],
+      'library' => const <BottomNavIconGalleryTab>[
+        BottomNavIconGalleryTab.home,
+        BottomNavIconGalleryTab.discover,
+      ],
+      'statistic' => const <BottomNavIconGalleryTab>[
+        BottomNavIconGalleryTab.stats,
+      ],
+      'mine' => const <BottomNavIconGalleryTab>[BottomNavIconGalleryTab.mine],
+      'home' => const <BottomNavIconGalleryTab>[BottomNavIconGalleryTab.home],
+      'discover' => const <BottomNavIconGalleryTab>[
+        BottomNavIconGalleryTab.discover,
+      ],
+      _ => const <BottomNavIconGalleryTab>[],
+    };
   }
 
   int? _parseHexColorValue(String? raw) {
@@ -2322,100 +2633,75 @@ class AdvancedThemeService {
       throw FormatException('Red 主题包缺少底栏图标包配置：$metaPath');
     }
 
-    final filenameMap =
-        <String, (BottomNavIconGalleryTab, BottomNavIconVariantSlot)>{
-          'featured_normal.png': (
-            BottomNavIconGalleryTab.home,
-            isDark
-                ? BottomNavIconVariantSlot.darkUnselected
-                : BottomNavIconVariantSlot.lightUnselected,
-          ),
-          'featured_selected.png': (
-            BottomNavIconGalleryTab.home,
-            isDark
-                ? BottomNavIconVariantSlot.darkSelected
-                : BottomNavIconVariantSlot.lightSelected,
-          ),
-          'bookshelf_normal.png': (
-            BottomNavIconGalleryTab.bookshelf,
-            isDark
-                ? BottomNavIconVariantSlot.darkUnselected
-                : BottomNavIconVariantSlot.lightUnselected,
-          ),
-          'bookshelf_selected.png': (
-            BottomNavIconGalleryTab.bookshelf,
-            isDark
-                ? BottomNavIconVariantSlot.darkSelected
-                : BottomNavIconVariantSlot.lightSelected,
-          ),
-          // Legacy bundles often use `home_*` for the first tab icon.
-          'home_normal.png': (
-            BottomNavIconGalleryTab.home,
-            isDark
-                ? BottomNavIconVariantSlot.darkUnselected
-                : BottomNavIconVariantSlot.lightUnselected,
-          ),
-          'home_selected.png': (
-            BottomNavIconGalleryTab.home,
-            isDark
-                ? BottomNavIconVariantSlot.darkSelected
-                : BottomNavIconVariantSlot.lightSelected,
-          ),
-          // Some bundles still use `discover_*` to describe the explore tab.
-          'discover_normal.png': (
-            BottomNavIconGalleryTab.discover,
-            isDark
-                ? BottomNavIconVariantSlot.darkUnselected
-                : BottomNavIconVariantSlot.lightUnselected,
-          ),
-          'discover_selected.png': (
-            BottomNavIconGalleryTab.discover,
-            isDark
-                ? BottomNavIconVariantSlot.darkSelected
-                : BottomNavIconVariantSlot.lightSelected,
-          ),
-          'statistics_normal.png': (
-            BottomNavIconGalleryTab.stats,
-            isDark
-                ? BottomNavIconVariantSlot.darkUnselected
-                : BottomNavIconVariantSlot.lightUnselected,
-          ),
-          'statistics_selected.png': (
-            BottomNavIconGalleryTab.stats,
-            isDark
-                ? BottomNavIconVariantSlot.darkSelected
-                : BottomNavIconVariantSlot.lightSelected,
-          ),
-          'settings_normal.png': (
-            BottomNavIconGalleryTab.mine,
-            isDark
-                ? BottomNavIconVariantSlot.darkUnselected
-                : BottomNavIconVariantSlot.lightUnselected,
-          ),
-          'settings_selected.png': (
-            BottomNavIconGalleryTab.mine,
-            isDark
-                ? BottomNavIconVariantSlot.darkSelected
-                : BottomNavIconVariantSlot.lightSelected,
-          ),
-        };
-
     final assignments = <_BottomNavBundleImportAssignment>[];
-    for (final entry in filenameMap.entries) {
-      final bundlePath = 'navbar_pack/$normalizedId/${entry.key}';
-      if (archive.findFile(bundlePath) == null) {
+    final prefix = 'navbar_pack/$normalizedId/';
+    for (final file in archive.files) {
+      final bundlePath = file.name;
+      if (!bundlePath.startsWith(prefix) ||
+          bundlePath.endsWith('/') ||
+          bundlePath.endsWith('/meta.json')) {
+        continue;
+      }
+      final fileName = p.basename(bundlePath).toLowerCase();
+      final resolved = _resolveRedBottomNavEntry(
+        fileName: fileName,
+        isDark: isDark,
+      );
+      if (resolved == null) {
         continue;
       }
       assignments.add(
         _BottomNavBundleImportAssignment.bundle(
-          tab: entry.value.$1,
-          slot: entry.value.$2,
-          format: BottomNavIconAssetFormat.png,
+          tab: resolved.$1,
+          slot: resolved.$2,
+          format: resolved.$3,
           bundlePath: bundlePath,
         ),
       );
     }
     return assignments;
+  }
+
+  (BottomNavIconGalleryTab, BottomNavIconVariantSlot, BottomNavIconAssetFormat)?
+  _resolveRedBottomNavEntry({required String fileName, required bool isDark}) {
+    final extension = p.extension(fileName).replaceFirst('.', '').trim();
+    final format = _bottomNavFormatFromName(extension);
+    if (format == null) {
+      return null;
+    }
+    final baseName = p.basenameWithoutExtension(fileName).trim().toLowerCase();
+    final parts = baseName.split('_');
+    if (parts.length < 2) {
+      return null;
+    }
+    final slotName = parts.last;
+    final tabName = parts.sublist(0, parts.length - 1).join('_');
+    final tab = switch (tabName) {
+      'featured' || 'home' => BottomNavIconGalleryTab.home,
+      'bookshelf' => BottomNavIconGalleryTab.bookshelf,
+      'discover' || 'notes' => BottomNavIconGalleryTab.discover,
+      'statistics' => BottomNavIconGalleryTab.stats,
+      'settings' || 'mine' => BottomNavIconGalleryTab.mine,
+      _ => null,
+    };
+    if (tab == null) {
+      return null;
+    }
+    final slot = switch (slotName) {
+      'normal' || 'unselected' =>
+        isDark
+            ? BottomNavIconVariantSlot.darkUnselected
+            : BottomNavIconVariantSlot.lightUnselected,
+      'selected' || 'active' =>
+        isDark
+            ? BottomNavIconVariantSlot.darkSelected
+            : BottomNavIconVariantSlot.lightSelected,
+      _ => null,
+    };
+    if (slot == null) {
+      return null;
+    }
+    return (tab, slot, format);
   }
 
   BottomNavIconGalleryTab? _bottomNavTabFromName(String raw) {
@@ -2443,6 +2729,7 @@ class AdvancedThemeService {
     return switch ((raw ?? '').trim()) {
       'svg' => BottomNavIconAssetFormat.svg,
       'png' => BottomNavIconAssetFormat.png,
+      'gif' => BottomNavIconAssetFormat.gif,
       _ => null,
     };
   }
@@ -2774,6 +3061,18 @@ class _ImportedThemeFonts {
   final String? appInterfaceFontFamilyKey;
   final String? readerFontFamilyKey;
   final List<String> importedFamilyKeys;
+}
+
+class _RgShareReaderThemeImport {
+  const _RgShareReaderThemeImport({
+    this.backgroundPath,
+    this.readerFontFamilyKey,
+    this.importedFontFamilyKeys = const <String>[],
+  });
+
+  final String? backgroundPath;
+  final String? readerFontFamilyKey;
+  final List<String> importedFontFamilyKeys;
 }
 
 class AdvancedThemeDeleteOptions {

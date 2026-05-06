@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
 import '../../../app/images/file_image_cache.dart';
@@ -39,6 +40,10 @@ class ReaderBackgroundService {
     required List<int> bytes,
     required String fileName,
   }) async {
+    final existingPath = await _findExistingDuplicate(bytes);
+    if (existingPath != null) {
+      return existingPath;
+    }
     final extension = _normalizeImageFileExtension(bytes, fileName);
     final asset = await _assetStore.persistBytes(
       type: ManagedAssetType.readerBackground,
@@ -50,6 +55,27 @@ class ReaderBackgroundService {
     final targetPath = asset.resolvedPath!;
     await evictFileImagePath(targetPath);
     return targetPath;
+  }
+
+  Future<String?> _findExistingDuplicate(List<int> bytes) async {
+    final targetHash = crypto.sha256.convert(bytes).toString();
+    final candidatePaths = await _assetStore.listResolvedFilePaths(
+      ManagedAssetType.readerBackground,
+    );
+    for (final path in candidatePaths) {
+      final file = File(path);
+      if (!await file.exists()) {
+        continue;
+      }
+      if (await file.length() != bytes.length) {
+        continue;
+      }
+      final existingHash = crypto.sha256.convert(await file.readAsBytes());
+      if (existingHash.toString() == targetHash) {
+        return file.path;
+      }
+    }
+    return null;
   }
 
   Future<void> deleteBackground(String path) async {

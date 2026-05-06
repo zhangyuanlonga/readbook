@@ -645,13 +645,38 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
   }
 
+  void _scheduleHiddenLoadingPlaceholder() {
+    _hiddenLoadingPlaceholderTimer?.cancel();
+    _hiddenLoadingPlaceholderTimer = null;
+    _showHiddenLoadingPlaceholder = false;
+
+    if (!_needsBlockingLoadingUi) {
+      return;
+    }
+
+    _hiddenLoadingPlaceholderTimer = Timer(
+      _ReaderPageState._kHiddenLoadingPlaceholderDelay,
+      () {
+        if (!mounted || !_needsBlockingLoadingUi) {
+          return;
+        }
+        setState(() {
+          _showHiddenLoadingPlaceholder = true;
+        });
+      },
+    );
+  }
+
   void _clearDelayedLoadingUi() {
     _chapterLoadingIndicatorTimer?.cancel();
     _chapterLoadingIndicatorTimer = null;
     _blockingLoadingCardTimer?.cancel();
     _blockingLoadingCardTimer = null;
+    _hiddenLoadingPlaceholderTimer?.cancel();
+    _hiddenLoadingPlaceholderTimer = null;
     _showChapterLoadingIndicator = false;
     _showBlockingLoadingCard = false;
+    _showHiddenLoadingPlaceholder = false;
   }
 
   void _scheduleChapterLoadingIndicator() {

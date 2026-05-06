@@ -46,8 +46,6 @@ enum _ProfileAvatarAction { change, remove }
 
 class _MinePageState extends ConsumerState<MinePage> {
   static const String _layoutModeKey = 'mine.page.layoutMode';
-  String? _highlightedTileId;
-
   static final Uri _sourceFeedbackUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
@@ -478,9 +476,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                           context,
                           item: actions[index],
                           denseGrid: denseGrid,
-                          tileId: 'mine_${title}_$index',
-                          highlighted:
-                              _highlightedTileId == 'mine_${title}_$index',
                           borderColor: resolveAppBorderColor(
                             Theme.of(context).colorScheme,
                             baseColor: palette.cardBorderColor,
@@ -697,8 +692,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     BuildContext context, {
     required _MineActionItem item,
     required bool denseGrid,
-    required String tileId,
-    required bool highlighted,
     required Color borderColor,
     required _MineResolvedPalette palette,
   }) {
@@ -721,123 +714,99 @@ class _MinePageState extends ConsumerState<MinePage> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onHighlightChanged: (value) {
-          if (value) {
-            if (_highlightedTileId == tileId) {
-              return;
-            }
-            setState(() {
-              _highlightedTileId = tileId;
-            });
-            return;
-          }
-          if (_highlightedTileId != tileId) {
-            return;
-          }
-          setState(() {
-            _highlightedTileId = null;
-          });
-        },
         onTap: item.onTap,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          scale: highlighted ? 0.965 : 1,
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor),
-              color: Colors.transparent,
-            ),
-            child: Padding(
-              padding:
-                  denseGrid
-                      ? const EdgeInsets.fromLTRB(8, 7, 8, 7)
-                      : const EdgeInsets.fromLTRB(9, 9, 9, 9),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: iconSize,
-                              height: iconSize,
-                              decoration: BoxDecoration(
-                                color: iconFill,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                item.icon,
-                                size: iconGlyphSize,
-                                color: palette.textPrimaryColor,
-                              ),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor),
+            color: Colors.transparent,
+          ),
+          child: Padding(
+            padding:
+                denseGrid
+                    ? const EdgeInsets.fromLTRB(8, 7, 8, 7)
+                    : const EdgeInsets.fromLTRB(9, 9, 9, 9),
+            child: Stack(
+              children: [
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: iconSize,
+                            height: iconSize,
+                            decoration: BoxDecoration(
+                              color: iconFill,
+                              shape: BoxShape.circle,
                             ),
-                            if (item.colorDot != null)
-                              Positioned(
-                                right: -1,
-                                bottom: -1,
-                                child: Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: item.colorDot,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: palette.cardColor,
-                                      width: 1.2,
-                                    ),
+                            child: Icon(
+                              item.icon,
+                              size: iconGlyphSize,
+                              color: palette.textPrimaryColor,
+                            ),
+                          ),
+                          if (item.colorDot != null)
+                            Positioned(
+                              right: -1,
+                              bottom: -1,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: item.colorDot,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: palette.cardColor,
+                                    width: 1.2,
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                        SizedBox(height: denseGrid ? 4 : 8),
-                        Text(
-                          item.label,
-                          maxLines: denseGrid ? 1 : 2,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          style: labelTextStyle,
-                        ),
-                      ],
-                    ),
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: denseGrid ? 4 : 8),
+                      Text(
+                        item.label,
+                        maxLines: denseGrid ? 1 : 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: labelTextStyle,
+                      ),
+                    ],
                   ),
-                  if (denseGrid &&
-                      item.tagText != null &&
-                      item.tagText!.isNotEmpty)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1.5,
+                ),
+                if (denseGrid &&
+                    item.tagText != null &&
+                    item.tagText!.isNotEmpty)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.noticeAccentColor.withValues(
+                          alpha: 0.14,
                         ),
-                        decoration: BoxDecoration(
-                          color: palette.noticeAccentColor.withValues(
-                            alpha: 0.14,
-                          ),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          item.tagText!,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: palette.noticeAccentColor,
-                            height: 1.0,
-                          ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        item.tagText!,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: palette.noticeAccentColor,
+                          height: 1.0,
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),

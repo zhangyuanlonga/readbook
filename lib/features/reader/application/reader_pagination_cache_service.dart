@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import 'local/local_reader_identity.dart';
 import 'reader_pagination_models.dart';
 
 typedef ReaderPaginationCacheDirectoryProvider = Future<Directory> Function();
@@ -35,8 +34,7 @@ class ReaderPaginationCacheService {
     required String sourceId,
     required String chapterUrl,
   }) {
-    return LocalReaderIdentity.isLocalSourceId(sourceId.trim()) &&
-        chapterUrl.trim().isNotEmpty;
+    return sourceId.trim().isNotEmpty && chapterUrl.trim().isNotEmpty;
   }
 
   Future<ReaderPrecomputedChapterLayout?> loadPrecomputedChapterLayout({

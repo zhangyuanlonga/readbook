@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -568,18 +570,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }) async {
     final service = ref.read(advancedThemeServiceProvider);
     final file = File(path);
+    final bytes = await file.readAsBytes();
     final effectiveKind =
-        packageKind ?? await _detectPackageKind(path: path, mimeType: mimeType);
+        packageKind ??
+        await _detectPackageKind(path: path, mimeType: mimeType, bytes: bytes);
     final importedTheme = switch (effectiveKind) {
       _ThemeImportPackageKind.red => await service.importRedThemePackageBytes(
-        await file.readAsBytes(),
+        bytes,
       ),
       _ThemeImportPackageKind.rgshare => await service
-          .importRgShareThemePackageBytes(await file.readAsBytes()),
+          .importRgShareThemePackageBytes(bytes),
       _ThemeImportPackageKind.official =>
-        _isZipThemeFile(path: path, mimeType: mimeType)
-            ? await service.importThemeBundleZipBytes(await file.readAsBytes())
-            : await service.importThemeColorJson(await file.readAsString()),
+        _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
+            ? await service.importThemeBundleZipBytes(bytes)
+            : await service.importThemeColorJson(utf8.decode(bytes)),
     };
     ref.read(advancedThemeRevisionProvider.notifier).markChanged();
     await _load();
@@ -707,33 +711,104 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<_ThemeImportPackageKind> _detectPackageKind({
     required String path,
     String? mimeType,
+    List<int>? bytes,
   }) async {
     final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
-    if (p.extension(path).trim().toLowerCase() == '.rgshare') {
+    final normalizedExtension = p.extension(path).trim().toLowerCase();
+    if (normalizedExtension == '.rgshare') {
       return _ThemeImportPackageKind.rgshare;
     }
     if (normalizedMime.contains('octet-stream') &&
-        p.extension(path).trim().toLowerCase() == '.red') {
+        normalizedExtension == '.red') {
       return _ThemeImportPackageKind.red;
     }
-    if (p.extension(path).trim().toLowerCase() == '.red') {
+    if (normalizedExtension == '.red') {
       return _ThemeImportPackageKind.red;
+    }
+    final resolvedBytes = bytes ?? await File(path).readAsBytes();
+    final sniffedKind = _detectPackageKindFromBytes(resolvedBytes);
+    if (sniffedKind != null) {
+      return sniffedKind;
+    }
+    if (normalizedExtension == '.zip') {
+      return _ThemeImportPackageKind.official;
+    }
+    if (normalizedExtension == '.json') {
+      return _ThemeImportPackageKind.official;
     }
     try {
-      final file = File(path);
-      final bytes = await file.openRead(0, 8).fold<List<int>>(<int>[], (
-        previous,
-        element,
-      ) {
-        return <int>[...previous, ...element];
-      });
-      if (_hasRedHeader(bytes)) {
+      if (_looksLikeThemeColorJson(
+        utf8.decode(resolvedBytes, allowMalformed: true),
+      )) {
+        return _ThemeImportPackageKind.official;
+      }
+    } catch (_) {
+      // Fall through to the default package kind.
+    }
+    return _ThemeImportPackageKind.official;
+  }
+
+  _ThemeImportPackageKind? _detectPackageKindFromBytes(List<int> bytes) {
+    if (_hasRedHeader(bytes)) {
+      return _ThemeImportPackageKind.red;
+    }
+    if (!_looksLikeZip(bytes)) {
+      return null;
+    }
+
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes, verify: false);
+      if (archive.findFile('manifest.json') != null) {
+        return _ThemeImportPackageKind.official;
+      }
+      final themeFile = archive.findFile('theme.json');
+      if (themeFile == null) {
+        return _ThemeImportPackageKind.official;
+      }
+      final decoded = jsonDecode(
+        utf8.decode(List<int>.from(themeFile.content), allowMalformed: true),
+      );
+      if (decoded is! Map) {
+        return _ThemeImportPackageKind.official;
+      }
+      final payload = decoded.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      if (_looksLikeRgShareTheme(payload)) {
+        return _ThemeImportPackageKind.rgshare;
+      }
+      if (_looksLikeRedTheme(payload)) {
         return _ThemeImportPackageKind.red;
       }
     } catch (_) {
-      // Fall through to official package detection.
+      return null;
     }
     return _ThemeImportPackageKind.official;
+  }
+
+  bool _looksLikeRgShareTheme(Map<String, dynamic> payload) {
+    return payload.containsKey('1') &&
+        payload.containsKey('2') &&
+        payload.containsKey('4');
+  }
+
+  bool _looksLikeRedTheme(Map<String, dynamic> payload) {
+    return payload['light'] is Map && payload['dark'] is Map;
+  }
+
+  bool _looksLikeThemeColorJson(String content) {
+    try {
+      final decoded = jsonDecode(content);
+      if (decoded is! Map) {
+        return false;
+      }
+      final payload = decoded.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      return payload['type']?.toString().trim() == 'advanced_theme_colors';
+    } catch (_) {
+      return false;
+    }
   }
 
   bool _hasRedHeader(List<int> bytes) {
@@ -743,12 +818,27 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         bytes[2] == 0x44;
   }
 
-  bool _isZipThemeFile({required String path, String? mimeType}) {
+  bool _looksLikeZip(List<int> bytes) {
+    return bytes.length >= 4 &&
+        bytes[0] == 0x50 &&
+        bytes[1] == 0x4B &&
+        bytes[2] == 0x03 &&
+        bytes[3] == 0x04;
+  }
+
+  bool _isZipThemeFile({
+    required String path,
+    String? mimeType,
+    List<int>? bytes,
+  }) {
     final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
     if (normalizedMime.contains('zip')) {
       return true;
     }
-    return p.extension(path).trim().toLowerCase() == '.zip';
+    if (p.extension(path).trim().toLowerCase() == '.zip') {
+      return true;
+    }
+    return bytes != null && _looksLikeZip(bytes);
   }
 
   Future<void> _deleteTheme(AppAdvancedTheme theme) async {
@@ -1085,7 +1175,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         if (didPop || !context.mounted) {
           return;
         }
-        context.go('/appearance?section=appearance');
+        context.go('/mine');
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
@@ -1097,7 +1187,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 context.pop();
                 return;
               }
-              context.go('/appearance?section=appearance');
+              context.go('/mine');
             },
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),

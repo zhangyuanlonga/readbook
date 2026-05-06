@@ -114,7 +114,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
     final cacheButton = buildAction(
       key: const Key('book_detail_cache_button'),
       icon: Icon(
-        Icons.category_outlined,
+        Icons.bookmarks_rounded,
         size: 18,
         color: Theme.of(context).colorScheme.onSurface,
       ),

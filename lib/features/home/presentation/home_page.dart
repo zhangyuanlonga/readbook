@@ -16,7 +16,6 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../application/home_engagement_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
-import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
@@ -1071,13 +1070,15 @@ class _HomePageState extends ConsumerState<HomePage>
     }
 
     context.push(
-      buildBookDetailRoute(
+      _readerEntryRouteResolver.buildChapterRoute(
         bookId: record.bookId,
+        chapterId: chapterId.isNotEmpty ? chapterId : 'bootstrap',
+        chapterUrl: chapterUrl.isNotEmpty ? chapterUrl : null,
+        chapterTitle: chapterTitle,
         sourceId: record.sourceId,
         detailUrl: record.detailUrl,
-        title: record.bookTitle,
-        author: record.bookAuthor,
-        coverUrl: record.coverUrl,
+        chapterIndex: chapterIndex,
+        openRouteKind: 'home_continue_reading_fallback',
       ),
     );
   }

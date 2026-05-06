@@ -77,9 +77,13 @@ class _BottomNavIconGalleryEditorPageState
       acceptedTypeGroups: const [
         XTypeGroup(
           label: 'Bottom nav icons',
-          extensions: ['svg', 'png'],
-          mimeTypes: ['image/svg+xml', 'image/png'],
-          uniformTypeIdentifiers: ['public.svg-image', 'public.png'],
+          extensions: ['svg', 'png', 'gif'],
+          mimeTypes: ['image/svg+xml', 'image/png', 'image/gif'],
+          uniformTypeIdentifiers: [
+            'public.svg-image',
+            'public.png',
+            'com.compuserve.gif',
+          ],
         ),
       ],
       confirmButtonText: '选择图标',
@@ -92,6 +96,7 @@ class _BottomNavIconGalleryEditorPageState
     final format = switch (extension) {
       'svg' => BottomNavIconAssetFormat.svg,
       'png' => BottomNavIconAssetFormat.png,
+      'gif' => BottomNavIconAssetFormat.gif,
       _ => null,
     };
     if (format == null) {

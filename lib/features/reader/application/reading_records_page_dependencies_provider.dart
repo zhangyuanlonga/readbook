@@ -8,7 +8,6 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
-import '../../book/presentation/book_detail_route.dart';
 import 'reading_book_status_service.dart';
 import 'reader_entry_route_resolver.dart';
 import 'reader_preferences_service.dart';
@@ -177,13 +176,15 @@ class ReadingRecordOpenRouteService {
       );
     }
 
-    return buildBookDetailRoute(
+    return _readerEntryRouteResolver.buildChapterRoute(
       bookId: record.bookId,
+      chapterId: chapterId.isNotEmpty ? chapterId : 'bootstrap',
+      chapterUrl: chapterUrl.isNotEmpty ? chapterUrl : null,
+      chapterTitle: chapterTitle,
       sourceId: record.sourceId,
       detailUrl: record.detailUrl,
-      title: record.bookTitle,
-      author: record.bookAuthor,
-      coverUrl: record.coverUrl,
+      chapterIndex: chapterIndex,
+      openRouteKind: 'reading_record_fallback',
     );
   }
 }

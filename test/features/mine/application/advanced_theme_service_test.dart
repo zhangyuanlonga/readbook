@@ -1,17 +1,52 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_service.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
+import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
+import 'package:shuxiang_reading_next/features/mine/application/cover_gallery_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  setUp(() async {
+    final documentsDir = await Directory.systemTemp.createTemp(
+      'theme_test_docs_',
+    );
+    final supportDir = await Directory.systemTemp.createTemp(
+      'theme_test_support_',
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, (call) async {
+          if (call.method == 'getApplicationDocumentsDirectory') {
+            return documentsDir.path;
+          }
+          if (call.method == 'getApplicationSupportDirectory') {
+            return supportDir.path;
+          }
+          return null;
+        });
+    addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, null);
+      if (documentsDir.existsSync()) {
+        await documentsDir.delete(recursive: true);
+      }
+      if (supportDir.existsSync()) {
+        await supportDir.delete(recursive: true);
+      }
+    });
   });
 
   test('encodes theme colors as portable json payload', () {
@@ -241,6 +276,325 @@ void main() {
     },
   );
 
+  test(
+    'round-trips bottom nav gallery binding through theme bundle import',
+    () async {
+      final assetStore = await _createAssetStore();
+      final prefs = await SharedPreferences.getInstance();
+      final service = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final bottomNavService = BottomNavIconGalleryService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final gallery = BottomNavIconGallery(
+        id: 'gallery_theme_bundle',
+        name: '主题底栏',
+        createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+        isBuiltIn: false,
+        isEditable: true,
+        isDeletable: true,
+        items: const <BottomNavIconGalleryTab, BottomNavIconSet>{
+          BottomNavIconGalleryTab.home: BottomNavIconSet(
+            lightUnselected: BottomNavIconAssetRef(
+              path: 'assets/test_icons/home_light.png',
+              format: BottomNavIconAssetFormat.png,
+              isAsset: true,
+            ),
+            darkSelected: BottomNavIconAssetRef(
+              path: 'assets/test_icons/home_dark.png',
+              format: BottomNavIconAssetFormat.png,
+              isAsset: true,
+            ),
+          ),
+        },
+      );
+      await bottomNavService.saveGalleries(<BottomNavIconGallery>[gallery]);
+      final theme = AppAdvancedTheme(
+        id: 'theme_bundle_bottom_nav',
+        name: '底栏主题',
+        createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+        bottomNavGalleryId: gallery.id,
+      );
+
+      final bundleBytes = await service.encodeThemeBundleZip(theme);
+      final imported = await service.importThemeBundleZipBytes(bundleBytes);
+      BottomNavIconGallery? importedGallery;
+      for (final gallery in await bottomNavService.loadGalleries()) {
+        if (gallery.id == imported.bottomNavGalleryId) {
+          importedGallery = gallery;
+          break;
+        }
+      }
+
+      expect(imported.bottomNavGalleryId, isNotNull);
+      expect(imported.bottomNavGalleryId, isNot(gallery.id));
+      expect(importedGallery, isNotNull);
+      expect(importedGallery!.name, gallery.name);
+      expect(
+        importedGallery
+            .items[BottomNavIconGalleryTab.home]
+            ?.lightUnselected
+            ?.path,
+        'assets/test_icons/home_light.png',
+      );
+      expect(
+        importedGallery.items[BottomNavIconGalleryTab.home]?.darkSelected?.path,
+        'assets/test_icons/home_dark.png',
+      );
+    },
+  );
+
+  test('imports Red bottom nav gif pack and maps legacy notes tab', () async {
+    final assetStore = await _createAssetStore();
+    final prefs = await SharedPreferences.getInstance();
+    final service = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    final bytes = _buildRedThemePackageBytes(
+      themeJson: <String, dynamic>{
+        'name': '夜昧·这个夏天',
+        'light': <String, dynamic>{'navbarPackId': 'pack_1'},
+        'dark': <String, dynamic>{'navbarPackId': 'pack_1'},
+      },
+      files: <String, List<int>>{
+        'navbar_pack/pack_1/meta.json': utf8.encode(
+          jsonEncode(<String, dynamic>{'name': '这个夏天底栏'}),
+        ),
+        'navbar_pack/pack_1/home_normal.gif': const <int>[
+          0x47,
+          0x49,
+          0x46,
+          0x38,
+          0x39,
+          0x61,
+        ],
+        'navbar_pack/pack_1/bookshelf_normal.gif': const <int>[
+          0x47,
+          0x49,
+          0x46,
+          0x38,
+          0x39,
+          0x61,
+          0x01,
+        ],
+        'navbar_pack/pack_1/statistics_normal.gif': const <int>[
+          0x47,
+          0x49,
+          0x46,
+          0x38,
+          0x39,
+          0x61,
+          0x02,
+        ],
+        'navbar_pack/pack_1/notes_normal.gif': const <int>[
+          0x47,
+          0x49,
+          0x46,
+          0x38,
+          0x39,
+          0x61,
+          0x03,
+        ],
+        'navbar_pack/pack_1/settings_normal.gif': const <int>[
+          0x47,
+          0x49,
+          0x46,
+          0x38,
+          0x39,
+          0x61,
+          0x04,
+        ],
+      },
+    );
+
+    final imported = await service.importRedThemePackageBytes(bytes);
+    BottomNavIconGallery? importedGallery;
+    final galleryService = BottomNavIconGalleryService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    for (final gallery in await galleryService.loadGalleries()) {
+      if (gallery.id == imported.bottomNavGalleryId) {
+        importedGallery = gallery;
+        break;
+      }
+    }
+
+    expect(imported.bottomNavGalleryId, isNotNull);
+    expect(importedGallery, isNotNull);
+    expect(
+      importedGallery!
+          .items[BottomNavIconGalleryTab.home]
+          ?.lightUnselected
+          ?.format,
+      BottomNavIconAssetFormat.gif,
+    );
+    expect(
+      importedGallery
+          .items[BottomNavIconGalleryTab.discover]
+          ?.lightUnselected
+          ?.format,
+      BottomNavIconAssetFormat.gif,
+    );
+    expect(
+      importedGallery
+          .items[BottomNavIconGalleryTab.mine]
+          ?.lightUnselected
+          ?.format,
+      BottomNavIconAssetFormat.gif,
+    );
+  });
+
+  test(
+    'imports RGShare cover gallery, bottom nav profile and reader background',
+    () async {
+      final assetStore = await _createAssetStore();
+      final prefs = await SharedPreferences.getInstance();
+      final service = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final bytes = _buildZipPackageBytes(<String, List<int>>{
+        'theme.json': utf8.encode(
+          jsonEncode(<String, dynamic>{
+            '1': 'Www.荔枝春',
+            '2': <String, dynamic>{'5': '#8C4141FF'},
+            '4': <String, dynamic>{'45': 'custom_light.jpg'},
+          }),
+        ),
+        'meta.json': utf8.encode(
+          jsonEncode(<String, dynamic>{
+            'cover': <String, dynamic>{
+              'name': 'Www.荔枝春',
+              'files': <String>[
+                'resources/cover/a.png',
+                'resources/cover/b.png',
+              ],
+            },
+            'readerTheme': <String, dynamic>{
+              'filePath': 'resources/reader_theme/theme.json',
+              'backgroundImagePath': 'resources/reader_theme/bg.jpg',
+            },
+            'tabBarProfile': <String, dynamic>{
+              'name': 'Www.荔枝春',
+              'filePath': 'resources/tabbar/profile.json',
+            },
+          }),
+        ),
+        'images/custom_light.jpg': const <int>[0xFF, 0xD8, 0xFF, 0x00],
+        'resources/cover/a.png': const <int>[0x89, 0x50, 0x4E, 0x47, 0x01],
+        'resources/cover/b.png': const <int>[0x89, 0x50, 0x4E, 0x47, 0x02],
+        'resources/reader_theme/theme.json': utf8.encode(
+          jsonEncode(<String, dynamic>{'bodyFont': 'MissingFont'}),
+        ),
+        'resources/reader_theme/bg.jpg': const <int>[0xFF, 0xD8, 0xFF, 0x01],
+        'resources/tabbar/profile.json': utf8.encode(
+          jsonEncode(<String, dynamic>{
+            'items': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'tab': 'shelf',
+                'iconSource': <String, dynamic>{
+                  'type': 'customImage',
+                  'value': 'shelf.png',
+                },
+              },
+              <String, dynamic>{
+                'tab': 'library',
+                'iconSource': <String, dynamic>{
+                  'type': 'customImage',
+                  'value': 'library.png',
+                },
+              },
+              <String, dynamic>{
+                'tab': 'statistic',
+                'iconSource': <String, dynamic>{
+                  'type': 'customImage',
+                  'value': 'statistic.png',
+                },
+              },
+              <String, dynamic>{
+                'tab': 'mine',
+                'iconSource': <String, dynamic>{
+                  'type': 'customImage',
+                  'value': 'mine.png',
+                },
+              },
+            ],
+          }),
+        ),
+        'resources/tabbar/shelf.png': const <int>[0x89, 0x50, 0x4E, 0x47, 0x11],
+        'resources/tabbar/library.png': const <int>[
+          0x89,
+          0x50,
+          0x4E,
+          0x47,
+          0x12,
+        ],
+        'resources/tabbar/statistic.png': const <int>[
+          0x89,
+          0x50,
+          0x4E,
+          0x47,
+          0x13,
+        ],
+        'resources/tabbar/mine.png': const <int>[0x89, 0x50, 0x4E, 0x47, 0x14],
+      });
+
+      final imported = await service.importRgShareThemePackageBytes(bytes);
+
+      expect(imported.coverGalleryId, isNotNull);
+      expect(imported.bottomNavGalleryId, isNotNull);
+      expect(imported.lightConfig.readerWallpaperPath, isNotNull);
+      expect(imported.darkConfig.readerWallpaperPath, isNotNull);
+
+      final coverService = CoverGalleryService(preferences: prefs);
+      final coverGallery = await coverService.loadGallery(
+        imported.coverGalleryId!,
+      );
+      expect(coverGallery, isNotNull);
+      expect(coverGallery!.imagePaths, hasLength(2));
+
+      final bottomNavService = BottomNavIconGalleryService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      BottomNavIconGallery? navGallery;
+      for (final gallery in await bottomNavService.loadGalleries()) {
+        if (gallery.id == imported.bottomNavGalleryId) {
+          navGallery = gallery;
+          break;
+        }
+      }
+      expect(navGallery, isNotNull);
+      expect(
+        navGallery!
+            .items[BottomNavIconGalleryTab.bookshelf]
+            ?.lightUnselected
+            ?.format,
+        BottomNavIconAssetFormat.png,
+      );
+      expect(
+        navGallery.items[BottomNavIconGalleryTab.home]?.lightUnselected?.format,
+        BottomNavIconAssetFormat.png,
+      );
+      expect(
+        navGallery
+            .items[BottomNavIconGalleryTab.discover]
+            ?.lightUnselected
+            ?.format,
+        BottomNavIconAssetFormat.png,
+      );
+    },
+  );
+
   test('rejects importing duplicate theme payload by fingerprint', () async {
     final service = AdvancedThemeService(assetStore: await _createAssetStore());
     final payload = jsonEncode(<String, dynamic>{
@@ -360,4 +714,26 @@ Future<File> _createTempFile({
   final file = File('${directory.path}/$fileName');
   await file.writeAsBytes(const <int>[0x89, 0x50, 0x4E, 0x47], flush: true);
   return file;
+}
+
+List<int> _buildRedThemePackageBytes({
+  required Map<String, dynamic> themeJson,
+  required Map<String, List<int>> files,
+}) {
+  final archive = Archive();
+  final themeBytes = utf8.encode(jsonEncode(themeJson));
+  archive.addFile(ArchiveFile('theme.json', themeBytes.length, themeBytes));
+  for (final entry in files.entries) {
+    archive.addFile(ArchiveFile(entry.key, entry.value.length, entry.value));
+  }
+  final zipBytes = ZipEncoder().encode(archive);
+  return <int>[0x52, 0x45, 0x44, 0x04, ...zipBytes];
+}
+
+List<int> _buildZipPackageBytes(Map<String, List<int>> files) {
+  final archive = Archive();
+  for (final entry in files.entries) {
+    archive.addFile(ArchiveFile(entry.key, entry.value.length, entry.value));
+  }
+  return ZipEncoder().encode(archive);
 }

@@ -532,9 +532,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return normalized.isEmpty ? null : normalized;
   }
 
-  Widget _buildQuickActionsCard(
-    BookDetailLoadResult result, {
+  Widget _buildQuickActionsCard({
     required _BookDetailAuxiliaryState auxiliaryState,
+    required bool hasCatalog,
   }) {
     return BookDetailQuickActionsCard(
       child: LayoutBuilder(
@@ -546,10 +546,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             isShelfActionLoading: auxiliaryState.isShelfActionLoading,
             onToggleBookshelf: _toggleBookshelf,
             onOpenCatalog:
-                result.chapters.isEmpty
-                    ? null
-                    : () => _openCatalogSheet(result),
-            isCatalogEnabled: result.chapters.isNotEmpty,
+                hasCatalog && _result != null
+                    ? () => _openCatalogSheet(_result!)
+                    : null,
+            isCatalogEnabled: hasCatalog,
             onSwitchSource: _canSwitchSource ? _handleSwitchSource : null,
             isSwitchSourceEnabled: _canSwitchSource,
             onOpenOrganize: _openOrganizeSheet,
@@ -602,7 +602,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       sections.addAll(<Widget>[
         _buildDetailCard(result),
         const SizedBox(height: 12),
-        _buildQuickActionsCard(result, auxiliaryState: auxiliaryState),
+        _buildQuickActionsCard(
+          auxiliaryState: auxiliaryState,
+          hasCatalog: result.chapters.isNotEmpty,
+        ),
         if (introCard != null) ...[const SizedBox(height: 12), introCard],
         if (shouldShowLocalIndexStatus) ...[
           const SizedBox(height: 12),
@@ -891,8 +894,15 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  Widget _buildDetailLoadingSkeleton() {
+  Widget _buildDetailLoadingSkeleton({
+    String? title,
+    String? author,
+    String? coverUrl,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final normalizedTitle = (title ?? '').trim();
+    final normalizedAuthor = (author ?? '').trim();
+    final normalizedCover = (coverUrl ?? '').trim();
 
     Widget block({
       required double height,
@@ -917,19 +927,47 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                block(
-                  width: 104,
-                  height: 148,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                if (normalizedTitle.isNotEmpty || normalizedCover.isNotEmpty)
+                  _buildCoverPreview(
+                    normalizedCover.isEmpty ? null : normalizedCover,
+                    title:
+                        normalizedTitle.isEmpty ? '加载书籍详情中' : normalizedTitle,
+                    author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
+                    heroTag: 'book_loading_${widget.bookId}',
+                    bookId: widget.bookId,
+                    sourceId: widget.sourceId,
+                    detailUrl: widget.detailUrl,
+                  )
+                else
+                  block(
+                    width: 104,
+                    height: 148,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      block(height: 22, width: double.infinity),
+                      if (normalizedTitle.isNotEmpty)
+                        Text(
+                          normalizedTitle,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        )
+                      else
+                        block(height: 22, width: double.infinity),
                       const SizedBox(height: 12),
-                      block(height: 16, width: 160),
+                      if (normalizedAuthor.isNotEmpty)
+                        Text(
+                          normalizedAuthor,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        )
+                      else
+                        block(height: 16, width: 160),
                       const SizedBox(height: 8),
                       block(height: 16, width: 130),
                       const SizedBox(height: 8),
@@ -938,23 +976,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            child: Row(
-              children: List.generate(
-                4,
-                (index) => Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(right: index == 3 ? 0 : 4),
-                    child: block(height: 62),
-                  ),
-                ),
-              ),
             ),
           ),
         ),
@@ -983,7 +1004,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  Widget _buildInitialLoadingContent() {
+  Widget _buildInitialLoadingContent({
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
     final routePreviewTitle = (widget.title ?? '').trim();
     final bootstrapTitle =
         (_displayTitle ?? widget.title ?? '').trim().isNotEmpty
@@ -996,73 +1019,24 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         bootstrapAuthor.isNotEmpty ||
         bootstrapCover.isNotEmpty;
 
-    if (!hasRoutePreview) {
-      return _buildDetailLoadingSkeleton();
-    }
+    final detailSkeleton =
+        hasRoutePreview
+            ? _buildDetailLoadingSkeleton(
+              title: bootstrapTitle,
+              author: bootstrapAuthor.isEmpty ? null : bootstrapAuthor,
+              coverUrl: bootstrapCover.isEmpty ? null : bootstrapCover,
+            )
+            : _buildDetailLoadingSkeleton();
 
     return Column(
       children: [
-        _buildBootstrapPreviewCard(
-          title: bootstrapTitle,
-          author: bootstrapAuthor.isEmpty ? null : bootstrapAuthor,
-          coverUrl: bootstrapCover.isEmpty ? null : bootstrapCover,
-        ),
+        detailSkeleton,
         const SizedBox(height: 12),
-        _buildDetailLoadingSkeleton(),
-      ],
-    );
-  }
-
-  Widget _buildBootstrapPreviewCard({
-    required String title,
-    String? author,
-    String? coverUrl,
-  }) {
-    final heroTag =
-        widget.heroTag?.trim().isNotEmpty == true
-            ? widget.heroTag!.trim()
-            : null;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCoverPreview(
-              coverUrl,
-              title: title,
-              author: author,
-              heroTag: heroTag ?? 'book_bootstrap_${widget.bookId}',
-              bookId: widget.bookId,
-              sourceId: widget.sourceId,
-              detailUrl: widget.detailUrl,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    author?.isNotEmpty == true ? author! : '作者信息加载中',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        _buildQuickActionsCard(
+          auxiliaryState: auxiliaryState,
+          hasCatalog: false,
         ),
-      ),
+      ],
     );
   }
 

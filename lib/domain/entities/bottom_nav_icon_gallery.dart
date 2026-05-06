@@ -1,6 +1,6 @@
 enum BottomNavIconGalleryTab { home, bookshelf, discover, stats, mine }
 
-enum BottomNavIconAssetFormat { svg, png }
+enum BottomNavIconAssetFormat { svg, png, gif }
 
 enum BottomNavIconVariantSlot {
   lightUnselected,
@@ -34,6 +34,7 @@ class BottomNavIconAssetRef {
     final format = switch (rawFormat) {
       'svg' => BottomNavIconAssetFormat.svg,
       'png' => BottomNavIconAssetFormat.png,
+      'gif' => BottomNavIconAssetFormat.gif,
       _ => throw const FormatException('Invalid required field: format'),
     };
 

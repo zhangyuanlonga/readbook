@@ -349,6 +349,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _readerInfoClockTimer;
   Timer? _chapterLoadingIndicatorTimer;
   Timer? _blockingLoadingCardTimer;
+  Timer? _hiddenLoadingPlaceholderTimer;
   Timer? _readingRecordAutoCommitTimer;
   DateTime? _lastReaderSnackAt;
   String? _lastReaderSnackKey;
@@ -395,6 +396,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ReaderPaginationSpec? _lastPaginationSpec;
   bool _showChapterLoadingIndicator = false;
   bool _showBlockingLoadingCard = false;
+  bool _showHiddenLoadingPlaceholder = false;
   double? _measuredPinnedChapterHeaderWidth;
   PagedTransitionState _pagedTransition = PagedTransitionController.idleState;
   _CurlTransitionState _curlTransition = const _CurlTransitionState();
@@ -456,6 +458,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   );
   static const Duration _kBlockingLoadingCardDelay = Duration(
     milliseconds: 520,
+  );
+  static const Duration _kHiddenLoadingPlaceholderDelay = Duration(
+    milliseconds: 180,
   );
   static const Duration _kReaderSnackDuration = Duration(milliseconds: 1800);
   static const Duration _kReaderBoundarySnackDuration = Duration(
@@ -2299,6 +2304,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _currentPageIndex = targetIndex;
     });
 
+    final normalizedSourceId = (_sourceId ?? '').trim();
+    final normalizedChapterUrl = (_chapterUrl ?? '').trim();
+    if (normalizedSourceId.isNotEmpty && normalizedChapterUrl.isNotEmpty) {
+      _storePrecomputedChapterLayout(
+        sourceId: normalizedSourceId,
+        chapterUrl: normalizedChapterUrl,
+        layout: ReaderPrecomputedChapterLayout(
+          paragraphs: List<String>.unmodifiable(paragraphs),
+          pagedPages: pages,
+          paginationSignature: signature,
+        ),
+      );
+    }
+
     _scheduleProgressSave();
   }
 
@@ -3619,6 +3638,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               pageCount: pages.length,
             );
             precomputedPaginationSignature = signature;
+            final normalizedSourceId = (_sourceId ?? '').trim();
+            final normalizedChapterUrl = chapterUrl.trim();
+            if (normalizedSourceId.isNotEmpty &&
+                normalizedChapterUrl.isNotEmpty) {
+              _storePrecomputedChapterLayout(
+                sourceId: normalizedSourceId,
+                chapterUrl: normalizedChapterUrl,
+                layout: ReaderPrecomputedChapterLayout(
+                  paragraphs: effectiveParagraphs,
+                  pagedPages: pages,
+                  paginationSignature: signature,
+                ),
+              );
+            }
           }
         }
       }
@@ -3682,8 +3715,88 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<bool> _tryHydrateVisibleContentFromCache() async {
     final sourceId = (_sourceId ?? '').trim();
+    if (sourceId.isEmpty) {
+      return false;
+    }
+
+    if (LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      final chapterId = _chapterId.trim();
+      if (chapterId.isEmpty || chapterId.toLowerCase() == 'bootstrap') {
+        return false;
+      }
+
+      try {
+        final chapter = await _localBookRepository.getChapterById(chapterId);
+        if (chapter == null || !chapter.hasReadablePayload) {
+          return false;
+        }
+
+        final previewProgress = _bootstrapProgressForCurrentChapter();
+        var previewRatio = 0.0;
+        if (!mounted) {
+          return false;
+        }
+
+        final resolvedCurrentChapter =
+            _currentIndex != null &&
+                    _currentIndex! >= 0 &&
+                    _currentIndex! < _chapters.length
+                ? _chapters[_currentIndex!]
+                : null;
+
+        setState(() {
+          _isCurrentChapterCached = true;
+          _errorText = null;
+          _setContent(
+            chapter.content,
+            imageUrls: chapter.imageUrls,
+            document: chapter.document,
+          );
+          previewRatio = _resolveDocumentRestoreRatio(
+            progress: previewProgress,
+          );
+          if (resolvedCurrentChapter != null &&
+              _shouldUseContinuousTextFlow &&
+              chapter.imageUrls.isEmpty &&
+              chapter.content.trim().isNotEmpty) {
+            _continuousTextChapters = <_ContinuousTextChapter>[
+              _ContinuousTextChapter(
+                chapterId: chapter.id,
+                chapterUrl: (_chapterUrl ?? '').trim(),
+                chapterTitle: resolvedCurrentChapter.title.trim(),
+                displayTitle:
+                    (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
+                chapterIndex: _currentIndex!,
+                content: chapter.content,
+                document: _document,
+                paragraphs:
+                    _paragraphs.isEmpty
+                        ? List<String>.unmodifiable(<String>[chapter.content])
+                        : List<String>.unmodifiable(_paragraphs),
+                isCached: true,
+              ),
+            ];
+          } else {
+            _continuousTextChapters = const <_ContinuousTextChapter>[];
+          }
+          _pagedPaginationState = _pagedPaginationState.copyWith(
+            pendingRestoreRatio: previewRatio,
+          );
+        });
+
+        if (previewProgress != null) {
+          _bootstrapProgress = null;
+        }
+        _restoreScrollPosition(previewRatio);
+        _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     final chapterUrl = (_chapterUrl ?? '').trim();
-    if (sourceId.isEmpty || chapterUrl.isEmpty) {
+    if (chapterUrl.isEmpty) {
       return false;
     }
 

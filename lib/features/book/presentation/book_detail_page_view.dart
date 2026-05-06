@@ -162,7 +162,9 @@ extension on _BookDetailPageState {
                                     result: result,
                                   ),
                                 ] else if (presentationState.isLoading) ...[
-                                  _buildInitialLoadingContent(),
+                                  _buildInitialLoadingContent(
+                                    auxiliaryState: auxiliaryState,
+                                  ),
                                 ],
                               ],
                             ),
@@ -179,5 +181,4 @@ extension on _BookDetailPageState {
       },
     );
   }
-
 }

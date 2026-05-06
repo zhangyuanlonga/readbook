@@ -199,6 +199,27 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       final storedCustomBackgroundsFuture = _loadUnifiedCustomBackgrounds();
       final progressFuture = _preferencesService.loadProgress(_currentBookId);
 
+      final progressLoadStopwatch = Stopwatch()..start();
+      final progress = await progressFuture;
+      progressLoadMs = progressLoadStopwatch.elapsedMilliseconds;
+      _bootstrapProgress = progress;
+      progressHit = progress != null;
+
+      if (progress != null) {
+        _applyProgressFallback(progress);
+      }
+
+      _applyLocalSchemeFallback();
+      final visibleCacheStopwatch = Stopwatch()..start();
+      final hydratedVisibleContent = await _tryHydrateVisibleContentFromCache();
+      visibleCacheLoadMs = visibleCacheStopwatch.elapsedMilliseconds;
+      visibleCacheHit = hydratedVisibleContent;
+      if (_hasVisibleReaderContent) {
+        tapToVisibleMs ??= _tapTraceElapsedMs();
+      } else {
+        _scheduleHiddenLoadingPlaceholder();
+      }
+
       final loadedSettings = await loadedSettingsFuture;
       var normalizedSettings = _typographyMetricsResolver.normalizeSettings(
         loadedSettings,
@@ -296,25 +317,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
       unawaited(_runDeferredBootstrapWarmup());
-
-      final progressLoadStopwatch = Stopwatch()..start();
-      final progress = await progressFuture;
-      progressLoadMs = progressLoadStopwatch.elapsedMilliseconds;
-      _bootstrapProgress = progress;
-      progressHit = progress != null;
-
-      if (progress != null) {
-        _applyProgressFallback(progress);
-      }
-
-      _applyLocalSchemeFallback();
-      final visibleCacheStopwatch = Stopwatch()..start();
-      final hydratedVisibleContent = await _tryHydrateVisibleContentFromCache();
-      visibleCacheLoadMs = visibleCacheStopwatch.elapsedMilliseconds;
-      visibleCacheHit = hydratedVisibleContent;
-      if (_hasVisibleReaderContent) {
-        tapToVisibleMs ??= _tapTraceElapsedMs();
-      }
       final tocSnapshotStopwatch = Stopwatch()..start();
       final hydratedTocSnapshot = await _tryHydrateTocSnapshot();
       tocSnapshotLoadMs = tocSnapshotStopwatch.elapsedMilliseconds;

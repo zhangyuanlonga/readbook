@@ -26,6 +26,7 @@ class ReaderViewportBodyState {
   const ReaderViewportBodyState({
     required this.showBlockingLoading,
     required this.showHiddenLoading,
+    required this.showTransientLoadingGap,
     required this.hasRenderableContent,
     this.errorText,
     this.canSwitchSource = false,
@@ -34,6 +35,7 @@ class ReaderViewportBodyState {
 
   final bool showBlockingLoading;
   final bool showHiddenLoading;
+  final bool showTransientLoadingGap;
   final bool hasRenderableContent;
   final String? errorText;
   final bool canSwitchSource;
@@ -79,6 +81,16 @@ class ReaderViewportBuilder {
           model: const ReaderBodyRegionModel.content(),
           palette: palette,
           child: const ReaderViewportLoadingPlaceholder(),
+        ),
+      );
+    }
+
+    if (state.showTransientLoadingGap) {
+      return tapAwareBuilder(
+        child: ReaderBodyRegion(
+          model: const ReaderBodyRegionModel.content(),
+          palette: palette,
+          child: const SizedBox.expand(),
         ),
       );
     }

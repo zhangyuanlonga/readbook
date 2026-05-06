@@ -87,7 +87,12 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
       state: ReaderViewportBodyState(
         showBlockingLoading: _shouldShowBlockingReaderLoading,
         showHiddenLoading:
+            _showHiddenLoadingPlaceholder &&
             (_isBootstrapping || _isLoadingContent) &&
+            !_hasVisibleReaderContent,
+        showTransientLoadingGap:
+            (_isBootstrapping || _isLoadingContent) &&
+            !_showHiddenLoadingPlaceholder &&
             !_hasVisibleReaderContent,
         hasRenderableContent:
             _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty,
