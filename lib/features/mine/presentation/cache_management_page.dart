@@ -8,13 +8,19 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../app/widgets/resolved_book_cover.dart';
-import '../../../domain/entities/app_advanced_theme.dart';
-import '../../../domain/entities/cover_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cache_management_service.dart';
-import '../application/cover_gallery_provider.dart';
 import '../providers.dart';
+
+enum _StorageClearOption {
+  chapterCaches,
+  paginationCaches,
+  coverCaches,
+  searchSourceHits,
+  legacyResidual,
+  otherAppData,
+  localImportedBooks,
+}
 
 class CacheManagementPage extends ConsumerStatefulWidget {
   const CacheManagementPage({super.key});
@@ -28,14 +34,23 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   late final CacheManagementService _cacheManagementService;
   Map<String, CachedBookPresentation> _bookPresentationIndex =
       const <String, CachedBookPresentation>{};
+  StorageManagementSnapshot? _storageSnapshot;
   bool _isBookPresentationIndexLoading = false;
   bool _hasLoadedBookPresentationIndex = false;
+  bool _isStorageSnapshotLoading = false;
+  bool _isClearingSelection = false;
+  Set<_StorageClearOption> _selectedOptions = <_StorageClearOption>{
+    _StorageClearOption.chapterCaches,
+    _StorageClearOption.paginationCaches,
+    _StorageClearOption.coverCaches,
+  };
 
   @override
   void initState() {
     super.initState();
     _cacheManagementService = ref.read(cacheManagementServiceProvider);
     unawaited(_loadBookPresentationIndex());
+    unawaited(_loadStorageSnapshot());
   }
 
   Future<void> _loadBookPresentationIndex() async {
@@ -64,11 +79,34 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     }
   }
 
+  Future<void> _loadStorageSnapshot() async {
+    if (_isStorageSnapshotLoading) {
+      return;
+    }
+    setState(() {
+      _isStorageSnapshotLoading = true;
+    });
+    try {
+      final snapshot = await _cacheManagementService.loadStorageSnapshot();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _storageSnapshot = snapshot;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isStorageSnapshotLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
-    final galleries = ref.watch(coverGalleriesProvider).valueOrNull ?? const [];
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
@@ -97,16 +135,12 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          title: const Text('书籍缓存'),
+          title: const Text('存储管理'),
           actions: [
-            IconButton(
-              onPressed: _confirmClearAll,
-              tooltip: '清理全部缓存',
-              icon: const Icon(Icons.delete_sweep_outlined),
-            ),
             IconButton(
               onPressed: () {
                 unawaited(_loadBookPresentationIndex());
+                unawaited(_loadStorageSnapshot());
               },
               tooltip: '刷新',
               icon: const Icon(Icons.refresh_rounded),
@@ -158,28 +192,43 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                           });
                         }
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildHeaderCard(
-                              context,
+                        final snapshot =
+                            _storageSnapshot ??
+                            StorageManagementSnapshot(
                               cachedBookCount: summaries.length,
                               cachedChapterCount: totalCachedChapters,
-                            ),
-                            if (_isBookPresentationIndexLoading &&
-                                !_hasLoadedBookPresentationIndex) ...[
-                              const SizedBox(height: 12),
+                              chapterCachesBytes: 0,
+                              paginationLayoutCount: 0,
+                              paginationLayoutsBytes: 0,
+                              coverCacheCount: 0,
+                              coverCachesBytes: 0,
+                              searchSourceHitCount: 0,
+                              searchSourceHitsBytes: 0,
+                              legacyResidualCount: 0,
+                              legacyResidualBytes: 0,
+                              themeAssetBytes: 0,
+                              localImportedBookCount: 0,
+                              localImportedBookBytes: 0,
+                              otherDataBytes: 0,
+                            );
+
+                        return ListView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          children: [
+                            if ((_isBookPresentationIndexLoading &&
+                                    !_hasLoadedBookPresentationIndex) ||
+                                _isStorageSnapshotLoading)
                               const LinearProgressIndicator(minHeight: 2),
-                            ],
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: _buildCacheList(
-                                context,
-                                summaries: summaries,
-                                presentationIndex: _bookPresentationIndex,
-                                activeTheme: activeAdvancedTheme,
-                                galleries: galleries,
-                              ),
+                            if ((_isBookPresentationIndexLoading &&
+                                    !_hasLoadedBookPresentationIndex) ||
+                                _isStorageSnapshotLoading)
+                              const SizedBox(height: 12),
+                            ..._buildStorageSections(
+                              context,
+                              snapshot: snapshot,
+                              summaries: summaries,
+                              presentationIndex: _bookPresentationIndex,
                             ),
                           ],
                         );
@@ -203,191 +252,355 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     context.go('/mine');
   }
 
-  Widget _buildHeaderCard(
+  List<Widget> _buildStorageSections(
     BuildContext context, {
-    required int cachedBookCount,
-    required int cachedChapterCount,
+    required StorageManagementSnapshot snapshot,
+    required List<CachedBookSummary> summaries,
+    required Map<String, CachedBookPresentation> presentationIndex,
+  }) {
+    return <Widget>[
+      _buildSectionTitle(context, '缓存数据'),
+      const SizedBox(height: 6),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.chapterCaches,
+        icon: Icons.menu_book_outlined,
+        title: '章节缓存',
+        statsLabel:
+            '${snapshot.cachedChapterCount} 条 · ${_formatBytes(snapshot.chapterCachesBytes)}',
+      ),
+      _buildListDivider(context),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.paginationCaches,
+        icon: Icons.auto_stories_outlined,
+        title: '分页缓存',
+        statsLabel:
+            '${snapshot.paginationLayoutCount} 条 · ${_formatBytes(snapshot.paginationLayoutsBytes)}',
+      ),
+      _buildListDivider(context),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.coverCaches,
+        icon: Icons.image_outlined,
+        title: '封面缓存',
+        statsLabel:
+            '${snapshot.coverCacheCount} 条 · ${_formatBytes(snapshot.coverCachesBytes)}',
+      ),
+      _buildListDivider(context),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.searchSourceHits,
+        icon: Icons.travel_explore_outlined,
+        title: '搜索命中记录',
+        statsLabel:
+            '${snapshot.searchSourceHitCount} 条 · ${_formatBytes(snapshot.searchSourceHitsBytes)}',
+      ),
+      _buildListDivider(context),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.legacyResidual,
+        icon: Icons.restore_from_trash_outlined,
+        title: '旧版残留',
+        statsLabel:
+            '${snapshot.legacyResidualCount} 项 · ${_formatBytes(snapshot.legacyResidualBytes)}',
+        highRisk: true,
+        onDetailsTap:
+            () => _showStorageDetails(
+              title: '旧版残留',
+              loader: _cacheManagementService.loadLegacyResidualDetails,
+            ),
+      ),
+      _buildListDivider(context),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.otherAppData,
+        icon: Icons.layers_clear_outlined,
+        title: '其他数据',
+        statsLabel: _formatBytes(snapshot.otherDataBytes),
+        highRisk: true,
+        onDetailsTap:
+            () => _showStorageDetails(
+              title: '其他数据',
+              loader: _cacheManagementService.loadOtherDataDetails,
+            ),
+      ),
+      const SizedBox(height: 18),
+      _buildSectionTitle(context, '本地数据'),
+      const SizedBox(height: 6),
+      _buildReadOnlyStorageRow(
+        context,
+        icon: Icons.palette_outlined,
+        title: '主题数据',
+        statsLabel: _formatBytes(snapshot.themeAssetBytes),
+        onDetailsTap:
+            () => _showStorageDetails(
+              title: '主题数据',
+              loader: _cacheManagementService.loadThemeAssetDetails,
+              emptyText: '暂无主题资源。',
+            ),
+      ),
+      _buildListDivider(context),
+      _buildStorageOptionRow(
+        context,
+        option: _StorageClearOption.localImportedBooks,
+        icon: Icons.folder_delete_outlined,
+        title: '本地图书数据',
+        statsLabel:
+            '${snapshot.localImportedBookCount} 本 · ${_formatBytes(snapshot.localImportedBookBytes)}',
+        highRisk: true,
+      ),
+      const SizedBox(height: 16),
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          OutlinedButton.icon(
+            onPressed:
+                _selectedOptions.isEmpty || _isClearingSelection
+                    ? null
+                    : _clearSelectedStorageItems,
+            icon:
+                _isClearingSelection
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.delete_sweep_outlined),
+            label: Text(_isClearingSelection ? '清理中...' : '清理所选'),
+          ),
+          TextButton(
+            onPressed:
+                _isClearingSelection
+                    ? null
+                    : () {
+                      setState(() {
+                        _selectedOptions = <_StorageClearOption>{
+                          _StorageClearOption.chapterCaches,
+                          _StorageClearOption.paginationCaches,
+                          _StorageClearOption.coverCaches,
+                        };
+                      });
+                    },
+            child: const Text('恢复默认勾选'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 20),
+      _buildSectionTitle(context, '书籍缓存'),
+      const SizedBox(height: 6),
+      ..._buildBookCacheRows(
+        context,
+        summaries: summaries,
+        presentationIndex: presentationIndex,
+      ),
+    ];
+  }
+
+  Widget _buildStorageOptionRow(
+    BuildContext context, {
+    required _StorageClearOption option,
+    required IconData icon,
+    required String title,
+    required String statsLabel,
+    bool highRisk = false,
+    VoidCallback? onDetailsTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final selected = _selectedOptions.contains(option);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colorScheme.surfaceContainerHighest,
-              colorScheme.surfaceContainerLow,
+    void toggle() {
+      setState(() {
+        if (selected) {
+          _selectedOptions.remove(option);
+        } else {
+          _selectedOptions.add(option);
+        }
+      });
+    }
+
+    return InkWell(
+      onTap: _isClearingSelection ? null : toggle,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+        child: Row(
+          children: [
+            Checkbox(
+              value: selected,
+              visualDensity: VisualDensity.compact,
+              onChanged: _isClearingSelection ? null : (_) => toggle(),
+            ),
+            Icon(icon, size: 18, color: colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            _buildInfoChip(context, statsLabel),
+            if (highRisk) ...[
+              const SizedBox(width: 8),
+              _buildInfoChip(context, '高风险'),
             ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.cloud_outlined, color: colorScheme.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '本地缓存',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '已缓存 $cachedBookCount 本书 · 共 $cachedChapterCount 章',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '提示：这里会统一清理章节缓存与封面缓存，用于离线/弱网加速。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+            if (onDetailsTap != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: '查看明细',
+                visualDensity: VisualDensity.compact,
+                onPressed: onDetailsTap,
+                icon: const Icon(Icons.chevron_right_rounded),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCacheList(
+  Widget _buildReadOnlyStorageRow(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String statsLabel,
+    VoidCallback? onDetailsTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onDetailsTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+        child: Row(
+          children: [
+            const SizedBox(width: 40),
+            Icon(icon, size: 18, color: colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            _buildInfoChip(context, statsLabel),
+            if (onDetailsTap != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: '查看明细',
+                visualDensity: VisualDensity.compact,
+                onPressed: onDetailsTap,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildBookCacheRows(
     BuildContext context, {
     required List<CachedBookSummary> summaries,
     required Map<String, CachedBookPresentation> presentationIndex,
-    required AppAdvancedTheme? activeTheme,
-    required List<CoverGallery> galleries,
   }) {
     if (summaries.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+      return <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.inbox_outlined),
+              const Icon(Icons.inbox_outlined, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '暂无缓存章节。\n你可以在书籍详情页或阅读页选择范围缓存。',
+                  '暂无缓存章节。',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
             ],
           ),
         ),
-      );
+      ];
     }
 
-    return ListView.separated(
-      itemCount: summaries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final summary = summaries[index];
-        final presentation = presentationIndex[summary.bookId];
+    final children = <Widget>[];
+    for (var index = 0; index < summaries.length; index++) {
+      if (index > 0) {
+        children.add(_buildListDivider(context));
+      }
+      final summary = summaries[index];
+      final presentation = presentationIndex[summary.bookId];
+      final rawTitle = presentation?.title?.trim() ?? '';
+      final title = rawTitle.isNotEmpty ? rawTitle : '未知书籍';
+      final statusLabel =
+          presentation == null
+              ? '缺少书籍信息'
+              : presentation.inBookshelf
+              ? '书架中'
+              : '已移出书架';
 
-        final rawTitle = presentation?.title?.trim() ?? '';
-        final title = rawTitle.isNotEmpty ? rawTitle : '未知书籍';
-        final author = presentation?.author?.trim() ?? '';
-        final statusLabel =
-            presentation == null
-                ? '缺少书籍信息'
-                : presentation.inBookshelf
-                ? '书架中'
-                : '已移出书架';
-
-        return InkWell(
-          borderRadius: BorderRadius.circular(18),
+      children.add(
+        InkWell(
           onTap: () => _confirmClearBook(summary, presentation),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Theme.of(
-                  context,
-                ).colorScheme.outlineVariant.withValues(alpha: 0.45),
-              ),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCover(
-                  realCoverUrl: presentation?.coverUrl,
-                  title: title,
-                  author: presentation?.author,
-                  activeTheme: activeTheme,
-                  galleries: galleries,
-                  bookId: presentation?.bookId ?? summary.bookId,
-                  sourceId: presentation?.sourceId,
-                  detailUrl: presentation?.detailUrl,
+                Icon(
+                  Icons.book_outlined,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (author.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          author,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _buildInfoChip(context, '${summary.cachedCount} 章缓存'),
-                          _buildInfoChip(context, statusLabel),
-                          _buildInfoChip(
-                            context,
-                            '更新于 ${_formatTime(summary.updatedAt)}',
-                          ),
-                        ],
-                      ),
-                    ],
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 10),
+                _buildInfoChip(context, '${summary.cachedCount} 章'),
                 const SizedBox(width: 8),
+                _buildInfoChip(context, statusLabel),
+                const SizedBox(width: 4),
                 IconButton(
                   tooltip: '清理本书缓存',
+                  visualDensity: VisualDensity.compact,
                   onPressed: () => _confirmClearBook(summary, presentation),
                   icon: const Icon(Icons.delete_outline_rounded),
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      );
+    }
+    return children;
+  }
+
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    return Text(
+      title,
+      style: Theme.of(
+        context,
+      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    );
+  }
+
+  Widget _buildListDivider(BuildContext context) {
+    return Divider(
+      height: 1,
+      color: Theme.of(
+        context,
+      ).colorScheme.outlineVariant.withValues(alpha: 0.42),
     );
   }
 
@@ -412,42 +625,55 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     );
   }
 
-  Widget _buildCover({
-    String? realCoverUrl,
-    required String title,
-    String? author,
-    required AppAdvancedTheme? activeTheme,
-    required List<CoverGallery> galleries,
-    String? bookId,
-    String? sourceId,
-    String? detailUrl,
-  }) {
-    final resolvedCover = resolveBookCover(
-      realCoverUrl: realCoverUrl,
-      activeTheme: activeTheme,
-      galleries: galleries,
-      brightness: Theme.of(context).brightness,
-      bookId: bookId,
-      sourceId: sourceId,
-      detailUrl: detailUrl,
-    );
-    return ResolvedBookCoverView(
-      cover: resolvedCover,
-      title: title,
-      author: author,
-      width: 42,
-      height: 56,
-      borderRadius: BorderRadius.circular(12),
-    );
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) {
+      return '0 B';
+    }
+    const units = <String>['B', 'KB', 'MB', 'GB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    final fractionDigits = value >= 100 || unitIndex == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(fractionDigits)} ${units[unitIndex]}';
   }
 
-  Future<void> _confirmClearAll() async {
+  Future<void> _clearSelectedStorageItems() async {
+    if (_selectedOptions.isEmpty || _isClearingSelection) {
+      return;
+    }
+    final labels = <String>[
+      if (_selectedOptions.contains(_StorageClearOption.chapterCaches)) '章节缓存',
+      if (_selectedOptions.contains(_StorageClearOption.paginationCaches))
+        '分页缓存',
+      if (_selectedOptions.contains(_StorageClearOption.coverCaches)) '封面缓存',
+      if (_selectedOptions.contains(_StorageClearOption.searchSourceHits))
+        '搜索命中记录',
+      if (_selectedOptions.contains(_StorageClearOption.legacyResidual)) '旧版残留',
+      if (_selectedOptions.contains(_StorageClearOption.otherAppData)) '其他数据',
+      if (_selectedOptions.contains(_StorageClearOption.localImportedBooks))
+        '本地图书数据',
+    ];
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final highRiskLabels = <String>[
+          if (_selectedOptions.contains(_StorageClearOption.legacyResidual))
+            '旧版残留',
+          if (_selectedOptions.contains(_StorageClearOption.otherAppData))
+            '其他数据',
+          if (_selectedOptions.contains(_StorageClearOption.localImportedBooks))
+            '本地图书数据',
+        ];
         return AlertDialog(
-          title: const Text('清理全部缓存？'),
-          content: const Text('将删除所有已缓存的章节正文和封面缓存。此操作不可恢复。'),
+          title: const Text('清理所选内容？'),
+          content: Text(
+            highRiskLabels.isEmpty
+                ? '将清理：${labels.join('、')}。'
+                : '将清理：${labels.join('、')}。\n\n高风险项：${highRiskLabels.join('、')}。\n其中本地图书数据清理后需要重新导入，其他数据与旧版残留清理后可能无法恢复。',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -466,14 +692,157 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       return;
     }
 
-    final clearedCoverCount = await _cacheManagementService.clearAllCaches();
+    setState(() {
+      _isClearingSelection = true;
+    });
+
+    var clearedChapterCount = 0;
+    var clearedPaginationCount = 0;
+    var clearedCoverCount = 0;
+    var clearedSearchHitCount = 0;
+    var clearedLegacyResidualCount = 0;
+    var clearedOtherDataCount = 0;
+    var clearedLocalBooksCount = 0;
+    try {
+      if (_selectedOptions.contains(_StorageClearOption.chapterCaches)) {
+        clearedChapterCount =
+            await _cacheManagementService.clearChapterCachesOnly();
+      }
+      if (_selectedOptions.contains(_StorageClearOption.paginationCaches)) {
+        clearedPaginationCount =
+            await _cacheManagementService.clearPaginationCachesOnly();
+      }
+      if (_selectedOptions.contains(_StorageClearOption.coverCaches)) {
+        clearedCoverCount =
+            await _cacheManagementService.clearCoverCachesOnly();
+      }
+      if (_selectedOptions.contains(_StorageClearOption.searchSourceHits)) {
+        clearedSearchHitCount =
+            await _cacheManagementService.clearSearchSourceHitsOnly();
+      }
+      if (_selectedOptions.contains(_StorageClearOption.legacyResidual)) {
+        clearedLegacyResidualCount =
+            await _cacheManagementService.clearLegacyResidualOnly();
+      }
+      if (_selectedOptions.contains(_StorageClearOption.otherAppData)) {
+        clearedOtherDataCount =
+            await _cacheManagementService.clearOtherAppDataOnly();
+      }
+      if (_selectedOptions.contains(_StorageClearOption.localImportedBooks)) {
+        clearedLocalBooksCount =
+            await _cacheManagementService.clearLocalImportedBooksOnly();
+      }
+      await _loadBookPresentationIndex();
+      await _loadStorageSnapshot();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isClearingSelection = false;
+        });
+      }
+    }
 
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已清理全部缓存（封面 $clearedCoverCount 张）。')),
+    final fragments = <String>[
+      if (_selectedOptions.contains(_StorageClearOption.chapterCaches))
+        '章节缓存 $clearedChapterCount 条',
+      if (_selectedOptions.contains(_StorageClearOption.paginationCaches))
+        '分页缓存 $clearedPaginationCount 条',
+      if (_selectedOptions.contains(_StorageClearOption.coverCaches))
+        '封面缓存 $clearedCoverCount 条',
+      if (_selectedOptions.contains(_StorageClearOption.searchSourceHits))
+        '搜索命中记录 $clearedSearchHitCount 条',
+      if (_selectedOptions.contains(_StorageClearOption.legacyResidual))
+        '旧版残留 $clearedLegacyResidualCount 项',
+      if (_selectedOptions.contains(_StorageClearOption.otherAppData))
+        '其他数据 $clearedOtherDataCount 项',
+      if (_selectedOptions.contains(_StorageClearOption.localImportedBooks))
+        '本地图书数据 $clearedLocalBooksCount 本',
+    ];
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已清理：${fragments.join('，')}。')));
+  }
+
+  Future<void> _showStorageDetails({
+    required String title,
+    required Future<List<StorageDetailEntry>> Function() loader,
+    String emptyText = '暂无明细。',
+  }) async {
+    final entries = await loader();
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.72,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child:
+                      entries.isEmpty
+                          ? Center(child: Text(emptyText))
+                          : ListView.separated(
+                            itemCount: entries.length,
+                            separatorBuilder:
+                                (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final entry = entries[index];
+                              return ListTile(
+                                title: Text(
+                                  entry.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle:
+                                    entry.subtitle == null
+                                        ? null
+                                        : Text(
+                                          entry.subtitle!,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                trailing: Text(
+                                  [
+                                    if (entry.trailingLabel != null)
+                                      entry.trailingLabel!,
+                                    _formatBytes(entry.bytes),
+                                  ].join(' · '),
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              );
+                            },
+                          ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -491,9 +860,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('清理本书缓存？'),
-          content: Text(
-            '将删除《$title》的已缓存章节（${summary.cachedCount} 章），并尝试清理该书封面缓存。',
-          ),
+          content: Text('将删除《$title》的已缓存章节（${summary.cachedCount} 章）。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -526,14 +893,5 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         content: Text(clearedCover ? '已清理《$title》的缓存与封面。' : '已清理《$title》的缓存。'),
       ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    final local = time.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$month-$day $hour:$minute';
   }
 }

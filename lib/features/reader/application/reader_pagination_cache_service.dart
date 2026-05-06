@@ -91,6 +91,81 @@ class ReaderPaginationCacheService {
     }
   }
 
+  Future<int> countPersistedChapterLayouts() async {
+    final directory = await _directoryProvider();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    var count = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  Future<int> clearPersistedChapterLayouts() async {
+    _memoryCache.clear();
+    final directory = await _directoryProvider();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    var deletedCount = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      try {
+        if (await entity.exists()) {
+          await entity.delete();
+          deletedCount++;
+        }
+      } catch (_) {
+        // Ignore single-file cleanup failure and continue.
+      }
+    }
+    return deletedCount;
+  }
+
+  Future<int> prunePersistedChapterLayouts({required int maxEntries}) async {
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    _memoryCache.clear();
+    final directory = await _directoryProvider();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    final files = <File>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        files.add(entity);
+      }
+    }
+    if (files.length <= normalizedMaxEntries) {
+      return 0;
+    }
+
+    files.sort(
+      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+    );
+    final overflowCount = files.length - normalizedMaxEntries;
+    var deletedCount = 0;
+    for (final file in files.take(overflowCount)) {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          deletedCount++;
+        }
+      } catch (_) {
+        // Ignore single-file cleanup failure and continue.
+      }
+    }
+    return deletedCount;
+  }
+
   Future<void> persistPrecomputedChapterLayout({
     required String sourceId,
     required String chapterUrl,

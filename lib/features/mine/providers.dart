@@ -10,6 +10,7 @@ import '../../core/membership/membership_service.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
 import '../../domain/repositories/bookmark_repository.dart';
 import '../../features/reader/application/chapter_cache_service.dart';
+import '../../features/reader/application/reader_pagination_cache_service.dart';
 import '../../features/reader/application/reading_record_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
@@ -37,18 +38,17 @@ final mineBookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
 });
 
 final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
+  final database = ref.watch(app_providers.appDatabaseProvider);
   return CacheManagementService(
+    database: database,
     bookshelfService: ref.watch(mineBookshelfServiceProvider),
-    readingRecordService: ReadingRecordService(
-      database: ref.watch(app_providers.appDatabaseProvider),
-    ),
+    readingRecordService: ReadingRecordService(database: database),
     localBookRepository: ref.watch(app_providers.localBookRepositoryProvider),
     bookMetadataOverrideRepository: ref.watch(
       app_providers.bookMetadataOverrideRepositoryProvider,
     ),
-    chapterCacheService: ChapterCacheService(
-      database: ref.watch(app_providers.appDatabaseProvider),
-    ),
+    chapterCacheService: ChapterCacheService(database: database),
+    paginationCacheService: ReaderPaginationCacheService(),
   );
 });
 

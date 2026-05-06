@@ -90,7 +90,6 @@ class App extends ConsumerWidget {
       themeAnimationCurve: Curves.easeOutCubic,
       routerConfig: appRouter,
       builder: (context, child) {
-        final mediaQuery = MediaQuery.of(context);
         final textScale = AppLayout.clampedTextScaleFactor(
           context,
           multiplier: interfaceTextScale,
@@ -103,12 +102,134 @@ class App extends ConsumerWidget {
           child: appChild,
         );
 
-        return MediaQuery(
-          data: mediaQuery.copyWith(textScaler: TextScaler.linear(textScale)),
+        return _MobileKeyboardInsetStabilizer(
+          textScale: textScale,
           child: responsiveChild,
         );
       },
     );
+  }
+}
+
+class _MobileKeyboardInsetStabilizer extends StatefulWidget {
+  const _MobileKeyboardInsetStabilizer({
+    required this.textScale,
+    required this.child,
+  });
+
+  final double textScale;
+  final Widget child;
+
+  @override
+  State<_MobileKeyboardInsetStabilizer> createState() =>
+      _MobileKeyboardInsetStabilizerState();
+}
+
+class _MobileKeyboardInsetStabilizerState
+    extends State<_MobileKeyboardInsetStabilizer> {
+  static const Duration _keyboardInsetSettleDuration = Duration(
+    milliseconds: 72,
+  );
+
+  Timer? _keyboardInsetSettleTimer;
+  double _stableBottomInset = 0;
+  double _pendingBottomInset = 0;
+  bool _didSeedStableInset = false;
+
+  bool get _useAndroidPanInsetsStrategy => Platform.isAndroid;
+
+  bool get _useIosStabilizedInsetsStrategy => Platform.isIOS;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncKeyboardInset(MediaQuery.viewInsetsOf(context).bottom);
+  }
+
+  @override
+  void dispose() {
+    _keyboardInsetSettleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _syncKeyboardInset(double rawBottomInset) {
+    if (_useAndroidPanInsetsStrategy) {
+      _keyboardInsetSettleTimer?.cancel();
+      _keyboardInsetSettleTimer = null;
+      _pendingBottomInset = 0;
+      _stableBottomInset = 0;
+      _didSeedStableInset = true;
+      return;
+    }
+
+    if (!_useIosStabilizedInsetsStrategy) {
+      _keyboardInsetSettleTimer?.cancel();
+      _keyboardInsetSettleTimer = null;
+      _pendingBottomInset = rawBottomInset;
+      _stableBottomInset = rawBottomInset;
+      _didSeedStableInset = true;
+      return;
+    }
+
+    _pendingBottomInset = rawBottomInset;
+    if (!_didSeedStableInset) {
+      _stableBottomInset = rawBottomInset;
+      _didSeedStableInset = true;
+      return;
+    }
+    if (rawBottomInset <= 0.5) {
+      _keyboardInsetSettleTimer?.cancel();
+      _keyboardInsetSettleTimer = null;
+      if (_stableBottomInset <= 0.5) {
+        return;
+      }
+      setState(() {
+        _stableBottomInset = 0;
+      });
+      return;
+    }
+    if ((_stableBottomInset - rawBottomInset).abs() < 0.5) {
+      return;
+    }
+
+    _keyboardInsetSettleTimer?.cancel();
+    _keyboardInsetSettleTimer = Timer(_keyboardInsetSettleDuration, () {
+      if (!mounted) {
+        return;
+      }
+      if ((_stableBottomInset - _pendingBottomInset).abs() < 0.5) {
+        return;
+      }
+      setState(() {
+        _stableBottomInset = _pendingBottomInset;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final effectiveBottomInset =
+        _useAndroidPanInsetsStrategy ? 0.0 : _stableBottomInset;
+    final effectiveBottomPadding =
+        _useAndroidPanInsetsStrategy
+            ? mediaQuery.viewPadding.bottom
+            : mediaQuery.padding.bottom;
+    final stabilizedMediaQuery =
+        (_useAndroidPanInsetsStrategy || _useIosStabilizedInsetsStrategy)
+            ? mediaQuery.copyWith(
+              textScaler: TextScaler.linear(widget.textScale),
+              viewInsets: mediaQuery.viewInsets.copyWith(
+                bottom: effectiveBottomInset,
+              ),
+              padding: mediaQuery.padding.copyWith(
+                bottom: effectiveBottomPadding,
+              ),
+            )
+            : mediaQuery.copyWith(
+              textScaler: TextScaler.linear(widget.textScale),
+            );
+    return MediaQuery(data: stabilizedMediaQuery, child: widget.child);
   }
 }
 

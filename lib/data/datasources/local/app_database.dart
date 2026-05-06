@@ -1333,6 +1333,37 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearSearchSourceHits() => delete(searchSourceHits).go();
 
+  Future<int> countSearchSourceHits() async {
+    const sql = 'SELECT COUNT(*) AS totalCount FROM search_source_hits';
+    final row =
+        await customSelect(sql, readsFrom: {searchSourceHits}).getSingle();
+    return _decodeCount(row.data['totalCount']);
+  }
+
+  Future<int> estimateChapterCachesBytes() async {
+    const sql =
+        'SELECT COALESCE(SUM('
+        'LENGTH(cache_key) + LENGTH(book_id) + LENGTH(source_id) + '
+        'COALESCE(LENGTH(chapter_title), 0) + LENGTH(chapter_url) + LENGTH(content)'
+        '), 0) AS totalBytes '
+        'FROM chapter_caches';
+    final row = await customSelect(sql, readsFrom: {chapterCaches}).getSingle();
+    return _decodeCount(row.data['totalBytes']);
+  }
+
+  Future<int> estimateSearchSourceHitsBytes() async {
+    const sql =
+        'SELECT COALESCE(SUM('
+        'LENGTH(title_norm) + LENGTH(author_norm) + LENGTH(source_id) + '
+        'LENGTH(source_name) + LENGTH(title) + COALESCE(LENGTH(author), 0) + '
+        'COALESCE(LENGTH(latest_chapter), 0)'
+        '), 0) AS totalBytes '
+        'FROM search_source_hits';
+    final row =
+        await customSelect(sql, readsFrom: {searchSourceHits}).getSingle();
+    return _decodeCount(row.data['totalBytes']);
+  }
+
   int _decodeCount(Object? value) {
     if (value is int) {
       return value;
@@ -1394,6 +1425,32 @@ class AppDatabase extends _$AppDatabase {
         )
         .where((item) => item.bookId.trim().isNotEmpty)
         .toList(growable: false);
+  }
+
+  Future<int> countChapterCaches() async {
+    const sql = 'SELECT COUNT(*) AS totalCount FROM chapter_caches';
+    final row = await customSelect(sql, readsFrom: {chapterCaches}).getSingle();
+    return _decodeCount(row.data['totalCount']);
+  }
+
+  Future<int> pruneOldestChapterCaches({required int maxEntries}) async {
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final totalCount = await countChapterCaches();
+    final overflowCount = totalCount - normalizedMaxEntries;
+    if (overflowCount <= 0) {
+      return 0;
+    }
+
+    await customStatement(
+      'DELETE FROM chapter_caches '
+      'WHERE cache_key IN ('
+      'SELECT cache_key FROM chapter_caches '
+      'ORDER BY updated_at ASC '
+      'LIMIT ?'
+      ')',
+      <Object>[overflowCount],
+    );
+    return overflowCount;
   }
 
   Stream<List<ChapterCacheBookSummary>> watchCachedBooks() {

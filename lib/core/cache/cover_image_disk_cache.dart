@@ -96,6 +96,79 @@ class CoverImageDiskCache {
     return deletedCount;
   }
 
+  Future<int> countAll() async {
+    final directory = await _ensureCacheDir();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    var count = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  Future<int> compact({
+    Duration stalePeriod = _stalePeriod,
+    int maxEntries = 300,
+  }) async {
+    final directory = await _ensureCacheDir();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    final files = <File>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        files.add(entity);
+      }
+    }
+
+    var deletedCount = 0;
+    final now = DateTime.now();
+    for (final file in files) {
+      try {
+        final stat = await file.stat();
+        if (now.difference(stat.modified) > stalePeriod) {
+          await file.delete();
+          deletedCount++;
+        }
+      } catch (_) {
+        // Ignore single-file cleanup failure and continue.
+      }
+    }
+
+    final remainingFiles = <File>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        remainingFiles.add(entity);
+      }
+    }
+    if (remainingFiles.length <= maxEntries) {
+      return deletedCount;
+    }
+
+    remainingFiles.sort(
+      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+    );
+    final overflowCount = remainingFiles.length - maxEntries;
+    for (final file in remainingFiles.take(overflowCount)) {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          deletedCount++;
+        }
+      } catch (_) {
+        // Ignore single-file cleanup failure and continue.
+      }
+    }
+
+    return deletedCount;
+  }
+
   Future<bool> clearByUrl(String imageUrl) async {
     final file = await _cacheFileForUrl(imageUrl);
     if (file == null) {

@@ -18,6 +18,9 @@ class AuthPage extends ConsumerStatefulWidget {
 
 class _AuthPageState extends ConsumerState<AuthPage> {
   static const EdgeInsets _cardPadding = EdgeInsets.fromLTRB(16, 14, 16, 14);
+  static const Duration _keyboardInsetAnimationDuration = Duration(
+    milliseconds: 180,
+  );
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -47,9 +50,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: Text(_isRegister ? '注册' : '登录')),
       body: LayoutBuilder(
         builder: (context, _) {
@@ -58,47 +63,56 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             maxWidth: AppLayout.mineContentMaxWidth,
           );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
-                ),
-                children: [
-                  _buildIntroCard(context),
-                  const SizedBox(height: 12),
-                  _buildModeToggle(colorScheme),
-                  const SizedBox(height: 12),
-                  _buildFormCard(context),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child:
-                        _isSubmitting
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                            : Text(_isRegister ? '注册并登录' : '登录'),
+          return AnimatedPadding(
+            duration: _keyboardInsetAnimationDuration,
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    12 + bottomSafe,
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _isRegister ? '继续即表示你同意相关服务条款与隐私政策。' : '没有账号？可切换到注册创建新账号。',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  children: [
+                    _buildIntroCard(context),
+                    const SizedBox(height: 12),
+                    _buildModeToggle(colorScheme),
+                    const SizedBox(height: 12),
+                    _buildFormCard(context),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      child:
+                          _isSubmitting
+                              ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : Text(_isRegister ? '注册并登录' : '登录'),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      _isRegister
+                          ? '继续即表示你同意相关服务条款与隐私政策。'
+                          : '没有账号？可切换到注册创建新账号。',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

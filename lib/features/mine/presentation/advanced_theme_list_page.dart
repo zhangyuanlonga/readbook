@@ -1331,9 +1331,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           sliver: SliverToBoxAdapter(
             child: Column(
               children: [
-                _buildIntroCard(context, activeThemeAsync),
-                const SizedBox(height: 10),
                 _buildSearchBar(context),
+                const SizedBox(height: 10),
+                _buildListStatusRow(
+                  context,
+                  activeThemeAsync: activeThemeAsync,
+                  visibleThemeCount: visibleThemes.length,
+                ),
                 const SizedBox(height: 10),
                 if (_availableCategories.isNotEmpty)
                   _buildCategoryChips(context),
@@ -1380,66 +1384,48 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  Widget _buildIntroCard(
-    BuildContext context,
-    AsyncValue<AppAdvancedTheme?> activeThemeAsync,
-  ) {
+  Widget _buildListStatusRow(
+    BuildContext context, {
+    required AsyncValue<AppAdvancedTheme?> activeThemeAsync,
+    required int visibleThemeCount,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final activeThemeName = switch (activeThemeAsync) {
       AsyncData(:final value) when value != null => value.name,
       _ => null,
     };
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+    final countLabel =
+        _searchQuery.trim().isEmpty &&
+                (_selectedCategory?.trim().isEmpty ?? true)
+            ? '主题数量 $visibleThemeCount'
+            : '筛选结果 $visibleThemeCount';
+    final activeLabel =
+        activeThemeName == null ? '当前应用 未启用' : '当前应用 $activeThemeName';
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            countLabel,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.palette_rounded,
-              color: colorScheme.primary,
-              size: 18,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            activeLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '双模式自定义主题',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  activeThemeName == null
-                      ? '当前未启用高级主题，应用后会覆盖基础主题中的已配置项。'
-                      : '当前生效：$activeThemeName',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

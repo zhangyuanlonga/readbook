@@ -23,6 +23,7 @@ void main() {
               state: const ReaderViewportBodyState(
                 showBlockingLoading: false,
                 showHiddenLoading: false,
+                showTransientLoadingGap: false,
                 hasRenderableContent: false,
               ),
               palette: palette,
@@ -50,6 +51,7 @@ void main() {
               state: const ReaderViewportBodyState(
                 showBlockingLoading: false,
                 showHiddenLoading: false,
+                showTransientLoadingGap: false,
                 hasRenderableContent: true,
                 errorText: '加载失败',
                 canSwitchSource: true,
@@ -81,6 +83,7 @@ void main() {
               state: const ReaderViewportBodyState(
                 showBlockingLoading: false,
                 showHiddenLoading: false,
+                showTransientLoadingGap: false,
                 hasRenderableContent: true,
                 errorText: '加载失败',
               ),
@@ -110,6 +113,7 @@ void main() {
               state: const ReaderViewportBodyState(
                 showBlockingLoading: false,
                 showHiddenLoading: true,
+                showTransientLoadingGap: false,
                 hasRenderableContent: false,
               ),
               palette: palette,

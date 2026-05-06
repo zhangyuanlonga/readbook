@@ -164,7 +164,7 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   ),
   MinePageItemDefinition(
     id: MinePageItemId.cacheManagement,
-    title: '书籍缓存',
+    title: '存储管理',
     sectionTitle: '数据',
   ),
   MinePageItemDefinition(

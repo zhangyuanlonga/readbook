@@ -20,6 +20,7 @@ import '../core/logging/app_logger.dart';
 import '../core/storage/managed_file_path_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
 import 'startup/managed_asset_path_migration_service.dart';
+import 'startup/startup_storage_maintenance_service.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
@@ -77,6 +78,20 @@ Future<void> _runDeferredBootstrapTasks() async {
   } catch (error, stackTrace) {
     AppLogger.instance.warn(
       'Deferred source health hydrate failed',
+      context: <String, Object?>{
+        'error': error.toString(),
+        'stackTrace': stackTrace.toString(),
+      },
+    );
+  }
+
+  try {
+    await StartupStorageMaintenanceService(
+      logger: AppLogger.instance,
+    ).runIfNeeded();
+  } catch (error, stackTrace) {
+    AppLogger.instance.warn(
+      'Deferred storage maintenance failed',
       context: <String, Object?>{
         'error': error.toString(),
         'stackTrace': stackTrace.toString(),

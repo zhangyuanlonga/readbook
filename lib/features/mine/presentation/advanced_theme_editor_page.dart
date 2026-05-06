@@ -66,6 +66,7 @@ class _AdvancedThemeEditorPageState
           slot: TextEditingController(),
       },
   };
+  final ValueNotifier<int> _colorPreviewRevision = ValueNotifier<int>(0);
 
   AppAdvancedTheme? _draft;
   AppAdvancedThemeMode _selectedMode = AppAdvancedThemeMode.light;
@@ -81,6 +82,16 @@ class _AdvancedThemeEditorPageState
   bool _isLoading = true;
   bool _isSaving = false;
   bool _didInitialize = false;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final controllers in _colorControllersByMode.values) {
+      for (final controller in controllers.values) {
+        controller.addListener(_handleColorControllerChanged);
+      }
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -103,9 +114,11 @@ class _AdvancedThemeEditorPageState
     _categoryController.dispose();
     for (final controllers in _colorControllersByMode.values) {
       for (final controller in controllers.values) {
+        controller.removeListener(_handleColorControllerChanged);
         controller.dispose();
       }
     }
+    _colorPreviewRevision.dispose();
     super.dispose();
   }
 
@@ -127,6 +140,10 @@ class _AdvancedThemeEditorPageState
       return;
     }
     setState(mutation);
+  }
+
+  void _handleColorControllerChanged() {
+    _colorPreviewRevision.value++;
   }
 
   Future<void> _initializeDraft() => _initializeDraftImpl();
@@ -1967,20 +1984,6 @@ class _AdvancedThemeEditorPageState
     });
   }
 
-  void _applyCategoryFromController(String value) {
-    final draft = _draft;
-    if (draft == null) {
-      return;
-    }
-    final normalized = value.trim();
-    setState(() {
-      _draft =
-          normalized.isEmpty
-              ? draft.copyWith(clearCategory: true)
-              : draft.copyWith(category: normalized);
-    });
-  }
-
   Future<void> _pickColorForSlot(_ThemeColorSlot slot) async {
     final controller = _currentControllers[slot]!;
     final current = _parseHexColor(controller.text.trim());
@@ -1993,9 +1996,7 @@ class _AdvancedThemeEditorPageState
     if (selected == null || !mounted) {
       return;
     }
-    setState(() {
-      controller.text = _formatHex(selected);
-    });
+    controller.text = _formatHex(selected);
   }
 
   Future<int?> _showColorPickerDialog(
@@ -2013,79 +2014,87 @@ class _AdvancedThemeEditorPageState
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              titlePadding: const EdgeInsets.fromLTRB(18, 14, 12, 8),
-              contentPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-              title: Row(
-                children: [
-                  Expanded(child: Text('选择$title')),
-                  TextButton(
-                    onPressed:
-                        () => Navigator.of(
-                          dialogContext,
-                        ).pop(draftColor.toARGB32()),
-                    child: const Text('保存'),
-                  ),
-                ],
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 24,
               ),
-              content: SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: hexController,
-                      keyboardType: TextInputType.text,
-                      textCapitalization: TextCapitalization.characters,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[#0-9a-fA-F]'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        final parsed = _parseHexColor(value);
-                        if (parsed == null) {
-                          return;
-                        }
-                        setDialogState(() {
-                          draftColor = Color(parsed);
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        hintText: '#RRGGBB / #AARRGGBB',
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text('选择$title')),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.of(
+                                  dialogContext,
+                                ).pop(draftColor.toARGB32()),
+                            child: const Text('保存'),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    ColorPicker(
-                      pickerColor: draftColor,
-                      onColorChanged: (color) {
-                        setDialogState(() {
-                          draftColor = color;
-                          hexController.text = _formatHex(color.toARGB32());
-                          hexController.selection = TextSelection.collapsed(
-                            offset: hexController.text.length,
-                          );
-                        });
-                      },
-                      enableAlpha: false,
-                      displayThumbColor: true,
-                      portraitOnly: true,
-                      paletteType: PaletteType.hueWheel,
-                      pickerAreaHeightPercent: 0.72,
-                      labelTypes: const [],
-                      hexInputBar: true,
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: hexController,
+                        keyboardType: TextInputType.text,
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[#0-9a-fA-F]'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          final parsed = _parseHexColor(value);
+                          if (parsed == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            draftColor = Color(parsed);
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          hintText: '#RRGGBB / #AARRGGBB',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ColorPicker(
+                        pickerColor: draftColor,
+                        onColorChanged: (color) {
+                          setDialogState(() {
+                            draftColor = color;
+                            hexController.text = _formatHex(color.toARGB32());
+                            hexController.selection = TextSelection.collapsed(
+                              offset: hexController.text.length,
+                            );
+                          });
+                        },
+                        enableAlpha: false,
+                        displayThumbColor: true,
+                        portraitOnly: true,
+                        paletteType: PaletteType.hueWheel,
+                        pickerAreaHeightPercent: 0.72,
+                        labelTypes: const [],
+                        hexInputBar: true,
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('取消'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
-                ),
-              ],
             );
           },
         );
@@ -2105,20 +2114,11 @@ class _AdvancedThemeEditorPageState
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final draft = _draft;
     final theme = Theme.of(context);
     const sectionGap = 8.0;
-    final editorBackdrop =
-        draft == null
-            ? null
-            : resolveAdvancedThemeBackdropFromModeConfig(
-              theme.colorScheme,
-              _previewModeConfig(context, draft, _selectedMode),
-            );
-
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title:
             _isEditingName
@@ -2236,11 +2236,8 @@ class _AdvancedThemeEditorPageState
           ),
         ],
       ),
-      body: DecoratedBox(
-        decoration:
-            editorBackdrop == null
-                ? const BoxDecoration()
-                : buildAdvancedThemeBackdropDecoration(editorBackdrop),
+      body: ValueListenableBuilder<int>(
+        valueListenable: _colorPreviewRevision,
         child: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -2257,11 +2254,13 @@ class _AdvancedThemeEditorPageState
                         : draft == null
                         ? const Center(child: Text('高级主题不存在'))
                         : ListView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
                             6,
                             horizontal,
-                            10 + bottomSafe + keyboardInset,
+                            10 + bottomSafe,
                           ),
                           children: [
                             _buildMetadataSection(context, draft),
@@ -2270,13 +2269,34 @@ class _AdvancedThemeEditorPageState
                             const SizedBox(height: sectionGap),
                             _buildResourceSection(context, draft),
                             const SizedBox(height: sectionGap),
-                            _buildPreviewSection(context, draft),
+                            ValueListenableBuilder<int>(
+                              valueListenable: _colorPreviewRevision,
+                              builder: (context, _, _) {
+                                return _buildPreviewSection(context, draft);
+                              },
+                            ),
                           ],
                         ),
               ),
             );
           },
         ),
+        builder: (context, _, child) {
+          final editorBackdrop =
+              draft == null
+                  ? null
+                  : resolveAdvancedThemeBackdropFromModeConfig(
+                    theme.colorScheme,
+                    _previewModeConfig(context, draft, _selectedMode),
+                  );
+          return DecoratedBox(
+            decoration:
+                editorBackdrop == null
+                    ? const BoxDecoration()
+                    : buildAdvancedThemeBackdropDecoration(editorBackdrop),
+            child: child,
+          );
+        },
       ),
     );
   }
@@ -2435,7 +2455,6 @@ class _AdvancedThemeEditorPageState
             children: [
               TextField(
                 controller: _categoryController,
-                onChanged: _applyCategoryFromController,
                 decoration: const InputDecoration(
                   labelText: '主题分类',
                   hintText: '例如：护眼 / 极简 / 漫画',
@@ -3420,89 +3439,96 @@ class _AdvancedThemeEditorPageState
     final slot = field.slot;
     final colorScheme = Theme.of(context).colorScheme;
     final controller = _currentControllers[slot]!;
-    final parsed = _parseHexColor(controller.text.trim());
     final fallback = _fallbackColorForSlot(context, _selectedMode, slot);
-    final previewColor = _resolvedColor(parsed, fallback);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  field.label,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, _, __) {
+        final parsed = _parseHexColor(controller.text.trim());
+        final previewColor = _resolvedColor(parsed, fallback);
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      field.label,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      field.description,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  field.description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 150,
-            child: TextField(
-              controller: controller,
-              enabled: !_isSaving,
-              keyboardType: TextInputType.text,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
-              ],
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: _formatHex(fallback.toARGB32()),
-                filled: true,
-                fillColor: colorScheme.surface,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 9,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(9),
-                  borderSide: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(9),
-                  borderSide: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(9),
-                  borderSide: BorderSide(
-                    color: colorScheme.primary,
-                    width: 1.2,
-                  ),
-                ),
-                suffixIcon: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: _isSaving ? null : () => _pickColorForSlot(slot),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 6, 8, 6),
-                    child: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        color: previewColor,
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.45,
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 150,
+                child: TextField(
+                  controller: controller,
+                  enabled: !_isSaving,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
+                  ],
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: _formatHex(fallback.toARGB32()),
+                    filled: true,
+                    fillColor: colorScheme.surface,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 9,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(9),
+                      borderSide: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.55,
+                        ),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(9),
+                      borderSide: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.55,
+                        ),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(9),
+                      borderSide: BorderSide(
+                        color: colorScheme.primary,
+                        width: 1.2,
+                      ),
+                    ),
+                    suffixIcon: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _isSaving ? null : () => _pickColorForSlot(slot),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 6, 8, 6),
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: previewColor,
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.45,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -3510,22 +3536,21 @@ class _AdvancedThemeEditorPageState
                   ),
                 ),
               ),
-            ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: '恢复默认',
+                onPressed:
+                    _isSaving
+                        ? null
+                        : () {
+                          controller.text = _formatHex(fallback.toARGB32());
+                        },
+                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+              ),
+            ],
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: '恢复默认',
-            onPressed:
-                _isSaving
-                    ? null
-                    : () {
-                      controller.text = _formatHex(fallback.toARGB32());
-                      setState(() {});
-                    },
-            icon: const Icon(Icons.restart_alt_rounded, size: 18),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
