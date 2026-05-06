@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -98,12 +101,14 @@ class AdvancedThemeEditorStateService {
     final fonts = await _fontRegistryService.listRegisteredFonts();
     return AdvancedThemeEditorAppearanceLinks(
       backgroundLibraryPaths: List<String>.unmodifiable(backgroundPaths),
-      readerBackgroundLibraryPaths:
-          List<String>.unmodifiable(readerBackgroundPaths),
+      readerBackgroundLibraryPaths: List<String>.unmodifiable(
+        readerBackgroundPaths,
+      ),
       bottomNavGalleries: List<BottomNavIconGallery>.unmodifiable(galleries),
       coverGalleries: List<CoverGallery>.unmodifiable(coverGalleries),
-      launchImageGalleries:
-          List<LaunchImageGallery>.unmodifiable(launchImageGalleries),
+      launchImageGalleries: List<LaunchImageGallery>.unmodifiable(
+        launchImageGalleries,
+      ),
       availableFonts: List<ReaderCustomFontEntry>.unmodifiable(fonts),
       activeBottomNavGalleryName: activeGallery?.name,
     );
@@ -127,7 +132,39 @@ class AdvancedThemeEditorStateService {
         previousPath != path) {
       await _service.deleteWallpaper(previousPath);
     }
-    return draft.copyWithModeConfig(mode, currentConfig.copyWith(wallpaperPath: path));
+    return draft.copyWithModeConfig(
+      mode,
+      currentConfig.copyWith(wallpaperPath: path),
+    );
+  }
+
+  Future<AppAdvancedTheme> applyReaderWallpaper({
+    required AppAdvancedTheme draft,
+    required AppAdvancedThemeMode mode,
+    required String sourcePath,
+  }) async {
+    final currentConfig = draft.configFor(mode);
+    final previousPath = currentConfig.readerWallpaperPath?.trim();
+    final bytes = await File(sourcePath).readAsBytes();
+    final path = await _service.saveReaderWallpaper(
+      themeId: draft.id,
+      mode: mode,
+      bytes: bytes,
+      fileName: p.basename(sourcePath),
+    );
+    if (previousPath != null &&
+        previousPath.isNotEmpty &&
+        previousPath != path &&
+        await _service.isThemeOwnedReaderWallpaper(
+          themeId: draft.id,
+          path: previousPath,
+        )) {
+      await _service.deleteReaderWallpaper(previousPath);
+    }
+    return draft.copyWithModeConfig(
+      mode,
+      currentConfig.copyWith(readerWallpaperPath: path),
+    );
   }
 
   AppAdvancedThemeModeConfig _modeConfigFromScheme(ColorScheme colorScheme) {
@@ -146,10 +183,11 @@ class AdvancedThemeEditorStateService {
         cardColorValue: colorScheme.surface.toARGB32(),
         cardTextColorValue: colorScheme.onSurface.toARGB32(),
         cardBorderColorValue: colorScheme.outlineVariant.toARGB32(),
-        iconBackgroundColorValue: Color.alphaBlend(
-          colorScheme.onSurface.withValues(alpha: 0.04),
-          colorScheme.surface,
-        ).toARGB32(),
+        iconBackgroundColorValue:
+            Color.alphaBlend(
+              colorScheme.onSurface.withValues(alpha: 0.04),
+              colorScheme.surface,
+            ).toARGB32(),
         textPrimaryColorValue: colorScheme.onSurface.toARGB32(),
         textSecondaryColorValue: colorScheme.onSurfaceVariant.toARGB32(),
         buttonTextColorValue: colorScheme.onPrimary.toARGB32(),

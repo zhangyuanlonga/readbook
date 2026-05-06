@@ -984,14 +984,19 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   Widget _buildInitialLoadingContent() {
+    final routePreviewTitle = (widget.title ?? '').trim();
     final bootstrapTitle =
         (_displayTitle ?? widget.title ?? '').trim().isNotEmpty
             ? (_displayTitle ?? widget.title ?? '').trim()
             : '加载书籍详情中';
     final bootstrapAuthor = (widget.author ?? '').trim();
     final bootstrapCover = (widget.coverUrl ?? '').trim();
+    final hasRoutePreview =
+        routePreviewTitle.isNotEmpty ||
+        bootstrapAuthor.isNotEmpty ||
+        bootstrapCover.isNotEmpty;
 
-    if (bootstrapAuthor.isEmpty && bootstrapCover.isEmpty) {
+    if (!hasRoutePreview) {
       return _buildDetailLoadingSkeleton();
     }
 
@@ -1676,9 +1681,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           tocWarningText: _toTocWarningText(result.tocError),
         ),
       );
-      await _loadSupplementaryState(
-        result: result,
-        loadRequestToken: requestToken,
+      unawaited(
+        _loadSupplementaryState(result: result, loadRequestToken: requestToken),
       );
       return true;
     } on AppException catch (error) {

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -10,8 +9,6 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
-import '../../mine/application/advanced_theme_provider.dart';
-import '../../mine/application/cover_gallery_provider.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_logical_position.dart';
 
@@ -50,6 +47,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required String? bookAuthor,
   required String? bookCoverUrl,
   String? customCoverPath,
+  ResolvedBookCover? resolvedCover,
   required bool supportsContentSearch,
   required BookmarkRepository bookmarkRepository,
   required String currentBookId,
@@ -554,11 +552,15 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                           8,
                         ),
                         child: _ReaderCatalogHeaderCard(
-                          currentBookId: currentBookId,
                           bookTitle: bookTitle,
                           bookAuthor: bookAuthor,
-                          bookCoverUrl: bookCoverUrl,
-                          customCoverPath: customCoverPath,
+                          resolvedCover:
+                              resolvedCover ??
+                              resolveBookCover(
+                                realCoverUrl: bookCoverUrl,
+                                customCoverPath: customCoverPath,
+                                bookId: currentBookId,
+                              ),
                           supportsContentSearch: supportsContentSearch,
                           searchController: searchController,
                           onMoreActions: openCatalogMoreActions,
@@ -854,21 +856,17 @@ class _CatalogSearchResultList extends StatelessWidget {
 
 class _ReaderCatalogHeaderCard extends StatelessWidget {
   const _ReaderCatalogHeaderCard({
-    required this.currentBookId,
     required this.bookTitle,
     required this.bookAuthor,
-    required this.bookCoverUrl,
-    required this.customCoverPath,
+    required this.resolvedCover,
     required this.supportsContentSearch,
     required this.searchController,
     required this.onMoreActions,
   });
 
-  final String currentBookId;
   final String bookTitle;
   final String? bookAuthor;
-  final String? bookCoverUrl;
-  final String? customCoverPath;
+  final ResolvedBookCover resolvedCover;
   final bool supportsContentSearch;
   final TextEditingController searchController;
   final VoidCallback onMoreActions;
@@ -905,31 +903,13 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Consumer(
-                  builder: (context, ref, _) {
-                    ref.watch(activeAdvancedThemeProvider);
-                    ref.watch(coverGalleriesProvider);
-                    final resolvedCover = resolveBookCover(
-                      realCoverUrl: bookCoverUrl,
-                      customCoverPath: customCoverPath,
-                      activeTheme:
-                          ref.read(activeAdvancedThemeProvider).valueOrNull,
-                      galleries:
-                          ref.read(coverGalleriesProvider).valueOrNull ??
-                          const [],
-                      brightness: Theme.of(context).brightness,
-                      bookId: currentBookId,
-                    );
-                    return ResolvedBookCoverView(
-                      cover: resolvedCover,
-                      title: normalizedTitle,
-                      author:
-                          normalizedAuthor.isEmpty ? null : normalizedAuthor,
-                      width: 44,
-                      height: 60,
-                      borderRadius: BorderRadius.circular(10),
-                    );
-                  },
+                child: ResolvedBookCoverView(
+                  cover: resolvedCover,
+                  title: normalizedTitle,
+                  author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
+                  width: 44,
+                  height: 60,
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
               const SizedBox(width: 8),

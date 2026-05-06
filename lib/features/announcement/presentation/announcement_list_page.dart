@@ -85,20 +85,27 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       _service.clearCache();
     }
 
-    Announcement? latest;
     try {
-      latest = await _service.fetchLatestAnnouncement(useCache: !forceRefresh);
-    } catch (error) {
-      _showMessage(_resolveErrorText(error));
-    }
-
-    try {
-      final page = await _service.fetchAnnouncements(
+      final pageFuture = _service.fetchAnnouncements(
         page: 1,
         pageSize: _pageSize,
         useCache: !forceRefresh,
       );
-      final readIds = await _readStateService.getReadIds();
+      final latestFuture = _service
+          .fetchLatestAnnouncement(useCache: !forceRefresh)
+          .catchError((error) {
+            _showMessage(_resolveErrorText(error));
+            return null;
+          });
+      final readIdsFuture = _readStateService.getReadIds();
+      final results = await Future.wait<Object?>([
+        pageFuture,
+        latestFuture,
+        readIdsFuture,
+      ]);
+      final page = results[0]! as AnnouncementPage;
+      final latest = results[1] as Announcement?;
+      final readIds = results[2]! as Set<String>;
       if (!mounted) {
         return;
       }

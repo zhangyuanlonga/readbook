@@ -22,6 +22,7 @@ import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
+import '../application/advanced_theme_service.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_source_import_bridge.dart';
@@ -44,11 +45,11 @@ enum _ThemeImportPackageKind { official, red, rgshare }
 class _AdvancedThemeDeleteDecision {
   const _AdvancedThemeDeleteDecision({
     required this.confirmed,
-    required this.deleteAssociatedResources,
+    required this.deleteOptions,
   });
 
   final bool confirmed;
-  final bool deleteAssociatedResources;
+  final AdvancedThemeDeleteOptions deleteOptions;
 }
 
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
@@ -725,10 +726,28 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _deleteTheme(AppAdvancedTheme theme) async {
+    final hasWallpaper =
+        theme.lightConfig.hasWallpaper || theme.darkConfig.hasWallpaper;
+    final hasReaderWallpaper =
+        theme.lightConfig.hasReaderWallpaper ||
+        theme.darkConfig.hasReaderWallpaper;
+    final hasCoverGallery = theme.hasCoverGalleryBinding;
+    final hasLaunchGallery =
+        theme.launchImageGalleryId?.trim().isNotEmpty ?? false;
+    final hasBottomNavGallery =
+        theme.bottomNavGalleryId?.trim().isNotEmpty ?? false;
+    final hasFonts =
+        (theme.appInterfaceFontFamilyKey?.trim().isNotEmpty ?? false) ||
+        (theme.readerFontFamilyKey?.trim().isNotEmpty ?? false);
     final decision = await showDialog<_AdvancedThemeDeleteDecision>(
       context: context,
       builder: (dialogContext) {
-        var deleteAssociatedResources = true;
+        var deleteAppearanceWallpapers = hasWallpaper;
+        var deleteReaderWallpapers = hasReaderWallpaper;
+        var deleteCoverGalleries = hasCoverGallery;
+        var deleteLaunchImageGallery = hasLaunchGallery;
+        var deleteBottomNavGallery = hasBottomNavGallery;
+        var deleteFonts = false;
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
@@ -738,21 +757,94 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('确定删除「${theme.name}」吗？'),
-                  const SizedBox(height: 12),
-                  CheckboxListTile(
-                    value: deleteAssociatedResources,
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: const Text('同时删除配套内容'),
-                    subtitle: const Text(
-                      '删除该主题独占绑定的壁纸、封面图集、启动图集和底栏图集；若其他主题仍在使用，会自动保留。',
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        deleteAssociatedResources = value ?? true;
-                      });
-                    },
-                  ),
+                  if (hasWallpaper ||
+                      hasReaderWallpaper ||
+                      hasCoverGallery ||
+                      hasLaunchGallery ||
+                      hasBottomNavGallery ||
+                      hasFonts) ...[
+                    const SizedBox(height: 12),
+                    const Text('可选删除绑定资源。若其他主题仍在使用同一资源，服务层会自动保留。'),
+                    const SizedBox(height: 8),
+                    if (hasWallpaper)
+                      CheckboxListTile(
+                        value: deleteAppearanceWallpapers,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('删除主题壁纸'),
+                        subtitle: const Text('删除该主题浅色 / 深色页面壁纸文件。'),
+                        onChanged: (value) {
+                          setState(() {
+                            deleteAppearanceWallpapers = value ?? false;
+                          });
+                        },
+                      ),
+                    if (hasReaderWallpaper)
+                      CheckboxListTile(
+                        value: deleteReaderWallpapers,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('删除阅读器背景'),
+                        subtitle: const Text('删除该主题绑定的阅读器背景资源。'),
+                        onChanged: (value) {
+                          setState(() {
+                            deleteReaderWallpapers = value ?? false;
+                          });
+                        },
+                      ),
+                    if (hasCoverGallery)
+                      CheckboxListTile(
+                        value: deleteCoverGalleries,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('删除封面图集'),
+                        subtitle: const Text('仅在没有其他主题引用时实际删除。'),
+                        onChanged: (value) {
+                          setState(() {
+                            deleteCoverGalleries = value ?? false;
+                          });
+                        },
+                      ),
+                    if (hasLaunchGallery)
+                      CheckboxListTile(
+                        value: deleteLaunchImageGallery,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('删除启动图集'),
+                        subtitle: const Text('仅在没有其他主题引用时实际删除。'),
+                        onChanged: (value) {
+                          setState(() {
+                            deleteLaunchImageGallery = value ?? false;
+                          });
+                        },
+                      ),
+                    if (hasBottomNavGallery)
+                      CheckboxListTile(
+                        value: deleteBottomNavGallery,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('删除底栏图集'),
+                        subtitle: const Text('仅在没有其他主题引用时实际删除。'),
+                        onChanged: (value) {
+                          setState(() {
+                            deleteBottomNavGallery = value ?? false;
+                          });
+                        },
+                      ),
+                    if (hasFonts)
+                      CheckboxListTile(
+                        value: deleteFonts,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('删除主题字体'),
+                        subtitle: const Text('只检查是否被其他主题引用，不检查手动阅读设置是否仍在使用。'),
+                        onChanged: (value) {
+                          setState(() {
+                            deleteFonts = value ?? false;
+                          });
+                        },
+                      ),
+                  ],
                 ],
               ),
               actions: [
@@ -761,7 +853,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       () => Navigator.of(dialogContext).pop(
                         const _AdvancedThemeDeleteDecision(
                           confirmed: false,
-                          deleteAssociatedResources: true,
+                          deleteOptions: AdvancedThemeDeleteOptions.none(),
                         ),
                       ),
                   child: const Text('取消'),
@@ -771,7 +863,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       () => Navigator.of(dialogContext).pop(
                         _AdvancedThemeDeleteDecision(
                           confirmed: true,
-                          deleteAssociatedResources: deleteAssociatedResources,
+                          deleteOptions: AdvancedThemeDeleteOptions(
+                            deleteAppearanceWallpapers:
+                                deleteAppearanceWallpapers,
+                            deleteReaderWallpapers: deleteReaderWallpapers,
+                            deleteCoverGalleries: deleteCoverGalleries,
+                            deleteLaunchImageGallery: deleteLaunchImageGallery,
+                            deleteBottomNavGallery: deleteBottomNavGallery,
+                            deleteFonts: deleteFonts,
+                          ),
                         ),
                       ),
                   child: const Text('删除'),
@@ -793,7 +893,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final service = ref.read(advancedThemeServiceProvider);
       await service.deleteTheme(
         theme.id,
-        deleteAssociatedResources: decision.deleteAssociatedResources,
+        deleteOptions: decision.deleteOptions,
       );
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       if (wasActive) {
@@ -804,8 +904,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         return;
       }
       _showMessage(
-        decision.deleteAssociatedResources
-            ? '已删除主题「${theme.name}」及配套内容'
+        decision.deleteOptions.deleteAnyAssociatedResources
+            ? '已删除主题「${theme.name}」及所选资源'
             : '已删除主题「${theme.name}」',
       );
     } finally {

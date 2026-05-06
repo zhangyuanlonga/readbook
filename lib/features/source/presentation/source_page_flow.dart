@@ -159,14 +159,12 @@ extension on _SourcePageState {
             builder: (context, snapshot) {
               final rawSources = snapshot.data ?? const <ScriptSource>[];
               _lastRawSources = rawSources;
-              final visibleSources = _resolveVisibleSources(rawSources);
+              _ensureDerivedSourceViewState(rawSources);
+              final visibleSources = _cachedVisibleSources;
               _lastVisibleSources = visibleSources;
-              final clusterSummaries = _buildClusterSummaries(visibleSources);
-              final filteredVisibleSources = _applyClusterFilter(
-                visibleSources,
-                clusterSummaries,
-              );
-              final availableGroups = _collectGroupKeys(rawSources);
+              final clusterSummaries = _cachedClusterSummaries;
+              final filteredVisibleSources = _cachedFilteredVisibleSources;
+              final availableGroups = _cachedAvailableGroups;
 
               if (_selectedGroupKey != null &&
                   !_isCurrentGroupSelectionAvailable(
@@ -1449,6 +1447,51 @@ extension on _SourcePageState {
     } catch (_) {
       // Ignore bootstrap failures here and surface them on manual actions.
     }
+  }
+
+  void _ensureDerivedSourceViewState(List<ScriptSource> rawSources) {
+    final query = _searchQuery.trim().toLowerCase();
+    var healthFingerprint = 0;
+    for (final source in rawSources) {
+      healthFingerprint = Object.hash(
+        healthFingerprint,
+        source.id,
+        _sourceHealthService
+            .snapshotFor(source.id, enabled: source.enabled)
+            .level,
+      );
+    }
+    final fingerprint = Object.hash(
+      identityHashCode(rawSources),
+      query,
+      _selectedGroupKey,
+      _sortOption,
+      healthFingerprint,
+    );
+    if (_derivedSourceViewFingerprint == fingerprint) {
+      return;
+    }
+
+    final visibleSources = _resolveVisibleSources(rawSources);
+    final clusterSummaries = _buildClusterSummaries(
+      List<ScriptSource>.of(visibleSources),
+    );
+    final filteredVisibleSources = _applyClusterFilter(
+      visibleSources,
+      clusterSummaries,
+    );
+    final availableGroups = _collectGroupKeys(rawSources);
+
+    _cachedVisibleSources = List<ScriptSource>.unmodifiable(visibleSources);
+    _cachedClusterSummaries =
+        Map<String, _SourceWebsiteClusterSummary>.unmodifiable(
+          clusterSummaries,
+        );
+    _cachedFilteredVisibleSources = List<ScriptSource>.unmodifiable(
+      filteredVisibleSources,
+    );
+    _cachedAvailableGroups = List<String>.unmodifiable(availableGroups);
+    _derivedSourceViewFingerprint = fingerprint;
   }
 
   Future<void> _openScriptSourceEditorPage({ScriptSource? source}) async {

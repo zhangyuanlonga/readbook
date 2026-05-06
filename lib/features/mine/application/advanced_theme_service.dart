@@ -228,6 +228,7 @@ class AdvancedThemeService {
   Future<void> deleteTheme(
     String themeId, {
     bool deleteAssociatedResources = true,
+    AdvancedThemeDeleteOptions? deleteOptions,
   }) async {
     final themes = await loadThemes();
     AppAdvancedTheme? removedTheme;
@@ -241,7 +242,13 @@ class AdvancedThemeService {
         })
         .toList(growable: false);
     await saveThemes(updated);
-    if (removedTheme != null && deleteAssociatedResources) {
+    final resolvedDeleteOptions =
+        deleteOptions ??
+        (deleteAssociatedResources
+            ? const AdvancedThemeDeleteOptions()
+            : const AdvancedThemeDeleteOptions.none());
+    if (removedTheme != null &&
+        resolvedDeleteOptions.deleteAnyAssociatedResources) {
       final targetTheme = removedTheme!;
       final appearancePaths = <String>{
         ...[
@@ -264,37 +271,60 @@ class AdvancedThemeService {
       final coverGalleryIds = _coverGalleryIdsForTheme(targetTheme);
       final launchGalleryId = targetTheme.launchImageGalleryId?.trim();
       final bottomNavGalleryId = targetTheme.bottomNavGalleryId?.trim();
+      final fontFamilyKeys = <String>{
+        ...[
+              targetTheme.appInterfaceFontFamilyKey,
+              targetTheme.readerFontFamilyKey,
+            ]
+            .whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty),
+      };
 
-      for (final path in appearancePaths) {
-        if (!_isAppearanceBackgroundReferenced(updated, path)) {
-          await deleteWallpaper(path);
+      if (resolvedDeleteOptions.deleteAppearanceWallpapers) {
+        for (final path in appearancePaths) {
+          if (!_isAppearanceBackgroundReferenced(updated, path)) {
+            await deleteWallpaper(path);
+          }
         }
       }
-      for (final path in readerPaths) {
-        if (!_isReaderBackgroundReferenced(updated, path)) {
-          await ReaderBackgroundService().deleteBackground(path);
+      if (resolvedDeleteOptions.deleteReaderWallpapers) {
+        for (final path in readerPaths) {
+          if (!_isReaderBackgroundReferenced(updated, path)) {
+            await deleteReaderWallpaper(path);
+          }
         }
       }
-      for (final galleryId in coverGalleryIds) {
-        if (!_isCoverGalleryReferenced(updated, galleryId)) {
-          await _safeDeleteCoverGallery(galleryId);
+      if (resolvedDeleteOptions.deleteCoverGalleries) {
+        for (final galleryId in coverGalleryIds) {
+          if (!_isCoverGalleryReferenced(updated, galleryId)) {
+            await _safeDeleteCoverGallery(galleryId);
+          }
         }
       }
-      if (launchGalleryId != null &&
+      if (resolvedDeleteOptions.deleteLaunchImageGallery &&
+          launchGalleryId != null &&
           launchGalleryId.isNotEmpty &&
           !_isLaunchGalleryReferenced(updated, launchGalleryId)) {
         await _safeDeleteLaunchGallery(launchGalleryId);
       }
-      if (bottomNavGalleryId != null &&
+      if (resolvedDeleteOptions.deleteBottomNavGallery &&
+          bottomNavGalleryId != null &&
           bottomNavGalleryId.isNotEmpty &&
           !_isBottomNavGalleryReferenced(updated, bottomNavGalleryId)) {
         await _safeDeleteBottomNavGallery(bottomNavGalleryId);
       }
-    }
-    if (deleteAssociatedResources) {
-      final directory = await _themeDirectory(themeId);
-      if (await directory.exists()) {
-        await directory.delete(recursive: true);
+      if (resolvedDeleteOptions.deleteFonts) {
+        final removableFontKeys = fontFamilyKeys
+            .where((familyKey) => !_isThemeFontReferenced(updated, familyKey))
+            .toList(growable: false);
+        await _safeDeleteImportedFonts(removableFontKeys);
+      }
+      if (resolvedDeleteOptions.deleteAppearanceWallpapers) {
+        final directory = await _themeDirectory(themeId);
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
       }
     }
   }
@@ -1095,6 +1125,26 @@ class AdvancedThemeService {
     return target.path;
   }
 
+  Future<String> saveReaderWallpaper({
+    required String themeId,
+    required AppAdvancedThemeMode mode,
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    final extension = _normalizeSharedImageExtension(bytes, fileName);
+    final asset = await _assetStore.persistBytes(
+      type: ManagedAssetType.readerBackground,
+      scope: ManagedAssetScope.themeBinding,
+      bytes: bytes,
+      fileName: 'theme_reader_bg_${mode.name}.$extension',
+      collectionId: themeId,
+      targetNamePrefix: 'theme_reader_bg_${mode.name}',
+    );
+    final targetPath = asset.resolvedPath!;
+    await evictFileImagePath(targetPath);
+    return targetPath;
+  }
+
   Future<void> deleteWallpaper(String path) async {
     final normalized = path.trim();
     if (normalized.isEmpty) {
@@ -1102,6 +1152,38 @@ class AdvancedThemeService {
     }
     await evictFileImagePath(normalized);
     await _assetStore.deletePath(normalized);
+  }
+
+  Future<void> deleteReaderWallpaper(String path) async {
+    final normalized = path.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    await ReaderBackgroundService(
+      assetStore: _assetStore,
+    ).deleteBackground(normalized);
+  }
+
+  Future<bool> isThemeOwnedReaderWallpaper({
+    required String themeId,
+    required String path,
+  }) async {
+    final normalizedThemeId = themeId.trim();
+    final normalizedPath = path.trim();
+    if (normalizedThemeId.isEmpty || normalizedPath.isEmpty) {
+      return false;
+    }
+    final resolved =
+        await _assetStore.resolvePersistedPath(normalizedPath) ??
+        normalizedPath;
+    final directory = await _assetStore.resolveDirectory(
+      ManagedAssetType.readerBackground,
+      collectionId: normalizedThemeId,
+    );
+    final normalizedDirectory = p.normalize(directory.path);
+    final normalizedResolved = p.normalize(resolved);
+    return normalizedResolved == normalizedDirectory ||
+        p.isWithin(normalizedDirectory, normalizedResolved);
   }
 
   Future<Directory> _themeDirectory(String themeId) async {
@@ -2416,6 +2498,21 @@ class AdvancedThemeService {
     return false;
   }
 
+  bool _isThemeFontReferenced(List<AppAdvancedTheme> themes, String familyKey) {
+    final normalizedFamilyKey = familyKey.trim();
+    if (normalizedFamilyKey.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if ((theme.appInterfaceFontFamilyKey?.trim() ?? '') ==
+              normalizedFamilyKey ||
+          (theme.readerFontFamilyKey?.trim() ?? '') == normalizedFamilyKey) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> _cleanupImportedThemeBundleArtifacts({
     required Directory themeDirectory,
     List<String?> coverGalleryIds = const <String?>[],
@@ -2634,6 +2731,41 @@ class _ImportedThemeFonts {
   final String? appInterfaceFontFamilyKey;
   final String? readerFontFamilyKey;
   final List<String> importedFamilyKeys;
+}
+
+class AdvancedThemeDeleteOptions {
+  const AdvancedThemeDeleteOptions({
+    this.deleteAppearanceWallpapers = true,
+    this.deleteReaderWallpapers = true,
+    this.deleteCoverGalleries = true,
+    this.deleteLaunchImageGallery = true,
+    this.deleteBottomNavGallery = true,
+    this.deleteFonts = false,
+  });
+
+  const AdvancedThemeDeleteOptions.none()
+    : deleteAppearanceWallpapers = false,
+      deleteReaderWallpapers = false,
+      deleteCoverGalleries = false,
+      deleteLaunchImageGallery = false,
+      deleteBottomNavGallery = false,
+      deleteFonts = false;
+
+  final bool deleteAppearanceWallpapers;
+  final bool deleteReaderWallpapers;
+  final bool deleteCoverGalleries;
+  final bool deleteLaunchImageGallery;
+  final bool deleteBottomNavGallery;
+  final bool deleteFonts;
+
+  bool get deleteAnyAssociatedResources {
+    return deleteAppearanceWallpapers ||
+        deleteReaderWallpapers ||
+        deleteCoverGalleries ||
+        deleteLaunchImageGallery ||
+        deleteBottomNavGallery ||
+        deleteFonts;
+  }
 }
 
 class _RedReaderSchemaImport {

@@ -9,6 +9,8 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
+import '../../../domain/entities/cover_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cache_management_service.dart';
 import '../application/cover_gallery_provider.dart';
@@ -24,28 +26,49 @@ class CacheManagementPage extends ConsumerStatefulWidget {
 
 class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   late final CacheManagementService _cacheManagementService;
-  late Future<Map<String, CachedBookPresentation>> _bookPresentationIndexFuture;
+  Map<String, CachedBookPresentation> _bookPresentationIndex =
+      const <String, CachedBookPresentation>{};
+  bool _isBookPresentationIndexLoading = false;
+  bool _hasLoadedBookPresentationIndex = false;
 
   @override
   void initState() {
     super.initState();
     _cacheManagementService = ref.read(cacheManagementServiceProvider);
-    _bookPresentationIndexFuture =
-        _cacheManagementService.buildBookPresentationIndex();
+    unawaited(_loadBookPresentationIndex());
   }
 
-  void _reloadBookPresentationIndex() {
+  Future<void> _loadBookPresentationIndex() async {
+    if (_isBookPresentationIndexLoading) {
+      return;
+    }
     setState(() {
-      _bookPresentationIndexFuture =
-          _cacheManagementService.buildBookPresentationIndex();
+      _isBookPresentationIndexLoading = true;
     });
+    try {
+      final presentationIndex =
+          await _cacheManagementService.buildBookPresentationIndex();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _bookPresentationIndex = presentationIndex;
+        _hasLoadedBookPresentationIndex = true;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBookPresentationIndexLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
-    ref.watch(coverGalleriesProvider);
+    final galleries = ref.watch(coverGalleriesProvider).valueOrNull ?? const [];
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
@@ -83,7 +106,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
             ),
             IconButton(
               onPressed: () {
-                _reloadBookPresentationIndex();
+                unawaited(_loadBookPresentationIndex());
               },
               tooltip: '刷新',
               icon: const Icon(Icons.refresh_rounded),
@@ -110,43 +133,55 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                       horizontal,
                       12 + bottomSafe,
                     ),
-                    child: FutureBuilder<Map<String, CachedBookPresentation>>(
-                      future: _bookPresentationIndexFuture,
-                      builder: (context, snapshot) {
-                        final presentationIndex =
-                            snapshot.data ??
-                            const <String, CachedBookPresentation>{};
+                    child: StreamBuilder<List<CachedBookSummary>>(
+                      stream: _cacheManagementService.watchCachedBooks(),
+                      builder: (context, summarySnapshot) {
+                        final summaries =
+                            summarySnapshot.data ?? const <CachedBookSummary>[];
+                        final totalCachedChapters = summaries.fold<int>(
+                          0,
+                          (sum, item) => sum + item.cachedCount,
+                        );
+                        final needsPresentationIndexRefresh = summaries.any(
+                          (summary) =>
+                              !_bookPresentationIndex.containsKey(
+                                summary.bookId,
+                              ),
+                        );
+                        if (needsPresentationIndexRefresh &&
+                            !_isBookPresentationIndexLoading) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) {
+                              return;
+                            }
+                            unawaited(_loadBookPresentationIndex());
+                          });
+                        }
 
-                        return StreamBuilder<List<CachedBookSummary>>(
-                          stream: _cacheManagementService.watchCachedBooks(),
-                          builder: (context, summarySnapshot) {
-                            final summaries =
-                                summarySnapshot.data ??
-                                const <CachedBookSummary>[];
-                            final totalCachedChapters = summaries.fold<int>(
-                              0,
-                              (sum, item) => sum + item.cachedCount,
-                            );
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildHeaderCard(
-                                  context,
-                                  cachedBookCount: summaries.length,
-                                  cachedChapterCount: totalCachedChapters,
-                                ),
-                                const SizedBox(height: 12),
-                                Expanded(
-                                  child: _buildCacheList(
-                                    context,
-                                    summaries: summaries,
-                                    presentationIndex: presentationIndex,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildHeaderCard(
+                              context,
+                              cachedBookCount: summaries.length,
+                              cachedChapterCount: totalCachedChapters,
+                            ),
+                            if (_isBookPresentationIndexLoading &&
+                                !_hasLoadedBookPresentationIndex) ...[
+                              const SizedBox(height: 12),
+                              const LinearProgressIndicator(minHeight: 2),
+                            ],
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: _buildCacheList(
+                                context,
+                                summaries: summaries,
+                                presentationIndex: _bookPresentationIndex,
+                                activeTheme: activeAdvancedTheme,
+                                galleries: galleries,
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
@@ -232,6 +267,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     BuildContext context, {
     required List<CachedBookSummary> summaries,
     required Map<String, CachedBookPresentation> presentationIndex,
+    required AppAdvancedTheme? activeTheme,
+    required List<CoverGallery> galleries,
   }) {
     if (summaries.isEmpty) {
       return Card(
@@ -291,6 +328,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                   realCoverUrl: presentation?.coverUrl,
                   title: title,
                   author: presentation?.author,
+                  activeTheme: activeTheme,
+                  galleries: galleries,
                   bookId: presentation?.bookId ?? summary.bookId,
                   sourceId: presentation?.sourceId,
                   detailUrl: presentation?.detailUrl,
@@ -377,14 +416,16 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     String? realCoverUrl,
     required String title,
     String? author,
+    required AppAdvancedTheme? activeTheme,
+    required List<CoverGallery> galleries,
     String? bookId,
     String? sourceId,
     String? detailUrl,
   }) {
     final resolvedCover = resolveBookCover(
       realCoverUrl: realCoverUrl,
-      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
-      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      activeTheme: activeTheme,
+      galleries: galleries,
       brightness: Theme.of(context).brightness,
       bookId: bookId,
       sourceId: sourceId,

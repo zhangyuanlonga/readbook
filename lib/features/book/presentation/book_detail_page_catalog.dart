@@ -54,6 +54,16 @@ extension on _BookDetailPageState {
     }
 
     final presentation = _resolvePresentedMetadata(result: result);
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: presentation.realCoverUrl,
+      customCoverPath: presentation.customCoverPath,
+      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
+      bookId: _activeBookId,
+      sourceId: widget.sourceId,
+      detailUrl: widget.detailUrl,
+    );
     final selected = await showReaderCatalogSheet(
       context: context,
       readerModalTheme: Theme.of(context),
@@ -63,6 +73,7 @@ extension on _BookDetailPageState {
       bookAuthor: presentation.displayAuthor,
       bookCoverUrl: presentation.realCoverUrl,
       customCoverPath: presentation.customCoverPath,
+      resolvedCover: resolvedCover,
       supportsContentSearch: false,
       bookmarkRepository: _bookmarkRepository,
       currentBookId: _activeBookId,
@@ -106,5 +117,4 @@ extension on _BookDetailPageState {
   ) {
     return _catalogService.resolveChapterFromBookmark(chapters, bookmark);
   }
-
 }

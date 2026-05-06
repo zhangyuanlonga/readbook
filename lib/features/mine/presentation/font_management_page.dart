@@ -38,18 +38,19 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   bool _isConsumingExternalImportPayloads = false;
   String? _errorText;
   List<ReaderCustomFontEntry> _fonts = const [];
+  Map<String, bool> _fontFileExistsByFamilyKey = const <String, bool>{};
   ReaderSettings _readerSettings = const ReaderSettings();
   StreamSubscription<IncomingExternalImportPayload>? _importSubscription;
 
   @override
   void initState() {
     super.initState();
-    _externalImportBridge = ref.read(app_providers.appExternalImportBridgeProvider);
+    _externalImportBridge = ref.read(
+      app_providers.appExternalImportBridgeProvider,
+    );
     unawaited(_reload());
     unawaited(_externalImportBridge.initialize());
-    _importSubscription = _externalImportBridge.payloadStream.listen((
-      payload,
-    ) {
+    _importSubscription = _externalImportBridge.payloadStream.listen((payload) {
       if (payload.type != ExternalImportPayloadType.font) {
         return;
       }
@@ -76,12 +77,24 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     });
     try {
       final fonts = await _fontRegistryService.listRegisteredFonts();
+      final fileExistsEntries = await Future.wait(
+        fonts.map((font) async {
+          return MapEntry(
+            font.fontFamilyKey,
+            await File(font.filePath).exists(),
+          );
+        }),
+      );
+      final fileExistsByFamilyKey = <String, bool>{
+        for (final entry in fileExistsEntries) entry.key: entry.value,
+      };
       final readerSettings = await _readerPreferencesService.loadSettings();
       if (!mounted) {
         return;
       }
       setState(() {
         _fonts = fonts;
+        _fontFileExistsByFamilyKey = fileExistsByFamilyKey;
         _readerSettings = readerSettings;
       });
     } catch (error) {
@@ -593,8 +606,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     required AppInterfaceFontSettings interfaceFontSettings,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final file = File(font.filePath);
-    final exists = file.existsSync();
+    final exists = _fontFileExistsByFamilyKey[font.fontFamilyKey] ?? false;
     final importedAt = DateTime.fromMillisecondsSinceEpoch(
       font.importedAtEpochMs,
     );

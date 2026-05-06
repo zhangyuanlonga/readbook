@@ -171,7 +171,6 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   Widget build(BuildContext context) {
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
-    ref.watch(coverGalleriesProvider);
     final backdrop = _resolvedBackdrop(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
@@ -1199,26 +1198,30 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     required double width,
     required double height,
   }) {
-    final resolvedCover = resolveBookCover(
-      realCoverUrl: realCoverUrl,
-      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
-      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
-      brightness: Theme.of(context).brightness,
-      bookId: bookId,
-      sourceId: sourceId,
-      detailUrl: detailUrl,
-    );
+    return Consumer(
+      builder: (context, ref, _) {
+        final resolvedCover = resolveBookCover(
+          realCoverUrl: realCoverUrl,
+          activeTheme: ref.watch(activeAdvancedThemeProvider).valueOrNull,
+          galleries: ref.watch(coverGalleriesProvider).valueOrNull ?? const [],
+          brightness: Theme.of(context).brightness,
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
 
-    return Hero(
-      tag: heroTag,
-      child: ResolvedBookCoverView(
-        cover: resolvedCover,
-        title: title,
-        author: author,
-        width: width,
-        height: height,
-        borderRadius: BorderRadius.circular(8),
-      ),
+        return Hero(
+          tag: heroTag,
+          child: ResolvedBookCoverView(
+            cover: resolvedCover,
+            title: title,
+            author: author,
+            width: width,
+            height: height,
+            borderRadius: BorderRadius.circular(8),
+          ),
+        );
+      },
     );
   }
 

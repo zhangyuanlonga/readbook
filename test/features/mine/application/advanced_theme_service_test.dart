@@ -196,6 +196,66 @@ void main() {
       ),
     );
   });
+
+  test('deletes only selected theme resources', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final wallpaperFile = await _createTempFile(
+      prefix: 'theme_wallpaper_',
+      fileName: 'light.png',
+    );
+    final readerWallpaperFile = await _createTempFile(
+      prefix: 'theme_reader_wallpaper_',
+      fileName: 'reader.png',
+    );
+    final theme = AppAdvancedTheme(
+      id: 'theme_delete_options',
+      name: '删除选项',
+      createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(
+        wallpaperPath: wallpaperFile.path,
+        readerWallpaperPath: readerWallpaperFile.path,
+      ),
+      darkConfig: AppAdvancedThemeModeConfig(),
+    );
+
+    await service.saveTheme(theme);
+    await service.deleteTheme(
+      theme.id,
+      deleteOptions: const AdvancedThemeDeleteOptions(
+        deleteAppearanceWallpapers: false,
+        deleteReaderWallpapers: true,
+        deleteCoverGalleries: false,
+        deleteLaunchImageGallery: false,
+        deleteBottomNavGallery: false,
+        deleteFonts: false,
+      ),
+    );
+
+    expect(await wallpaperFile.exists(), isTrue);
+    expect(await readerWallpaperFile.exists(), isFalse);
+    expect(await service.loadThemes(), isEmpty);
+  });
+
+  test('imports reader wallpaper into theme-owned collection', () async {
+    final assetStore = await _createAssetStore();
+    final service = AdvancedThemeService(assetStore: assetStore);
+    final path = await service.saveReaderWallpaper(
+      themeId: 'theme_reader_private',
+      mode: AppAdvancedThemeMode.dark,
+      bytes: const <int>[0x89, 0x50, 0x4E, 0x47],
+      fileName: 'reader.png',
+    );
+
+    expect(
+      await service.isThemeOwnedReaderWallpaper(
+        themeId: 'theme_reader_private',
+        path: path,
+      ),
+      isTrue,
+    );
+    expect(await File(path).exists(), isTrue);
+  });
 }
 
 Future<ManagedAssetStore> _createAssetStore() async {
@@ -213,4 +273,19 @@ Future<ManagedAssetStore> _createAssetStore() async {
     documentsDirectoryProvider: () async => documentsDir,
     supportDirectoryProvider: () async => supportDir,
   );
+}
+
+Future<File> _createTempFile({
+  required String prefix,
+  required String fileName,
+}) async {
+  final directory = await Directory.systemTemp.createTemp(prefix);
+  addTearDown(() async {
+    if (directory.existsSync()) {
+      await directory.delete(recursive: true);
+    }
+  });
+  final file = File('${directory.path}/$fileName');
+  await file.writeAsBytes(const <int>[0x89, 0x50, 0x4E, 0x47], flush: true);
+  return file;
 }

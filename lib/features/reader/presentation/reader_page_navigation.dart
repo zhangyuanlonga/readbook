@@ -263,6 +263,16 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     if (!mounted) {
       return;
     }
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: _bookCoverUrl,
+      customCoverPath: customCoverPath,
+      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
+      bookId: _currentBookId,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+    );
     final result = await showReaderCatalogSheet(
       context: context,
       readerModalTheme: _readerModalTheme(),
@@ -272,6 +282,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       bookAuthor: _bookAuthor,
       bookCoverUrl: _bookCoverUrl,
       customCoverPath: customCoverPath,
+      resolvedCover: resolvedCover,
       supportsContentSearch:
           _readerModeCapabilities.supportsCatalogContentSearch,
       bookmarkRepository: _bookmarkRepository,

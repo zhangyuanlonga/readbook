@@ -74,7 +74,6 @@ class _HomePageState extends ConsumerState<HomePage>
   Widget build(BuildContext context) {
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
-    ref.watch(coverGalleriesProvider);
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       ref.watch(activeAdvancedThemeProvider).valueOrNull,
@@ -107,67 +106,82 @@ class _HomePageState extends ConsumerState<HomePage>
       ),
       body: DecoratedBox(
         decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-        child: StreamBuilder<List<ReadingRecord>>(
-          stream: _readingRecordService.watchLatestRecords(),
-          builder: (context, recordsSnapshot) {
-            final records = recordsSnapshot.data ?? const <ReadingRecord>[];
-            return StreamBuilder<List<ReadingRecordDay>>(
-              stream: _readingRecordService.watchDailyRecords(),
-              builder: (context, daysSnapshot) {
-                final dailyRecords =
-                    daysSnapshot.data ?? const <ReadingRecordDay>[];
-                final summary = _buildSummary(
-                  records: records,
-                  dailyRecords: dailyRecords,
-                );
-
-                return SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: AppLayout.pageContentMaxWidth(
-                          context,
-                          maxWidth: 980,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.pageHorizontal(context),
-                          topInset + 8,
-                          AppSpacing.pageHorizontal(context),
-                          bottomInset + 16,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildCheckInCard(summary),
-                            const SizedBox(height: 24),
-                            _buildGoalCard(summary, records),
-                            const SizedBox(height: 24),
-                            _buildSectionHeader(
-                              context,
-                              title: '继续阅读',
-                              actionLabel: '查看统计',
-                              onAction: () => context.push('/stats'),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildContinueReadingSection(records),
-                            const SizedBox(height: 24),
-                            _buildSectionHeader(context, title: '排行'),
-                            const SizedBox(height: 12),
-                            _buildRankingPreviewSection(context),
-                          ],
-                        ),
-                      ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: AppLayout.pageContentMaxWidth(context, maxWidth: 980),
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.pageHorizontal(context),
+                  topInset + 8,
+                  AppSpacing.pageHorizontal(context),
+                  bottomInset + 16,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildReadingSummarySection(),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(
+                      context,
+                      title: '继续阅读',
+                      actionLabel: '查看统计',
+                      onAction: () => context.push('/stats'),
                     ),
-                  ),
-                );
-              },
-            );
-          },
+                    const SizedBox(height: 12),
+                    _buildContinueReadingSectionBlock(),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(context, title: '排行'),
+                    const SizedBox(height: 12),
+                    _buildRankingPreviewSection(context),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildReadingSummarySection() {
+    return StreamBuilder<List<ReadingRecord>>(
+      stream: _readingRecordService.watchLatestRecords(),
+      builder: (context, recordsSnapshot) {
+        final records = recordsSnapshot.data ?? const <ReadingRecord>[];
+        return StreamBuilder<List<ReadingRecordDay>>(
+          stream: _readingRecordService.watchDailyRecords(),
+          builder: (context, daysSnapshot) {
+            final dailyRecords =
+                daysSnapshot.data ?? const <ReadingRecordDay>[];
+            final summary = _buildSummary(
+              records: records,
+              dailyRecords: dailyRecords,
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCheckInCard(summary),
+                const SizedBox(height: 24),
+                _buildGoalCard(summary, records),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildContinueReadingSectionBlock() {
+    return StreamBuilder<List<ReadingRecord>>(
+      stream: _readingRecordService.watchLatestRecords(),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? const <ReadingRecord>[];
+        return _buildContinueReadingSection(records);
+      },
     );
   }
 
@@ -501,15 +515,6 @@ class _HomePageState extends ConsumerState<HomePage>
     final displayState = _bookPresentationResolver.resolveReadingRecord(
       record: record,
     );
-    final cover = resolveBookCover(
-      realCoverUrl: displayState.displayCover,
-      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
-      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
-      brightness: theme.brightness,
-      bookId: record.bookId,
-      sourceId: record.sourceId,
-      detailUrl: record.detailUrl,
-    );
 
     return Material(
       color: Colors.transparent,
@@ -528,13 +533,29 @@ class _HomePageState extends ConsumerState<HomePage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ResolvedBookCoverView(
-                cover: cover,
-                title: displayState.displayTitle,
-                author: displayState.displayAuthor,
-                width: 124,
-                height: 124,
-                borderRadius: BorderRadius.circular(18),
+              Consumer(
+                builder: (context, ref, _) {
+                  final cover = resolveBookCover(
+                    realCoverUrl: displayState.displayCover,
+                    activeTheme:
+                        ref.watch(activeAdvancedThemeProvider).valueOrNull,
+                    galleries:
+                        ref.watch(coverGalleriesProvider).valueOrNull ??
+                        const [],
+                    brightness: theme.brightness,
+                    bookId: record.bookId,
+                    sourceId: record.sourceId,
+                    detailUrl: record.detailUrl,
+                  );
+                  return ResolvedBookCoverView(
+                    cover: cover,
+                    title: displayState.displayTitle,
+                    author: displayState.displayAuthor,
+                    width: 124,
+                    height: 124,
+                    borderRadius: BorderRadius.circular(18),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               Text(

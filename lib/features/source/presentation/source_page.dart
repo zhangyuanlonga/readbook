@@ -25,7 +25,6 @@ import '../application/external_import_diagnostics.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_health_action_policy_service.dart';
 import '../application/source_login_entry_resolver.dart';
-import '../application/source_login_runtime_service.dart';
 import '../application/source_check_service.dart';
 import '../application/source_page_access_service.dart';
 import '../application/source_health_service.dart';
@@ -161,13 +160,18 @@ class _SourcePageState extends ConsumerState<SourcePage> {
   late final SourceHealthService _sourceHealthService;
   late final SourceHealthActionPolicyService _policyService;
   late final TextEditingController _searchController;
-  late final SourceLoginRuntimeService _sourceLoginRuntimeService;
   late final SourceLoginEntryResolver _sourceLoginEntryResolver;
   late final SourcePageFlowCoordinator _pageFlowCoordinator;
   late final SourcePageAccessService _accessService;
   late final SourceScriptImportService _importService;
   List<ScriptSource> _lastRawSources = const <ScriptSource>[];
   List<ScriptSource> _lastVisibleSources = const <ScriptSource>[];
+  List<ScriptSource> _cachedVisibleSources = const <ScriptSource>[];
+  List<ScriptSource> _cachedFilteredVisibleSources = const <ScriptSource>[];
+  List<String> _cachedAvailableGroups = const <String>[];
+  Map<String, _SourceWebsiteClusterSummary> _cachedClusterSummaries =
+      const <String, _SourceWebsiteClusterSummary>{};
+  Object? _derivedSourceViewFingerprint;
 
   String _searchQuery = '';
   String? _selectedGroupKey;
@@ -191,7 +195,6 @@ class _SourcePageState extends ConsumerState<SourcePage> {
     _sourceHealthService =
         widget.sourceHealthService ?? ref.read(sourceHealthServiceProvider);
     _policyService = const SourceHealthActionPolicyService();
-    _sourceLoginRuntimeService = ref.read(sourceLoginRuntimeServiceProvider);
     _sourceLoginEntryResolver = ref.read(sourceLoginEntryResolverProvider);
     _pageFlowCoordinator = ref.read(sourcePageFlowCoordinatorFactoryProvider)();
     _accessService = ref.read(sourcePageAccessServiceProvider);

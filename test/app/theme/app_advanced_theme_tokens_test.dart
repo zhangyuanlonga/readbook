@@ -28,4 +28,34 @@ void main() {
       expect(palette.buttonTextColor.computeLuminance(), greaterThan(0.7));
     },
   );
+
+  test('resolves light and dark configs by active brightness', () {
+    final activeTheme = AppAdvancedTheme(
+      id: 'theme_mode_switch',
+      name: '双模式',
+      createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(
+        colors: const AppAdvancedThemeColors(primaryColorValue: 0xFF112233),
+      ),
+      darkConfig: AppAdvancedThemeModeConfig(
+        colors: const AppAdvancedThemeColors(primaryColorValue: 0xFFCCDDEE),
+      ),
+    );
+
+    final lightPalette = resolveAdvancedThemePalette(
+      ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: Brightness.light,
+      ),
+      activeTheme,
+    );
+    final darkPalette = resolveAdvancedThemePalette(
+      ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
+      activeTheme,
+    );
+
+    expect(lightPalette.primaryColor, const Color(0xFF112233));
+    expect(darkPalette.primaryColor, const Color(0xFFCCDDEE));
+  });
 }

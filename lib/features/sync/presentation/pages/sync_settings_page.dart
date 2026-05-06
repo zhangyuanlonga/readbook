@@ -51,7 +51,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     _syncButtonController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
-    )..repeat();
+    );
   }
 
   @override
@@ -69,13 +69,9 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
   Widget build(BuildContext context) {
     final catalog = ref.watch(syncScopeCatalogServiceProvider);
     final groups = catalog.buildGroups();
-    final profilesAsync = ref.watch(syncProfilesProvider);
-    final jobsAsync = ref.watch(syncJobsProvider);
     final selectableGroups = groups
         .where((group) => group.title != '明确排除')
         .toList(growable: false);
-    final savedProfiles = profilesAsync.valueOrNull ?? const <SyncProfile>[];
-    final primaryProfile = savedProfiles.isEmpty ? null : savedProfiles.first;
 
     return Scaffold(
       appBar: AppBar(title: const Text('同步中心')),
@@ -118,33 +114,36 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
               ),
             ),
             const SizedBox(height: 14),
-            _SyncHeroButton(
-              controller: _syncButtonController,
-              profile: primaryProfile,
-              isRunning: _runningProfileId != null,
-              onPressed:
-                  primaryProfile == null
-                      ? null
-                      : () => _handleRunStage4(primaryProfile.id),
+            Consumer(
+              builder: (context, ref, _) {
+                final profilesAsync = ref.watch(syncProfilesProvider);
+                final savedProfiles =
+                    profilesAsync.valueOrNull ?? const <SyncProfile>[];
+                final primaryProfile =
+                    savedProfiles.isEmpty ? null : savedProfiles.first;
+                return _SyncHeroButton(
+                  controller: _syncButtonController,
+                  profile: primaryProfile,
+                  isRunning: _runningProfileId != null,
+                  onPressed:
+                      primaryProfile == null
+                          ? null
+                          : () => _handleRunStage4(primaryProfile.id),
+                );
+              },
             ),
             const SizedBox(height: 12),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 child: switch (_activePanel) {
-                  _SyncPanel.account => _buildAccountPanel(
-                    context,
-                    profilesAsync: profilesAsync,
-                  ),
+                  _SyncPanel.account => _buildAccountPanel(context),
                   _SyncPanel.content => _buildContentPanel(
                     context,
                     catalog: catalog,
                     selectableGroups: selectableGroups,
                   ),
-                  _SyncPanel.history => _buildHistoryPanel(
-                    context,
-                    jobsAsync: jobsAsync,
-                  ),
+                  _SyncPanel.history => _buildHistoryPanel(context),
                 },
               ),
             ),
@@ -154,10 +153,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     );
   }
 
-  Widget _buildAccountPanel(
-    BuildContext context, {
-    required AsyncValue<List<SyncProfile>> profilesAsync,
-  }) {
+  Widget _buildAccountPanel(BuildContext context) {
+    final profilesAsync = ref.watch(syncProfilesProvider);
     return ListView(
       key: const ValueKey<String>('account'),
       padding: const EdgeInsets.only(bottom: 24),
@@ -351,10 +348,8 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     });
   }
 
-  Widget _buildHistoryPanel(
-    BuildContext context, {
-    required AsyncValue<List<SyncJob>> jobsAsync,
-  }) {
+  Widget _buildHistoryPanel(BuildContext context) {
+    final jobsAsync = ref.watch(syncJobsProvider);
     return ListView(
       key: const ValueKey<String>('history'),
       padding: const EdgeInsets.only(bottom: 24),
@@ -474,6 +469,9 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     setState(() {
       _runningProfileId = profileId;
     });
+    _syncButtonController
+      ..reset()
+      ..repeat();
     try {
       final result = await ref.read(syncStage4ServiceProvider).run(profileId);
       if (!mounted) {
@@ -490,6 +488,9 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
         context,
       ).showSnackBar(SnackBar(content: Text('同步失败：$error')));
     } finally {
+      _syncButtonController
+        ..stop()
+        ..reset();
       if (mounted) {
         setState(() {
           _runningProfileId = null;

@@ -6,20 +6,19 @@ import 'package:flutter/material.dart';
 import '../../domain/entities/app_advanced_theme.dart';
 import '../theme/app_advanced_theme_tokens.dart';
 
+final Map<String, FileImage?> _advancedThemeBackdropFileImageCache =
+    <String, FileImage?>{};
+
 Decoration buildAdvancedThemeBackdropDecoration(
   ResolvedAdvancedThemeBackdrop backdrop, {
   BorderRadius? borderRadius,
   BoxBorder? border,
 }) {
+  final wallpaperPath = backdrop.wallpaperPath?.trim() ?? '';
   return _AdvancedThemeBackdropDecoration(
     backgroundColor: backdrop.backgroundColor,
     surfaceColor: backdrop.surfaceColor,
-    imageProvider:
-        backdrop.wallpaperPath != null &&
-                backdrop.wallpaperPath!.isNotEmpty &&
-                File(backdrop.wallpaperPath!).existsSync()
-            ? FileImage(File(backdrop.wallpaperPath!))
-            : null,
+    imageProvider: _resolveBackdropFileImage(wallpaperPath),
     imageOpacity: backdrop.wallpaperOpacity,
     imageBlurSigma: backdrop.wallpaperBlurSigma,
     imageFit: _toBoxFit(backdrop.wallpaperFit),
@@ -196,4 +195,16 @@ BoxFit _toBoxFit(AppAdvancedThemeWallpaperFit fit) {
     AppAdvancedThemeWallpaperFit.fill => BoxFit.fill,
     AppAdvancedThemeWallpaperFit.cover => BoxFit.cover,
   };
+}
+
+FileImage? _resolveBackdropFileImage(String wallpaperPath) {
+  if (wallpaperPath.isEmpty) {
+    return null;
+  }
+  if (_advancedThemeBackdropFileImageCache.containsKey(wallpaperPath)) {
+    return _advancedThemeBackdropFileImageCache[wallpaperPath];
+  }
+  final resolved = FileImage(File(wallpaperPath));
+  _advancedThemeBackdropFileImageCache[wallpaperPath] = resolved;
+  return resolved;
 }

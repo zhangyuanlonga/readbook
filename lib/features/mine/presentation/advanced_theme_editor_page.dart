@@ -17,6 +17,7 @@ import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
@@ -43,6 +44,8 @@ class _AdvancedThemeEditorPageState
     extends ConsumerState<AdvancedThemeEditorPage>
     with SingleTickerProviderStateMixin {
   static const double _resourcePickerSheetHeightFactor = 0.7;
+  static final ManagedFilePathResolver _pathResolver =
+      ManagedFilePathResolver();
 
   late final AdvancedThemeService _service;
   late final AdvancedThemeEditorStateService _stateService;
@@ -381,14 +384,28 @@ class _AdvancedThemeEditorPageState
       return;
     }
 
-    final normalized = confirmedPath.trim();
-    final currentConfig = draft.configFor(_selectedMode);
     setState(() {
-      _draft = draft.copyWithModeConfig(
-        _selectedMode,
-        currentConfig.copyWith(readerWallpaperPath: normalized),
-      );
+      _isSaving = true;
     });
+    try {
+      final nextDraft = await _stateService.applyReaderWallpaper(
+        draft: draft,
+        mode: _selectedMode,
+        sourcePath: confirmedPath.trim(),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draft = nextDraft;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   Future<void> _openRouteFromSheet(
@@ -874,19 +891,15 @@ class _AdvancedThemeEditorPageState
   }
 
   String? _selectedWallpaperPreviewPath(AppAdvancedTheme draft) {
-    final path = draft.configFor(_selectedMode).wallpaperPath?.trim();
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-    return File(path).existsSync() ? path : null;
+    return _resolveExistingLocalImagePath(
+      draft.configFor(_selectedMode).wallpaperPath,
+    );
   }
 
   String? _selectedReaderWallpaperPreviewPath(AppAdvancedTheme draft) {
-    final path = draft.configFor(_selectedMode).readerWallpaperPath?.trim();
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-    return File(path).existsSync() ? path : null;
+    return _resolveExistingLocalImagePath(
+      draft.configFor(_selectedMode).readerWallpaperPath,
+    );
   }
 
   CoverGallery? _selectedCoverGallery() {
@@ -963,13 +976,9 @@ class _AdvancedThemeEditorPageState
 
   String? _firstExistingImagePath(List<String> imagePaths) {
     for (final rawPath in imagePaths) {
-      final normalized = rawPath.trim();
-      if (normalized.isEmpty) {
-        continue;
-      }
-      final file = _resolveLocalImageFile(normalized);
-      if (file.existsSync()) {
-        return file.path;
+      final resolved = _resolveExistingLocalImagePath(rawPath);
+      if (resolved != null) {
+        return resolved;
       }
     }
     return null;
@@ -1234,16 +1243,16 @@ class _AdvancedThemeEditorPageState
     return File(normalized);
   }
 
+  String? _resolveExistingLocalImagePath(String? path) {
+    return _pathResolver.tryResolveExistingFilePathSync(path);
+  }
+
   List<String> _existingImagePaths(Iterable<String> imagePaths) {
     final existing = <String>[];
     for (final rawPath in imagePaths) {
-      final normalized = rawPath.trim();
-      if (normalized.isEmpty) {
-        continue;
-      }
-      final file = _resolveLocalImageFile(normalized);
-      if (file.existsSync()) {
-        existing.add(file.path);
+      final resolved = _resolveExistingLocalImagePath(rawPath);
+      if (resolved != null) {
+        existing.add(resolved);
       }
     }
     return existing;
@@ -1253,10 +1262,11 @@ class _AdvancedThemeEditorPageState
     required String imagePath,
     required String title,
   }) async {
-    final file = _resolveLocalImageFile(imagePath);
-    if (!file.existsSync()) {
+    final resolvedPath = _resolveExistingLocalImagePath(imagePath);
+    if (resolvedPath == null) {
       return;
     }
+    final file = File(resolvedPath);
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.88),
@@ -1758,6 +1768,12 @@ class _AdvancedThemeEditorPageState
       _isSaving = true;
     });
     try {
+      if (await _service.isThemeOwnedReaderWallpaper(
+        themeId: draft.id,
+        path: path,
+      )) {
+        await _service.deleteReaderWallpaper(path);
+      }
       if (!mounted) {
         return;
       }

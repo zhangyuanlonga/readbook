@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/domain/entities/book.dart';
+import 'package:shuxiang_reading_next/features/book/application/book_display_state.dart';
 import 'package:shuxiang_reading_next/features/search/presentation/widgets/search_book_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,6 +20,7 @@ void main() {
           home: Scaffold(
             body: SearchBookCard(
               book: book,
+              presentation: const BookDisplayState(displayTitle: '凡人修仙传'),
               sourceName: '测试源',
               heroTag: 'hero_book_1',
               onTap: () {},

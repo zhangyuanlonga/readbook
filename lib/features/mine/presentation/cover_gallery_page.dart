@@ -273,7 +273,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                           ),
                         ),
                         child:
-                            path != null && File(path).existsSync()
+                            path != null
                                 ? ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
                                   child: Image.file(

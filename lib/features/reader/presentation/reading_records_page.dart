@@ -231,7 +231,6 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   @override
   Widget build(BuildContext context) {
     ref.watch(activeAdvancedThemeProvider);
-    ref.watch(coverGalleriesProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
@@ -2392,22 +2391,26 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       author: author,
       coverUrl: realCoverUrl,
     );
-    final resolvedCover = resolveBookCover(
-      realCoverUrl: presentation.displayCover,
-      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
-      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
-      brightness: Theme.of(context).brightness,
-      bookId: bookId,
-      sourceId: sourceId,
-      detailUrl: detailUrl,
-    );
-    return ResolvedBookCoverView(
-      cover: resolvedCover,
-      title: presentation.displayTitle,
-      author: presentation.displayAuthor,
-      width: width,
-      height: height,
-      borderRadius: BorderRadius.circular(10),
+    return Consumer(
+      builder: (context, ref, _) {
+        final resolvedCover = resolveBookCover(
+          realCoverUrl: presentation.displayCover,
+          activeTheme: ref.watch(activeAdvancedThemeProvider).valueOrNull,
+          galleries: ref.watch(coverGalleriesProvider).valueOrNull ?? const [],
+          brightness: Theme.of(context).brightness,
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
+        return ResolvedBookCoverView(
+          cover: resolvedCover,
+          title: presentation.displayTitle,
+          author: presentation.displayAuthor,
+          width: width,
+          height: height,
+          borderRadius: BorderRadius.circular(10),
+        );
+      },
     );
   }
 
