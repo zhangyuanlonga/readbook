@@ -39,6 +39,12 @@ class AdvancedThemeService {
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
+  String? _cachedThemesRaw;
+  List<AppAdvancedTheme>? _cachedThemes;
+  List<AdvancedThemeSummary>? _cachedThemeSummaries;
+  String? _cachedHydratedThemeSummariesRaw;
+  List<AdvancedThemeSummary>? _cachedHydratedThemeSummaries;
+  final Map<String, String?> _previewWallpaperPathCache = <String, String?>{};
 
   static const Uuid _uuid = Uuid();
   static const String _themesKey = 'app.advancedThemes';
@@ -55,7 +61,16 @@ class AdvancedThemeService {
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_themesKey);
     if (raw == null || raw.trim().isEmpty) {
+      _cachedThemesRaw = null;
+      _cachedThemes = const <AppAdvancedTheme>[];
+      _cachedThemeSummaries = const <AdvancedThemeSummary>[];
+      _cachedHydratedThemeSummariesRaw = null;
+      _cachedHydratedThemeSummaries = const <AdvancedThemeSummary>[];
+      _previewWallpaperPathCache.clear();
       return const <AppAdvancedTheme>[];
+    }
+    if (_cachedThemesRaw == raw && _cachedThemes != null) {
+      return _cachedThemes!;
     }
 
     try {
@@ -84,6 +99,12 @@ class AdvancedThemeService {
       if (changed) {
         await saveThemes(normalizedThemes);
       }
+      _cachedThemesRaw = changed ? null : raw;
+      _cachedThemes = List<AppAdvancedTheme>.unmodifiable(normalizedThemes);
+      _cachedThemeSummaries = null;
+      _cachedHydratedThemeSummariesRaw = null;
+      _cachedHydratedThemeSummaries = null;
+      _previewWallpaperPathCache.clear();
       return normalizedThemes;
     } catch (_) {
       return const <AppAdvancedTheme>[];
@@ -91,21 +112,58 @@ class AdvancedThemeService {
   }
 
   Future<List<AdvancedThemeSummary>> loadThemeSummaries() async {
-    final themes = await loadThemes();
-    if (themes.isEmpty) {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_themesKey);
+    if (raw == null || raw.trim().isEmpty) {
+      _cachedThemesRaw = null;
+      _cachedThemeSummaries = const <AdvancedThemeSummary>[];
+      _cachedHydratedThemeSummariesRaw = null;
+      _cachedHydratedThemeSummaries = const <AdvancedThemeSummary>[];
+      _previewWallpaperPathCache.clear();
       return const <AdvancedThemeSummary>[];
     }
-    final summaries = themes
-        .map(AdvancedThemeSummary.fromTheme)
-        .toList(growable: false);
-    summaries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return summaries;
+    if (_cachedThemesRaw == raw && _cachedThemeSummaries != null) {
+      return _cachedThemeSummaries!;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <AdvancedThemeSummary>[];
+      }
+      final summaries = decoded
+          .whereType<Map>()
+          .map(
+            (item) => AdvancedThemeSummary.fromTheme(
+              AppAdvancedTheme.fromJson(
+                item.map((key, value) => MapEntry(key.toString(), value)),
+              ),
+            ),
+          )
+          .toList(growable: false);
+      summaries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      _cachedThemesRaw = raw;
+      _cachedThemeSummaries = List<AdvancedThemeSummary>.unmodifiable(
+        summaries,
+      );
+      _cachedHydratedThemeSummariesRaw = null;
+      _cachedHydratedThemeSummaries = null;
+      return summaries;
+    } catch (_) {
+      return const <AdvancedThemeSummary>[];
+    }
   }
 
   Future<void> saveThemes(List<AppAdvancedTheme> themes) async {
     final prefs = await _preferencesFuture;
     if (themes.isEmpty) {
       await prefs.remove(_themesKey);
+      _cachedThemesRaw = null;
+      _cachedThemes = const <AppAdvancedTheme>[];
+      _cachedThemeSummaries = const <AdvancedThemeSummary>[];
+      _cachedHydratedThemeSummariesRaw = null;
+      _cachedHydratedThemeSummaries = const <AdvancedThemeSummary>[];
+      _previewWallpaperPathCache.clear();
       return;
     }
     final persistedThemes = <Map<String, dynamic>>[];
@@ -114,7 +172,16 @@ class AdvancedThemeService {
         (await _normalizeThemeForPersistence(theme)).toJson(),
       );
     }
-    await prefs.setString(_themesKey, jsonEncode(persistedThemes));
+    final encoded = jsonEncode(persistedThemes);
+    await prefs.setString(_themesKey, encoded);
+    final cachedThemes = List<AppAdvancedTheme>.from(themes)
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    _cachedThemesRaw = encoded;
+    _cachedThemes = List<AppAdvancedTheme>.unmodifiable(cachedThemes);
+    _cachedThemeSummaries = null;
+    _cachedHydratedThemeSummariesRaw = null;
+    _cachedHydratedThemeSummaries = null;
+    _previewWallpaperPathCache.clear();
   }
 
   Future<AppAdvancedTheme> _normalizeThemeForRuntime(
@@ -222,29 +289,60 @@ class AdvancedThemeService {
     if (normalizedThemeId.isEmpty) {
       return null;
     }
+    final themes = await loadThemes();
+    for (final theme in themes) {
+      if (theme.id == normalizedThemeId) {
+        return theme;
+      }
+    }
+    return null;
+  }
+
+  Future<List<AdvancedThemeSummary>> hydrateThemeSummaryPreviewPaths(
+    List<AdvancedThemeSummary> summaries,
+  ) async {
+    if (summaries.isEmpty) {
+      return const <AdvancedThemeSummary>[];
+    }
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_themesKey);
     if (raw == null || raw.trim().isEmpty) {
-      return null;
+      return summaries;
+    }
+    if (_cachedHydratedThemeSummariesRaw == raw &&
+        _cachedHydratedThemeSummaries != null) {
+      return _cachedHydratedThemeSummaries!;
     }
 
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! List) {
-        return null;
+        return summaries;
       }
+      final previewPathCache = <String, String?>{..._previewWallpaperPathCache};
+      final hydratedById = <String, AdvancedThemeSummary>{};
       for (final item in decoded.whereType<Map>()) {
         final theme = AppAdvancedTheme.fromJson(
           item.map((key, value) => MapEntry(key.toString(), value)),
         );
-        if (theme.id != normalizedThemeId) {
-          continue;
-        }
-        return _normalizeThemeForRuntime(theme);
+        hydratedById[theme.id] = await _buildThemeSummary(
+          theme,
+          previewPathCache: previewPathCache,
+        );
       }
-      return null;
+      _previewWallpaperPathCache
+        ..clear()
+        ..addAll(previewPathCache);
+      final hydrated = summaries
+          .map((summary) => hydratedById[summary.id] ?? summary)
+          .toList(growable: false);
+      _cachedHydratedThemeSummariesRaw = raw;
+      _cachedHydratedThemeSummaries = List<AdvancedThemeSummary>.unmodifiable(
+        hydrated,
+      );
+      return hydrated;
     } catch (_) {
-      return null;
+      return summaries;
     }
   }
 
@@ -3008,6 +3106,78 @@ class AdvancedThemeService {
     }
     return null;
   }
+
+  Future<AdvancedThemeSummary> _buildThemeSummary(
+    AppAdvancedTheme theme, {
+    required Map<String, String?> previewPathCache,
+  }) async {
+    return AdvancedThemeSummary(
+      id: theme.id,
+      name: theme.name,
+      category: theme.category?.trim(),
+      updatedAt: theme.updatedAt,
+      lightMode: await _buildModeSummary(
+        theme.lightConfig,
+        previewPathCache: previewPathCache,
+      ),
+      darkMode: await _buildModeSummary(
+        theme.darkConfig,
+        previewPathCache: previewPathCache,
+      ),
+      hasCoverGalleryBinding: theme.hasCoverGalleryBinding,
+      hasLaunchImageGallery:
+          theme.launchImageGalleryId?.trim().isNotEmpty ?? false,
+      hasBottomNavGallery: theme.bottomNavGalleryId?.trim().isNotEmpty ?? false,
+      hasAppInterfaceFont:
+          theme.appInterfaceFontFamilyKey?.trim().isNotEmpty ?? false,
+      hasReaderFont: theme.readerFontFamilyKey?.trim().isNotEmpty ?? false,
+    );
+  }
+
+  Future<AdvancedThemeModeSummary> _buildModeSummary(
+    AppAdvancedThemeModeConfig config, {
+    required Map<String, String?> previewPathCache,
+  }) async {
+    final colors = config.colors;
+    return AdvancedThemeModeSummary(
+      primaryColorValue: colors.primaryColorValue,
+      backgroundColorValue: colors.backgroundColorValue,
+      surfaceColorValue: colors.surfaceColorValue,
+      cardColorValue: colors.cardColorValue,
+      cardTextColorValue: colors.cardTextColorValue,
+      textSecondaryColorValue: colors.textSecondaryColorValue,
+      wallpaperPath: await _resolvePreviewWallpaperPath(
+        config.wallpaperAsset,
+        previewPathCache: previewPathCache,
+      ),
+      hasWallpaper: config.hasWallpaper,
+      hasReaderWallpaper: config.hasReaderWallpaper,
+      configuredColorCount: colors.configuredColorCount,
+    );
+  }
+
+  Future<String?> _resolvePreviewWallpaperPath(
+    ManagedAssetRef? ref, {
+    required Map<String, String?> previewPathCache,
+  }) async {
+    if (ref == null) {
+      return null;
+    }
+    final cacheKey = ref.bindingKey;
+    if (previewPathCache.containsKey(cacheKey)) {
+      return previewPathCache[cacheKey];
+    }
+    final normalizedRef = await _assetStore.normalizeRefForRuntime(ref);
+    final resolvedPath = normalizedRef?.normalizedResolvedPath;
+    if (resolvedPath == null || resolvedPath.isEmpty) {
+      previewPathCache[cacheKey] = null;
+      return null;
+    }
+    final file = File(resolvedPath);
+    final previewPath = await file.exists() ? resolvedPath : null;
+    previewPathCache[cacheKey] = previewPath;
+    return previewPath;
+  }
 }
 
 class _BottomNavBundleImportAssignment {
@@ -3135,6 +3305,25 @@ class AdvancedThemeModeSummary {
   final bool hasWallpaper;
   final bool hasReaderWallpaper;
   final int configuredColorCount;
+
+  AdvancedThemeModeSummary copyWith({
+    String? wallpaperPath,
+    bool clearWallpaperPath = false,
+  }) {
+    return AdvancedThemeModeSummary(
+      primaryColorValue: primaryColorValue,
+      backgroundColorValue: backgroundColorValue,
+      surfaceColorValue: surfaceColorValue,
+      cardColorValue: cardColorValue,
+      cardTextColorValue: cardTextColorValue,
+      textSecondaryColorValue: textSecondaryColorValue,
+      wallpaperPath:
+          clearWallpaperPath ? null : (wallpaperPath ?? this.wallpaperPath),
+      hasWallpaper: hasWallpaper,
+      hasReaderWallpaper: hasReaderWallpaper,
+      configuredColorCount: configuredColorCount,
+    );
+  }
 }
 
 class AdvancedThemeSummary {
@@ -3158,8 +3347,12 @@ class AdvancedThemeSummary {
       name: theme.name,
       category: theme.category?.trim(),
       updatedAt: theme.updatedAt,
-      lightMode: AdvancedThemeModeSummary.fromConfig(theme.lightConfig),
-      darkMode: AdvancedThemeModeSummary.fromConfig(theme.darkConfig),
+      lightMode: AdvancedThemeModeSummary.fromConfig(
+        theme.lightConfig,
+      ).copyWith(clearWallpaperPath: true),
+      darkMode: AdvancedThemeModeSummary.fromConfig(
+        theme.darkConfig,
+      ).copyWith(clearWallpaperPath: true),
       hasCoverGalleryBinding: theme.hasCoverGalleryBinding,
       hasLaunchImageGallery:
           theme.launchImageGalleryId?.trim().isNotEmpty ?? false,
@@ -3185,6 +3378,25 @@ class AdvancedThemeSummary {
   bool get hasBothModesConfigured {
     return lightMode.configuredColorCount > 0 &&
         darkMode.configuredColorCount > 0;
+  }
+
+  AdvancedThemeSummary copyWith({
+    AdvancedThemeModeSummary? lightMode,
+    AdvancedThemeModeSummary? darkMode,
+  }) {
+    return AdvancedThemeSummary(
+      id: id,
+      name: name,
+      category: category,
+      updatedAt: updatedAt,
+      lightMode: lightMode ?? this.lightMode,
+      darkMode: darkMode ?? this.darkMode,
+      hasCoverGalleryBinding: hasCoverGalleryBinding,
+      hasLaunchImageGallery: hasLaunchImageGallery,
+      hasBottomNavGallery: hasBottomNavGallery,
+      hasAppInterfaceFont: hasAppInterfaceFont,
+      hasReaderFont: hasReaderFont,
+    );
   }
 }
 

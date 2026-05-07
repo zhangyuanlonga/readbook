@@ -152,6 +152,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final MembershipService _membershipService;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
   final TextEditingController _searchController = TextEditingController();
+  final Map<String, ImageProvider<Object>> _previewWallpaperImageProviders =
+      <String, ImageProvider<Object>>{};
   List<AdvancedThemeSummary> _themeSummaries = const <AdvancedThemeSummary>[];
   String _searchQuery = '';
   String? _selectedCategory;
@@ -163,6 +165,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   bool _canUseAdvancedThemes = false;
   bool _isSelectionMode = false;
   String? _savingStatusText;
+  int _summaryLoadToken = 0;
 
   @override
   void initState() {
@@ -239,19 +242,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Future<void> _load() async {
     final service = ref.read(advancedThemeServiceProvider);
+    final loadToken = ++_summaryLoadToken;
     final themes = await service.loadThemeSummaries();
     if (!mounted) {
       return;
     }
-    final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
-    final sortedThemes = List<AdvancedThemeSummary>.from(themes)..sort((a, b) {
-      final aIsActive = a.id == activeThemeId;
-      final bIsActive = b.id == activeThemeId;
-      if (aIsActive != bIsActive) {
-        return aIsActive ? -1 : 1;
-      }
-      return b.updatedAt.compareTo(a.updatedAt);
-    });
+    final sortedThemes = _sortThemeSummaries(themes);
     setState(() {
       _themeSummaries = sortedThemes;
       if (_selectedCategory != null &&
@@ -261,6 +257,65 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _pruneSelectionForVisibleThemes();
       _isLoading = false;
     });
+    unawaited(_hydrateThemePreviewSummaries(loadToken, sortedThemes));
+  }
+
+  Future<void> _hydrateThemePreviewSummaries(
+    int loadToken,
+    List<AdvancedThemeSummary> currentSummaries,
+  ) async {
+    final service = ref.read(advancedThemeServiceProvider);
+    final hydrated = await service.hydrateThemeSummaryPreviewPaths(
+      currentSummaries,
+    );
+    if (!mounted || loadToken != _summaryLoadToken) {
+      return;
+    }
+    final sortedHydrated = _sortThemeSummaries(hydrated);
+    final changed =
+        sortedHydrated.length != _themeSummaries.length ||
+        !_hasSamePreviewContent(_themeSummaries, sortedHydrated);
+    if (!changed) {
+      return;
+    }
+    setState(() {
+      _themeSummaries = sortedHydrated;
+      _pruneSelectionForVisibleThemes();
+    });
+  }
+
+  List<AdvancedThemeSummary> _sortThemeSummaries(
+    List<AdvancedThemeSummary> themes,
+  ) {
+    final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
+    return List<AdvancedThemeSummary>.from(themes)..sort((a, b) {
+      final aIsActive = a.id == activeThemeId;
+      final bIsActive = b.id == activeThemeId;
+      if (aIsActive != bIsActive) {
+        return aIsActive ? -1 : 1;
+      }
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+  }
+
+  bool _hasSamePreviewContent(
+    List<AdvancedThemeSummary> previous,
+    List<AdvancedThemeSummary> next,
+  ) {
+    for (var index = 0; index < previous.length; index += 1) {
+      final previousItem = previous[index];
+      final nextItem = next[index];
+      if (previousItem.id != nextItem.id) {
+        return false;
+      }
+      if (previousItem.lightMode.wallpaperPath !=
+              nextItem.lightMode.wallpaperPath ||
+          previousItem.darkMode.wallpaperPath !=
+              nextItem.darkMode.wallpaperPath) {
+        return false;
+      }
+    }
+    return true;
   }
 
   List<String> get _availableCategories {
@@ -1073,6 +1128,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         if (theme == null) {
           continue;
         }
+        // Keep export strictly sequential so dozens of themes won't amplify
+        // memory usage by building multiple theme bundles at the same time.
         index += 1;
         onProgress?.call('正在打包 ${theme.name} ($index/${summaries.length})');
         final normalizedName = _normalizedFileName(theme.name);
@@ -2663,9 +2720,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final label = mode == AppAdvancedThemeMode.light ? '浅色' : '深色';
     final wallpaperPath = config.wallpaperPath?.trim();
     final hasPreviewWallpaper =
-        wallpaperPath != null &&
-        wallpaperPath.isNotEmpty &&
-        File(wallpaperPath).existsSync();
+        wallpaperPath != null && wallpaperPath.isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -2677,7 +2732,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         image:
             hasPreviewWallpaper
                 ? DecorationImage(
-                  image: FileImage(File(wallpaperPath)),
+                  image: _previewWallpaperImageProvider(wallpaperPath),
                   fit: BoxFit.cover,
                   opacity: 0.88,
                 )
@@ -2783,6 +2838,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           ),
         ],
       ),
+    );
+  }
+
+  ImageProvider<Object> _previewWallpaperImageProvider(String wallpaperPath) {
+    return _previewWallpaperImageProviders.putIfAbsent(
+      wallpaperPath,
+      () => ResizeImage(FileImage(File(wallpaperPath)), width: 640),
     );
   }
 
