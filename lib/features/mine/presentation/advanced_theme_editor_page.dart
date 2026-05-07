@@ -441,88 +441,69 @@ class _AdvancedThemeEditorPageState
     String? selectedId = _draft?.bottomNavGalleryId ?? _activeGalleryId;
     final nextId = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '选择底栏图集',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _bottomNavGalleries.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final gallery = _bottomNavGalleries[index];
-                        final selected = gallery.id == selectedId;
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            setSheetState(() {
-                              selectedId = gallery.id;
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    gallery.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                                if (selected)
-                                  Icon(
-                                    Icons.check_rounded,
-                                    color: colorScheme.primary,
-                                    size: 18,
-                                  ),
-                              ],
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择底栏图集',
+              content: ListView.separated(
+                itemCount: _bottomNavGalleries.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final gallery = _bottomNavGalleries[index];
+                  final selected = gallery.id == selectedId;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      setSheetState(() {
+                        selectedId = gallery.id;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              gallery.name,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
-                        );
-                      },
+                          if (selected)
+                            Icon(
+                              Icons.check_rounded,
+                              color: colorScheme.primary,
+                              size: 18,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed:
-                            selectedId == null
-                                ? null
-                                : () => Navigator.of(context).pop(selectedId),
-                        child: const Text('应用'),
-                      ),
-                    ],
-                  ),
-                ],
+                  );
+                },
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(selectedId),
+                  child: const Text('应用'),
+                ),
+              ],
             );
           },
         );
@@ -548,190 +529,133 @@ class _AdvancedThemeEditorPageState
     String? selectedId = _draft?.coverGalleryIdFor(_selectedMode)?.trim();
     final result = await showModalBottomSheet<_CoverGallerySelectionResult>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '选择${_modeLabel(_selectedMode)}封面图集',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择${_modeLabel(_selectedMode)}封面图集',
+              content:
+                  _coverGalleries.isEmpty
+                      ? _buildEmptyResourceState(
+                        context,
+                        icon: Icons.photo_library_outlined,
+                        title: '还没有封面图集',
+                        description: '先去封面图集页准备素材，再回来绑定。',
+                      )
+                      : ListView.separated(
+                        itemCount: _coverGalleries.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final gallery = _coverGalleries[index];
+                          final selected = gallery.id == selectedId;
+                          final previewPath = _firstExistingImagePath(
+                            gallery.imagePaths,
+                          );
+                          final imageCount = gallery.imagePaths.length;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              setSheetState(() {
+                                selectedId = gallery.id;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  _buildGalleryPreviewThumb(
+                                    context,
+                                    previewPath: previewPath,
+                                    title: gallery.name,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          gallery.name,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelLarge?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          imageCount <= 0
+                                              ? '暂无图片'
+                                              : '$imageCount 张图片',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (selected)
+                                    Icon(
+                                      Icons.check_rounded,
+                                      color: colorScheme.primary,
+                                      size: 18,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_coverGalleries.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed:
+                      () => unawaited(
+                        _openRouteFromSheet(context, '/cover-galleries'),
+                      ),
+                  child: const Text('去管理'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(
+                            const _CoverGallerySelectionResult(
+                              applied: true,
+                              galleryId: null,
                             ),
                           ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.photo_library_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '还没有封面图集',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '先去封面图集页准备素材，再回来绑定。',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _coverGalleries.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final gallery = _coverGalleries[index];
-                            final selected = gallery.id == selectedId;
-                            final previewPath = _firstExistingImagePath(
-                              gallery.imagePaths,
-                            );
-                            final imageCount = gallery.imagePaths.length;
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                setSheetState(() {
-                                  selectedId = gallery.id;
-                                });
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    _buildGalleryPreviewThumb(
-                                      context,
-                                      previewPath: previewPath,
-                                      title: gallery.name,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            gallery.name,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.labelLarge?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            imageCount <= 0
-                                                ? '暂无图片'
-                                                : '$imageCount 张图片',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (selected)
-                                      Icon(
-                                        Icons.check_rounded,
-                                        color: colorScheme.primary,
-                                        size: 18,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed:
-                              () => unawaited(
-                                _openRouteFromSheet(
-                                  context,
-                                  '/cover-galleries',
-                                ),
-                              ),
-                          child: const Text('去管理'),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed:
-                              selectedId == null
-                                  ? null
-                                  : () => Navigator.of(context).pop(
-                                    const _CoverGallerySelectionResult(
-                                      applied: true,
-                                      galleryId: null,
-                                    ),
-                                  ),
-                          child: const Text('取消绑定'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed:
-                              selectedId == null
-                                  ? null
-                                  : () => Navigator.of(context).pop(
-                                    _CoverGallerySelectionResult(
-                                      applied: true,
-                                      galleryId: selectedId,
-                                    ),
-                                  ),
-                          child: const Text('应用'),
-                        ),
-                      ],
-                    ),
-                  ],
+                  child: const Text('取消绑定'),
                 ),
-              ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(
+                            _CoverGallerySelectionResult(
+                              applied: true,
+                              galleryId: selectedId,
+                            ),
+                          ),
+                  child: const Text('应用'),
+                ),
+              ],
             );
           },
         );
@@ -1062,65 +986,25 @@ class _AdvancedThemeEditorPageState
             ?.trim();
     final result = await showModalBottomSheet<_ThemeFontSelectionResult>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    readerFont ? '选择阅读字体' : '选择界面字体',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_availableFonts.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.4,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.font_download_outlined,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '还没有已导入字体',
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '先去字体管理导入字体，再回来绑定。',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
+            return _buildResourcePickerSheet(
+              context,
+              title: readerFont ? '选择阅读字体' : '选择界面字体',
+              content:
+                  _availableFonts.isEmpty
+                      ? _buildEmptyResourceState(
+                        context,
+                        icon: Icons.font_download_outlined,
+                        title: '还没有已导入字体',
+                        description: '先去字体管理导入字体，再回来绑定。',
+                      )
+                      : ListView.separated(
                         itemCount: _availableFonts.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
@@ -1180,52 +1064,46 @@ class _AdvancedThemeEditorPageState
                           );
                         },
                       ),
-                    ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed:
+                      () => unawaited(
+                        _openRouteFromSheet(context, '/font-management'),
                       ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed:
-                            () => unawaited(
-                              _openRouteFromSheet(context, '/font-management'),
+                  child: const Text('去管理'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(
+                            const _ThemeFontSelectionResult(
+                              applied: true,
+                              familyKey: null,
                             ),
-                        child: const Text('去管理'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed:
-                            selectedId == null
-                                ? null
-                                : () => Navigator.of(context).pop(
-                                  const _ThemeFontSelectionResult(
-                                    applied: true,
-                                    familyKey: null,
-                                  ),
-                                ),
-                        child: const Text('取消绑定'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed:
-                            selectedId == null
-                                ? null
-                                : () => Navigator.of(context).pop(
-                                  _ThemeFontSelectionResult(
-                                    applied: true,
-                                    familyKey: selectedId,
-                                  ),
-                                ),
-                        child: const Text('应用'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                          ),
+                  child: const Text('取消绑定'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(
+                            _ThemeFontSelectionResult(
+                              applied: true,
+                              familyKey: selectedId,
+                            ),
+                          ),
+                  child: const Text('应用'),
+                ),
+              ],
             );
           },
         );
@@ -2263,7 +2141,7 @@ class _AdvancedThemeEditorPageState
                             10 + bottomSafe,
                           ),
                           children: [
-                            _buildMetadataSection(context, draft),
+                            _buildMetadataSection(context),
                             const SizedBox(height: sectionGap),
                             _buildColorsSection(context),
                             const SizedBox(height: sectionGap),
@@ -2428,12 +2306,6 @@ class _AdvancedThemeEditorPageState
                   description: '页面壁纸上层的统一覆盖色',
                 ),
               ]),
-              const Divider(height: 1),
-              _buildInfoRow(
-                context,
-                label: '卡片背景模糊',
-                description: '当前暂未独立支持，后续再补成单独效果项',
-              ),
             ],
           ),
         ),
@@ -2441,89 +2313,30 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildMetadataSection(BuildContext context, AppAdvancedTheme draft) {
+  Widget _buildMetadataSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel(context, '主题信息'),
-        const SizedBox(height: 2),
-        _buildSectionDescription(context, '分类用于主题列表筛选，当前封面绑定会按浅色和深色模式分别生效。'),
         const SizedBox(height: 4),
         _buildPanel(
           context,
-          child: Column(
-            children: [
-              TextField(
-                controller: _categoryController,
-                decoration: const InputDecoration(
-                  labelText: '主题分类',
-                  hintText: '例如：护眼 / 极简 / 漫画',
-                  prefixIcon: Icon(Icons.category_outlined),
-                ),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+          child: TextField(
+            controller: _categoryController,
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: '主题分类',
+              hintText: '例如：护眼 / 极简 / 漫画',
+              prefixIcon: Icon(Icons.category_outlined, size: 18),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
               ),
-              const SizedBox(height: 12),
-              _buildInfoRow(
-                context,
-                label: '当前模式封面绑定',
-                description: _resolvedCoverGalleryName(),
-              ),
-            ],
+            ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildInfoRow(
-    BuildContext context, {
-    required String label,
-    required String description,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Text(
-              '当前联动',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -3572,11 +3385,12 @@ class _AdvancedThemeEditorPageState
     BuildContext context, {
     required Widget child,
     Color? backgroundColor,
+    EdgeInsetsGeometry padding = const EdgeInsets.fromLTRB(10, 8, 10, 8),
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),

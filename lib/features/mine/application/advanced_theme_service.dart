@@ -91,32 +91,15 @@ class AdvancedThemeService {
   }
 
   Future<List<AdvancedThemeSummary>> loadThemeSummaries() async {
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_themesKey);
-    if (raw == null || raw.trim().isEmpty) {
+    final themes = await loadThemes();
+    if (themes.isEmpty) {
       return const <AdvancedThemeSummary>[];
     }
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <AdvancedThemeSummary>[];
-      }
-      final summaries = decoded
-          .whereType<Map>()
-          .map(
-            (item) => AdvancedThemeSummary.fromTheme(
-              AppAdvancedTheme.fromJson(
-                item.map((key, value) => MapEntry(key.toString(), value)),
-              ),
-            ),
-          )
-          .toList(growable: false);
-      summaries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return summaries;
-    } catch (_) {
-      return const <AdvancedThemeSummary>[];
-    }
+    final summaries = themes
+        .map(AdvancedThemeSummary.fromTheme)
+        .toList(growable: false);
+    summaries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return summaries;
   }
 
   Future<void> saveThemes(List<AppAdvancedTheme> themes) async {
@@ -3118,6 +3101,7 @@ class AdvancedThemeModeSummary {
     required this.cardColorValue,
     required this.cardTextColorValue,
     required this.textSecondaryColorValue,
+    required this.wallpaperPath,
     required this.hasWallpaper,
     required this.hasReaderWallpaper,
     required this.configuredColorCount,
@@ -3134,6 +3118,7 @@ class AdvancedThemeModeSummary {
       cardColorValue: colors.cardColorValue,
       cardTextColorValue: colors.cardTextColorValue,
       textSecondaryColorValue: colors.textSecondaryColorValue,
+      wallpaperPath: config.wallpaperPath,
       hasWallpaper: config.hasWallpaper,
       hasReaderWallpaper: config.hasReaderWallpaper,
       configuredColorCount: colors.configuredColorCount,
@@ -3146,6 +3131,7 @@ class AdvancedThemeModeSummary {
   final int? cardColorValue;
   final int? cardTextColorValue;
   final int? textSecondaryColorValue;
+  final String? wallpaperPath;
   final bool hasWallpaper;
   final bool hasReaderWallpaper;
   final int configuredColorCount;

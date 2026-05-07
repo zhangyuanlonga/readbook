@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -47,7 +47,26 @@ enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 
 enum _ThemeImportPackageKind { official, red, rgshare }
 
-enum _AdvancedThemeListMoreAction { importTheme, importBatch, exportBatch }
+enum _AdvancedThemeListMoreAction { importBatch, selectThemes }
+
+enum _AdvancedThemeExportDispatchStatus { completed, cancelled, failed }
+
+class _AdvancedThemeExportDispatchResult {
+  const _AdvancedThemeExportDispatchResult.completed({this.message})
+    : status = _AdvancedThemeExportDispatchStatus.completed;
+
+  const _AdvancedThemeExportDispatchResult.cancelled({this.message})
+    : status = _AdvancedThemeExportDispatchStatus.cancelled;
+
+  const _AdvancedThemeExportDispatchResult.failed({this.message})
+    : status = _AdvancedThemeExportDispatchStatus.failed;
+
+  final _AdvancedThemeExportDispatchStatus status;
+  final String? message;
+
+  bool get isCompleted =>
+      status == _AdvancedThemeExportDispatchStatus.completed;
+}
 
 class _AdvancedThemeDeleteDecision {
   const _AdvancedThemeDeleteDecision({
@@ -136,11 +155,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   List<AdvancedThemeSummary> _themeSummaries = const <AdvancedThemeSummary>[];
   String _searchQuery = '';
   String? _selectedCategory;
+  Set<String> _selectedThemeIds = <String>{};
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isConsumingExternalImportPayloads = false;
   bool _isAccessLoading = true;
   bool _canUseAdvancedThemes = false;
+  bool _isSelectionMode = false;
+  String? _savingStatusText;
 
   @override
   void initState() {
@@ -236,6 +258,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           !_availableCategories.contains(_selectedCategory)) {
         _selectedCategory = null;
       }
+      _pruneSelectionForVisibleThemes();
       _isLoading = false;
     });
   }
@@ -268,6 +291,82 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           return haystacks.any((item) => item.contains(keyword));
         })
         .toList(growable: false);
+  }
+
+  List<AdvancedThemeSummary> get _selectedVisibleThemes {
+    return _visibleThemes
+        .where((theme) => _selectedThemeIds.contains(theme.id))
+        .toList(growable: false);
+  }
+
+  bool get _allVisibleThemesSelected {
+    final visibleThemes = _visibleThemes;
+    return visibleThemes.isNotEmpty &&
+        visibleThemes.every((theme) => _selectedThemeIds.contains(theme.id));
+  }
+
+  void _pruneSelectionForVisibleThemes() {
+    if (!_isSelectionMode) {
+      return;
+    }
+    final visibleIds = _visibleThemes.map((theme) => theme.id).toSet();
+    _selectedThemeIds =
+        _selectedThemeIds.where((id) => visibleIds.contains(id)).toSet();
+    if (_selectedThemeIds.isEmpty) {
+      _isSelectionMode = false;
+    }
+  }
+
+  void _enterSelectionMode() {
+    if (_isSaving || _visibleThemes.isEmpty) {
+      return;
+    }
+    setState(() {
+      _isSelectionMode = true;
+      _selectedThemeIds = <String>{};
+    });
+  }
+
+  void _exitSelectionMode() {
+    if (_isSaving) {
+      return;
+    }
+    setState(() {
+      _isSelectionMode = false;
+      _selectedThemeIds = <String>{};
+    });
+  }
+
+  void _toggleThemeSelection(String themeId) {
+    if (!_isSelectionMode || _isSaving) {
+      return;
+    }
+    setState(() {
+      final nextSelectedIds = Set<String>.from(_selectedThemeIds);
+      if (!nextSelectedIds.add(themeId)) {
+        nextSelectedIds.remove(themeId);
+      }
+      _selectedThemeIds = nextSelectedIds;
+      if (_selectedThemeIds.isEmpty) {
+        _isSelectionMode = false;
+      }
+    });
+  }
+
+  void _toggleSelectAllVisibleThemes() {
+    if (!_isSelectionMode || _isSaving) {
+      return;
+    }
+    final visibleIds = _visibleThemes.map((theme) => theme.id).toSet();
+    if (visibleIds.isEmpty) {
+      return;
+    }
+    setState(() {
+      _selectedThemeIds = _allVisibleThemesSelected ? <String>{} : visibleIds;
+      if (_selectedThemeIds.isEmpty) {
+        _isSelectionMode = false;
+      }
+    });
   }
 
   Future<AppAdvancedTheme?> _loadThemeDetail(String themeId) {
@@ -337,7 +436,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       }
       final fileName = '${_normalizedFileName(theme.name)}.json';
       final content = service.encodeThemeColorJson(theme);
-      var completed = false;
+      String? successMessage;
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
           acceptedTypeGroups: const <XTypeGroup>[
@@ -347,26 +446,34 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           confirmButtonText: '导出',
         );
         if (location == null) {
+          _showMessage('已取消导出颜色配置');
           return;
         }
         final file = File(location.path);
         await file.writeAsString(content, flush: true);
-        completed = true;
       } else {
         final tempDir = await getTemporaryDirectory();
         final file = File('${tempDir.path}/$fileName');
         await file.writeAsString(content, flush: true);
-        completed = await _shareExportedThemeFile(
+        final shareResult = await _shareExportedThemeFile(
           file: file,
           text: '分享颜色主题：${theme.name}',
           subject: theme.name,
           clipboardText: content,
         );
+        if (!mounted) {
+          return;
+        }
+        if (!shareResult.isCompleted) {
+          _showMessage(shareResult.message ?? '已取消导出颜色配置');
+          return;
+        }
+        successMessage = shareResult.message;
       }
-      if (!completed || !mounted) {
+      if (!mounted) {
         return;
       }
-      _showMessage('已导出颜色配置「${theme.name}」');
+      _showMessage(successMessage ?? '已导出颜色配置「${theme.name}」');
     } catch (error) {
       if (!mounted) {
         return;
@@ -399,7 +506,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       }
       final fileName = '${_normalizedFileName(theme.name)}.zip';
       final bytes = await service.encodeThemeBundleZip(theme);
-      var completed = false;
+      String? successMessage;
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
           acceptedTypeGroups: const <XTypeGroup>[
@@ -409,25 +516,33 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           confirmButtonText: '导出',
         );
         if (location == null) {
+          _showMessage('已取消导出主题包');
           return;
         }
         final file = File(location.path);
         await file.writeAsBytes(bytes, flush: true);
-        completed = true;
       } else {
         final tempDir = await getTemporaryDirectory();
         final file = File('${tempDir.path}/$fileName');
         await file.writeAsBytes(bytes, flush: true);
-        completed = await _shareExportedThemeFile(
+        final shareResult = await _shareExportedThemeFile(
           file: file,
           text: '分享主题包：${theme.name}',
           subject: theme.name,
         );
+        if (!mounted) {
+          return;
+        }
+        if (!shareResult.isCompleted) {
+          _showMessage(shareResult.message ?? '已取消导出主题包');
+          return;
+        }
+        successMessage = shareResult.message;
       }
-      if (!completed || !mounted) {
+      if (!mounted) {
         return;
       }
-      _showMessage('已导出主题包「${theme.name}」');
+      _showMessage(successMessage ?? '已导出主题包「${theme.name}」');
     } catch (error) {
       if (!mounted) {
         return;
@@ -449,7 +564,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         defaultTargetPlatform == TargetPlatform.linux;
   }
 
-  Future<bool> _shareExportedThemeFile({
+  Future<_AdvancedThemeExportDispatchResult> _shareExportedThemeFile({
     required File file,
     required String text,
     required String subject,
@@ -462,21 +577,29 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         subject: subject,
         sharePositionOrigin: _resolveSharePositionOrigin(),
       );
-      return result.status != ShareResultStatus.dismissed;
+      switch (result.status) {
+        case ShareResultStatus.success:
+          return const _AdvancedThemeExportDispatchResult.completed();
+        case ShareResultStatus.dismissed:
+          return const _AdvancedThemeExportDispatchResult.cancelled(
+            message: '已取消导出',
+          );
+        case ShareResultStatus.unavailable:
+          return const _AdvancedThemeExportDispatchResult.completed(
+            message: '已发起系统分享，请检查目标应用。',
+          );
+      }
     } on MissingPluginException {
       final fallbackText = clipboardText;
       if (fallbackText != null && fallbackText.isNotEmpty) {
         await Clipboard.setData(ClipboardData(text: fallbackText));
       }
-      if (!mounted) {
-        return false;
-      }
-      _showMessage(
-        fallbackText == null || fallbackText.isEmpty
-            ? '当前安装包暂不支持系统分享，请完整重启 App 后重试。'
-            : '当前安装包暂不支持系统分享，已复制主题内容，请完整重启 App 后重试。',
+      return _AdvancedThemeExportDispatchResult.failed(
+        message:
+            fallbackText == null || fallbackText.isEmpty
+                ? '当前安装包暂不支持系统分享，请完整重启 App 后重试。'
+                : '当前安装包暂不支持系统分享，已复制主题内容，请完整重启 App 后重试。',
       );
-      return false;
     }
   }
 
@@ -490,62 +613,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return null;
     }
     return renderObject.localToGlobal(Offset.zero) & size;
-  }
-
-  Future<void> _importTheme() async {
-    if (_isSaving) {
-      return;
-    }
-    final packageKind = await _chooseImportPackageKind();
-    if (packageKind == null) {
-      return;
-    }
-    final picked = await openFile(
-      acceptedTypeGroups: <XTypeGroup>[
-        switch (packageKind) {
-          _ThemeImportPackageKind.red =>
-            ExternalImportCatalog.advancedThemeRedTypeGroup,
-          _ThemeImportPackageKind.rgshare =>
-            ExternalImportCatalog.advancedThemeRgShareTypeGroup,
-          _ThemeImportPackageKind.official =>
-            ExternalImportCatalog.advancedThemeImportTypeGroup,
-        },
-      ],
-      confirmButtonText: '导入主题',
-    );
-    if (picked == null) {
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      final importedTheme = await _importThemeFromPath(
-        path: picked.path,
-        packageKind: packageKind,
-      );
-      if (!mounted) {
-        return;
-      }
-      _showMessage('已导入主题「${importedTheme.name}」');
-    } on FormatException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage(error.message);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('导入失败，请确认主题文件格式正确。');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
   }
 
   Future<void> _consumePendingExternalImportPayloads() async {
@@ -685,14 +752,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   void _handleMoreAction(_AdvancedThemeListMoreAction action) {
     switch (action) {
-      case _AdvancedThemeListMoreAction.importTheme:
-        unawaited(_importTheme());
-        break;
       case _AdvancedThemeListMoreAction.importBatch:
         unawaited(_openBatchImportSheet());
         break;
-      case _AdvancedThemeListMoreAction.exportBatch:
-        unawaited(_exportThemeBatch());
+      case _AdvancedThemeListMoreAction.selectThemes:
+        _enterSelectionMode();
         break;
     }
   }
@@ -705,8 +769,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         await showModalBottomSheet<_AdvancedThemeBatchImportSummary>(
           context: context,
           isScrollControlled: true,
-          isDismissible: false,
-          enableDrag: false,
+          isDismissible: true,
+          enableDrag: true,
           useSafeArea: true,
           builder: (sheetContext) {
             return _AdvancedThemeBatchImportSheet(
@@ -883,28 +947,34 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
-  Future<void> _exportThemeBatch() async {
+  Future<void> _exportSelectedThemes() async {
     if (_isSaving) {
       return;
     }
-    if (_themeSummaries.isEmpty) {
-      _showMessage('暂无可导出的主题。');
+    final targetThemes = _selectedVisibleThemes;
+    if (targetThemes.isEmpty) {
+      _showMessage('请先选择要导出的主题。');
       return;
     }
+    await _exportThemeSummaries(targetThemes);
+  }
 
-    final targetThemes = await _chooseThemesForBatchExport();
-    if (targetThemes == null || targetThemes.isEmpty || !mounted) {
+  Future<void> _exportThemeSummaries(
+    List<AdvancedThemeSummary> targetThemes,
+  ) async {
+    if (_isSaving || targetThemes.isEmpty) {
       return;
     }
 
     setState(() {
       _isSaving = true;
+      _savingStatusText = '正在准备导出 ${targetThemes.length} 个主题...';
     });
     try {
-      final bundleBytes = await _buildThemeBatchBundle(summaries: targetThemes);
       final fileName =
           'advanced_themes_batch_${_formattedTimestampForFileName(DateTime.now())}.zip';
-      var completed = false;
+      File? outputFile;
+      String? successMessage;
       if (_shouldUseSaveLocationPicker) {
         final location = await getSaveLocation(
           acceptedTypeGroups: const <XTypeGroup>[
@@ -914,25 +984,44 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           confirmButtonText: '导出',
         );
         if (location == null) {
+          if (mounted) {
+            _showMessage('已取消批量导出');
+          }
           return;
         }
-        final file = File(location.path);
-        await file.writeAsBytes(bundleBytes, flush: true);
-        completed = true;
+        outputFile = File(location.path);
+        await _buildThemeBatchBundleFile(
+          summaries: targetThemes,
+          outputFile: outputFile,
+          onProgress: _updateSavingStatus,
+        );
       } else {
         final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsBytes(bundleBytes, flush: true);
-        completed = await _shareExportedThemeFile(
-          file: file,
+        outputFile = File('${tempDir.path}/$fileName');
+        await _buildThemeBatchBundleFile(
+          summaries: targetThemes,
+          outputFile: outputFile,
+          onProgress: _updateSavingStatus,
+        );
+        _updateSavingStatus('正在打开系统分享...');
+        final shareResult = await _shareExportedThemeFile(
+          file: outputFile,
           text: '分享高级主题包，共 ${targetThemes.length} 个主题',
           subject: '高级主题批量导出',
         );
+        if (!mounted) {
+          return;
+        }
+        if (!shareResult.isCompleted) {
+          _showMessage(shareResult.message ?? '已取消批量导出');
+          return;
+        }
+        successMessage = shareResult.message;
       }
-      if (!completed || !mounted) {
+      if (!mounted) {
         return;
       }
-      _showMessage('已导出 ${targetThemes.length} 个主题');
+      _showMessage(successMessage ?? '已导出 ${targetThemes.length} 个主题');
     } catch (error) {
       if (!mounted) {
         return;
@@ -942,257 +1031,301 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       if (mounted) {
         setState(() {
           _isSaving = false;
+          _savingStatusText = null;
         });
       }
     }
   }
 
-  Future<List<AdvancedThemeSummary>?> _chooseThemesForBatchExport() async {
-    if (_themeSummaries.isEmpty) {
-      return null;
+  void _updateSavingStatus(String message) {
+    if (!mounted) {
+      return;
     }
-    return showModalBottomSheet<List<AdvancedThemeSummary>>(
+    setState(() {
+      _savingStatusText = message;
+    });
+  }
+
+  Future<void> _buildThemeBatchBundleFile({
+    required List<AdvancedThemeSummary> summaries,
+    required File outputFile,
+    ValueChanged<String>? onProgress,
+  }) async {
+    final service = ref.read(advancedThemeServiceProvider);
+    final manifestThemes = <Map<String, Object?>>[];
+    final tempDir = await getTemporaryDirectory();
+    final workingDirectory = Directory(
+      '${tempDir.path}/advanced_theme_batch_work_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    var index = 0;
+
+    if (!await workingDirectory.exists()) {
+      await workingDirectory.create(recursive: true);
+    }
+
+    final encoder = ZipFileEncoder();
+    var encoderCreated = false;
+    try {
+      encoder.create(outputFile.path, level: ZipFileEncoder.gzip);
+      encoderCreated = true;
+      for (final summary in summaries) {
+        final theme = await _loadThemeDetail(summary.id);
+        if (theme == null) {
+          continue;
+        }
+        index += 1;
+        onProgress?.call('正在打包 ${theme.name} ($index/${summaries.length})');
+        final normalizedName = _normalizedFileName(theme.name);
+        final innerZipName =
+            '${index.toString().padLeft(3, '0')}_$normalizedName.zip';
+        final tempThemeFile = File('${workingDirectory.path}/$innerZipName');
+        final bundleBytes = await service.encodeThemeBundleZip(theme);
+        await tempThemeFile.writeAsBytes(bundleBytes, flush: true);
+        final bundlePath = 'themes/$innerZipName';
+        await encoder.addFile(tempThemeFile, bundlePath);
+        manifestThemes.add(<String, Object?>{
+          'id': theme.id,
+          'name': theme.name,
+          'file': bundlePath,
+        });
+        if (await tempThemeFile.exists()) {
+          await tempThemeFile.delete();
+        }
+        await _yieldToUi();
+      }
+
+      if (manifestThemes.isEmpty) {
+        throw const FormatException('没有可打包的主题内容。');
+      }
+
+      onProgress?.call('正在写入批量导出清单...');
+      final manifestBytes = utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+          'type': _batchBundleType,
+          'version': _batchBundleVersion,
+          'generatedAt': DateTime.now().toIso8601String(),
+          'themes': manifestThemes,
+        }),
+      );
+      encoder.addArchiveFile(
+        ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
+      );
+    } finally {
+      if (encoderCreated) {
+        await encoder.close();
+      }
+      if (await workingDirectory.exists()) {
+        await workingDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<void> _deleteSelectedThemes() async {
+    if (_isSaving) {
+      return;
+    }
+    final selectedThemes = _selectedVisibleThemes;
+    if (selectedThemes.isEmpty) {
+      _showMessage('请先选择要删除的主题。');
+      return;
+    }
+    final confirmed = await _showBatchDeleteDialog(selectedThemes.length);
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    var successCount = 0;
+    var failureCount = 0;
+    final deletedIds = <String>{};
+    final service = ref.read(advancedThemeServiceProvider);
+    final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
+
+    try {
+      for (final theme in selectedThemes) {
+        try {
+          await service.deleteTheme(
+            theme.id,
+            deleteOptions: const AdvancedThemeDeleteOptions(),
+          );
+          deletedIds.add(theme.id);
+          successCount += 1;
+        } catch (_) {
+          failureCount += 1;
+        }
+      }
+
+      if (successCount > 0) {
+        ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+        if (activeThemeId != null && deletedIds.contains(activeThemeId)) {
+          await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
+        }
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      if (successCount == 0) {
+        _showMessage('批量删除失败，请稍后重试。');
+        return;
+      }
+      if (failureCount > 0) {
+        _showMessage('已删除 $successCount 个主题，失败 $failureCount 个。');
+      } else {
+        _showMessage('已删除 $successCount 个主题。');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<bool?> _showBatchDeleteDialog(int count) {
+    return showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        final selectedIds = _themeSummaries.map((item) => item.id).toSet();
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final allSelected = selectedIds.length == _themeSummaries.length;
-            final selectedCount = selectedIds.length;
-            return SafeArea(
-              top: false,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    0,
-                    16,
-                    16 + MediaQuery.viewPaddingOf(context).bottom,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '选择要导出的主题',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '先勾选主题，再确认导出。已选 $selectedCount / ${_themeSummaries.length}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      CheckboxListTile(
-                        value: allSelected,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text('全选主题'),
-                        subtitle: const Text('勾选后会把当前全部高级主题打包导出'),
-                        onChanged: (value) {
-                          setSheetState(() {
-                            selectedIds
-                              ..clear()
-                              ..addAll(
-                                value == true
-                                    ? _themeSummaries.map((item) => item.id)
-                                    : const <String>[],
-                              );
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _themeSummaries.length,
-                          separatorBuilder:
-                              (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final theme = _themeSummaries[index];
-                            final checked = selectedIds.contains(theme.id);
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () {
-                                setSheetState(() {
-                                  if (checked) {
-                                    selectedIds.remove(theme.id);
-                                  } else {
-                                    selectedIds.add(theme.id);
-                                  }
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.fromLTRB(
-                                  12,
-                                  10,
-                                  12,
-                                  10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerLow,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color:
-                                        checked
-                                            ? colorScheme.primary.withValues(
-                                              alpha: 0.6,
-                                            )
-                                            : colorScheme.outlineVariant
-                                                .withValues(alpha: 0.45),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Checkbox(
-                                      value: checked,
-                                      onChanged: (value) {
-                                        setSheetState(() {
-                                          if (value == true) {
-                                            selectedIds.add(theme.id);
-                                          } else {
-                                            selectedIds.remove(theme.id);
-                                          }
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            theme.name,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleSmall?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          if ((theme.category
-                                                  ?.trim()
-                                                  .isNotEmpty ??
-                                              false))
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 4,
-                                              ),
-                                              child: Text(
-                                                theme.category!.trim(),
-                                                style: Theme.of(
-                                                  context,
-                                                ).textTheme.bodySmall?.copyWith(
-                                                  color:
-                                                      colorScheme
-                                                          .onSurfaceVariant,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.of(sheetContext).pop(),
-                              child: const Text('取消'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed:
-                                  selectedIds.isEmpty
-                                      ? null
-                                      : () {
-                                        final selectedThemes = _themeSummaries
-                                            .where(
-                                              (item) =>
-                                                  selectedIds.contains(item.id),
-                                            )
-                                            .toList(growable: false);
-                                        Navigator.of(
-                                          sheetContext,
-                                        ).pop(selectedThemes);
-                                      },
-                              child: const Text('确定'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('批量删除主题'),
+          content: Text(
+            '确定删除已选 $count 个主题吗？\n\n会按默认策略一并处理主题绑定的壁纸、图集等资源；仍被其他主题引用的共享资源会自动保留。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
         );
       },
     );
   }
 
-  Future<List<int>> _buildThemeBatchBundle({
-    required List<AdvancedThemeSummary> summaries,
-  }) async {
-    final service = ref.read(advancedThemeServiceProvider);
-    final archive = Archive();
-    final manifestThemes = <Map<String, Object?>>[];
-    var index = 0;
+  Future<void> _updateSelectedThemesCategory() async {
+    if (_isSaving) {
+      return;
+    }
+    final selectedThemes = _selectedVisibleThemes;
+    if (selectedThemes.isEmpty) {
+      _showMessage('请先选择要分类的主题。');
+      return;
+    }
+    final category = await _showBatchCategoryDialog(selectedThemes.length);
+    if (category == null || !mounted) {
+      return;
+    }
+    final normalizedCategory = category.trim();
+    final nextCategory = normalizedCategory.isEmpty ? null : normalizedCategory;
 
-    for (final summary in summaries) {
-      final theme = await _loadThemeDetail(summary.id);
-      if (theme == null) {
-        continue;
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final service = ref.read(advancedThemeServiceProvider);
+      final selectedIds = selectedThemes.map((theme) => theme.id).toSet();
+      final updatedThemes = (await service.loadThemes())
+          .map((theme) {
+            if (!selectedIds.contains(theme.id)) {
+              return theme;
+            }
+            return nextCategory == null
+                ? theme.copyWith(clearCategory: true)
+                : theme.copyWith(category: nextCategory);
+          })
+          .toList(growable: false);
+      await service.saveThemes(updatedThemes);
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+      await _load();
+      if (!mounted) {
+        return;
       }
-      index += 1;
-      final bundleBytes = await service.encodeThemeBundleZip(theme);
-      final normalizedName = _normalizedFileName(theme.name);
-      final bundlePath =
-          'themes/${index.toString().padLeft(3, '0')}_$normalizedName.zip';
-      archive.addFile(ArchiveFile(bundlePath, bundleBytes.length, bundleBytes));
-      manifestThemes.add(<String, Object?>{
-        'id': theme.id,
-        'name': theme.name,
-        'file': bundlePath,
-      });
+      _showMessage(
+        nextCategory == null
+            ? '已清空 ${selectedThemes.length} 个主题的分类'
+            : '已将 ${selectedThemes.length} 个主题归类到「$nextCategory」',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
+  }
 
-    if (manifestThemes.isEmpty) {
-      throw const FormatException('没有可打包的主题内容。');
-    }
+  Future<String?> _showBatchCategoryDialog(int count) {
+    final controller = TextEditingController();
+    String? errorText;
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void submit() {
+              final value = controller.text.trim();
+              if (value.isEmpty) {
+                setDialogState(() {
+                  errorText = '请输入分类名称，或使用“清空分类”。';
+                });
+                return;
+              }
+              Navigator.of(dialogContext).pop(value);
+            }
 
-    final manifestBytes = utf8.encode(
-      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
-        'type': _batchBundleType,
-        'version': _batchBundleVersion,
-        'generatedAt': DateTime.now().toIso8601String(),
-        'themes': manifestThemes,
-      }),
+            return AlertDialog(
+              title: const Text('批量分类'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('已选 $count 个主题'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: '主题分类',
+                      hintText: '例如：护眼 / 极简 / 漫画',
+                      errorText: errorText,
+                    ),
+                    onChanged: (_) {
+                      if (errorText == null) {
+                        return;
+                      }
+                      setDialogState(() {
+                        errorText = null;
+                      });
+                    },
+                    onSubmitted: (_) => submit(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(''),
+                  child: const Text('清空分类'),
+                ),
+                FilledButton(onPressed: submit, child: const Text('确定')),
+              ],
+            );
+          },
+        );
+      },
     );
-    archive.addFile(
-      ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
-    );
-    return ZipEncoder().encode(archive);
   }
 
   void _showBatchImportSummary(_AdvancedThemeBatchImportSummary summary) {
@@ -1207,92 +1340,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     _showMessage(summary.lastError ?? '批量导入失败，请确认主题文件格式正确。');
-  }
-
-  Future<_ThemeImportPackageKind?> _chooseImportPackageKind() {
-    return showModalBottomSheet<_ThemeImportPackageKind>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '选择导入类型',
-                      style: Theme.of(sheetContext).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '导入说明',
-                    onPressed: () => _showThemeImportSupportHelp(sheetContext),
-                    icon: Icon(
-                      Icons.help_outline_rounded,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                '请选择要导入的主题包类型。',
-                style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  Icons.inventory_2_outlined,
-                  color: colorScheme.primary,
-                ),
-                title: const Text('官方主题包'),
-                subtitle: const Text('导入应用当前支持的 JSON / ZIP 主题包'),
-                onTap:
-                    () => Navigator.of(
-                      sheetContext,
-                    ).pop(_ThemeImportPackageKind.official),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  Icons.auto_awesome_outlined,
-                  color: colorScheme.primary,
-                ),
-                title: const Text('Red 主题包'),
-                subtitle: const Text('导入Reeden 主题包并按兼容规则转换'),
-                onTap:
-                    () => Navigator.of(
-                      sheetContext,
-                    ).pop(_ThemeImportPackageKind.red),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  Icons.layers_outlined,
-                  color: colorScheme.primary,
-                ),
-                title: const Text('RGShare 主题包'),
-                subtitle: const Text('导入 .rgshare 轻量主题包并按兼容规则转换'),
-                onTap:
-                    () => Navigator.of(
-                      sheetContext,
-                    ).pop(_ThemeImportPackageKind.rgshare),
-              ),
-              const SizedBox(height: 4),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _showThemeImportSupportHelp(BuildContext context) {
@@ -1798,9 +1845,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
 
     return PopScope<void>(
-      canPop: context.canPop(),
+      canPop: !_isSelectionMode && context.canPop(),
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || !context.mounted) {
+          return;
+        }
+        if (_isSelectionMode) {
+          _exitSelectionMode();
           return;
         }
         context.go('/mine');
@@ -1809,78 +1860,109 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           leading: IconButton(
-            tooltip: '返回',
+            tooltip: _isSelectionMode ? '取消选择' : '返回',
             onPressed: () {
+              if (_isSelectionMode) {
+                _exitSelectionMode();
+                return;
+              }
               if (context.canPop()) {
                 context.pop();
                 return;
               }
               context.go('/mine');
             },
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            icon: Icon(
+              _isSelectionMode
+                  ? Icons.close_rounded
+                  : Icons.arrow_back_ios_new_rounded,
+            ),
           ),
-          title: const Text('高级主题'),
+          title: Text(
+            _isSelectionMode
+                ? _selectedThemeIds.isEmpty
+                    ? '选择主题'
+                    : '已选 ${_selectedThemeIds.length} 个主题'
+                : '高级主题',
+          ),
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.transparent,
           actions: [
-            IconButton(
-              tooltip: '新建高级主题',
-              onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
-              icon: const Icon(Icons.palette_outlined),
-            ),
-            PopupMenuButton<_AdvancedThemeListMoreAction>(
-              enabled: !_isLoading && !_isSaving,
-              tooltip: '更多',
-              onSelected: _handleMoreAction,
-              itemBuilder:
-                  (context) =>
-                      const <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
-                        PopupMenuItem(
-                          value: _AdvancedThemeListMoreAction.importTheme,
-                          child: Text('导入主题'),
-                        ),
-                        PopupMenuItem(
-                          value: _AdvancedThemeListMoreAction.importBatch,
-                          child: Text('批量导入'),
-                        ),
-                        PopupMenuItem(
-                          value: _AdvancedThemeListMoreAction.exportBatch,
-                          child: Text('批量导出'),
-                        ),
-                      ],
-            ),
+            if (!_isSelectionMode) ...[
+              IconButton(
+                tooltip: '新建高级主题',
+                onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
+                icon: const Icon(Icons.add_rounded),
+              ),
+              PopupMenuButton<_AdvancedThemeListMoreAction>(
+                enabled: !_isLoading && !_isSaving,
+                tooltip: '更多',
+                onSelected: _handleMoreAction,
+                itemBuilder:
+                    (context) =>
+                        const <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
+                          PopupMenuItem(
+                            value: _AdvancedThemeListMoreAction.importBatch,
+                            child: Text('批量导入'),
+                          ),
+                          PopupMenuItem(
+                            value: _AdvancedThemeListMoreAction.selectThemes,
+                            child: Text('选择主题'),
+                          ),
+                        ],
+              ),
+            ],
           ],
         ),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.settingsContentMaxWidth,
-            );
-            return DecoratedBox(
-              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child:
-                      _isAccessLoading || _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : !_canUseAdvancedThemes
-                          ? _buildVipLockedState(context, topInset: topInset)
-                          : _buildThemeListView(
-                            context,
-                            activeThemeAsync: activeThemeAsync,
-                            activeThemeId: activeThemeId,
-                            horizontal: horizontal,
-                            bottomSafe: bottomSafe,
-                            topInset: topInset,
-                          ),
+        bottomNavigationBar:
+            _isSelectionMode &&
+                    !_isAccessLoading &&
+                    !_isLoading &&
+                    _canUseAdvancedThemes
+                ? _buildSelectionActionBar(context)
+                : null,
+        body: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                );
+                final content =
+                    _isAccessLoading || _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : !_canUseAdvancedThemes
+                        ? _buildVipLockedState(context, topInset: topInset)
+                        : _buildThemeListView(
+                          context,
+                          activeThemeAsync: activeThemeAsync,
+                          activeThemeId: activeThemeId,
+                          horizontal: horizontal,
+                          bottomSafe: bottomSafe,
+                          topInset: topInset,
+                        );
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: content,
+                    ),
+                  ),
+                );
+              },
+            ),
+            if (_isSaving && (_savingStatusText?.trim().isNotEmpty ?? false))
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  child: Center(child: _buildSavingProgressCard(context)),
                 ),
               ),
-            );
-          },
+          ],
         ),
       ),
     );
@@ -1954,6 +2036,49 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
+  Widget _buildSavingProgressCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.6),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                _savingStatusText ?? '处理中...',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildThemeListView(
     BuildContext context, {
     required AsyncValue<AppAdvancedTheme?> activeThemeAsync,
@@ -1982,10 +2107,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   activeThemeAsync: activeThemeAsync,
                   visibleThemeCount: visibleThemes.length,
                 ),
-                const SizedBox(height: 10),
-                if (_availableCategories.isNotEmpty)
-                  _buildCategoryChips(context),
-                if (_availableCategories.isNotEmpty) const SizedBox(height: 10),
+                const SizedBox(height: 12),
               ],
             ),
           ),
@@ -2033,7 +2155,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required AsyncValue<AppAdvancedTheme?> activeThemeAsync,
     required int visibleThemeCount,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final activeThemeName = switch (activeThemeAsync) {
       AsyncData(:final value) when value != null => value.name,
       _ => null,
@@ -2044,84 +2165,143 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             ? '主题数量 $visibleThemeCount'
             : '筛选结果 $visibleThemeCount';
     final activeLabel =
-        activeThemeName == null ? '当前应用 未启用' : '当前应用 $activeThemeName';
+        activeThemeName == null ? '当前启用: 未启用' : '当前启用: $activeThemeName';
     return Row(
       children: [
         Expanded(
-          child: Text(
-            countLabel,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _buildStatusBubble(context, countLabel),
           ),
         ),
         const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            activeLabel,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _buildStatusBubble(context, activeLabel),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSearchBar(BuildContext context) {
-    return CompactCollectionSearchField(
-      controller: _searchController,
-      hintText: '搜索主题名称或分类',
-      query: _searchQuery,
-      onChanged: (value) {
-        setState(() {
-          _searchQuery = value;
-        });
-      },
-      onClear: () {
-        _searchController.clear();
-        setState(() {
-          _searchQuery = '';
-        });
-      },
+  Widget _buildStatusBubble(BuildContext context, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
-  Widget _buildCategoryChips(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          ChoiceChip(
-            label: const Text('全部'),
-            selected: _selectedCategory == null,
-            onSelected: (_) {
+  Widget _buildSearchBar(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedCategory = _selectedCategory?.trim();
+    final categoryLabel =
+        selectedCategory == null || selectedCategory.isEmpty
+            ? '全部分类'
+            : selectedCategory;
+    return Row(
+      children: [
+        Flexible(
+          flex: 5,
+          child: CompactCollectionSearchField(
+            controller: _searchController,
+            hintText: '搜索主题名称或分类',
+            query: _searchQuery,
+            onChanged: (value) {
               setState(() {
-                _selectedCategory = null;
+                _searchQuery = value;
+                _pruneSelectionForVisibleThemes();
+              });
+            },
+            onClear: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+                _pruneSelectionForVisibleThemes();
               });
             },
           ),
-          const SizedBox(width: 8),
-          for (final category in _availableCategories) ...[
-            ChoiceChip(
-              label: Text(category),
-              selected: _selectedCategory == category,
-              onSelected: (_) {
-                setState(() {
-                  _selectedCategory =
-                      _selectedCategory == category ? null : category;
-                });
-              },
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 2,
+          child: PopupMenuButton<String?>(
+            tooltip: '分类筛选',
+            initialValue: _selectedCategory,
+            onSelected: (value) {
+              setState(() {
+                _selectedCategory =
+                    value?.trim().isEmpty ?? true ? null : value;
+                _pruneSelectionForVisibleThemes();
+              });
+            },
+            itemBuilder:
+                (context) => <PopupMenuEntry<String?>>[
+                  const PopupMenuItem<String?>(
+                    value: null,
+                    child: Text('全部分类'),
+                  ),
+                  ..._availableCategories.map(
+                    (category) => PopupMenuItem<String?>(
+                      value: category,
+                      child: Text(category),
+                    ),
+                  ),
+                ],
+            child: Container(
+              height: 40,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLowest.withValues(
+                  alpha: 0.92,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      categoryLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2142,20 +2322,31 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required bool isActive,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isSelected = _selectedThemeIds.contains(theme.id);
+    final showSelectedState = _isSelectionMode && isSelected;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: _isSaving ? null : () => _openEditor(theme.id),
+      onTap:
+          _isSaving
+              ? null
+              : _isSelectionMode
+              ? () => _toggleThemeSelection(theme.id)
+              : () => _openEditor(theme.id),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
           color:
-              isActive
+              showSelectedState
+                  ? colorScheme.primary.withValues(alpha: 0.12)
+                  : isActive
                   ? colorScheme.primary.withValues(alpha: 0.08)
                   : colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color:
-                isActive
+                showSelectedState
+                    ? colorScheme.primary.withValues(alpha: 0.72)
+                    : isActive
                     ? colorScheme.primary.withValues(alpha: 0.55)
                     : colorScheme.outlineVariant.withValues(alpha: 0.45),
           ),
@@ -2165,6 +2356,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           children: [
             Row(
               children: [
+                if (_isSelectionMode) ...[
+                  Checkbox(
+                    value: isSelected,
+                    onChanged:
+                        _isSaving
+                            ? null
+                            : (_) => _toggleThemeSelection(theme.id),
+                    visualDensity: const VisualDensity(
+                      horizontal: -4,
+                      vertical: -4,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2202,70 +2407,188 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                           ],
                         ],
                       ),
+                      if ((theme.category?.trim().isNotEmpty ?? false))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            theme.category!.trim(),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                PopupMenuButton<_AdvancedThemeAction>(
-                  enabled: !_isSaving,
-                  onSelected: (action) {
-                    switch (action) {
-                      case _AdvancedThemeAction.edit:
-                        _openEditor(theme.id);
-                      case _AdvancedThemeAction.duplicate:
-                        unawaited(_duplicateTheme(theme.id));
-                      case _AdvancedThemeAction.exportJson:
-                        unawaited(_exportTheme(theme.id));
-                      case _AdvancedThemeAction.exportZip:
-                        unawaited(_exportThemeBundle(theme.id));
-                      case _AdvancedThemeAction.delete:
-                        unawaited(_handleDeleteThemeById(theme.id));
-                    }
-                  },
-                  itemBuilder:
-                      (context) => const [
-                        PopupMenuItem(
-                          value: _AdvancedThemeAction.edit,
-                          child: Text('编辑'),
-                        ),
-                        PopupMenuItem(
-                          value: _AdvancedThemeAction.duplicate,
-                          child: Text('复制'),
-                        ),
-                        PopupMenuItem(
-                          value: _AdvancedThemeAction.exportJson,
-                          child: Text('导出颜色 JSON'),
-                        ),
-                        PopupMenuItem(
-                          value: _AdvancedThemeAction.exportZip,
-                          child: Text('导出 ZIP'),
-                        ),
-                        PopupMenuItem(
-                          value: _AdvancedThemeAction.delete,
-                          child: Text('删除'),
-                        ),
-                      ],
-                ),
+                if (!_isSelectionMode)
+                  PopupMenuButton<_AdvancedThemeAction>(
+                    enabled: !_isSaving,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _AdvancedThemeAction.edit:
+                          _openEditor(theme.id);
+                        case _AdvancedThemeAction.duplicate:
+                          unawaited(_duplicateTheme(theme.id));
+                        case _AdvancedThemeAction.exportJson:
+                          unawaited(_exportTheme(theme.id));
+                        case _AdvancedThemeAction.exportZip:
+                          unawaited(_exportThemeBundle(theme.id));
+                        case _AdvancedThemeAction.delete:
+                          unawaited(_handleDeleteThemeById(theme.id));
+                      }
+                    },
+                    itemBuilder:
+                        (context) => const [
+                          PopupMenuItem(
+                            value: _AdvancedThemeAction.edit,
+                            child: Text('编辑'),
+                          ),
+                          PopupMenuItem(
+                            value: _AdvancedThemeAction.duplicate,
+                            child: Text('复制'),
+                          ),
+                          PopupMenuItem(
+                            value: _AdvancedThemeAction.exportJson,
+                            child: Text('导出颜色 JSON'),
+                          ),
+                          PopupMenuItem(
+                            value: _AdvancedThemeAction.exportZip,
+                            child: Text('导出 ZIP'),
+                          ),
+                          PopupMenuItem(
+                            value: _AdvancedThemeAction.delete,
+                            child: Text('删除'),
+                          ),
+                        ],
+                  ),
               ],
             ),
             const SizedBox(height: 10),
             _buildDualModePreviewStrip(context, theme),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _buildResourceBadges(context, theme),
+            if (!_isSelectionMode) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed:
+                      _isSaving
+                          ? null
+                          : isActive
+                          ? _disableActiveTheme
+                          : () => unawaited(_applyThemeById(theme.id)),
+                  child: Text(isActive ? '停用主题' : '应用主题'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionActionBar(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasSelection = _selectedThemeIds.isNotEmpty;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surface.withValues(alpha: 0.98),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed:
-                    _isSaving
-                        ? null
-                        : isActive
-                        ? _disableActiveTheme
-                        : () => unawaited(_applyThemeById(theme.id)),
-                child: Text(isActive ? '停用主题' : '应用主题'),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildSelectionActionButton(
+                context,
+                icon:
+                    _allVisibleThemesSelected
+                        ? Icons.deselect_outlined
+                        : Icons.select_all_rounded,
+                label: _allVisibleThemesSelected ? '取消全选' : '全选',
+                enabled: !_isSaving && _visibleThemes.isNotEmpty,
+                onTap: _toggleSelectAllVisibleThemes,
+              ),
+            ),
+            Expanded(
+              child: _buildSelectionActionButton(
+                context,
+                icon: Icons.delete_outline_rounded,
+                label: '删除',
+                enabled: !_isSaving && hasSelection,
+                color: colorScheme.error,
+                onTap: () => unawaited(_deleteSelectedThemes()),
+              ),
+            ),
+            Expanded(
+              child: _buildSelectionActionButton(
+                context,
+                icon: Icons.ios_share_outlined,
+                label: '导出',
+                enabled: !_isSaving && hasSelection,
+                onTap: () => unawaited(_exportSelectedThemes()),
+              ),
+            ),
+            Expanded(
+              child: _buildSelectionActionButton(
+                context,
+                icon: Icons.category_outlined,
+                label: '分类',
+                enabled: !_isSaving && hasSelection,
+                onTap: () => unawaited(_updateSelectedThemesCategory()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionActionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final resolvedColor =
+        enabled
+            ? (color ?? colorScheme.onSurface)
+            : colorScheme.onSurfaceVariant.withValues(alpha: 0.45);
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: enabled ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: resolvedColor),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: resolvedColor,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -2338,6 +2661,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       previewConfig,
     );
     final label = mode == AppAdvancedThemeMode.light ? '浅色' : '深色';
+    final wallpaperPath = config.wallpaperPath?.trim();
+    final hasPreviewWallpaper =
+        wallpaperPath != null &&
+        wallpaperPath.isNotEmpty &&
+        File(wallpaperPath).existsSync();
 
     return Container(
       decoration: BoxDecoration(
@@ -2346,6 +2674,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           end: Alignment.bottomRight,
           colors: <Color>[palette.backgroundColor, palette.surfaceColor],
         ),
+        image:
+            hasPreviewWallpaper
+                ? DecorationImage(
+                  image: FileImage(File(wallpaperPath)),
+                  fit: BoxFit.cover,
+                  opacity: 0.88,
+                )
+                : null,
       ),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
@@ -2450,46 +2786,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  List<Widget> _buildResourceBadges(
-    BuildContext context,
-    AdvancedThemeSummary theme,
-  ) {
-    final badges = <Widget>[];
-    final category = theme.category?.trim();
-    if (category != null && category.isNotEmpty) {
-      badges.add(_buildResourceBadge(context, label: '分类：$category'));
-    }
-    if (theme.lightMode.hasWallpaper || theme.darkMode.hasWallpaper) {
-      badges.add(_buildResourceBadge(context, label: '壁纸'));
-    }
-    if (theme.lightMode.hasReaderWallpaper ||
-        theme.darkMode.hasReaderWallpaper) {
-      badges.add(_buildResourceBadge(context, label: '阅读器背景'));
-    }
-    if (theme.hasCoverGalleryBinding) {
-      badges.add(_buildResourceBadge(context, label: '封面'));
-    }
-    if (theme.hasLaunchImageGallery) {
-      badges.add(_buildResourceBadge(context, label: '启动图'));
-    }
-    if (theme.hasBottomNavGallery) {
-      badges.add(_buildResourceBadge(context, label: '底栏'));
-    }
-    if (theme.hasAppInterfaceFont) {
-      badges.add(_buildResourceBadge(context, label: '界面字体'));
-    }
-    if (theme.hasReaderFont) {
-      badges.add(_buildResourceBadge(context, label: '阅读字体'));
-    }
-    if (theme.hasBothModesConfigured) {
-      badges.add(_buildResourceBadge(context, label: '双模式完整'));
-    }
-    if (badges.isEmpty) {
-      badges.add(_buildResourceBadge(context, label: '仅颜色'));
-    }
-    return badges;
-  }
-
   AppAdvancedThemeModeConfig _summaryToPreviewModeConfig(
     AdvancedThemeModeSummary summary,
   ) {
@@ -2501,27 +2797,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         cardColorValue: summary.cardColorValue,
         cardTextColorValue: summary.cardTextColorValue,
         textSecondaryColorValue: summary.textSecondaryColorValue,
-      ),
-    );
-  }
-
-  Widget _buildResourceBadge(BuildContext context, {required String label}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -2614,7 +2889,7 @@ class _AdvancedThemeBatchImportSheetState
       const <_AdvancedThemeImportQueueItem>[];
   bool _isImporting = false;
   _AdvancedThemeBatchImportSummary? _summary;
-  String _headerMessage = '添加主题文件后开始导入';
+  String _headerMessage = '';
 
   int get _completedCount {
     return _items
@@ -2782,7 +3057,7 @@ class _AdvancedThemeBatchImportSheetState
       _summary = null;
       final next = [..._items]..removeAt(index);
       _items = next;
-      _headerMessage = next.isEmpty ? '添加主题文件后开始导入' : '已选择 ${next.length} 个文件';
+      _headerMessage = next.isEmpty ? '' : '已选择 ${next.length} 个文件';
     });
   }
 
@@ -2810,13 +3085,6 @@ class _AdvancedThemeBatchImportSheetState
     });
   }
 
-  void _closeSheet() {
-    if (_isImporting) {
-      return;
-    }
-    Navigator.of(context).pop(_summary);
-  }
-
   void _showMessage(String message) {
     ScaffoldMessenger.of(
       context,
@@ -2828,6 +3096,8 @@ class _AdvancedThemeBatchImportSheetState
     final colorScheme = Theme.of(context).colorScheme;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final summary = _summary;
+    final isEmptyState = _items.isEmpty && summary == null && !_isImporting;
+    final maxHeightFactor = isEmptyState ? 0.36 : 0.56;
 
     return PopScope<void>(
       canPop: !_isImporting,
@@ -2835,45 +3105,57 @@ class _AdvancedThemeBatchImportSheetState
         top: false,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+            maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor,
           ),
           child: Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomSafe),
+            padding: EdgeInsets.fromLTRB(14, 8, 14, 8 + bottomSafe),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
+                    const SizedBox(width: 40),
                     Expanded(
                       child: Text(
                         '批量导入主题',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 40,
+                      child: IconButton(
+                        tooltip: '导入说明',
+                        onPressed:
+                            _isImporting
+                                ? null
+                                : widget.onShowImportSupportHelp,
+                        icon: const Icon(Icons.help_outline_rounded),
+                        visualDensity: const VisualDensity(
+                          horizontal: -2,
+                          vertical: -2,
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: '导入说明',
-                      onPressed:
-                          _isImporting ? null : widget.onShowImportSupportHelp,
-                      icon: const Icon(Icons.help_outline_rounded),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: Text(
-                    _headerMessage,
-                    key: ValueKey<String>(_headerMessage),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.4,
+                if (_headerMessage.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Text(
+                      _headerMessage,
+                      key: ValueKey<String>(_headerMessage),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
+                ],
+                SizedBox(height: isEmptyState ? 14 : 8),
                 if (_isImporting || summary != null) ...[
                   Container(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -2935,48 +3217,30 @@ class _AdvancedThemeBatchImportSheetState
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                 ],
-                Flexible(
-                  child:
-                      _items.isEmpty
-                          ? _buildEmptyPicker(context)
-                          : _buildImportQueue(context),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isImporting ? null : _closeSheet,
-                        child: Text(summary == null ? '取消' : '完成'),
+                if (_items.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: _buildEmptyPicker(context),
+                  )
+                else
+                  Flexible(child: _buildImportQueue(context)),
+                if (_items.isNotEmpty && !_isImporting) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: summary == null ? _startImport : _resetQueue,
+                      icon: Icon(
+                        summary == null
+                            ? Icons.file_upload_outlined
+                            : Icons.restart_alt_rounded,
                       ),
+                      label: Text(summary == null ? '开始导入' : '再导入一批'),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed:
-                            _isImporting
-                                ? null
-                                : summary == null
-                                ? (_items.isEmpty ? _pickFiles : _startImport)
-                                : _resetQueue,
-                        icon: Icon(
-                          summary == null
-                              ? (_items.isEmpty
-                                  ? Icons.add_rounded
-                                  : Icons.file_upload_outlined)
-                              : Icons.restart_alt_rounded,
-                        ),
-                        label: Text(
-                          summary == null
-                              ? (_items.isEmpty ? '添加文件' : '开始导入')
-                              : '再导入一批',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -2992,60 +3256,58 @@ class _AdvancedThemeBatchImportSheetState
     setState(() {
       _items = const <_AdvancedThemeImportQueueItem>[];
       _summary = null;
-      _headerMessage = '添加主题文件后开始导入';
+      _headerMessage = '';
     });
   }
 
   Widget _buildEmptyPicker(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: _pickFiles,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: _pickFiles,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_photo_alternate_outlined,
+                color: colorScheme.primary,
+                size: 22,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.add_photo_alternate_outlined,
-                  color: colorScheme.primary,
-                  size: 30,
-                ),
+            const SizedBox(height: 10),
+            Text(
+              '添加主题文件',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '支持一次选择多个 JSON / ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.45,
               ),
-              const SizedBox(height: 16),
-              Text(
-                '添加主题文件',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '支持一次选择多个 JSON / ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -3064,11 +3326,6 @@ class _AdvancedThemeBatchImportSheetState
                   context,
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
-            ),
-            TextButton.icon(
-              onPressed: _isImporting ? null : _pickFiles,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('添加'),
             ),
           ],
         ),
