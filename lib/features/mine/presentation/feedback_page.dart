@@ -6,6 +6,8 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/feedback/feedback_models.dart';
 import '../../../core/feedback/feedback_service.dart';
@@ -354,73 +356,26 @@ class _FeedbackPageState extends State<FeedbackPage>
   }
 
   Widget _buildErrorState(BuildContext context, String errorText) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colorScheme.errorContainer.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '加载失败',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              errorText,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-              ),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonal(
-              onPressed: () => _loadEntries(),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      child: AppStatusStateCard(
+        icon: Icons.error_outline_rounded,
+        title: '加载失败',
+        message: errorText,
+        tone: AppStatusStateTone.error,
+        actionLabel: '重试',
+        onAction: () => _loadEntries(),
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 26),
-      child: Column(
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 34,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '暂无匹配反馈',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '可以换个关键词试试，或点击右上角“提交”发起新的反馈。',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-        ],
+      child: const AppEmptyStateCard(
+        icon: Icons.inbox_outlined,
+        title: '暂无匹配反馈',
+        description: '可以换个关键词试试，或点击右上角“提交”发起新的反馈。',
       ),
     );
   }

@@ -11,6 +11,8 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
@@ -434,61 +436,21 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   }
 
   Widget _buildErrorCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '加载失败',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _errorText ?? '',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: () => unawaited(_reload()),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+    return AppStatusStateCard(
+      icon: Icons.error_outline_rounded,
+      title: '加载失败',
+      message: _errorText ?? '',
+      tone: AppStatusStateTone.error,
+      actionLabel: '重试',
+      onAction: () => unawaited(_reload()),
     );
   }
 
   Widget _buildEmptyLibraryCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '还没有导入字体',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '导入 `.ttf` 或 `.otf` 后会在这里显示。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return const AppEmptyStateCard(
+      icon: Icons.font_download_outlined,
+      title: '还没有导入字体',
+      description: '导入 `.ttf` 或 `.otf` 后会在这里显示。',
     );
   }
 

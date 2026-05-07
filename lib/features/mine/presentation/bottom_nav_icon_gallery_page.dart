@@ -11,6 +11,7 @@ import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
 class BottomNavIconGalleryPage extends StatefulWidget {
   const BottomNavIconGalleryPage({super.key});
@@ -322,34 +323,21 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                   16 + bottomSafe,
                                 ),
                                 children: [
-                                  TextField(
+                                  CompactCollectionSearchField(
                                     controller: _searchController,
+                                    hintText: '搜索底栏图集',
+                                    query: _searchQuery,
                                     onChanged: (value) {
                                       setState(() {
                                         _searchQuery = value;
                                       });
                                     },
-                                    decoration: InputDecoration(
-                                      prefixIcon: const Icon(
-                                        Icons.search_rounded,
-                                      ),
-                                      hintText: '搜索底栏图集',
-                                      suffixIcon:
-                                          _searchQuery.trim().isEmpty
-                                              ? null
-                                              : IconButton(
-                                                tooltip: '清空搜索',
-                                                onPressed: () {
-                                                  _searchController.clear();
-                                                  setState(() {
-                                                    _searchQuery = '';
-                                                  });
-                                                },
-                                                icon: const Icon(
-                                                  Icons.close_rounded,
-                                                ),
-                                              ),
-                                    ),
+                                    onClear: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchQuery = '';
+                                      });
+                                    },
                                   ),
                                   const SizedBox(height: 12),
                                   Text(

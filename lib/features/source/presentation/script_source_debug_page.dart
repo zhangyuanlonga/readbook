@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../runtime/host/appread_browser_runtime.dart';
 import '../../../runtime/session/source_session.dart';
@@ -65,10 +66,10 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
   @override
   void initState() {
     super.initState();
-    _sourceRuntimeFacade =
-        ProviderScope.containerOf(context, listen: false).read(
-          sourceRuntimeFacadeProvider,
-        );
+    _sourceRuntimeFacade = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(sourceRuntimeFacadeProvider);
     if (widget.autoRunOnInit) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
@@ -362,9 +363,8 @@ class _DebugInputCard extends StatelessWidget {
                     children: [
                       Text(
                         '调试参数',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       Chip(label: Text(modeLabel)),
                     ],
@@ -499,7 +499,9 @@ class _SummaryCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         _checkStatusLabel(summary.status),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(
                           color: statusColor,
                           fontWeight: FontWeight.w700,
                         ),
@@ -593,14 +595,15 @@ class _StageCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         '${stage.title} · ${_stageOutcomeLabel(stage.outcome)}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
                 ),
-                _CopyCardButton(text: _buildStageCardCopyText(stage, formatJson)),
+                _CopyCardButton(
+                  text: _buildStageCardCopyText(stage, formatJson),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -745,38 +748,17 @@ class _CodeLikeBlock extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
+  static const String _message =
+      '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。';
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '阶段明细',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const _CopyCardButton(
-                  text: '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '还没有调试结果。\n\n建议先执行一次检测，页面会给出标准结论，并把搜索、详情、目录、正文的详细过程按时间线展示出来。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.playlist_add_check_circle_outlined,
+      title: '阶段明细',
+      description: _message,
+      centered: false,
+      trailing: const _CopyCardButton(text: _message),
     );
   }
 }
@@ -842,9 +824,10 @@ String _buildStageCardCopyText(
   _StageReport stage,
   String Function(Object? value) formatJson,
 ) {
-  final buffer = StringBuffer()
-    ..writeln('${stage.title} · ${_stageOutcomeLabel(stage.outcome)}')
-    ..writeln(stage.summary);
+  final buffer =
+      StringBuffer()
+        ..writeln('${stage.title} · ${_stageOutcomeLabel(stage.outcome)}')
+        ..writeln(stage.summary);
 
   if (stage.highlights.isNotEmpty) {
     buffer

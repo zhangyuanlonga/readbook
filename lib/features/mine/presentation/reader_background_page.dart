@@ -310,30 +310,21 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                               horizontal,
                               10,
                             ),
-                            child: TextField(
+                            child: CompactCollectionSearchField(
                               controller: _searchController,
+                              hintText: '搜索阅读背景文件名',
+                              query: _searchQuery,
                               onChanged: (value) {
                                 setState(() {
                                   _searchQuery = value;
                                 });
                               },
-                              decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.search_rounded),
-                                hintText: '搜索阅读背景文件名',
-                                suffixIcon:
-                                    _searchQuery.trim().isEmpty
-                                        ? null
-                                        : IconButton(
-                                          tooltip: '清空搜索',
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() {
-                                              _searchQuery = '';
-                                            });
-                                          },
-                                          icon: const Icon(Icons.close_rounded),
-                                        ),
-                              ),
+                              onClear: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                });
+                              },
                             ),
                           ),
                           Expanded(

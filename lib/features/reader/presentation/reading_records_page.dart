@@ -11,6 +11,7 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
@@ -63,6 +64,9 @@ class ReadingRecordsPage extends ConsumerStatefulWidget {
 
 class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   static const double _kStatsPageBottomGap = 24;
+  static const double _kHeatmapCellSize = 14;
+  static const double _kHeatmapCellGap = 4;
+  static const double _kHeatmapWeekGap = 4;
 
   late final ReadingRecordService _readingRecordService;
   late final ReadingRecordsQueryService _readingRecordsQueryService;
@@ -155,11 +159,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       case ReadingRecordsPeriod.week:
         return normalized.add(Duration(days: 7 * offset));
       case ReadingRecordsPeriod.month:
-        return DateTime(
-          normalized.year,
-          normalized.month + offset,
-          normalized.day,
-        );
+        return DateTime(normalized.year, normalized.month + offset, 1);
       case ReadingRecordsPeriod.year:
         return DateTime(
           normalized.year + offset,
@@ -210,13 +210,19 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   Future<void> _openDistributionCalendarSheet(
     ReadingCalendarDistribution distribution,
   ) async {
+    final bottomInset = mobileBottomNavigationBodyInset(
+      context,
+      style: _resolveEffectiveNavigationStyle(),
+      showNavigationLabels: ref.read(appNavigationLabelVisibilityProvider),
+      standardAppearance: ref.read(appStandardNavigationBarAppearanceProvider),
+    );
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
       builder: (sheetContext) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + bottomInset),
           child: SingleChildScrollView(
             child: _buildDistributionCalendarOverview(
               distribution,
@@ -536,9 +542,6 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
           today,
           (current, item) => item.isBefore(current) ? item : current,
         );
-    final showEarlierDataIndicator =
-        _period == ReadingRecordsPeriod.all &&
-        _heatmapRangeMode != _HeatmapRangeMode.all;
     final startDate =
         _period == ReadingRecordsPeriod.year
             ? _startOfWeek(_stripDate(periodRange.start!))
@@ -553,6 +556,10 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                   periodRange.endExclusive!.subtract(const Duration(days: 1)),
                 )
             : today;
+    final showEarlierDataIndicator =
+        _period == ReadingRecordsPeriod.all &&
+        _heatmapRangeMode != _HeatmapRangeMode.all &&
+        firstDate.isBefore(startDate);
     final weeks = _buildHeatmapWeeks(startDate: startDate, endDate: endDate);
     final monthLabels = _buildHeatmapMonthLabels(weeks);
     final visibleDateKeys = <String>{};
@@ -659,9 +666,11 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                       ),
                       for (final label in monthLabels)
                         Padding(
-                          padding: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.only(
+                            right: _kHeatmapWeekGap,
+                          ),
                           child: SizedBox(
-                            width: 28,
+                            width: _heatmapWeekColumnWidth,
                             child: Text(
                               label,
                               style: Theme.of(
@@ -675,7 +684,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                               ),
                               maxLines: 1,
                               softWrap: false,
-                              overflow: TextOverflow.clip,
+                              overflow: TextOverflow.visible,
                             ),
                           ),
                         ),
@@ -716,12 +725,14 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     ],
                     for (final week in weeks)
                       Padding(
-                        padding: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.only(right: _kHeatmapWeekGap),
                         child: Column(
                           children: [
                             for (final day in week)
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
+                                padding: const EdgeInsets.only(
+                                  bottom: _kHeatmapCellGap,
+                                ),
                                 child: _buildHeatmapCell(
                                   day: day,
                                   stats: statsByDate[_dateKeyFor(day)],
@@ -2004,7 +2015,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   }
 
   Widget _buildEarlierDataHint() {
-    final characters = '没有更早数据'.split('');
+    final characters = '更早数据已折叠'.split('');
     return SizedBox(
       width: 22,
       child: Padding(
@@ -2044,6 +2055,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
         hintWidth +
         gapBeforeHeatmap;
   }
+
+  double get _heatmapWeekColumnWidth => _kHeatmapCellSize;
 
   Widget _buildHeatmapCell({
     required DateTime day,
@@ -2092,7 +2105,10 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                       color: colorScheme.outlineVariant.withValues(alpha: 0.18),
                     ),
           ),
-          child: const SizedBox(width: 14, height: 14),
+          child: const SizedBox(
+            width: _kHeatmapCellSize,
+            height: _kHeatmapCellSize,
+          ),
         ),
       ),
     );
@@ -2333,11 +2349,11 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   }
 
   Widget _buildEmptyCard(String message) {
-    return SizedBox(
-      width: double.infinity,
-      child: Card(
-        child: Padding(padding: const EdgeInsets.all(16), child: Text(message)),
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.insights_rounded,
+      title: '暂无统计数据',
+      description: message,
+      compact: true,
     );
   }
 
@@ -2507,6 +2523,14 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     final normalized = _stripDate(date);
     final offset = normalized.weekday - DateTime.monday;
     return normalized.subtract(Duration(days: offset));
+  }
+
+  AppNavigationStyle _resolveEffectiveNavigationStyle() {
+    return resolveAppNavigationStyle(
+      ref.read(appNavigationStylePreferenceProvider),
+      isWeb: false,
+      platform: Theme.of(context).platform,
+    );
   }
 
   String _formatDuration(int millis) {

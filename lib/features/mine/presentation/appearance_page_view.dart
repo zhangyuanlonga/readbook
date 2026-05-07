@@ -886,30 +886,21 @@ extension on _AppearancePageState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
+        CompactCollectionSearchField(
           controller: _backgroundSearchController,
+          hintText: '搜索应用背景文件名',
+          query: _backgroundSearchQuery,
           onChanged: (value) {
             _updateBackgroundSearchState(() {
               _backgroundSearchQuery = value;
             });
           },
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search_rounded),
-            hintText: '搜索应用背景文件名',
-            suffixIcon:
-                _backgroundSearchQuery.trim().isEmpty
-                    ? null
-                    : IconButton(
-                      tooltip: '清空搜索',
-                      onPressed: () {
-                        _backgroundSearchController.clear();
-                        _updateBackgroundSearchState(() {
-                          _backgroundSearchQuery = '';
-                        });
-                      },
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-          ),
+          onClear: () {
+            _backgroundSearchController.clear();
+            _updateBackgroundSearchState(() {
+              _backgroundSearchQuery = '';
+            });
+          },
         ),
         const SizedBox(height: 10),
         if (_isLoadingBackgrounds)

@@ -9,6 +9,8 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import 'chapter_rule_management_page.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/advanced_theme_provider.dart';
@@ -1024,56 +1026,23 @@ class _BookshelfTaxonomyManagementPageState
   }
 
   Widget _buildEmptyCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Text(
-        '还没有$_entityName，点击右上角新增即可。',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
-      ),
+    return AppEmptyStateCard(
+      icon: _icon,
+      title: '还没有$_entityName',
+      description: '点击右上角新增即可。',
+      compact: true,
     );
   }
 
   Widget _buildErrorCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.error.withValues(alpha: 0.28)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _loadErrorText ?? '',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onErrorContainer,
-                height: 1.35,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          FilledButton.tonal(
-            onPressed:
-                _isSaving ? null : () => unawaited(_load(showLoading: true)),
-            child: const Text('重试'),
-          ),
-        ],
-      ),
+    return AppStatusStateCard(
+      icon: Icons.error_outline_rounded,
+      title: '加载失败',
+      message: _loadErrorText ?? '',
+      tone: AppStatusStateTone.error,
+      actionLabel: '重试',
+      onAction: _isSaving ? null : () => unawaited(_load(showLoading: true)),
+      compact: true,
     );
   }
 

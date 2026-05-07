@@ -9,6 +9,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../source/debug_service/source_debug_web_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../../source/providers.dart';
@@ -177,7 +178,11 @@ class _SourceDebugServicePageState
                     _buildErrorCard(context, _service.lastErrorText!.trim()),
                   ],
                   const SizedBox(height: 12),
-                  _buildApiCard(context, isRunning: isRunning, addresses: addresses),
+                  _buildApiCard(
+                    context,
+                    isRunning: isRunning,
+                    addresses: addresses,
+                  ),
                 ],
               ),
             ),
@@ -189,7 +194,9 @@ class _SourceDebugServicePageState
           child: FilledButton.icon(
             onPressed: busy ? null : _toggleService,
             icon: Icon(
-              isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+              isRunning
+                  ? Icons.stop_circle_outlined
+                  : Icons.play_circle_outline,
             ),
             label: Text(
               busy
@@ -242,9 +249,9 @@ class _SourceDebugServicePageState
               Expanded(
                 child: Text(
                   '书源网页调试服务',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
             ],
@@ -274,20 +281,15 @@ class _SourceDebugServicePageState
     final rows = <({String label, String value})>[
       (
         label: '运行状态',
-        value: busy
-            ? '处理中'
-            : isRunning
-            ? '运行中'
-            : '未启动',
+        value:
+            busy
+                ? '处理中'
+                : isRunning
+                ? '运行中'
+                : '未启动',
       ),
-      (
-        label: '默认端口',
-        value: SourceDebugWebService.defaultPort.toString(),
-      ),
-      (
-        label: '当前端口',
-        value: _service.port?.toString() ?? '--',
-      ),
+      (label: '默认端口', value: SourceDebugWebService.defaultPort.toString()),
+      (label: '当前端口', value: _service.port?.toString() ?? '--'),
       (
         label: '启动时间',
         value:
@@ -325,9 +327,9 @@ class _SourceDebugServicePageState
                 ),
                 Text(
                   row.value,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -359,7 +361,8 @@ class _SourceDebugServicePageState
                     Container(
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerLow,
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -388,34 +391,11 @@ class _SourceDebugServicePageState
   }
 
   Widget _buildErrorCard(BuildContext context, String errorText) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.error.withValues(alpha: 0.22)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '最近错误',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onErrorContainer,
-            ),
-          ),
-          const SizedBox(height: 10),
-          SelectableText(
-            errorText,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onErrorContainer,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
+    return AppStatusStateCard(
+      icon: Icons.error_outline_rounded,
+      title: '最近错误',
+      message: errorText,
+      tone: AppStatusStateTone.error,
     );
   }
 
@@ -424,9 +404,10 @@ class _SourceDebugServicePageState
     required bool isRunning,
     required List<String> addresses,
   }) {
-    final sampleBase = addresses.isNotEmpty
-        ? addresses.first
-        : 'http://192.168.1.23:${SourceDebugWebService.defaultPort}';
+    final sampleBase =
+        addresses.isNotEmpty
+            ? addresses.first
+            : 'http://192.168.1.23:${SourceDebugWebService.defaultPort}';
     final sampleUrl = '$sampleBase/api/debug/ping';
     return _buildCardShell(
       context,
@@ -451,9 +432,9 @@ class _SourceDebugServicePageState
             ),
             child: SelectableText(
               sampleUrl,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontFamily: 'SF Mono',
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontFamily: 'SF Mono'),
             ),
           ),
           const SizedBox(height: 12),
@@ -516,10 +497,7 @@ class _SourceDebugServicePageState
                   ],
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: 12),
-                trailing,
-              ],
+              if (trailing != null) ...[const SizedBox(width: 12), trailing],
             ],
           ),
           const SizedBox(height: 14),

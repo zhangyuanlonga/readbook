@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/app_status_state_card.dart';
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../../app/theme/app_border_tokens.dart';
 
@@ -463,51 +465,18 @@ class BookshelfEmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: palette.cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: resolveAppBorderSide(
-          Theme.of(context).colorScheme,
-          baseColor: palette.cardBorderColor,
-          containerColor: palette.cardColor,
+    return AppEmptyStateCard(
+      icon: Icons.import_contacts_outlined,
+      title: '书架暂无内容',
+      description: '请先在搜索结果或详情页加入书架。',
+      footer: FilledButton.icon(
+        onPressed: onImportLocal,
+        style: FilledButton.styleFrom(
+          backgroundColor: palette.primaryColor,
+          foregroundColor: palette.buttonTextColor,
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Icon(
-              Icons.import_contacts_outlined,
-              color: palette.primaryColor,
-              size: 28,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '书架暂无内容',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '请先在搜索结果或详情页加入书架。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondaryColor,
-              ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: onImportLocal,
-              style: FilledButton.styleFrom(
-                backgroundColor: palette.primaryColor,
-                foregroundColor: palette.buttonTextColor,
-              ),
-              icon: const Icon(Icons.library_add_rounded),
-              label: const Text('导入本地图书'),
-            ),
-          ],
-        ),
+        icon: const Icon(Icons.library_add_rounded),
+        label: const Text('导入本地图书'),
       ),
     );
   }
@@ -529,40 +498,17 @@ class BookshelfFilterEmptyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalizedKeyword = searchKeyword?.trim() ?? '';
     final hasSearchKeyword = normalizedKeyword.isNotEmpty;
-    return Card(
-      color: palette.cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: resolveAppBorderSide(
-          Theme.of(context).colorScheme,
-          baseColor: palette.cardBorderColor,
-          containerColor: palette.cardColor,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              hasSearchKeyword
-                  ? Icons.search_off_rounded
-                  : Icons.filter_alt_off_rounded,
-              color: palette.primaryColor,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                hasSearchKeyword
-                    ? '当前“$label”中没有匹配“$normalizedKeyword”的书籍'
-                    : '当前“$label”分类暂无书籍',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: palette.textSecondaryColor,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      icon:
+          hasSearchKeyword
+              ? Icons.search_off_rounded
+              : Icons.filter_alt_off_rounded,
+      title: hasSearchKeyword ? '没有匹配书籍' : '当前分类暂无书籍',
+      description:
+          hasSearchKeyword
+              ? '当前“$label”中没有匹配“$normalizedKeyword”的书籍'
+              : '当前“$label”分类暂无书籍',
+      compact: true,
     );
   }
 }
@@ -581,33 +527,16 @@ class BookshelfLoadErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: palette.noticeSurfaceColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: palette.noticeAccentColor.withValues(alpha: 0.45),
-        ),
+    return AppStatusStateCard(
+      icon: Icons.error_outline_rounded,
+      title: '书架加载失败',
+      message: message,
+      tone: AppStatusStateTone.error,
+      footer: Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '书架加载失败',
-              style: TextStyle(
-                color: palette.noticeAccentColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(message, style: TextStyle(color: palette.textPrimaryColor)),
-            const SizedBox(height: 10),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
-      ),
+      compact: true,
     );
   }
 }

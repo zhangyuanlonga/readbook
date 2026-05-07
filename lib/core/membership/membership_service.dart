@@ -62,10 +62,15 @@ class MembershipService {
     );
     return MembershipEntitlement.fromJson({
       'vip_level': data['vip_level'],
+      'membership_level': data['membership_level'],
       'vip_status': 'active',
       'plan_type': data['plan_type'],
       'expire_at': data['expire_at'],
       'source': data['source'],
+      'grant_type': data['grant_type'],
+      'grant_subtype': data['grant_subtype'],
+      'grant_label': data['grant_label'],
+      'is_custom_expire': data['is_custom_expire'],
       'is_trial': data['is_trial'],
       'max_devices': data['max_devices'],
       'features': data['features'],
@@ -102,10 +107,15 @@ class MembershipService {
       );
       return MembershipEntitlement.fromJson({
         'vip_level': data['vip_level'],
+        'membership_level': data['membership_level'],
         'vip_status': 'active',
         'plan_type': data['plan_type'],
         'expire_at': data['expire_at'],
         'source': data['source'],
+        'grant_type': data['grant_type'],
+        'grant_subtype': data['grant_subtype'],
+        'grant_label': data['grant_label'],
+        'is_custom_expire': data['is_custom_expire'],
         'is_trial': data['is_trial'],
         'max_devices': data['max_devices'],
         'features': data['features'],

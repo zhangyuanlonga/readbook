@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
 
@@ -114,11 +115,11 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                       ),
                       const SizedBox(height: 12),
                       if (entries.isEmpty)
-                        const Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('暂无错误日志。'),
-                          ),
+                        const AppEmptyStateCard(
+                          icon: Icons.event_note_outlined,
+                          title: '暂无错误日志',
+                          description: '当前没有可展示的错误日志记录。',
+                          compact: true,
                         )
                       else
                         ...entries.map(_buildLogCard),

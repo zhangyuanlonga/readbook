@@ -42,6 +42,10 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin<HomePage> {
+  static const double _kContinueReadingCardWidth = 104;
+  static const double _kContinueReadingCardHeight = 154;
+  static const double _kContinueReadingCardCoverSize = 86;
+
   late final ReadingRecordService _readingRecordService;
   late final ReaderPreferencesService _preferencesService;
   late final HomeEngagementService _engagementService;
@@ -494,15 +498,18 @@ class _HomePageState extends ConsumerState<HomePage>
 
     final visible = records.take(6).toList(growable: false);
     return SizedBox(
-      height: 220,
+      height: _kContinueReadingCardHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: visible.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final record = visible[index];
-          return SizedBox(width: 148, child: _buildContinueReadingCard(record));
+          return SizedBox(
+            width: _kContinueReadingCardWidth,
+            child: _buildContinueReadingCard(record),
+          );
         },
       ),
     );
@@ -518,13 +525,13 @@ class _HomePageState extends ConsumerState<HomePage>
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         onTap: () => unawaited(_openRecord(record)),
         child: Ink(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: colorScheme.surface.withValues(alpha: 0.78),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: colorScheme.outlineVariant.withValues(alpha: 0.32),
             ),
@@ -550,37 +557,37 @@ class _HomePageState extends ConsumerState<HomePage>
                     cover: cover,
                     title: displayState.displayTitle,
                     author: displayState.displayAuthor,
-                    width: 124,
-                    height: 124,
-                    borderRadius: BorderRadius.circular(18),
+                    width: _kContinueReadingCardCoverSize,
+                    height: _kContinueReadingCardCoverSize,
+                    borderRadius: BorderRadius.circular(14),
                   );
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 displayState.displayTitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
+                style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w700,
-                  height: 1.2,
+                  height: 1.15,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 displayState.displayAuthor?.trim().isNotEmpty == true
                     ? displayState.displayAuthor!
                     : '继续阅读',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.labelSmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
               const Spacer(),
               Text(
                 '累计 ${_formatMinutes(record.totalReadMillis)}',
-                style: theme.textTheme.labelMedium?.copyWith(
+                style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: colorScheme.primary,
                 ),

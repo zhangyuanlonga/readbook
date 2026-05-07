@@ -146,6 +146,130 @@ void main() {
       expect(day.readMillis, const Duration(minutes: 45).inMilliseconds);
     });
 
+    test('groups cross-day session counts by end date in calendar stats', () {
+      final startAt = DateTime(2026, 4, 4, 23, 50);
+      final endAt = DateTime(2026, 4, 5, 0, 20);
+      final latestRecords = <ReadingRecord>[
+        ReadingRecord(
+          bookId: 'book_1',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/1',
+          bookTitle: '测试书一',
+          totalReadMillis: const Duration(minutes: 30).inMilliseconds,
+          totalReadChars: 3200,
+          lastReadAt: endAt,
+        ),
+      ];
+      final dailyRecords = <ReadingRecordDay>[
+        ReadingRecordDay(
+          bookId: 'book_1',
+          dateKey: '2026-04-05',
+          bookTitle: '测试书一',
+          readMillis: const Duration(minutes: 30).inMilliseconds,
+          readChars: 3200,
+          firstReadAt: startAt,
+          lastReadAt: endAt,
+        ),
+      ];
+      final sessions = <ReadingRecordSession>[
+        ReadingRecordSession(
+          id: 1,
+          bookId: 'book_1',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/1',
+          bookTitle: '测试书一',
+          chapterTitle: '第一章',
+          startAt: startAt,
+          endAt: endAt,
+          durationMillis: const Duration(minutes: 30).inMilliseconds,
+          readChars: 3200,
+        ),
+      ];
+
+      final view = service.buildQueryView(
+        latestRecords: latestRecords,
+        dailyRecords: dailyRecords,
+        sessions: sessions,
+        period: ReadingRecordsPeriod.month,
+        anchor: DateTime.parse('2026-04-05T00:00:00.000Z'),
+        resolvedStatusesByBookId: const <String, ReadingBookResolvedStatus>{},
+      );
+
+      final calendarMonth = view.distributionCalendar.months[1];
+      final targetDay = calendarMonth.weeks
+          .expand((week) => week.days)
+          .firstWhere((day) => day.dateKey == '2026-04-05');
+      expect(targetDay.readMillis, const Duration(minutes: 30).inMilliseconds);
+
+      final heatmap = service.buildHeatmapStats(
+        dailyRecords,
+        sessions: sessions,
+      );
+      expect(heatmap['2026-04-05']?.sessionCount, 1);
+    });
+
+    test('splits day distribution across crossed hours', () {
+      final startAt = DateTime(2026, 4, 4, 9, 50);
+      final endAt = DateTime(2026, 4, 4, 11, 20);
+      final latestRecords = <ReadingRecord>[
+        ReadingRecord(
+          bookId: 'book_1',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/1',
+          bookTitle: '测试书一',
+          totalReadMillis: const Duration(minutes: 80).inMilliseconds,
+          totalReadChars: 4000,
+          lastReadAt: endAt,
+        ),
+      ];
+      final dailyRecords = <ReadingRecordDay>[
+        ReadingRecordDay(
+          bookId: 'book_1',
+          dateKey: '2026-04-04',
+          bookTitle: '测试书一',
+          readMillis: const Duration(minutes: 80).inMilliseconds,
+          readChars: 4000,
+          firstReadAt: startAt,
+          lastReadAt: endAt,
+        ),
+      ];
+      final sessions = <ReadingRecordSession>[
+        ReadingRecordSession(
+          id: 1,
+          bookId: 'book_1',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/1',
+          bookTitle: '测试书一',
+          startAt: startAt,
+          endAt: endAt,
+          durationMillis: const Duration(minutes: 90).inMilliseconds,
+          readChars: 4000,
+        ),
+      ];
+
+      final view = service.buildQueryView(
+        latestRecords: latestRecords,
+        dailyRecords: dailyRecords,
+        sessions: sessions,
+        period: ReadingRecordsPeriod.day,
+        anchor: DateTime.parse('2026-04-04T00:00:00.000Z'),
+        resolvedStatusesByBookId: const <String, ReadingBookResolvedStatus>{},
+      );
+
+      expect(
+        view.distribution.buckets[9].readMillis,
+        const Duration(minutes: 10).inMilliseconds,
+      );
+      expect(
+        view.distribution.buckets[10].readMillis,
+        const Duration(hours: 1).inMilliseconds,
+      );
+      expect(
+        view.distribution.buckets[11].readMillis,
+        const Duration(minutes: 20).inMilliseconds,
+      );
+    });
+
     test('dedupes same work re-imported under different book ids', () {
       final latestRecords = <ReadingRecord>[
         ReadingRecord(

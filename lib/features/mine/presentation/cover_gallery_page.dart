@@ -151,32 +151,21 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                               16 + bottomSafe,
                             ),
                             children: [
-                              TextField(
+                              CompactCollectionSearchField(
                                 controller: _searchController,
+                                hintText: '搜索封面图集',
+                                query: _searchQuery,
                                 onChanged: (value) {
                                   setState(() {
                                     _searchQuery = value;
                                   });
                                 },
-                                decoration: InputDecoration(
-                                  prefixIcon: const Icon(Icons.search_rounded),
-                                  hintText: '搜索封面图集',
-                                  suffixIcon:
-                                      _searchQuery.trim().isEmpty
-                                          ? null
-                                          : IconButton(
-                                            tooltip: '清空搜索',
-                                            onPressed: () {
-                                              _searchController.clear();
-                                              setState(() {
-                                                _searchQuery = '';
-                                              });
-                                            },
-                                            icon: const Icon(
-                                              Icons.close_rounded,
-                                            ),
-                                          ),
-                                ),
+                                onClear: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
                               ),
                               const SizedBox(height: 10),
                               if (_visibleGalleries.isEmpty)

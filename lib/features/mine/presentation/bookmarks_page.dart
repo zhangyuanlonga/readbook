@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -288,9 +289,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     required String actionLabel,
     required VoidCallback onAction,
   }) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
     return RefreshIndicator(
       onRefresh: _reload,
       child: ListView(
@@ -302,27 +300,16 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
           24 + bottomSafe,
         ),
         children: [
-          Icon(Icons.bookmarks_outlined, size: 48, color: colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: FilledButton.tonal(
-              onPressed: onAction,
-              child: Text(actionLabel),
-            ),
+          AppStatusStateCard(
+            icon: Icons.bookmarks_outlined,
+            title: title,
+            message: message,
+            tone:
+                title == '加载失败'
+                    ? AppStatusStateTone.error
+                    : AppStatusStateTone.neutral,
+            actionLabel: actionLabel,
+            onAction: onAction,
           ),
         ],
       ),

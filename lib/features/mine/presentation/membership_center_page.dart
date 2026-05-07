@@ -1103,7 +1103,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                       const SizedBox(height: 4),
                       Text(
                         hasMembership
-                            ? '已开通 ${_describePlan(activeEntitlement!.planType)}，${_formatTime(activeEntitlement.expireAt)} 到期。'
+                            ? _buildEntitlementSummary(activeEntitlement!)
                             : '当前账号还没有有效会员，可通过底部“许可证激活”输入许可证码完成开通。',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
@@ -1121,13 +1121,9 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               '会员状态',
               _describeStatus(entitlement.vipStatus),
             ),
-            _buildInfoRow(context, '权益来源', _describeSource(entitlement.source)),
+            _buildInfoRow(context, '权益来源', _describeSource(entitlement)),
             _buildInfoRow(context, '设备上限', '${entitlement.maxDevices} 台'),
-            _buildInfoRow(
-              context,
-              '试用状态',
-              entitlement.isTrial ? '试用中' : '正式权益',
-            ),
+            _buildInfoRow(context, '试用状态', entitlement.displayBenefitKind),
             if (entitlement.features.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
@@ -1573,9 +1569,28 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         return '年卡';
       case 'lifetime':
         return '终身';
+      case 'custom':
+        return '自定义';
       default:
         return '月卡';
     }
+  }
+
+  String _buildEntitlementSummary(MembershipEntitlement entitlement) {
+    final planLabel = _describePlan(entitlement.planType);
+    final sourceLabel = entitlement.displaySourceLabel;
+    final expireText =
+        entitlement.expireAt == null
+            ? '长期有效'
+            : '${_formatTime(entitlement.expireAt)} 到期';
+
+    if (entitlement.isCampaignTrial) {
+      return '当前为$sourceLabel，按$planLabel口径展示，$expireText。';
+    }
+    if (entitlement.isSystemTrial || entitlement.isTrial) {
+      return '当前为$sourceLabel，$expireText。';
+    }
+    return '已开通$planLabel，$expireText。';
   }
 
   String _describeStatus(String? status) {
@@ -1589,17 +1604,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     }
   }
 
-  String _describeSource(String? source) {
-    switch (source) {
-      case 'activation_code':
-        return '许可证';
-      case 'trial':
-        return '试用';
-      case 'manual_grant':
-        return '手工赠送';
-      default:
-        return '-';
-    }
+  String _describeSource(MembershipEntitlement? entitlement) {
+    return entitlement?.displaySourceLabel ?? '-';
   }
 
   String _describeFeature(String raw) {

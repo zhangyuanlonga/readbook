@@ -18,6 +18,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/membership/membership_features.dart';
@@ -32,6 +33,7 @@ import '../../source/application/external_source_import_bridge.dart';
 import '../application/advanced_theme_page_flow_coordinator.dart';
 import '../application/advanced_theme_provider.dart';
 import '../providers.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 
 class AdvancedThemeListPage extends ConsumerStatefulWidget {
   const AdvancedThemeListPage({super.key});
@@ -2072,30 +2074,21 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Widget _buildSearchBar(BuildContext context) {
-    return TextField(
+    return CompactCollectionSearchField(
       controller: _searchController,
+      hintText: '搜索主题名称或分类',
+      query: _searchQuery,
       onChanged: (value) {
         setState(() {
           _searchQuery = value;
         });
       },
-      decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.search_rounded),
-        hintText: '搜索主题名称或分类',
-        suffixIcon:
-            _searchQuery.trim().isEmpty
-                ? null
-                : IconButton(
-                  tooltip: '清空搜索',
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {
-                      _searchQuery = '';
-                    });
-                  },
-                  icon: const Icon(Icons.close_rounded),
-                ),
-      ),
+      onClear: () {
+        _searchController.clear();
+        setState(() {
+          _searchQuery = '';
+        });
+      },
     );
   }
 
@@ -2133,40 +2126,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final isFiltering =
         _searchQuery.trim().isNotEmpty ||
         (_selectedCategory?.trim().isNotEmpty ?? false);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.palette_outlined, size: 34, color: colorScheme.primary),
-          const SizedBox(height: 10),
-          Text(
-            isFiltering ? '没有匹配的主题' : '还没有高级主题',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isFiltering ? '换个关键词或分类试试。' : '点击右上角新增，就可以分别配置浅色和深色主题。',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.palette_outlined,
+      title: isFiltering ? '没有匹配的主题' : '还没有高级主题',
+      description: isFiltering ? '换个关键词或分类试试。' : '点击右上角新增，就可以分别配置浅色和深色主题。',
     );
   }
 

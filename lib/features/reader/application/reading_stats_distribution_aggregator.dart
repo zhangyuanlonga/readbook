@@ -123,9 +123,7 @@ class ReadingStatsDistributionAggregator {
   }) {
     final millisByHour = <int, int>{};
     for (final session in filteredSessions) {
-      final local = session.startAt.toLocal();
-      millisByHour[local.hour] =
-          (millisByHour[local.hour] ?? 0) + session.durationMillis;
+      _accumulateSessionByHour(millisByHour, session);
     }
     return List<ReadingDurationDistributionBucket>.generate(24, (hour) {
       return ReadingDurationDistributionBucket(
@@ -133,6 +131,33 @@ class ReadingStatsDistributionAggregator {
         readMillis: millisByHour[hour] ?? 0,
       );
     }, growable: false);
+  }
+
+  void _accumulateSessionByHour(
+    Map<int, int> millisByHour,
+    ReadingRecordSession session,
+  ) {
+    var cursor = session.startAt.toLocal();
+    final end = session.endAt.toLocal();
+    if (!end.isAfter(cursor)) {
+      return;
+    }
+
+    while (cursor.isBefore(end)) {
+      final nextHour = DateTime(
+        cursor.year,
+        cursor.month,
+        cursor.day,
+        cursor.hour + 1,
+      );
+      final sliceEnd = nextHour.isBefore(end) ? nextHour : end;
+      final sliceMillis = sliceEnd.difference(cursor).inMilliseconds;
+      if (sliceMillis > 0) {
+        millisByHour[cursor.hour] =
+            (millisByHour[cursor.hour] ?? 0) + sliceMillis;
+      }
+      cursor = sliceEnd;
+    }
   }
 
   List<ReadingDurationDistributionBucket> _buildWeekDistributionBuckets({

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/app_status_state_card.dart';
 import '../../application/sync_scope_catalog_service.dart';
 import '../../domain/sync_scope.dart';
 import '../../domain/sync_job.dart';
@@ -233,7 +235,12 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
           child: profilesAsync.when(
             data: (profiles) {
               if (profiles.isEmpty) {
-                return const Text('当前还没有已保存的同步配置。');
+                return const AppEmptyStateCard(
+                  icon: Icons.cloud_off_rounded,
+                  title: '还没有已保存配置',
+                  description: '完成一次配置保存后，这里会显示可直接复用的同步配置。',
+                  compact: true,
+                );
               }
               return Column(
                 children: [
@@ -248,7 +255,14 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
                 ],
               );
             },
-            error: (error, _) => Text('加载配置失败：$error'),
+            error:
+                (error, _) => AppStatusStateCard(
+                  icon: Icons.error_outline_rounded,
+                  title: '加载配置失败',
+                  message: '$error',
+                  tone: AppStatusStateTone.error,
+                  compact: true,
+                ),
             loading: () => const _LoadingLine('正在加载配置…'),
           ),
         ),
@@ -359,13 +373,25 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
           child: jobsAsync.when(
             data: (jobs) {
               if (jobs.isEmpty) {
-                return const Text('当前还没有同步任务记录。');
+                return const AppEmptyStateCard(
+                  icon: Icons.history_toggle_off_rounded,
+                  title: '还没有同步任务记录',
+                  description: '执行过同步任务后，这里会展示最近的同步历史。',
+                  compact: true,
+                );
               }
               return Column(
                 children: [for (final job in jobs.take(8)) _JobTile(job: job)],
               );
             },
-            error: (error, _) => Text('加载任务失败：$error'),
+            error:
+                (error, _) => AppStatusStateCard(
+                  icon: Icons.error_outline_rounded,
+                  title: '加载任务失败',
+                  message: '$error',
+                  tone: AppStatusStateTone.error,
+                  compact: true,
+                ),
             loading: () => const _LoadingLine('正在加载任务…'),
           ),
         ),

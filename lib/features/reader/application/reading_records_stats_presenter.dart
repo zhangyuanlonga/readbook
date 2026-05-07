@@ -105,7 +105,7 @@ class ReadingRecordsStatsPresenter {
 
     final sessionCountByDate = <String, int>{};
     for (final session in sessions) {
-      final dateKey = _dateKeyFor(session.startAt);
+      final dateKey = _dateKeyFor(session.endAt);
       if (!allowedDateKeys.contains(dateKey)) {
         continue;
       }
@@ -125,14 +125,15 @@ class ReadingRecordsStatsPresenter {
         readMillis: totalReadMillisByDate[dateKey] ?? 0,
         readChars: totalReadCharsByDate[dateKey] ?? 0,
         sessionCount: sessionCountByDate[dateKey] ?? 0,
-        workCount: books.isEmpty
-            ? _workIdentityService.countDistinctWorks(
-                items: daysByDate[dateKey] ?? const <ReadingRecordDay>[],
-                titleOf: (item) => item.bookTitle,
-                authorOf: (item) => item.bookAuthor,
-                fallbackIdOf: (item) => item.bookId,
-              )
-            : books.length,
+        workCount:
+            books.isEmpty
+                ? _workIdentityService.countDistinctWorks(
+                  items: daysByDate[dateKey] ?? const <ReadingRecordDay>[],
+                  titleOf: (item) => item.bookTitle,
+                  authorOf: (item) => item.bookAuthor,
+                  fallbackIdOf: (item) => item.bookId,
+                )
+                : books.length,
         books: books,
       );
     }

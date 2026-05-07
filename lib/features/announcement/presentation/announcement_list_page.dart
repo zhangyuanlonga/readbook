@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
 import '../../mine/application/advanced_theme_provider.dart';
@@ -332,9 +333,6 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     required String actionLabel,
     required VoidCallback onAction,
   }) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
     return RefreshIndicator(
       onRefresh: () => _loadInitial(forceRefresh: true),
       child: ListView(
@@ -346,27 +344,16 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
           24 + bottomSafe,
         ),
         children: [
-          Icon(Icons.notifications_none, size: 48, color: colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: FilledButton.tonal(
-              onPressed: onAction,
-              child: Text(actionLabel),
-            ),
+          AppStatusStateCard(
+            icon: Icons.notifications_none,
+            title: title,
+            message: message,
+            tone:
+                title == '加载失败'
+                    ? AppStatusStateTone.error
+                    : AppStatusStateTone.neutral,
+            actionLabel: actionLabel,
+            onAction: onAction,
           ),
         ],
       ),

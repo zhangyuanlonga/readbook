@@ -630,54 +630,19 @@ extension on _SourcePageState {
   }
 
   Widget _buildEmptyStateCard(BuildContext context) {
-    return Card(
-      shape: _buildOutlinedCardShape(context),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        child: Column(
-          children: [
-            Text(
-              '还没有书源',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '可以新建脚本，或直接导入现成书源。',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
+    return const AppEmptyStateCard(
+      icon: Icons.auto_stories_outlined,
+      title: '还没有书源',
+      description: '可以新建脚本，或直接导入现成书源。',
     );
   }
 
   Widget _buildNoResultCard(BuildContext context) {
-    return Card(
-      shape: _buildOutlinedCardShape(context),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-        child: Column(
-          children: [
-            const Icon(Icons.search_off_rounded, size: 28),
-            const SizedBox(height: 10),
-            Text(
-              '没有匹配结果',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '改关键词、切换分组，或清空筛选后再试。',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
+    return const AppEmptyStateCard(
+      icon: Icons.search_off_rounded,
+      title: '没有匹配结果',
+      description: '改关键词、切换分组，或清空筛选后再试。',
+      compact: true,
     );
   }
 

@@ -8,6 +8,8 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../application/advanced_theme_provider.dart';
 import '../../reader/application/local/txt_chapter_rule_service.dart';
 
@@ -426,16 +428,11 @@ class _ChapterRuleManagementPageState extends State<ChapterRuleManagementPage> {
                                     const SizedBox(height: 12),
                                   ],
                                   if (_rules.isEmpty)
-                                    Text(
-                                      '还没有规则，点击右下角新增即可。',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.copyWith(
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                      ),
+                                    AppEmptyStateCard(
+                                      icon: Icons.rule_folder_outlined,
+                                      title: '还没有规则',
+                                      description: '点击右下角新增即可。',
+                                      compact: true,
                                     )
                                   else
                                     Column(
@@ -581,33 +578,14 @@ class _ChapterRuleManagementPageState extends State<ChapterRuleManagementPage> {
     String message, {
     VoidCallback? onRetry,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-                height: 1.35,
-              ),
-            ),
-          ),
-          if (onRetry != null) ...[
-            const SizedBox(width: 8),
-            TextButton(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ],
-      ),
+    return AppStatusStateCard(
+      icon: Icons.error_outline_rounded,
+      title: '加载失败',
+      message: message,
+      tone: AppStatusStateTone.error,
+      actionLabel: onRetry == null ? null : '重试',
+      onAction: onRetry,
+      compact: true,
     );
   }
 
