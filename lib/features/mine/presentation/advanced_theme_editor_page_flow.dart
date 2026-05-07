@@ -81,8 +81,6 @@ extension on _AdvancedThemeEditorPageState {
       _selectMode(AppAdvancedThemeMode.dark);
       return;
     }
-    final normalizedCategory = _categoryController.text.trim();
-
     _updateAdvancedThemeEditorState(() {
       _isSaving = true;
     });
@@ -90,8 +88,6 @@ extension on _AdvancedThemeEditorPageState {
       final saved = await _service.saveTheme(
         draft.copyWith(
           name: normalizedName,
-          category: normalizedCategory.isEmpty ? null : normalizedCategory,
-          clearCategory: normalizedCategory.isEmpty,
           lightConfig: draft.lightConfig.copyWith(colors: parsedLightColors),
           darkConfig: draft.darkConfig.copyWith(colors: parsedDarkColors),
         ),

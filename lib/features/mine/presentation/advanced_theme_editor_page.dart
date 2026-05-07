@@ -50,7 +50,6 @@ class _AdvancedThemeEditorPageState
   late final AdvancedThemeService _service;
   late final AdvancedThemeEditorStateService _stateService;
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _categoryController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
     vsync: this,
@@ -111,7 +110,6 @@ class _AdvancedThemeEditorPageState
     _modeTabController.removeListener(_handleModeTabChanged);
     _modeTabController.dispose();
     _nameController.dispose();
-    _categoryController.dispose();
     for (final controllers in _colorControllersByMode.values) {
       for (final controller in controllers.values) {
         controller.removeListener(_handleColorControllerChanged);
@@ -187,7 +185,6 @@ class _AdvancedThemeEditorPageState
 
   void _syncControllersFromDraft(AppAdvancedTheme theme) {
     _nameController.text = theme.name;
-    _categoryController.text = theme.category?.trim() ?? '';
     for (final mode in AppAdvancedThemeMode.values) {
       for (final slot in _ThemeColorSlot.values) {
         _colorControllersByMode[mode]![slot]!.text = _formatHex(
@@ -2141,8 +2138,6 @@ class _AdvancedThemeEditorPageState
                             10 + bottomSafe,
                           ),
                           children: [
-                            _buildMetadataSection(context),
-                            const SizedBox(height: sectionGap),
                             _buildColorsSection(context),
                             const SizedBox(height: sectionGap),
                             _buildResourceSection(context, draft),
@@ -2184,14 +2179,10 @@ class _AdvancedThemeEditorPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel(context, '基础主题层'),
-        const SizedBox(height: 2),
-        _buildSectionDescription(
-          context,
-          '这一层决定整体风格，会影响大面积背景、输入区、选中态、文字层级和通用边框。',
-        ),
         const SizedBox(height: 4),
         _buildPanel(
           context,
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
           child: Column(
             children: _buildColorFieldRows(context, const [
               _ThemeColorFieldSpec(
@@ -2249,14 +2240,10 @@ class _AdvancedThemeEditorPageState
         ),
         const SizedBox(height: 8),
         _buildSectionLabel(context, '精细覆盖层'),
-        const SizedBox(height: 2),
-        _buildSectionDescription(
-          context,
-          '这一层负责局部精修，主要影响卡片、提示块、图标承托、按钮文字和阴影等具体视觉块。',
-        ),
         const SizedBox(height: 4),
         _buildPanel(
           context,
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
           child: Column(
             children: [
               ..._buildColorFieldRows(context, const [
@@ -2313,47 +2300,6 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildMetadataSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel(context, '主题信息'),
-        const SizedBox(height: 4),
-        _buildPanel(
-          context,
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-          child: TextField(
-            controller: _categoryController,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: '主题分类',
-              hintText: '例如：护眼 / 极简 / 漫画',
-              prefixIcon: Icon(Icons.category_outlined, size: 18),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionDescription(BuildContext context, String description) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Text(
-        description,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 11,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          height: 1.35,
-        ),
-      ),
-    );
-  }
-
   Widget _buildResourceSection(BuildContext context, AppAdvancedTheme draft) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2378,10 +2324,9 @@ class _AdvancedThemeEditorPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(context, '其他外观'),
-        const SizedBox(height: 4),
         _buildPanel(
           context,
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: Column(
             children: [
               _buildAppearanceLinkTile(
@@ -3259,7 +3204,7 @@ class _AdvancedThemeEditorPageState
         final parsed = _parseHexColor(controller.text.trim());
         final previewColor = _resolvedColor(parsed, fallback);
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           child: Row(
             children: [
               Expanded(
@@ -3269,6 +3214,7 @@ class _AdvancedThemeEditorPageState
                     Text(
                       field.label,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -3276,35 +3222,42 @@ class _AdvancedThemeEditorPageState
                     Text(
                       field.description,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: colorScheme.onSurfaceVariant,
+                        height: 1.2,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               SizedBox(
-                width: 150,
+                width: 136,
                 child: TextField(
                   controller: controller,
                   enabled: !_isSaving,
                   keyboardType: TextInputType.text,
                   textCapitalization: TextCapitalization.characters,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
                   ],
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: _formatHex(fallback.toARGB32()),
+                    hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                     filled: true,
                     fillColor: colorScheme.surface,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 9,
+                      horizontal: 8,
+                      vertical: 8,
                     ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(
                         color: colorScheme.outlineVariant.withValues(
                           alpha: 0.55,
@@ -3312,7 +3265,7 @@ class _AdvancedThemeEditorPageState
                       ),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(
                         color: colorScheme.outlineVariant.withValues(
                           alpha: 0.55,
@@ -3320,7 +3273,7 @@ class _AdvancedThemeEditorPageState
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(
                         color: colorScheme.primary,
                         width: 1.2,
@@ -3330,13 +3283,13 @@ class _AdvancedThemeEditorPageState
                       borderRadius: BorderRadius.circular(8),
                       onTap: _isSaving ? null : () => _pickColorForSlot(slot),
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6, 6, 8, 6),
+                        padding: const EdgeInsets.fromLTRB(5, 5, 7, 5),
                         child: Container(
-                          width: 18,
-                          height: 18,
+                          width: 16,
+                          height: 16,
                           decoration: BoxDecoration(
                             color: previewColor,
-                            borderRadius: BorderRadius.circular(5),
+                            borderRadius: BorderRadius.circular(4),
                             border: Border.all(
                               color: colorScheme.outlineVariant.withValues(
                                 alpha: 0.45,
@@ -3350,7 +3303,10 @@ class _AdvancedThemeEditorPageState
                 ),
               ),
               IconButton(
-                visualDensity: VisualDensity.compact,
+                visualDensity: const VisualDensity(
+                  horizontal: -3,
+                  vertical: -3,
+                ),
                 tooltip: '恢复默认',
                 onPressed:
                     _isSaving
@@ -3358,7 +3314,7 @@ class _AdvancedThemeEditorPageState
                         : () {
                           controller.text = _formatHex(fallback.toARGB32());
                         },
-                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                icon: const Icon(Icons.restart_alt_rounded, size: 16),
               ),
             ],
           ),
