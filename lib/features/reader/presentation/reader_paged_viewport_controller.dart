@@ -12,9 +12,7 @@ class ReaderPagedViewportController {
     required Size viewportSize,
     required bool isCurlAutoTurning,
     required double? swipeDragStartDx,
-    required double? swipeDragStartDy,
     required double? swipeDragCurrentDx,
-    required double? swipeDragCurrentDy,
     required int pageCount,
     required int currentPageIndex,
     required ReaderPagedViewportCurlState currentState,
@@ -25,7 +23,6 @@ class ReaderPagedViewportController {
     }
 
     final startDx = swipeDragStartDx;
-    final startDy = swipeDragStartDy;
     final currentDx = swipeDragCurrentDx;
     if (startDx == null || currentDx == null) {
       return currentState;
@@ -56,21 +53,11 @@ class ReaderPagedViewportController {
       0.0,
       0.98,
     );
-    final touchXFactor = (currentDx / max(viewportSize.width, 1.0)).clamp(
-      0.02,
-      0.98,
-    );
-    final referenceY = swipeDragCurrentDy ?? startDy ?? viewportSize.height / 2;
-    final useTopCorner = referenceY < viewportSize.height / 2;
-    final touchYFactor = useTopCorner ? 0.005 : 0.995;
     if (currentState.isPreview &&
         currentState.direction == direction &&
         currentState.fromIndex == clampedCurrentIndex &&
         currentState.toIndex == targetIndex &&
-        (progress - currentState.previewProgress).abs() < 0.01 &&
-        (touchXFactor - currentState.touchXFactor).abs() < 0.01 &&
-        (touchYFactor - currentState.touchYFactor).abs() < 0.001 &&
-        currentState.useTopCorner == useTopCorner) {
+        (progress - currentState.previewProgress).abs() < 0.01) {
       return currentState;
     }
 
@@ -80,9 +67,6 @@ class ReaderPagedViewportController {
       fromIndex: clampedCurrentIndex,
       toIndex: targetIndex,
       previewProgress: progress,
-      touchXFactor: touchXFactor,
-      touchYFactor: touchYFactor,
-      useTopCorner: useTopCorner,
     );
   }
 
@@ -105,9 +89,6 @@ class ReaderPagedViewportController {
       fromIndex: currentState.fromIndex,
       toIndex: currentState.toIndex,
       previewProgress: progress,
-      touchXFactor: currentState.touchXFactor,
-      touchYFactor: currentState.touchYFactor,
-      useTopCorner: currentState.useTopCorner,
       commitOnAnimationEnd: commit,
     );
   }
@@ -129,9 +110,6 @@ class ReaderPagedViewportController {
       return ReaderPagedViewportCurlState(
         fromIndex: safeIndex,
         toIndex: safeIndex,
-        touchXFactor: currentState.touchXFactor,
-        touchYFactor: currentState.touchYFactor,
-        useTopCorner: currentState.useTopCorner,
       );
     }
 
@@ -148,9 +126,6 @@ class ReaderPagedViewportController {
     return ReaderPagedViewportCurlState(
       fromIndex: nextIndex,
       toIndex: nextIndex,
-      touchXFactor: currentState.touchXFactor,
-      touchYFactor: currentState.touchYFactor,
-      useTopCorner: currentState.useTopCorner,
     );
   }
 
@@ -158,7 +133,6 @@ class ReaderPagedViewportController {
     required int direction,
     required int currentPageIndex,
     required int pageCount,
-    bool useTopCorner = false,
   }) {
     final safeIndex = currentPageIndex.clamp(0, max(0, pageCount - 1)).toInt();
     return ReaderPagedViewportCurlState(
@@ -166,9 +140,6 @@ class ReaderPagedViewportController {
       direction: direction,
       fromIndex: safeIndex,
       toIndex: safeIndex + direction,
-      touchXFactor: direction >= 0 ? 0.88 : 0.12,
-      touchYFactor: useTopCorner ? 0.005 : 0.995,
-      useTopCorner: useTopCorner,
       commitOnAnimationEnd: true,
     );
   }

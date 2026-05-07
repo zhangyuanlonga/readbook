@@ -442,8 +442,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     milliseconds: 520,
   );
   static const double _kCurlPreviewStartThreshold = 8;
-  static const double _kCurlPreviewCommitProgressThreshold = 0.62;
-  static const double _kCurlPreviewCommitVelocityThreshold = 280;
   static const double _kOverlayScrimMaxAlpha = 0.14;
   static const Duration _kOverlayControlsShowDuration = Duration(
     milliseconds: 220,
@@ -506,8 +504,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int get _curlAnimationFromIndex => _curlTransition.fromIndex;
   int get _curlAnimationToIndex => _curlTransition.toIndex;
   double get _curlPreviewProgress => _curlTransition.previewProgress;
-  double get _curlTouchXFactor => _curlTransition.touchXFactor;
-  bool get _curlUseTopCorner => _curlTransition.useTopCorner;
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
@@ -1970,22 +1966,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       0.0,
       0.98,
     );
-    final touchXFactor = (currentDx / max(viewportSize.width, 1.0)).clamp(
-      0.02,
-      0.98,
-    );
-    final referenceY =
-        _swipeDragCurrentDy ?? _swipeDragStartDy ?? viewportSize.height / 2;
-    final useTopCorner = referenceY < viewportSize.height / 2;
-    final touchYFactor = useTopCorner ? 0.005 : 0.995;
     if (_isCurlPreviewActive &&
         _curlAutoDirection == direction &&
         _curlAnimationFromIndex == currentIndex &&
         _curlAnimationToIndex == targetIndex &&
-        (progress - _curlPreviewProgress).abs() < 0.01 &&
-        (touchXFactor - _curlTouchXFactor).abs() < 0.01 &&
-        (touchYFactor - _curlTransition.touchYFactor).abs() < 0.001 &&
-        _curlTransition.useTopCorner == useTopCorner) {
+        (progress - _curlPreviewProgress).abs() < 0.01) {
       return;
     }
 
@@ -1995,9 +1980,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         fromIndex: currentIndex,
         toIndex: targetIndex,
         previewProgress: progress,
-        touchXFactor: touchXFactor,
-        touchYFactor: touchYFactor,
-        useTopCorner: useTopCorner,
         isPreview: true,
       );
     });
@@ -2104,12 +2086,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
-    final lastTouchY = _tapPointerDownPosition?.dy ?? _swipeDragStartDy;
-    final viewportHeight = AppLayout.viewportSize(context).height;
-    final useTopCorner =
-        lastTouchY != null &&
-        viewportHeight > 0 &&
-        lastTouchY < viewportHeight / 2;
     if (direction < 0 && currentIndex <= 0) {
       await _jumpToAdjacentReadableChapter(forward: false);
       return;
@@ -2128,9 +2104,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         commitOnAnimationEnd: true,
         isPreview: false,
         previewProgress: 0,
-        touchXFactor: direction >= 0 ? 0.88 : 0.12,
-        touchYFactor: useTopCorner ? 0.005 : 0.995,
-        useTopCorner: useTopCorner,
         isAnimating: true,
       );
     });
@@ -2458,11 +2431,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   dx.abs() >= _kSwipeTurnDistanceThreshold ||
                   velocity.abs() >= _kSwipeTurnVelocityThreshold;
               if (enableCurlPreview && _isCurlPreviewActive) {
-                final shouldCommitCurl =
-                    _curlPreviewProgress >=
-                        _kCurlPreviewCommitProgressThreshold ||
-                    velocity.abs() >= _kCurlPreviewCommitVelocityThreshold;
-                _finishCurlPreview(commit: shouldCommitCurl);
+                _finishCurlPreview(commit: isSwipe);
                 _resetPointerTracking();
                 return;
               }
@@ -5082,9 +5051,6 @@ class _CurlTransitionState {
     this.fromIndex = 0,
     this.toIndex = 0,
     this.previewProgress = 0,
-    this.touchXFactor = 0.88,
-    this.touchYFactor = 0.995,
-    this.useTopCorner = false,
     this.commitOnAnimationEnd = true,
   });
 
@@ -5094,9 +5060,6 @@ class _CurlTransitionState {
   final int fromIndex;
   final int toIndex;
   final double previewProgress;
-  final double touchXFactor;
-  final double touchYFactor;
-  final bool useTopCorner;
   final bool commitOnAnimationEnd;
 
   _CurlTransitionState copyWith({
@@ -5106,9 +5069,6 @@ class _CurlTransitionState {
     int? fromIndex,
     int? toIndex,
     double? previewProgress,
-    double? touchXFactor,
-    double? touchYFactor,
-    bool? useTopCorner,
     bool? commitOnAnimationEnd,
   }) {
     return _CurlTransitionState(
@@ -5118,9 +5078,6 @@ class _CurlTransitionState {
       fromIndex: fromIndex ?? this.fromIndex,
       toIndex: toIndex ?? this.toIndex,
       previewProgress: previewProgress ?? this.previewProgress,
-      touchXFactor: touchXFactor ?? this.touchXFactor,
-      touchYFactor: touchYFactor ?? this.touchYFactor,
-      useTopCorner: useTopCorner ?? this.useTopCorner,
       commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
     );
   }

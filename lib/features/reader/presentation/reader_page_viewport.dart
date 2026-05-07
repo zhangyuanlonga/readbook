@@ -273,8 +273,6 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             fromIndex: _curlAnimationFromIndex,
             toIndex: _curlAnimationToIndex,
             previewProgress: _curlPreviewProgress,
-            touchXFactor: _curlTouchXFactor,
-            useTopCorner: _curlUseTopCorner,
             commitOnAnimationEnd: _curlCommitOnAnimationEnd,
           ),
         );
