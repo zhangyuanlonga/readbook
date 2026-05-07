@@ -122,6 +122,7 @@ import 'reader_body_region.dart';
 import 'reader_chrome_widgets.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
+import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'reader_page_lifecycle_delegate.dart';
 import 'reader_selection_state.dart';
 import 'reader_shell.dart';
@@ -361,6 +362,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _readerBatteryReadFailed = false;
   bool _isSystemBrightnessOverrideActive = false;
   Future<bool>? _iosSimulatorCheck;
+  bool _hasTriggeredDebugSimulatorCurlDemo = false;
   int _autoReadTaskToken = 0;
   int _chapterContentRequestToken = 0;
   int _preloadTaskToken = 0;
@@ -440,6 +442,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     milliseconds: 520,
   );
   static const double _kCurlPreviewStartThreshold = 8;
+  static const double _kCurlPreviewCommitProgressThreshold = 0.62;
+  static const double _kCurlPreviewCommitVelocityThreshold = 280;
   static const double _kOverlayScrimMaxAlpha = 0.14;
   static const Duration _kOverlayControlsShowDuration = Duration(
     milliseconds: 220,
@@ -448,7 +452,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     milliseconds: 180,
   );
   static const double _kShellOverlayTranslateDistance = 12;
-  static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 560);
+  static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 760);
   static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 300);
   static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
@@ -473,6 +477,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kReadingRecordAutoCommitInterval = Duration(
     minutes: 2,
   );
+  static const bool _kDebugEnableSimulatorCurlDemo = true;
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
   static const int _kSwitchSourceScoreStep = 6;
@@ -501,7 +506,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int get _curlAnimationFromIndex => _curlTransition.fromIndex;
   int get _curlAnimationToIndex => _curlTransition.toIndex;
   double get _curlPreviewProgress => _curlTransition.previewProgress;
-  double get _curlTouchYFactor => _curlTransition.touchYFactor;
+  double get _curlTouchXFactor => _curlTransition.touchXFactor;
+  bool get _curlUseTopCorner => _curlTransition.useTopCorner;
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
@@ -1923,7 +1929,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final startDx = _swipeDragStartDx;
     final currentDx = _swipeDragCurrentDx;
-    final currentDy = _swipeDragCurrentDy;
     if (startDx == null || currentDx == null) {
       return;
     }
@@ -1965,16 +1970,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       0.0,
       0.98,
     );
-    final touchYFactor =
-        currentDy == null
-            ? 0.82
-            : (currentDy / max(viewportSize.height, 1.0)).clamp(0.08, 0.92);
+    final touchXFactor = (currentDx / max(viewportSize.width, 1.0)).clamp(
+      0.02,
+      0.98,
+    );
+    final referenceY =
+        _swipeDragCurrentDy ?? _swipeDragStartDy ?? viewportSize.height / 2;
+    final useTopCorner = referenceY < viewportSize.height / 2;
+    final touchYFactor = useTopCorner ? 0.005 : 0.995;
     if (_isCurlPreviewActive &&
         _curlAutoDirection == direction &&
         _curlAnimationFromIndex == currentIndex &&
         _curlAnimationToIndex == targetIndex &&
         (progress - _curlPreviewProgress).abs() < 0.01 &&
-        (touchYFactor - _curlTouchYFactor).abs() < 0.01) {
+        (touchXFactor - _curlTouchXFactor).abs() < 0.01 &&
+        (touchYFactor - _curlTransition.touchYFactor).abs() < 0.001 &&
+        _curlTransition.useTopCorner == useTopCorner) {
       return;
     }
 
@@ -1984,7 +1995,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         fromIndex: currentIndex,
         toIndex: targetIndex,
         previewProgress: progress,
+        touchXFactor: touchXFactor,
         touchYFactor: touchYFactor,
+        useTopCorner: useTopCorner,
         isPreview: true,
       );
     });
@@ -2091,6 +2104,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
+    final lastTouchY = _tapPointerDownPosition?.dy ?? _swipeDragStartDy;
+    final viewportHeight = AppLayout.viewportSize(context).height;
+    final useTopCorner =
+        lastTouchY != null &&
+        viewportHeight > 0 &&
+        lastTouchY < viewportHeight / 2;
     if (direction < 0 && currentIndex <= 0) {
       await _jumpToAdjacentReadableChapter(forward: false);
       return;
@@ -2109,13 +2128,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         commitOnAnimationEnd: true,
         isPreview: false,
         previewProgress: 0,
-        touchYFactor: direction > 0 ? 0.82 : 0.86,
+        touchXFactor: direction >= 0 ? 0.88 : 0.12,
+        touchYFactor: useTopCorner ? 0.005 : 0.995,
+        useTopCorner: useTopCorner,
         isAnimating: true,
       );
     });
 
     _curlAutoTurnController.value = 0;
     _curlAutoTurnController.forward();
+  }
+
+  Future<void> _debugMaybeTriggerSimulatorCurlDemo() async {
+    if (!_kDebugEnableSimulatorCurlDemo || !kDebugMode) {
+      return;
+    }
+    if (_hasTriggeredDebugSimulatorCurlDemo) {
+      return;
+    }
+    if (kIsWeb || !Platform.isIOS) {
+      return;
+    }
+    _iosSimulatorCheck ??= _loadIsIosSimulator();
+    final isSimulator = await _iosSimulatorCheck!;
+    if (!mounted || !isSimulator) {
+      return;
+    }
+    if (_currentViewportKind != ReaderModeViewportKind.textPaged) {
+      return;
+    }
+    if (_currentPagedAnimationStyle() != ReaderPageAnimationStyle.curl) {
+      return;
+    }
+    if (_pagedPages.length < 2) {
+      return;
+    }
+    _hasTriggeredDebugSimulatorCurlDemo = true;
+    Future<void>.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_autoTurnCurlPage(1));
+    });
   }
 
   void _ensurePagination({required ReaderPaginationSpec spec}) {
@@ -2175,6 +2229,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _resetPagedTransitionState();
           _resetCurlAnimationState();
         });
+        unawaited(_debugMaybeTriggerSimulatorCurlDemo());
         return;
       }
     }
@@ -2303,6 +2358,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _pagedPages = pages;
       _currentPageIndex = targetIndex;
     });
+    unawaited(_debugMaybeTriggerSimulatorCurlDemo());
 
     final normalizedSourceId = (_sourceId ?? '').trim();
     final normalizedChapterUrl = (_chapterUrl ?? '').trim();
@@ -2402,7 +2458,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   dx.abs() >= _kSwipeTurnDistanceThreshold ||
                   velocity.abs() >= _kSwipeTurnVelocityThreshold;
               if (enableCurlPreview && _isCurlPreviewActive) {
-                _finishCurlPreview(commit: isSwipe);
+                final shouldCommitCurl =
+                    _curlPreviewProgress >=
+                        _kCurlPreviewCommitProgressThreshold ||
+                    velocity.abs() >= _kCurlPreviewCommitVelocityThreshold;
+                _finishCurlPreview(commit: shouldCommitCurl);
                 _resetPointerTracking();
                 return;
               }
@@ -5022,7 +5082,9 @@ class _CurlTransitionState {
     this.fromIndex = 0,
     this.toIndex = 0,
     this.previewProgress = 0,
-    this.touchYFactor = 0.82,
+    this.touchXFactor = 0.88,
+    this.touchYFactor = 0.995,
+    this.useTopCorner = false,
     this.commitOnAnimationEnd = true,
   });
 
@@ -5032,7 +5094,9 @@ class _CurlTransitionState {
   final int fromIndex;
   final int toIndex;
   final double previewProgress;
+  final double touchXFactor;
   final double touchYFactor;
+  final bool useTopCorner;
   final bool commitOnAnimationEnd;
 
   _CurlTransitionState copyWith({
@@ -5042,7 +5106,9 @@ class _CurlTransitionState {
     int? fromIndex,
     int? toIndex,
     double? previewProgress,
+    double? touchXFactor,
     double? touchYFactor,
+    bool? useTopCorner,
     bool? commitOnAnimationEnd,
   }) {
     return _CurlTransitionState(
@@ -5052,7 +5118,9 @@ class _CurlTransitionState {
       fromIndex: fromIndex ?? this.fromIndex,
       toIndex: toIndex ?? this.toIndex,
       previewProgress: previewProgress ?? this.previewProgress,
+      touchXFactor: touchXFactor ?? this.touchXFactor,
       touchYFactor: touchYFactor ?? this.touchYFactor,
+      useTopCorner: useTopCorner ?? this.useTopCorner,
       commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
     );
   }

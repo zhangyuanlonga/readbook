@@ -35,20 +35,20 @@ void main() {
       expect(restored.logicalPosition!.pageIndex, 2);
     });
 
-    test('defaults ratio to zero when loading legacy payload', () {
-      final restored = ReadingProgress.fromJson({
-        'bookId': 'book_legacy',
-        'sourceId': 'src_legacy',
-        'detailUrl': 'https://example.com/book/legacy',
-        'chapterId': 'c_1',
-        'chapterUrl': 'https://example.com/book/legacy/c1',
-        'chapterTitle': '第一章',
-        'chapterIndex': 1,
-        'updatedAt': '2026-02-12T12:00:00.000Z',
-      });
-
-      expect(restored.chapterPositionRatio, 0);
-      expect(restored.logicalPosition, isNull);
+    test('rejects legacy payload without chapter position ratio', () {
+      expect(
+        () => ReadingProgress.fromJson({
+          'bookId': 'book_legacy',
+          'sourceId': 'src_legacy',
+          'detailUrl': 'https://example.com/book/legacy',
+          'chapterId': 'c_1',
+          'chapterUrl': 'https://example.com/book/legacy/c1',
+          'chapterTitle': '第一章',
+          'chapterIndex': 1,
+          'updatedAt': '2026-02-12T12:00:00.000Z',
+        }),
+        throwsFormatException,
+      );
     });
 
     test('clamps ratio into valid range', () {

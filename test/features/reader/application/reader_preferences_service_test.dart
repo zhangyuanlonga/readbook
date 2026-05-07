@@ -159,32 +159,29 @@ void main() {
       expect(restored.chapterHeaderVerticalOffset, 24);
     });
 
-    test(
-      'loads new settings while treating legacy fields as migration input',
-      () async {
-        SharedPreferences.setMockInitialValues({
-          'reader.settings.bodyMarginMode': 'preset',
-          'reader.settings.bodyMarginPreset': 'relaxed',
-          'reader.settings.horizontalPadding': 30.0,
-          'reader.settings.chapterHeaderMode': 'center',
-          'reader.settings.chapterHeaderTopSpacing': 12.0,
-          'reader.settings.chapterHeaderBottomSpacing': 6.0,
-          'reader.settings.pinnedChapterHeaderOffsetX': 80.0,
-          'reader.settings.pinnedChapterHeaderOffsetY': 18.0,
-        });
+    test('ignores legacy layout fields when loading settings', () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.settings.bodyMarginMode': 'preset',
+        'reader.settings.bodyMarginPreset': 'relaxed',
+        'reader.settings.horizontalPadding': 30.0,
+        'reader.settings.chapterHeaderMode': 'center',
+        'reader.settings.chapterHeaderTopSpacing': 12.0,
+        'reader.settings.chapterHeaderBottomSpacing': 6.0,
+        'reader.settings.pinnedChapterHeaderOffsetX': 80.0,
+        'reader.settings.pinnedChapterHeaderOffsetY': 18.0,
+      });
 
-        final service = await _createService();
-        final restored = await service.loadSettings();
+      final service = await _createService();
+      final restored = await service.loadSettings();
 
-        expect(restored.bodyMarginTop, 8);
-        expect(restored.bodyMarginBottom, 10);
-        expect(restored.bodyMarginLeft, 20);
-        expect(restored.bodyMarginRight, 20);
-        expect(restored.showChapterHeader, isTrue);
-        expect(restored.chapterHeaderHorizontalOffset, closeTo(2 / 3, 0.0001));
-        expect(restored.chapterHeaderVerticalOffset, 12);
-      },
-    );
+      expect(restored.bodyMarginTop, 6);
+      expect(restored.bodyMarginBottom, 6);
+      expect(restored.bodyMarginLeft, 16);
+      expect(restored.bodyMarginRight, 16);
+      expect(restored.showChapterHeader, isTrue);
+      expect(restored.chapterHeaderHorizontalOffset, 0);
+      expect(restored.chapterHeaderVerticalOffset, 0);
+    });
 
     test(
       'preserves negative chapter header vertical offset after reload',
@@ -244,6 +241,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.containsKey('reader.settings.bodyMarginMode'), isFalse);
       expect(prefs.containsKey('reader.settings.bodyMarginPreset'), isFalse);
+      expect(prefs.containsKey('reader.settings.horizontalPadding'), isFalse);
       expect(prefs.containsKey('reader.settings.chapterHeaderMode'), isFalse);
       expect(
         prefs.containsKey('reader.settings.chapterHeaderTopSpacing'),
@@ -335,7 +333,7 @@ void main() {
       expect(newProgress.chapterIndex, 1);
     });
 
-    test('loads legacy progress payload without position ratio', () async {
+    test('rejects legacy progress payload without position ratio', () async {
       SharedPreferences.setMockInitialValues({
         'reader.progress.book_legacy':
             '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z"}',
@@ -344,9 +342,18 @@ void main() {
       final service = await _createService();
       final restored = await service.loadProgress('book_legacy');
 
-      expect(restored, isNotNull);
-      expect(restored!.chapterPositionRatio, 0);
-      expect(restored.logicalPosition, isNull);
+      expect(restored, isNull);
+    });
+
+    test('ignores legacy single background image key', () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.settings.customBackgroundImageBase64': 'legacy_background',
+      });
+
+      final service = await _createService();
+      final restored = await service.loadCustomBackgroundImages();
+
+      expect(restored, isEmpty);
     });
 
     test('saves and loads toc snapshot', () async {

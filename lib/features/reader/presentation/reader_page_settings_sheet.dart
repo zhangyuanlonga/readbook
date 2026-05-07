@@ -1038,30 +1038,18 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                   }
 
                   Widget buildPageAnimationSelector() {
+                    const animationStyles = <ReaderPageAnimationStyle>[
+                      ReaderPageAnimationStyle.curl,
+                      ReaderPageAnimationStyle.cover,
+                      ReaderPageAnimationStyle.translate,
+                      ReaderPageAnimationStyle.fade,
+                      ReaderPageAnimationStyle.none,
+                    ];
                     return SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: const Text('滚动'),
-                              selected: draft.pageTurnMode.usesScrollLayout,
-                              showCheckmark: false,
-                              onSelected: (_) {
-                                applyTextPresentationMode(
-                                  useScrollLayout: true,
-                                );
-                              },
-                            ),
-                          ),
-                          ...const [
-                            ReaderPageAnimationStyle.curl,
-                            ReaderPageAnimationStyle.cover,
-                            ReaderPageAnimationStyle.translate,
-                            ReaderPageAnimationStyle.fade,
-                            ReaderPageAnimationStyle.none,
-                          ].map(
+                          ...animationStyles.map(
                             (style) => Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: Tooltip(
@@ -1080,6 +1068,19 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                   },
                                 ),
                               ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: const Text('滚动'),
+                              selected: draft.pageTurnMode.usesScrollLayout,
+                              showCheckmark: false,
+                              onSelected: (_) {
+                                applyTextPresentationMode(
+                                  useScrollLayout: true,
+                                );
+                              },
                             ),
                           ),
                         ],

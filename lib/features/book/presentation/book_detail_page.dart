@@ -25,9 +25,9 @@ import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
+import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
-import '../../../domain/entities/reading_progress.dart';
 import '../providers.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
@@ -1364,7 +1364,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final previousReadableChapter = _firstReadableChapter(
       previousResult?.chapters,
     );
-
     final normalizedPreviousSourceId = (previousSourceId ?? '').trim();
     if (normalizedPreviousSourceId.isNotEmpty) {
       _sourceRuntimeFacade.clearReadingFlow(

@@ -225,53 +225,21 @@ class ReaderPreferencesService {
       (item) => item.name == mangaLoadStrategyName,
       orElse: () => ReaderMangaLoadStrategy.balanced,
     );
-    final bodyMarginModeName = prefs.getString(_bodyMarginModeKey);
-    final legacyBodyMarginMode = ReaderBodyMarginMode.values.firstWhere(
-      (item) => item.name == bodyMarginModeName,
-      orElse: () => ReaderBodyMarginMode.preset,
-    );
-    final bodyMarginPresetName = prefs.getString(_bodyMarginPresetKey);
-    final legacyBodyMarginPreset = ReaderBodyMarginPreset.values.firstWhere(
-      (item) => item.name == bodyMarginPresetName,
-      orElse: () => ReaderBodyMarginPreset.standard,
-    );
-    final chapterHeaderModeName = prefs.getString(_chapterHeaderModeKey);
-    final legacyChapterHeaderMode = ReaderChapterHeaderMode.values.firstWhere(
-      (item) => item.name == chapterHeaderModeName,
-      orElse:
-          () => ReaderSettings.inferChapterHeaderModeFromLegacy(
-            legacyOffsetX: prefs.getDouble(_pinnedChapterHeaderOffsetXKey) ?? 0,
-          ),
-    );
-
-    final legacyHorizontalPadding =
-        prefs.getDouble(_horizontalPaddingKey) ?? 16;
-    final legacyBodyMargins = ReaderSettings.bodyMarginValuesForPreset(
-      legacyBodyMarginPreset,
-    );
     final bodyMarginTop = _clampLayoutMargin(
       prefs.getDouble(_bodyMarginTopKey) ??
-          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
-              ? legacyBodyMargins.top
-              : 6),
+          const ReaderSettings().bodyMarginTop,
     );
     final bodyMarginBottom = _clampLayoutMargin(
       prefs.getDouble(_bodyMarginBottomKey) ??
-          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
-              ? legacyBodyMargins.bottom
-              : 6),
+          const ReaderSettings().bodyMarginBottom,
     );
     final bodyMarginLeft = _clampLayoutMargin(
       prefs.getDouble(_bodyMarginLeftKey) ??
-          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
-              ? legacyBodyMargins.left
-              : legacyHorizontalPadding),
+          const ReaderSettings().bodyMarginLeft,
     );
     final bodyMarginRight = _clampLayoutMargin(
       prefs.getDouble(_bodyMarginRightKey) ??
-          (legacyBodyMarginMode == ReaderBodyMarginMode.preset
-              ? legacyBodyMargins.right
-              : legacyHorizontalPadding),
+          const ReaderSettings().bodyMarginRight,
     );
 
     final persistedCustomFontPath = prefs.getString(_customFontPathKey);
@@ -404,7 +372,8 @@ class ReaderPreferencesService {
               )
               .toDouble(),
       infoHeaderMarginLeft:
-          (prefs.getDouble(_infoHeaderMarginLeftKey) ?? legacyHorizontalPadding)
+          (prefs.getDouble(_infoHeaderMarginLeftKey) ??
+                  const ReaderSettings().infoHeaderMarginLeft)
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxLayoutMargin,
@@ -412,7 +381,7 @@ class ReaderPreferencesService {
               .toDouble(),
       infoHeaderMarginRight:
           (prefs.getDouble(_infoHeaderMarginRightKey) ??
-                  legacyHorizontalPadding)
+                  const ReaderSettings().infoHeaderMarginRight)
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxLayoutMargin,
@@ -437,7 +406,8 @@ class ReaderPreferencesService {
               )
               .toDouble(),
       infoFooterMarginLeft:
-          (prefs.getDouble(_infoFooterMarginLeftKey) ?? legacyHorizontalPadding)
+          (prefs.getDouble(_infoFooterMarginLeftKey) ??
+                  const ReaderSettings().infoFooterMarginLeft)
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxInfoFooterHorizontalMargin,
@@ -445,7 +415,7 @@ class ReaderPreferencesService {
               .toDouble(),
       infoFooterMarginRight:
           (prefs.getDouble(_infoFooterMarginRightKey) ??
-                  legacyHorizontalPadding)
+                  const ReaderSettings().infoFooterMarginRight)
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxInfoFooterHorizontalMargin,
@@ -453,14 +423,10 @@ class ReaderPreferencesService {
               .toDouble(),
       showChapterHeader:
           prefs.getBool(_showChapterHeaderKey) ??
-          ReaderSettings.inferShowChapterHeaderFromLegacy(
-            legacyMode: legacyChapterHeaderMode,
-          ),
+          const ReaderSettings().showChapterHeader,
       chapterHeaderHorizontalOffset:
           (prefs.getDouble(_chapterHeaderHorizontalOffsetKey) ??
-                  ReaderSettings.normalizePinnedChapterHeaderOffsetX(
-                    prefs.getDouble(_pinnedChapterHeaderOffsetXKey) ?? 0,
-                  ))
+                  const ReaderSettings().chapterHeaderHorizontalOffset)
               .clamp(
                 ReaderSettings.minPinnedHeaderOffsetX,
                 ReaderSettings.maxPinnedHeaderOffsetX,
@@ -468,8 +434,7 @@ class ReaderPreferencesService {
               .toDouble(),
       chapterHeaderVerticalOffset:
           (prefs.getDouble(_chapterHeaderVerticalOffsetKey) ??
-                  (prefs.getDouble(_chapterHeaderTopSpacingKey) ??
-                      (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8)))
+                  const ReaderSettings().chapterHeaderVerticalOffset)
               .clamp(
                 ReaderSettings.minChapterHeaderVerticalOffset,
                 ReaderSettings.maxChapterHeaderSpacing,
@@ -483,10 +448,6 @@ class ReaderPreferencesService {
 
     await prefs.setDouble(_fontSizeKey, settings.fontSize);
     await prefs.setDouble(_lineHeightKey, settings.lineHeight);
-    await prefs.setDouble(
-      _horizontalPaddingKey,
-      ((settings.bodyMarginLeft + settings.bodyMarginRight) / 2).toDouble(),
-    );
     await prefs.setDouble(_paragraphSpacingKey, settings.paragraphSpacing);
     await prefs.setDouble(_paragraphIndentKey, settings.paragraphIndent);
     await prefs.setBool(
@@ -635,6 +596,7 @@ class ReaderPreferencesService {
     await prefs.setDouble(_bodyMarginBottomKey, settings.bodyMarginBottom);
     await prefs.setDouble(_bodyMarginLeftKey, settings.bodyMarginLeft);
     await prefs.setDouble(_bodyMarginRightKey, settings.bodyMarginRight);
+    await prefs.remove(_horizontalPaddingKey);
     await prefs.remove(_bodyMarginModeKey);
     await prefs.remove(_bodyMarginPresetKey);
     await prefs.setDouble(
@@ -714,19 +676,32 @@ class ReaderPreferencesService {
           }
         }
       } catch (_) {
-        // Ignore invalid stored list and fall back to legacy key.
+        return const <String>[];
       }
     }
 
-    final legacy = prefs.getString(_customBackgroundImageBase64Key);
-    final legacyValue = legacy?.trim();
-    if (legacyValue != null &&
-        legacyValue.isNotEmpty &&
-        !results.contains(legacyValue)) {
-      results.add(legacyValue);
+    return results;
+  }
+
+  Future<void> migrateProgress({
+    required String previousBookId,
+    required ReadingProgress nextProgress,
+    bool removePrevious = true,
+  }) async {
+    final normalizedPreviousBookId = previousBookId.trim();
+    if (normalizedPreviousBookId.isEmpty) {
+      await saveProgress(nextProgress);
+      return;
     }
 
-    return results;
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      '$_progressPrefix${nextProgress.bookId}',
+      jsonEncode(nextProgress.toJson()),
+    );
+    if (removePrevious && normalizedPreviousBookId != nextProgress.bookId) {
+      await prefs.remove('$_progressPrefix$normalizedPreviousBookId');
+    }
   }
 
   Future<void> saveCustomBackgroundImages(List<String> images) async {
@@ -750,7 +725,7 @@ class ReaderPreferencesService {
     }
 
     await prefs.setString(_customBackgroundImagesKey, jsonEncode(normalized));
-    await prefs.setString(_customBackgroundImageBase64Key, normalized.first);
+    await prefs.remove(_customBackgroundImageBase64Key);
   }
 
   Future<List<int>> loadRecentBodyTextColors() async {
@@ -873,27 +848,6 @@ class ReaderPreferencesService {
     }
     results.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return List<ReadingProgress>.unmodifiable(results);
-  }
-
-  Future<void> migrateProgress({
-    required String previousBookId,
-    required ReadingProgress nextProgress,
-    bool removePrevious = true,
-  }) async {
-    final normalizedPreviousBookId = previousBookId.trim();
-    if (normalizedPreviousBookId.isEmpty) {
-      await saveProgress(nextProgress);
-      return;
-    }
-
-    final prefs = await _preferencesFuture;
-    await prefs.setString(
-      '$_progressPrefix${nextProgress.bookId}',
-      jsonEncode(nextProgress.toJson()),
-    );
-    if (removePrevious && normalizedPreviousBookId != nextProgress.bookId) {
-      await prefs.remove('$_progressPrefix$normalizedPreviousBookId');
-    }
   }
 
   Future<ReaderTocSnapshot?> loadTocSnapshot({

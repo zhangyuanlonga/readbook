@@ -173,8 +173,6 @@ class ReaderSettings {
   static const double maxInfoFooterHorizontalMargin = 80;
   static const double minPinnedHeaderOffsetX = 0;
   static const double maxPinnedHeaderOffsetX = 1;
-  static const double legacyMinPinnedHeaderOffsetX = -80;
-  static const double legacyMaxPinnedHeaderOffsetX = 160;
   static const double minPinnedHeaderOffsetY = -40;
   static const double maxPinnedHeaderOffsetY = 180;
   static const double minChapterHeaderVerticalOffset = -50;
@@ -598,7 +596,6 @@ class ReaderSettings {
     return {
       'fontSize': fontSize,
       'lineHeight': lineHeight,
-      'horizontalPadding': ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       'paragraphSpacing': paragraphSpacing,
       'paragraphIndent': paragraphIndent,
       'textFullJustifyEnabled': textFullJustifyEnabled,
@@ -668,23 +665,6 @@ class ReaderSettings {
     };
   }
 
-  static bool inferShowChapterHeaderFromLegacy({
-    required ReaderChapterHeaderMode? legacyMode,
-  }) {
-    return legacyMode != ReaderChapterHeaderMode.hidden;
-  }
-
-  static ReaderChapterHeaderMode inferChapterHeaderModeFromLegacy({
-    required double? legacyOffsetX,
-  }) {
-    final normalizedOffsetX = normalizePinnedChapterHeaderOffsetX(
-      legacyOffsetX ?? 0,
-    );
-    return normalizedOffsetX >= 0.05
-        ? ReaderChapterHeaderMode.center
-        : ReaderChapterHeaderMode.start;
-  }
-
   factory ReaderSettings.fromJson(Map<String, dynamic> json) {
     final modeName = json['themeMode']?.toString();
     final mode = ReaderThemeMode.values.firstWhere(
@@ -747,29 +727,6 @@ class ReaderSettings {
       (item) => item.name == mangaLoadStrategyName,
       orElse: () => ReaderMangaLoadStrategy.balanced,
     );
-    final bodyMarginModeName = json['bodyMarginMode']?.toString();
-    final bodyMarginMode = ReaderBodyMarginMode.values.firstWhere(
-      (item) => item.name == bodyMarginModeName,
-      orElse: () => ReaderBodyMarginMode.preset,
-    );
-    final bodyMarginPresetName = json['bodyMarginPreset']?.toString();
-    final bodyMarginPreset = ReaderBodyMarginPreset.values.firstWhere(
-      (item) => item.name == bodyMarginPresetName,
-      orElse: () => ReaderBodyMarginPreset.standard,
-    );
-    final legacyBodyMargins = bodyMarginValuesForPreset(bodyMarginPreset);
-    final chapterHeaderModeName = json['chapterHeaderMode']?.toString();
-    final legacyPinnedHeaderOffsetX = _asDouble(
-      json['pinnedChapterHeaderOffsetX'],
-    );
-    final legacyChapterHeaderMode = ReaderChapterHeaderMode.values.firstWhere(
-      (item) => item.name == chapterHeaderModeName,
-      orElse:
-          () => inferChapterHeaderModeFromLegacy(
-            legacyOffsetX: legacyPinnedHeaderOffsetX,
-          ),
-    );
-
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();
     final bodyTextColorValue = _asInt(json['bodyTextColorValue']);
@@ -786,19 +743,14 @@ class ReaderSettings {
     final rawFontWeightValue = _asInt(json['fontWeightValue']);
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
-    final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 16;
     final bodyMarginLeft =
         (_asDouble(json['bodyMarginLeft']) ??
-                (bodyMarginMode == ReaderBodyMarginMode.preset
-                    ? legacyBodyMargins.left
-                    : legacyHorizontalPadding))
+                const ReaderSettings().bodyMarginLeft)
             .clamp(minLayoutMargin, maxLayoutMargin)
             .toDouble();
     final bodyMarginRight =
         (_asDouble(json['bodyMarginRight']) ??
-                (bodyMarginMode == ReaderBodyMarginMode.preset
-                    ? legacyBodyMargins.right
-                    : legacyHorizontalPadding))
+                const ReaderSettings().bodyMarginRight)
             .clamp(minLayoutMargin, maxLayoutMargin)
             .toDouble();
 
@@ -908,25 +860,23 @@ class ReaderSettings {
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       infoHeaderMarginLeft:
-          (_asDouble(json['infoHeaderMarginLeft']) ?? legacyHorizontalPadding)
+          (_asDouble(json['infoHeaderMarginLeft']) ??
+                  const ReaderSettings().infoHeaderMarginLeft)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       infoHeaderMarginRight:
-          (_asDouble(json['infoHeaderMarginRight']) ?? legacyHorizontalPadding)
+          (_asDouble(json['infoHeaderMarginRight']) ??
+                  const ReaderSettings().infoHeaderMarginRight)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginTop:
           (_asDouble(json['bodyMarginTop']) ??
-                  (bodyMarginMode == ReaderBodyMarginMode.preset
-                      ? legacyBodyMargins.top
-                      : 6))
+                  const ReaderSettings().bodyMarginTop)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginBottom:
           (_asDouble(json['bodyMarginBottom']) ??
-                  (bodyMarginMode == ReaderBodyMarginMode.preset
-                      ? legacyBodyMargins.bottom
-                      : 6))
+                  const ReaderSettings().bodyMarginBottom)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       bodyMarginLeft: bodyMarginLeft,
@@ -940,43 +890,29 @@ class ReaderSettings {
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
       infoFooterMarginLeft:
-          (_asDouble(json['infoFooterMarginLeft']) ?? legacyHorizontalPadding)
+          (_asDouble(json['infoFooterMarginLeft']) ??
+                  const ReaderSettings().infoFooterMarginLeft)
               .clamp(minLayoutMargin, maxInfoFooterHorizontalMargin)
               .toDouble(),
       infoFooterMarginRight:
-          (_asDouble(json['infoFooterMarginRight']) ?? legacyHorizontalPadding)
+          (_asDouble(json['infoFooterMarginRight']) ??
+                  const ReaderSettings().infoFooterMarginRight)
               .clamp(minLayoutMargin, maxInfoFooterHorizontalMargin)
               .toDouble(),
       showChapterHeader:
           _asBool(json['showChapterHeader']) ??
-          inferShowChapterHeaderFromLegacy(legacyMode: legacyChapterHeaderMode),
+          const ReaderSettings().showChapterHeader,
       chapterHeaderHorizontalOffset:
           (_asDouble(json['chapterHeaderHorizontalOffset']) ??
-                  normalizePinnedChapterHeaderOffsetX(
-                    _asDouble(json['pinnedChapterHeaderOffsetX']),
-                  ))
+                  const ReaderSettings().chapterHeaderHorizontalOffset)
               .clamp(minPinnedHeaderOffsetX, maxPinnedHeaderOffsetX)
               .toDouble(),
       chapterHeaderVerticalOffset:
           (_asDouble(json['chapterHeaderVerticalOffset']) ??
-                  (_asDouble(json['chapterHeaderTopSpacing']) ??
-                      (_asDouble(json['pinnedChapterHeaderOffsetY']) ?? 8)))
+                  const ReaderSettings().chapterHeaderVerticalOffset)
               .clamp(minChapterHeaderVerticalOffset, maxChapterHeaderSpacing)
               .toDouble(),
     );
-  }
-
-  static double normalizePinnedChapterHeaderOffsetX(double? rawValue) {
-    final value = rawValue ?? 0;
-    if (value >= minPinnedHeaderOffsetX && value <= maxPinnedHeaderOffsetX) {
-      return value.toDouble();
-    }
-    final normalized =
-        (value - legacyMinPinnedHeaderOffsetX) /
-        (legacyMaxPinnedHeaderOffsetX - legacyMinPinnedHeaderOffsetX);
-    return normalized
-        .clamp(minPinnedHeaderOffsetX, maxPinnedHeaderOffsetX)
-        .toDouble();
   }
 
   static double? _asDouble(Object? value) {

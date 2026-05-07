@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
 
 class ErrorCenterPage extends StatefulWidget {
@@ -14,7 +16,10 @@ class ErrorCenterPage extends StatefulWidget {
 
 class _ErrorCenterPageState extends State<ErrorCenterPage> {
   final SourceLogStore _store = SourceLogStore.instance;
+  final DiagnosticLogExportService _exportService =
+      DiagnosticLogExportService();
   bool _includeInfoLogs = false;
+  bool _isExporting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -23,8 +28,20 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('错误中心'),
+        title: const Text('诊断日志'),
         actions: [
+          IconButton(
+            onPressed: _isExporting ? null : _shareLogs,
+            tooltip: '导出日志',
+            icon:
+                _isExporting
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.ios_share_outlined),
+          ),
           IconButton(
             onPressed: _copyLogs,
             tooltip: '复制日志',
@@ -90,7 +107,7 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                                 },
                               ),
                               const SizedBox(height: 8),
-                              const Text('日志包含时间、阶段、书源、请求地址，可用于问题排查。'),
+                              const Text('日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。'),
                             ],
                           ),
                         ),
@@ -194,9 +211,63 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
     _showMessage('日志已复制到剪贴板。');
   }
 
+  Future<void> _shareLogs() async {
+    if (_isExporting) {
+      return;
+    }
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final exportResult = await _exportService.export(
+        includeInfo: _includeInfoLogs,
+      );
+      if (exportResult == null) {
+        _showMessage('暂无可导出日志。');
+        return;
+      }
+
+      try {
+        final result = await Share.shareXFiles(
+          [XFile(exportResult.file.path)],
+          text: '请把这份诊断日志发给开发者。安装标识：${exportResult.identity.installId}',
+          subject: '诊断日志 ${exportResult.identity.appVersion}',
+          sharePositionOrigin: _resolveSharePositionOrigin(),
+        );
+        if (result.status == ShareResultStatus.dismissed && mounted) {
+          _showMessage('已生成日志文件，分享已取消。');
+        }
+      } on MissingPluginException {
+        await Clipboard.setData(ClipboardData(text: exportResult.text));
+        _showMessage('当前安装包暂不支持系统分享，已复制完整日志文本。');
+      }
+    } catch (error) {
+      _showMessage('导出日志失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
+  }
+
   void _clearLogs() {
     _store.clear();
     _showMessage('日志已清空。');
+  }
+
+  Rect? _resolveSharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final size = renderObject.size;
+    if (size.isEmpty) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero) & size;
   }
 
   void _showMessage(String text) {

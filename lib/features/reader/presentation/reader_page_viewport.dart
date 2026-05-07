@@ -273,7 +273,8 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             fromIndex: _curlAnimationFromIndex,
             toIndex: _curlAnimationToIndex,
             previewProgress: _curlPreviewProgress,
-            touchYFactor: _curlTouchYFactor,
+            touchXFactor: _curlTouchXFactor,
+            useTopCorner: _curlUseTopCorner,
             commitOnAnimationEnd: _curlCommitOnAnimationEnd,
           ),
         );
@@ -295,6 +296,11 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           pagedTransitionAnimation: _pagedTransitionController,
           curlAnimation: _curlAutoTurnController,
           switchInCurve: motion.switchInCurve,
+          curlColors: CurlRendererColors(
+            backgroundColor: colors.background,
+            dividerColor: colors.divider,
+            overlayColor: colors.overlay,
+          ),
           selectionWrapper: (child) => _wrapSelectionArea(child: child),
           disabledSelectionWrapper:
               (child) => SelectionContainer.disabled(child: child),

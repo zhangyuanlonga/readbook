@@ -162,9 +162,8 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
       ),
-      // Legacy vertical persists as a slide-style transition.
       ReaderPageAnimationStyle.vertical => const PagedAnimationMotionSpec(
-        duration: Duration(milliseconds: 430),
+        duration: Duration(milliseconds: 460),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
       ),

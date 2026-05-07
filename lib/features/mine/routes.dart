@@ -20,6 +20,7 @@ import 'presentation/mine_page.dart';
 import 'presentation/reader_background_page.dart';
 import 'presentation/source_debug_service_page.dart';
 import 'presentation/system_settings_page.dart';
+import '../error/presentation/error_center_page.dart';
 
 final StatefulShellBranch mineShellBranch = StatefulShellBranch(
   routes: [
@@ -169,6 +170,11 @@ final List<RouteBase> mineRoutes = <RouteBase>[
     path: '/bookmarks',
     name: 'bookmarks',
     builder: (context, state) => const BookmarksPage(),
+  ),
+  GoRoute(
+    path: '/error-center',
+    name: 'error-center',
+    builder: (context, state) => const ErrorCenterPage(),
   ),
   GoRoute(
     path: '/feedback',

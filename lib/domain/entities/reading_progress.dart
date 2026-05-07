@@ -50,8 +50,10 @@ class ReadingProgress {
       chapterTitle: _requiredString(json, 'chapterTitle'),
       chapterIndex: _requiredInt(json, 'chapterIndex'),
       updatedAt: _requiredDateTime(json, 'updatedAt'),
-      chapterPositionRatio: (_asDouble(json['chapterPositionRatio']) ?? 0)
-          .clamp(0.0, 1.0),
+      chapterPositionRatio: _requiredDouble(
+        json,
+        'chapterPositionRatio',
+      ).clamp(0.0, 1.0),
       logicalPosition: _optionalLogicalPosition(json['logicalPosition']),
     );
   }
@@ -95,6 +97,14 @@ class ReadingProgress {
       return double.tryParse(value.trim());
     }
     return null;
+  }
+
+  static double _requiredDouble(Map<String, dynamic> json, String key) {
+    final value = _asDouble(json[key]);
+    if (value == null) {
+      throw FormatException('Missing required double field: $key');
+    }
+    return value;
   }
 
   static DateTime _requiredDateTime(Map<String, dynamic> json, String key) {

@@ -133,6 +133,13 @@ class _FeedbackPageState extends State<FeedbackPage>
         shadowColor: Colors.transparent,
         title: const Text('问题反馈'),
         actions: [
+          IconButton(
+            onPressed: () {
+              context.push('/error-center');
+            },
+            tooltip: '诊断日志',
+            icon: const Icon(Icons.receipt_long_outlined),
+          ),
           FilledButton.tonalIcon(
             onPressed: () async {
               final changed = await context.push<bool>('/feedback/compose');
