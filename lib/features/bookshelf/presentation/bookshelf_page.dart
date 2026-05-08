@@ -15,6 +15,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
+import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/logging/app_logger.dart';
@@ -387,7 +388,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   String? _openingBookId;
   String? _loadErrorText;
   bool _isConsumingExternalImportPayloads = false;
-  bool _isImportingLocal = false;
   ImportExportTaskStatus? _taskStatus;
   _BookshelfSelectionState _selectionState = const _BookshelfSelectionState();
   int _loadTicket = 0;
@@ -613,17 +613,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 )
               else
                 const SizedBox.shrink()
-            else if (_isImportingLocal)
-              const Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
             else ...[
               _buildAnnouncementAction(),
               if (showTopSearchAction)

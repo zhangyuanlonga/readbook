@@ -917,177 +917,39 @@ extension on _BookshelfPageState {
     );
   }
 
-  Future<void> _importLocalBooksFromPicker() async {
-    if (_isImportingLocal || _isBatchDeleting) {
-      return;
-    }
-
-    final files = await openFiles(
-      acceptedTypeGroups: const <XTypeGroup>[
-        ExternalImportCatalog.localBookTypeGroup,
-      ],
-      confirmButtonText: '选择本地图书',
-    );
-
-    if (!mounted || files.isEmpty) {
-      return;
-    }
-
-    _updateBookshelfState(() {
-      _isImportingLocal = true;
-      _taskStatus = ImportExportTaskStatus(
-        title: '正在导入本地图书',
-        message: '正在准备处理 ${files.length} 个文件…',
-        progress: 0,
-        progressLabel: '0/${files.length}',
-      );
-    });
-
-    try {
-      final summary = await _flowCoordinator.importLocalBooks(
-        candidates: files.map(
-          (file) => BookshelfImportCandidate(
-            filePath: file.path.trim(),
-            displayName:
-                file.name.trim().isEmpty
-                    ? p.basename(file.path.trim())
-                    : file.name.trim(),
-          ),
-        ),
-        importer: (candidate) {
-          return _localBookImportService.importFromFile(
-            filePath: candidate.filePath,
-            displayName: candidate.displayName,
-            waitForIndexing:
-                LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
-            onProgress: (progress) {
-              if (!mounted) {
-                return;
-              }
-              final stageText = switch (progress.stage) {
-                LocalBookImportStage.preparing => '准备文件',
-                LocalBookImportStage.persisted => '写入书架',
-                LocalBookImportStage.indexing => '建立目录',
-                LocalBookImportStage.completed => '完成导入',
-              };
-              _updateBookshelfState(() {
-                final current = _taskStatus;
-                _taskStatus = ImportExportTaskStatus(
-                  title: '正在导入本地图书',
-                  message: '${progress.displayName} · $stageText',
-                  detail: progress.detail,
-                  progress: current?.progress,
-                  progressLabel: current?.progressLabel,
-                );
-              });
-            },
-          );
-        },
-        errorFormatter: (error) {
-          return switch (error) {
-            AppException() => error.briefMessage,
-            _ => '导入失败：$error',
-          };
-        },
-        onProgress: (progress) {
-          if (!mounted) {
-            return;
-          }
-          _updateBookshelfState(() {
-            _taskStatus = ImportExportTaskStatus(
-              title: '正在导入本地图书',
-              message: '正在处理 ${progress.currentFileLabel}',
-              detail: '请等待目录建立完成后再阅读。',
-              progress:
-                  progress.totalCount <= 0
-                      ? null
-                      : progress.completedCount / progress.totalCount,
-              progressLabel:
-                  progress.totalCount <= 0
-                      ? null
-                      : '${progress.completedCount}/${progress.totalCount}',
-            );
-          });
-        },
-      );
-
-      await _loadBookshelf(force: true);
-
-      if (!mounted) {
-        return;
-      }
-
-      if (summary.hasSuccess) {
-        _showMessage(
-          LocalBookWorkflowPolicy.importSuccessMessage(
-            successCount: summary.successCount,
-            failureCount: summary.failureCount,
-            directoryReady:
-                LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
-          ),
-        );
-        return;
-      }
-
-      _showMessage(summary.lastError ?? '导入失败，请重试。');
-    } finally {
-      if (mounted) {
-        _updateBookshelfState(() {
-          _isImportingLocal = false;
-          _taskStatus = null;
-        });
-      }
-    }
-  }
-
   Future<void> _showImportLocalBooksSheet() async {
-    if (_isImportingLocal || _isBatchDeleting || !mounted) {
+    if (_isBatchDeleting || !mounted) {
       return;
     }
     await _showBookshelfBottomSheet<void>(
+      isScrollControlled: true,
       builder: (sheetContext) {
-        return AppTaskBottomSheet(
-          title: '导入本地图书',
-          trailing: IconButton(
-            tooltip: '导入说明',
-            onPressed: () {
-              showDialog<void>(
-                context: sheetContext,
-                builder: (context) {
-                  return AlertDialog(
-                    title: const Text('导入说明'),
-                    content: const Text(
-                      '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。\n\n图文内容较多时，系统会继续解析结构和图片资源。\n\n导入阶段：准备文件 -> 写入书架 -> 建立目录 -> 完成导入。',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('知道了'),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-            icon: const Icon(Icons.help_outline_rounded),
-          ),
-          maxHeightFactor: 0.36,
-          fitContent: true,
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppTaskActionCard(
-                title: '添加图书文件',
-                description: '支持一次选择多个本地图书文件。',
-                icon: Icons.library_add_rounded,
-                dashedBorder: true,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  unawaited(_importLocalBooksFromPicker());
-                },
-              ),
-            ],
-          ),
+        return _BookshelfImportLocalBooksSheet(
+          flowCoordinator: _flowCoordinator,
+          importService: _localBookImportService,
+          onReload: () => _loadBookshelf(force: true),
+          onOpenReader: (book, localBook) async {
+            final plan = await _readerOpenService.resolve(
+              book: book,
+              openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
+              localBookHint: localBook,
+            );
+            if (!mounted) {
+              return;
+            }
+            switch (plan.action) {
+              case BookshelfReaderOpenAction.openReader:
+                final route = plan.readerRoute;
+                if (route == null) {
+                  return;
+                }
+                context.push(route);
+              case BookshelfReaderOpenAction.openDetail:
+                _openBookDetail(book);
+            }
+          },
+          onShowMessage: _showMessage,
+          onClose: () => Navigator.of(sheetContext).pop(),
         );
       },
     );
@@ -1626,5 +1488,243 @@ extension on _BookshelfPageState {
       default:
         break;
     }
+  }
+}
+
+class _BookshelfImportLocalBooksSheet extends StatefulWidget {
+  const _BookshelfImportLocalBooksSheet({
+    required this.flowCoordinator,
+    required this.importService,
+    required this.onReload,
+    required this.onOpenReader,
+    required this.onShowMessage,
+    required this.onClose,
+  });
+
+  final BookshelfFlowCoordinator flowCoordinator;
+  final LocalBookImportService importService;
+  final Future<void> Function() onReload;
+  final Future<void> Function(BookshelfBook book, LocalBook localBook)
+  onOpenReader;
+  final void Function(String message) onShowMessage;
+  final VoidCallback onClose;
+
+  @override
+  State<_BookshelfImportLocalBooksSheet> createState() =>
+      _BookshelfImportLocalBooksSheetState();
+}
+
+class _BookshelfImportLocalBooksSheetState
+    extends State<_BookshelfImportLocalBooksSheet> {
+  bool _isImporting = false;
+  int _total = 0;
+  int _completed = 0;
+  String? _currentLabel;
+  String? _detail;
+  String? _lastError;
+  LocalBookImportStage? _stage;
+  LocalBookImportResult? _lastImportedResult;
+
+  List<AppTaskStep> get _steps {
+    final current =
+        !_isImporting && _lastImportedResult != null
+            ? 2
+            : (_isImporting ? 1 : 0);
+    return <AppTaskStep>[
+      AppTaskStep(label: '添加文件', active: current >= 0),
+      AppTaskStep(label: '解析导入', active: current >= 1),
+      AppTaskStep(label: '完成', active: current >= 2),
+    ];
+  }
+
+  Future<void> _pickAndImportFiles() async {
+    if (_isImporting) {
+      return;
+    }
+
+    final files = await openFiles(
+      acceptedTypeGroups: const <XTypeGroup>[
+        ExternalImportCatalog.localBookTypeGroup,
+      ],
+      confirmButtonText: '选择本地图书',
+    );
+    if (!mounted || files.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+      _total = files.length;
+      _completed = 0;
+      _currentLabel = null;
+      _detail = '图文内容较多时，解析和提取资源会耗时更久。';
+      _lastError = null;
+      _stage = LocalBookImportStage.preparing;
+      _lastImportedResult = null;
+    });
+
+    try {
+      final summary = await widget.flowCoordinator.importLocalBooks(
+        candidates: files.map(
+          (file) => BookshelfImportCandidate(
+            filePath: file.path.trim(),
+            displayName:
+                file.name.trim().isEmpty
+                    ? p.basename(file.path.trim())
+                    : file.name.trim(),
+          ),
+        ),
+        importer: (candidate) async {
+          final result = await widget.importService.importFromFile(
+            filePath: candidate.filePath,
+            displayName: candidate.displayName,
+            waitForIndexing:
+                LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+            onProgress: (progress) {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _currentLabel = progress.displayName;
+                _stage = progress.stage;
+                _detail = progress.detail;
+              });
+            },
+          );
+          _lastImportedResult = result;
+        },
+        errorFormatter: (error) {
+          return switch (error) {
+            AppException() => error.briefMessage,
+            _ => '导入失败：$error',
+          };
+        },
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _currentLabel = progress.currentFileLabel;
+            _completed = progress.completedCount;
+          });
+        },
+      );
+
+      await widget.onReload();
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isImporting = false;
+        _completed = _total;
+        _stage = LocalBookImportStage.completed;
+        _detail =
+            summary.hasSuccess
+                ? '目录已建立，可直接阅读。'
+                : (summary.lastError ?? '导入失败，请重试。');
+        _lastError = summary.lastError;
+      });
+      widget.onShowMessage(
+        summary.hasSuccess
+            ? LocalBookWorkflowPolicy.importSuccessMessage(
+              successCount: summary.successCount,
+              failureCount: summary.failureCount,
+              directoryReady: true,
+            )
+            : (summary.lastError ?? '导入失败，请重试。'),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isImporting = false;
+        _lastError = '$error';
+        _detail = '$error';
+      });
+      widget.onShowMessage('导入失败：$error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stageText = switch (_stage) {
+      LocalBookImportStage.preparing => '准备文件',
+      LocalBookImportStage.persisted => '写入书架',
+      LocalBookImportStage.indexing => '建立目录',
+      LocalBookImportStage.completed => '完成导入',
+      null => '请选择本地图书文件',
+    };
+
+    final status =
+        _isImporting || _lastImportedResult != null || _lastError != null
+            ? ImportExportTaskStatus(
+              title:
+                  !_isImporting && _lastImportedResult != null
+                      ? '本地图书已导入'
+                      : '正在导入本地图书',
+              message:
+                  _currentLabel?.trim().isNotEmpty == true
+                      ? '${_currentLabel!} · $stageText'
+                      : stageText,
+              detail: _detail,
+              progress: _total <= 0 ? null : _completed / _total,
+              progressLabel: _total <= 0 ? null : '$_completed/$_total',
+              result:
+                  !_isImporting && _lastImportedResult != null
+                      ? ImportExportTaskResult.success
+                      : (_lastError != null
+                          ? ImportExportTaskResult.failure
+                          : ImportExportTaskResult.running),
+            )
+            : null;
+
+    return AppTaskBottomSheet(
+      title: '导入本地图书',
+      trailing: IconButton(
+        tooltip: '导入说明',
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('导入说明'),
+                content: const Text(
+                  '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。\n\n图文内容较多时，系统会继续解析结构和图片资源。\n\n导入阶段：添加文件 -> 解析导入 -> 完成。',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('知道了'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+        icon: const Icon(Icons.help_outline_rounded),
+      ),
+      maxHeightFactor: 0.46,
+      fitContent: true,
+      steps: _steps,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!_isImporting && _lastImportedResult == null)
+            AppTaskActionCard(
+              title: '添加图书文件',
+              description: '支持一次选择多个本地图书文件。',
+              icon: Icons.library_add_rounded,
+              dashedBorder: true,
+              onTap: _pickAndImportFiles,
+            )
+          else if (status != null)
+            (!_isImporting && _lastImportedResult != null)
+                ? ImportExportTaskSheet(status: status)
+                : ImportExportProgressCard(status: status),
+        ],
+      ),
+    );
   }
 }

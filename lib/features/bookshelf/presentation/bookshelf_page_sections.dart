@@ -92,7 +92,7 @@ extension on _BookshelfPageState {
 
   Widget _buildEmptyCard() {
     return BookshelfEmptyCard(
-      onImportLocal: _importLocalBooksFromPicker,
+      onImportLocal: _showImportLocalBooksSheet,
       palette: _resolvedPalette(context),
     );
   }
