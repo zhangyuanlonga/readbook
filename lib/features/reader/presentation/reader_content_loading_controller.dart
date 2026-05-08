@@ -10,6 +10,18 @@ import '../application/reader_document_render_model.dart';
 import '../application/reader_pagination_engine.dart';
 import '../application/reader_pagination_models.dart';
 
+class ReaderResolvedContentCacheKey {
+  const ReaderResolvedContentCacheKey({
+    required this.content,
+    required this.imageUrls,
+    required this.document,
+  });
+
+  final String content;
+  final List<String> imageUrls;
+  final ReaderDocument? document;
+}
+
 class ReaderBootstrapProgressResolution {
   const ReaderBootstrapProgressResolution({
     required this.matchedProgress,
@@ -134,6 +146,8 @@ class ReaderContentLoadingController {
   }) : _chapterNavigation = chapterNavigation;
 
   final ReaderChapterNavigation _chapterNavigation;
+  static final Map<int, ReaderResolvedChapterContent> _resolvedContentCache =
+      <int, ReaderResolvedChapterContent>{};
 
   ReaderBootstrapProgressResolution resolveBootstrapProgressForCurrentChapter({
     required ReadingProgress? bootstrapProgress,
@@ -194,6 +208,21 @@ class ReaderContentLoadingController {
     int? precomputedCurrentPageIndex,
     String? precomputedPaginationSignature,
   }) {
+    final canReuseResolvedContent =
+        precomputedParagraphs == null &&
+        precomputedPagedPages == null &&
+        precomputedCurrentPageIndex == null &&
+        precomputedPaginationSignature == null;
+    final cacheKey =
+        canReuseResolvedContent
+            ? Object.hash(content, Object.hashAll(imageUrls), document)
+            : null;
+    if (cacheKey != null) {
+      final cached = _resolvedContentCache[cacheKey];
+      if (cached != null) {
+        return cached;
+      }
+    }
     final resolvedDocument =
         document ??
         ReaderDocument.fromContent(content: content, imageUrls: imageUrls);
@@ -214,14 +243,13 @@ class ReaderContentLoadingController {
       resolvedRenderItems,
     );
 
-    final normalizedPagedPages =
-        precomputedPagedPages
-            ?.map((page) => List<ReaderPagedSlice>.unmodifiable(page))
-            .toList(growable: false);
+    final normalizedPagedPages = precomputedPagedPages
+        ?.map((page) => List<ReaderPagedSlice>.unmodifiable(page))
+        .toList(growable: false);
     final hasPrecomputedPages =
         normalizedPagedPages != null && normalizedPagedPages.isNotEmpty;
 
-    return ReaderResolvedChapterContent(
+    final resolved = ReaderResolvedChapterContent(
       document: resolvedDocument,
       content: resolvedContent,
       chapterImageUrls: resolvedImageUrls,
@@ -242,6 +270,10 @@ class ReaderContentLoadingController {
               )
               : const ReaderPaginationSessionState(),
     );
+    if (cacheKey != null) {
+      _resolvedContentCache[cacheKey] = resolved;
+    }
+    return resolved;
   }
 
   bool shouldBuildContinuousTextFlowFor({
@@ -424,7 +456,8 @@ class ReaderContentLoadingController {
     required String currentChapterId,
     required String? currentChapterUrl,
   }) {
-    if (currentChapterIndex != null && chapter.chapterIndex == currentChapterIndex) {
+    if (currentChapterIndex != null &&
+        chapter.chapterIndex == currentChapterIndex) {
       return true;
     }
     final chapterUrl = (currentChapterUrl ?? '').trim();

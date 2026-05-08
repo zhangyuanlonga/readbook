@@ -161,8 +161,9 @@ class LocalChapterContentService {
   }) async {
     final normalizedChapterId = (chapterId ?? '').trim();
     if (normalizedChapterId.isNotEmpty) {
-      final byId = await _localBookRepository.getChapterById(
-        normalizedChapterId,
+      final byId = await _loadChapterByIdentity(
+        book: book,
+        chapterId: normalizedChapterId,
       );
       if (byId != null) {
         if (byId.bookId.trim() != book.id.trim()) {
@@ -181,27 +182,56 @@ class LocalChapterContentService {
         chapterIndex,
         chapterCount: book.chapterCount,
       );
-      final byIndex = await _localBookRepository.getChapterByIndex(
-        book.id,
-        safeIndex,
+      final byIndex = await _loadChapterByIndex(
+        book: book,
+        chapterIndex: safeIndex,
       );
       if (byIndex != null) {
         return byIndex;
       }
     }
 
-    final chapters = await _localBookRepository.getChapters(book.id);
-    if (chapters.isEmpty) {
+    final chapterMetas = await _localBookRepository.getChapterMetas(book.id);
+    if (chapterMetas.isEmpty) {
       return null;
     }
     if (chapterIndex == null) {
-      return chapters.first;
+      return _loadChapterByIdentity(
+        book: book,
+        chapterId: chapterMetas.first.id,
+      );
     }
     final fallbackIndex = _safeChapterIndex(
       chapterIndex,
-      chapterCount: chapters.length,
+      chapterCount: chapterMetas.length,
     );
-    return chapters[fallbackIndex];
+    return _loadChapterByIdentity(
+      book: book,
+      chapterId: chapterMetas[fallbackIndex].id,
+    );
+  }
+
+  Future<LocalChapter?> _loadChapterByIdentity({
+    required LocalBook book,
+    required String chapterId,
+  }) {
+    if (book.format == LocalBookFormat.txt) {
+      return _localBookRepository.getChapterContentById(chapterId);
+    }
+    return _localBookRepository.getChapterById(chapterId);
+  }
+
+  Future<LocalChapter?> _loadChapterByIndex({
+    required LocalBook book,
+    required int chapterIndex,
+  }) {
+    if (book.format == LocalBookFormat.txt) {
+      return _localBookRepository.getChapterContentByIndex(
+        book.id,
+        chapterIndex,
+      );
+    }
+    return _localBookRepository.getChapterByIndex(book.id, chapterIndex);
   }
 
   int _safeChapterIndex(int chapterIndex, {required int chapterCount}) {

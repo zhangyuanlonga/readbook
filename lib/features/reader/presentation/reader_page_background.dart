@@ -1,5 +1,44 @@
 part of 'reader_page.dart';
 
+class _ReaderBackgroundResizeRequest {
+  const _ReaderBackgroundResizeRequest({
+    required this.bytes,
+    required this.maxDimension,
+    required this.quality,
+  });
+
+  final Uint8List bytes;
+  final int maxDimension;
+  final int quality;
+}
+
+Uint8List? _resizeReaderBackgroundBytesInIsolate(
+  _ReaderBackgroundResizeRequest request,
+) {
+  try {
+    final decoded = img.decodeImage(request.bytes);
+    if (decoded == null) {
+      return request.bytes;
+    }
+    img.Image processed = decoded;
+    final width = decoded.width;
+    final height = decoded.height;
+    final longestSide = width > height ? width : height;
+    if (longestSide > request.maxDimension) {
+      if (width >= height) {
+        processed = img.copyResize(decoded, width: request.maxDimension);
+      } else {
+        processed = img.copyResize(decoded, height: request.maxDimension);
+      }
+    }
+    return Uint8List.fromList(
+      img.encodeJpg(processed, quality: request.quality.clamp(1, 100)),
+    );
+  } catch (_) {
+    return request.bytes;
+  }
+}
+
 class _ReaderBackgroundAssetStore {
   final Map<String, Uint8List> presetBytes = <String, Uint8List>{};
   final Map<String, String> presetBase64 = <String, String>{};
@@ -10,6 +49,8 @@ class _ReaderBackgroundAssetStore {
   String? cachedManagedBackgroundPath;
   FileImage? cachedManagedBackgroundImage;
   bool? cachedManagedBackgroundExists;
+  final Map<String, Future<bool>> managedBackgroundExistsFutures =
+      <String, Future<bool>>{};
 }
 
 extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
@@ -59,6 +100,9 @@ extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
   set _cachedManagedBackgroundExists(bool? value) {
     _backgroundAssets.cachedManagedBackgroundExists = value;
   }
+
+  Map<String, Future<bool>> get _managedBackgroundExistsFutures =>
+      _backgroundAssets.managedBackgroundExistsFutures;
 }
 
 extension _ReaderPageBackgroundExtension on _ReaderPageState {
@@ -131,10 +175,25 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
             raw.startsWith('file://')
                 ? File(Uri.parse(raw).toFilePath())
                 : File(raw);
-        final exists = file.existsSync();
         _cachedManagedBackgroundPath = raw;
-        _cachedManagedBackgroundExists = exists;
-        _cachedManagedBackgroundImage = exists ? FileImage(file) : null;
+        _cachedManagedBackgroundExists = null;
+        _cachedManagedBackgroundImage = null;
+        _managedBackgroundExistsFutures[raw] = file.exists().then((exists) {
+          if (_cachedManagedBackgroundPath == raw) {
+            _cachedManagedBackgroundExists = exists;
+            _cachedManagedBackgroundImage = exists ? FileImage(file) : null;
+            if (mounted) {
+              _updateReaderState(() {});
+            }
+          }
+          return exists;
+        });
+      }
+      if (_cachedManagedBackgroundExists == null) {
+        final pending = _managedBackgroundExistsFutures[raw];
+        if (pending != null) {
+          unawaited(pending);
+        }
       }
       if (_cachedManagedBackgroundExists != true ||
           _cachedManagedBackgroundImage == null) {
@@ -263,7 +322,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
           return null;
         }
         final bytes = await file.readAsBytes();
-        return _resizeImageBytesImpl(
+        return await _resizeImageBytesImpl(
           bytes,
           maxDimension: _ReaderPageState._kCustomBackgroundPreviewMaxDimension,
           quality: 72,
@@ -275,37 +334,23 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
     return _tryDecodeBase64Impl(normalized);
   }
 
-  Uint8List? _resizeImageBytesImpl(
+  Future<Uint8List?> _resizeImageBytesImpl(
     Uint8List bytes, {
     required int maxDimension,
     required int quality,
   }) {
-    try {
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) {
-        return bytes;
-      }
-      img.Image processed = decoded;
-      final width = decoded.width;
-      final height = decoded.height;
-      final longestSide = width > height ? width : height;
-      if (longestSide > maxDimension) {
-        if (width >= height) {
-          processed = img.copyResize(decoded, width: maxDimension);
-        } else {
-          processed = img.copyResize(decoded, height: maxDimension);
-        }
-      }
-      return Uint8List.fromList(
-        img.encodeJpg(processed, quality: quality.clamp(1, 100)),
-      );
-    } catch (_) {
-      return bytes;
-    }
+    return compute(
+      _resizeReaderBackgroundBytesInIsolate,
+      _ReaderBackgroundResizeRequest(
+        bytes: bytes,
+        maxDimension: maxDimension,
+        quality: quality,
+      ),
+    );
   }
 
   Future<String?> _storeCustomBackgroundImageImpl(Uint8List bytes) async {
-    final storedBytes = _resizeImageBytesImpl(
+    final storedBytes = await _resizeImageBytesImpl(
       bytes,
       maxDimension: _ReaderPageState._kCustomBackgroundStoreMaxDimension,
       quality: _ReaderPageState._kCustomBackgroundStoreQuality,
@@ -318,7 +363,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
       fileName: 'bg_${DateTime.now().millisecondsSinceEpoch}_${_uuid.v4()}.jpg',
     );
     _customBackgroundPreviewBytes[filePath] =
-        _resizeImageBytesImpl(
+        await _resizeImageBytesImpl(
           storedBytes,
           maxDimension: _ReaderPageState._kCustomBackgroundPreviewMaxDimension,
           quality: 72,

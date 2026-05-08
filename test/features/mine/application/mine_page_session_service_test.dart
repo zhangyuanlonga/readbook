@@ -13,30 +13,33 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('loads session snapshot with membership and source visibility', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final store = AuthSessionStore(preferences: prefs);
-    await store.saveSession(
-      const AuthSession(
-        accessToken: 'token',
-        userId: 'user_1',
-        username: 'tester',
-      ),
-    );
+  test(
+    'loads session snapshot with membership and source visibility',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = AuthSessionStore(preferences: prefs);
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'token',
+          userId: 'user_1',
+          username: 'tester',
+        ),
+      );
 
-    final service = MinePageSessionService(
-      authSessionStore: store,
-      mobileFeatureService: _FakeMobileFeatureService(),
-      membershipService: _FakeMembershipService(),
-    );
+      final service = MinePageSessionService(
+        authSessionStore: store,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _FakeMembershipService(),
+      );
 
-    final snapshot = await service.loadSession();
-    expect(snapshot.session?.userId, 'user_1');
-    expect(snapshot.showSourceEntry, isTrue);
-    expect(snapshot.hasMembership, isTrue);
-    expect(snapshot.hasThemeCustom, isTrue);
-    expect(snapshot.sourceImportLimit, 88);
-  });
+      final snapshot = await service.loadSession();
+      expect(snapshot.session?.userId, 'user_1');
+      expect(snapshot.showSourceEntry, isTrue);
+      expect(snapshot.hasMembership, isTrue);
+      expect(snapshot.hasThemeCustom, isTrue);
+      expect(snapshot.sourceImportLimit, 88);
+    },
+  );
 
   test('persists and restores layout mode', () async {
     final service = MinePageSessionService(
@@ -95,6 +98,11 @@ class _FakeMembershipService extends MembershipService {
       vipLevel: 'pro',
       vipStatus: 'active',
       planType: 'year',
+      membershipLevel: 'pro',
+      grantType: 'manual_grant',
+      grantSubtype: 'test',
+      grantLabel: '测试会员',
+      isCustomExpire: false,
       expireAt: null,
       source: 'test',
       isTrial: false,

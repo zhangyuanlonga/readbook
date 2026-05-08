@@ -42,29 +42,32 @@ void main() {
       ),
     ];
 
-    test('matches bootstrap progress by chapter and consumes when requested', () {
-      final progress = ReadingProgress(
-        bookId: 'book-1',
-        sourceId: 'source-1',
-        detailUrl: 'detail://1',
-        chapterId: 'chapter-2',
-        chapterUrl: 'chapter://2',
-        chapterTitle: '第二章',
-        chapterIndex: 2,
-        updatedAt: DateTime(2026, 4, 26, 12),
-        chapterPositionRatio: 0.4,
-      );
+    test(
+      'matches bootstrap progress by chapter and consumes when requested',
+      () {
+        final progress = ReadingProgress(
+          bookId: 'book-1',
+          sourceId: 'source-1',
+          detailUrl: 'detail://1',
+          chapterId: 'chapter-2',
+          chapterUrl: 'chapter://2',
+          chapterTitle: '第二章',
+          chapterIndex: 2,
+          updatedAt: DateTime(2026, 4, 26, 12),
+          chapterPositionRatio: 0.4,
+        );
 
-      final resolution = controller.resolveBootstrapProgressForCurrentChapter(
-        bootstrapProgress: progress,
-        currentChapterId: 'chapter-2',
-        currentChapterUrl: 'chapter://2',
-        consume: true,
-      );
+        final resolution = controller.resolveBootstrapProgressForCurrentChapter(
+          bootstrapProgress: progress,
+          currentChapterId: 'chapter-2',
+          currentChapterUrl: 'chapter://2',
+          consume: true,
+        );
 
-      expect(resolution.matchedProgress, same(progress));
-      expect(resolution.remainingProgress, isNull);
-    });
+        expect(resolution.matchedProgress, same(progress));
+        expect(resolution.remainingProgress, isNull);
+      },
+    );
 
     test('restores ratio from logical position before fallback ratio', () {
       final document = ReaderDocument.fromContent(content: '第一段\n\n第二段\n\n第三段');
@@ -95,6 +98,13 @@ void main() {
       expect(contentState.renderTextItemsByParagraph, isEmpty);
     });
 
+    test('reuses resolved content cache for identical text payload', () {
+      final first = controller.buildResolvedContent(content: '第一段\n\n第二段');
+      final second = controller.buildResolvedContent(content: '第一段\n\n第二段');
+
+      expect(identical(first, second), isTrue);
+    });
+
     test('keeps precomputed pagination session when provided', () {
       const page = ReaderPagedSlice(
         paragraphIndex: 0,
@@ -117,7 +127,9 @@ void main() {
     });
 
     test('seeds continuous text flow from current chapter content', () {
-      final contentState = controller.buildResolvedContent(content: '第一段\n\n第二段');
+      final contentState = controller.buildResolvedContent(
+        content: '第一段\n\n第二段',
+      );
 
       final seeded = controller.seedContinuousTextFlow(
         shouldUseContinuousTextFlow: true,
@@ -138,29 +150,32 @@ void main() {
       expect(seeded.single.isCached, isTrue);
     });
 
-    test('skips unreadable chapters when resolving adjacent continuous chapter', () {
-      final loaded = <ReaderContinuousTextChapter>[
-        ReaderContinuousTextChapter(
-          chapterId: 'chapter-1',
-          chapterUrl: 'chapter://1',
-          chapterTitle: '第一章',
-          displayTitle: '第一章',
-          chapterIndex: 0,
-          content: '第一章内容',
-          document: ReaderDocument.fromContent(content: '第一章内容'),
-          paragraphs: <String>['第一章内容'],
-          isCached: false,
-        ),
-      ];
+    test(
+      'skips unreadable chapters when resolving adjacent continuous chapter',
+      () {
+        final loaded = <ReaderContinuousTextChapter>[
+          ReaderContinuousTextChapter(
+            chapterId: 'chapter-1',
+            chapterUrl: 'chapter://1',
+            chapterTitle: '第一章',
+            displayTitle: '第一章',
+            chapterIndex: 0,
+            content: '第一章内容',
+            document: ReaderDocument.fromContent(content: '第一章内容'),
+            paragraphs: <String>['第一章内容'],
+            isCached: false,
+          ),
+        ];
 
-      final forward = controller.resolveAdjacentContinuousTextChapterIndex(
-        chapters: chapters,
-        loadedChapters: loaded,
-        forward: true,
-      );
+        final forward = controller.resolveAdjacentContinuousTextChapterIndex(
+          chapters: chapters,
+          loadedChapters: loaded,
+          forward: true,
+        );
 
-      expect(forward, 2);
-    });
+        expect(forward, 2);
+      },
+    );
 
     test('builds neighbor prefetch plan near both scroll edges', () {
       final loaded = <ReaderContinuousTextChapter>[
@@ -237,10 +252,7 @@ void main() {
       final active = controller.resolveActiveContinuousTextChapter(
         chapters: loaded,
         layoutsByChapterIndex: const <int, ReaderContinuousTextChapterLayout>{
-          0: ReaderContinuousTextChapterLayout(
-            startOffset: 0,
-            endOffset: 700,
-          ),
+          0: ReaderContinuousTextChapterLayout(startOffset: 0, endOffset: 700),
           2: ReaderContinuousTextChapterLayout(
             startOffset: 700,
             endOffset: 1400,

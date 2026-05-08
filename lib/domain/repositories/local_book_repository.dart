@@ -45,6 +45,18 @@ abstract class LocalBookRepository {
   /// Returns a single directory entry without loading正文内容。
   Future<LocalChapter?> getChapterMetaByIndex(String bookId, int chapterIndex);
 
+  /// Returns正文内容，但不强制解码结构化 document。
+  ///
+  /// 用于阅读器首屏正文恢复、正文预览等场景，尽量避免把 `document`
+  /// 一并解码到主线程。
+  Future<LocalChapter?> getChapterContentById(String chapterId);
+
+  /// Returns正文内容，但不强制解码结构化 document。
+  Future<LocalChapter?> getChapterContentByIndex(
+    String bookId,
+    int chapterIndex,
+  );
+
   Future<void> updateChapterContent({
     required String chapterId,
     required String content,

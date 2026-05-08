@@ -12,6 +12,8 @@ import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/import_export_copy.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
@@ -23,6 +25,7 @@ import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../application/search_history_service.dart';
+import '../application/search_failure_export_service.dart';
 import '../application/search_service.dart';
 import '../application/search_system_settings_service.dart';
 import '../providers.dart';
@@ -52,6 +55,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
+  late final SearchFailureExportService _searchFailureExportService;
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -72,6 +76,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   bool _isSearching = false;
   bool _isLoadingSourceCount = false;
+  ImportExportTaskStatus? _taskStatus;
   final ValueNotifier<SearchExecutionReport?> _progressReportNotifier =
       ValueNotifier<SearchExecutionReport?>(null);
   final SearchRenderStateController _renderStateController =
@@ -112,6 +117,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _searchSystemSettingsService = ref.read(
       searchSystemSettingsServiceProvider,
     );
+    _searchFailureExportService = ref.read(searchFailureExportServiceProvider);
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -160,265 +166,290 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         if (didPop || !mounted) return;
         context.go('/bookshelf');
       },
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          leading: IconButton(
-            onPressed: _handleBackNavigation,
-            tooltip: '返回',
-            icon: const Icon(Icons.arrow_back),
+      child: ImportExportTaskOverlay(
+        status: _taskStatus,
+        child: Scaffold(
+          resizeToAvoidBottomInset: false,
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            leading: IconButton(
+              onPressed: _handleBackNavigation,
+              tooltip: '返回',
+              icon: const Icon(Icons.arrow_back),
+            ),
+            titleSpacing:
+                widget.hideTopSearchBar ? NavigationToolbar.kMiddleSpacing : 0,
+            title:
+                widget.hideTopSearchBar
+                    ? const Text('搜索')
+                    : _buildSearchBar(context, palette),
+            actions: [
+              ValueListenableBuilder<SearchExecutionReport?>(
+                valueListenable: _progressReportNotifier,
+                builder: (context, report, _) {
+                  final canExport = report?.failures.isNotEmpty == true;
+                  return IconButton(
+                    tooltip: '导出失败书源',
+                    onPressed:
+                        canExport
+                            ? () => unawaited(_exportSearchFailures())
+                            : null,
+                    icon: const Icon(Icons.ios_share_outlined),
+                  );
+                },
+              ),
+            ],
           ),
-          titleSpacing:
-              widget.hideTopSearchBar ? NavigationToolbar.kMiddleSpacing : 0,
-          title:
-              widget.hideTopSearchBar
-                  ? const Text('搜索')
-                  : _buildSearchBar(context, palette),
-        ),
-        body: DecoratedBox(
-          decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-          child: LayoutBuilder(
-            builder: (context, _) {
-              final maxWidth = AppLayout.pageContentMaxWidth(
-                context,
-                maxWidth: AppLayout.searchContentMaxWidth,
-              );
+          body: DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.searchContentMaxWidth,
+                );
 
-              return Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: ScrollConfiguration(
-                    behavior: const MaterialScrollBehavior().copyWith(
-                      dragDevices: _dragDevices,
-                    ),
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: _onScrollNotification,
-                      child: CustomScrollView(
-                        controller: _pageScrollController,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        slivers: [
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              topInset + 12,
-                              horizontal,
-                              0,
-                            ),
-                            sliver: SliverToBoxAdapter(
-                              child: SearchInputCard(
-                                isSearching: _isSearching,
-                                searchContentMode: _searchContentMode,
-                                isPreciseBookMatch: _isPreciseBookMatch,
-                                selectedSourceCount: _selectedSourceIds.length,
-                                availableSourceCount: _availableSourceCount,
-                                isLoadingSourceCount: _isLoadingSourceCount,
-                                modeActiveBackgroundColor: palette.primaryColor,
-                                modeActiveForegroundColor:
-                                    palette.buttonTextColor,
-                                optionActiveBackgroundColor:
-                                    palette.primaryContainerColor,
-                                optionActiveForegroundColor:
-                                    palette.textPrimaryColor,
-                                onClearResults: _clearResults,
-                                onContentModeChanged: _onContentModeChanged,
-                                onPreciseMatchChanged: _onPreciseMatchChanged,
-                                onOpenSourceFilter:
-                                    () => unawaited(_showSourceFilterSheet()),
-                                onClearSourceFilter: _clearSourceFilter,
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: ScrollConfiguration(
+                      behavior: const MaterialScrollBehavior().copyWith(
+                        dragDevices: _dragDevices,
+                      ),
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: _onScrollNotification,
+                        child: CustomScrollView(
+                          controller: _pageScrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          slivers: [
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                topInset + 12,
+                                horizontal,
+                                0,
+                              ),
+                              sliver: SliverToBoxAdapter(
+                                child: SearchInputCard(
+                                  isSearching: _isSearching,
+                                  searchContentMode: _searchContentMode,
+                                  isPreciseBookMatch: _isPreciseBookMatch,
+                                  selectedSourceCount:
+                                      _selectedSourceIds.length,
+                                  availableSourceCount: _availableSourceCount,
+                                  isLoadingSourceCount: _isLoadingSourceCount,
+                                  modeActiveBackgroundColor:
+                                      palette.primaryColor,
+                                  modeActiveForegroundColor:
+                                      palette.buttonTextColor,
+                                  optionActiveBackgroundColor:
+                                      palette.primaryContainerColor,
+                                  optionActiveForegroundColor:
+                                      palette.textPrimaryColor,
+                                  onClearResults: _clearResults,
+                                  onContentModeChanged: _onContentModeChanged,
+                                  onPreciseMatchChanged: _onPreciseMatchChanged,
+                                  onOpenSourceFilter:
+                                      () => unawaited(_showSourceFilterSheet()),
+                                  onClearSourceFilter: _clearSourceFilter,
+                                ),
                               ),
                             ),
-                          ),
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              0,
-                              horizontal,
-                              0,
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                0,
+                                horizontal,
+                                0,
+                              ),
+                              sliver: SliverToBoxAdapter(
+                                child: ValueListenableBuilder<
+                                  SearchExecutionReport?
+                                >(
+                                  valueListenable: _progressReportNotifier,
+                                  builder: (context, report, _) {
+                                    if (!_isSearching) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return SearchProgressCard(
+                                      report: report,
+                                      isSearching: _isSearching,
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
-                            sliver: SliverToBoxAdapter(
-                              child: ValueListenableBuilder<
-                                SearchExecutionReport?
-                              >(
-                                valueListenable: _progressReportNotifier,
-                                builder: (context, report, _) {
-                                  if (!_isSearching) {
-                                    return const SizedBox.shrink();
+                            ValueListenableBuilder<SearchRenderState?>(
+                              valueListenable:
+                                  _renderStateController.renderStateNotifier,
+                              builder: (context, renderState, _) {
+                                if (renderState == null) {
+                                  if (_isSearching) {
+                                    return SliverPadding(
+                                      padding: EdgeInsets.only(
+                                        bottom: 16 + bottomSafe + keyboardInset,
+                                      ),
+                                      sliver: const SliverToBoxAdapter(
+                                        child: SizedBox.shrink(),
+                                      ),
+                                    );
                                   }
-                                  return SearchProgressCard(
-                                    report: report,
-                                    isSearching: _isSearching,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          ValueListenableBuilder<SearchRenderState?>(
-                            valueListenable:
-                                _renderStateController.renderStateNotifier,
-                            builder: (context, renderState, _) {
-                              if (renderState == null) {
-                                if (_isSearching) {
                                   return SliverPadding(
-                                    padding: EdgeInsets.only(
-                                      bottom: 16 + bottomSafe + keyboardInset,
+                                    padding: EdgeInsets.fromLTRB(
+                                      horizontal,
+                                      8,
+                                      horizontal,
+                                      16 + bottomSafe + keyboardInset,
                                     ),
-                                    sliver: const SliverToBoxAdapter(
-                                      child: SizedBox.shrink(),
+                                    sliver: SliverToBoxAdapter(
+                                      child: SearchEmptyState(
+                                        history: _searchHistory,
+                                        onHistoryTap: _onHistoryTap,
+                                        onClearHistory: _onClearHistory,
+                                        onRemoveHistoryItem:
+                                            _onRemoveHistoryItem,
+                                      ),
                                     ),
                                   );
                                 }
-                                return SliverPadding(
-                                  padding: EdgeInsets.fromLTRB(
-                                    horizontal,
-                                    8,
-                                    horizontal,
-                                    16 + bottomSafe + keyboardInset,
-                                  ),
-                                  sliver: SliverToBoxAdapter(
-                                    child: SearchEmptyState(
-                                      history: _searchHistory,
-                                      onHistoryTap: _onHistoryTap,
-                                      onClearHistory: _onClearHistory,
-                                      onRemoveHistoryItem: _onRemoveHistoryItem,
+
+                                final report = renderState.report;
+                                final books = renderState.visibleBooks;
+                                final visibleCount = renderState
+                                    .renderedResultCount
+                                    .clamp(0, books.length);
+
+                                if (books.isEmpty) {
+                                  return SliverPadding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      horizontal,
+                                      8,
+                                      horizontal,
+                                      16 + bottomSafe + keyboardInset,
                                     ),
-                                  ),
-                                );
-                              }
-
-                              final report = renderState.report;
-                              final books = renderState.visibleBooks;
-                              final visibleCount = renderState
-                                  .renderedResultCount
-                                  .clamp(0, books.length);
-
-                              if (books.isEmpty) {
-                                return SliverPadding(
-                                  padding: EdgeInsets.fromLTRB(
-                                    horizontal,
-                                    8,
-                                    horizontal,
-                                    16 + bottomSafe + keyboardInset,
-                                  ),
-                                  sliver: SliverToBoxAdapter(
-                                    child: SearchGroupedEmptyFallbackCard(
-                                      canDisablePrecise:
-                                          _isPreciseBookMatch &&
-                                          report.books.isNotEmpty,
-                                      canSwitchAllSources:
-                                          _selectedSourceIds.isNotEmpty,
-                                      onDisablePreciseMatch:
-                                          _disablePreciseMatchFallback,
-                                      onSwitchAllSources:
-                                          () => unawaited(
-                                            _switchToAllSourcesFallback(),
-                                          ),
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              return SliverPadding(
-                                padding: EdgeInsets.fromLTRB(
-                                  horizontal,
-                                  8,
-                                  horizontal,
-                                  16 + bottomSafe + keyboardInset,
-                                ),
-                                sliver: SliverList(
-                                  delegate: SliverChildBuilderDelegate((
-                                    context,
-                                    index,
-                                  ) {
-                                    if (index == 0) {
-                                      return Column(
-                                        children: [
-                                          SearchReportSummary(
-                                            report: report,
-                                            visibleBookCount: books.length,
-                                            isPreciseBookMatch:
-                                                _isPreciseBookMatch,
-                                          ),
-                                          if (report.failures.isNotEmpty) ...[
-                                            const SizedBox(height: 8),
-                                            SearchFailureBanner(report: report),
-                                          ],
-                                          const SizedBox(height: 10),
-                                        ],
-                                      );
-                                    }
-
-                                    final book = books[index - 1];
-                                    final sourceName =
-                                        report.sourceNames[book.sourceId] ??
-                                        book.sourceId;
-                                    final targetKey =
-                                        BookMetadataOverride.remoteTargetKey(
-                                          sourceId: book.sourceId,
-                                          detailUrl: book.detailUrl,
-                                        );
-                                    final heroTag = _buildBookCoverHeroTag(
-                                      book: book,
-                                      listIndex: index - 1,
-                                    );
-
-                                    return SearchBookCard(
-                                      book: book,
-                                      presentation:
-                                          _bookPresentationByTargetKey[targetKey] ??
-                                          const BookDisplayState(
-                                            displayTitle: '',
-                                          ),
-                                      sourceName: sourceName,
-                                      sourceHitCount: report.sourceHitCountOf(
-                                        book,
+                                    sliver: SliverToBoxAdapter(
+                                      child: SearchGroupedEmptyFallbackCard(
+                                        canDisablePrecise:
+                                            _isPreciseBookMatch &&
+                                            report.books.isNotEmpty,
+                                        canSwitchAllSources:
+                                            _selectedSourceIds.isNotEmpty,
+                                        onDisablePreciseMatch:
+                                            _disablePreciseMatchFallback,
+                                        onSwitchAllSources:
+                                            () => unawaited(
+                                              _switchToAllSourcesFallback(),
+                                            ),
                                       ),
-                                      heroTag: heroTag,
-                                      normalizedIntro:
-                                          renderState.normalizedIntros[book.id],
-                                      normalizedLatestChapter:
-                                          renderState
-                                              .normalizedLatestChapters[book
-                                              .id],
-                                      onTap: () async {
-                                        final selected =
-                                            await _pickSearchResultSource(
+                                    ),
+                                  );
+                                }
+
+                                return SliverPadding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    horizontal,
+                                    8,
+                                    horizontal,
+                                    16 + bottomSafe + keyboardInset,
+                                  ),
+                                  sliver: SliverList(
+                                    delegate: SliverChildBuilderDelegate((
+                                      context,
+                                      index,
+                                    ) {
+                                      if (index == 0) {
+                                        return Column(
+                                          children: [
+                                            SearchReportSummary(
                                               report: report,
-                                              primaryBook: book,
-                                            );
-                                        if (selected == null || !mounted) {
-                                          return;
-                                        }
-                                        final selectedHeroTag =
-                                            selected.id == book.id
-                                                ? heroTag
-                                                : _buildBookCoverHeroTag(
-                                                  book: selected,
-                                                  listIndex: index - 1,
-                                                );
-                                        await _openBookDetail(
-                                          selected,
-                                          heroTag: selectedHeroTag,
+                                              visibleBookCount: books.length,
+                                              isPreciseBookMatch:
+                                                  _isPreciseBookMatch,
+                                            ),
+                                            if (report.failures.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              SearchFailureBanner(
+                                                report: report,
+                                              ),
+                                            ],
+                                            const SizedBox(height: 10),
+                                          ],
                                         );
-                                      },
-                                    );
-                                  }, childCount: visibleCount + 1),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                                      }
+
+                                      final book = books[index - 1];
+                                      final sourceName =
+                                          report.sourceNames[book.sourceId] ??
+                                          book.sourceId;
+                                      final targetKey =
+                                          BookMetadataOverride.remoteTargetKey(
+                                            sourceId: book.sourceId,
+                                            detailUrl: book.detailUrl,
+                                          );
+                                      final heroTag = _buildBookCoverHeroTag(
+                                        book: book,
+                                        listIndex: index - 1,
+                                      );
+
+                                      return SearchBookCard(
+                                        book: book,
+                                        presentation:
+                                            _bookPresentationByTargetKey[targetKey] ??
+                                            const BookDisplayState(
+                                              displayTitle: '',
+                                            ),
+                                        sourceName: sourceName,
+                                        sourceHitCount: report.sourceHitCountOf(
+                                          book,
+                                        ),
+                                        heroTag: heroTag,
+                                        normalizedIntro:
+                                            renderState.normalizedIntros[book
+                                                .id],
+                                        normalizedLatestChapter:
+                                            renderState
+                                                .normalizedLatestChapters[book
+                                                .id],
+                                        onTap: () async {
+                                          final selected =
+                                              await _pickSearchResultSource(
+                                                report: report,
+                                                primaryBook: book,
+                                              );
+                                          if (selected == null || !mounted) {
+                                            return;
+                                          }
+                                          final selectedHeroTag =
+                                              selected.id == book.id
+                                                  ? heroTag
+                                                  : _buildBookCoverHeroTag(
+                                                    book: selected,
+                                                    listIndex: index - 1,
+                                                  );
+                                          await _openBookDetail(
+                                            selected,
+                                            heroTag: selectedHeroTag,
+                                          );
+                                        },
+                                      );
+                                    }, childCount: visibleCount + 1),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -1285,6 +1316,75 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void _showMessage(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _exportSearchFailures() async {
+    final report = _progressReportNotifier.value;
+    if (report == null || report.failures.isEmpty) {
+      _showMessage('没有失败书源可导出。');
+      return;
+    }
+
+    setState(() {
+      _taskStatus = ImportExportCopy.running(
+        title: '正在导出失败书源',
+        message: '正在整理失败书源快照并生成 JSON 文件…',
+      );
+    });
+
+    try {
+      final sources = _sourceRuntimeFacade.registeredScriptSources();
+      final result = await _searchFailureExportService.exportFailedSources(
+        report: report,
+        sources: sources,
+        contentMode: _searchContentMode,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _taskStatus = ImportExportCopy.success(
+          title: '失败书源导出完成',
+          message: '已生成失败书源文件，可用于排查问题。',
+          detail: result.filePath,
+          progress: 1,
+        );
+      });
+      _showMessage('已导出 ${result.failureCount} 个失败书源。');
+    } on AppException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _taskStatus = ImportExportCopy.failure(
+          title: '导出失败书源失败',
+          message: error.briefMessage,
+        );
+      });
+      _showMessage(error.briefMessage);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _taskStatus = ImportExportCopy.failure(
+          title: '导出失败书源失败',
+          message: '$error',
+        );
+      });
+      _showMessage('导出失败书源失败：$error');
+    } finally {
+      if (mounted) {
+        Future<void>.delayed(const Duration(milliseconds: 520), () {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _taskStatus = null;
+          });
+        });
+      }
+    }
   }
 
   bool _onScrollNotification(ScrollNotification notification) {

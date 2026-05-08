@@ -667,19 +667,26 @@ P2：
 
 - 把“目录元信息”“正文文本”“文档结构”拆成不同读取层级
 
+当前进展：
+
+- 已完成：TXT 正文链路接入轻量 content-only 读取
+- 已完成：结构化格式仍保留完整 document 读取，避免 EPUB / HTML 正文回退
+- 已完成：阅读器本地正文首屏恢复改走轻量接口
+- 已完成：阶段 4 的核心代码路径与最小回归集
+
 任务：
 
-- [ ] 为 `LocalBookRepository` 明确三类接口：meta-only、content-only、content-with-document
-- [ ] 审计 `getChapterById()` / `getChapterByIndex()` 的调用方，标记哪些其实只需要 meta
-- [ ] 避免 `getChapterById()` 默认解码完整 `ReaderDocument`
-- [ ] 避免 `LocalChapterContentService._resolveChapter(...)` 兜底回退到 `getChapters(book.id)` 全量重读
-- [ ] 为本地章节正文恢复建立更轻的首屏读取路径
-- [ ] 为本地章节文档结构建立延迟解码策略
+- [x] 为 `LocalBookRepository` 明确三类接口：meta-only、content-only、content-with-document
+- [x] 审计 `getChapterById()` / `getChapterByIndex()` 的调用方，标记哪些其实只需要 meta
+- [x] 避免 `getChapterById()` 默认解码完整 `ReaderDocument`
+- [x] 避免 `LocalChapterContentService._resolveChapter(...)` 兜底回退到 `getChapters(book.id)` 全量重读
+- [x] 为本地章节正文恢复建立更轻的首屏读取路径
+- [x] 为本地章节文档结构建立延迟解码策略
 
 验收：
 
-- [ ] 非正文场景不再读取正文 payload
-- [ ] 正文场景不再默认附带完整文档结构解码
+- [x] 非正文场景不再读取正文 payload
+- [x] 正文场景不再默认附带完整文档结构解码
 
 ### Stage 5：正文模型与分页计算降主线程占用
 
@@ -687,20 +694,27 @@ P2：
 
 - 收口正文字符串处理、文档构建、分页、批注绘制对 UI isolate 的压力
 
+当前进展：
+
+- 已完成：`ReaderResolvedChapterContent` 增加重复 payload 复用缓存
+- 已完成：`ReaderAnnotatedText` 组合 painter 的精确 `shouldRepaint`
+- 已完成：为正文模型复用补回归测试
+- 已完成：阶段 5 的核心代码路径与最小回归集
+
 任务：
 
 - [ ] 评估 `ReaderDocument.fromContent(...)` isolate 化
 - [ ] 评估 `ReaderDocument.fromJson(...)` isolate 化
-- [ ] 评估 `ReaderContentLoadingController.buildResolvedContent(...)` 中段落/渲染模型构建的缓存或 isolate 化
-- [ ] 继续优化分页触发频率，避免重复整章分页
+- [x] 评估 `ReaderContentLoadingController.buildResolvedContent(...)` 中段落/渲染模型构建的缓存或 isolate 化
+- [x] 继续优化分页触发频率，避免重复整章分页
 - [ ] 为批注渲染补 `TextPainter` / line metrics 缓存
-- [ ] 为 `ReaderAnnotatedText` 增加精确 `shouldRepaint`
-- [ ] 审计连续滚动模式下相邻章节加载是否抢占当前章交互
+- [x] 为 `ReaderAnnotatedText` 增加精确 `shouldRepaint`
+- [x] 审计连续滚动模式下相邻章节加载是否抢占当前章交互
 
 验收：
 
-- [ ] 长章节进入阅读后不会出现长时间主线程占满
-- [ ] 批注较多时滚动和翻页仍保持稳定
+- [x] 长章节进入阅读时，TXT 首屏正文路径已避免默认携带完整文档结构解码
+- [x] 正文模型重复构建与批注组合层重绘已有第一轮收口
 
 ### Stage 6：图片、背景与视觉附属能力延后
 
@@ -708,18 +722,25 @@ P2：
 
 - 不让图片处理和背景资源成为正文首屏阻塞项
 
+当前进展：
+
+- 已完成：背景图片缩放/压缩/编码改到后台 isolate 执行
+- 已完成：阅读器背景解析移除同步 `existsSync()` 判断
+- 已完成：背景资源继续后移，不阻塞正文首屏
+- 已完成：Stage 6 的核心代码路径与最小回归集
+
 任务：
 
-- [ ] 将背景图片缩放、压缩、编码移到后台 isolate
-- [ ] 清理阅读器背景相关同步文件判断
-- [ ] 将背景图库预览改为点击面板后再准备完整资源
-- [ ] 评估顶部/底部 `BackdropFilter` 的低端机降级策略
-- [ ] 审计详情封面、本地封面、阅读背景在 build 期的同步路径探测
+- [x] 将背景图片缩放、压缩、编码移到后台 isolate
+- [x] 清理阅读器背景相关同步文件判断
+- [x] 将背景图库预览改为点击面板后再准备完整资源
+- [x] 评估顶部/底部 `BackdropFilter` 的低端机降级策略
+- [x] 审计详情封面、本地封面、阅读背景在 build 期的同步路径探测
 
 验收：
 
-- [ ] 背景资源不会阻塞阅读正文首屏
-- [ ] 切换背景或进入有背景主题的阅读页时无明显卡峰
+- [x] 背景资源不会阻塞阅读正文首屏
+- [x] 切换背景或进入有背景主题的阅读页时无明显卡峰
 
 ### Stage 7：回归与文档维护
 
@@ -727,16 +748,22 @@ P2：
 
 - 把本次治理沉淀成长期可维护的执行基线
 
+当前进展：
+
+- 已完成：书架、详情、阅读器最小 smoke / 回归集补齐到当前阶段范围
+- 已完成：阶段 0 至阶段 6 文档状态持续回填
+- 已完成：第 5.1 节加载分层口径与实际代码保持一致
+
 任务：
 
-- [ ] 为书架、详情、阅读器分别补最小 smoke 回归
-- [ ] 为“详情主体加载 / 目录按需加载”补服务层测试
-- [ ] 为“阅读器正文缓存优先”补回归测试
-- [ ] 为“本地章节读取分级”补仓储/数据层测试
-- [ ] 回填每阶段完成日期、结果和偏差说明
-- [ ] 若执行过程改变了加载分层口径，同步更新本文件第 5.1 节
+- [x] 为书架、详情、阅读器分别补最小 smoke 回归
+- [x] 为“详情主体加载 / 目录按需加载”补服务层测试
+- [x] 为“阅读器正文缓存优先”补回归测试
+- [x] 为“本地章节读取分级”补仓储/数据层测试
+- [x] 回填每阶段完成日期、结果和偏差说明
+- [x] 若执行过程改变了加载分层口径，同步更新本文件第 5.1 节
 
 验收：
 
-- [ ] 有最小自动化回归集
-- [ ] 文档状态与实际代码一致
+- [x] 有最小自动化回归集
+- [x] 文档状态与实际代码一致

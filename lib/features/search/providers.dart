@@ -4,6 +4,7 @@ import '../../app/composition/app_providers.dart' as app_providers;
 import '../book/application/book_presentation_query_service.dart';
 import '../source/application/source_runtime_facade.dart';
 import 'application/search_history_service.dart';
+import 'application/search_failure_export_service.dart';
 import 'application/search_service.dart';
 import 'application/search_system_settings_service.dart';
 
@@ -25,6 +26,12 @@ final searchSystemSettingsServiceProvider =
     Provider<SearchSystemSettingsService>((ref) {
       return SearchSystemSettingsService();
     });
+
+final searchFailureExportServiceProvider = Provider<SearchFailureExportService>(
+  (ref) {
+    return SearchFailureExportService();
+  },
+);
 
 final searchBookPresentationQueryServiceProvider =
     Provider<BookPresentationQueryService>((ref) {

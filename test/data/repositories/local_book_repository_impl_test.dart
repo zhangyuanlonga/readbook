@@ -79,6 +79,13 @@ void main() {
       expect(chapter, isNotNull);
       expect(chapter!.title, '第一章');
 
+      final contentOnly = await repository.getChapterContentById(
+        'local_r_2_c1',
+      );
+      expect(contentOnly, isNotNull);
+      expect(contentOnly!.content, '章节内容1');
+      expect(contentOnly.document, isNull);
+
       final chapterMeta = await repository.getChapterMetaByIndex(
         'local_r_2',
         0,
@@ -86,6 +93,14 @@ void main() {
       expect(chapterMeta, isNotNull);
       expect(chapterMeta!.title, '第一章');
       expect(chapterMeta.content, isEmpty);
+
+      final contentByIndex = await repository.getChapterContentByIndex(
+        'local_r_2',
+        0,
+      );
+      expect(contentByIndex, isNotNull);
+      expect(contentByIndex!.content, '章节内容1');
+      expect(contentByIndex.document, isNull);
 
       await repository.deleteBook('local_r_2');
       expect(await repository.getBookById('local_r_2'), isNull);

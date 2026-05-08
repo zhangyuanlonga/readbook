@@ -615,7 +615,9 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       }
 
       try {
-        final chapter = await _localBookRepository.getChapterById(chapterId);
+        final chapter = await _localBookRepository.getChapterContentById(
+          chapterId,
+        );
         if (chapter == null || !chapter.hasReadablePayload) {
           return false;
         }

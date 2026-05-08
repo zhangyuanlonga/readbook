@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/app/widgets/app_empty_state_card.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_metadata_override.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
@@ -81,9 +82,9 @@ void main() {
       final emptyText = find.text('还没有可以展示的阅读热力图。');
       expect(emptyText, findsOneWidget);
 
-      final card = find.ancestor(of: emptyText, matching: find.byType(Card));
-      expect(card, findsOneWidget);
-      expect(tester.getSize(card).width, greaterThan(300));
+      final emptyCard = find.byType(AppEmptyStateCard);
+      expect(emptyCard, findsWidgets);
+      expect(tester.getSize(emptyCard.first).width, greaterThan(300));
     });
 
     testWidgets('在手机和平板尺寸下渲染时不出现布局异常', (tester) async {
@@ -317,8 +318,18 @@ class _FakeLocalBookRepository implements LocalBookRepository {
       throw UnimplementedError();
 
   @override
+  Future<LocalChapter?> getChapterContentById(String chapterId) =>
+      throw UnimplementedError();
+
+  @override
   Future<LocalChapter?> getChapterByIndex(String bookId, int chapterIndex) =>
       throw UnimplementedError();
+
+  @override
+  Future<LocalChapter?> getChapterContentByIndex(
+    String bookId,
+    int chapterIndex,
+  ) => throw UnimplementedError();
 
   @override
   Future<LocalChapter?> getChapterMetaByIndex(

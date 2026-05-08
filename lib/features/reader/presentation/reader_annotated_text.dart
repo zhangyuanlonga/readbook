@@ -284,7 +284,22 @@ class ReaderCompositeTextDecorationPainter extends CustomPainter {
   bool shouldRepaint(
     covariant ReaderCompositeTextDecorationPainter oldDelegate,
   ) {
-    return true;
+    if (identical(oldDelegate, this)) {
+      return false;
+    }
+    if (oldDelegate.painters.length != painters.length) {
+      return true;
+    }
+    for (var index = 0; index < painters.length; index++) {
+      if (painters[index].runtimeType !=
+          oldDelegate.painters[index].runtimeType) {
+        return true;
+      }
+      if (painters[index].shouldRepaint(oldDelegate.painters[index])) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

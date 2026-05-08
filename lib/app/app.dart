@@ -16,6 +16,8 @@ import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/source/application/external_import_catalog.dart';
 import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
+import 'widgets/import_export_copy.dart';
+import 'widgets/import_export_task_overlay.dart';
 import 'lifecycle/app_lifecycle_coordinator.dart';
 import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
@@ -248,6 +250,7 @@ class _SystemUiOverlayWrapperState
     with WidgetsBindingObserver {
   Color? _lastOverlayBaseColor;
   bool _isStartupReady = false;
+  ImportExportTaskStatus? _externalImportStatus;
   late final AppLifecycleCoordinator _lifecycleCoordinator;
   late final AppAnnouncementCoordinator _announcementCoordinator;
   late final AppStartupCoordinator _startupCoordinator;
@@ -705,6 +708,24 @@ class _SystemUiOverlayWrapperState
   }
 
   void _onIncomingExternalImportPayload(IncomingExternalImportPayload payload) {
+    if (mounted) {
+      setState(() {
+        _externalImportStatus = ImportExportCopy.running(
+          title: '已接收外部文件',
+          message:
+              '正在接管${ExternalImportDiagnostics.payloadLabel(payload.type)}并跳转到对应页面…',
+          detail: payload.label,
+        );
+      });
+      Future<void>.delayed(const Duration(milliseconds: 900), () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _externalImportStatus = null;
+        });
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -732,12 +753,15 @@ class _SystemUiOverlayWrapperState
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: style,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          widget.child,
-          if (!_isStartupReady) const _StartupGuardPage(),
-        ],
+      child: ImportExportTaskOverlay(
+        status: _externalImportStatus,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            widget.child,
+            if (!_isStartupReady) const _StartupGuardPage(),
+          ],
+        ),
       ),
     );
   }

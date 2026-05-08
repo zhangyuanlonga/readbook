@@ -24,6 +24,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../core/errors/app_exception.dart';
@@ -3797,7 +3798,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       try {
-        final chapter = await _localBookRepository.getChapterById(chapterId);
+        final chapter = await _localBookRepository.getChapterContentById(
+          chapterId,
+        );
         if (chapter == null || !chapter.hasReadablePayload) {
           return false;
         }

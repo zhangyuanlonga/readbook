@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/widgets/import_export_copy.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../application/source_runtime_facade.dart';
@@ -28,6 +30,7 @@ class _ScriptSourcePasteImportPageState
   late final MobileFeatureService _mobileFeatureService;
 
   bool _isImporting = false;
+  ImportExportTaskStatus? _taskStatus;
 
   @override
   void initState() {
@@ -70,11 +73,23 @@ class _ScriptSourcePasteImportPageState
 
     setState(() {
       _isImporting = true;
+      _taskStatus = ImportExportCopy.running(
+        title: '正在导入书源',
+        message: '正在校验粘贴内容并准备保存…',
+      );
     });
 
     try {
       if (!await _ensureCanImport()) {
         return;
+      }
+      if (mounted) {
+        setState(() {
+          _taskStatus = ImportExportCopy.running(
+            title: '正在导入书源',
+            message: '正在解析书源格式并保存到书源列表…',
+          );
+        });
       }
       final saved = await _sourceRuntimeFacade.saveScriptSource(
         sourceCode: sourceCode,
@@ -82,16 +97,31 @@ class _ScriptSourcePasteImportPageState
       if (!mounted) {
         return;
       }
+      setState(() {
+        _taskStatus = ImportExportCopy.success(
+          title: '书源导入完成',
+          message: '已完成书源保存，即将返回书源列表。',
+          detail: saved.name,
+          progress: 1,
+        );
+      });
       context.pop('已导入书源：${saved.name}');
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _taskStatus = ImportExportCopy.failure(
+          title: '导入书源失败',
+          message: _toFriendlyImportError(error),
+        );
+      });
       _showMessage(_toFriendlyImportError(error));
     } finally {
       if (mounted) {
         setState(() {
           _isImporting = false;
+          _taskStatus = null;
         });
       }
     }
@@ -174,80 +204,86 @@ class _ScriptSourcePasteImportPageState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          tooltip: '返回',
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const Text('粘贴导入'),
-        actions: [
-          TextButton(
-            onPressed: _isImporting ? null : _tryPrefillFromClipboard,
-            child: const Text('读取剪贴板'),
+    return ImportExportTaskOverlay(
+      status: _taskStatus,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: () => context.pop(),
+            tooltip: '返回',
+            icon: const Icon(Icons.arrow_back),
           ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: constraints.maxWidth > 880 ? 880 : double.infinity,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '将完整书源脚本粘贴到下方，导入后会直接保存到书源列表。',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _controller,
-                          maxLines: null,
-                          expands: true,
-                          textAlignVertical: TextAlignVertical.top,
-                          keyboardType: TextInputType.multiline,
-                          decoration: const InputDecoration(
-                            hintText:
-                                '请粘贴 export default { meta, ... } 形式的书源脚本',
-                            alignLabelWithHint: true,
-                            border: OutlineInputBorder(),
+          title: const Text('粘贴导入'),
+          actions: [
+            TextButton(
+              onPressed: _isImporting ? null : _tryPrefillFromClipboard,
+              child: const Text('读取剪贴板'),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth:
+                        constraints.maxWidth > 880 ? 880 : double.infinity,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '将完整书源脚本粘贴到下方，导入后会直接保存到书源列表。',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            maxLines: null,
+                            expands: true,
+                            textAlignVertical: TextAlignVertical.top,
+                            keyboardType: TextInputType.multiline,
+                            decoration: const InputDecoration(
+                              hintText:
+                                  '请粘贴 export default { meta, ... } 形式的书源脚本',
+                              alignLabelWithHint: true,
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _isImporting ? null : _import,
-                          icon:
-                              _isImporting
-                                  ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _isImporting ? null : _import,
+                            icon:
+                                _isImporting
+                                    ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : const Icon(
+                                      Icons.content_paste_go_rounded,
                                     ),
-                                  )
-                                  : const Icon(Icons.content_paste_go_rounded),
-                          label: Text(_isImporting ? '导入中...' : '导入书源'),
+                            label: Text(_isImporting ? '导入中...' : '导入书源'),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

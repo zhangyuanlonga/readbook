@@ -491,6 +491,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
     setState(() {
       _isSaving = true;
+      _savingStatusText = '正在准备导出颜色配置…';
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
@@ -561,6 +562,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
     setState(() {
       _isSaving = true;
+      _savingStatusText = '正在准备导出主题包…';
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
@@ -638,6 +640,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     String? clipboardText,
   }) async {
     try {
+      _updateSavingStatus(ImportExportCopy.shareLaunching);
       final result = await Share.shareXFiles(
         [XFile(file.path)],
         text: text,
@@ -700,6 +703,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    setState(() {
+      _isSaving = true;
+      _savingStatusText = '正在读取外部主题文件并准备导入…';
+    });
     final cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
     if (cached == null) {
       ExternalImportDiagnostics.logCacheFailed(payload);
@@ -767,6 +774,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           label: cached.label,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _savingStatusText = null;
+        });
+      }
     }
   }
 

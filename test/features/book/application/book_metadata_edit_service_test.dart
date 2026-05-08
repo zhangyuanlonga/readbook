@@ -205,7 +205,16 @@ class _NoopLocalBookRepository implements LocalBookRepository {
   Future<LocalChapter?> getChapterById(String chapterId) async => null;
 
   @override
+  Future<LocalChapter?> getChapterContentById(String chapterId) async => null;
+
+  @override
   Future<LocalChapter?> getChapterByIndex(
+    String bookId,
+    int chapterIndex,
+  ) async => null;
+
+  @override
+  Future<LocalChapter?> getChapterContentByIndex(
     String bookId,
     int chapterIndex,
   ) async => null;

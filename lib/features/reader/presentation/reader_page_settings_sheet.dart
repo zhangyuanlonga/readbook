@@ -328,7 +328,9 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                     }
                   }
 
-                  Future<ReaderCustomFontEntry?> importCustomFont() async {
+                  Future<ReaderCustomFontEntry?> importCustomFont(
+                    void Function(ImportExportTaskStatus status) onInlineStatus,
+                  ) async {
                     try {
                       final imported =
                           await _fontRegistryService.pickAndImportFont();
@@ -352,12 +354,39 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       }
                       return imported;
                     } on PlatformException catch (error) {
+                      onInlineStatus(
+                        ImportExportTaskStatus(
+                          title: '导入字体失败',
+                          message: error.message ?? error.code,
+                          presentation:
+                              ImportExportTaskPresentation.inlineCompact,
+                          result: ImportExportTaskResult.failure,
+                        ),
+                      );
                       _showMessage('导入字体失败：${error.message ?? error.code}');
                       return null;
                     } on ReaderFontRegistryException catch (error) {
+                      onInlineStatus(
+                        ImportExportTaskStatus(
+                          title: '导入字体失败',
+                          message: error.message,
+                          presentation:
+                              ImportExportTaskPresentation.inlineCompact,
+                          result: ImportExportTaskResult.failure,
+                        ),
+                      );
                       _showMessage(error.message);
                       return null;
                     } catch (error) {
+                      onInlineStatus(
+                        ImportExportTaskStatus(
+                          title: '导入字体失败',
+                          message: '$error',
+                          presentation:
+                              ImportExportTaskPresentation.inlineCompact,
+                          result: ImportExportTaskResult.failure,
+                        ),
+                      );
                       _showMessage('导入字体失败：$error');
                       return null;
                     }
@@ -412,6 +441,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       backgroundColor: readerModalTheme.colorScheme.surface,
                       builder: (sheetContext) {
                         bool isImporting = false;
+                        ImportExportTaskStatus? inlineImportStatus;
                         return StatefulBuilder(
                           builder: (sheetContext, setFontSheetState) {
                             Widget buildFontChoiceTile({
@@ -540,13 +570,42 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               }
                               setFontSheetState(() {
                                 isImporting = true;
+                                inlineImportStatus =
+                                    const ImportExportTaskStatus(
+                                      title: '正在导入字体',
+                                      message: '正在选择并注册字体到阅读设置…',
+                                      presentation:
+                                          ImportExportTaskPresentation
+                                              .inlineCompact,
+                                    );
                               });
-                              final imported = await importCustomFont();
+                              final imported = await importCustomFont((status) {
+                                if (!sheetContext.mounted) {
+                                  return;
+                                }
+                                setFontSheetState(() {
+                                  inlineImportStatus = status;
+                                });
+                              });
                               if (!sheetContext.mounted) {
                                 return;
                               }
                               setFontSheetState(() {
                                 isImporting = false;
+                                inlineImportStatus =
+                                    imported == null
+                                        ? inlineImportStatus
+                                        : ImportExportTaskStatus(
+                                          title: '字体导入完成',
+                                          message: '已完成字体注册，正在应用到阅读设置…',
+                                          detail: imported.displayName,
+                                          progress: 1,
+                                          presentation:
+                                              ImportExportTaskPresentation
+                                                  .inlineCompact,
+                                          result:
+                                              ImportExportTaskResult.success,
+                                        );
                               });
                               if (imported != null && sheetContext.mounted) {
                                 Navigator.of(sheetContext).pop();
@@ -657,6 +716,12 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
+                                    if (inlineImportStatus != null) ...[
+                                      ImportExportInlineStatus(
+                                        status: inlineImportStatus!,
+                                      ),
+                                      const SizedBox(height: 8),
+                                    ],
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: TextButton.icon(

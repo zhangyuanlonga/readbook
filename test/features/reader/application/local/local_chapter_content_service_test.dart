@@ -358,6 +358,14 @@ $chapter2
       expect(document, isNotNull);
       expect(document?.blocks.whereType<ReaderImageBlock>(), isNotEmpty);
 
+      final persistedContent = await repository.getChapterContentById(
+        metas.first.id,
+      );
+      expect(persistedContent, isNotNull);
+      expect(persistedContent!.content, contains('第一章正文。'));
+      expect(persistedContent.imageUrls, isNotEmpty);
+      expect(persistedContent.document, isNull);
+
       final persisted = await repository.getChapterById(metas.first.id);
       expect(persisted, isNotNull);
       expect(persisted!.content, contains('第一章正文。'));
