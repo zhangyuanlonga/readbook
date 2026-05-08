@@ -3,6 +3,14 @@
 part of 'reader_page.dart';
 
 extension _ReaderPageNavigationExtension on _ReaderPageState {
+  Future<bool> _ensureCatalogLoadedForOverlay() async {
+    if (_chapters.isNotEmpty) {
+      return true;
+    }
+    await _hydrateCatalogAfterVisible();
+    return _chapters.isNotEmpty;
+  }
+
   Future<bool> _jumpToAdjacentReadableChapter({
     required bool forward,
     bool showBoundaryHint = true,
@@ -253,7 +261,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
   }
 
   Future<void> _showCatalogSheet() async {
-    if (_chapters.isEmpty) {
+    if (!await _ensureCatalogLoadedForOverlay()) {
       _showMessage('当前书籍暂无目录。');
       return;
     }

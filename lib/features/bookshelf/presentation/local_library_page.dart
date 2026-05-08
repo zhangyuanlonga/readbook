@@ -10,6 +10,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../source/application/external_import_catalog.dart';
+import '../application/bookshelf_reader_open_service.dart';
 import '../application/local_book_import_service.dart';
 import '../providers.dart';
 
@@ -22,12 +23,15 @@ class LocalLibraryPage extends ConsumerStatefulWidget {
 
 class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
   late final LocalBookImportService _localBookImportService;
+  late final BookshelfReaderOpenService _readerOpenService;
 
   bool _isImporting = false;
   int _importTotal = 0;
   int _importCompleted = 0;
   String? _currentImportLabel;
   String? _lastErrorText;
+  String? _currentStageText;
+  LocalBookImportResult? _lastImportedResult;
 
   double? get _importProgressValue {
     if (!_isImporting || _importTotal <= 0) {
@@ -40,6 +44,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
   void initState() {
     super.initState();
     _localBookImportService = ref.read(localBookImportServiceProvider);
+    _readerOpenService = ref.read(bookshelfReaderOpenServiceProvider);
   }
 
   String get _importProgressText {
@@ -48,6 +53,10 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     }
     if (_importCompleted >= _importTotal) {
       return '导入完成';
+    }
+    final stage = _currentStageText?.trim();
+    if (stage != null && stage.isNotEmpty) {
+      return stage;
     }
     final current = _currentImportLabel?.trim();
     if (current != null && current.isNotEmpty) {
@@ -77,7 +86,9 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       _importTotal = files.length;
       _importCompleted = 0;
       _currentImportLabel = null;
+      _currentStageText = '正在准备导入';
       _lastErrorText = null;
+      _lastImportedResult = null;
     });
 
     var successCount = 0;
@@ -97,12 +108,26 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
           _currentImportLabel =
               LocalBookImportService.normalizeImportedDisplayName(displayName);
         });
-        await _localBookImportService.importFromFile(
+        final result = await _localBookImportService.importFromFile(
           filePath: filePath,
           displayName: displayName,
           waitForIndexing:
               LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+          onProgress: (progress) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _currentStageText = switch (progress.stage) {
+                LocalBookImportStage.preparing => '准备文件',
+                LocalBookImportStage.persisted => '已写入书架',
+                LocalBookImportStage.indexing => '正在建立目录',
+                LocalBookImportStage.completed => '完成导入',
+              };
+            });
+          },
         );
+        _lastImportedResult = result;
         successCount += 1;
       } on AppException catch (error) {
         failedBooks.add(file.name.trim().isEmpty ? filePath : file.name.trim());
@@ -125,9 +150,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
 
     setState(() {
       _isImporting = false;
-      _importTotal = 0;
-      _importCompleted = 0;
-      _currentImportLabel = null;
+      _currentStageText = successCount > 0 ? '完成导入，可直接阅读' : null;
     });
 
     if (successCount > 0) {
@@ -138,7 +161,6 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
           failureCount: failureCount,
         ),
       );
-      _returnToBookshelf();
       return;
     }
 
@@ -167,6 +189,37 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     final currentPath = GoRouterState.of(context).uri.path;
     if (currentPath != '/bookshelf') {
       context.go('/bookshelf');
+    }
+  }
+
+  Future<void> _openLatestImportedBook() async {
+    final result = _lastImportedResult;
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final plan = await _readerOpenService.resolve(
+      book: result.bookshelfBook,
+      openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
+      localBookHint: result.localBook,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    switch (plan.action) {
+      case BookshelfReaderOpenAction.openReader:
+        final route = plan.readerRoute;
+        if (route == null) {
+          return;
+        }
+        context.push(route);
+        return;
+      case BookshelfReaderOpenAction.openDetail:
+        context.push(
+          '/local/book/${result.localBook.id}?sourceId=${Uri.encodeComponent(result.bookshelfBook.sourceId)}&detailUrl=${Uri.encodeComponent(result.bookshelfBook.detailUrl)}',
+        );
+        return;
     }
   }
 
@@ -220,7 +273,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '支持 TXT 和 EPUB。选择后会立即开始导入，成功入库后直接返回书架，目录解析在后台继续进行。',
+                          '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入会等待目录建立完成，完成后可直接阅读。',
                           style: Theme.of(
                             context,
                           ).textTheme.bodyMedium?.copyWith(
@@ -234,6 +287,25 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                           icon: const Icon(Icons.upload_file_outlined),
                           label: const Text('从文件选择器导入'),
                         ),
+                        if (!_isImporting && _lastImportedResult != null) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: _openLatestImportedBook,
+                                icon: const Icon(Icons.menu_book_rounded),
+                                label: const Text('立即阅读'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _returnToBookshelf,
+                                icon: const Icon(Icons.library_books_outlined),
+                                label: const Text('返回书架'),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -256,7 +328,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '1. 选择文件后立即导入，不再进入待导入列表。\n2. 导入成功表示已加入书架。\n3. 如果目录还没出来，稍后会自动完成解析。',
+                        '1. 选择文件后立即导入，不再进入待导入列表。\n2. 进度会依次显示准备、入库、索引、完成。\n3. 显示完成后代表目录已建立，可直接阅读。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           height: 1.6,
@@ -334,7 +406,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              '导入成功表示已加入书架；目录解析会在后台继续，稍后会自动变为可读状态。',
+              '显示完成后，说明图书目录已建立，可直接打开阅读。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),

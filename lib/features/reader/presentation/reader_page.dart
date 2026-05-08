@@ -2945,12 +2945,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _openChapterCache() async {
     final sourceId = _sourceId;
-    if (sourceId == null || sourceId.isEmpty || _chapters.isEmpty) {
+    if (sourceId == null || sourceId.isEmpty) {
       if (!mounted) {
         return;
       }
       _showMessage('缺少目录信息，无法缓存。');
       return;
+    }
+    if (_chapters.isEmpty) {
+      await _hydrateCatalogAfterVisible();
+      if (!mounted || _chapters.isEmpty) {
+        _showMessage('缺少目录信息，无法缓存。');
+        return;
+      }
     }
 
     if (!_canCacheChapter) {

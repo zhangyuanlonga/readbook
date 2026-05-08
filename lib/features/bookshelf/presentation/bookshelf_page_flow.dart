@@ -965,10 +965,10 @@ extension on _BookshelfPageState {
                 return;
               }
               final stageText = switch (progress.stage) {
-                LocalBookImportStage.preparing => '正在准备文件',
-                LocalBookImportStage.persisted => '已写入书架，正在整理记录',
-                LocalBookImportStage.indexing => '正在解析目录与正文',
-                LocalBookImportStage.completed => '已完成导入',
+                LocalBookImportStage.preparing => '准备文件',
+                LocalBookImportStage.persisted => '写入书架',
+                LocalBookImportStage.indexing => '建立目录',
+                LocalBookImportStage.completed => '完成导入',
               };
               _updateBookshelfState(() {
                 final current = _taskStatus;
@@ -1105,10 +1105,10 @@ extension on _BookshelfPageState {
             return;
           }
           final stageText = switch (progress.stage) {
-            LocalBookImportStage.preparing => '正在准备文件',
-            LocalBookImportStage.persisted => '已写入书架，正在整理记录',
-            LocalBookImportStage.indexing => '正在解析目录与正文',
-            LocalBookImportStage.completed => '已完成导入',
+            LocalBookImportStage.preparing => '准备文件',
+            LocalBookImportStage.persisted => '写入书架',
+            LocalBookImportStage.indexing => '建立目录',
+            LocalBookImportStage.completed => '完成导入',
           };
           _updateBookshelfState(() {
             _taskStatus = ImportExportTaskStatus(
@@ -1126,7 +1126,7 @@ extension on _BookshelfPageState {
         ExternalImportPayloadType.localBook,
         cached.label,
       );
-      _showMessage('已导入 ${cached.label}');
+      _showMessage('已导入 ${cached.label}，目录已建立，可直接阅读。');
     } on AppException catch (error) {
       ExternalImportDiagnostics.logImportFailed(
         ExternalImportPayloadType.localBook,

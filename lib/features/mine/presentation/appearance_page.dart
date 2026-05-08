@@ -18,6 +18,7 @@ import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -349,6 +350,7 @@ class _FontFamilyPickerDialogState
     extends ConsumerState<_FontFamilyPickerDialog> {
   late List<ReaderCustomFontEntry> _availableCustomFonts;
   bool _isImporting = false;
+  ImportExportTaskStatus? _inlineImportStatus;
 
   @override
   void initState() {
@@ -531,6 +533,10 @@ class _FontFamilyPickerDialogState
                 ],
               ),
             ),
+            if (_inlineImportStatus != null) ...[
+              const SizedBox(height: 12),
+              ImportExportInlineStatus(status: _inlineImportStatus!),
+            ],
           ],
         ),
       ),
@@ -579,6 +585,11 @@ class _FontFamilyPickerDialogState
     }
     setState(() {
       _isImporting = true;
+      _inlineImportStatus = const ImportExportTaskStatus(
+        title: '正在导入字体',
+        message: '正在选择并注册字体到界面字体列表…',
+        presentation: ImportExportTaskPresentation.inlineCompact,
+      );
     });
 
     try {
@@ -593,6 +604,14 @@ class _FontFamilyPickerDialogState
       }
       setState(() {
         _availableCustomFonts = refreshedFonts;
+        _inlineImportStatus = ImportExportTaskStatus(
+          title: '字体导入完成',
+          message: '已完成字体注册，正在应用到当前界面设置…',
+          detail: imported.displayName,
+          progress: 1,
+          presentation: ImportExportTaskPresentation.inlineCompact,
+          result: ImportExportTaskResult.success,
+        );
       });
       await ref
           .read(appInterfaceFontSettingsProvider.notifier)
@@ -601,10 +620,40 @@ class _FontFamilyPickerDialogState
         Navigator.of(context).pop();
       }
     } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() {
+          _inlineImportStatus = ImportExportTaskStatus(
+            title: '导入字体失败',
+            message: error.message ?? error.code,
+            presentation: ImportExportTaskPresentation.inlineCompact,
+            result: ImportExportTaskResult.failure,
+          );
+        });
+      }
       _showMessage('导入字体失败：${error.message ?? error.code}');
     } on ReaderFontRegistryException catch (error) {
+      if (mounted) {
+        setState(() {
+          _inlineImportStatus = ImportExportTaskStatus(
+            title: '导入字体失败',
+            message: error.message,
+            presentation: ImportExportTaskPresentation.inlineCompact,
+            result: ImportExportTaskResult.failure,
+          );
+        });
+      }
       _showMessage(error.message);
     } catch (error) {
+      if (mounted) {
+        setState(() {
+          _inlineImportStatus = ImportExportTaskStatus(
+            title: '导入字体失败',
+            message: '$error',
+            presentation: ImportExportTaskPresentation.inlineCompact,
+            result: ImportExportTaskResult.failure,
+          );
+        });
+      }
       _showMessage('导入字体失败：$error');
     } finally {
       if (mounted) {

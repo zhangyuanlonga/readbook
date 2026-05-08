@@ -1,18 +1,59 @@
 import 'package:flutter/material.dart';
 
+enum ImportExportTaskPresentation { overlay, inlineCompact, queuePanel }
+
+enum ImportExportTaskResult { idle, running, success, failure, cancelled }
+
 class ImportExportTaskStatus {
   const ImportExportTaskStatus({
     required this.title,
     required this.message,
     this.progress,
     this.progressLabel,
+    this.detail,
+    this.presentation = ImportExportTaskPresentation.overlay,
+    this.result = ImportExportTaskResult.running,
   });
 
   final String title;
   final String message;
   final double? progress;
   final String? progressLabel;
+  final String? detail;
+  final ImportExportTaskPresentation presentation;
+  final ImportExportTaskResult result;
+
+  bool get isFinished =>
+      result == ImportExportTaskResult.success ||
+      result == ImportExportTaskResult.failure ||
+      result == ImportExportTaskResult.cancelled;
+
+  ImportExportTaskStatus copyWith({
+    String? title,
+    String? message,
+    Object? progress = _sentinel,
+    Object? progressLabel = _sentinel,
+    Object? detail = _sentinel,
+    ImportExportTaskPresentation? presentation,
+    ImportExportTaskResult? result,
+  }) {
+    return ImportExportTaskStatus(
+      title: title ?? this.title,
+      message: message ?? this.message,
+      progress:
+          identical(progress, _sentinel) ? this.progress : progress as double?,
+      progressLabel:
+          identical(progressLabel, _sentinel)
+              ? this.progressLabel
+              : progressLabel as String?,
+      detail: identical(detail, _sentinel) ? this.detail : detail as String?,
+      presentation: presentation ?? this.presentation,
+      result: result ?? this.result,
+    );
+  }
 }
+
+const Object _sentinel = Object();
 
 class ImportExportTaskOverlay extends StatelessWidget {
   const ImportExportTaskOverlay({super.key, required this.child, this.status});
@@ -139,13 +180,35 @@ class _ImportExportTaskPane extends StatelessWidget {
                     const SizedBox(height: 12),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 180),
-                      child: Text(
-                        status.message,
-                        key: ValueKey<String>(status.message),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.5,
+                      child: Column(
+                        key: ValueKey<String>(
+                          '${status.message}::${status.detail ?? ''}',
                         ),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            status.message,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                          ),
+                          if ((status.detail ?? '').trim().isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              status.detail!,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -177,6 +240,101 @@ class _ImportExportTaskPane extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class ImportExportInlineStatus extends StatelessWidget {
+  const ImportExportInlineStatus({
+    super.key,
+    required this.status,
+    this.padding = const EdgeInsets.fromLTRB(12, 10, 12, 10),
+  });
+
+  final ImportExportTaskStatus status;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final progress = status.progress?.clamp(0.0, 1.0);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  value:
+                      status.isFinished && progress != null ? progress : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  status.title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if ((status.progressLabel ?? '').trim().isNotEmpty)
+                Text(
+                  status.progressLabel!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            status.message,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          if ((status.detail ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              status.detail!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+          if (progress != null) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 6,
+                value: progress,
+                backgroundColor: colorScheme.surface,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

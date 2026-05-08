@@ -3,6 +3,36 @@
 part of 'reader_page.dart';
 
 extension _ReaderPageBootstrapExtension on _ReaderPageState {
+  bool _canBootstrapCurrentChapterWithoutCatalog() {
+    final sourceId = (_sourceId ?? '').trim();
+    final chapterId = _chapterId.trim();
+    final chapterUrl = (_chapterUrl ?? '').trim();
+    if (sourceId.isEmpty) {
+      return false;
+    }
+    if (_shouldTryLocalBootstrapPreview()) {
+      return false;
+    }
+    if (LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      return chapterId.isNotEmpty && chapterId.toLowerCase() != 'bootstrap';
+    }
+    return chapterUrl.isNotEmpty;
+  }
+
+  Future<bool> _bootstrapCurrentChapterWithoutCatalog() async {
+    if (!_canBootstrapCurrentChapterWithoutCatalog()) {
+      return false;
+    }
+
+    final bootstrapProgress = _bootstrapProgressForCurrentChapter(
+      consume: true,
+    );
+    return _loadCurrentChapter(
+      initialScrollRatio: bootstrapProgress?.chapterPositionRatio,
+      initialLogicalPosition: bootstrapProgress?.logicalPosition,
+    );
+  }
+
   void _scheduleDeferredReaderPostVisibleSync({
     BookDetailLoadResult? detailResult,
     bool refreshBookshelf = true,
@@ -210,7 +240,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       final loadedSettingsFuture = _preferencesService.loadSettings();
       final loadedVisualOverridesFuture =
           _visualOverridesService.loadOverrides();
-      final storedCustomBackgroundsFuture = _loadUnifiedCustomBackgrounds();
       final progressFuture = _preferencesService.loadProgress(_currentBookId);
 
       final progressLoadStopwatch = Stopwatch()..start();
@@ -239,14 +268,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         loadedSettings,
       );
       var loadedVisualOverrides = await loadedVisualOverridesFuture;
-      var storedCustomBackgrounds = const <String>[];
-
-      try {
-        storedCustomBackgrounds = await storedCustomBackgroundsFuture;
-      } catch (_) {
-        storedCustomBackgrounds = const <String>[];
-      }
-
       normalizedSettings = _typographyMetricsResolver.normalizeSettings(
         normalizedSettings,
       );
@@ -318,16 +339,14 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           _visualOverrides = loadedVisualOverrides;
           _settings = bootSettings;
           _customFonts = const <ReaderCustomFontEntry>[];
-          _customBackgroundImages = storedCustomBackgrounds;
+          _customBackgroundImages = const <String>[];
         });
-        unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
         unawaited(_syncVolumeKeyPageInterception());
       } else {
         _settings = bootSettings;
         _customFonts = const <ReaderCustomFontEntry>[];
-        _customBackgroundImages = storedCustomBackgrounds;
-        unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
+        _customBackgroundImages = const <String>[];
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
       unawaited(_runDeferredBootstrapWarmup());
@@ -385,6 +404,21 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         if (loaded) {
           _scheduleDeferredReaderPostVisibleSync();
           await _consumePendingBookmarkJump();
+          return;
+        }
+      }
+
+      if (_canBootstrapCurrentChapterWithoutCatalog()) {
+        final chapterLoadStopwatch = Stopwatch()..start();
+        final loaded = await _bootstrapCurrentChapterWithoutCatalog();
+        chapterLoadMs = chapterLoadStopwatch.elapsedMilliseconds;
+        chapterLoaded = loaded;
+        bootstrapSucceeded = loaded;
+        if (loaded && _hasVisibleReaderContent) {
+          tapToVisibleMs ??= _tapTraceElapsedMs();
+          _scheduleDeferredReaderPostVisibleSync();
+          await _consumePendingBookmarkJump();
+          unawaited(_hydrateCatalogAfterVisible());
           return;
         }
       }
@@ -554,6 +588,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       await _fontRegistryService.restoreRegisteredFonts();
       return _fontRegistryService.listRegisteredFonts();
     }();
+    final customBackgroundsFuture = _loadUnifiedCustomBackgrounds();
     final recentColorsFuture = _preferencesService.loadRecentBodyTextColors();
     final autoSwitchSourceOnFailureFuture =
         _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
@@ -561,6 +596,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _systemSettingsService.loadReadRecordEnabled();
 
     var availableCustomFonts = const <ReaderCustomFontEntry>[];
+    var availableCustomBackgrounds = const <String>[];
     var recentColors = const <int>[];
     var autoSwitchSourceOnFailureEnabled = false;
     var readingRecordEnabled = true;
@@ -569,6 +605,11 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       availableCustomFonts = await fontRestoreFuture;
     } catch (_) {
       availableCustomFonts = const <ReaderCustomFontEntry>[];
+    }
+    try {
+      availableCustomBackgrounds = await customBackgroundsFuture;
+    } catch (_) {
+      availableCustomBackgrounds = const <String>[];
     }
     try {
       recentColors = await recentColorsFuture;
@@ -588,6 +629,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
     if (!mounted) {
       _customFonts = availableCustomFonts;
+      _customBackgroundImages = availableCustomBackgrounds;
       _recentBodyTextColors = recentColors;
       _autoSwitchSourceOnFailureEnabled = autoSwitchSourceOnFailureEnabled;
       _readingRecordEnabled = readingRecordEnabled;
@@ -596,10 +638,65 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
     setState(() {
       _customFonts = availableCustomFonts;
+      _customBackgroundImages = availableCustomBackgrounds;
       _recentBodyTextColors = recentColors;
       _autoSwitchSourceOnFailureEnabled = autoSwitchSourceOnFailureEnabled;
       _readingRecordEnabled = readingRecordEnabled;
     });
+    unawaited(_preloadCustomBackgroundPreviews(availableCustomBackgrounds));
+  }
+
+  Future<void> _hydrateCatalogAfterVisible() async {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    if (sourceId.isEmpty ||
+        detailUrl.isEmpty ||
+        _chapters.isNotEmpty ||
+        !mounted) {
+      return;
+    }
+    try {
+      final detailProvider = _requireContentProvider(
+        sourceId: _sourceId,
+        stage: ErrorStage.detail,
+      );
+      final detailResult = await detailProvider.loadDetail(
+        sourceId: sourceId,
+        bookId: _currentBookId,
+        detailUrl: detailUrl,
+        fallbackTitle: _chapterTitle,
+      );
+      if (!mounted || detailResult.chapters.isEmpty) {
+        return;
+      }
+      final resolvedIndex = _resolveCurrentIndex(detailResult.chapters);
+      if (resolvedIndex == null) {
+        return;
+      }
+      final current = detailResult.chapters[resolvedIndex];
+      setState(() {
+        _bookTitle = detailResult.detail.title;
+        _bookAuthor = detailResult.detail.author;
+        _bookCoverUrl = detailResult.detail.coverUrl;
+        _bookCustomCoverPath = null;
+        _chapters = detailResult.chapters;
+        _currentIndex = resolvedIndex;
+        _chapterId = current.id;
+        _chapterUrl = current.chapterUrl;
+        _chapterTitle = current.title;
+      });
+      await _applyPresentedBookMetadata(
+        fallbackTitle: detailResult.detail.title,
+        fallbackAuthor: detailResult.detail.author,
+        realCoverUrl: detailResult.detail.coverUrl,
+      );
+      _scheduleDeferredReaderPostVisibleSync(
+        detailResult: detailResult,
+        refreshBookshelf: false,
+      );
+    } catch (_) {
+      // Ignore post-visible catalog hydration failures.
+    }
   }
 
   bool _shouldTryLocalBootstrapPreview() {

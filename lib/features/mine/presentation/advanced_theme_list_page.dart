@@ -19,6 +19,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/import_export_copy.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/membership/membership_features.dart';
@@ -99,6 +100,17 @@ enum _AdvancedThemeImportQueueItemStatus {
   importing,
   success,
   failure,
+}
+
+extension on _AdvancedThemeImportQueueItemStatus {
+  String get label => switch (this) {
+    _AdvancedThemeImportQueueItemStatus.pending => '待处理',
+    _AdvancedThemeImportQueueItemStatus.reading => '读取文件',
+    _AdvancedThemeImportQueueItemStatus.parsing => '解析内容',
+    _AdvancedThemeImportQueueItemStatus.importing => '导入主题',
+    _AdvancedThemeImportQueueItemStatus.success => '导入完成',
+    _AdvancedThemeImportQueueItemStatus.failure => '导入失败',
+  };
 }
 
 class _AdvancedThemeImportQueueItem {
@@ -856,7 +868,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     String? mimeType,
     _AdvancedThemeBatchImportProgressCallback? onProgress,
   }) async {
-    onProgress?.call(_AdvancedThemeImportQueueItemStatus.reading, '正在读取文件');
+    onProgress?.call(
+      _AdvancedThemeImportQueueItemStatus.reading,
+      ImportExportCopy.importPreparing,
+    );
     await _yieldToUi();
     final bytes = await File(path).readAsBytes();
     if (_isBatchBundleFile(path: path, mimeType: mimeType, bytes: bytes)) {
@@ -867,7 +882,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       await _yieldToUi();
       return _importThemeBatchBundleBytes(bytes, onProgress: onProgress);
     }
-    onProgress?.call(_AdvancedThemeImportQueueItemStatus.importing, '正在导入主题');
+    onProgress?.call(_AdvancedThemeImportQueueItemStatus.importing, '正在导入主题资源');
     await _yieldToUi();
     await _importThemeBytes(
       path: path,
@@ -3045,7 +3060,7 @@ class _AdvancedThemeBatchImportSheetState
       _updateItem(
         index,
         status: _AdvancedThemeImportQueueItemStatus.reading,
-        detail: '正在准备 ${item.fileName}',
+        detail: '准备处理 ${item.fileName}',
       );
       _updateHeaderMessage('正在处理 ${index + 1}/${_items.length}');
       await Future<void>.delayed(const Duration(milliseconds: 16));
@@ -3443,6 +3458,16 @@ class _AdvancedThemeBatchImportSheetState
                           ),
                           if (item.detail != null) ...[
                             const SizedBox(height: 6),
+                            Text(
+                              item.status.label,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
                             Text(
                               item.detail!,
                               style: Theme.of(
