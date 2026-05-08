@@ -102,6 +102,15 @@ void main() {
       expect(pageIndex, 2);
     });
 
+    test('resolvePageIndexByRatio restores conservatively', () {
+      final pageIndex = planner.resolvePageIndexByRatio(
+        targetRatio: 0.12,
+        pageCount: 8,
+      );
+
+      expect(pageIndex, 0);
+    });
+
     test('resolveChapterTitleAfterLoad applies display title precedence', () {
       final commitTitle = planner.resolveChapterTitleAfterLoad(
         commitChapterIdentity: true,

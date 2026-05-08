@@ -44,7 +44,6 @@ class ReaderThemeModeService {
         themeMode: ReaderThemeMode.dark,
         backgroundStyle: ReaderBackgroundStyle.plain,
         backgroundTone: ReaderBackgroundTone.pureBlack,
-        clearBackgroundImage: true,
       ),
     };
 

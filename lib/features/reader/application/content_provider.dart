@@ -36,6 +36,7 @@ abstract class ContentProvider {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   });
 
   Future<ChapterContentResult> loadChapterContent({

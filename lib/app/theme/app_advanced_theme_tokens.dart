@@ -79,33 +79,32 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
   AppAdvancedThemeModeConfig? modeConfig,
 ) {
   final colors = modeConfig?.colors;
-  final backgroundColor =
-      colors?.backgroundColorValue != null
-          ? Color(colors!.backgroundColorValue!)
-          : colorScheme.surface;
-  final surfaceColor =
-      colors?.surfaceColorValue != null
-          ? Color(colors!.surfaceColorValue!)
-          : colorScheme.surfaceContainerLow;
-  final searchFieldBackgroundColor =
-      colors?.searchFieldBackgroundColorValue != null
-          ? Color(colors!.searchFieldBackgroundColorValue!)
-          : colorScheme.surfaceContainerHighest;
-  final elevatedSurfaceColor =
-      colors?.elevatedSurfaceColorValue != null
-          ? Color(colors!.elevatedSurfaceColorValue!)
-          : colorScheme.surfaceContainerHigh;
-  final cardColor =
-      colors?.cardColorValue != null
-          ? Color(colors!.cardColorValue!)
-          : colorScheme.surface;
+  final backgroundColor = _resolveColor(
+    colors?.backgroundColorValue,
+    fallback: colorScheme.surface,
+  );
+  final surfaceColor = _resolveColor(
+    colors?.surfaceColorValue,
+    fallback: colorScheme.surfaceContainerLow,
+  );
+  final cardColor = _resolveColor(
+    colors?.cardColorValue,
+    fallback: colorScheme.surface,
+  );
+  final primaryColor = _resolveColor(
+    colors?.primaryColorValue,
+    fallback: colorScheme.primary,
+  );
+  final outlineColor = _resolveColor(
+    colors?.outlineColorValue,
+    fallback: colorScheme.outline,
+  );
   final textPrimaryColor =
       colors?.textPrimaryColorValue != null
           ? Color(colors!.textPrimaryColorValue!)
           : _resolveReadableOnColor(<Color>[
             backgroundColor,
             surfaceColor,
-            searchFieldBackgroundColor,
             cardColor,
           ]);
   final textSecondaryColor =
@@ -115,10 +114,21 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
             foreground: textPrimaryColor,
             background: surfaceColor,
           );
-  final primaryColor =
-      colors?.primaryColorValue != null
-          ? Color(colors!.primaryColorValue!)
-          : colorScheme.primary;
+  final searchFieldBackgroundColor =
+      colors?.searchFieldBackgroundColorValue != null
+          ? Color(colors!.searchFieldBackgroundColorValue!)
+          : _resolveSearchFieldBackgroundColor(
+            surfaceColor: surfaceColor,
+            textPrimaryColor: textPrimaryColor,
+          );
+  final elevatedSurfaceColor =
+      colors?.elevatedSurfaceColorValue != null
+          ? Color(colors!.elevatedSurfaceColorValue!)
+          : _resolveElevatedSurfaceColor(
+            surfaceColor: surfaceColor,
+            cardColor: cardColor,
+            brightness: colorScheme.brightness,
+          );
   final cardTextColor =
       colors?.cardTextColorValue != null
           ? Color(colors!.cardTextColorValue!)
@@ -127,6 +137,57 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
             fallbackLight: textPrimaryColor,
             fallbackDark: textPrimaryColor,
           );
+  final primaryContainerColor =
+      colors?.primaryContainerColorValue != null
+          ? Color(colors!.primaryContainerColorValue!)
+          : _resolvePrimaryContainerColor(
+            primaryColor: primaryColor,
+            surfaceColor: surfaceColor,
+          );
+  final secondaryColor =
+      colors?.secondaryColorValue != null
+          ? Color(colors!.secondaryColorValue!)
+          : _resolveSecondaryColor(
+            primaryColor: primaryColor,
+            surfaceColor: surfaceColor,
+          );
+  final buttonTextColor =
+      colors?.buttonTextColorValue != null
+          ? Color(colors!.buttonTextColorValue!)
+          : _resolveReadableOnColor(<Color>[primaryColor]);
+  final cardBorderColor =
+      colors?.cardBorderColorValue != null
+          ? Color(colors!.cardBorderColorValue!)
+          : _resolveCardBorderColor(
+            outlineColor: outlineColor,
+            cardColor: cardColor,
+          );
+  final iconBackgroundColor =
+      colors?.iconBackgroundColorValue != null
+          ? Color(colors!.iconBackgroundColorValue!)
+          : _resolveIconBackgroundColor(
+            foreground: textPrimaryColor,
+            surface: surfaceColor,
+          );
+  final shadowColor =
+      colors?.shadowColorValue != null
+          ? _resolveShadowColor(
+            baseColor: Color(colors!.shadowColorValue!),
+            brightness: colorScheme.brightness,
+            preserveExplicitAlpha: true,
+          )
+          : _resolveShadowColor(
+            baseColor: primaryColor,
+            brightness: colorScheme.brightness,
+          );
+  final noticeAccentColor = _resolveColor(
+    colors?.noticeAccentColorValue,
+    fallback: colorScheme.tertiary,
+  );
+  final noticeSurfaceColor = _resolveColor(
+    colors?.noticeSurfaceColorValue,
+    fallback: colorScheme.tertiaryContainer,
+  );
 
   return ResolvedAdvancedThemePalette(
     backgroundColor: backgroundColor,
@@ -135,50 +196,18 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
     elevatedSurfaceColor: elevatedSurfaceColor,
     cardColor: cardColor,
     cardTextColor: cardTextColor,
-    cardBorderColor:
-        colors?.cardBorderColorValue != null
-            ? Color(colors!.cardBorderColorValue!)
-            : colorScheme.outlineVariant,
-    outlineColor:
-        colors?.outlineColorValue != null
-            ? Color(colors!.outlineColorValue!)
-            : colorScheme.outline,
-    iconBackgroundColor:
-        colors?.iconBackgroundColorValue != null
-            ? Color(colors!.iconBackgroundColorValue!)
-            : Color.alphaBlend(
-              colorScheme.onSurface.withValues(alpha: 0.04),
-              colorScheme.surface,
-            ),
+    cardBorderColor: cardBorderColor,
+    outlineColor: outlineColor,
+    iconBackgroundColor: iconBackgroundColor,
     textPrimaryColor: textPrimaryColor,
     textSecondaryColor: textSecondaryColor,
     primaryColor: primaryColor,
-    primaryContainerColor:
-        colors?.primaryContainerColorValue != null
-            ? Color(colors!.primaryContainerColorValue!)
-            : colorScheme.primaryContainer,
-    secondaryColor:
-        colors?.secondaryColorValue != null
-            ? Color(colors!.secondaryColorValue!)
-            : colorScheme.secondary,
-    buttonTextColor:
-        colors?.buttonTextColorValue != null
-            ? Color(colors!.buttonTextColorValue!)
-            : _resolveReadableOnColor(<Color>[primaryColor]),
-    shadowColor:
-        colors?.shadowColorValue != null
-            ? Color(colors!.shadowColorValue!)
-            : colorScheme.shadow.withValues(
-              alpha: colorScheme.brightness == Brightness.dark ? 0.22 : 0.12,
-            ),
-    noticeAccentColor:
-        colors?.noticeAccentColorValue != null
-            ? Color(colors!.noticeAccentColorValue!)
-            : colorScheme.tertiary,
-    noticeSurfaceColor:
-        colors?.noticeSurfaceColorValue != null
-            ? Color(colors!.noticeSurfaceColorValue!)
-            : colorScheme.tertiaryContainer,
+    primaryContainerColor: primaryContainerColor,
+    secondaryColor: secondaryColor,
+    buttonTextColor: buttonTextColor,
+    shadowColor: shadowColor,
+    noticeAccentColor: noticeAccentColor,
+    noticeSurfaceColor: noticeSurfaceColor,
   );
 }
 
@@ -213,8 +242,51 @@ ResolvedAdvancedThemeBackdrop resolveAdvancedThemeBackdropFromModeConfig(
     wallpaperOverlayColor:
         colors?.wallpaperOverlayColorValue != null
             ? Color(colors!.wallpaperOverlayColorValue!)
-            : colorScheme.surface,
-    wallpaperOverlayOpacity: modeConfig?.wallpaperOverlayOpacity ?? 0.32,
+            : _resolveWallpaperOverlayColor(
+              backgroundColor:
+                  colors?.backgroundColorValue != null
+                      ? Color(colors!.backgroundColorValue!)
+                      : colorScheme.surface,
+            ),
+    wallpaperOverlayOpacity:
+        modeConfig?.wallpaperOverlayOpacity ??
+        _defaultWallpaperOverlayOpacity(colorScheme.brightness),
+  );
+}
+
+AppAdvancedThemeModeConfig buildDefaultAdvancedThemeModeConfig(
+  ColorScheme colorScheme,
+) {
+  return AppAdvancedThemeModeConfig(
+    colors: AppAdvancedThemeColors(
+      primaryColorValue: colorScheme.primary.toARGB32(),
+      secondaryColorValue: colorScheme.secondary.toARGB32(),
+      noticeAccentColorValue: colorScheme.tertiary.toARGB32(),
+      noticeSurfaceColorValue: colorScheme.tertiaryContainer.toARGB32(),
+      primaryContainerColorValue: colorScheme.primaryContainer.toARGB32(),
+      backgroundColorValue: colorScheme.surface.toARGB32(),
+      surfaceColorValue: colorScheme.surfaceContainerLow.toARGB32(),
+      searchFieldBackgroundColorValue:
+          colorScheme.surfaceContainerHighest.toARGB32(),
+      elevatedSurfaceColorValue: colorScheme.surfaceContainerHigh.toARGB32(),
+      cardColorValue: colorScheme.surface.toARGB32(),
+      cardTextColorValue: colorScheme.onSurface.toARGB32(),
+      cardBorderColorValue: colorScheme.outlineVariant.toARGB32(),
+      iconBackgroundColorValue:
+          Color.alphaBlend(
+            colorScheme.onSurface.withValues(alpha: 0.04),
+            colorScheme.surface,
+          ).toARGB32(),
+      textPrimaryColorValue: colorScheme.onSurface.toARGB32(),
+      textSecondaryColorValue: colorScheme.onSurfaceVariant.toARGB32(),
+      buttonTextColorValue: colorScheme.onPrimary.toARGB32(),
+      outlineColorValue: colorScheme.outline.toARGB32(),
+      shadowColorValue: colorScheme.primary.withValues(alpha: 0.18).toARGB32(),
+      wallpaperOverlayColorValue: colorScheme.surface.toARGB32(),
+    ),
+    readerWallpaperOverlayOpacity: 0,
+    wallpaperOverlayOpacity:
+        colorScheme.brightness == Brightness.dark ? 0.46 : 0.28,
   );
 }
 
@@ -262,6 +334,84 @@ Color _resolveMutedTextColor({
           ? 0.72
           : 0.62;
   return Color.alphaBlend(foreground.withValues(alpha: alpha), background);
+}
+
+Color _resolveColor(int? value, {required Color fallback}) {
+  if (value == null) {
+    return fallback;
+  }
+  return Color(value);
+}
+
+Color _resolveSearchFieldBackgroundColor({
+  required Color surfaceColor,
+  required Color textPrimaryColor,
+}) {
+  return Color.alphaBlend(
+    textPrimaryColor.withValues(alpha: 0.035),
+    surfaceColor,
+  );
+}
+
+Color _resolveElevatedSurfaceColor({
+  required Color surfaceColor,
+  required Color cardColor,
+  required Brightness brightness,
+}) {
+  final liftAlpha = brightness == Brightness.dark ? 0.08 : 0.04;
+  return Color.alphaBlend(
+    _resolveReadableOnColor(<Color>[cardColor]).withValues(alpha: liftAlpha),
+    surfaceColor,
+  );
+}
+
+Color _resolvePrimaryContainerColor({
+  required Color primaryColor,
+  required Color surfaceColor,
+}) {
+  return Color.alphaBlend(primaryColor.withValues(alpha: 0.18), surfaceColor);
+}
+
+Color _resolveSecondaryColor({
+  required Color primaryColor,
+  required Color surfaceColor,
+}) {
+  return Color.alphaBlend(primaryColor.withValues(alpha: 0.72), surfaceColor);
+}
+
+Color _resolveCardBorderColor({
+  required Color outlineColor,
+  required Color cardColor,
+}) {
+  return Color.alphaBlend(outlineColor.withValues(alpha: 0.72), cardColor);
+}
+
+Color _resolveIconBackgroundColor({
+  required Color foreground,
+  required Color surface,
+}) {
+  return Color.alphaBlend(foreground.withValues(alpha: 0.06), surface);
+}
+
+Color _resolveShadowColor({
+  required Color baseColor,
+  required Brightness brightness,
+  bool preserveExplicitAlpha = false,
+}) {
+  if (preserveExplicitAlpha && baseColor.a < 1) {
+    return baseColor;
+  }
+  final alpha = brightness == Brightness.dark ? 0.26 : 0.16;
+  return baseColor.withValues(alpha: alpha);
+}
+
+Color _resolveWallpaperOverlayColor({required Color backgroundColor}) {
+  final overlayBase = _resolveReadableOnColor(<Color>[backgroundColor]);
+  return Color.alphaBlend(overlayBase.withValues(alpha: 0.08), backgroundColor);
+}
+
+double _defaultWallpaperOverlayOpacity(Brightness brightness) {
+  return brightness == Brightness.dark ? 0.46 : 0.28;
 }
 
 double _contrastRatio(Color foreground, Color background) {

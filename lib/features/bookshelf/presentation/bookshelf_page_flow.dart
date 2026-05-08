@@ -935,26 +935,51 @@ extension on _BookshelfPageState {
 
     _updateBookshelfState(() {
       _isImportingLocal = true;
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入本地图书',
+        message: '正在准备处理 ${files.length} 个文件…',
+        progress: 0,
+        progressLabel: '0/${files.length}',
+      );
     });
 
     try {
       final summary = await _flowCoordinator.importLocalBooks(
-        candidates:
-            files.map(
-              (file) => BookshelfImportCandidate(
-                filePath: file.path.trim(),
-                displayName:
-                    file.name.trim().isEmpty
-                        ? p.basename(file.path.trim())
-                        : file.name.trim(),
-              ),
-            ),
+        candidates: files.map(
+          (file) => BookshelfImportCandidate(
+            filePath: file.path.trim(),
+            displayName:
+                file.name.trim().isEmpty
+                    ? p.basename(file.path.trim())
+                    : file.name.trim(),
+          ),
+        ),
         importer: (candidate) {
           return _localBookImportService.importFromFile(
             filePath: candidate.filePath,
             displayName: candidate.displayName,
             waitForIndexing:
                 LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+            onProgress: (progress) {
+              if (!mounted) {
+                return;
+              }
+              final stageText = switch (progress.stage) {
+                LocalBookImportStage.preparing => '正在准备文件',
+                LocalBookImportStage.persisted => '已写入书架，正在整理记录',
+                LocalBookImportStage.indexing => '正在解析目录与正文',
+                LocalBookImportStage.completed => '已完成导入',
+              };
+              _updateBookshelfState(() {
+                final current = _taskStatus;
+                _taskStatus = ImportExportTaskStatus(
+                  title: '正在导入本地图书',
+                  message: '${progress.displayName} · $stageText',
+                  progress: current?.progress,
+                  progressLabel: current?.progressLabel,
+                );
+              });
+            },
           );
         },
         errorFormatter: (error) {
@@ -962,6 +987,25 @@ extension on _BookshelfPageState {
             AppException() => error.briefMessage,
             _ => '导入失败：$error',
           };
+        },
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          _updateBookshelfState(() {
+            _taskStatus = ImportExportTaskStatus(
+              title: '正在导入本地图书',
+              message: '正在处理 ${progress.currentFileLabel}',
+              progress:
+                  progress.totalCount <= 0
+                      ? null
+                      : progress.completedCount / progress.totalCount,
+              progressLabel:
+                  progress.totalCount <= 0
+                      ? null
+                      : '${progress.completedCount}/${progress.totalCount}',
+            );
+          });
         },
       );
 
@@ -988,6 +1032,7 @@ extension on _BookshelfPageState {
       if (mounted) {
         _updateBookshelfState(() {
           _isImportingLocal = false;
+          _taskStatus = null;
         });
       }
     }
@@ -1011,6 +1056,12 @@ extension on _BookshelfPageState {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    _updateBookshelfState(() {
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入外部图书',
+        message: '正在读取 ${payload.label} 并准备入库…',
+      );
+    });
     final cached = await _externalImportCoordinator.cacheExternalFileFromUri(
       payload,
     );
@@ -1049,6 +1100,23 @@ extension on _BookshelfPageState {
         displayName: cached.label,
         waitForIndexing:
             LocalBookWorkflowPolicy.externalImportShouldWaitForIndexing,
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          final stageText = switch (progress.stage) {
+            LocalBookImportStage.preparing => '正在准备文件',
+            LocalBookImportStage.persisted => '已写入书架，正在整理记录',
+            LocalBookImportStage.indexing => '正在解析目录与正文',
+            LocalBookImportStage.completed => '已完成导入',
+          };
+          _updateBookshelfState(() {
+            _taskStatus = ImportExportTaskStatus(
+              title: '正在导入外部图书',
+              message: '${progress.displayName} · $stageText',
+            );
+          });
+        },
       );
       await _loadBookshelf(force: true);
       if (!mounted) {
@@ -1080,6 +1148,11 @@ extension on _BookshelfPageState {
         ),
       );
     } finally {
+      if (mounted) {
+        _updateBookshelfState(() {
+          _taskStatus = null;
+        });
+      }
       try {
         if (await tempFile.exists()) {
           await tempFile.delete();

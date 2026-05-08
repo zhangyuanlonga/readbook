@@ -131,10 +131,9 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
         shouldDefer: true,
       );
     }
-    final pageIndex = (normalizedRatio * (metrics.pageCount - 1)).round().clamp(
-      0,
-      metrics.pageCount - 1,
-    );
+    final pageIndex = (normalizedRatio * metrics.pageCount)
+        .floor()
+        .clamp(0, metrics.pageCount - 1);
     return ReaderRestorePlan(
       normalizedRatio: normalizedRatio,
       pageIndex: pageIndex,

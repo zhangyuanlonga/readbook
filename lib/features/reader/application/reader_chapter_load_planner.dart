@@ -90,7 +90,7 @@ class ReaderChapterLoadPlanner {
     if (pageCount <= 1) {
       return 0;
     }
-    return (targetRatio.clamp(0.0, 1.0) * (pageCount - 1)).round().clamp(
+    return (targetRatio.clamp(0.0, 1.0) * pageCount).floor().clamp(
       0,
       pageCount - 1,
     );

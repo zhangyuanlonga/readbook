@@ -51,13 +51,22 @@ void main() {
       expect(plan.normalizedRatio, 0.5);
     });
 
-    test('restores to nearest page index when pages are ready', () {
-      const metrics = ReaderRenderMetrics(pageCount: 6);
+    test('restores conservatively without jumping to the next page early', () {
+      const metrics = ReaderRenderMetrics(pageCount: 8);
 
-      final plan = renderer.planRestore(ratio: 0.61, metrics: metrics);
+      final plan = renderer.planRestore(ratio: 0.125, metrics: metrics);
 
       expect(plan.shouldDefer, isFalse);
-      expect(plan.pageIndex, 3);
+      expect(plan.pageIndex, 1);
+    });
+
+    test('keeps early first-page progress on the first page', () {
+      const metrics = ReaderRenderMetrics(pageCount: 8);
+
+      final plan = renderer.planRestore(ratio: 0.12, metrics: metrics);
+
+      expect(plan.shouldDefer, isFalse);
+      expect(plan.pageIndex, 0);
     });
 
     test('resolves animated turn decision with settings style', () {

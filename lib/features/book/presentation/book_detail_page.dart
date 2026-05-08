@@ -19,6 +19,7 @@ import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
@@ -102,18 +103,21 @@ class BookDetailPage extends ConsumerStatefulWidget {
 class _BookDetailPresentationState {
   const _BookDetailPresentationState({
     this.isLoading = false,
+    this.isCatalogLoading = false,
     this.errorText,
     this.tocWarningText,
     this.result,
   });
 
   final bool isLoading;
+  final bool isCatalogLoading;
   final String? errorText;
   final String? tocWarningText;
   final BookDetailLoadResult? result;
 
   _BookDetailPresentationState copyWith({
     bool? isLoading,
+    bool? isCatalogLoading,
     String? errorText,
     bool clearErrorText = false,
     String? tocWarningText,
@@ -123,6 +127,7 @@ class _BookDetailPresentationState {
   }) {
     return _BookDetailPresentationState(
       isLoading: isLoading ?? this.isLoading,
+      isCatalogLoading: isCatalogLoading ?? this.isCatalogLoading,
       errorText: clearErrorText ? null : (errorText ?? this.errorText),
       tocWarningText:
           clearTocWarningText ? null : (tocWarningText ?? this.tocWarningText),
@@ -219,6 +224,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final BookDetailActionService _actionService;
   late final BookDetailCatalogService _catalogService;
   late final SourceRuntimeFacade _sourceRuntimeFacade;
+  final AppLogger _logger = AppLogger.instance;
+  final Stopwatch _detailOpenStopwatch = Stopwatch()..start();
   final BookDisplayStateResolver _bookMetadataPresentationResolver =
       const BookDisplayStateResolver();
   late final ReaderSystemSettingsService _readerSystemSettingsService;
@@ -236,6 +243,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   String? _editingCharset;
   bool _editingSplitLongChapter = true;
   bool _defaultSplitLongChapterEnabled = true;
+  bool _hasLoggedDetailBodyVisible = false;
   String? _catalogSearchCacheFingerprint;
   Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
       const <String, List<ReaderCatalogSearchEntry>>{};
@@ -309,9 +317,15 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _handleLocalIndexEvent,
     );
     if (hydratedFromCache) {
-      unawaited(_load(forceRefresh: true, backgroundRefresh: true));
+      unawaited(
+        _load(
+          forceRefresh: true,
+          backgroundRefresh: true,
+          includeCatalog: _result?.catalogLoaded ?? true,
+        ),
+      );
     } else {
-      unawaited(_load());
+      unawaited(_load(includeCatalog: false));
     }
   }
 
@@ -343,6 +357,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _auxiliaryStateNotifier.value;
 
   bool get _isLoading => _presentationState.isLoading;
+
+  bool get _isCatalogLoading => _presentationState.isCatalogLoading;
 
   String? get _errorText => _presentationState.errorText;
 
@@ -423,6 +439,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         clearTocWarningText: true,
       ),
     );
+    _recordDetailBodyVisible(result: cached, source: 'detail_cache');
     unawaited(
       _loadSupplementaryState(
         result: cached,
@@ -546,10 +563,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             isShelfActionLoading: auxiliaryState.isShelfActionLoading,
             onToggleBookshelf: _toggleBookshelf,
             onOpenCatalog:
-                hasCatalog && _result != null
-                    ? () => _openCatalogSheet(_result!)
-                    : null,
-            isCatalogEnabled: hasCatalog,
+                hasCatalog && _result != null ? _handleOpenCatalogAction : null,
+            isCatalogEnabled: hasCatalog && !_isCatalogLoading,
             onSwitchSource: _canSwitchSource ? _handleSwitchSource : null,
             isSwitchSourceEnabled: _canSwitchSource,
             onOpenOrganize: _openOrganizeSheet,
@@ -604,7 +619,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         const SizedBox(height: 12),
         _buildQuickActionsCard(
           auxiliaryState: auxiliaryState,
-          hasCatalog: result.chapters.isNotEmpty,
+          hasCatalog: _canOpenCatalogForResult(result),
         ),
         if (introCard != null) ...[const SizedBox(height: 12), introCard],
         if (shouldShowLocalIndexStatus) ...[
@@ -883,12 +898,16 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   Widget? _buildReadFloatingActionButton(BookDetailLoadResult result) {
     final readableChapters = _readableChapters(result.chapters);
-    if (readableChapters.isEmpty) {
+    final fallbackRoute = _buildFallbackReadRoute(result);
+    if (readableChapters.isEmpty && fallbackRoute == null) {
       return null;
     }
     return FloatingActionButton.extended(
       key: const Key('book_detail_read_button'),
-      onPressed: () => _openChapter(readableChapters.first),
+      onPressed:
+          readableChapters.isNotEmpty
+              ? () => _openChapter(readableChapters.first)
+              : () => context.push(fallbackRoute!),
       icon: const Icon(Icons.chrome_reader_mode_outlined),
       label: const Text('开始阅读'),
     );
@@ -1206,6 +1225,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           bookId: _activeBookId,
           detailUrl: currentDetailUrl,
           fallbackTitle: currentTitle.isEmpty ? null : currentTitle,
+          includeCatalog: false,
         );
         return detailResult.detail.title;
       },
@@ -1378,7 +1398,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _activeBookId = candidate.book.id.trim();
     _displayTitle = candidate.book.title.trim();
 
-    final switched = await _load(forceRefresh: true, clearResult: true);
+    final switched = await _load(
+      forceRefresh: true,
+      clearResult: true,
+      includeCatalog: false,
+    );
     if (switched) {
       final bookshelfSyncFailed = await _migrateBookshelfAfterSwitch(
         previousSourceId: previousSourceId,
@@ -1594,6 +1618,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     bool forceRefresh = false,
     bool clearResult = false,
     bool backgroundRefresh = false,
+    bool? includeCatalog,
   }) async {
     if (!mounted || _isMissingParams) {
       return false;
@@ -1609,6 +1634,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return false;
     }
     final requestToken = ++_detailLoadRequestToken;
+    final shouldIncludeCatalog =
+        includeCatalog ?? (_result?.catalogLoaded ?? false);
 
     final shouldShowLoading = !backgroundRefresh || _result == null;
     final nextPresentationBeforeLoad = _presentationState.copyWith(
@@ -1635,6 +1662,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         detailUrl: _activeDetailUrl!,
         fallbackTitle: _displayTitle ?? widget.title,
         forceRefresh: forceRefresh,
+        includeCatalog: shouldIncludeCatalog,
       );
 
       if (!_isActiveDetailLoadRequest(requestToken)) {
@@ -1653,6 +1681,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           result: result,
           tocWarningText: _toTocWarningText(result.tocError),
         ),
+      );
+      _recordDetailBodyVisible(
+        result: result,
+        source: shouldIncludeCatalog ? 'detail_and_catalog' : 'detail_only',
       );
       unawaited(
         _loadSupplementaryState(result: result, loadRequestToken: requestToken),
@@ -1939,7 +1971,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       if (_isLoading) {
         return;
       }
-      await _load(backgroundRefresh: true);
+      await _load(
+        backgroundRefresh: true,
+        includeCatalog: _result?.catalogLoaded ?? false,
+      );
       return;
     }
     await _syncLocalBookMeta();
@@ -2025,7 +2060,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: TextButton.icon(
-                onPressed: _isLoading ? null : () => _load(forceRefresh: true),
+                onPressed:
+                    _isLoading
+                        ? null
+                        : () => _load(
+                          forceRefresh: true,
+                          includeCatalog: _result?.catalogLoaded ?? false,
+                        ),
                 icon: Icon(Icons.refresh_rounded, color: foreground, size: 16),
                 label: Text('重建', style: TextStyle(color: foreground)),
               ),

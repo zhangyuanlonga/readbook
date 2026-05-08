@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -69,8 +70,12 @@ class AdvancedThemeEditorStateService {
       name: '未命名主题',
       createdAt: now,
       updatedAt: now,
-      lightConfig: _modeConfigFromScheme(buildAppLightColorScheme(seedColor)),
-      darkConfig: _modeConfigFromScheme(buildAppDarkColorScheme(seedColor)),
+      lightConfig: buildDefaultAdvancedThemeModeConfig(
+        buildAppLightColorScheme(seedColor),
+      ),
+      darkConfig: buildDefaultAdvancedThemeModeConfig(
+        buildAppDarkColorScheme(seedColor),
+      ),
     );
   }
 
@@ -164,41 +169,6 @@ class AdvancedThemeEditorStateService {
     return draft.copyWithModeConfig(
       mode,
       currentConfig.copyWith(readerWallpaperPath: path),
-    );
-  }
-
-  AppAdvancedThemeModeConfig _modeConfigFromScheme(ColorScheme colorScheme) {
-    return AppAdvancedThemeModeConfig(
-      colors: AppAdvancedThemeColors(
-        primaryColorValue: colorScheme.primary.toARGB32(),
-        secondaryColorValue: colorScheme.secondary.toARGB32(),
-        noticeAccentColorValue: colorScheme.tertiary.toARGB32(),
-        noticeSurfaceColorValue: colorScheme.tertiaryContainer.toARGB32(),
-        primaryContainerColorValue: colorScheme.primaryContainer.toARGB32(),
-        backgroundColorValue: colorScheme.surface.toARGB32(),
-        surfaceColorValue: colorScheme.surfaceContainerLow.toARGB32(),
-        searchFieldBackgroundColorValue:
-            colorScheme.surfaceContainerHighest.toARGB32(),
-        elevatedSurfaceColorValue: colorScheme.surfaceContainerHigh.toARGB32(),
-        cardColorValue: colorScheme.surface.toARGB32(),
-        cardTextColorValue: colorScheme.onSurface.toARGB32(),
-        cardBorderColorValue: colorScheme.outlineVariant.toARGB32(),
-        iconBackgroundColorValue:
-            Color.alphaBlend(
-              colorScheme.onSurface.withValues(alpha: 0.04),
-              colorScheme.surface,
-            ).toARGB32(),
-        textPrimaryColorValue: colorScheme.onSurface.toARGB32(),
-        textSecondaryColorValue: colorScheme.onSurfaceVariant.toARGB32(),
-        buttonTextColorValue: colorScheme.onPrimary.toARGB32(),
-        outlineColorValue: colorScheme.outline.toARGB32(),
-        shadowColorValue:
-            colorScheme.primary.withValues(alpha: 0.18).toARGB32(),
-        wallpaperOverlayColorValue: colorScheme.surface.toARGB32(),
-      ),
-      readerWallpaperOverlayOpacity: 0,
-      wallpaperOverlayOpacity:
-          colorScheme.brightness == Brightness.dark ? 0.46 : 0.28,
     );
   }
 }

@@ -83,6 +83,12 @@ void main() {
     expect(decoded['name'], '护眼绿');
     expect(decoded['lightConfig'], isA<Map>());
     expect(decoded['darkConfig'], isA<Map>());
+    expect(
+      ((decoded['lightConfig'] as Map)['colors'] as Map).containsKey(
+        AppAdvancedThemeColors.semanticColorGroupsKey,
+      ),
+      isTrue,
+    );
     expect(decoded.containsKey('coverGalleryId'), isFalse);
     expect(decoded.containsKey('launchImageGalleryId'), isFalse);
     expect(decoded.containsKey('bottomNavGalleryId'), isFalse);
@@ -123,6 +129,46 @@ void main() {
     final themes = await service.loadThemes();
     expect(themes, hasLength(1));
     expect(themes.first.name, '薄雾灰');
+  });
+
+  test('imports semantic-group color payload into a new saved theme', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+
+    final imported = await service.importThemeColorJson(
+      jsonEncode(<String, dynamic>{
+        'type': 'advanced_theme_colors',
+        'version': 2,
+        'name': '语义分组主题',
+        'lightConfig': <String, dynamic>{
+          'colors': <String, dynamic>{
+            AppAdvancedThemeColors.semanticColorGroupsKey: <String, dynamic>{
+              'core': <String, dynamic>{
+                'primary': 0xFF556677,
+                'background': 0xFFF6F6F4,
+              },
+              'component': <String, dynamic>{'card': 0xFFFFFFFF},
+            },
+          },
+        },
+        'darkConfig': <String, dynamic>{
+          'colors': <String, dynamic>{
+            AppAdvancedThemeColors.semanticColorGroupsKey: <String, dynamic>{
+              'core': <String, dynamic>{
+                'primary': 0xFF99AABB,
+                'background': 0xFF17191A,
+              },
+              'component': <String, dynamic>{'card': 0xFF202326},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported.name, '语义分组主题');
+    expect(imported.lightConfig.colors.primaryColorValue, 0xFF556677);
+    expect(imported.darkConfig.colors.primaryColorValue, 0xFF99AABB);
+    expect(imported.lightConfig.colors.cardColorValue, 0xFFFFFFFF);
+    expect(imported.darkConfig.colors.cardColorValue, 0xFF202326);
   });
 
   test('persists reader wallpaper path inside theme mode config', () async {

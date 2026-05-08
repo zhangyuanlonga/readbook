@@ -7,7 +7,7 @@ void main() {
   group('ReaderThemeModeService', () {
     const service = ReaderThemeModeService();
 
-    test('switches light mode to dark mode and clears background image', () {
+    test('switches light mode to dark mode and preserves background image', () {
       final result = service.buildToggleResult(
         settings: const ReaderSettings(
           themeMode: ReaderThemeMode.light,
@@ -21,7 +21,7 @@ void main() {
         result.nextSettings.backgroundTone,
         ReaderBackgroundTone.pureBlack,
       );
-      expect(result.nextSettings.backgroundImageBase64, isNull);
+      expect(result.nextSettings.backgroundImageBase64, 'abc');
       expect(result.nextAppThemeMode, ThemeMode.dark);
       expect(result.nextLightModeBackgroundImageBackup, 'abc');
     });

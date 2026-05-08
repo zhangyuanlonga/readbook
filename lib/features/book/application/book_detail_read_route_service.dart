@@ -48,4 +48,24 @@ class BookDetailReadRouteService {
       chapter: chapter,
     );
   }
+
+  String? buildFallbackRoute({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    String? fallbackTitle,
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return null;
+    }
+    return _readerEntryRouteResolver.buildChapterRoute(
+      bookId: bookId,
+      chapterId: 'bootstrap',
+      sourceId: normalizedSourceId,
+      detailUrl: normalizedDetailUrl,
+      chapterTitle: fallbackTitle,
+    );
+  }
 }

@@ -97,6 +97,7 @@ class ReaderPaginationRequest {
     required this.paragraphStyle,
     this.paragraphModels,
     this.textScaler = TextScaler.noScaling,
+    this.yieldInterval = const Duration(milliseconds: 8),
     this.shouldAbort,
     this.textDirection = TextDirection.ltr,
     this.textAlign = TextAlign.start,
@@ -107,6 +108,7 @@ class ReaderPaginationRequest {
   final TextStyle paragraphStyle;
   final List<ReaderPaginationParagraph>? paragraphModels;
   final TextScaler textScaler;
+  final Duration yieldInterval;
   final bool Function()? shouldAbort;
   final TextDirection textDirection;
   final TextAlign textAlign;
@@ -288,6 +290,22 @@ class ReaderPaginationEngine {
     var currentPage = <ReaderPagedSlice>[];
     var remainingHeight = maxHeight;
     var lastSpacingAfter = 0.0;
+    final yieldStopwatch = Stopwatch()..start();
+
+    Future<bool> maybeYield() async {
+      if (request.shouldAbort?.call() ?? false) {
+        return true;
+      }
+      if (request.yieldInterval <= Duration.zero ||
+          yieldStopwatch.elapsed < request.yieldInterval) {
+        return false;
+      }
+      await Future<void>.delayed(Duration.zero);
+      yieldStopwatch
+        ..reset()
+        ..start();
+      return request.shouldAbort?.call() ?? false;
+    }
 
     for (
       var paragraphIndex = 0;
@@ -308,6 +326,9 @@ class ReaderPaginationEngine {
         if (request.shouldAbort?.call() ?? false) {
           return null;
         }
+        if (await maybeYield()) {
+          return null;
+        }
 
         if (currentPage.isNotEmpty) {
           if (remainingHeight <= lastSpacingAfter + _kPageTailSafetyBuffer) {
@@ -315,6 +336,9 @@ class ReaderPaginationEngine {
             currentPage = <ReaderPagedSlice>[];
             remainingHeight = maxHeight;
             lastSpacingAfter = 0.0;
+            if (await maybeYield()) {
+              return null;
+            }
             continue;
           }
           remainingHeight -= lastSpacingAfter;
@@ -356,6 +380,9 @@ class ReaderPaginationEngine {
           currentPage = <ReaderPagedSlice>[];
           remainingHeight = maxHeight;
           lastSpacingAfter = 0.0;
+          if (await maybeYield()) {
+            return null;
+          }
           continue;
         }
 
@@ -387,11 +414,14 @@ class ReaderPaginationEngine {
           currentPage = <ReaderPagedSlice>[];
           remainingHeight = maxHeight;
           lastSpacingAfter = 0.0;
+          if (await maybeYield()) {
+            return null;
+          }
         }
       }
 
-      if (paragraphIndex % 8 == 0) {
-        await Future<void>.delayed(Duration.zero);
+      if (await maybeYield()) {
+        return null;
       }
     }
 

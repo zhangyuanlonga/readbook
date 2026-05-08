@@ -182,135 +182,138 @@ extension on _SourcePageState {
                 });
               }
 
-              return Scaffold(
-                resizeToAvoidBottomInset: false,
-                extendBodyBehindAppBar: true,
-                appBar: AppBar(
-                  backgroundColor: Colors.transparent,
-                  surfaceTintColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  leading: IconButton(
-                    onPressed: _handleBackNavigation,
-                    tooltip: '返回',
-                    icon: const Icon(Icons.arrow_back),
+              return ImportExportTaskOverlay(
+                status: _taskStatus,
+                child: Scaffold(
+                  resizeToAvoidBottomInset: false,
+                  extendBodyBehindAppBar: true,
+                  appBar: AppBar(
+                    backgroundColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    leading: IconButton(
+                      onPressed: _handleBackNavigation,
+                      tooltip: '返回',
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    titleSpacing: 0,
+                    title: _buildSearchField(context),
+                    actions: [
+                      PopupMenuButton<_ScriptSourceSortOption>(
+                        tooltip: '排序',
+                        initialValue: _sortOption,
+                        onSelected: (value) {
+                          if (!mounted) {
+                            return;
+                          }
+                          _updateSourcePageState(() {
+                            _sortOption = value;
+                          });
+                        },
+                        itemBuilder:
+                            (context) => const [
+                              PopupMenuItem(
+                                value: _ScriptSourceSortOption.updatedDesc,
+                                child: Text('最近更新'),
+                              ),
+                              PopupMenuItem(
+                                value: _ScriptSourceSortOption.nameAsc,
+                                child: Text('名称 A-Z'),
+                              ),
+                              PopupMenuItem(
+                                value: _ScriptSourceSortOption.nameDesc,
+                                child: Text('名称 Z-A'),
+                              ),
+                            ],
+                        icon: const Icon(Icons.swap_vert_rounded),
+                      ),
+                      PopupMenuButton<String?>(
+                        tooltip: '分组',
+                        initialValue: _selectedGroupKey,
+                        onSelected: (value) {
+                          if (!mounted) {
+                            return;
+                          }
+                          _updateSourcePageState(() {
+                            _selectedGroupKey = value;
+                          });
+                        },
+                        itemBuilder: (context) {
+                          final items = <PopupMenuEntry<String?>>[
+                            const PopupMenuItem<String?>(
+                              value: null,
+                              child: Text('全部'),
+                            ),
+                          ];
+                          if (_hasDuplicateSources(rawSources)) {
+                            items.add(
+                              const PopupMenuItem<String?>(
+                                value: _SourcePageState._duplicateGroupKey,
+                                child: Text('重复源'),
+                              ),
+                            );
+                          }
+                          if (_hasUngrouped(rawSources)) {
+                            items.add(
+                              const PopupMenuItem<String?>(
+                                value: _SourcePageState._ungroupedGroupKey,
+                                child: Text('未分组'),
+                              ),
+                            );
+                          }
+                          for (final group in availableGroups) {
+                            items.add(
+                              PopupMenuItem<String?>(
+                                value: group,
+                                child: Text(group),
+                              ),
+                            );
+                          }
+                          return items;
+                        },
+                        icon: const Icon(Icons.filter_list_rounded),
+                      ),
+                      PopupMenuButton<_SourcePageMenuAction>(
+                        tooltip: '更多',
+                        icon: const Icon(Icons.more_vert_rounded),
+                        onSelected: _handlePageMenuAction,
+                        itemBuilder:
+                            (context) => [
+                              PopupMenuItem(
+                                value: _SourcePageMenuAction.create,
+                                child: Text('新增'),
+                              ),
+                              PopupMenuItem(
+                                value: _SourcePageMenuAction.importLocal,
+                                child: Text('本地导入'),
+                              ),
+                              PopupMenuItem(
+                                value: _SourcePageMenuAction.importNetwork,
+                                child: Text('网络导入'),
+                              ),
+                              PopupMenuItem(
+                                value: _SourcePageMenuAction.importPaste,
+                                child: Text('粘贴导入'),
+                              ),
+                              PopupMenuItem(
+                                value: _SourcePageMenuAction.batchCheck,
+                                child: Text('批量检测'),
+                              ),
+                            ],
+                      ),
+                    ],
                   ),
-                  titleSpacing: 0,
-                  title: _buildSearchField(context),
-                  actions: [
-                    PopupMenuButton<_ScriptSourceSortOption>(
-                      tooltip: '排序',
-                      initialValue: _sortOption,
-                      onSelected: (value) {
-                        if (!mounted) {
-                          return;
-                        }
-                        _updateSourcePageState(() {
-                          _sortOption = value;
-                        });
-                      },
-                      itemBuilder:
-                          (context) => const [
-                            PopupMenuItem(
-                              value: _ScriptSourceSortOption.updatedDesc,
-                              child: Text('最近更新'),
-                            ),
-                            PopupMenuItem(
-                              value: _ScriptSourceSortOption.nameAsc,
-                              child: Text('名称 A-Z'),
-                            ),
-                            PopupMenuItem(
-                              value: _ScriptSourceSortOption.nameDesc,
-                              child: Text('名称 Z-A'),
-                            ),
-                          ],
-                      icon: const Icon(Icons.swap_vert_rounded),
-                    ),
-                    PopupMenuButton<String?>(
-                      tooltip: '分组',
-                      initialValue: _selectedGroupKey,
-                      onSelected: (value) {
-                        if (!mounted) {
-                          return;
-                        }
-                        _updateSourcePageState(() {
-                          _selectedGroupKey = value;
-                        });
-                      },
-                      itemBuilder: (context) {
-                        final items = <PopupMenuEntry<String?>>[
-                          const PopupMenuItem<String?>(
-                            value: null,
-                            child: Text('全部'),
-                          ),
-                        ];
-                        if (_hasDuplicateSources(rawSources)) {
-                          items.add(
-                            const PopupMenuItem<String?>(
-                              value: _SourcePageState._duplicateGroupKey,
-                              child: Text('重复源'),
-                            ),
-                          );
-                        }
-                        if (_hasUngrouped(rawSources)) {
-                          items.add(
-                            const PopupMenuItem<String?>(
-                              value: _SourcePageState._ungroupedGroupKey,
-                              child: Text('未分组'),
-                            ),
-                          );
-                        }
-                        for (final group in availableGroups) {
-                          items.add(
-                            PopupMenuItem<String?>(
-                              value: group,
-                              child: Text(group),
-                            ),
-                          );
-                        }
-                        return items;
-                      },
-                      icon: const Icon(Icons.filter_list_rounded),
-                    ),
-                    PopupMenuButton<_SourcePageMenuAction>(
-                      tooltip: '更多',
-                      icon: const Icon(Icons.more_vert_rounded),
-                      onSelected: _handlePageMenuAction,
-                      itemBuilder:
-                          (context) => [
-                            PopupMenuItem(
-                              value: _SourcePageMenuAction.create,
-                              child: Text('新增'),
-                            ),
-                            PopupMenuItem(
-                              value: _SourcePageMenuAction.importLocal,
-                              child: Text('本地导入'),
-                            ),
-                            PopupMenuItem(
-                              value: _SourcePageMenuAction.importNetwork,
-                              child: Text('网络导入'),
-                            ),
-                            PopupMenuItem(
-                              value: _SourcePageMenuAction.importPaste,
-                              child: Text('粘贴导入'),
-                            ),
-                            PopupMenuItem(
-                              value: _SourcePageMenuAction.batchCheck,
-                              child: Text('批量检测'),
-                            ),
-                          ],
-                    ),
-                  ],
-                ),
-                body: themedBody(
-                  SafeArea(
-                    top: false,
-                    child: _buildBody(
-                      context,
-                      topInset: topInset,
-                      snapshot: snapshot,
-                      rawSources: rawSources,
-                      visibleSources: filteredVisibleSources,
-                      clusterSummaries: clusterSummaries,
+                  body: themedBody(
+                    SafeArea(
+                      top: false,
+                      child: _buildBody(
+                        context,
+                        topInset: topInset,
+                        snapshot: snapshot,
+                        rawSources: rawSources,
+                        visibleSources: filteredVisibleSources,
+                        clusterSummaries: clusterSummaries,
+                      ),
                     ),
                   ),
                 ),
@@ -1499,6 +1502,12 @@ extension on _SourcePageState {
 
   Future<void> _exportScriptSource(ScriptSource source) async {
     try {
+      _updateSourcePageState(() {
+        _taskStatus = const ImportExportTaskStatus(
+          title: '正在导出书源',
+          message: '正在写入书源文件并准备系统分享…',
+        );
+      });
       final fileName = '${_normalizedSourceFileName(source.name)}.js';
       if (kIsWeb ||
           defaultTargetPlatform == TargetPlatform.macOS ||
@@ -1546,6 +1555,12 @@ extension on _SourcePageState {
         return;
       }
       _showMessage('导出书源失败：$error');
+    } finally {
+      if (mounted) {
+        _updateSourcePageState(() {
+          _taskStatus = null;
+        });
+      }
     }
   }
 
@@ -1578,6 +1593,15 @@ extension on _SourcePageState {
       return;
     }
 
+    _updateSourcePageState(() {
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入书源',
+        message: '正在准备解析 ${files.length} 个书源文件…',
+        progress: 0,
+        progressLabel: '0/${files.length}',
+      );
+    });
+
     final summary = await _importService.importLocalFiles(
       files: files,
       remainingSlots: _remainingSourceImportSlots(),
@@ -1585,11 +1609,35 @@ extension on _SourcePageState {
         return _sourceRuntimeFacade.saveScriptSource(sourceCode: sourceCode);
       },
       errorFormatter: _toFriendlyImportError,
+      onProgress: (progress) {
+        if (!mounted) {
+          return;
+        }
+        final label = progress.currentFileLabel.trim();
+        _updateSourcePageState(() {
+          _taskStatus = ImportExportTaskStatus(
+            title: '正在导入书源',
+            message: label.isEmpty ? '正在解析并保存书源…' : '正在解析并保存 $label',
+            progress:
+                progress.totalCount <= 0
+                    ? null
+                    : progress.completedCount / progress.totalCount,
+            progressLabel:
+                progress.totalCount <= 0
+                    ? null
+                    : '${progress.completedCount}/${progress.totalCount}',
+          );
+        });
+      },
     );
 
     if (!mounted) {
       return;
     }
+
+    _updateSourcePageState(() {
+      _taskStatus = null;
+    });
 
     if (summary.hasSuccess) {
       if (summary.truncatedByLimit) {
@@ -1616,6 +1664,12 @@ extension on _SourcePageState {
     }
 
     try {
+      _updateSourcePageState(() {
+        _taskStatus = const ImportExportTaskStatus(
+          title: '正在网络导入',
+          message: '正在下载书源内容并准备保存…',
+        );
+      });
       final response = await _importDio.get<String>(
         url,
         options: Options(responseType: ResponseType.plain),
@@ -1640,6 +1694,12 @@ extension on _SourcePageState {
         return;
       }
       _showMessage('网络导入失败：${_toFriendlyImportError(error)}');
+    } finally {
+      if (mounted) {
+        _updateSourcePageState(() {
+          _taskStatus = null;
+        });
+      }
     }
   }
 
@@ -1705,6 +1765,12 @@ extension on _SourcePageState {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    _updateSourcePageState(() {
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入外部书源',
+        message: '正在读取 ${payload.label} 并准备保存…',
+      );
+    });
     final cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
     if (cached == null) {
       ExternalImportDiagnostics.logCacheFailed(payload);
@@ -1767,6 +1833,11 @@ extension on _SourcePageState {
         ),
       );
     } finally {
+      if (mounted) {
+        _updateSourcePageState(() {
+          _taskStatus = null;
+        });
+      }
       try {
         if (await tempFile.exists()) {
           await tempFile.delete();

@@ -64,7 +64,8 @@ extension on _BookDetailPageState {
           child: ListView(
             shrinkWrap: true,
             children: [
-              if (detailResult != null && detailResult.chapters.isNotEmpty)
+              if (detailResult != null &&
+                  _canOpenCatalogForResult(detailResult))
                 ListTile(
                   leading: const Icon(Icons.menu_book_rounded),
                   title: const Text('查看目录'),
@@ -116,9 +117,7 @@ extension on _BookDetailPageState {
 
     switch (action) {
       case 'catalog':
-        if (detailResult != null) {
-          await _openCatalogSheet(detailResult);
-        }
+        await _handleOpenCatalogAction();
         return;
       case 'cache':
         final cacheAction =
@@ -136,7 +135,10 @@ extension on _BookDetailPageState {
         }
         return;
       case 'refresh':
-        await _load(forceRefresh: true);
+        await _load(
+          forceRefresh: true,
+          includeCatalog: _result?.catalogLoaded ?? false,
+        );
         return;
       case 'reverse':
         _updateDetailPageState(() {
@@ -199,6 +201,49 @@ extension on _BookDetailPageState {
 
   List<Chapter> _readableChapters(List<Chapter> chapters) {
     return _readRouteService.readableChapters(chapters);
+  }
+
+  bool _canOpenCatalogForResult(BookDetailLoadResult result) {
+    return result.catalogAvailable || result.catalogLoaded;
+  }
+
+  String? _buildFallbackReadRoute(BookDetailLoadResult result) {
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
+      return null;
+    }
+    return _readRouteService.buildFallbackRoute(
+      bookId: _activeBookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      fallbackTitle: result.detail.title,
+    );
+  }
+
+  void _recordDetailBodyVisible({
+    required BookDetailLoadResult result,
+    required String source,
+  }) {
+    if (_hasLoggedDetailBodyVisible) {
+      return;
+    }
+    _hasLoggedDetailBodyVisible = true;
+    _logger.info(
+      'Book detail body visible',
+      context: <String, Object?>{
+        'chain': 'book_detail',
+        'step': 'body_visible',
+        'bookId': result.detail.id,
+        'sourceId': result.detail.sourceId,
+        'detailUrl': result.detail.detailUrl,
+        'catalogLoaded': result.catalogLoaded,
+        'catalogAvailable': result.catalogAvailable,
+        'tocFromCache': result.tocFromCache,
+        'durationMs': _detailOpenStopwatch.elapsedMilliseconds,
+        'source': source,
+      },
+    );
   }
 
   String? _resolveIntro(String? rawIntro) {

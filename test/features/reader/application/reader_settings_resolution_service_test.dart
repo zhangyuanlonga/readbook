@@ -152,5 +152,33 @@ void main() {
       expect(resolved.fontFamilyKey, 'theme_reader_font');
       expect(resolved.customFontPath, isNull);
     });
+
+    test('syncs reader light dark mode with app theme mode by default', () {
+      const persisted = ReaderSettings(themeMode: ReaderThemeMode.light);
+
+      final resolved = service.resolve(
+        persistedSettings: persisted,
+        visualOverrides: ReaderVisualOverrides.empty,
+        activeTheme: null,
+        appThemeMode: ThemeMode.dark,
+        platformBrightness: Brightness.light,
+      );
+
+      expect(resolved.themeMode, ReaderThemeMode.dark);
+    });
+
+    test('preserves sepia mode when syncing with app theme mode', () {
+      const persisted = ReaderSettings(themeMode: ReaderThemeMode.sepia);
+
+      final resolved = service.resolve(
+        persistedSettings: persisted,
+        visualOverrides: ReaderVisualOverrides.empty,
+        activeTheme: null,
+        appThemeMode: ThemeMode.dark,
+        platformBrightness: Brightness.dark,
+      );
+
+      expect(resolved.themeMode, ReaderThemeMode.sepia);
+    });
   });
 }

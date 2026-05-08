@@ -4,6 +4,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/local_book.dart' as local_entities;
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
@@ -51,6 +52,7 @@ class LocalContentProvider extends ContentProvider {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     _ensureLocalSource(sourceId, stage: ErrorStage.detail);
 
@@ -68,7 +70,10 @@ class LocalContentProvider extends ContentProvider {
 
     final result = await _requireDetailService().load(
       bookId: resolvedBookId,
-      mode: LocalBookDetailLoadMode.directoryOnly,
+      mode:
+          includeCatalog
+              ? LocalBookDetailLoadMode.directoryOnly
+              : LocalBookDetailLoadMode.bookOnly,
       forceReindex: forceRefresh,
       allowBackgroundIndex: !forceRefresh,
     );
@@ -101,6 +106,10 @@ class LocalContentProvider extends ContentProvider {
       sourceName: sourceName,
       tocFromCache: false,
       tocError: null,
+      catalogAvailable:
+          result.book.indexStatus == local_entities.LocalBookIndexStatus.ready &&
+          result.book.chapterCount > 0,
+      catalogLoaded: includeCatalog,
     );
   }
 

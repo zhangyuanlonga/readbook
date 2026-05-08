@@ -17,6 +17,7 @@ import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
@@ -185,6 +186,7 @@ class _SourcePageState extends ConsumerState<SourcePage> {
   bool _isFeatureAccessLoading = true;
   bool _canAccessSourcePage = false;
   int _sourceImportLimit = 10;
+  ImportExportTaskStatus? _taskStatus;
 
   @override
   void initState() {

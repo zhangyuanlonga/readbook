@@ -21,6 +21,8 @@ class BookDetailLoadResult {
     required this.sourceName,
     required this.tocFromCache,
     this.tocError,
+    this.catalogAvailable = true,
+    this.catalogLoaded = true,
   });
 
   final BookDetail detail;
@@ -28,6 +30,31 @@ class BookDetailLoadResult {
   final String sourceName;
   final bool tocFromCache;
   final AppException? tocError;
+  final bool catalogAvailable;
+  final bool catalogLoaded;
+
+  BookDetailLoadResult copyWith({
+    BookDetail? detail,
+    List<Chapter>? chapters,
+    String? sourceName,
+    bool? tocFromCache,
+    Object? tocError = _bookDetailUnset,
+    bool? catalogAvailable,
+    bool? catalogLoaded,
+  }) {
+    return BookDetailLoadResult(
+      detail: detail ?? this.detail,
+      chapters: chapters ?? this.chapters,
+      sourceName: sourceName ?? this.sourceName,
+      tocFromCache: tocFromCache ?? this.tocFromCache,
+      tocError:
+          identical(tocError, _bookDetailUnset)
+              ? this.tocError
+              : tocError as AppException?,
+      catalogAvailable: catalogAvailable ?? this.catalogAvailable,
+      catalogLoaded: catalogLoaded ?? this.catalogLoaded,
+    );
+  }
 }
 
 class BookDetailService {
@@ -86,16 +113,23 @@ class BookDetailService {
       sourceName: cached.sourceName,
       tocFromCache: true,
       tocError: null,
+      catalogAvailable: cached.catalogAvailable,
+      catalogLoaded: cached.catalogLoaded,
     );
   }
 
   void _writeDetailCache(String key, BookDetailLoadResult result) {
+    if (!result.catalogLoaded) {
+      return;
+    }
     final snapshot = BookDetailLoadResult(
       detail: result.detail,
       chapters: List<Chapter>.unmodifiable(result.chapters),
       sourceName: result.sourceName,
       tocFromCache: false,
       tocError: null,
+      catalogAvailable: result.catalogAvailable,
+      catalogLoaded: result.catalogLoaded,
     );
     _detailCache.remove(key);
     _detailCache[key] = _TimedCacheEntry<BookDetailLoadResult>(snapshot);
@@ -136,6 +170,7 @@ class BookDetailService {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     final normalizedSourceId = sourceId.trim();
     final normalizedBookId = bookId.trim();
@@ -161,19 +196,33 @@ class BookDetailService {
       }
     }
 
-    final existingInFlight = _inFlightLoads[cacheKey];
-    if (existingInFlight != null) {
-      return existingInFlight;
+    if (includeCatalog) {
+      final existingInFlight = _inFlightLoads[cacheKey];
+      if (existingInFlight != null) {
+        return existingInFlight;
+      }
     }
 
-    final future = _loadFromScriptRuntime(
-      sourceId: normalizedSourceId,
-      bookId: normalizedBookId,
-      detailUrl: normalizedDetailUrl,
-      fallbackTitle: normalizedFallbackTitle,
-      fallbackAuthor: normalizedFallbackAuthor,
-      cacheKey: cacheKey,
-    );
+    final future =
+        includeCatalog
+            ? _loadFromScriptRuntime(
+              sourceId: normalizedSourceId,
+              bookId: normalizedBookId,
+              detailUrl: normalizedDetailUrl,
+              fallbackTitle: normalizedFallbackTitle,
+              fallbackAuthor: normalizedFallbackAuthor,
+              cacheKey: cacheKey,
+            )
+            : _loadSummaryFromScriptRuntime(
+              sourceId: normalizedSourceId,
+              bookId: normalizedBookId,
+              detailUrl: normalizedDetailUrl,
+              fallbackTitle: normalizedFallbackTitle,
+              fallbackAuthor: normalizedFallbackAuthor,
+            );
+    if (!includeCatalog) {
+      return future;
+    }
     _inFlightLoads[cacheKey] = future;
     try {
       return await future;
@@ -218,6 +267,127 @@ class BookDetailService {
       cacheKey: cacheKey,
       cancellationHandle: cancellationHandle,
     );
+  }
+
+  Future<BookDetailLoadResult> _loadSummaryFromScriptRuntime({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+    required String? fallbackTitle,
+    required String? fallbackAuthor,
+  }) async {
+    final facade = _sourceRuntimeFacade;
+    var currentStep = ErrorStage.detail;
+    final registered =
+        facade == null
+            ? null
+            : await facade.ensureRegisteredScriptSourceById(sourceId);
+    if (facade == null || registered == null) {
+      _sourceHealthService.markDetailFailure(
+        sourceId: sourceId,
+        message: '未找到书源：$sourceId',
+      );
+      throw UnknownSourceException(
+        briefMessage: '未找到书源：$sourceId',
+        sourceId: sourceId,
+        stage: ErrorStage.detail,
+      );
+    }
+
+    final runtimeBook = runtime_models.Book(
+      title: fallbackTitle ?? bookId,
+      author: fallbackAuthor ?? '',
+      detailUrl: detailUrl,
+      sourceId: sourceId,
+    );
+    try {
+      final detailStartedAt = DateTime.now();
+      final detailed = await _runDetailTask(
+        source: registered,
+        action: () => facade.detail(sourceId: sourceId, book: runtimeBook),
+      );
+      _sourceHealthService.markDetailSuccess(
+        sourceId: sourceId,
+        latencyMs: DateTime.now().difference(detailStartedAt).inMilliseconds,
+      );
+      _logger.info(
+        'Runtime detail success',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': 'detail',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'durationMs':
+              DateTime.now().difference(detailStartedAt).inMilliseconds,
+          'catalogRequested': false,
+        },
+      );
+
+      return _buildDetailResult(
+        bookId: bookId,
+        sourceId: sourceId,
+        fallbackTitle: fallbackTitle,
+        detailUrl: detailUrl,
+        detailed: detailed,
+        sourceName: registered.runtime.name,
+        chapters: const <Chapter>[],
+        tocFromCache: false,
+        catalogAvailable: true,
+        catalogLoaded: false,
+      );
+    } on AppException catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stage: currentStep,
+        message: error.briefMessage,
+        error: error,
+      );
+      _logger.warn(
+        'Runtime detail chain failed',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': currentStep.name,
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'code': error.code.name,
+          'stage': error.stage.name,
+          'message': error.briefMessage,
+          'catalogRequested': false,
+        },
+      );
+      rethrow;
+    } catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stage: currentStep,
+        message: error.toString(),
+        error: error,
+      );
+      _logger.error(
+        'Runtime detail chain crashed',
+        exception: AppException(
+          code: ErrorCode.unknown,
+          stage: currentStep,
+          sourceId: sourceId,
+          briefMessage: error.toString(),
+          cause: error,
+        ),
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': currentStep.name,
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'catalogRequested': false,
+        },
+      );
+      rethrow;
+    }
   }
 
   Future<BookDetailLoadResult> _loadFromScriptRuntime({
@@ -323,30 +493,18 @@ class BookDetailService {
         _writeTocCache(cacheKey, chapters);
       }
 
-      final result = BookDetailLoadResult(
-        detail: BookDetail(
-          id: bookId,
-          sourceId: sourceId,
-          title:
-              detailed.title.trim().isNotEmpty
-                  ? detailed.title.trim()
-                  : (fallbackTitle ?? '未命名书籍'),
-          detailUrl:
-              detailed.detailUrl.trim().isNotEmpty
-                  ? detailed.detailUrl.trim()
-                  : detailUrl,
-          author: _normalizeOptionalText(detailed.author),
-          intro: _normalizeOptionalText(detailed.intro),
-          coverUrl: _normalizeOptionalText(detailed.cover),
-          tocUrl:
-              _normalizeOptionalText(detailed.tocUrl) ??
-              _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
-              _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
-        ),
-        chapters: chapters,
+      final result = _buildDetailResult(
+        bookId: bookId,
+        sourceId: sourceId,
+        fallbackTitle: fallbackTitle,
+        detailUrl: detailUrl,
+        detailed: detailed,
         sourceName: registered.runtime.name,
+        chapters: chapters,
         tocFromCache: false,
         tocError: null,
+        catalogAvailable: true,
+        catalogLoaded: true,
       );
       _writeDetailCache(cacheKey, result);
       return result;
@@ -525,30 +683,18 @@ class BookDetailService {
           )
           .toList(growable: false);
 
-      final result = BookDetailLoadResult(
-        detail: BookDetail(
-          id: bookId,
-          sourceId: sourceId,
-          title:
-              detailed.title.trim().isNotEmpty
-                  ? detailed.title.trim()
-                  : (fallbackTitle ?? '未命名书籍'),
-          detailUrl:
-              detailed.detailUrl.trim().isNotEmpty
-                  ? detailed.detailUrl.trim()
-                  : detailUrl,
-          author: _normalizeOptionalText(detailed.author),
-          intro: _normalizeOptionalText(detailed.intro),
-          coverUrl: _normalizeOptionalText(detailed.cover),
-          tocUrl:
-              _normalizeOptionalText(detailed.tocUrl) ??
-              _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
-              _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
-        ),
-        chapters: chapters,
+      final result = _buildDetailResult(
+        bookId: bookId,
+        sourceId: sourceId,
+        fallbackTitle: fallbackTitle,
+        detailUrl: detailUrl,
+        detailed: detailed,
         sourceName: registered.runtime.name,
+        chapters: chapters,
         tocFromCache: false,
         tocError: null,
+        catalogAvailable: true,
+        catalogLoaded: true,
       );
       if (chapters.isNotEmpty) {
         _writeTocCache(cacheKey, chapters);
@@ -590,6 +736,48 @@ class BookDetailService {
       return '$bookId:${Uri.encodeComponent(normalizedChapterUrl)}';
     }
     return '${bookId}_$index';
+  }
+
+  BookDetailLoadResult _buildDetailResult({
+    required String bookId,
+    required String sourceId,
+    required String? fallbackTitle,
+    required String detailUrl,
+    required runtime_models.Book detailed,
+    required String sourceName,
+    required List<Chapter> chapters,
+    required bool tocFromCache,
+    AppException? tocError,
+    required bool catalogAvailable,
+    required bool catalogLoaded,
+  }) {
+    return BookDetailLoadResult(
+      detail: BookDetail(
+        id: bookId,
+        sourceId: sourceId,
+        title:
+            detailed.title.trim().isNotEmpty
+                ? detailed.title.trim()
+                : (fallbackTitle ?? '未命名书籍'),
+        detailUrl:
+            detailed.detailUrl.trim().isNotEmpty
+                ? detailed.detailUrl.trim()
+                : detailUrl,
+        author: _normalizeOptionalText(detailed.author),
+        intro: _normalizeOptionalText(detailed.intro),
+        coverUrl: _normalizeOptionalText(detailed.cover),
+        tocUrl:
+            _normalizeOptionalText(detailed.tocUrl) ??
+            _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
+            _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
+      ),
+      chapters: chapters,
+      sourceName: sourceName,
+      tocFromCache: tocFromCache,
+      tocError: tocError,
+      catalogAvailable: catalogAvailable,
+      catalogLoaded: catalogLoaded,
+    );
   }
 
   String? _normalizeOptionalText(String? value) {
@@ -656,3 +844,5 @@ class _TimedCacheEntry<T> {
 
   bool isExpired(Duration ttl) => DateTime.now().difference(storedAt) > ttl;
 }
+
+const Object _bookDetailUnset = Object();

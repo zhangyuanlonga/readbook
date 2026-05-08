@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
 
@@ -21,115 +22,121 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
       DiagnosticLogExportService();
   bool _includeInfoLogs = false;
   bool _isExporting = false;
+  ImportExportTaskStatus? _taskStatus;
 
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('诊断日志'),
-        actions: [
-          IconButton(
-            onPressed: _isExporting ? null : _shareLogs,
-            tooltip: '导出日志',
-            icon:
-                _isExporting
-                    ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.ios_share_outlined),
-          ),
-          IconButton(
-            onPressed: _copyLogs,
-            tooltip: '复制日志',
-            icon: const Icon(Icons.copy_all_outlined),
-          ),
-          IconButton(
-            onPressed: _clearLogs,
-            tooltip: '清空日志',
-            icon: const Icon(Icons.delete_sweep_outlined),
-          ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.errorCenterContentMaxWidth,
-          );
-
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: StreamBuilder<List<AppLogEntry>>(
-                stream: _store.watch(),
-                initialData: _store.entries,
-                builder: (context, snapshot) {
-                  final allEntries = snapshot.data ?? const <AppLogEntry>[];
-                  final entries = allEntries
-                      .where(
-                        (entry) =>
-                            _includeInfoLogs || entry.level != AppLogLevel.info,
+    return ImportExportTaskOverlay(
+      status: _taskStatus,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('诊断日志'),
+          actions: [
+            IconButton(
+              onPressed: _isExporting ? null : _shareLogs,
+              tooltip: '导出日志',
+              icon:
+                  _isExporting
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                      .toList(growable: false);
+                      : const Icon(Icons.ios_share_outlined),
+            ),
+            IconButton(
+              onPressed: _copyLogs,
+              tooltip: '复制日志',
+              icon: const Icon(Icons.copy_all_outlined),
+            ),
+            IconButton(
+              onPressed: _clearLogs,
+              tooltip: '清空日志',
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.errorCenterContentMaxWidth,
+            );
 
-                  return ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      16,
-                      horizontal,
-                      16 + bottomSafe,
-                    ),
-                    children: [
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 10),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('包含 INFO 日志'),
-                                value: _includeInfoLogs,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _includeInfoLogs = value;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 8),
-                              const Text('日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。'),
-                            ],
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: StreamBuilder<List<AppLogEntry>>(
+                  stream: _store.watch(),
+                  initialData: _store.entries,
+                  builder: (context, snapshot) {
+                    final allEntries = snapshot.data ?? const <AppLogEntry>[];
+                    final entries = allEntries
+                        .where(
+                          (entry) =>
+                              _includeInfoLogs ||
+                              entry.level != AppLogLevel.info,
+                        )
+                        .toList(growable: false);
+
+                    return ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        16,
+                        horizontal,
+                        16 + bottomSafe,
+                      ),
+                      children: [
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 10),
+                                SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('包含 INFO 日志'),
+                                  value: _includeInfoLogs,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _includeInfoLogs = value;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+                                const Text('日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。'),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (entries.isEmpty)
-                        const AppEmptyStateCard(
-                          icon: Icons.event_note_outlined,
-                          title: '暂无错误日志',
-                          description: '当前没有可展示的错误日志记录。',
-                          compact: true,
-                        )
-                      else
-                        ...entries.map(_buildLogCard),
-                    ],
-                  );
-                },
+                        const SizedBox(height: 12),
+                        if (entries.isEmpty)
+                          const AppEmptyStateCard(
+                            icon: Icons.event_note_outlined,
+                            title: '暂无错误日志',
+                            description: '当前没有可展示的错误日志记录。',
+                            compact: true,
+                          )
+                        else
+                          ...entries.map(_buildLogCard),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -218,6 +225,10 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
     }
     setState(() {
       _isExporting = true;
+      _taskStatus = const ImportExportTaskStatus(
+        title: '正在导出日志',
+        message: '正在整理诊断日志并生成可分享文件…',
+      );
     });
 
     try {
@@ -249,6 +260,7 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
       if (mounted) {
         setState(() {
           _isExporting = false;
+          _taskStatus = null;
         });
       }
     }

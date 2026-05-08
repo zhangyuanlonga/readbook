@@ -128,5 +128,23 @@ void main() {
         expect(styled!.pages, hasLength(2));
       },
     );
+
+    test(
+      'paginateParagraphs keeps working when yielding aggressively',
+      () async {
+        final result = await engine.paginateParagraphs(
+          ReaderPaginationRequest(
+            paragraphs: <String>['测试正文 ' * 320],
+            spec: spec,
+            paragraphStyle: const TextStyle(fontSize: 18, height: 1.72),
+            yieldInterval: Duration.zero,
+          ),
+        );
+
+        expect(result, isNotNull);
+        expect(result!.pages.length, greaterThan(1));
+        expect(result.pages.first, isNotEmpty);
+      },
+    );
   });
 }

@@ -135,6 +135,51 @@ void main() {
       expect(cached.chapters, hasLength(1));
     });
 
+    test('can load detail body without requesting catalog', () async {
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'source_body_only', name: '脚本源C'),
+        ],
+        detailedBooksBySourceId: <String, runtime_models.Book>{
+          'source_body_only': const runtime_models.Book(
+            title: '仅详情书籍',
+            author: '作者C',
+            detailUrl: 'https://example.com/book/3',
+          ),
+        },
+        chaptersBySourceId: <String, List<runtime_models.Chapter>>{
+          'source_body_only': const <runtime_models.Chapter>[
+            runtime_models.Chapter(
+              title: '第三章',
+              url: 'https://example.com/book/3/c3',
+              index: 2,
+            ),
+          ],
+        },
+      );
+      final service = BookDetailService(sourceRuntimeFacade: runtimeFacade);
+
+      final result = await service.load(
+        sourceId: 'source_body_only',
+        bookId: 'book_3',
+        detailUrl: 'https://example.com/book/3',
+        includeCatalog: false,
+      );
+
+      expect(result.detail.title, '仅详情书籍');
+      expect(result.chapters, isEmpty);
+      expect(result.catalogAvailable, isTrue);
+      expect(result.catalogLoaded, isFalse);
+      expect(runtimeFacade.chaptersCallCount, 0);
+      expect(
+        service.peekCached(
+          sourceId: 'source_body_only',
+          detailUrl: 'https://example.com/book/3',
+        ),
+        isNull,
+      );
+    });
+
     test('throws unknown source when runtime source is missing', () async {
       final healthService = SourceHealthService();
       final service = BookDetailService(
@@ -272,6 +317,7 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   final Map<String, runtime_models.Book> detailedBooksBySourceId;
   final Map<String, List<runtime_models.Chapter>> chaptersBySourceId;
   runtime_models.Book? lastDetailBook;
+  int chaptersCallCount = 0;
   int createdDiagnosticContainerCount = 0;
   int disposedDiagnosticContainerCount = 0;
   bool lastDiagnosticCancellationHandleWasSet = false;
@@ -307,6 +353,7 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required String sourceId,
     required runtime_models.Book book,
   }) async {
+    chaptersCallCount += 1;
     return chaptersBySourceId[sourceId] ?? const <runtime_models.Chapter>[];
   }
 

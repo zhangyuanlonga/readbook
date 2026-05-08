@@ -15,7 +15,7 @@ class LocalBookDetailResult {
   final List<LocalChapter> chapters;
 }
 
-enum LocalBookDetailLoadMode { directoryOnly, withContent }
+enum LocalBookDetailLoadMode { bookOnly, directoryOnly, withContent }
 
 class LocalBookDetailService {
   LocalBookDetailService({
@@ -80,10 +80,13 @@ class LocalBookDetailService {
       }
     }
 
-    final chapters =
-        mode == LocalBookDetailLoadMode.withContent
-            ? await _localBookRepository.getChapters(normalizedBookId)
-            : await _localBookRepository.getChapterMetas(normalizedBookId);
+    final chapters = switch (mode) {
+      LocalBookDetailLoadMode.bookOnly => const <LocalChapter>[],
+      LocalBookDetailLoadMode.directoryOnly => await _localBookRepository
+          .getChapterMetas(normalizedBookId),
+      LocalBookDetailLoadMode.withContent => await _localBookRepository
+          .getChapters(normalizedBookId),
+    };
 
     return LocalBookDetailResult(book: book, chapters: chapters);
   }

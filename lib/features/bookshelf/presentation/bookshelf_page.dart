@@ -13,6 +13,7 @@ import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/logging/app_logger.dart';
@@ -386,6 +387,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   String? _loadErrorText;
   bool _isConsumingExternalImportPayloads = false;
   bool _isImportingLocal = false;
+  ImportExportTaskStatus? _taskStatus;
   _BookshelfSelectionState _selectionState = const _BookshelfSelectionState();
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
@@ -396,6 +398,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Future<void>? _activeBookshelfLoad;
   bool _reloadAfterActiveLoad = false;
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
+  final Stopwatch _bookshelfOpenStopwatch = Stopwatch()..start();
+  bool _hasLoggedBookshelfFirstVisible = false;
   bool _hasShownContinueReadingPrompt = false;
   ReadingRecord? _continueReadingRecord;
   int _latestInfoRefreshEpoch = 0;
@@ -423,6 +427,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const double _kContinueReadingDockGap = 12;
   static const double _kContinueReadingStandardGap = 16;
   static const double _kContinueReadingIosExtraGap = 10;
+  static const Duration _kDeferredBookshelfWarmupDelay = Duration(
+    milliseconds: 16,
+  );
   static const Set<String> _kMangaCapabilityKeywords = <String>{
     'manga',
     'comic',
@@ -569,28 +576,43 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final contentTopPadding =
         _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        leading:
-            _isSelectionMode
-                ? IconButton(
-                  onPressed: _exitSelectionMode,
-                  tooltip: '取消选择',
-                  icon: const Icon(Icons.close),
+    return ImportExportTaskOverlay(
+      status: _taskStatus,
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          leading:
+              _isSelectionMode
+                  ? IconButton(
+                    onPressed: _exitSelectionMode,
+                    tooltip: '取消选择',
+                    icon: const Icon(Icons.close),
+                  )
+                  : null,
+          title:
+              _isSelectionMode
+                  ? Text('已选择 ${_selectedBookKeys.length} 项')
+                  : _buildBookshelfViewTitle(),
+          actions: [
+            if (_isSelectionMode)
+              if (_isBatchDeleting || _isBatchUpdatingCovers)
+                const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                 )
-                : null,
-        title:
-            _isSelectionMode
-                ? Text('已选择 ${_selectedBookKeys.length} 项')
-                : _buildBookshelfViewTitle(),
-        actions: [
-          if (_isSelectionMode)
-            if (_isBatchDeleting || _isBatchUpdatingCovers)
+              else
+                const SizedBox.shrink()
+            else if (_isImportingLocal)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
                 child: Center(
@@ -601,143 +623,131 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   ),
                 ),
               )
-            else
-              const SizedBox.shrink()
-          else if (_isImportingLocal)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+            else ...[
+              _buildAnnouncementAction(),
+              if (showTopSearchAction)
+                IconButton(
+                  tooltip: '搜索书籍',
+                  onPressed: () => context.push('/search'),
+                  icon: const Icon(Icons.search_rounded),
+                ),
+              PopupMenuButton<_BookshelfMoreAction>(
+                tooltip: '更多功能',
+                onSelected: _handleMoreAction,
+                itemBuilder:
+                    (context) => [
+                      PopupMenuItem<_BookshelfMoreAction>(
+                        value: _BookshelfMoreAction.selectBooks,
+                        enabled: !_isLoading && _filteredBooks.isNotEmpty,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.checklist_rounded, size: 18),
+                            SizedBox(width: 10),
+                            Text('选择书籍'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<_BookshelfMoreAction>(
+                        value: _BookshelfMoreAction.batchEditCover,
+                        enabled: !_isLoading && _filteredBooks.isNotEmpty,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.collections_outlined, size: 18),
+                            SizedBox(width: 10),
+                            Text('批量修改封面'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<_BookshelfMoreAction>(
+                        value: _BookshelfMoreAction.sortBooks,
+                        enabled: !_isLoading && _books.isNotEmpty,
+                        child: const Row(
+                          children: [
+                            Icon(Icons.sort_rounded, size: 18),
+                            SizedBox(width: 10),
+                            Text('书籍排序'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<_BookshelfMoreAction>(
+                        value: _BookshelfMoreAction.settings,
+                        child: Row(
+                          children: [
+                            Icon(Icons.tune_rounded, size: 18),
+                            SizedBox(width: 10),
+                            Text('书架设置'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<_BookshelfMoreAction>(
+                        value: _BookshelfMoreAction.importLocal,
+                        child: Row(
+                          children: [
+                            Icon(Icons.library_add_rounded, size: 18),
+                            SizedBox(width: 10),
+                            Text('导入图书'),
+                          ],
+                        ),
+                      ),
+                    ],
+                icon: const Icon(Icons.more_vert_rounded),
+              ),
+            ],
+          ],
+        ),
+        bottomNavigationBar:
+            _isSelectionMode
+                ? _buildSelectionActionBar(filteredBooks: filteredBooks)
+                : null,
+        body: Stack(
+          children: [
+            DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: RefreshIndicator(
+                onRefresh: () => _loadBookshelf(force: true),
+                child: CustomScrollView(
+                  controller: _bookshelfScrollController,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    if (_shouldShowBookshelfSearchSliver)
+                      _buildBookshelfSearchSliver(
+                        horizontal: horizontal,
+                        topInset: topInset + 12,
+                      ),
+                    if (_books.isNotEmpty)
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          contentTopPadding,
+                          horizontal,
+                          16 + continueReadingReservedSpace,
+                        ),
+                        sliver: _buildBooksContentSliver(filteredBooks),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          contentTopPadding,
+                          horizontal,
+                          16 + continueReadingReservedSpace,
+                        ),
+                        sliver: _buildBooksContentSliver(filteredBooks),
+                      ),
+                  ],
                 ),
               ),
-            )
-          else ...[
-            _buildAnnouncementAction(),
-            if (showTopSearchAction)
-              IconButton(
-                tooltip: '搜索书籍',
-                onPressed: () => context.push('/search'),
-                icon: const Icon(Icons.search_rounded),
-              ),
-            PopupMenuButton<_BookshelfMoreAction>(
-              tooltip: '更多功能',
-              onSelected: _handleMoreAction,
-              itemBuilder:
-                  (context) => [
-                    PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.selectBooks,
-                      enabled: !_isLoading && _filteredBooks.isNotEmpty,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.checklist_rounded, size: 18),
-                          SizedBox(width: 10),
-                          Text('选择书籍'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.batchEditCover,
-                      enabled: !_isLoading && _filteredBooks.isNotEmpty,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.collections_outlined, size: 18),
-                          SizedBox(width: 10),
-                          Text('批量修改封面'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.sortBooks,
-                      enabled: !_isLoading && _books.isNotEmpty,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.sort_rounded, size: 18),
-                          SizedBox(width: 10),
-                          Text('书籍排序'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.settings,
-                      child: Row(
-                        children: [
-                          Icon(Icons.tune_rounded, size: 18),
-                          SizedBox(width: 10),
-                          Text('书架设置'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.importLocal,
-                      child: Row(
-                        children: [
-                          Icon(Icons.library_add_rounded, size: 18),
-                          SizedBox(width: 10),
-                          Text('导入图书'),
-                        ],
-                      ),
-                    ),
-                  ],
-              icon: const Icon(Icons.more_vert_rounded),
+            ),
+            Positioned(
+              left: horizontal,
+              right: horizontal,
+              bottom: continueReadingBottomInset,
+              child: _buildContinueReadingPromptCard(),
             ),
           ],
-        ],
-      ),
-      bottomNavigationBar:
-          _isSelectionMode
-              ? _buildSelectionActionBar(filteredBooks: filteredBooks)
-              : null,
-      body: Stack(
-        children: [
-          DecoratedBox(
-            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-            child: RefreshIndicator(
-              onRefresh: () => _loadBookshelf(force: true),
-              child: CustomScrollView(
-                controller: _bookshelfScrollController,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  if (_shouldShowBookshelfSearchSliver)
-                    _buildBookshelfSearchSliver(
-                      horizontal: horizontal,
-                      topInset: topInset + 12,
-                    ),
-                  if (_books.isNotEmpty)
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        contentTopPadding,
-                        horizontal,
-                        16 + continueReadingReservedSpace,
-                      ),
-                      sliver: _buildBooksContentSliver(filteredBooks),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        contentTopPadding,
-                        horizontal,
-                        16 + continueReadingReservedSpace,
-                      ),
-                      sliver: _buildBooksContentSliver(filteredBooks),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: horizontal,
-            right: horizontal,
-            bottom: continueReadingBottomInset,
-            child: _buildContinueReadingPromptCard(),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -864,7 +874,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
     });
 
-    unawaited(_loadBookshelfMetadata(_books, ticket: _loadTicket));
+    unawaited(_loadBookshelfImmediateMetadata(_books, ticket: _loadTicket));
   }
 
   void _handleCollectionChange(BookshelfCollectionChange change) {
@@ -2549,31 +2559,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _isLoading = false;
         _ensureFilterStillValid();
       });
+      _recordBookshelfFirstVisible(booksCount: books.length);
       _syncBookCardStateNotifiers(books);
       _syncSelectionWithBooks();
       unawaited(_maybeShowContinueReadingPrompt(ticket: ticket));
 
-      await _loadBookshelfMetadata(books, ticket: ticket);
+      await _loadBookshelfImmediateMetadata(books, ticket: ticket);
 
       if (books.isEmpty) {
         return;
       }
 
-      await _loadLatestCachedChapterMap(books, ticket: ticket);
-      await _loadCachedChapterCountMap(books, ticket: ticket);
-      await _loadProgressMapInBatches(books, ticket: ticket);
-      if (_skipNextBackgroundLatestInfoRefresh) {
-        _skipNextBackgroundLatestInfoRefresh = false;
-      } else {
-        final refreshEpoch = ++_latestInfoRefreshEpoch;
-        unawaited(
-          _refreshOnlineBookshelfLatestInfo(
-            books,
-            ticket: ticket,
-            refreshEpoch: refreshEpoch,
-          ),
-        );
-      }
+      unawaited(_runDeferredBookshelfWarmup(books, ticket: ticket));
     } on TimeoutException {
       if (!mounted || ticket != _loadTicket) {
         return;
@@ -2593,13 +2590,27 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
   }
 
-  Future<void> _loadBookshelfMetadata(
+  void _recordBookshelfFirstVisible({required int booksCount}) {
+    if (_hasLoggedBookshelfFirstVisible) {
+      return;
+    }
+    _hasLoggedBookshelfFirstVisible = true;
+    _logger.info(
+      'Bookshelf first content visible',
+      context: <String, Object?>{
+        'chain': 'bookshelf',
+        'step': 'first_visible',
+        'bookCount': booksCount,
+        'durationMs': _bookshelfOpenStopwatch.elapsedMilliseconds,
+      },
+    );
+  }
+
+  Future<void> _loadBookshelfImmediateMetadata(
     List<BookshelfBook> books, {
     required int ticket,
   }) async {
     final sourceTypeFuture = _loadSourceTypeMap();
-    final localBooksFuture = _loadLocalBookMap(books);
-    final metadataOverridesFuture = _loadBookMetadataOverrideMap(books);
     final rawTagMapFuture = _bookshelfService.getTagMap();
     final tagOrderFuture = _bookshelfService.getTagOrder();
     final rawCategoryMapFuture = _bookshelfService.getCategoryMap();
@@ -2609,8 +2620,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     try {
       await Future.wait<dynamic>([
         sourceTypeFuture,
-        localBooksFuture,
-        metadataOverridesFuture,
         rawTagMapFuture,
         tagOrderFuture,
         rawCategoryMapFuture,
@@ -2626,14 +2635,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     final sourceTypeMap = await sourceTypeFuture;
-    final localBooksById = await localBooksFuture;
-    final metadataOverridesByTargetKey = await metadataOverridesFuture;
-    final bookPresentationByKey = _bookshelfPresentationQueryService
-        .buildBookshelfPresentationMap(
-          books: books,
-          localBooksById: localBooksById,
-          metadataOverridesByTargetKey: metadataOverridesByTargetKey,
-        );
     final rawTagMap = await rawTagMapFuture;
     final tagOrder = await tagOrderFuture;
     final rawCategoryMap = await rawCategoryMapFuture;
@@ -2670,9 +2671,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     setState(() {
       _sourceTypeBySourceId = sourceTypeMap;
-      _localBooksById = localBooksById;
-      _metadataOverridesByTargetKey = metadataOverridesByTargetKey;
-      _bookPresentationByKey = bookPresentationByKey;
       _bookTagsByKey = tagMap;
       _tagOrder = _normalizeTags(tagOrder);
       _bookCategoriesByKey = categoryMap;
@@ -2691,12 +2689,81 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _bookshelfMetadataReady = true;
       _ensureFilterStillValid();
     });
+    _syncSelectionWithBooks();
+  }
+
+  Future<void> _runDeferredBookshelfWarmup(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    await Future<void>.delayed(_kDeferredBookshelfWarmupDelay);
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    await _loadBookshelfPresentationMetadata(books, ticket: ticket);
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    await _loadLatestCachedChapterMap(books, ticket: ticket);
+    await _loadCachedChapterCountMap(books, ticket: ticket);
+    await _loadProgressMapInBatches(books, ticket: ticket);
+    if (_skipNextBackgroundLatestInfoRefresh) {
+      _skipNextBackgroundLatestInfoRefresh = false;
+    } else {
+      final refreshEpoch = ++_latestInfoRefreshEpoch;
+      unawaited(
+        _refreshOnlineBookshelfLatestInfo(
+          books,
+          ticket: ticket,
+          refreshEpoch: refreshEpoch,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadBookshelfPresentationMetadata(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    final localBooksFuture = _loadLocalBookMap(books);
+    final metadataOverridesFuture = _loadBookMetadataOverrideMap(books);
+
+    try {
+      await Future.wait<dynamic>([localBooksFuture, metadataOverridesFuture]);
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    final localBooksById = await localBooksFuture;
+    final metadataOverridesByTargetKey = await metadataOverridesFuture;
+    final bookPresentationByKey = _bookshelfPresentationQueryService
+        .buildBookshelfPresentationMap(
+          books: books,
+          localBooksById: localBooksById,
+          metadataOverridesByTargetKey: metadataOverridesByTargetKey,
+        );
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    setState(() {
+      _localBooksById = localBooksById;
+      _metadataOverridesByTargetKey = metadataOverridesByTargetKey;
+      _bookPresentationByKey = bookPresentationByKey;
+      _derivedBookshelfFingerprint = null;
+    });
     _updateBookCardStatesForBooks(
       books,
       localBooksById: localBooksById,
       presentationByKey: bookPresentationByKey,
     );
-    _syncSelectionWithBooks();
   }
 
   Future<Map<String, BookMetadataOverride>> _loadBookMetadataOverrideMap(
@@ -3876,12 +3943,38 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   await _localBookRepository.getBookById(book.bookId.trim()))
               : null;
       final bookKey = _bookKey(book);
-      final plan = await _readerOpenService.resolve(
+      final resolveFuture = _readerOpenService.resolve(
         book: book,
         openRequestedAtMs: openRequestedAtMs,
         progressHint: progress,
         localBookHint: localBook,
       );
+      final plan =
+          book.sourceId == _kLocalBookSourceId
+              ? await resolveFuture
+              : await resolveFuture.timeout(
+                const Duration(milliseconds: 220),
+                onTimeout: () {
+                  _logger.info(
+                    'Bookshelf reader open plan timed out, using reader fallback route',
+                    context: <String, Object?>{
+                      'chain': 'reader_open',
+                      'step': 'plan_timeout',
+                      'bookId': book.bookId,
+                      'sourceId': book.sourceId,
+                      'detailUrl': book.detailUrl,
+                      'tapToTimeoutMs': openStopwatch.elapsedMilliseconds,
+                    },
+                  );
+                  return BookshelfReaderOpenPlan(
+                    action: BookshelfReaderOpenAction.openReader,
+                    kind: BookshelfReaderOpenKind.readerFallback,
+                    readerRoute: _pageRouteService.resolveReaderFallbackRoute(
+                      book,
+                    ),
+                  );
+                },
+              );
 
       final latestProgress = plan.latestProgress;
       if (mounted &&

@@ -13,6 +13,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
@@ -38,6 +39,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   bool _isLoading = true;
   bool _isImporting = false;
   bool _isConsumingExternalImportPayloads = false;
+  ImportExportTaskStatus? _taskStatus;
   String? _errorText;
   List<ReaderCustomFontEntry> _fonts = const [];
   Map<String, bool> _fontFileExistsByFamilyKey = const <String, bool>{};
@@ -139,6 +141,12 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    setState(() {
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入字体',
+        message: '正在读取 ${payload.label} 并准备注册到字体库…',
+      );
+    });
     final cached = await _externalImportBridge.cacheExternalFileFromUri(
       payload,
     );
@@ -209,6 +217,12 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
           label: cached.label,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _taskStatus = null;
+        });
+      }
     }
   }
 
@@ -233,104 +247,107 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         }
         context.go('/mine');
       },
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: const Text('字体管理'),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-                return;
-              }
-              context.go('/mine');
-            },
-          ),
-          actions: [
-            IconButton(
-              tooltip: '刷新',
-              onPressed: _isLoading ? null : () => unawaited(_reload()),
-              icon: const Icon(Icons.refresh_rounded),
+      child: ImportExportTaskOverlay(
+        status: _taskStatus,
+        child: Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            title: const Text('字体管理'),
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                  return;
+                }
+                context.go('/mine');
+              },
             ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _isImporting ? null : _importFont,
-          icon:
-              _isImporting
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(Icons.file_upload_outlined),
-          label: Text(_isImporting ? '导入中...' : '导入字体'),
-        ),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.systemSettingsContentMaxWidth,
-            );
-            return DecoratedBox(
-              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: RefreshIndicator(
-                    onRefresh: _reload,
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        topInset + 12,
-                        horizontal,
-                        88 + bottomSafe,
-                      ),
-                      children: [
-                        _buildHero(context),
-                        const SizedBox(height: 12),
-                        if (_isLoading)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 32),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (_errorText != null)
-                          _buildErrorCard(context)
-                        else ...[
-                          _buildLibraryHeader(context),
-                          const SizedBox(height: 10),
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _buildSystemDefaultFontCard(
-                              context,
-                              interfaceFontSettings: interfaceFontSettings,
-                            ),
-                          ),
-                          ..._fonts.map(
-                            (font) => Padding(
+            actions: [
+              IconButton(
+                tooltip: '刷新',
+                onPressed: _isLoading ? null : () => unawaited(_reload()),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _isImporting ? null : _importFont,
+            icon:
+                _isImporting
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.file_upload_outlined),
+            label: Text(_isImporting ? '导入中...' : '导入字体'),
+          ),
+          body: LayoutBuilder(
+            builder: (context, _) {
+              final maxWidth = AppLayout.pageContentMaxWidth(
+                context,
+                maxWidth: AppLayout.systemSettingsContentMaxWidth,
+              );
+              return DecoratedBox(
+                decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: RefreshIndicator(
+                      onRefresh: _reload,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset + 12,
+                          horizontal,
+                          88 + bottomSafe,
+                        ),
+                        children: [
+                          _buildHero(context),
+                          const SizedBox(height: 12),
+                          if (_isLoading)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 32),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (_errorText != null)
+                            _buildErrorCard(context)
+                          else ...[
+                            _buildLibraryHeader(context),
+                            const SizedBox(height: 10),
+                            Padding(
                               padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildFontCard(
+                              child: _buildSystemDefaultFontCard(
                                 context,
-                                font,
                                 interfaceFontSettings: interfaceFontSettings,
                               ),
                             ),
-                          ),
-                          if (_fonts.isEmpty) _buildEmptyLibraryCard(context),
+                            ..._fonts.map(
+                              (font) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildFontCard(
+                                  context,
+                                  font,
+                                  interfaceFontSettings: interfaceFontSettings,
+                                ),
+                              ),
+                            ),
+                            if (_fonts.isEmpty) _buildEmptyLibraryCard(context),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -696,6 +713,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   Future<void> _importFont() async {
     setState(() {
       _isImporting = true;
+      _taskStatus = const ImportExportTaskStatus(
+        title: '正在导入字体',
+        message: '正在打开文件选择器并准备注册字体…',
+      );
     });
     try {
       final entry = await _fontRegistryService.pickAndImportFont();
@@ -727,6 +748,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       if (mounted) {
         setState(() {
           _isImporting = false;
+          _taskStatus = null;
         });
       }
     }

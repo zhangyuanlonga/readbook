@@ -45,6 +45,15 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   void _initializeReaderPage() {
     WidgetsBinding.instance.addObserver(this);
     _bindDependencies();
+    _appThemeModeSubscription = ref.listenManual<ThemeMode>(
+      appThemeModeProvider,
+      (_, next) => _handleAppThemeModeChanged(next),
+    );
+    _activeAdvancedThemeSubscription =
+        ref.listenManual<AsyncValue<AppAdvancedTheme?>>(
+          activeAdvancedThemeProvider,
+          (_, next) => _handleActiveAdvancedThemeChanged(next),
+        );
     _chapterId = widget.chapterId;
     _chapterUrl = widget.chapterUrl?.trim();
     _chapterTitle = widget.chapterTitle?.trim();
@@ -54,6 +63,9 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _cancelBackgroundRefreshConflictForCurrentBook();
     _bookTitle = widget.chapterTitle?.trim() ?? '';
     _currentIndex = widget.chapterIndex;
+    _readerInteractionUnlockAt = DateTime.now().add(
+      _ReaderPageState._kInitialReaderInteractionCooldown,
+    );
     final incomingBookmarkId = widget.bookmarkId?.trim() ?? '';
     if (incomingBookmarkId.isNotEmpty) {
       _pendingBookmarkId = incomingBookmarkId;
@@ -138,6 +150,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _hiddenLoadingPlaceholderTimer?.cancel();
     _readingRecordAutoCommitTimer?.cancel();
     _volumeKeyEventSubscription?.cancel();
+    _appThemeModeSubscription?.close();
+    _activeAdvancedThemeSubscription?.close();
     _volumeKeyEventSubscription = null;
     _scrollController.removeListener(_onScrollChanged);
     _selectionNotifier.removeListener(_handleSelectionNotifierChanged);

@@ -355,6 +355,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   DateTime? _lastReaderSnackAt;
   String? _lastReaderSnackKey;
   StreamSubscription<ReaderVolumeKeyEvent>? _volumeKeyEventSubscription;
+  ProviderSubscription<ThemeMode>? _appThemeModeSubscription;
+  ProviderSubscription<AsyncValue<AppAdvancedTheme?>>?
+  _activeAdvancedThemeSubscription;
   late final Battery _battery;
   late final DeviceInfoPlugin _deviceInfo;
   DateTime _readerInfoNow = DateTime.now();
@@ -381,6 +384,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _tapPointerMoved = false;
   bool _suppressNextReaderTap = false;
   DateTime? _lastBackNavigationAt;
+  DateTime? _readerInteractionUnlockAt;
   OverlayEntry? _bookmarkToolbarEntry;
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead =
       ReaderPageTurnMode.tapAndSwipe;
@@ -402,6 +406,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double? _measuredPinnedChapterHeaderWidth;
   PagedTransitionState _pagedTransition = PagedTransitionController.idleState;
   _CurlTransitionState _curlTransition = const _CurlTransitionState();
+  Stopwatch? _firstPageTurnStopwatch;
+  bool _hasLoggedFirstPageTurn = false;
   bool _isSystemUiVisible = true;
   bool _isVolumeKeyPageInterceptionEnabled = false;
   late final AnimationController _overlayControlsController;
@@ -455,14 +461,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
+  static const Duration _kInitialReaderInteractionCooldown = Duration(
+    milliseconds: 320,
+  );
   static const Duration _kChapterLoadingIndicatorDelay = Duration(
     milliseconds: 260,
   );
   static const Duration _kBlockingLoadingCardDelay = Duration(
-    milliseconds: 520,
+    milliseconds: 320,
   );
   static const Duration _kHiddenLoadingPlaceholderDelay = Duration(
-    milliseconds: 180,
+    milliseconds: 40,
   );
   static const Duration _kReaderSnackDuration = Duration(milliseconds: 1800);
   static const Duration _kReaderBoundarySnackDuration = Duration(
@@ -1714,6 +1723,58 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return ref.read(activeAdvancedThemeProvider).valueOrNull;
   }
 
+  Future<void> _syncAppThemeModeWithReaderTheme(ReaderThemeMode mode) async {
+    final nextAppThemeMode = switch (mode) {
+      ReaderThemeMode.dark => ThemeMode.dark,
+      ReaderThemeMode.light => ThemeMode.light,
+      ReaderThemeMode.sepia => null,
+    };
+    if (nextAppThemeMode == null) {
+      return;
+    }
+    final currentAppThemeMode = _currentAppThemeMode();
+    if (currentAppThemeMode == nextAppThemeMode) {
+      return;
+    }
+    await ref
+        .read(appThemeModeProvider.notifier)
+        .setThemeMode(nextAppThemeMode);
+  }
+
+  void _handleAppThemeModeChanged(ThemeMode nextMode) {
+    if (!mounted) {
+      return;
+    }
+    _syncReaderThemeDependencies(appThemeMode: nextMode);
+  }
+
+  void _handleActiveAdvancedThemeChanged(
+    AsyncValue<AppAdvancedTheme?> nextTheme,
+  ) {
+    if (!mounted || nextTheme.isLoading) {
+      return;
+    }
+    _syncReaderThemeDependencies(activeTheme: nextTheme.valueOrNull);
+  }
+
+  void _syncReaderThemeDependencies({
+    ThemeMode? appThemeMode,
+    AppAdvancedTheme? activeTheme,
+  }) {
+    final nextResolved = _resolveReaderSettingsLayers(
+      appThemeMode: appThemeMode,
+      activeTheme: activeTheme,
+    );
+    final nextSettings = nextResolved.copyWith(
+      pageTurnMode: _settings.pageTurnMode,
+      autoReadEnabled: _settings.autoReadEnabled,
+    );
+    if (jsonEncode(nextSettings.toJson()) == jsonEncode(_settings.toJson())) {
+      return;
+    }
+    _applyReaderSettingsWithModeRestore(nextSettings: nextSettings);
+  }
+
   ReaderSettings _resolveReaderSettingsLayers({
     ReaderSettings? persistedSettings,
     ReaderVisualOverrides? visualOverrides,
@@ -2073,6 +2134,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _currentPageIndex = nextIndex;
     });
     _scheduleProgressSave();
+    _recordFirstPageTurnCompleted(mode: 'curl');
   }
 
   Future<void> _autoTurnCurlPage(int direction) async {
@@ -2243,6 +2305,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  bool _canWarmNeighborPaginationCache() {
+    final paginationSpec = _lastPaginationSpec;
+    return _isTextPagedViewport &&
+        !_pagedPaginationState.isPaginating &&
+        _pagedPages.isNotEmpty &&
+        paginationSpec != null &&
+        paginationSpec.contentWidth >= 20 &&
+        paginationSpec.contentHeight >= 40;
+  }
+
   List<ReaderPaginationParagraph> _buildPaginationParagraphModels(
     _ReaderThemeColors colors,
     List<String> paragraphs,
@@ -2348,6 +2420,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     _scheduleProgressSave();
+    if (_canWarmNeighborPaginationCache()) {
+      final preloadTaskToken = ++_preloadTaskToken;
+      unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
+    }
   }
 
   Widget _buildTapAwareBody({required Widget child}) {
@@ -2408,6 +2484,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           },
           onPointerUp: (event) {
             if (event.pointer != _tapPointerId) {
+              return;
+            }
+            if (_isInitialReaderInteractionCoolingDown) {
+              _resetPointerTracking();
               return;
             }
             final size = constraints.biggest;
@@ -2492,6 +2572,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _swipeDragCurrentDy = null;
 
     if (!_isSwipePaginationEnabled() || startDx == null || currentDx == null) {
+      return;
+    }
+    if (_isInitialReaderInteractionCoolingDown) {
       return;
     }
     if (_isBackNavigationInteractionCoolingDown) {
@@ -3613,12 +3696,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     if (canPrepaginate) {
-      final paragraphs = snapshot.result.document.paragraphs;
-      final effectiveParagraphs =
-          paragraphs.isEmpty ? <String>[snapshot.result.content] : paragraphs;
       final paginationSpec = _lastPaginationSpec;
       if (paginationSpec != null) {
-        final textScaler = MediaQuery.textScalerOf(context);
         final signature = _buildPaginationSignature(
           spec: paginationSpec,
           chapterIdOverride: commitChapterIdentity ? chapterId : _chapterId,
@@ -3636,52 +3715,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             pageCount: cachedLayout.pagedPages.length,
           );
           precomputedPaginationSignature = cachedLayout.paginationSignature;
-        } else {
-          final colors = _resolveThemeColors(
-            _effectiveReaderThemeMode(),
-            _settings,
-          );
-          final paginationResult = await _paginationEngine.paginateParagraphs(
-            ReaderPaginationRequest(
-              paragraphs: effectiveParagraphs,
-              spec: paginationSpec,
-              paragraphStyle: _paragraphTextStyle(
-                colors,
-              ).copyWith(color: Colors.black),
-              paragraphModels: _buildPaginationParagraphModels(
-                colors,
-                effectiveParagraphs,
-              ),
-              textScaler: textScaler,
-            ),
-          );
-          if (!_isActiveChapterContentRequest(requestToken)) {
-            return;
-          }
-          final pages = paginationResult?.pages;
-          if (pages != null && pages.isNotEmpty) {
-            precomputedParagraphs = effectiveParagraphs;
-            precomputedPagedPages = pages;
-            precomputedPageIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
-              targetRatio: targetRatio,
-              pageCount: pages.length,
-            );
-            precomputedPaginationSignature = signature;
-            final normalizedSourceId = (_sourceId ?? '').trim();
-            final normalizedChapterUrl = chapterUrl.trim();
-            if (normalizedSourceId.isNotEmpty &&
-                normalizedChapterUrl.isNotEmpty) {
-              _storePrecomputedChapterLayout(
-                sourceId: normalizedSourceId,
-                chapterUrl: normalizedChapterUrl,
-                layout: ReaderPrecomputedChapterLayout(
-                  paragraphs: effectiveParagraphs,
-                  pagedPages: pages,
-                  paginationSignature: signature,
-                ),
-              );
-            }
-          }
         }
       }
     }
@@ -3738,8 +3771,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await _saveProgress();
     _hasPromptedMissingSourceSwitch = false;
-    final preloadTaskToken = ++_preloadTaskToken;
-    unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
+    if (_canWarmNeighborPaginationCache()) {
+      final preloadTaskToken = ++_preloadTaskToken;
+      unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
+    }
   }
 
   Future<bool> _tryHydrateVisibleContentFromCache() async {
@@ -4280,7 +4315,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
         );
-        if (_isTextPagedViewport &&
+        if (_canWarmNeighborPaginationCache() &&
             result.imageUrls.isEmpty &&
             result.content.trim().isNotEmpty &&
             _lastPaginationSpec != null &&
@@ -4435,6 +4470,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     bool syncVolumeKeyPageInterception = true,
   }) {
     final previousSettings = _settings;
+    final shouldSyncAppThemeMode =
+        nextSettings.themeMode != previousSettings.themeMode;
     final previousPagedTextEnabled = _isPagedTextReaderEnabledFor(
       previousSettings,
     );
@@ -4462,6 +4499,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       unawaited(_syncVolumeKeyPageInterception());
     }
     unawaited(_applySystemReaderBrightness(nextSettings.brightness));
+    if (shouldSyncAppThemeMode) {
+      unawaited(_syncAppThemeModeWithReaderTheme(nextSettings.themeMode));
+    }
   }
 
   void _applyProgressFallback(ReadingProgress progress) {

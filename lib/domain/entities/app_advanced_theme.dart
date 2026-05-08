@@ -6,6 +6,8 @@ enum AppAdvancedThemeMode { light, dark }
 enum AppAdvancedThemeWallpaperFit { fill, cover }
 
 class AppAdvancedThemeColors {
+  static const String semanticColorGroupsKey = 'semanticColorGroups';
+
   const AppAdvancedThemeColors({
     this.primaryColorValue,
     this.secondaryColorValue,
@@ -49,7 +51,7 @@ class AppAdvancedThemeColors {
   final int? wallpaperOverlayColorValue;
 
   Map<String, dynamic> toJson() {
-    return {
+    final json = <String, dynamic>{
       if (primaryColorValue != null) 'primaryColorValue': primaryColorValue,
       if (secondaryColorValue != null)
         'secondaryColorValue': secondaryColorValue,
@@ -83,32 +85,80 @@ class AppAdvancedThemeColors {
       if (wallpaperOverlayColorValue != null)
         'wallpaperOverlayColorValue': wallpaperOverlayColorValue,
     };
+    final semanticGroups = _semanticColorGroupsToJson();
+    if (semanticGroups.isNotEmpty) {
+      json[semanticColorGroupsKey] = semanticGroups;
+    }
+    return json;
   }
 
   factory AppAdvancedThemeColors.fromJson(Map<String, dynamic> json) {
     return AppAdvancedThemeColors(
-      primaryColorValue: _readInt(json, 'primaryColorValue'),
-      secondaryColorValue: _readInt(json, 'secondaryColorValue'),
-      noticeAccentColorValue: _readInt(json, 'noticeAccentColorValue'),
-      noticeSurfaceColorValue: _readInt(json, 'noticeSurfaceColorValue'),
-      primaryContainerColorValue: _readInt(json, 'primaryContainerColorValue'),
-      backgroundColorValue: _readInt(json, 'backgroundColorValue'),
-      surfaceColorValue: _readInt(json, 'surfaceColorValue'),
-      searchFieldBackgroundColorValue: _readInt(
-        json,
-        'searchFieldBackgroundColorValue',
-      ),
-      elevatedSurfaceColorValue: _readInt(json, 'elevatedSurfaceColorValue'),
-      cardColorValue: _readInt(json, 'cardColorValue'),
-      cardTextColorValue: _readInt(json, 'cardTextColorValue'),
-      cardBorderColorValue: _readInt(json, 'cardBorderColorValue'),
-      iconBackgroundColorValue: _readInt(json, 'iconBackgroundColorValue'),
-      textPrimaryColorValue: _readInt(json, 'textPrimaryColorValue'),
-      textSecondaryColorValue: _readInt(json, 'textSecondaryColorValue'),
-      buttonTextColorValue: _readInt(json, 'buttonTextColorValue'),
-      outlineColorValue: _readInt(json, 'outlineColorValue'),
-      shadowColorValue: _readInt(json, 'shadowColorValue'),
-      wallpaperOverlayColorValue: _readInt(json, 'wallpaperOverlayColorValue'),
+      primaryColorValue:
+          _readInt(json, 'primaryColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'primary'),
+      secondaryColorValue:
+          _readInt(json, 'secondaryColorValue') ??
+          _readSemanticColor(json, group: 'advanced', key: 'secondary'),
+      noticeAccentColorValue:
+          _readInt(json, 'noticeAccentColorValue') ??
+          _readSemanticColor(json, group: 'state', key: 'noticeAccent'),
+      noticeSurfaceColorValue:
+          _readInt(json, 'noticeSurfaceColorValue') ??
+          _readSemanticColor(json, group: 'state', key: 'noticeSurface'),
+      primaryContainerColorValue:
+          _readInt(json, 'primaryContainerColorValue') ??
+          _readSemanticColor(json, group: 'state', key: 'primaryContainer'),
+      backgroundColorValue:
+          _readInt(json, 'backgroundColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'background'),
+      surfaceColorValue:
+          _readInt(json, 'surfaceColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'surface'),
+      searchFieldBackgroundColorValue:
+          _readInt(json, 'searchFieldBackgroundColorValue') ??
+          _readSemanticColor(
+            json,
+            group: 'advanced',
+            key: 'searchFieldBackground',
+          ),
+      elevatedSurfaceColorValue:
+          _readInt(json, 'elevatedSurfaceColorValue') ??
+          _readSemanticColor(json, group: 'advanced', key: 'elevatedSurface'),
+      cardColorValue:
+          _readInt(json, 'cardColorValue') ??
+          _readSemanticColor(json, group: 'component', key: 'card'),
+      cardTextColorValue:
+          _readInt(json, 'cardTextColorValue') ??
+          _readSemanticColor(json, group: 'advanced', key: 'cardText'),
+      cardBorderColorValue:
+          _readInt(json, 'cardBorderColorValue') ??
+          _readSemanticColor(json, group: 'advanced', key: 'cardBorder'),
+      iconBackgroundColorValue:
+          _readInt(json, 'iconBackgroundColorValue') ??
+          _readSemanticColor(json, group: 'derived', key: 'iconBackground'),
+      textPrimaryColorValue:
+          _readInt(json, 'textPrimaryColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'textPrimary'),
+      textSecondaryColorValue:
+          _readInt(json, 'textSecondaryColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'textSecondary'),
+      buttonTextColorValue:
+          _readInt(json, 'buttonTextColorValue') ??
+          _readSemanticColor(json, group: 'derived', key: 'buttonText'),
+      outlineColorValue:
+          _readInt(json, 'outlineColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'outline'),
+      shadowColorValue:
+          _readInt(json, 'shadowColorValue') ??
+          _readSemanticColor(json, group: 'effects', key: 'shadow'),
+      wallpaperOverlayColorValue:
+          _readInt(json, 'wallpaperOverlayColorValue') ??
+          _readSemanticColor(
+            json,
+            group: 'effects',
+            key: 'wallpaperOverlayColor',
+          ),
     );
   }
 
@@ -267,6 +317,82 @@ class AppAdvancedThemeColors {
       return value.toInt();
     }
     return int.tryParse(value.toString().trim());
+  }
+
+  Map<String, dynamic> _semanticColorGroupsToJson() {
+    final core = <String, dynamic>{
+      if (primaryColorValue != null) 'primary': primaryColorValue,
+      if (backgroundColorValue != null) 'background': backgroundColorValue,
+      if (surfaceColorValue != null) 'surface': surfaceColorValue,
+      if (textPrimaryColorValue != null) 'textPrimary': textPrimaryColorValue,
+      if (textSecondaryColorValue != null)
+        'textSecondary': textSecondaryColorValue,
+      if (outlineColorValue != null) 'outline': outlineColorValue,
+    };
+    final component = <String, dynamic>{
+      if (cardColorValue != null) 'card': cardColorValue,
+    };
+    final state = <String, dynamic>{
+      if (primaryContainerColorValue != null)
+        'primaryContainer': primaryContainerColorValue,
+      if (noticeAccentColorValue != null)
+        'noticeAccent': noticeAccentColorValue,
+      if (noticeSurfaceColorValue != null)
+        'noticeSurface': noticeSurfaceColorValue,
+    };
+    final advanced = <String, dynamic>{
+      if (searchFieldBackgroundColorValue != null)
+        'searchFieldBackground': searchFieldBackgroundColorValue,
+      if (elevatedSurfaceColorValue != null)
+        'elevatedSurface': elevatedSurfaceColorValue,
+      if (cardTextColorValue != null) 'cardText': cardTextColorValue,
+      if (cardBorderColorValue != null) 'cardBorder': cardBorderColorValue,
+      if (secondaryColorValue != null) 'secondary': secondaryColorValue,
+    };
+    final derived = <String, dynamic>{
+      if (buttonTextColorValue != null) 'buttonText': buttonTextColorValue,
+      if (iconBackgroundColorValue != null)
+        'iconBackground': iconBackgroundColorValue,
+    };
+    final effects = <String, dynamic>{
+      if (shadowColorValue != null) 'shadow': shadowColorValue,
+      if (wallpaperOverlayColorValue != null)
+        'wallpaperOverlayColor': wallpaperOverlayColorValue,
+    };
+
+    return <String, dynamic>{
+      if (core.isNotEmpty) 'core': core,
+      if (component.isNotEmpty) 'component': component,
+      if (state.isNotEmpty) 'state': state,
+      if (advanced.isNotEmpty) 'advanced': advanced,
+      if (derived.isNotEmpty) 'derived': derived,
+      if (effects.isNotEmpty) 'effects': effects,
+    };
+  }
+
+  static int? _readSemanticColor(
+    Map<String, dynamic> json, {
+    required String group,
+    required String key,
+  }) {
+    final root =
+        json[semanticColorGroupsKey] ??
+        json['semanticColors'] ??
+        json['semanticPalette'];
+    if (root is! Map) {
+      return null;
+    }
+    final normalizedRoot = root.map(
+      (nestedKey, value) => MapEntry(nestedKey.toString(), value),
+    );
+    final groupMap = normalizedRoot[group];
+    if (groupMap is! Map) {
+      return null;
+    }
+    return _readInt(
+      groupMap.map((nestedKey, value) => MapEntry(nestedKey.toString(), value)),
+      key,
+    );
   }
 }
 

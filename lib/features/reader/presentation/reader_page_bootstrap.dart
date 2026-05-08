@@ -3,6 +3,20 @@
 part of 'reader_page.dart';
 
 extension _ReaderPageBootstrapExtension on _ReaderPageState {
+  void _scheduleDeferredReaderPostVisibleSync({
+    BookDetailLoadResult? detailResult,
+    bool refreshBookshelf = true,
+  }) {
+    unawaited(() async {
+      if (detailResult != null) {
+        await _persistTocSnapshot(detailResult);
+      }
+      if (refreshBookshelf) {
+        await _refreshBookshelfState();
+      }
+    }());
+  }
+
   Future<void> _copyLocalReaderDiagnostics() async {
     final localBook = await _localBookRepository.getBookById(_currentBookId);
     final sourcePath = localBook?.sourcePath?.trim() ?? '';
@@ -323,9 +337,9 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       tocSnapshotHit = hydratedTocSnapshot;
 
       if (hydratedTocSnapshot) {
-        await _refreshBookshelfState();
         if (_hasVisibleReaderContent) {
           bootstrapSucceeded = true;
+          _scheduleDeferredReaderPostVisibleSync();
           await _consumePendingBookmarkJump();
           return;
         }
@@ -345,6 +359,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           tapToVisibleMs ??= _tapTraceElapsedMs();
         }
         if (loaded) {
+          _scheduleDeferredReaderPostVisibleSync();
           await _consumePendingBookmarkJump();
         }
         return;
@@ -352,7 +367,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
       if (_shouldTryLocalBootstrapPreview()) {
         localBootstrapPreviewAttempted = true;
-        await _refreshBookshelfState();
         final bootstrapProgress = _bootstrapProgressForCurrentChapter(
           consume: true,
         );
@@ -369,6 +383,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           tapToVisibleMs ??= _tapTraceElapsedMs();
         }
         if (loaded) {
+          _scheduleDeferredReaderPostVisibleSync();
           await _consumePendingBookmarkJump();
           return;
         }
@@ -406,7 +421,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
             return loaded;
           }();
       detailLoaded = true;
-      await _persistTocSnapshot(detailResult);
+      _scheduleDeferredReaderPostVisibleSync(
+        detailResult: detailResult,
+        refreshBookshelf: false,
+      );
 
       _bookTitle = detailResult.detail.title;
       _bookAuthor = detailResult.detail.author;
@@ -438,7 +456,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       _chapterUrl = current.chapterUrl;
       _chapterTitle = current.title;
 
-      await _refreshBookshelfState();
       final bootstrapProgress = _bootstrapProgressForCurrentChapter(
         consume: true,
       );
@@ -454,6 +471,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         tapToVisibleMs ??= _tapTraceElapsedMs();
       }
       if (loaded) {
+        _scheduleDeferredReaderPostVisibleSync();
         await _consumePendingBookmarkJump();
       }
     } on AppException catch (error) {

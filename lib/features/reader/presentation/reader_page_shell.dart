@@ -155,6 +155,14 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         _ReaderPageState._kBackNavigationInteractionCooldown;
   }
 
+  bool get _isInitialReaderInteractionCoolingDown {
+    final unlockAt = _readerInteractionUnlockAt;
+    if (unlockAt == null) {
+      return false;
+    }
+    return DateTime.now().isBefore(unlockAt);
+  }
+
   void _handleBackNavigation() {
     _markBackNavigationTriggered();
     if (context.canPop()) {
@@ -320,6 +328,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (_isTextSelectionActive) {
       return;
     }
+    if (_isInitialReaderInteractionCoolingDown) {
+      return;
+    }
     if (_isBackNavigationInteractionCoolingDown) {
       return;
     }
@@ -460,13 +471,8 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     _lightModeBackgroundImageBackup = result.nextLightModeBackgroundImageBackup;
-    setState(() {
-      _settings = result.nextSettings;
-    });
+    _applyReaderSettingsWithModeRestore(nextSettings: result.nextSettings);
     await _persistResolvedReaderSettingsLayers(result.nextSettings);
-    await ref
-        .read(appThemeModeProvider.notifier)
-        .setThemeMode(result.nextAppThemeMode);
   }
 
   void _showMessage(

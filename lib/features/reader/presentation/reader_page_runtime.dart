@@ -3,6 +3,35 @@
 part of 'reader_page.dart';
 
 extension _ReaderPageRuntimeExtension on _ReaderPageState {
+  void _markFirstPageTurnRequested() {
+    if (_hasLoggedFirstPageTurn || _firstPageTurnStopwatch != null) {
+      return;
+    }
+    _firstPageTurnStopwatch = Stopwatch()..start();
+  }
+
+  void _recordFirstPageTurnCompleted({required String mode}) {
+    final stopwatch = _firstPageTurnStopwatch;
+    if (_hasLoggedFirstPageTurn || stopwatch == null) {
+      return;
+    }
+    _hasLoggedFirstPageTurn = true;
+    _firstPageTurnStopwatch = null;
+    _logger.info(
+      'Reader first page turn completed',
+      context: <String, Object?>{
+        'chain': 'reader_open',
+        'step': 'first_page_turn',
+        'bookId': _currentBookId,
+        'sourceId': _sourceId,
+        'detailUrl': _detailUrl,
+        'chapterId': _chapterId,
+        'mode': mode,
+        'durationMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+  }
+
   void _scheduleReadingRecordSessionStart({double? initialRatio}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isBootstrapping || _isLoadingContent) {
@@ -772,19 +801,29 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       case PagedTransitionActionType.ignored:
         return;
       case PagedTransitionActionType.crossChapter:
-        await _jumpToAdjacentReadableChapter(forward: safeDirection >= 0);
+        _markFirstPageTurnRequested();
+        final turned = await _jumpToAdjacentReadableChapter(
+          forward: safeDirection >= 0,
+        );
+        if (turned) {
+          _recordFirstPageTurnCompleted(mode: 'cross_chapter');
+        }
         return;
       case PagedTransitionActionType.curl:
+        _markFirstPageTurnRequested();
         await _autoTurnCurlPage(safeDirection);
         return;
       case PagedTransitionActionType.immediate:
+        _markFirstPageTurnRequested();
         setState(() {
           _currentPageIndex = action.targetPageIndex;
         });
         _syncActiveReadingRecordSessionProgress();
         _scheduleProgressSave();
+        _recordFirstPageTurnCompleted(mode: 'immediate');
         return;
       case PagedTransitionActionType.animated:
+        _markFirstPageTurnRequested();
         _startPagedPageTransition(action);
         return;
     }
@@ -822,5 +861,6 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
+    _recordFirstPageTurnCompleted(mode: 'animated');
   }
 }

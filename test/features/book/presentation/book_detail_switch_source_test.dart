@@ -177,6 +177,7 @@ class _FakeBookDetailService extends BookDetailService {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     loadedSourceIds.add(sourceId);
     final result = _bySourceId[sourceId];

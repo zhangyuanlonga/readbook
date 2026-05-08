@@ -22,6 +22,21 @@ class BookshelfImportSummary {
   bool get hasSuccess => successCount > 0;
 }
 
+class BookshelfImportProgress {
+  const BookshelfImportProgress({
+    required this.completedCount,
+    required this.totalCount,
+    required this.currentFileLabel,
+  });
+
+  final int completedCount;
+  final int totalCount;
+  final String currentFileLabel;
+}
+
+typedef BookshelfImportProgressCallback =
+    void Function(BookshelfImportProgress progress);
+
 class BookshelfFlowCoordinator {
   const BookshelfFlowCoordinator();
 
@@ -31,10 +46,7 @@ class BookshelfFlowCoordinator {
     required bool alwaysShowSearchBar,
     required bool isSearchExpanded,
   }) {
-    return !hasFocus &&
-        !hasKeyword &&
-        !alwaysShowSearchBar &&
-        isSearchExpanded;
+    return !hasFocus && !hasKeyword && !alwaysShowSearchBar && isSearchExpanded;
   }
 
   bool canStartSelectionMode({
@@ -73,15 +85,25 @@ class BookshelfFlowCoordinator {
     required Iterable<BookshelfImportCandidate> candidates,
     required Future<void> Function(BookshelfImportCandidate candidate) importer,
     String Function(Object error)? errorFormatter,
+    BookshelfImportProgressCallback? onProgress,
   }) async {
     var successCount = 0;
     var failureCount = 0;
     String? lastError;
+    final importTargets = candidates.toList(growable: false);
 
-    for (final candidate in candidates) {
+    for (var index = 0; index < importTargets.length; index += 1) {
+      final candidate = importTargets[index];
       if (candidate.filePath.trim().isEmpty) {
         continue;
       }
+      onProgress?.call(
+        BookshelfImportProgress(
+          completedCount: index,
+          totalCount: importTargets.length,
+          currentFileLabel: candidate.displayName,
+        ),
+      );
       try {
         await importer(candidate);
         successCount += 1;
@@ -89,6 +111,16 @@ class BookshelfFlowCoordinator {
         failureCount += 1;
         lastError = errorFormatter?.call(error) ?? '$error';
       }
+    }
+
+    if (importTargets.isNotEmpty) {
+      onProgress?.call(
+        BookshelfImportProgress(
+          completedCount: importTargets.length,
+          totalCount: importTargets.length,
+          currentFileLabel: importTargets.last.displayName,
+        ),
+      );
     }
 
     return BookshelfImportSummary(

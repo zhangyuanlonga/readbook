@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/router_transitions.dart';
 import '../../app/theme/app_interface_typography_provider.dart';
-import '../../app/theme/app_theme.dart';
 import '../../domain/entities/book_identity.dart';
 import '../bookshelf/application/local_book_import_service.dart';
 import 'presentation/reader_page.dart';
@@ -136,20 +135,17 @@ Widget _buildReaderRoutePage(
         data: MediaQuery.of(
           context,
         ).copyWith(textScaler: TextScaler.linear(baseScale)),
-        child: Theme(
-          data: AppTheme.build(Theme.of(context).colorScheme),
-          child: ReaderPage(
-            bookId: bookId,
-            chapterId: chapterId,
-            chapterUrl: chapterUrl,
-            chapterTitle: chapterTitle,
-            sourceId: sourceId,
-            detailUrl: detailUrl,
-            chapterIndex: chapterIndex,
-            bookmarkId: bookmarkId,
-            openRequestedAtMs: openRequestedAtMs,
-            openRouteKind: openRouteKind,
-          ),
+        child: ReaderPage(
+          bookId: bookId,
+          chapterId: chapterId,
+          chapterUrl: chapterUrl,
+          chapterTitle: chapterTitle,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+          chapterIndex: chapterIndex,
+          bookmarkId: bookmarkId,
+          openRequestedAtMs: openRequestedAtMs,
+          openRouteKind: openRouteKind,
         ),
       );
     },

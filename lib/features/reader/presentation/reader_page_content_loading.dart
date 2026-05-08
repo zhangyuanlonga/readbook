@@ -521,12 +521,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     );
 
     if (canPrepaginate) {
-      final paragraphs = snapshot.result.document.paragraphs;
-      final effectiveParagraphs =
-          paragraphs.isEmpty ? <String>[snapshot.result.content] : paragraphs;
       final paginationSpec = _lastPaginationSpec;
       if (paginationSpec != null) {
-        final textScaler = MediaQuery.textScalerOf(context);
         final signature = _buildPaginationSignature(
           spec: paginationSpec,
           chapterIdOverride: commitChapterIdentity ? chapterId : _chapterId,
@@ -544,52 +540,6 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             pageCount: cachedLayout.pagedPages.length,
           );
           precomputedPaginationSignature = cachedLayout.paginationSignature;
-        } else {
-          final colors = _resolveThemeColors(
-            _effectiveReaderThemeMode(),
-            _settings,
-          );
-          final paginationResult = await _paginationEngine.paginateParagraphs(
-            ReaderPaginationRequest(
-              paragraphs: effectiveParagraphs,
-              spec: paginationSpec,
-              paragraphStyle: _paragraphTextStyle(
-                colors,
-              ).copyWith(color: Colors.black),
-              paragraphModels: _buildPaginationParagraphModels(
-                colors,
-                effectiveParagraphs,
-              ),
-              textScaler: textScaler,
-            ),
-          );
-          if (!_isActiveChapterContentRequestFlow(requestToken)) {
-            return;
-          }
-          final pages = paginationResult?.pages;
-          if (pages != null && pages.isNotEmpty) {
-            precomputedParagraphs = effectiveParagraphs;
-            precomputedPagedPages = pages;
-            precomputedPageIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
-              targetRatio: targetRatio,
-              pageCount: pages.length,
-            );
-            precomputedPaginationSignature = signature;
-            final normalizedSourceId = (_sourceId ?? '').trim();
-            final normalizedChapterUrl = chapterUrl.trim();
-            if (normalizedSourceId.isNotEmpty &&
-                normalizedChapterUrl.isNotEmpty) {
-              _storePrecomputedChapterLayout(
-                sourceId: normalizedSourceId,
-                chapterUrl: normalizedChapterUrl,
-                layout: ReaderPrecomputedChapterLayout(
-                  paragraphs: effectiveParagraphs,
-                  pagedPages: pages,
-                  paginationSignature: signature,
-                ),
-              );
-            }
-          }
         }
       }
     }
@@ -646,8 +596,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     await _saveProgress();
     _hasPromptedMissingSourceSwitch = false;
-    final preloadTaskToken = ++_preloadTaskToken;
-    unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+    if (_canWarmNeighborPaginationCache()) {
+      final preloadTaskToken = ++_preloadTaskToken;
+      unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+    }
   }
 
   Future<bool> _tryHydrateVisibleContentFromCacheFlow() async {
@@ -1054,7 +1006,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
         );
-        if (_isTextPagedViewport &&
+        if (_canWarmNeighborPaginationCache() &&
             result.imageUrls.isEmpty &&
             result.content.trim().isNotEmpty &&
             _lastPaginationSpec != null &&

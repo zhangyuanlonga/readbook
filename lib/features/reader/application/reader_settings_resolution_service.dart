@@ -14,7 +14,11 @@ class ReaderSettingsResolutionService {
     required ThemeMode appThemeMode,
     required Brightness platformBrightness,
   }) {
-    var resolved = persistedSettings;
+    var resolved = synchronizeThemeModeWithAppShell(
+      settings: persistedSettings,
+      appThemeMode: appThemeMode,
+      platformBrightness: platformBrightness,
+    );
     resolved = applyAdvancedThemeVisualOverlay(
       settings: resolved,
       activeTheme: activeTheme,
@@ -28,6 +32,24 @@ class ReaderSettingsResolutionService {
       appThemeMode: appThemeMode,
       platformBrightness: platformBrightness,
     );
+  }
+
+  ReaderSettings synchronizeThemeModeWithAppShell({
+    required ReaderSettings settings,
+    required ThemeMode appThemeMode,
+    required Brightness platformBrightness,
+  }) {
+    if (settings.themeMode == ReaderThemeMode.sepia) {
+      return settings;
+    }
+    final targetMode = _resolveReaderThemeMode(
+      appThemeMode: appThemeMode,
+      platformBrightness: platformBrightness,
+    );
+    if (settings.themeMode == targetMode) {
+      return settings;
+    }
+    return settings.copyWith(themeMode: targetMode);
   }
 
   ReaderSettings applyAdvancedThemeVisualOverlay({
@@ -133,13 +155,37 @@ class ReaderSettingsResolutionService {
     required ThemeMode appThemeMode,
     required Brightness platformBrightness,
   }) {
+    final brightness = _resolveBrightness(
+      appThemeMode: appThemeMode,
+      platformBrightness: platformBrightness,
+    );
+    return brightness == Brightness.dark
+        ? AppAdvancedThemeMode.dark
+        : AppAdvancedThemeMode.light;
+  }
+
+  ReaderThemeMode _resolveReaderThemeMode({
+    required ThemeMode appThemeMode,
+    required Brightness platformBrightness,
+  }) {
+    final brightness = _resolveBrightness(
+      appThemeMode: appThemeMode,
+      platformBrightness: platformBrightness,
+    );
+    return brightness == Brightness.dark
+        ? ReaderThemeMode.dark
+        : ReaderThemeMode.light;
+  }
+
+  Brightness _resolveBrightness({
+    required ThemeMode appThemeMode,
+    required Brightness platformBrightness,
+  }) {
     final brightness = switch (appThemeMode) {
       ThemeMode.dark => Brightness.dark,
       ThemeMode.light => Brightness.light,
       ThemeMode.system => platformBrightness,
     };
-    return brightness == Brightness.dark
-        ? AppAdvancedThemeMode.dark
-        : AppAdvancedThemeMode.light;
+    return brightness;
   }
 }

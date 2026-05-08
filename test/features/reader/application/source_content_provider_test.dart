@@ -19,6 +19,7 @@ class _FakeBookDetailService extends BookDetailService {
   String? fallbackTitle;
   String? fallbackAuthor;
   bool? forceRefresh;
+  bool? includeCatalog;
 
   @override
   Future<BookDetailLoadResult> load({
@@ -28,6 +29,7 @@ class _FakeBookDetailService extends BookDetailService {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     this.sourceId = sourceId;
     this.bookId = bookId;
@@ -35,6 +37,7 @@ class _FakeBookDetailService extends BookDetailService {
     this.fallbackTitle = fallbackTitle;
     this.fallbackAuthor = fallbackAuthor;
     this.forceRefresh = forceRefresh;
+    this.includeCatalog = includeCatalog;
     return result;
   }
 
@@ -146,6 +149,7 @@ void main() {
       fallbackTitle: '兜底标题',
       fallbackAuthor: '兜底作者',
       forceRefresh: true,
+      includeCatalog: false,
     );
 
     expect(loadedDetail, same(detailResult));
@@ -155,6 +159,7 @@ void main() {
     expect(fakeDetailService.fallbackTitle, '兜底标题');
     expect(fakeDetailService.fallbackAuthor, '兜底作者');
     expect(fakeDetailService.forceRefresh, isTrue);
+    expect(fakeDetailService.includeCatalog, isFalse);
 
     final loadedContent = await provider.loadChapterContent(
       sourceId: 'source_a',
