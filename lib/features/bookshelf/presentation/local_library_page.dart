@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
+import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../source/application/external_import_catalog.dart';
@@ -32,13 +34,9 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
   String? _lastErrorText;
   String? _currentStageText;
   LocalBookImportResult? _lastImportedResult;
-
-  double? get _importProgressValue {
-    if (!_isImporting || _importTotal <= 0) {
-      return null;
-    }
-    return (_importCompleted / _importTotal).clamp(0, 1).toDouble();
-  }
+  ImportExportTaskStatus? _taskStatus;
+  LocalBookImportStage? _lastProgressStage;
+  PersistentBottomSheetController? _taskSheetController;
 
   @override
   void initState() {
@@ -47,22 +45,10 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     _readerOpenService = ref.read(bookshelfReaderOpenServiceProvider);
   }
 
-  String get _importProgressText {
-    if (_importTotal <= 0) {
-      return '准备导入';
-    }
-    if (_importCompleted >= _importTotal) {
-      return '导入完成';
-    }
-    final stage = _currentStageText?.trim();
-    if (stage != null && stage.isNotEmpty) {
-      return stage;
-    }
-    final current = _currentImportLabel?.trim();
-    if (current != null && current.isNotEmpty) {
-      return '正在处理《$current》';
-    }
-    return '正在导入本地图书';
+  @override
+  void dispose() {
+    _taskSheetController?.close();
+    super.dispose();
   }
 
   Future<void> _pickAndImportFiles() async {
@@ -89,7 +75,16 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       _currentStageText = '正在准备导入';
       _lastErrorText = null;
       _lastImportedResult = null;
+      _lastProgressStage = null;
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入本地图书',
+        message: '正在准备处理 ${files.length} 个文件…',
+        detail: '图文内容较多时，解析和提取资源会耗时更久。',
+        progress: 0,
+        progressLabel: '0/$files.length',
+      );
     });
+    _showOrRefreshTaskSheet();
 
     var successCount = 0;
     final failedBooks = <String>[];
@@ -117,14 +112,34 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             if (!mounted) {
               return;
             }
+            final nextStage = progress.stage;
+            final shouldUpdateStage = _lastProgressStage != nextStage;
             setState(() {
+              _lastProgressStage = nextStage;
               _currentStageText = switch (progress.stage) {
                 LocalBookImportStage.preparing => '准备文件',
-                LocalBookImportStage.persisted => '已写入书架',
-                LocalBookImportStage.indexing => '正在建立目录',
+                LocalBookImportStage.persisted => '写入书架',
+                LocalBookImportStage.indexing => '建立目录',
                 LocalBookImportStage.completed => '完成导入',
               };
+              if (shouldUpdateStage || _taskStatus == null) {
+                _taskStatus = ImportExportTaskStatus(
+                  title: '正在导入本地图书',
+                  message:
+                      '${progress.displayName} · ${_currentStageText ?? '处理中'}',
+                  detail: progress.detail,
+                  progress:
+                      _importTotal <= 0
+                          ? null
+                          : _importCompleted / _importTotal,
+                  progressLabel:
+                      _importTotal <= 0
+                          ? null
+                          : '$_importCompleted/$_importTotal',
+                );
+              }
             });
+            _showOrRefreshTaskSheet();
           },
         );
         _lastImportedResult = result;
@@ -139,7 +154,24 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         if (mounted) {
           setState(() {
             _importCompleted += 1;
+            if (_isImporting) {
+              _taskStatus = ImportExportTaskStatus(
+                title: '正在导入本地图书',
+                message:
+                    _currentImportLabel?.trim().isNotEmpty == true
+                        ? '${_currentImportLabel!} · ${_currentStageText ?? '处理中'}'
+                        : (_currentStageText ?? '处理中'),
+                detail: _taskStatus?.detail,
+                progress:
+                    _importTotal <= 0 ? null : _importCompleted / _importTotal,
+                progressLabel:
+                    _importTotal <= 0
+                        ? null
+                        : '$_importCompleted/$_importTotal',
+              );
+            }
           });
+          _showOrRefreshTaskSheet();
         }
       }
     }
@@ -151,7 +183,19 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     setState(() {
       _isImporting = false;
       _currentStageText = successCount > 0 ? '完成导入，可直接阅读' : null;
+      _taskStatus =
+          successCount > 0
+              ? ImportExportTaskStatus(
+                title: '本地图书已导入',
+                message: '目录已建立，可直接阅读。',
+                detail: _currentImportLabel,
+                progress: 1,
+                progressLabel: '$_importCompleted/$_importTotal',
+                result: ImportExportTaskResult.success,
+              )
+              : null;
     });
+    _showOrRefreshTaskSheet();
 
     if (successCount > 0) {
       final failureCount = failedBooks.length;
@@ -173,6 +217,55 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _showOrRefreshTaskSheet() {
+    if (!mounted) {
+      return;
+    }
+    final status = _taskStatus;
+    final scaffold = Scaffold.maybeOf(context);
+    if (status == null || scaffold == null) {
+      return;
+    }
+    if (_taskSheetController == null) {
+      _taskSheetController = scaffold.showBottomSheet(
+        (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              return ImportExportTaskSheet(
+                status: _taskStatus ?? status,
+                primaryAction:
+                    !_isImporting && _lastImportedResult != null
+                        ? FilledButton.icon(
+                          onPressed: _openLatestImportedBook,
+                          icon: const Icon(Icons.menu_book_rounded),
+                          label: const Text('立即阅读'),
+                        )
+                        : null,
+                secondaryAction:
+                    !_isImporting && _lastImportedResult != null
+                        ? OutlinedButton.icon(
+                          onPressed: _returnToBookshelf,
+                          icon: const Icon(Icons.library_books_outlined),
+                          label: const Text('返回书架'),
+                        )
+                        : null,
+              );
+            },
+          );
+        },
+        backgroundColor: Colors.transparent,
+        enableDrag: false,
+      );
+      _taskSheetController!.closed.whenComplete(() {
+        if (mounted) {
+          _taskSheetController = null;
+        }
+      });
+      return;
+    }
+    _taskSheetController!.setState?.call(() {});
   }
 
   void _returnToBookshelf() {
@@ -238,7 +331,6 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 24),
               children: [
-                if (_isImporting) _buildImportProgressCard(colorScheme),
                 InkWell(
                   onTap: _isImporting ? null : _pickAndImportFiles,
                   borderRadius: BorderRadius.circular(24),
@@ -360,58 +452,6 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImportProgressCard(ColorScheme colorScheme) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colorScheme.primaryContainer.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _importProgressText,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Text(
-                  '$_importCompleted/$_importTotal',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: _importProgressValue,
-                minHeight: 8,
-                backgroundColor: colorScheme.surface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '显示完成后，说明图书目录已建立，可直接打开阅读。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
         ),
       ),
     );

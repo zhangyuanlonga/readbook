@@ -37,11 +37,13 @@ class LocalBookImportProgress {
     required this.stage,
     required this.bookId,
     required this.displayName,
+    this.detail,
   });
 
   final LocalBookImportStage stage;
   final String bookId;
   final String displayName;
+  final String? detail;
 }
 
 typedef LocalBookImportProgressCallback =
@@ -126,6 +128,7 @@ class LocalBookImportService {
         stage: LocalBookImportStage.preparing,
         bookId: bookId,
         displayName: normalizedDisplayName,
+        detail: '正在校验文件并准备导入',
       ),
     );
     final storedStoragePath = _localBookStorageService.buildStoredStoragePath(
@@ -151,6 +154,7 @@ class LocalBookImportService {
         stage: LocalBookImportStage.persisted,
         bookId: bookId,
         displayName: normalizedDisplayName,
+        detail: '已写入书架，准备建立目录',
       ),
     );
 
@@ -183,6 +187,7 @@ class LocalBookImportService {
           stage: LocalBookImportStage.indexing,
           bookId: bookId,
           displayName: normalizedDisplayName,
+          detail: _indexingDetailForFormat(format),
         ),
       );
       await _localBookIndexService.ensureIndexed(bookId: bookId);
@@ -191,6 +196,7 @@ class LocalBookImportService {
           stage: LocalBookImportStage.completed,
           bookId: bookId,
           displayName: normalizedDisplayName,
+          detail: '目录已建立，可直接阅读',
         ),
       );
     } else {
@@ -228,6 +234,19 @@ class LocalBookImportService {
       format: format,
       waitForIndexingRequested: waitForIndexingRequested,
     );
+  }
+
+  String _indexingDetailForFormat(LocalBookFormat format) {
+    return switch (format) {
+      LocalBookFormat.epub => '正在解析图文结构、提取资源并建立目录',
+      LocalBookFormat.html => '正在解析 HTML 结构、处理图片并建立目录',
+      LocalBookFormat.md => '正在解析 Markdown、转换图文结构并建立目录',
+      LocalBookFormat.pdf => '正在提取页面文本并建立目录',
+      LocalBookFormat.mobi ||
+      LocalBookFormat.azw ||
+      LocalBookFormat.azw3 => '正在解析电子书内容并建立目录',
+      LocalBookFormat.txt => '正在切分章节并建立目录',
+    };
   }
 
   bool _shouldIgnoreWarmUpError(Object error) {

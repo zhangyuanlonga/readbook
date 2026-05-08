@@ -13,6 +13,7 @@ import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
@@ -1034,7 +1035,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: FilledButton.tonalIcon(
+                      child: FilledButton.tonal(
                         onPressed:
                             isSelectionActionBusy || _selectedBookKeys.isEmpty
                                 ? null
@@ -1045,8 +1046,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        icon: const Icon(Icons.image_outlined),
-                        label: const Text('修改封面'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.image_outlined, size: 18),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                '修改封面',
+                                maxLines: 2,
+                                overflow: TextOverflow.visible,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),

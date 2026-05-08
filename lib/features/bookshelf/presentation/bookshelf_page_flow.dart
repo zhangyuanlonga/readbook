@@ -19,7 +19,7 @@ extension on _BookshelfPageState {
         unawaited(_showBookshelfSettingsSheet());
         break;
       case _BookshelfMoreAction.importLocal:
-        unawaited(_importLocalBooksFromPicker());
+        unawaited(_showImportLocalBooksSheet());
         break;
     }
   }
@@ -975,6 +975,7 @@ extension on _BookshelfPageState {
                 _taskStatus = ImportExportTaskStatus(
                   title: '正在导入本地图书',
                   message: '${progress.displayName} · $stageText',
+                  detail: progress.detail,
                   progress: current?.progress,
                   progressLabel: current?.progressLabel,
                 );
@@ -996,6 +997,7 @@ extension on _BookshelfPageState {
             _taskStatus = ImportExportTaskStatus(
               title: '正在导入本地图书',
               message: '正在处理 ${progress.currentFileLabel}',
+              detail: '请等待目录建立完成后再阅读。',
               progress:
                   progress.totalCount <= 0
                       ? null
@@ -1036,6 +1038,59 @@ extension on _BookshelfPageState {
         });
       }
     }
+  }
+
+  Future<void> _showImportLocalBooksSheet() async {
+    if (_isImportingLocal || _isBatchDeleting || !mounted) {
+      return;
+    }
+    await _showBookshelfBottomSheet<void>(
+      builder: (sheetContext) {
+        return AppTaskBottomSheet(
+          title: '导入本地图书',
+          trailing: IconButton(
+            tooltip: '导入说明',
+            onPressed: () {
+              showDialog<void>(
+                context: sheetContext,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text('导入说明'),
+                    content: const Text(
+                      '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。\n\n图文内容较多时，系统会继续解析结构和图片资源。\n\n导入阶段：准备文件 -> 写入书架 -> 建立目录 -> 完成导入。',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('知道了'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+            icon: const Icon(Icons.help_outline_rounded),
+          ),
+          maxHeightFactor: 0.36,
+          fitContent: true,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppTaskActionCard(
+                title: '添加图书文件',
+                description: '支持一次选择多个本地图书文件。',
+                icon: Icons.library_add_rounded,
+                dashedBorder: true,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_importLocalBooksFromPicker());
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _consumePendingExternalImportPayloads() async {
@@ -1114,6 +1169,7 @@ extension on _BookshelfPageState {
             _taskStatus = ImportExportTaskStatus(
               title: '正在导入外部图书',
               message: '${progress.displayName} · $stageText',
+              detail: progress.detail,
             );
           });
         },

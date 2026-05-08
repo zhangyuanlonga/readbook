@@ -107,7 +107,6 @@ extension on _SourcePageState {
           });
         }
 
-        final maxHeight = MediaQuery.of(context).size.height * 0.82;
         return ValueListenableBuilder<_BatchCheckProgressState>(
           valueListenable: progress,
           builder: (context, state, _) {
@@ -137,124 +136,113 @@ extension on _SourcePageState {
                 .where((result) => result.status == SourceCheckStatus.healthy)
                 .toList(growable: false);
 
-            return SafeArea(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        state.finished ? '批量检测结果' : '批量检测中',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      Text('范围：${_batchCheckScopeLabel(request.scope)}'),
-                      Text('级别：${_checkLevelLabel(request.level)}'),
-                      Text('进度：${state.completedCount} / ${state.totalCount}'),
-                      if (!state.finished &&
-                          (state.currentSourceName?.trim().isNotEmpty ?? false))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            children: [
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  '正在检测：${state.currentSourceName}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+            return AppTaskBottomSheet(
+              title: state.finished ? '批量检测结果' : '批量检测中',
+              maxHeightFactor: 0.82,
+              header: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('范围：${_batchCheckScopeLabel(request.scope)}'),
+                  Text('级别：${_checkLevelLabel(request.level)}'),
+                  Text('进度：${state.completedCount} / ${state.totalCount}'),
+                  if (!state.finished &&
+                      (state.currentSourceName?.trim().isNotEmpty ?? false))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                        ),
-                      const SizedBox(height: 12),
-                      LinearProgressIndicator(
-                        value:
-                            state.totalCount == 0
-                                ? null
-                                : state.completedCount / state.totalCount,
-                      ),
-                      const SizedBox(height: 12),
-                      Text('通过：$healthyCount'),
-                      Text('风险：$warningCount'),
-                      Text('失败：${failedResults.length}'),
-                      Text('跳过：${skippedResults.length}'),
-                      const SizedBox(height: 12),
-                      if (state.finished && failedResults.isNotEmpty)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            FilledButton.tonal(
-                              onPressed: () async {
-                                Navigator.of(context).pop();
-                                await _batchDisableFailedSources(failedResults);
-                              },
-                              child: const Text('批量停用失败源'),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '正在检测：${state.currentSourceName}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            OutlinedButton(
-                              onPressed: () async {
-                                Navigator.of(context).pop();
-                                await _batchDeleteFailedSources(failedResults);
-                              },
-                              child: const Text('批量删除失败源'),
-                            ),
-                          ],
-                        ),
-                      if (state.finished) const SizedBox(height: 12),
-                      Expanded(
-                        child: ListView(
-                          children: [
-                            if (!state.finished && results.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 12),
-                                child: Text('检测进行中，请稍候…'),
-                              ),
-                            _buildBatchResultSection(
-                              context,
-                              title: '失败',
-                              results: failedResults,
-                            ),
-                            _buildBatchResultSection(
-                              context,
-                              title: '风险',
-                              results: warningResults,
-                            ),
-                            _buildBatchResultSection(
-                              context,
-                              title: '跳过',
-                              results: skippedResults,
-                            ),
-                            _buildBatchResultSection(
-                              context,
-                              title: '通过',
-                              results: healthyResults,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (state.finished)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('关闭'),
                           ),
-                        ),
-                    ],
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value:
+                        state.totalCount == 0
+                            ? null
+                            : state.completedCount / state.totalCount,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Text('通过：$healthyCount'),
+                  Text('风险：$warningCount'),
+                  Text('失败：${failedResults.length}'),
+                  Text('跳过：${skippedResults.length}'),
+                  if (state.finished && failedResults.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.tonal(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await _batchDisableFailedSources(failedResults);
+                          },
+                          child: const Text('批量停用失败源'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await _batchDeleteFailedSources(failedResults);
+                          },
+                          child: const Text('批量删除失败源'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
+              body: ListView(
+                children: [
+                  if (!state.finished && results.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text('检测进行中，请稍候…'),
+                    ),
+                  _buildBatchResultSection(
+                    context,
+                    title: '失败',
+                    results: failedResults,
+                  ),
+                  _buildBatchResultSection(
+                    context,
+                    title: '风险',
+                    results: warningResults,
+                  ),
+                  _buildBatchResultSection(
+                    context,
+                    title: '跳过',
+                    results: skippedResults,
+                  ),
+                  _buildBatchResultSection(
+                    context,
+                    title: '通过',
+                    results: healthyResults,
+                  ),
+                ],
+              ),
+              footer:
+                  state.finished
+                      ? Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('关闭'),
+                        ),
+                      )
+                      : null,
             );
           },
         );
@@ -540,5 +528,4 @@ extension on _SourcePageState {
     }
     return ' ${diff.inMinutes}m';
   }
-
 }
