@@ -58,6 +58,13 @@ class _FakeLocalBookRepository implements LocalBookRepository {
       throw UnimplementedError();
 
   @override
+  Future<LocalBook?> findBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) => throw UnimplementedError();
+
+  @override
   Future<LocalChapter?> getChapterById(String chapterId) =>
       throw UnimplementedError();
 

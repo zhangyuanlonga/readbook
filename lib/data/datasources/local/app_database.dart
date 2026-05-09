@@ -1673,6 +1673,33 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalBook(row);
   }
 
+  Future<LocalBook?> findLocalBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) async {
+    final normalizedTitle = _normalizeImportFingerprintText(title);
+    if (normalizedTitle.isEmpty || sourceFileSize < 0) {
+      return null;
+    }
+
+    final rows =
+        await (select(storedLocalBooks)
+              ..where(
+                (table) =>
+                    table.format.equals(format.name) &
+                    table.sourceFileSize.equals(sourceFileSize),
+              )
+              ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]))
+            .get();
+    for (final row in rows) {
+      if (_normalizeImportFingerprintText(row.title) == normalizedTitle) {
+        return _mapRowToLocalBook(row);
+      }
+    }
+    return null;
+  }
+
   Future<List<LocalBook>> getAllLocalBooks() async {
     final rows =
         await (select(storedLocalBooks)
@@ -2966,6 +2993,10 @@ class AppDatabase extends _$AppDatabase {
       return null;
     }
     return text;
+  }
+
+  String _normalizeImportFingerprintText(String value) {
+    return value.trim().replaceAll(RegExp(r'\s+'), '').toLowerCase();
   }
 
   DateTime _decodeEpochDateTime(int epoch) {

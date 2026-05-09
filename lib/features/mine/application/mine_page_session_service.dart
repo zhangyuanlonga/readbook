@@ -29,6 +29,20 @@ class MinePageSessionSnapshot {
   final int sourceImportLimit;
 }
 
+class MinePageSessionPriming {
+  MinePageSessionPriming._();
+
+  static AuthSession? _primedSession;
+
+  static void prime(SharedPreferences prefs) {
+    _primedSession = AuthSessionStore.readSession(prefs);
+  }
+
+  static AuthSession? take() {
+    return _primedSession;
+  }
+}
+
 class MinePageSessionService {
   const MinePageSessionService({
     required AuthSessionStore authSessionStore,
@@ -97,7 +111,8 @@ class MinePageSessionService {
       return null;
     }
     final prefs = await SharedPreferences.getInstance();
-    final rawPath = prefs.getString(_profileAvatarStorageKey(normalizedUserId))?.trim();
+    final rawPath =
+        prefs.getString(_profileAvatarStorageKey(normalizedUserId))?.trim();
     if (rawPath == null || rawPath.isEmpty) {
       return null;
     }

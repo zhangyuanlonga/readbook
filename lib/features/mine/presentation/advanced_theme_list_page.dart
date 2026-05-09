@@ -504,7 +504,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       icon: Icons.palette_outlined,
       processingMessage: theme.name,
       processingDetail: '准备导出颜色配置',
-      runTask: () => _runExportTheme(theme),
+      runTask: (onProgress) => _runExportTheme(theme, onProgress),
     );
   }
 
@@ -522,7 +522,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       icon: Icons.archive_outlined,
       processingMessage: theme.name,
       processingDetail: '准备导出主题包',
-      runTask: () => _runExportThemeBundle(theme),
+      runTask: (onProgress) => _runExportThemeBundle(theme, onProgress),
     );
   }
 
@@ -538,9 +538,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required String text,
     required String subject,
     String? clipboardText,
+    ValueChanged<String>? onProgress,
   }) async {
     try {
-      _updateSavingStatus(ImportExportCopy.shareLaunching);
+      if (onProgress == null) {
+        _updateSavingStatus(ImportExportCopy.shareLaunching);
+      } else {
+        onProgress(ImportExportCopy.shareLaunching);
+      }
       final result = await Share.shareXFiles(
         [XFile(file.path)],
         text: text,
@@ -579,7 +584,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required IconData icon,
     required String processingMessage,
     required String processingDetail,
-    required Future<bool> Function() runTask,
+    required Future<bool> Function(ValueChanged<String> onProgress) runTask,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -600,12 +605,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  Future<bool> _runExportTheme(AppAdvancedTheme theme) async {
+  Future<bool> _runExportTheme(
+    AppAdvancedTheme theme, [
+    ValueChanged<String>? onProgress,
+  ]) async {
     setState(() {
       _isSaving = true;
-      _savingStatusText = '正在准备导出颜色配置…';
     });
     try {
+      onProgress?.call('正在准备导出颜色配置…');
       final service = ref.read(advancedThemeServiceProvider);
       final fileName = '${_normalizedFileName(theme.name)}.json';
       final content = service.encodeThemeColorJson(theme);
@@ -633,6 +641,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           text: '分享颜色主题：${theme.name}',
           subject: theme.name,
           clipboardText: content,
+          onProgress: onProgress,
         );
         if (!mounted) {
           return false;
@@ -663,12 +672,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
-  Future<bool> _runExportThemeBundle(AppAdvancedTheme theme) async {
+  Future<bool> _runExportThemeBundle(
+    AppAdvancedTheme theme, [
+    ValueChanged<String>? onProgress,
+  ]) async {
     setState(() {
       _isSaving = true;
-      _savingStatusText = '正在准备导出主题包…';
     });
     try {
+      onProgress?.call('正在准备导出主题包…');
       final service = ref.read(advancedThemeServiceProvider);
       final fileName = '${_normalizedFileName(theme.name)}.zip';
       final bytes = await service.encodeThemeBundleZip(theme);
@@ -695,6 +707,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           file: file,
           text: '分享主题包：${theme.name}',
           subject: theme.name,
+          onProgress: onProgress,
         );
         if (!mounted) {
           return false;
@@ -840,14 +853,31 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required String path,
     String? mimeType,
     _ThemeImportPackageKind? packageKind,
+    bool reloadAfterImport = true,
+    bool markRevision = true,
   }) async {
-    final file = File(path);
-    final bytes = await file.readAsBytes();
+    final service = ref.read(advancedThemeServiceProvider);
+    final effectiveKind =
+        packageKind ?? await _detectPackageKind(path: path, mimeType: mimeType);
+    if (effectiveKind == _ThemeImportPackageKind.official &&
+        _isZipThemeFile(path: path, mimeType: mimeType)) {
+      final importedTheme = await service.importThemeBundleZipFile(path);
+      if (markRevision) {
+        ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+      }
+      if (reloadAfterImport) {
+        await _load();
+      }
+      return importedTheme;
+    }
+    final bytes = await File(path).readAsBytes();
     return _importThemeBytes(
       path: path,
       bytes: bytes,
       mimeType: mimeType,
-      packageKind: packageKind,
+      packageKind: effectiveKind,
+      reloadAfterImport: reloadAfterImport,
+      markRevision: markRevision,
     );
   }
 
@@ -939,15 +969,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       ImportExportCopy.importPreparing,
     );
     await _yieldToUi();
-    final bytes = await File(path).readAsBytes();
-    if (_isBatchBundleFile(path: path, mimeType: mimeType, bytes: bytes)) {
+    if (_isBatchBundleFile(path: path, mimeType: mimeType)) {
       onProgress?.call(
         _AdvancedThemeImportQueueItemStatus.parsing,
         '正在解析批量主题包',
       );
       await _yieldToUi();
-      return _importThemeBatchBundleBytes(bytes, onProgress: onProgress);
+      return _importThemeBatchBundleFile(path, onProgress: onProgress);
     }
+    final bytes = await File(path).readAsBytes();
     onProgress?.call(_AdvancedThemeImportQueueItemStatus.importing, '正在导入主题资源');
     await _yieldToUi();
     await _importThemeBytes(
@@ -963,11 +993,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  Future<_AdvancedThemeBatchImportSummary> _importThemeBatchBundleBytes(
-    List<int> bytes, {
+  Future<_AdvancedThemeBatchImportSummary> _importThemeBatchBundleFile(
+    String path, {
     _AdvancedThemeBatchImportProgressCallback? onProgress,
   }) async {
-    final archive = ZipDecoder().decodeBytes(bytes, verify: false);
+    final input = InputFileStream(path);
+    final archive = ZipDecoder().decodeStream(input, verify: false);
+    input.close();
     final manifestFile = archive.findFile('manifest.json');
     if (manifestFile == null) {
       throw const FormatException('批量主题包缺少 manifest.json。');
@@ -1000,43 +1032,65 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     var successCount = 0;
     var failureCount = 0;
     String? lastError;
+    final tempDir = await getTemporaryDirectory();
+    final workingDirectory = Directory(
+      '${tempDir.path}/advanced_theme_batch_import_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    if (!await workingDirectory.exists()) {
+      await workingDirectory.create(recursive: true);
+    }
     final importableEntries = entries.whereType<Map>().toList(growable: false);
-    for (var index = 0; index < importableEntries.length; index += 1) {
-      final item = importableEntries[index];
-      final entry = item.map((key, value) => MapEntry(key.toString(), value));
-      final bundlePath = entry['file']?.toString().trim() ?? '';
-      if (bundlePath.isEmpty) {
-        failureCount += 1;
-        lastError = '批量主题包条目缺少文件路径。';
-        continue;
-      }
-      final themeName = entry['name']?.toString().trim() ?? '';
-      onProgress?.call(
-        _AdvancedThemeImportQueueItemStatus.importing,
-        themeName.isEmpty
-            ? '正在导入主题 ${index + 1}/${importableEntries.length}'
-            : '正在导入 $themeName ${index + 1}/${importableEntries.length}',
-      );
-      await _yieldToUi();
-      final archiveFile = archive.findFile(bundlePath);
-      if (archiveFile == null) {
-        failureCount += 1;
-        lastError = '批量主题包缺少主题文件：$bundlePath';
-        continue;
-      }
-      try {
-        await _importThemeBytes(
-          path: bundlePath,
-          bytes: List<int>.from(archiveFile.content),
-          mimeType: 'application/zip',
-          packageKind: _ThemeImportPackageKind.official,
-          reloadAfterImport: false,
-          markRevision: false,
+    try {
+      for (var index = 0; index < importableEntries.length; index += 1) {
+        final item = importableEntries[index];
+        final entry = item.map((key, value) => MapEntry(key.toString(), value));
+        final bundlePath = entry['file']?.toString().trim() ?? '';
+        if (bundlePath.isEmpty) {
+          failureCount += 1;
+          lastError = '批量主题包条目缺少文件路径。';
+          continue;
+        }
+        final themeName = entry['name']?.toString().trim() ?? '';
+        onProgress?.call(
+          _AdvancedThemeImportQueueItemStatus.importing,
+          themeName.isEmpty
+              ? '正在导入主题 ${index + 1}/${importableEntries.length}'
+              : '正在导入 $themeName ${index + 1}/${importableEntries.length}',
         );
-        successCount += 1;
-      } catch (error) {
-        failureCount += 1;
-        lastError = formatAdvancedThemeExportError(error);
+        await _yieldToUi();
+        final archiveFile = archive.findFile(bundlePath);
+        if (archiveFile == null) {
+          failureCount += 1;
+          lastError = '批量主题包缺少主题文件：$bundlePath';
+          continue;
+        }
+        final tempThemeFile = File(
+          '${workingDirectory.path}/${index.toString().padLeft(3, '0')}.zip',
+        );
+        try {
+          final output = OutputFileStream(tempThemeFile.path);
+          archiveFile.writeContent(output);
+          output.close();
+          await _importThemeFromPath(
+            path: tempThemeFile.path,
+            mimeType: 'application/zip',
+            packageKind: _ThemeImportPackageKind.official,
+            reloadAfterImport: false,
+            markRevision: false,
+          );
+          successCount += 1;
+        } catch (error) {
+          failureCount += 1;
+          lastError = formatAdvancedThemeExportError(error);
+        } finally {
+          if (await tempThemeFile.exists()) {
+            await tempThemeFile.delete();
+          }
+        }
+      }
+    } finally {
+      if (await workingDirectory.exists()) {
+        await workingDirectory.delete(recursive: true);
       }
     }
 
@@ -1058,12 +1112,18 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (!_isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)) {
       return false;
     }
-    final resolvedBytes = bytes;
-    if (resolvedBytes == null) {
-      return false;
-    }
     try {
-      final archive = ZipDecoder().decodeBytes(resolvedBytes, verify: false);
+      Archive archive;
+      if (bytes == null) {
+        final input = InputFileStream(path);
+        try {
+          archive = ZipDecoder().decodeStream(input, verify: false);
+        } finally {
+          input.close();
+        }
+      } else {
+        archive = ZipDecoder().decodeBytes(bytes, verify: false);
+      }
       final manifestFile = archive.findFile('manifest.json');
       if (manifestFile == null) {
         return false;
@@ -3627,7 +3687,7 @@ class _AdvancedThemeSingleTaskSheet extends StatefulWidget {
   final IconData icon;
   final String processingMessage;
   final String processingDetail;
-  final Future<bool> Function() runTask;
+  final Future<bool> Function(ValueChanged<String> onProgress) runTask;
 
   @override
   State<_AdvancedThemeSingleTaskSheet> createState() =>
@@ -3637,6 +3697,7 @@ class _AdvancedThemeSingleTaskSheet extends StatefulWidget {
 class _AdvancedThemeSingleTaskSheetState
     extends State<_AdvancedThemeSingleTaskSheet> {
   _AdvancedThemeSingleTaskMode _mode = _AdvancedThemeSingleTaskMode.prepare;
+  late String _processingDetail = widget.processingDetail;
 
   List<AppTaskStep> get _steps {
     final current = switch (_mode) {
@@ -3655,7 +3716,7 @@ class _AdvancedThemeSingleTaskSheetState
     setState(() {
       _mode = _AdvancedThemeSingleTaskMode.processing;
     });
-    final completed = await widget.runTask();
+    final completed = await widget.runTask(_updateProcessingDetail);
     if (!mounted) {
       return;
     }
@@ -3665,6 +3726,15 @@ class _AdvancedThemeSingleTaskSheetState
     }
     setState(() {
       _mode = _AdvancedThemeSingleTaskMode.completed;
+    });
+  }
+
+  void _updateProcessingDetail(String detail) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _processingDetail = detail;
     });
   }
 
@@ -3712,7 +3782,7 @@ class _AdvancedThemeSingleTaskSheetState
               status: ImportExportTaskStatus(
                 title: widget.title,
                 message: widget.processingMessage,
-                detail: widget.processingDetail,
+                detail: _processingDetail,
               ),
             )
           else

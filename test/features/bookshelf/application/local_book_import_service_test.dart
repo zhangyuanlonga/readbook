@@ -303,6 +303,30 @@ void main() {
       expect(second.localBook.sourceFileSize, await sourceFile.length());
     });
 
+    test(
+      're-import by same book info merges into existing local book',
+      () async {
+        final firstFile = File('${tempDir.path}/folder_a/same_name.txt');
+        final secondFile = File('${tempDir.path}/folder_b/same_name.txt');
+        await firstFile.parent.create(recursive: true);
+        await secondFile.parent.create(recursive: true);
+        await firstFile.writeAsString('完全相同的内容');
+        await secondFile.writeAsString('完全相同的内容');
+
+        final prefs = await SharedPreferences.getInstance();
+        final service = buildService(preferences: prefs);
+
+        final first = await service.importFromFile(filePath: firstFile.path);
+        final second = await service.importFromFile(filePath: secondFile.path);
+
+        expect(second.localBook.id, first.localBook.id);
+        expect(await database.getAllLocalBooks(), hasLength(1));
+        final bookshelf = await BookshelfService(preferences: prefs).getAll();
+        expect(bookshelf, hasLength(1));
+        expect(bookshelf.single.bookId, first.localBook.id);
+      },
+    );
+
     test('removes local book storage and records', () async {
       final sourceFile = File('${tempDir.path}/remove.txt');
       await sourceFile.writeAsString('待删除内容');

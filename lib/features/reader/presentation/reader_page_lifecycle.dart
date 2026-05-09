@@ -157,6 +157,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _stopAutoRead();
     _scrollController.dispose();
     _mangaPageController.dispose();
+    _staticPagedTextPageControllerInstance?.dispose();
     _disposeMangaTransformControllers();
     _overlayControlsController.dispose();
     _pagedTransitionController.dispose();

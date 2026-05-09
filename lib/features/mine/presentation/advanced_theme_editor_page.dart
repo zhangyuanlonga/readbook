@@ -1104,7 +1104,27 @@ class _AdvancedThemeEditorPageState
   }
 
   String? _resolveExistingLocalImagePath(String? path) {
+    final normalized = path?.trim() ?? '';
+    if (normalized.startsWith('assets/')) {
+      return normalized;
+    }
     return _pathResolver.tryResolveExistingFilePathSync(path);
+  }
+
+  Widget _buildResolvedImage(
+    String path, {
+    required BoxFit fit,
+    FilterQuality filterQuality = FilterQuality.medium,
+  }) {
+    final normalized = path.trim();
+    if (normalized.startsWith('assets/')) {
+      return Image.asset(normalized, fit: fit, filterQuality: filterQuality);
+    }
+    return Image.file(
+      _resolveLocalImageFile(normalized),
+      fit: fit,
+      filterQuality: filterQuality,
+    );
   }
 
   List<String> _existingImagePaths(Iterable<String> imagePaths) {
@@ -1126,7 +1146,6 @@ class _AdvancedThemeEditorPageState
     if (resolvedPath == null) {
       return;
     }
-    final file = File(resolvedPath);
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.88),
@@ -1175,8 +1194,8 @@ class _AdvancedThemeEditorPageState
                         minScale: 1,
                         maxScale: 4,
                         child: Center(
-                          child: Image.file(
-                            file,
+                          child: _buildResolvedImage(
+                            resolvedPath,
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.high,
                           ),
@@ -1565,10 +1584,7 @@ class _AdvancedThemeEditorPageState
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(borderRadius),
-          child: Image.file(
-            _resolveLocalImageFile(previewPath),
-            fit: BoxFit.cover,
-          ),
+          child: _buildResolvedImage(previewPath, fit: BoxFit.cover),
         ),
       );
     }

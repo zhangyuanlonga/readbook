@@ -32,6 +32,41 @@ void main() {
       expect(ratio, 0.6);
     });
 
+    test('resolves bottom drag end as next chapter only', () {
+      final bottomAction = controller.resolveScrollEdgeDragEndAction(
+        isArmed: false,
+        armedActionDirection: 0,
+        atTop: false,
+        atBottom: true,
+        isDragEnd: true,
+        velocityDy: -120,
+      );
+      final topAction = controller.resolveScrollEdgeDragEndAction(
+        isArmed: false,
+        armedActionDirection: 0,
+        atTop: true,
+        atBottom: false,
+        isDragEnd: true,
+        velocityDy: 120,
+      );
+
+      expect(bottomAction, ReaderScrollEdgeAction.nextChapter);
+      expect(topAction, ReaderScrollEdgeAction.refreshCurrent);
+    });
+
+    test('ignores mismatched armed scroll edge direction', () {
+      final action = controller.resolveScrollEdgeDragEndAction(
+        isArmed: true,
+        armedActionDirection: -2,
+        atTop: false,
+        atBottom: true,
+        isDragEnd: true,
+        velocityDy: -120,
+      );
+
+      expect(action, ReaderScrollEdgeAction.none);
+    });
+
     test('starts reading record session through coordinator', () {
       final result = controller.startOrUpdateReadingRecordSession(
         coordinator: const ReaderReadingRecordCoordinator(),

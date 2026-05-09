@@ -1,5 +1,6 @@
 import 'package:flutter/animation.dart';
 
+import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import 'reader_session_state.dart';
 
@@ -131,16 +132,26 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
         shouldDefer: true,
       );
     }
-    final pageIndex = (normalizedRatio * metrics.pageCount)
-        .floor()
-        .clamp(0, metrics.pageCount - 1);
+    final pageIndex = (normalizedRatio * metrics.pageCount).floor().clamp(
+      0,
+      metrics.pageCount - 1,
+    );
     return ReaderRestorePlan(
       normalizedRatio: normalizedRatio,
       pageIndex: pageIndex,
     );
   }
 
-  ReaderPageAnimationStyle resolveAnimationStyle(ReaderSettings settings) {
+  ReaderPageAnimationStyle resolveAnimationStyle(
+    ReaderSettings settings, {
+    ReaderDocument? document,
+  }) {
+    if (document != null &&
+        document.hasImageBlocks &&
+        !document.isPureImageDocument &&
+        settings.pageAnimationStyle == ReaderPageAnimationStyle.curl) {
+      return ReaderPageAnimationStyle.none;
+    }
     return settings.pageAnimationStyle;
   }
 
@@ -184,8 +195,9 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
     required int currentPageIndex,
     required int pageCount,
     required ReaderSettings settings,
+    ReaderDocument? document,
   }) {
-    final animationStyle = resolveAnimationStyle(settings);
+    final animationStyle = resolveAnimationStyle(settings, document: document);
     if (pageCount <= 0 || direction == 0) {
       return PagedTurnDecision(
         type: PagedTurnDecisionType.immediate,

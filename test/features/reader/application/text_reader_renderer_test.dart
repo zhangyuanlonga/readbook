@@ -1,4 +1,5 @@
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_session_state.dart';
 import 'package:shuxiang_reading_next/features/reader/application/text_reader_renderer.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,6 +105,27 @@ void main() {
       expect(curlDecision.targetPageIndex, 2);
       expect(crossChapterDecision.type, PagedTurnDecisionType.crossChapter);
       expect(crossChapterDecision.targetPageIndex, 7);
+    });
+
+    test('downgrades curl turn for mixed media EPUB text', () {
+      final document = ReaderDocument.fromContent(
+        content:
+            '正文\n\n${ReaderDocument.inlineImageParagraph('file:///cover.jpg')}',
+      );
+
+      final decision = renderer.resolveTurnDecision(
+        direction: 1,
+        currentPageIndex: 0,
+        pageCount: 3,
+        settings: const ReaderSettings(
+          pageAnimationStyle: ReaderPageAnimationStyle.curl,
+        ),
+        document: document,
+      );
+
+      expect(decision.type, PagedTurnDecisionType.immediate);
+      expect(decision.targetPageIndex, 1);
+      expect(decision.animationStyle, ReaderPageAnimationStyle.none);
     });
 
     test('exposes animation motion spec for style', () {

@@ -86,14 +86,21 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   Future<void> _advanceScrollReaderByStep({required bool forward}) async {
-    if (!_scrollController.hasClients) {
+    if (!_scrollController.hasClients || _isScrollStepAnimating) {
       return;
     }
 
     final position = _scrollController.position;
+    final viewport = position.viewportDimension;
+    final lineReserve =
+        (_settings.fontSize *
+                _typographyMetricsResolver.resolveLineHeight(_settings))
+            .clamp(18.0, viewport * 0.22)
+            .toDouble();
+    final imageReserve = _document.hasImageBlocks ? 0.0 : lineReserve;
     final distance =
-        (position.viewportDimension * _settings.pageTurnStepRatio)
-            .clamp(120.0, max(position.viewportDimension, 120.0))
+        (viewport * _settings.pageTurnStepRatio - imageReserve)
+            .clamp(120.0, max(viewport - imageReserve, 120.0))
             .toDouble();
     final current = position.pixels;
     final target =
@@ -102,14 +109,17 @@ extension _ReaderPageShellExtension on _ReaderPageState {
             : max(current - distance, 0.0);
 
     if ((target - current).abs() >= 1.0) {
+      _isScrollStepAnimating = true;
       try {
         await _scrollController.animateTo(
           target,
           duration: _ReaderPageState._kPagedScrollTurnDuration,
-          curve: Curves.easeInOutCubic,
+          curve: Curves.easeOutCubic,
         );
       } catch (_) {
         // Ignore interrupted animations.
+      } finally {
+        _isScrollStepAnimating = false;
       }
       _scheduleProgressSave();
       return;

@@ -9,6 +9,12 @@ abstract class LocalBookRepository {
 
   Future<LocalBook?> getBookBySourcePath(String sourcePath);
 
+  Future<LocalBook?> findBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  });
+
   Future<List<LocalBook>> getAllBooks();
 
   Stream<List<LocalBook>> watchAllBooks();

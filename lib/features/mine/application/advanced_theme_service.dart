@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -715,6 +716,21 @@ class AdvancedThemeService {
     final fingerprint = _computeImportFingerprint(bytes);
     await _ensureImportFingerprintAvailable(fingerprint);
     final archive = _decodeZipArchiveBytes(bytes);
+    return _importThemeBundleArchive(archive, importFingerprint: fingerprint);
+  }
+
+  Future<AppAdvancedTheme> importThemeBundleZipFile(String path) async {
+    final file = File(path);
+    final fingerprint = await _computeImportFingerprintForFile(file);
+    await _ensureImportFingerprintAvailable(fingerprint);
+    final archive = _decodeZipArchiveFile(file.path);
+    return _importThemeBundleArchive(archive, importFingerprint: fingerprint);
+  }
+
+  Future<AppAdvancedTheme> _importThemeBundleArchive(
+    Archive archive, {
+    required String importFingerprint,
+  }) async {
     final manifestFile = archive.findFile('manifest.json');
     if (manifestFile == null) {
       throw const FormatException('主题压缩包缺少 manifest.json。');
@@ -861,6 +877,11 @@ class AdvancedThemeService {
         manifest['launchImageGallery'],
         isLaunchGallery: true,
       );
+      if (launchImageGalleryId == null &&
+          importedTheme.launchImageGalleryId?.trim() ==
+              defaultLaunchImageGalleryId) {
+        launchImageGalleryId = defaultLaunchImageGalleryId;
+      }
       bottomNavGalleryId = await _importBottomNavGalleryFromBundle(
         archive,
         manifest['bottomNavGallery'],
@@ -921,7 +942,7 @@ class AdvancedThemeService {
         clearReaderFontFamilyKey:
             importedFonts.hasManifest &&
             importedFonts.readerFontFamilyKey == null,
-        importFingerprint: fingerprint,
+        importFingerprint: importFingerprint,
       );
       return saveTheme(theme);
     } catch (_) {
@@ -1421,6 +1442,11 @@ class AdvancedThemeService {
     return crypto.sha256.convert(bytes).toString();
   }
 
+  Future<String> _computeImportFingerprintForFile(File file) async {
+    final digest = await crypto.sha256.bind(file.openRead()).first;
+    return digest.toString();
+  }
+
   Future<void> _ensureImportFingerprintAvailable(String fingerprint) async {
     if (fingerprint.trim().isEmpty) {
       return;
@@ -1536,6 +1562,15 @@ class AdvancedThemeService {
 
   Archive _decodeZipArchiveBytes(List<int> bytes) {
     return ZipDecoder().decodeBytes(bytes, verify: true);
+  }
+
+  Archive _decodeZipArchiveFile(String path) {
+    final input = InputFileStream(path);
+    try {
+      return ZipDecoder().decodeStream(input, verify: true);
+    } finally {
+      input.close();
+    }
   }
 
   Archive _decodeRedThemeArchiveBytes(List<int> bytes) {

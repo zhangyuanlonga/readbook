@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/app_empty_state_card.dart';
@@ -155,6 +157,94 @@ class ImageResourceSelectionBadge extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+    );
+  }
+}
+
+class LazyFileImage extends StatelessWidget {
+  const LazyFileImage({
+    super.key,
+    required this.path,
+    this.fit = BoxFit.cover,
+    this.borderRadius,
+    this.cacheWidth = 360,
+    this.cacheHeight,
+    this.placeholderIcon = Icons.image_outlined,
+  });
+
+  final String path;
+  final BoxFit fit;
+  final BorderRadius? borderRadius;
+  final int cacheWidth;
+  final int? cacheHeight;
+  final IconData placeholderIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final image = Image.file(
+      File(path),
+      fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      cacheWidth: cacheWidth,
+      cacheHeight: cacheHeight,
+      frameBuilder:
+          (context, child, frame, wasSynchronouslyLoaded) =>
+              wasSynchronouslyLoaded || frame != null
+                  ? child
+                  : _ImageResourcePlaceholder(icon: placeholderIcon),
+      errorBuilder:
+          (_, __, ___) => ColoredBox(
+            color: colorScheme.surfaceContainerLow,
+            child: Icon(placeholderIcon, color: colorScheme.onSurfaceVariant),
+          ),
+    );
+    if (path.trim().startsWith('assets/')) {
+      return _clipIfNeeded(
+        Image.asset(
+          path,
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          cacheWidth: cacheWidth,
+          cacheHeight: cacheHeight,
+          errorBuilder:
+              (_, __, ___) => ColoredBox(
+                color: colorScheme.surfaceContainerLow,
+                child: Icon(
+                  placeholderIcon,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+        ),
+      );
+    }
+    return _clipIfNeeded(image);
+  }
+
+  Widget _clipIfNeeded(Widget child) {
+    final radius = borderRadius;
+    if (radius == null) {
+      return child;
+    }
+    return ClipRRect(borderRadius: radius, child: child);
+  }
+}
+
+class _ImageResourcePlaceholder extends StatelessWidget {
+  const _ImageResourcePlaceholder({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colorScheme.surfaceContainerLow,
+      child: Center(
+        child: Icon(icon, size: 22, color: colorScheme.onSurfaceVariant),
+      ),
     );
   }
 }

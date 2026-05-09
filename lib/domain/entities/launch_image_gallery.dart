@@ -5,6 +5,9 @@ class LaunchImageGallery {
     required this.createdAt,
     required this.updatedAt,
     required this.imagePaths,
+    this.isBuiltIn = false,
+    this.isEditable = true,
+    this.isDeletable = true,
   });
 
   final String id;
@@ -12,6 +15,9 @@ class LaunchImageGallery {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<String> imagePaths;
+  final bool isBuiltIn;
+  final bool isEditable;
+  final bool isDeletable;
 
   Map<String, dynamic> toJson() {
     return {
@@ -20,6 +26,9 @@ class LaunchImageGallery {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'imagePaths': imagePaths,
+      'isBuiltIn': isBuiltIn,
+      'isEditable': isEditable,
+      'isDeletable': isDeletable,
     };
   }
 
@@ -47,6 +56,9 @@ class LaunchImageGallery {
       createdAt: _readDateTime(json, 'createdAt'),
       updatedAt: _readDateTime(json, 'updatedAt'),
       imagePaths: imagePaths,
+      isBuiltIn: _readBool(json, 'isBuiltIn') ?? false,
+      isEditable: _readBool(json, 'isEditable') ?? true,
+      isDeletable: _readBool(json, 'isDeletable') ?? true,
     );
   }
 
@@ -56,6 +68,9 @@ class LaunchImageGallery {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<String>? imagePaths,
+    bool? isBuiltIn,
+    bool? isEditable,
+    bool? isDeletable,
   }) {
     return LaunchImageGallery(
       id: id ?? this.id,
@@ -63,7 +78,28 @@ class LaunchImageGallery {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       imagePaths: imagePaths ?? this.imagePaths,
+      isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+      isEditable: isEditable ?? this.isEditable,
+      isDeletable: isDeletable ?? this.isDeletable,
     );
+  }
+
+  static bool? _readBool(Map<String, dynamic> json, String key) {
+    final raw = json[key];
+    if (raw == null) {
+      return null;
+    }
+    if (raw is bool) {
+      return raw;
+    }
+    final normalized = raw.toString().trim().toLowerCase();
+    if (normalized == 'true') {
+      return true;
+    }
+    if (normalized == 'false') {
+      return false;
+    }
+    return null;
   }
 
   static DateTime _readDateTime(Map<String, dynamic> json, String key) {

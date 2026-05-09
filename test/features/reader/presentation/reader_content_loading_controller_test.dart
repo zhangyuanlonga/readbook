@@ -150,6 +150,34 @@ void main() {
       expect(seeded.single.isCached, isTrue);
     });
 
+    test('seeds continuous text flow for EPUB text with inline image', () {
+      final document = ReaderDocument.fromContent(
+        content:
+            '第一段\n\n${ReaderDocument.inlineImageParagraph('file:///cover.jpg')}\n\n第二段',
+      );
+      final contentState = controller.buildResolvedContent(
+        content: document.compatibilityContent,
+        document: document,
+      );
+
+      final seeded = controller.seedContinuousTextFlow(
+        shouldUseContinuousTextFlow: true,
+        isMangaChapter: false,
+        currentContent: contentState.content,
+        currentChapterIndex: 0,
+        chapters: chapters,
+        currentChapterId: 'chapter-1',
+        currentChapterUrl: 'chapter://1',
+        currentChapterTitle: '第一章',
+        contentState: contentState,
+        isCurrentChapterCached: true,
+      );
+
+      expect(seeded, hasLength(1));
+      expect(seeded.single.document.hasImageBlocks, isTrue);
+      expect(seeded.single.paragraphs, hasLength(3));
+    });
+
     test(
       'skips unreadable chapters when resolving adjacent continuous chapter',
       () {

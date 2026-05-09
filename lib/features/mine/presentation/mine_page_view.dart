@@ -207,7 +207,7 @@ extension on _MinePageState {
           palette: palette,
           icon: Icons.auto_awesome_outlined,
           label: '灵感',
-          onTap: () => context.push('/bookmarks'),
+          onTap: _pushMineRouteAction('/bookmarks'),
         ),
     ];
 
@@ -252,7 +252,7 @@ extension on _MinePageState {
           subtitle:
               '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
           colorDot: seedColor,
-          onTap: () => context.push('/appearance?section=appearance'),
+          onTap: _pushMineRouteAction('/appearance?section=appearance'),
         ),
       );
     }
@@ -288,7 +288,7 @@ extension on _MinePageState {
             loading: () => null,
             error: (_, _) => null,
           ),
-          onTap: () => context.push('/bottom-nav-icon-galleries'),
+          onTap: _pushMineRouteAction('/bottom-nav-icon-galleries'),
         ),
       );
     }
@@ -297,7 +297,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.photo_library_outlined,
           label: '封面图集',
-          onTap: () => context.push('/cover-galleries'),
+          onTap: _pushMineRouteAction('/cover-galleries'),
         ),
       );
     }
@@ -306,7 +306,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.wallpaper_outlined,
           label: '应用背景',
-          onTap: () => context.push('/appearance?section=background'),
+          onTap: _pushMineRouteAction('/appearance?section=background'),
         ),
       );
     }
@@ -315,7 +315,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.auto_stories_outlined,
           label: '阅读背景',
-          onTap: () => context.push('/appearance/reader-background'),
+          onTap: _pushMineRouteAction('/appearance/reader-background'),
         ),
       );
     }
@@ -340,7 +340,7 @@ extension on _MinePageState {
             loading: () => null,
             error: (_, _) => null,
           ),
-          onTap: () => context.push('/appearance/launch-image'),
+          onTap: _pushMineRouteAction('/appearance/launch-image'),
         ),
       );
     }
@@ -358,7 +358,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.sell_outlined,
           label: '标签管理',
-          onTap: () => context.push('/mine/tags'),
+          onTap: _pushMineRouteAction('/mine/tags'),
         ),
       );
     }
@@ -367,7 +367,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.folder_copy_outlined,
           label: '分类管理',
-          onTap: () => context.push('/mine/categories'),
+          onTap: _pushMineRouteAction('/mine/categories'),
         ),
       );
     }
@@ -376,7 +376,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.rule_rounded,
           label: '分章规则',
-          onTap: () => context.push('/mine/chapter-rules'),
+          onTap: _pushMineRouteAction('/mine/chapter-rules'),
         ),
       );
     }
@@ -385,7 +385,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.cleaning_services_outlined,
           label: '正文净化',
-          onTap: () => context.push('/mine/content-cleanup'),
+          onTap: _pushMineRouteAction('/mine/content-cleanup'),
         ),
       );
     }
@@ -402,7 +402,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.font_download_outlined,
           label: '字体管理',
-          onTap: () => context.push('/font-management'),
+          onTap: _pushMineRouteAction('/font-management'),
         ),
       );
     }
@@ -411,7 +411,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.tune_rounded,
           label: '系统',
-          onTap: () => context.push('/system-settings'),
+          onTap: _pushMineRouteAction('/system-settings'),
         ),
       );
     }
@@ -432,7 +432,7 @@ extension on _MinePageState {
           icon: Icons.lan_outlined,
           label: '网页调试服务',
           subtitle: '为网站调试台提供局域网本地接口',
-          onTap: () => context.push('/mine/source-debug-service'),
+          onTap: _pushMineRouteAction('/mine/source-debug-service'),
         ),
       );
     }
@@ -442,7 +442,7 @@ extension on _MinePageState {
           icon: Icons.cloud_outlined,
           label: '存储管理',
           subtitle: '分类清理章节缓存、分页缓存、封面缓存等',
-          onTap: () => context.push('/cache'),
+          onTap: _pushMineRouteAction('/cache'),
         ),
       );
     }
@@ -459,7 +459,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.rate_review_outlined,
           label: '问题反馈',
-          onTap: () => context.push('/feedback'),
+          onTap: _pushMineRouteAction('/feedback'),
         ),
       );
     }
@@ -486,7 +486,7 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.info_outline,
           label: '关于我们',
-          onTap: () => context.push('/about'),
+          onTap: _pushMineRouteAction('/about'),
         ),
       );
     }

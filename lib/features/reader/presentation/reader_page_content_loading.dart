@@ -219,18 +219,33 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     );
   }
 
-  Future<void> _loadAdjacentContinuousTextChapterFlow({
+  Future<_ContinuousTextChapter?> _loadAdjacentContinuousTextChapterFlow({
     required bool forward,
   }) async {
     if (_isScrollEdgeAdvancingChapter ||
         !_shouldUseContinuousTextFlow ||
         _continuousTextChapters.isEmpty) {
-      return;
+      return null;
     }
 
     _continuousTextChapters = _retainContinuousTextWindowFlow(
       _continuousTextChapters,
     );
+    final plan = _chapterWindowController.buildWindowPlan(
+      chapters: _chapters,
+      currentChapterIndex: _currentIndex,
+    );
+    final adjacentIndex =
+        forward ? plan?.nextChapterIndex : plan?.previousChapterIndex;
+    if (adjacentIndex == null) {
+      return null;
+    }
+    for (final chapter in _continuousTextChapters) {
+      if (chapter.chapterIndex == adjacentIndex) {
+        return chapter;
+      }
+    }
+
     final targetIndex = _chapterWindowController.resolveAdjacentLoadIndex(
       chapters: _chapters,
       loadedChapterIndices: _continuousTextChapters.map(
@@ -239,26 +254,27 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       currentChapterIndex: _currentIndex,
       forward: forward,
     );
-    if (targetIndex == null) {
-      return;
+    if (targetIndex == null || targetIndex != adjacentIndex) {
+      return null;
     }
 
     _isScrollEdgeAdvancingChapter = true;
     try {
       final chapter = await _loadContinuousTextChapterFlow(targetIndex);
       if (!mounted || chapter == null) {
-        return;
+        return null;
       }
       if (_continuousTextChapters.any(
         (item) => item.chapterIndex == chapter.chapterIndex,
       )) {
-        return;
+        return chapter;
       }
       _updateReaderState(() {
         _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
           chapter,
         );
       });
+      return chapter;
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
@@ -400,6 +416,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     if (!mounted) {
       return;
     }
+    final preserveOffset =
+        _scrollController.hasClients ? _scrollController.position.pixels : null;
 
     _updateReaderState(() {
       _currentIndex = activation.chapterIndex;
@@ -407,18 +425,46 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _chapterUrl = activation.chapterUrl;
       _chapterTitle = activation.chapterTitle;
       _isCurrentChapterCached = activation.isCached;
-      _setContentFlow(
-        activation.contentState.content,
-        imageUrls: activation.contentState.chapterImageUrls,
-        imageHeaders: activation.contentState.imageHeaders,
-        document: activation.contentState.document,
-        precomputedParagraphs: activation.contentState.paragraphs,
-        precomputedPagedPages: activation.contentState.pagedPages,
-        precomputedCurrentPageIndex: activation.contentState.currentPageIndex,
-        precomputedPaginationSignature:
-            activation.contentState.paginationState.signature,
-      );
+      _document = activation.contentState.document;
+      _content = activation.contentState.content;
+      _chapterImageUrls = activation.contentState.chapterImageUrls;
+      _chapterImageHeaders = activation.contentState.imageHeaders;
+      _paragraphs = activation.contentState.paragraphs;
+      _renderItems = activation.contentState.renderItems;
+      _renderTextItemsByParagraph =
+          activation.contentState.renderTextItemsByParagraph;
+      _pagedPages = activation.contentState.pagedPages;
+      _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+      _currentPageIndex = activation.contentState.currentPageIndex;
+      _pagedPaginationState = activation.contentState.paginationState;
+      _isTextSelectionActive = false;
+      _selectionRange = null;
+      _selectionStatus = SelectionStatus.none;
+      _selectionStartOffset = 0;
+      _selectionEndOffset = 0;
+      _selectedSnippet = '';
+      _hideBookmarkToolbar();
+      _chapterBookmarks = const <Bookmark>[];
+      _bookmarkRangesByParagraph = const <int, List<_BookmarkRange>>{};
+      _resetCatalogSearchCache();
+      _resetScrollEdgeAdvanceState();
     });
+    if (preserveOffset != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        final position = _scrollController.position;
+        final stableOffset = preserveOffset.clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+        if ((position.pixels - stableOffset).abs() > 0.5) {
+          _scrollController.jumpTo(stableOffset);
+        }
+      });
+    }
+    unawaited(_refreshChapterBookmarks());
 
     _scheduleReadingRecordSessionStart(initialRatio: activation.initialRatio);
     _scheduleProgressSave();
@@ -678,8 +724,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           );
           if (resolvedCurrentChapter != null &&
               _shouldUseContinuousTextFlow &&
-              chapter.imageUrls.isEmpty &&
-              chapter.content.trim().isNotEmpty) {
+              !_document.isPureImageDocument &&
+              _document.paragraphs.isNotEmpty) {
             _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
               _ContinuousTextChapter(
                 chapterId: chapter.id,
@@ -692,7 +738,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
                 document: _document,
                 paragraphs:
                     _paragraphs.isEmpty
-                        ? List<String>.unmodifiable(<String>[chapter.content])
+                        ? List<String>.unmodifiable(_document.paragraphs)
                         : List<String>.unmodifiable(_paragraphs),
                 isCached: true,
               ),
@@ -755,8 +801,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         previewRatio = _resolveDocumentRestoreRatio(progress: previewProgress);
         if (resolvedCurrentChapter != null &&
             _shouldUseContinuousTextFlow &&
-            decoded.imageUrls.isEmpty &&
-            decoded.content.trim().isNotEmpty) {
+            !_document.isPureImageDocument &&
+            _document.paragraphs.isNotEmpty) {
           _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
             _ContinuousTextChapter(
               chapterId: _chapterId,
@@ -769,7 +815,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
               document: _document,
               paragraphs:
                   _paragraphs.isEmpty
-                      ? List<String>.unmodifiable(<String>[decoded.content])
+                      ? List<String>.unmodifiable(_document.paragraphs)
                       : List<String>.unmodifiable(_paragraphs),
               isCached: true,
             ),

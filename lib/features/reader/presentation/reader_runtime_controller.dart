@@ -12,6 +12,8 @@ enum ReaderRuntimeViewportKind {
   mangaContinuous,
 }
 
+enum ReaderScrollEdgeAction { none, refreshCurrent, nextChapter }
+
 class ReaderRuntimeController {
   const ReaderRuntimeController();
 
@@ -112,6 +114,38 @@ class ReaderRuntimeController {
       return null;
     }
     return Timer(interval, onAutoCommit);
+  }
+
+  ReaderScrollEdgeAction resolveScrollEdgeDragEndAction({
+    required bool isArmed,
+    required int armedActionDirection,
+    required bool atTop,
+    required bool atBottom,
+    required bool isDragEnd,
+    required double velocityDy,
+    double velocityThreshold = 36,
+  }) {
+    if (isArmed) {
+      if (armedActionDirection > 0 && atBottom) {
+        return ReaderScrollEdgeAction.nextChapter;
+      }
+      if (armedActionDirection < 0 && atTop) {
+        return ReaderScrollEdgeAction.refreshCurrent;
+      }
+      return ReaderScrollEdgeAction.none;
+    }
+
+    if (!isDragEnd) {
+      return ReaderScrollEdgeAction.none;
+    }
+
+    if (atBottom && velocityDy <= velocityThreshold) {
+      return ReaderScrollEdgeAction.nextChapter;
+    }
+    if (atTop && velocityDy >= -velocityThreshold) {
+      return ReaderScrollEdgeAction.refreshCurrent;
+    }
+    return ReaderScrollEdgeAction.none;
   }
 
   Future<void> reconcileAutoRead({

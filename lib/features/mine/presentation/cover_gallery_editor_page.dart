@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -317,7 +315,11 @@ class _CoverGalleryEditorPageState
                     child: InteractiveViewer(
                       minScale: 0.8,
                       maxScale: 4,
-                      child: Image.file(File(path), fit: BoxFit.contain),
+                      child: LazyFileImage(
+                        path: path,
+                        fit: BoxFit.contain,
+                        cacheWidth: 1080,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -502,6 +504,8 @@ class _CoverGalleryEditorPageState
                                 spacing: metrics.contentGap,
                               );
                               return GridView.builder(
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
                                 padding: EdgeInsets.fromLTRB(
                                   horizontal,
                                   metrics.contentGap,
@@ -530,21 +534,15 @@ class _CoverGalleryEditorPageState
                                     child: Stack(
                                       children: [
                                         Positioned.fill(
-                                          child: ClipRRect(
+                                          child: LazyFileImage(
+                                            path: path,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 360,
                                             borderRadius: BorderRadius.circular(
                                               12,
                                             ),
-                                            child: Image.file(
-                                              File(path),
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (_, __, ___) => Container(
-                                                    color:
-                                                        Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainerLow,
-                                                  ),
-                                            ),
+                                            placeholderIcon:
+                                                Icons.broken_image_outlined,
                                           ),
                                         ),
                                         Positioned(

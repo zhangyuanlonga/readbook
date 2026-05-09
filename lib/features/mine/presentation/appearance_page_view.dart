@@ -334,74 +334,88 @@ extension on _AppearancePageState {
       icon: Icons.palette_outlined,
       title: '颜色',
       subtitle: '应用主色与强调色。',
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: appThemeSeedOptions
-            .map((option) {
-              final selected =
-                  option.color.toARGB32() == selectedSeedColor.toARGB32();
-              return GestureDetector(
-                onTap: () {
-                  if (selected) return;
-                  unawaited(
-                    ref
-                        .read(appSeedColorProvider.notifier)
-                        .setSeedColor(option.color),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            for (
+              var index = 0;
+              index < appThemeSeedOptions.length;
+              index++
+            ) ...[
+              Builder(
+                builder: (context) {
+                  final option = appThemeSeedOptions[index];
+                  final selected =
+                      option.color.toARGB32() == selectedSeedColor.toARGB32();
+                  return GestureDetector(
+                    onTap: () {
+                      if (selected) return;
+                      unawaited(
+                        ref
+                            .read(appSeedColorProvider.notifier)
+                            .setSeedColor(option.color),
+                      );
+                    },
+                    child: Tooltip(
+                      message: option.label,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: option.color,
+                          shape: BoxShape.circle,
+                          border:
+                              selected
+                                  ? Border.all(
+                                    color: colorScheme.primary,
+                                    width: 2.5,
+                                    strokeAlign: BorderSide.strokeAlignOutside,
+                                  )
+                                  : Border.all(
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.4),
+                                    width: 0.5,
+                                  ),
+                          boxShadow:
+                              selected
+                                  ? [
+                                    BoxShadow(
+                                      color: option.color.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                  : null,
+                        ),
+                        child:
+                            selected
+                                ? Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color:
+                                      ThemeData.estimateBrightnessForColor(
+                                                option.color,
+                                              ) ==
+                                              Brightness.dark
+                                          ? Colors.white
+                                          : Colors.black.withValues(alpha: 0.7),
+                                )
+                                : null,
+                      ),
+                    ),
                   );
                 },
-                child: Tooltip(
-                  message: option.label,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: option.color,
-                      shape: BoxShape.circle,
-                      border:
-                          selected
-                              ? Border.all(
-                                color: colorScheme.primary,
-                                width: 2.5,
-                                strokeAlign: BorderSide.strokeAlignOutside,
-                              )
-                              : Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.4,
-                                ),
-                                width: 0.5,
-                              ),
-                      boxShadow:
-                          selected
-                              ? [
-                                BoxShadow(
-                                  color: option.color.withValues(alpha: 0.4),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                              : null,
-                    ),
-                    child:
-                        selected
-                            ? Icon(
-                              Icons.check_rounded,
-                              size: 16,
-                              color:
-                                  ThemeData.estimateBrightnessForColor(
-                                            option.color,
-                                          ) ==
-                                          Brightness.dark
-                                      ? Colors.white
-                                      : Colors.black.withValues(alpha: 0.7),
-                            )
-                            : null,
-                  ),
-                ),
-              );
-            })
-            .toList(growable: false),
+              ),
+              if (index < appThemeSeedOptions.length - 1)
+                const SizedBox(width: 10),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -929,9 +943,6 @@ extension on _AppearancePageState {
             builder: (context, constraints) {
               const spacing = 8.0;
               const columns = 3;
-              final itemWidth =
-                  (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
               if (_visibleBackgroundPaths.isEmpty) {
                 return const SizedBox(
                   width: double.infinity,
@@ -943,40 +954,46 @@ extension on _AppearancePageState {
                 );
               }
 
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: _visibleBackgroundPaths
-                    .map((path) {
-                      return GestureDetector(
-                        onTap: () => _previewBackground(path),
-                        onLongPress: () => _confirmDeleteBackground(path),
-                        child: Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: SizedBox(
-                                width: itemWidth,
-                                height: itemWidth * 1.28,
-                                child: Image.file(
-                                  File(path),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: 6,
-                              top: 6,
-                              child: const ImageResourceCornerHint(
-                                label: '长按删除',
-                                icon: Icons.delete_outline,
-                              ),
-                            ),
-                          ],
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                addAutomaticKeepAlives: false,
+                addRepaintBoundaries: true,
+                itemCount: _visibleBackgroundPaths.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                  childAspectRatio: 1 / 1.28,
+                ),
+                itemBuilder: (context, index) {
+                  final path = _visibleBackgroundPaths[index];
+                  return GestureDetector(
+                    onTap: () => _previewBackground(path),
+                    onLongPress: () => _confirmDeleteBackground(path),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: LazyFileImage(
+                            path: path,
+                            fit: BoxFit.cover,
+                            cacheWidth: 420,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                      );
-                    })
-                    .toList(growable: false),
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: const ImageResourceCornerHint(
+                            label: '长按删除',
+                            icon: Icons.delete_outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               );
             },
           ),

@@ -33,7 +33,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
 
-  bool _isLoading = true;
   String? _errorText;
   List<Bookmark> _bookmarks = const [];
   Map<String, BookshelfBook> _bookshelfIndex = const <String, BookshelfBook>{};
@@ -52,7 +51,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       return;
     }
     setState(() {
-      _isLoading = true;
       _errorText = null;
     });
 
@@ -75,12 +73,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       setState(() {
         _errorText = '灵感加载失败，请稍后重试。';
       });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
 
@@ -161,15 +153,6 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     required double topInset,
     required double bottomSafe,
   }) {
-    if (_isLoading) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomSafe),
-          child: const CircularProgressIndicator(),
-        ),
-      );
-    }
-
     final errorText = _errorText;
     if (errorText != null && errorText.isNotEmpty) {
       return _buildStatusBody(

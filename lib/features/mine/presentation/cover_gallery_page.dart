@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,8 +61,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
       if (!mounted) {
         return;
       }
-      await context.push('/cover-galleries/editor?id=${gallery.id}');
-      await _load();
+      await _pushMineRoute('/cover-galleries/editor?id=${gallery.id}');
     } finally {
       if (mounted) {
         setState(() {
@@ -75,7 +72,14 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
   }
 
   Future<void> _openGalleryEditor(CoverGallery gallery) async {
-    await context.push('/cover-galleries/editor?id=${gallery.id}');
+    await _pushMineRoute('/cover-galleries/editor?id=${gallery.id}');
+  }
+
+  Future<void> _pushMineRoute(String route) async {
+    await context.push(route);
+    if (!mounted) {
+      return;
+    }
     await _load();
   }
 
@@ -149,7 +153,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                               key: ValueKey('cover_gallery_loading'),
                               child: CircularProgressIndicator(),
                             )
-                            : ListView(
+                            : ListView.builder(
                               key: const ValueKey('cover_gallery_content'),
                               padding: EdgeInsets.fromLTRB(
                                 horizontal,
@@ -157,48 +161,54 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                                 horizontal,
                                 metrics.sectionGap + bottomSafe,
                               ),
-                              children: [
-                                AppFadeSlideTransition(
-                                  child: CompactCollectionSearchField(
-                                    controller: _searchController,
-                                    hintText: '搜索封面图集',
-                                    query: _searchQuery,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                    onClear: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _searchQuery = '';
-                                      });
-                                    },
-                                  ),
-                                ),
-                                SizedBox(height: metrics.contentGap),
-                                if (_visibleGalleries.isEmpty)
-                                  AppAnimatedSwitcher(
+                              itemCount:
+                                  _visibleGalleries.isEmpty
+                                      ? 2
+                                      : _visibleGalleries.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == 0) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: metrics.contentGap,
+                                    ),
+                                    child: AppFadeSlideTransition(
+                                      child: CompactCollectionSearchField(
+                                        controller: _searchController,
+                                        hintText: '搜索封面图集',
+                                        query: _searchQuery,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _searchQuery = value;
+                                          });
+                                        },
+                                        onClear: () {
+                                          _searchController.clear();
+                                          setState(() {
+                                            _searchQuery = '';
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                }
+                                if (_visibleGalleries.isEmpty) {
+                                  return AppAnimatedSwitcher(
                                     child: KeyedSubtree(
                                       key: const ValueKey(
                                         'cover_gallery_empty',
                                       ),
                                       child: _buildEmptyState(context),
                                     ),
-                                  )
-                                else
-                                  ..._visibleGalleries.map(
-                                    (gallery) => Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom: metrics.contentGap,
-                                      ),
-                                      child: _buildGalleryCard(
-                                        context,
-                                        gallery,
-                                      ),
-                                    ),
+                                  );
+                                }
+                                final gallery = _visibleGalleries[index - 1];
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: metrics.contentGap,
                                   ),
-                              ],
+                                  child: _buildGalleryCard(context, gallery),
+                                );
+                              },
                             ),
                   ),
                 ),
@@ -220,7 +230,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
 
   Widget _buildGalleryCard(BuildContext context, CoverGallery gallery) {
     final colorScheme = Theme.of(context).colorScheme;
-    const previewCount = 5;
+    const previewCount = 4;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: () => _openGalleryEditor(gallery),
@@ -260,9 +270,10 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 62,
+            AspectRatio(
+              aspectRatio: 3.1,
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(previewCount, (index) {
                   final path =
                       index < gallery.imagePaths.length
@@ -283,24 +294,11 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                             ),
                           ),
                         ),
-                        child:
-                            path != null
-                                ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    File(path),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (_, __, ___) => Icon(
-                                          Icons.broken_image_outlined,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                                )
-                                : Icon(
-                                  Icons.image_outlined,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                        child: _buildPreviewSlot(
+                          context,
+                          path: path,
+                          cacheWidth: 280,
+                        ),
                       ),
                     ),
                   );
@@ -310,6 +308,33 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPreviewSlot(
+    BuildContext context, {
+    required String? path,
+    required int cacheWidth,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (path == null) {
+      return ColoredBox(
+        color: colorScheme.surfaceContainerLow,
+        child: Center(
+          child: Icon(
+            Icons.image_outlined,
+            size: 24,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return LazyFileImage(
+      path: path,
+      fit: BoxFit.cover,
+      cacheWidth: cacheWidth,
+      borderRadius: BorderRadius.circular(10),
+      placeholderIcon: Icons.broken_image_outlined,
     );
   }
 }

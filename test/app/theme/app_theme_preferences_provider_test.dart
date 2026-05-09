@@ -31,6 +31,13 @@ void main() {
     expect(prefs.getString('app.themeMode'), 'dark');
   });
 
+  test('theme mode defaults to following system when unset', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(container.read(appThemeModeProvider), ThemeMode.system);
+  });
+
   test('seed color persists through app seed color provider', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);

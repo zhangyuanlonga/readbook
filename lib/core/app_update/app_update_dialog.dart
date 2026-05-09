@@ -86,67 +86,115 @@ class AppUpdateDialog {
         (release.versionCode != null ? '版本 ${release.versionCode}' : '新版本');
     final changelog = release.changelog?.trim();
 
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
-      barrierDismissible: !forceUpdate,
-      builder: (dialogContext) {
+      useRootNavigator: true,
+      useSafeArea: true,
+      showDragHandle: !forceUpdate,
+      isDismissible: !forceUpdate,
+      enableDrag: !forceUpdate,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+        final bottomInset = MediaQuery.viewPaddingOf(sheetContext).bottom;
         return PopScope(
           canPop: !forceUpdate,
-          child: AlertDialog(
-            title: const Text('发现新版本'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(versionLabel),
-                if (forceUpdate) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    '本次更新为强制更新，请尽快升级。',
-                    style: Theme.of(
-                      dialogContext,
-                    ).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(dialogContext).colorScheme.error,
-                    ),
-                  ),
-                ],
-                if (changelog != null && changelog.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    changelog,
-                    style: Theme.of(
-                      dialogContext,
-                    ).textTheme.bodySmall?.copyWith(height: 1.4),
-                  ),
-                ],
-                if (url == null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    '暂无可用更新链接，请稍后再试。',
-                    style: Theme.of(
-                      dialogContext,
-                    ).textTheme.bodySmall?.copyWith(
-                      color:
-                          Theme.of(dialogContext).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              if (!forceUpdate)
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('稍后'),
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottomInset),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.76,
                 ),
-              FilledButton(
-                onPressed:
-                    url == null
-                        ? null
-                        : () => openUpdateUrl(dialogContext, url),
-                child: const Text('前往更新'),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.system_update_alt_rounded,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '发现新版本',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      versionLabel,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (forceUpdate) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '本次更新为强制更新，请尽快升级。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    if (changelog != null && changelog.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Text(
+                            changelog,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              height: 1.42,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (url == null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '暂无可用更新链接，请稍后再试。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        if (!forceUpdate) ...[
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(sheetContext).pop(),
+                              child: const Text('稍后'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: FilledButton(
+                            onPressed:
+                                url == null
+                                    ? null
+                                    : () => openUpdateUrl(sheetContext, url),
+                            child: const Text('前往更新'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         );
       },

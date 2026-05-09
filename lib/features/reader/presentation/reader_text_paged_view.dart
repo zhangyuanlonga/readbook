@@ -176,7 +176,7 @@ class ReaderPagedResolvedSlice {
   final double measuredHeight;
 }
 
-class ReaderTextPagedView extends StatelessWidget {
+class ReaderTextPagedView extends StatefulWidget {
   const ReaderTextPagedView({
     super.key,
     required this.model,
@@ -207,62 +207,157 @@ class ReaderTextPagedView extends StatelessWidget {
   final Widget? content;
 
   @override
-  Widget build(BuildContext context) {
-    if (content != null) {
-      return content!;
+  State<ReaderTextPagedView> createState() => _ReaderTextPagedViewState();
+}
+
+class _ReaderTextPagedViewState extends State<ReaderTextPagedView> {
+  PageController? _ownedPageController;
+  int? _pendingJumpPage;
+
+  ReaderTextPagedViewModel get model => widget.model;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncOwnedPageController();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReaderTextPagedView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncOwnedPageController();
+  }
+
+  @override
+  void dispose() {
+    _ownedPageController?.dispose();
+    super.dispose();
+  }
+
+  int get _effectivePageCount =>
+      model.pagedBlockPages.isNotEmpty
+          ? model.pagedBlockPages.length
+          : model.pagedPages.isNotEmpty
+          ? model.pagedPages.length
+          : model.pageCount;
+
+  int _safeCurrentPageIndex(int effectivePageCount) {
+    return model.currentPageIndex.clamp(0, effectivePageCount - 1);
+  }
+
+  void _syncOwnedPageController() {
+    if (widget.content != null || widget.pageController != null) {
+      _ownedPageController?.dispose();
+      _ownedPageController = null;
+      return;
     }
 
-    final effectivePageCount =
-        model.pagedBlockPages.isNotEmpty
-            ? model.pagedBlockPages.length
-            : model.pagedPages.isNotEmpty
-            ? model.pagedPages.length
-            : model.pageCount;
+    final effectivePageCount = _effectivePageCount;
     if (effectivePageCount <= 0) {
-      return emptyBuilder?.call(context, model) ?? _buildDefaultEmptyState();
+      _ownedPageController?.dispose();
+      _ownedPageController = null;
+      return;
     }
 
-    final safeInitialPage = model.currentPageIndex.clamp(
-      0,
-      effectivePageCount - 1,
-    );
-    final controller =
-        pageController ?? PageController(initialPage: safeInitialPage);
+    final safePage = _safeCurrentPageIndex(effectivePageCount);
+    final controller = _ownedPageController;
+    if (controller == null) {
+      _ownedPageController = PageController(initialPage: safePage);
+      return;
+    }
+    if (!controller.hasClients) {
+      return;
+    }
+
+    final currentPage = controller.page?.round() ?? controller.initialPage;
+    if (currentPage != safePage) {
+      _scheduleJumpToPage(safePage);
+    }
+  }
+
+  void _scheduleJumpToPage(int pageIndex) {
+    if (_pendingJumpPage == pageIndex) {
+      return;
+    }
+    _pendingJumpPage = pageIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final target = _pendingJumpPage;
+      _pendingJumpPage = null;
+      final controller = _ownedPageController;
+      if (target == null || controller == null || !controller.hasClients) {
+        return;
+      }
+      final effectivePageCount = _effectivePageCount;
+      if (effectivePageCount <= 0) {
+        return;
+      }
+      final safeTarget = target.clamp(0, effectivePageCount - 1);
+      final currentPage = controller.page?.round() ?? controller.initialPage;
+      if (currentPage != safeTarget) {
+        controller.jumpToPage(safeTarget);
+      }
+    });
+  }
+
+  void _notifyPageChanged(int pageIndex, int pageCount) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.onPageChanged?.call(pageIndex);
+      widget.onVisiblePositionChanged?.call(
+        ReaderVisiblePosition(pageIndex: pageIndex, pageCount: pageCount),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.content != null) {
+      return widget.content!;
+    }
+
+    final effectivePageCount = _effectivePageCount;
+    if (effectivePageCount <= 0) {
+      return widget.emptyBuilder?.call(context, model) ??
+          _buildDefaultEmptyState();
+    }
+
+    final controller = widget.pageController ?? _ownedPageController;
 
     return PageView.builder(
       controller: controller,
-      physics: physics,
+      physics: widget.physics,
       itemCount: effectivePageCount,
       onPageChanged: (pageIndex) {
-        onPageChanged?.call(pageIndex);
-        onVisiblePositionChanged?.call(
-          ReaderVisiblePosition(
-            pageIndex: pageIndex,
-            pageCount: effectivePageCount,
-          ),
-        );
+        _notifyPageChanged(pageIndex, effectivePageCount);
       },
       itemBuilder: (context, index) {
         final pageChild = _buildPageChild(context, index);
-        return pageFrameBuilder?.call(context, model, index, pageChild) ??
+        return widget.pageFrameBuilder?.call(
+              context,
+              model,
+              index,
+              pageChild,
+            ) ??
             pageChild;
       },
     );
   }
 
   Widget _buildPageChild(BuildContext context, int pageIndex) {
-    if (pageBuilder != null) {
-      return Padding(
-        padding: model.pagePadding ?? model.surfaceMetrics.effectivePagePadding,
-        child: pageBuilder!(context, pageIndex),
-      );
+    if (widget.pageBuilder != null) {
+      return widget.pageBuilder!(context, pageIndex);
     }
     return ReaderPagedPageContent(
       model: model,
       pageIndex: pageIndex,
-      resolvedPageBuilder: resolvedPageBuilder,
-      resolvedSliceBuilder: resolvedSliceBuilder,
-      sliceTextSpanBuilder: sliceTextSpanBuilder,
+      resolvedPageBuilder: widget.resolvedPageBuilder,
+      resolvedSliceBuilder: widget.resolvedSliceBuilder,
+      sliceTextSpanBuilder: widget.sliceTextSpanBuilder,
     ).maybeCachePage(
       enabled: model.enableLightweightRenderCache,
       pageIndex: pageIndex,

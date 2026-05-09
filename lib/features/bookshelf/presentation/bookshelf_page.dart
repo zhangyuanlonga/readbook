@@ -63,13 +63,7 @@ part 'bookshelf_page_selection.dart';
 
 enum _BookshelfFilter { all, local, novel, manga, custom }
 
-enum _BookshelfMoreAction {
-  selectBooks,
-  batchEditCover,
-  sortBooks,
-  settings,
-  importLocal,
-}
+enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
 
 enum _BookshelfSortMode {
   defaultOrder,
@@ -367,6 +361,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _gridShowAuthor = BookshelfService.defaultGridShowAuthor;
   bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
   bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
+  bool _gridShowSourceBadge = BookshelfService.defaultGridShowSourceBadge;
   bool _gridAlwaysShowSearchBar =
       BookshelfService.defaultGridAlwaysShowSearchBar;
   bool _gridPinSearchBar = BookshelfService.defaultGridPinSearchBar;
@@ -376,6 +371,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowAuthor = BookshelfService.defaultListShowAuthor;
   bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
+  bool _listShowSourceBadge = BookshelfService.defaultListShowSourceBadge;
   bool _listAlwaysShowSearchBar =
       BookshelfService.defaultListAlwaysShowSearchBar;
   bool _listPinSearchBar = BookshelfService.defaultListPinSearchBar;
@@ -388,6 +384,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _isBookshelfSearchExpanded = false;
   String? _openingBookId;
   String? _loadErrorText;
+  bool _isCoverRefreshActive = false;
   bool _isConsumingExternalImportPayloads = false;
   ImportExportTaskStatus? _taskStatus;
   _BookshelfSelectionState _selectionState = const _BookshelfSelectionState();
@@ -634,17 +631,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             Icon(Icons.checklist_rounded, size: 18),
                             SizedBox(width: 10),
                             Text('选择书籍'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<_BookshelfMoreAction>(
-                        value: _BookshelfMoreAction.batchEditCover,
-                        enabled: !_isLoading && _filteredBooks.isNotEmpty,
-                        child: const Row(
-                          children: [
-                            Icon(Icons.collections_outlined, size: 18),
-                            SizedBox(width: 10),
-                            Text('批量修改封面'),
                           ],
                         ),
                       ),
@@ -1042,7 +1028,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
-                                '修改封面',
+                                '封面',
                                 maxLines: 2,
                                 overflow: TextOverflow.visible,
                                 textAlign: TextAlign.center,
@@ -1274,11 +1260,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           },
                         ),
                       ),
-                      if (!_isSelectionMode)
+                      if (!_isSelectionMode && _gridShowSourceBadge)
                         Positioned(
                           top: 6,
                           right: 6,
                           child: _buildSourceBadge(book, compact: true),
+                        ),
+                      if (_isCoverRefreshActive)
+                        Positioned(
+                          left: 10,
+                          right: 10,
+                          bottom: 8,
+                          child: _buildCoverRefreshIndicator(),
                         ),
                       if (isOpening)
                         Positioned(
@@ -1533,11 +1526,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           height: 96,
                         ),
                       ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: _buildSourceBadge(book, compact: true),
-                      ),
+                      if (_listShowSourceBadge)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: _buildSourceBadge(book, compact: true),
+                        ),
+                      if (_isCoverRefreshActive)
+                        Positioned(
+                          left: 7,
+                          right: 7,
+                          bottom: 6,
+                          child: _buildCoverRefreshIndicator(),
+                        ),
                     ],
                   ),
                 ),
@@ -1710,6 +1711,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCoverRefreshIndicator() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: LinearProgressIndicator(
+        minHeight: 3,
+        backgroundColor: colorScheme.scrim.withValues(alpha: 0.28),
+        color: colorScheme.primary,
       ),
     );
   }
@@ -2498,11 +2511,23 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
     _lastBookshelfLoadRequestedAt = now;
 
+    final showCoverRefresh = force && _books.isNotEmpty;
+    if (showCoverRefresh) {
+      setState(() {
+        _isCoverRefreshActive = true;
+      });
+    }
+
     final task = _loadBookshelfCore();
     _activeBookshelfLoad = task;
     return task.whenComplete(() {
       if (identical(_activeBookshelfLoad, task)) {
         _activeBookshelfLoad = null;
+      }
+      if (showCoverRefresh && mounted) {
+        setState(() {
+          _isCoverRefreshActive = false;
+        });
       }
     });
   }
@@ -3115,6 +3140,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showLatestChapter =
         await _bookshelfService.loadListShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadListShowProgressBar();
+    final showSourceBadge = await _bookshelfService.loadListShowSourceBadge();
     final alwaysShowSearchBar =
         await _bookshelfService.loadListAlwaysShowSearchBar();
     final pinSearchBar = await _bookshelfService.loadListPinSearchBar();
@@ -3128,6 +3154,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowAuthor == showAuthor &&
         _listShowLatestChapter == showLatestChapter &&
         _listShowProgressBar == showProgressBar &&
+        _listShowSourceBadge == showSourceBadge &&
         _listAlwaysShowSearchBar == alwaysShowSearchBar &&
         _listPinSearchBar == pinSearchBar &&
         _listQuickFilterContent == quickFilterContent) {
@@ -3138,6 +3165,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowAuthor = showAuthor;
       _listShowLatestChapter = showLatestChapter;
       _listShowProgressBar = showProgressBar;
+      _listShowSourceBadge = showSourceBadge;
       _listAlwaysShowSearchBar = alwaysShowSearchBar;
       _listPinSearchBar = pinSearchBar;
       _listQuickFilterContent = quickFilterContent;
@@ -3166,6 +3194,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showLatestChapter =
         await _bookshelfService.loadGridShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadGridShowProgressBar();
+    final showSourceBadge = await _bookshelfService.loadGridShowSourceBadge();
     final alwaysShowSearchBar =
         await _bookshelfService.loadGridAlwaysShowSearchBar();
     final pinSearchBar = await _bookshelfService.loadGridPinSearchBar();
@@ -3183,6 +3212,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridShowAuthor == showAuthor &&
         _gridShowLatestChapter == showLatestChapter &&
         _gridShowProgressBar == showProgressBar &&
+        _gridShowSourceBadge == showSourceBadge &&
         _gridAlwaysShowSearchBar == alwaysShowSearchBar &&
         _gridPinSearchBar == pinSearchBar &&
         _gridQuickFilterContent == quickFilterContent) {
@@ -3197,6 +3227,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _gridShowAuthor = showAuthor;
       _gridShowLatestChapter = showLatestChapter;
       _gridShowProgressBar = showProgressBar;
+      _gridShowSourceBadge = showSourceBadge;
       _gridAlwaysShowSearchBar = alwaysShowSearchBar;
       _gridPinSearchBar = pinSearchBar;
       _gridQuickFilterContent = quickFilterContent;

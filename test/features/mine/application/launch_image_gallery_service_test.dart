@@ -30,10 +30,28 @@ void main() {
       await service.saveActiveGalleryId(gallery.id);
 
       final galleries = await service.loadGalleries();
-      expect(galleries, hasLength(1));
-      expect(galleries.first.name, '品牌启动图');
+      expect(
+        galleries.map((item) => item.id),
+        contains(defaultLaunchImageGalleryId),
+      );
+      final savedGallery = galleries.singleWhere(
+        (item) => item.id == gallery.id,
+      );
+      expect(savedGallery.name, '品牌启动图');
       expect(await service.loadActiveGalleryId(), gallery.id);
       expect((await service.loadActiveGallery())?.id, gallery.id);
+    });
+
+    test('loads built-in launch gallery by default', () async {
+      final service = LaunchImageGalleryService(
+        assetStore: await _createAssetStore(),
+      );
+
+      expect(await service.loadActiveGalleryId(), defaultLaunchImageGalleryId);
+      expect(
+        await service.loadActiveLaunchImagePath(),
+        'assets/branding/selune_launch_scene.png',
+      );
     });
 
     test('resolves first existing image path from active gallery', () async {

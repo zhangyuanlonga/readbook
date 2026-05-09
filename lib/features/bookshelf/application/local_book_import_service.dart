@@ -118,11 +118,18 @@ class LocalBookImportService {
     final splitLongChapterDefault =
         await _readerSystemSettingsService
             .loadLocalTxtSplitLongChapterEnabled();
-    final existingBook = await _findBySourcePath(normalizedPath);
-    final bookId = existingBook?.id ?? _buildBookId();
     final normalizedDisplayName = normalizeImportedDisplayName(
       displayName ?? p.basename(normalizedPath),
     );
+    final resolvedTitle = _resolveTitle(normalizedDisplayName);
+    final existingBook =
+        await _findBySourcePath(normalizedPath) ??
+        await _findByImportFingerprint(
+          format: format,
+          title: resolvedTitle,
+          sourceFileSize: sourceStat.size,
+        );
+    final bookId = existingBook?.id ?? _buildBookId();
     onProgress?.call(
       LocalBookImportProgress(
         stage: LocalBookImportStage.preparing,
@@ -146,6 +153,7 @@ class LocalBookImportService {
       existingBook: existingBook,
       bookId: bookId,
       storedStoragePath: storedStoragePath,
+      title: resolvedTitle,
     );
     await _persistImportedBook(prepared.localBook);
     await _bookshelfService.upsert(prepared.bookshelfBook);
@@ -275,6 +283,7 @@ class LocalBookImportService {
     required LocalBook? existingBook,
     required String bookId,
     required String storedStoragePath,
+    required String title,
   }) async {
     final resolvedStoragePath = await _localBookStorageService
         .resolveStoragePath(storedStoragePath);
@@ -296,7 +305,7 @@ class LocalBookImportService {
       sourceStat: sourceStat,
       storageStat: storageResult.storageStat,
       normalizedCharset: storageResult.normalizedCharset,
-      displayName: displayName,
+      title: title,
       splitLongChapterDefault: splitLongChapterDefault,
       now: now,
     );
@@ -317,13 +326,12 @@ class LocalBookImportService {
     required FileStat sourceStat,
     required FileStat storageStat,
     required String? normalizedCharset,
-    required String? displayName,
+    required String title,
     required bool splitLongChapterDefault,
     required DateTime now,
   }) {
     final recoverableSourcePath = _localBookStorageService
         .normalizeRecoverableSourcePath(sourcePath);
-    final title = _resolveTitle(displayName ?? p.basename(sourcePath));
     return existingBook?.copyWith(
           title: title,
           format: format,
@@ -424,6 +432,18 @@ class LocalBookImportService {
       return null;
     }
     return _localBookRepository.getBookBySourcePath(normalized);
+  }
+
+  Future<LocalBook?> _findByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) {
+    return _localBookRepository.findBookByImportFingerprint(
+      format: format,
+      title: title,
+      sourceFileSize: sourceFileSize,
+    );
   }
 
   String _buildBookId() {

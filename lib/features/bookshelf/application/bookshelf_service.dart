@@ -76,6 +76,8 @@ class BookshelfService {
       'bookshelf.grid.showLatestChapter';
   static const String _gridShowProgressBarKey =
       'bookshelf.grid.showProgressBar';
+  static const String _gridShowSourceBadgeKey =
+      'bookshelf.grid.showSourceBadge';
   static const String _gridAlwaysShowSearchBarKey =
       'bookshelf.grid.search.alwaysVisible';
   static const String _gridPinSearchBarKey = 'bookshelf.grid.search.pinned';
@@ -87,6 +89,8 @@ class BookshelfService {
       'bookshelf.list.showLatestChapter';
   static const String _listShowProgressBarKey =
       'bookshelf.list.showProgressBar';
+  static const String _listShowSourceBadgeKey =
+      'bookshelf.list.showSourceBadge';
   static const String _listAlwaysShowSearchBarKey =
       'bookshelf.list.search.alwaysVisible';
   static const String _listPinSearchBarKey = 'bookshelf.list.search.pinned';
@@ -107,6 +111,7 @@ class BookshelfService {
   static const bool defaultGridShowAuthor = true;
   static const bool defaultGridShowLatestChapter = true;
   static const bool defaultGridShowProgressBar = true;
+  static const bool defaultGridShowSourceBadge = true;
   static const bool defaultGridAlwaysShowSearchBar = true;
   static const bool defaultGridPinSearchBar = false;
   static const String defaultGridQuickFilterContent = 'none';
@@ -114,6 +119,7 @@ class BookshelfService {
   static const bool defaultListShowAuthor = true;
   static const bool defaultListShowLatestChapter = true;
   static const bool defaultListShowProgressBar = true;
+  static const bool defaultListShowSourceBadge = true;
   static const bool defaultListAlwaysShowSearchBar = true;
   static const bool defaultListPinSearchBar = false;
   static const String defaultListQuickFilterContent = 'none';
@@ -415,6 +421,16 @@ class BookshelfService {
     await prefs.setBool(_gridShowProgressBarKey, visible);
   }
 
+  Future<bool> loadGridShowSourceBadge() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridShowSourceBadgeKey) ?? defaultGridShowSourceBadge;
+  }
+
+  Future<void> saveGridShowSourceBadge(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridShowSourceBadgeKey, visible);
+  }
+
   Future<bool> loadGridAlwaysShowSearchBar() async {
     final prefs = await _preferencesFuture;
     return prefs.getBool(_gridAlwaysShowSearchBarKey) ??
@@ -494,6 +510,16 @@ class BookshelfService {
   Future<void> saveListShowProgressBar(bool visible) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_listShowProgressBarKey, visible);
+  }
+
+  Future<bool> loadListShowSourceBadge() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowSourceBadgeKey) ?? defaultListShowSourceBadge;
+  }
+
+  Future<void> saveListShowSourceBadge(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowSourceBadgeKey, visible);
   }
 
   Future<bool> loadListAlwaysShowSearchBar() async {

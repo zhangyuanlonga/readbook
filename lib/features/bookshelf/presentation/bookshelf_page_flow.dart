@@ -6,12 +6,6 @@ extension on _BookshelfPageState {
       case _BookshelfMoreAction.selectBooks:
         _startSelectionMode();
         break;
-      case _BookshelfMoreAction.batchEditCover:
-        _startSelectionMode();
-        if (_isSelectionMode) {
-          _showMessage('已进入选择模式，选择书籍后点击底部“修改封面”。');
-        }
-        break;
       case _BookshelfMoreAction.sortBooks:
         unawaited(_showSortModeSheet());
         break;
@@ -202,6 +196,7 @@ extension on _BookshelfPageState {
     var draftShowAuthor = _gridShowAuthor;
     var draftShowLatestChapter = _gridShowLatestChapter;
     var draftShowProgressBar = _gridShowProgressBar;
+    var draftShowSourceBadge = _gridShowSourceBadge;
     var draftGridAlwaysShowSearchBar = _gridAlwaysShowSearchBar;
     var draftGridPinSearchBar = _gridPinSearchBar;
     var draftGridQuickFilterContent = _gridQuickFilterContent;
@@ -209,6 +204,7 @@ extension on _BookshelfPageState {
     var draftListShowAuthor = _listShowAuthor;
     var draftListShowLatestChapter = _listShowLatestChapter;
     var draftListShowProgressBar = _listShowProgressBar;
+    var draftListShowSourceBadge = _listShowSourceBadge;
     var draftListAlwaysShowSearchBar = _listAlwaysShowSearchBar;
     var draftListPinSearchBar = _listPinSearchBar;
     var draftListQuickFilterContent = _listQuickFilterContent;
@@ -244,6 +240,9 @@ extension on _BookshelfPageState {
                   await _bookshelfService.saveGridShowProgressBar(
                     draftShowProgressBar,
                   );
+                  await _bookshelfService.saveGridShowSourceBadge(
+                    draftShowSourceBadge,
+                  );
                   await _bookshelfService.saveGridAlwaysShowSearchBar(
                     draftGridAlwaysShowSearchBar,
                   );
@@ -274,6 +273,9 @@ extension on _BookshelfPageState {
                   );
                   await _bookshelfService.saveListShowProgressBar(
                     draftListShowProgressBar,
+                  );
+                  await _bookshelfService.saveListShowSourceBadge(
+                    draftListShowSourceBadge,
                   );
                   await _bookshelfService.saveListAlwaysShowSearchBar(
                     draftListAlwaysShowSearchBar,
@@ -636,6 +638,21 @@ extension on _BookshelfPageState {
                         unawaited(persistGridSettings());
                       },
                     ),
+                    buildCompactSwitchTile(
+                      value: !draftShowSourceBadge,
+                      title: '隐藏来源标识',
+                      subtitle: '隐藏封面右上角的在线/本地标识。',
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftShowSourceBadge = next;
+                        });
+                        _updateBookshelfState(() {
+                          _gridShowSourceBadge = next;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
                     buildSearchSettings(
                       alwaysShowSearchBar: draftGridAlwaysShowSearchBar,
                       pinSearchBar: draftGridPinSearchBar,
@@ -763,6 +780,21 @@ extension on _BookshelfPageState {
                         });
                         _updateBookshelfState(() {
                           _listShowLatestChapter = next;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
+                    buildCompactSwitchTile(
+                      value: !draftListShowSourceBadge,
+                      title: '隐藏来源标识',
+                      subtitle: '隐藏封面右上角的在线/本地标识。',
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftListShowSourceBadge = next;
+                        });
+                        _updateBookshelfState(() {
+                          _listShowSourceBadge = next;
                         });
                         unawaited(persistListSettings());
                       },
@@ -973,112 +1005,21 @@ extension on _BookshelfPageState {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
-    _updateBookshelfState(() {
-      _taskStatus = ImportExportTaskStatus(
-        title: '正在导入外部图书',
-        message: '正在读取 ${payload.label} 并准备入库…',
-      );
-    });
-    final cached = await _externalImportCoordinator.cacheExternalFileFromUri(
-      payload,
-    );
-    if (cached == null) {
-      ExternalImportDiagnostics.logCacheFailed(payload);
-      _showMessage(
-        ExternalImportDiagnostics.readFailedMessage(
-          payload.type,
-          payload.label,
-        ),
-      );
+    if (!mounted) {
       return;
     }
-
-    final tempFile = File(cached.path);
-    try {
-      if (!ExternalImportCatalog.supportsFileLabel(
-        ExternalImportPayloadType.localBook,
-        cached.label,
-      )) {
-        ExternalImportDiagnostics.logImportUnsupported(
-          ExternalImportPayloadType.localBook,
-          cached.label,
+    await _showBookshelfBottomSheet<void>(
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _BookshelfExternalImportSheet(
+          payload: payload,
+          externalImportCoordinator: _externalImportCoordinator,
+          importService: _localBookImportService,
+          onReload: () => _loadBookshelf(force: true),
+          onShowMessage: _showMessage,
         );
-        _showMessage(
-          ExternalImportCatalog.unsupportedFileMessage(
-            ExternalImportPayloadType.localBook,
-            cached.label,
-          ),
-        );
-        return;
-      }
-
-      await _localBookImportService.importFromFile(
-        filePath: cached.path,
-        displayName: cached.label,
-        waitForIndexing:
-            LocalBookWorkflowPolicy.externalImportShouldWaitForIndexing,
-        onProgress: (progress) {
-          if (!mounted) {
-            return;
-          }
-          final stageText = switch (progress.stage) {
-            LocalBookImportStage.preparing => '准备文件',
-            LocalBookImportStage.persisted => '写入书架',
-            LocalBookImportStage.indexing => '建立目录',
-            LocalBookImportStage.completed => '完成导入',
-          };
-          _updateBookshelfState(() {
-            _taskStatus = ImportExportTaskStatus(
-              title: '正在导入外部图书',
-              message: '${progress.displayName} · $stageText',
-              detail: progress.detail,
-            );
-          });
-        },
-      );
-      await _loadBookshelf(force: true);
-      if (!mounted) {
-        return;
-      }
-      ExternalImportDiagnostics.logImportSucceeded(
-        ExternalImportPayloadType.localBook,
-        cached.label,
-      );
-      _showMessage('已导入 ${cached.label}，目录已建立，可直接阅读。');
-    } on AppException catch (error) {
-      ExternalImportDiagnostics.logImportFailed(
-        ExternalImportPayloadType.localBook,
-        cached.label,
-        error,
-      );
-      _showMessage(error.briefMessage);
-    } catch (error) {
-      ExternalImportDiagnostics.logImportFailed(
-        ExternalImportPayloadType.localBook,
-        cached.label,
-        error,
-      );
-      _showMessage(
-        ExternalImportDiagnostics.importFailedMessage(
-          ExternalImportPayloadType.localBook,
-          '$error',
-          label: cached.label,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        _updateBookshelfState(() {
-          _taskStatus = null;
-        });
-      }
-      try {
-        if (await tempFile.exists()) {
-          await tempFile.delete();
-        }
-      } catch (_) {
-        // ignore cleanup failure
-      }
-    }
+      },
+    );
   }
 
   Future<T?> _showBookshelfBottomSheet<T>({
@@ -1488,6 +1429,222 @@ extension on _BookshelfPageState {
       default:
         break;
     }
+  }
+}
+
+class _BookshelfExternalImportSheet extends StatefulWidget {
+  const _BookshelfExternalImportSheet({
+    required this.payload,
+    required this.externalImportCoordinator,
+    required this.importService,
+    required this.onReload,
+    required this.onShowMessage,
+  });
+
+  final IncomingExternalImportPayload payload;
+  final BookshelfExternalImportCoordinator externalImportCoordinator;
+  final LocalBookImportService importService;
+  final Future<void> Function() onReload;
+  final void Function(String message) onShowMessage;
+
+  @override
+  State<_BookshelfExternalImportSheet> createState() =>
+      _BookshelfExternalImportSheetState();
+}
+
+class _BookshelfExternalImportSheetState
+    extends State<_BookshelfExternalImportSheet> {
+  ImportExportTaskStatus _status = const ImportExportTaskStatus(
+    title: '正在导入外部图书',
+    message: '正在读取外部文件并准备导入…',
+  );
+  bool _started = false;
+
+  List<AppTaskStep> get _steps {
+    final current =
+        _status.result == ImportExportTaskResult.success
+            ? 2
+            : (_started ? 1 : 0);
+    return <AppTaskStep>[
+      AppTaskStep(label: '接收文件', active: current >= 0),
+      AppTaskStep(label: '解析导入', active: current >= 1),
+      AppTaskStep(label: '完成', active: current >= 2),
+    ];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _started) {
+        return;
+      }
+      _start();
+    });
+  }
+
+  Future<void> _start() async {
+    setState(() {
+      _started = true;
+    });
+    final cached = await widget.externalImportCoordinator
+        .cacheExternalFileFromUri(widget.payload);
+    if (!mounted) {
+      return;
+    }
+    if (cached == null) {
+      ExternalImportDiagnostics.logCacheFailed(widget.payload);
+      final message = ExternalImportDiagnostics.readFailedMessage(
+        widget.payload.type,
+        widget.payload.label,
+      );
+      _updateStatus(
+        ImportExportTaskStatus(
+          title: '导入外部图书失败',
+          message: message,
+          result: ImportExportTaskResult.failure,
+        ),
+      );
+      widget.onShowMessage(message);
+      return;
+    }
+
+    final tempFile = File(cached.path);
+    try {
+      if (!ExternalImportCatalog.supportsFileLabel(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+      )) {
+        ExternalImportDiagnostics.logImportUnsupported(
+          ExternalImportPayloadType.localBook,
+          cached.label,
+        );
+        final message = ExternalImportCatalog.unsupportedFileMessage(
+          ExternalImportPayloadType.localBook,
+          cached.label,
+        );
+        _updateStatus(
+          ImportExportTaskStatus(
+            title: '导入外部图书失败',
+            message: message,
+            result: ImportExportTaskResult.failure,
+          ),
+        );
+        widget.onShowMessage(message);
+        return;
+      }
+
+      await widget.importService.importFromFile(
+        filePath: cached.path,
+        displayName: cached.label,
+        waitForIndexing:
+            LocalBookWorkflowPolicy.externalImportShouldWaitForIndexing,
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          final stageText = switch (progress.stage) {
+            LocalBookImportStage.preparing => '准备文件',
+            LocalBookImportStage.persisted => '写入书架',
+            LocalBookImportStage.indexing => '建立目录',
+            LocalBookImportStage.completed => '完成导入',
+          };
+          _updateStatus(
+            ImportExportTaskStatus(
+              title: '正在导入外部图书',
+              message: '${progress.displayName} · $stageText',
+              detail: progress.detail,
+            ),
+          );
+        },
+      );
+      await widget.onReload();
+      if (!mounted) {
+        return;
+      }
+      ExternalImportDiagnostics.logImportSucceeded(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+      );
+      _updateStatus(
+        ImportExportTaskStatus(
+          title: '外部图书已导入',
+          message: cached.label,
+          detail: '目录已建立，可直接阅读。',
+          progress: 1,
+          result: ImportExportTaskResult.success,
+        ),
+      );
+      widget.onShowMessage('已导入 ${cached.label}，目录已建立，可直接阅读。');
+    } on AppException catch (error) {
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+        error,
+      );
+      _updateStatus(
+        ImportExportTaskStatus(
+          title: '导入外部图书失败',
+          message: error.briefMessage,
+          result: ImportExportTaskResult.failure,
+        ),
+      );
+      widget.onShowMessage(error.briefMessage);
+    } catch (error) {
+      ExternalImportDiagnostics.logImportFailed(
+        ExternalImportPayloadType.localBook,
+        cached.label,
+        error,
+      );
+      final message = ExternalImportDiagnostics.importFailedMessage(
+        ExternalImportPayloadType.localBook,
+        '$error',
+        label: cached.label,
+      );
+      _updateStatus(
+        ImportExportTaskStatus(
+          title: '导入外部图书失败',
+          message: message,
+          result: ImportExportTaskResult.failure,
+        ),
+      );
+      widget.onShowMessage(message);
+    } finally {
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {
+        // ignore cleanup failure
+      }
+    }
+  }
+
+  void _updateStatus(ImportExportTaskStatus status) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _status = status;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTaskBottomSheet(
+      title: '导入外部图书',
+      maxHeightFactor: 0.42,
+      fitContent: true,
+      steps: _steps,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _status.isFinished
+              ? ImportExportTaskSheet(status: _status)
+              : ImportExportProgressCard(status: _status),
+        ],
+      ),
+    );
   }
 }
 

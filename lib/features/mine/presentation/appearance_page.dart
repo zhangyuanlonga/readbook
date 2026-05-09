@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -236,16 +234,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   minScale: 0.8,
                   maxScale: 4,
                   child: Center(
-                    child: Image.file(
-                      File(path),
+                    child: LazyFileImage(
+                      path: path,
                       fit: BoxFit.contain,
-                      errorBuilder:
-                          (_, __, ___) => const Center(
-                            child: Text(
-                              '图片加载失败',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
+                      cacheWidth: 1080,
                     ),
                   ),
                 ),

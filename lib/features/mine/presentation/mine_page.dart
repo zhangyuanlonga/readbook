@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -64,8 +65,27 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _hasThemeCustom = false;
   int _sourceImportLimit = 10;
   _MineLayoutMode _layoutMode = _MineLayoutMode.list;
+  String? _openingRoute;
 
   bool get _isListMode => _layoutMode == _MineLayoutMode.list;
+
+  VoidCallback _pushMineRouteAction(String route) {
+    return () => unawaited(_pushMineRoute(route));
+  }
+
+  Future<void> _pushMineRoute(String route) async {
+    if (_openingRoute == route) {
+      return;
+    }
+    _openingRoute = route;
+    try {
+      await context.push(route);
+    } finally {
+      if (_openingRoute == route) {
+        _openingRoute = null;
+      }
+    }
+  }
 
   EdgeInsets _actionSectionPaddingFor(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
@@ -158,6 +178,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     _pageFlowCoordinator = ref.read(minePageFlowCoordinatorProvider)();
     _sessionService = ref.read(minePageSessionServiceProvider);
     _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
+    _applyPrimedSession();
     _restoreLayoutMode();
     _loadSession();
   }
@@ -170,6 +191,15 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   @override
   Widget build(BuildContext context) => _buildMinePage(context);
+
+  void _applyPrimedSession() {
+    final session = MinePageSessionPriming.take();
+    if (session == null) {
+      return;
+    }
+    _userId = session.userId;
+    _username = session.username;
+  }
 
   Future<void> _restoreLayoutMode() async {
     final raw = await _sessionService.restoreLayoutMode(_layoutModeKey);
@@ -231,13 +261,17 @@ class _MinePageState extends ConsumerState<MinePage> {
     }
     final action = await showModalBottomSheet<_ProfileAvatarAction>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
+        final bottomInset = _mineBottomSafeInset(context);
         return SafeArea(
+          top: false,
+          bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -352,13 +386,17 @@ class _MinePageState extends ConsumerState<MinePage> {
     }
     return showModalBottomSheet<ImageSelectionSource>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
+        final bottomInset = _mineBottomSafeInset(context);
         return SafeArea(
+          top: false,
+          bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -393,6 +431,12 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
+  double _mineBottomSafeInset(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
+    return math.max(viewPadding, gestureInsets);
+  }
+
   String _buildSourceSubtitle() {
     if (_sourceImportLimit < 0) {
       return _hasMembership ? '会员不限数量' : '默认可用';
@@ -405,7 +449,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Future<void> _handleAdvancedThemeTap() async {
     if (_hasThemeCustom) {
-      await context.push('/appearance/advanced-themes');
+      await _pushMineRoute('/appearance/advanced-themes');
       return;
     }
     await _showMembershipPrompt('高级主题为会员专属功能，开通后可用。');
@@ -413,18 +457,18 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   void _handleSyncTap() {
     if (_hasMembership) {
-      context.push('/sync');
+      unawaited(_pushMineRoute('/sync'));
       return;
     }
     unawaited(_showMembershipPrompt('多端同步为会员计划功能，当前正在开发中。'));
   }
 
   Future<void> _handleSourceTap() async {
-    await context.push('/source');
+    await _pushMineRoute('/source');
   }
 
   Future<void> _openMembershipCenter() async {
-    await context.push('/membership');
+    await _pushMineRoute('/membership');
     await _refreshMine();
   }
 

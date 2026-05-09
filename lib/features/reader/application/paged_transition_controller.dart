@@ -1,5 +1,6 @@
 import 'package:flutter/animation.dart';
 
+import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import 'text_reader_renderer.dart';
 
@@ -83,6 +84,7 @@ class PagedTransitionController {
     required ReaderSettings settings,
     required bool isAnimating,
     required PagedTextReaderRenderer renderer,
+    ReaderDocument? document,
   }) {
     if (isAnimating) {
       return PagedTransitionAction(
@@ -97,6 +99,7 @@ class PagedTransitionController {
       currentPageIndex: currentPageIndex,
       pageCount: pageCount,
       settings: settings,
+      document: document,
     );
 
     switch (turnDecision.type) {

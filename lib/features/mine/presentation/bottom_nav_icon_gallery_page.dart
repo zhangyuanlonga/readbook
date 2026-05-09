@@ -6,10 +6,13 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
+import '../../../app/navigation/bottom_nav_icon_resolver.dart';
+import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
+import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import 'widgets/image_resource_collection_widgets.dart';
@@ -133,8 +136,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
           .markChanged();
       await _load();
       if (!mounted) return;
-      await context.push('/bottom-nav-icon-galleries/editor?id=${gallery.id}');
-      await _load();
+      await _openEditor(gallery.id);
     } finally {
       if (mounted) {
         setState(() {
@@ -195,8 +197,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
       if (!mounted) {
         return;
       }
-      await context.push('/bottom-nav-icon-galleries/editor?id=${copied.id}');
-      await _load();
+      await _openEditor(copied.id);
     } finally {
       if (mounted) {
         setState(() {
@@ -263,6 +264,14 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
         .toList(growable: false);
   }
 
+  Future<void> _openEditor(String galleryId) async {
+    await context.push('/bottom-nav-icon-galleries/editor?id=$galleryId');
+    if (!mounted) {
+      return;
+    }
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer(
@@ -321,7 +330,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                   key: ValueKey('bottom_nav_gallery_loading'),
                                   child: CircularProgressIndicator(),
                                 )
-                                : ListView(
+                                : ListView.builder(
                                   key: const ValueKey(
                                     'bottom_nav_gallery_content',
                                   ),
@@ -331,39 +340,38 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                     horizontal,
                                     metrics.sectionGap + bottomSafe,
                                   ),
-                                  children: [
-                                    AppFadeSlideTransition(
-                                      child: CompactCollectionSearchField(
-                                        controller: _searchController,
-                                        hintText: '搜索底栏图集',
-                                        query: _searchQuery,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _searchQuery = value;
-                                          });
-                                        },
-                                        onClear: () {
-                                          _searchController.clear();
-                                          setState(() {
-                                            _searchQuery = '';
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                    SizedBox(height: metrics.contentGap),
-                                    AppFadeSlideTransition(
-                                      delay: const Duration(milliseconds: 36),
-                                      child: Text(
-                                        '支持切换默认图集，也可以新增、复制、重命名或删除自定义图集。',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(height: 1.35),
-                                      ),
-                                    ),
-                                    SizedBox(height: metrics.contentGap),
-                                    if (_visibleGalleries.isEmpty)
-                                      const AppAnimatedSwitcher(
+                                  itemCount:
+                                      _visibleGalleries.isEmpty
+                                          ? 2
+                                          : _visibleGalleries.length + 1,
+                                  itemBuilder: (context, index) {
+                                    if (index == 0) {
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom: metrics.contentGap,
+                                        ),
+                                        child: AppFadeSlideTransition(
+                                          child: CompactCollectionSearchField(
+                                            controller: _searchController,
+                                            hintText: '搜索底栏图集',
+                                            query: _searchQuery,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _searchQuery = value;
+                                              });
+                                            },
+                                            onClear: () {
+                                              _searchController.clear();
+                                              setState(() {
+                                                _searchQuery = '';
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    if (_visibleGalleries.isEmpty) {
+                                      return const AppAnimatedSwitcher(
                                         child: ImageResourceEmptyStateCard(
                                           key: ValueKey(
                                             'bottom_nav_gallery_empty',
@@ -372,29 +380,23 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                           title: '没有匹配的底栏图集',
                                           description: '换个关键词，或点击右上角新增自定义图集。',
                                         ),
-                                      )
-                                    else
-                                      for (
-                                        var index = 0;
-                                        index < _visibleGalleries.length;
-                                        index++
-                                      )
-                                        Padding(
-                                          padding: EdgeInsets.only(
-                                            bottom:
-                                                index ==
-                                                        _visibleGalleries
-                                                                .length -
-                                                            1
-                                                    ? 0
-                                                    : metrics.contentGap,
-                                          ),
-                                          child: _buildGalleryCard(
-                                            context,
-                                            gallery: _visibleGalleries[index],
-                                          ),
-                                        ),
-                                  ],
+                                      );
+                                    }
+                                    final gallery =
+                                        _visibleGalleries[index - 1];
+                                    return Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom:
+                                            index == _visibleGalleries.length
+                                                ? 0
+                                                : metrics.contentGap,
+                                      ),
+                                      child: _buildGalleryCard(
+                                        context,
+                                        gallery: gallery,
+                                      ),
+                                    );
+                                  },
                                 ),
                       ),
                     ),
@@ -420,14 +422,9 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
-        onTap:
-            _isSaving
-                ? null
-                : () => context.push(
-                  '/bottom-nav-icon-galleries/editor?id=${gallery.id}',
-                ),
+        onTap: _isSaving ? null : () => _openEditor(gallery.id),
         child: Container(
-          padding: EdgeInsets.all(metrics.cardPadding),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           decoration: BoxDecoration(
             color:
                 active
@@ -441,136 +438,177 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                       : colorScheme.outlineVariant.withValues(alpha: 0.48),
             ),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color:
-                      active
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.dock_outlined,
-                  color:
-                      active
-                          ? colorScheme.onPrimaryContainer
-                          : colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            gallery.name,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        if (gallery.isBuiltIn) _buildPill(context, label: '内置'),
-                        if (!gallery.isBuiltIn)
-                          _buildPill(context, label: '自定义'),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      active ? '当前已启用' : '点击设为默认图集',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      gallery.name,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
+                  ),
+                  if (gallery.isBuiltIn) _buildPill(context, label: '内置'),
+                  if (!gallery.isBuiltIn) _buildPill(context, label: '自定义'),
+                  const SizedBox(width: 6),
+                  if (_isSaving && active)
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colorScheme.primary,
+                      ),
+                    )
+                  else
+                    PopupMenuButton<_GalleryAction>(
+                      onSelected: (action) {
+                        switch (action) {
+                          case _GalleryAction.activate:
+                            _setActiveGallery(gallery.id);
+                            break;
+                          case _GalleryAction.edit:
+                            _openEditor(gallery.id);
+                            break;
+                          case _GalleryAction.rename:
+                            _renameGallery(gallery);
+                            break;
+                          case _GalleryAction.duplicate:
+                            _duplicateGallery(gallery);
+                            break;
+                          case _GalleryAction.delete:
+                            _deleteGallery(gallery);
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) {
+                        final items = <PopupMenuEntry<_GalleryAction>>[
+                          if (!active)
+                            const PopupMenuItem<_GalleryAction>(
+                              value: _GalleryAction.activate,
+                              child: Text('设为默认'),
+                            ),
+                          const PopupMenuItem<_GalleryAction>(
+                            value: _GalleryAction.edit,
+                            child: Text('编辑图标'),
+                          ),
+                        ];
+
+                        if (gallery.isEditable) {
+                          items.add(
+                            const PopupMenuItem<_GalleryAction>(
+                              value: _GalleryAction.rename,
+                              child: Text('重命名'),
+                            ),
+                          );
+                        }
+                        items.add(
+                          const PopupMenuItem<_GalleryAction>(
+                            value: _GalleryAction.duplicate,
+                            child: Text('复制图集'),
+                          ),
+                        );
+                        if (gallery.isDeletable) {
+                          items.add(
+                            const PopupMenuItem<_GalleryAction>(
+                              value: _GalleryAction.delete,
+                              child: Text('删除图集'),
+                            ),
+                          );
+                        }
+                        return items;
+                      },
+                      icon: Icon(
+                        active
+                            ? Icons.check_circle_rounded
+                            : Icons.more_horiz_rounded,
+                        color:
+                            active ? colorScheme.primary : colorScheme.outline,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                active ? '当前已启用' : '点击设为默认图集',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              AspectRatio(
+                aspectRatio: 4.2,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final tab in BottomNavIconGalleryTab.values) ...[
+                      Expanded(
+                        child: _buildLightPreviewSlot(
+                          context,
+                          gallery: gallery,
+                          tab: tab,
+                          active: active,
+                        ),
+                      ),
+                      if (tab != BottomNavIconGalleryTab.values.last)
+                        const SizedBox(width: 6),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              if (_isSaving && active)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                )
-              else
-                PopupMenuButton<_GalleryAction>(
-                  onSelected: (action) {
-                    switch (action) {
-                      case _GalleryAction.activate:
-                        _setActiveGallery(gallery.id);
-                        break;
-                      case _GalleryAction.edit:
-                        context.push(
-                          '/bottom-nav-icon-galleries/editor?id=${gallery.id}',
-                        );
-                        break;
-                      case _GalleryAction.rename:
-                        _renameGallery(gallery);
-                        break;
-                      case _GalleryAction.duplicate:
-                        _duplicateGallery(gallery);
-                        break;
-                      case _GalleryAction.delete:
-                        _deleteGallery(gallery);
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) {
-                    final items = <PopupMenuEntry<_GalleryAction>>[
-                      if (!active)
-                        const PopupMenuItem<_GalleryAction>(
-                          value: _GalleryAction.activate,
-                          child: Text('设为默认'),
-                        ),
-                      const PopupMenuItem<_GalleryAction>(
-                        value: _GalleryAction.edit,
-                        child: Text('编辑图标'),
-                      ),
-                    ];
-
-                    if (gallery.isEditable) {
-                      items.add(
-                        const PopupMenuItem<_GalleryAction>(
-                          value: _GalleryAction.rename,
-                          child: Text('重命名'),
-                        ),
-                      );
-                    }
-                    items.add(
-                      const PopupMenuItem<_GalleryAction>(
-                        value: _GalleryAction.duplicate,
-                        child: Text('复制图集'),
-                      ),
-                    );
-                    if (gallery.isDeletable) {
-                      items.add(
-                        const PopupMenuItem<_GalleryAction>(
-                          value: _GalleryAction.delete,
-                          child: Text('删除图集'),
-                        ),
-                      );
-                    }
-                    return items;
-                  },
-                  icon: Icon(
-                    active
-                        ? Icons.check_circle_rounded
-                        : Icons.more_horiz_rounded,
-                    color: active ? colorScheme.primary : colorScheme.outline,
-                  ),
-                ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLightPreviewSlot(
+    BuildContext context, {
+    required BottomNavIconGallery gallery,
+    required BottomNavIconGalleryTab tab,
+    required bool active,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final iconSet = gallery.items[tab] ?? const BottomNavIconSet();
+    final asset = iconSet.lightUnselected ?? iconSet.lightSelected;
+    final resolved = _fallbackIconForTab(tab).copyWith(assetRef: asset);
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            active
+                ? colorScheme.primaryContainer.withValues(alpha: 0.34)
+                : colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      alignment: Alignment.center,
+      child: BottomNavIconView(
+        icon: resolved,
+        size: 24,
+        fallbackColor:
+            active ? colorScheme.primary : colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  ResolvedBottomNavIcon _fallbackIconForTab(BottomNavIconGalleryTab tab) {
+    final shellTab = switch (tab) {
+      BottomNavIconGalleryTab.home => AppShellTab.home,
+      BottomNavIconGalleryTab.bookshelf => AppShellTab.bookshelf,
+      BottomNavIconGalleryTab.discover => AppShellTab.discover,
+      BottomNavIconGalleryTab.stats => AppShellTab.stats,
+      BottomNavIconGalleryTab.mine => AppShellTab.mine,
+    };
+    return resolveCupertinoBottomNavIcon(
+      tab: shellTab,
+      selected: false,
+      brightness: Brightness.light,
     );
   }
 

@@ -117,7 +117,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return _continuousTextChapterKeys.putIfAbsent(identity, () => GlobalKey());
   }
 
-  Future<void> _loadAdjacentContinuousTextChapter({required bool forward}) {
+  Future<_ContinuousTextChapter?> _loadAdjacentContinuousTextChapter({
+    required bool forward,
+  }) {
     return _loadAdjacentContinuousTextChapterFlow(forward: forward);
   }
 
@@ -811,6 +813,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       settings: _settings,
       isAnimating: _isPagedTransitionAnimating,
       renderer: _pagedTextRenderer,
+      document: _document,
     );
     switch (action.type) {
       case PagedTransitionActionType.ignored:
@@ -831,11 +834,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         return;
       case PagedTransitionActionType.immediate:
         _markFirstPageTurnRequested();
-        setState(() {
-          _currentPageIndex = action.targetPageIndex;
-        });
-        _syncActiveReadingRecordSessionProgress();
-        _scheduleProgressSave();
+        _snapToPagedTextPage(action.targetPageIndex);
         _recordFirstPageTurnCompleted(mode: 'immediate');
         return;
       case PagedTransitionActionType.animated:

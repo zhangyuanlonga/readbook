@@ -27,6 +27,17 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
       _database.getLocalBookBySourcePath(sourcePath);
 
   @override
+  Future<LocalBook?> findBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) => _database.findLocalBookByImportFingerprint(
+    format: format,
+    title: title,
+    sourceFileSize: sourceFileSize,
+  );
+
+  @override
   Future<LocalChapter?> getChapterById(String chapterId) =>
       _database.getLocalChapterById(chapterId);
 

@@ -202,6 +202,13 @@ class _NoopLocalBookRepository implements LocalBookRepository {
   Future<LocalBook?> getBookBySourcePath(String sourcePath) async => null;
 
   @override
+  Future<LocalBook?> findBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) async => null;
+
+  @override
   Future<LocalChapter?> getChapterById(String chapterId) async => null;
 
   @override

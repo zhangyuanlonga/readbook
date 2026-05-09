@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -205,7 +204,11 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                     child: InteractiveViewer(
                       minScale: 0.8,
                       maxScale: 4,
-                      child: Image.file(File(path), fit: BoxFit.contain),
+                      child: LazyFileImage(
+                        path: path,
+                        fit: BoxFit.contain,
+                        cacheWidth: 1080,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -376,13 +379,10 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                     : LayoutBuilder(
                       key: const ValueKey('reader_background_grid'),
                       builder: (context, constraints) {
-                        final columns = metrics.gridColumnsFor(
-                          availableWidth: constraints.maxWidth - horizontal * 2,
-                          minItemWidth: 150,
-                          maxColumns: 4,
-                          spacing: metrics.contentGap,
-                        );
+                        const columns = 3;
                         return GridView.builder(
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
                             0,
@@ -396,7 +396,7 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                                 crossAxisSpacing: metrics.contentGap,
                                 mainAxisSpacing: metrics.contentGap,
                                 childAspectRatio:
-                                    metrics.isCompactDensity ? 0.76 : 0.82,
+                                    metrics.isCompactDensity ? 0.62 : 0.66,
                               ),
                           itemBuilder: (context, index) {
                             final path = _visibleBackgroundPaths[index];
@@ -435,20 +435,12 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: ClipRRect(
+              child: LazyFileImage(
+                path: path,
+                fit: BoxFit.cover,
+                cacheWidth: 420,
                 borderRadius: BorderRadius.circular(18),
-                child: Image.file(
-                  File(path),
-                  fit: BoxFit.cover,
-                  errorBuilder:
-                      (_, __, ___) => ColoredBox(
-                        color: colorScheme.surfaceContainerLow,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                ),
+                placeholderIcon: Icons.broken_image_outlined,
               ),
             ),
             Positioned(

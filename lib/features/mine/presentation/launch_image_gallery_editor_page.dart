@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,6 +38,11 @@ class _LaunchImageGalleryEditorPageState
   bool _isSelectionMode = false;
   final Set<String> _selectedPaths = <String>{};
 
+  bool get _isBuiltInGallery => _gallery?.isBuiltIn ?? false;
+
+  String get _emptyDescription =>
+      _isBuiltInGallery ? '内置启动图集随应用提供，不能编辑。' : '点击右上角新增，准备启动页和主题可复用的启动素材。';
+
   @override
   void initState() {
     super.initState();
@@ -67,7 +70,7 @@ class _LaunchImageGalleryEditorPageState
 
   void _startEditingName() {
     final gallery = _gallery;
-    if (gallery == null) {
+    if (gallery == null || !gallery.isEditable) {
       return;
     }
     _nameController.text = gallery.name;
@@ -82,7 +85,7 @@ class _LaunchImageGalleryEditorPageState
 
   Future<void> _saveName() async {
     final gallery = _gallery;
-    if (gallery == null || _isSaving) {
+    if (gallery == null || _isSaving || !gallery.isEditable) {
       return;
     }
     final nextName = _nameController.text.trim();
@@ -117,7 +120,7 @@ class _LaunchImageGalleryEditorPageState
 
   Future<void> _pickImages() async {
     final gallery = _gallery;
-    if (gallery == null || _isSaving) {
+    if (gallery == null || _isSaving || !gallery.isEditable) {
       return;
     }
     try {
@@ -228,7 +231,10 @@ class _LaunchImageGalleryEditorPageState
 
   Future<void> _deleteSelectedImages() async {
     final gallery = _gallery;
-    if (gallery == null || _selectedPaths.isEmpty || _isSaving) {
+    if (gallery == null ||
+        _selectedPaths.isEmpty ||
+        _isSaving ||
+        !gallery.isEditable) {
       return;
     }
     setState(() {
@@ -259,7 +265,7 @@ class _LaunchImageGalleryEditorPageState
 
   Future<void> _deleteGallery() async {
     final gallery = _gallery;
-    if (gallery == null || _isSaving) {
+    if (gallery == null || _isSaving || !gallery.isDeletable) {
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -319,7 +325,11 @@ class _LaunchImageGalleryEditorPageState
                     child: InteractiveViewer(
                       minScale: 0.8,
                       maxScale: 4,
-                      child: Image.file(File(path), fit: BoxFit.contain),
+                      child: LazyFileImage(
+                        path: path,
+                        fit: BoxFit.contain,
+                        cacheWidth: 1080,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -399,7 +409,7 @@ class _LaunchImageGalleryEditorPageState
                     ),
                   )
                   : GestureDetector(
-                    onTap: _startEditingName,
+                    onTap: _isBuiltInGallery ? null : _startEditingName,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -410,12 +420,15 @@ class _LaunchImageGalleryEditorPageState
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                        if (!_isBuiltInGallery) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 16,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -435,20 +448,24 @@ class _LaunchImageGalleryEditorPageState
                   icon: const Icon(Icons.check_rounded),
                 ),
               IconButton(
-                onPressed: _isLoading || _isSaving ? null : _pickImages,
+                onPressed:
+                    _isLoading || _isSaving || _isBuiltInGallery
+                        ? null
+                        : _pickImages,
                 icon: const Icon(Icons.add_rounded),
               ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    _deleteGallery();
-                  }
-                },
-                itemBuilder:
-                    (context) => const [
-                      PopupMenuItem(value: 'delete', child: Text('删除图集')),
-                    ],
-              ),
+              if (!_isBuiltInGallery)
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      _deleteGallery();
+                    }
+                  },
+                  itemBuilder:
+                      (context) => const [
+                        PopupMenuItem(value: 'delete', child: Text('删除图集')),
+                      ],
+                ),
             ],
           ],
         ),
@@ -484,11 +501,11 @@ class _LaunchImageGalleryEditorPageState
                                 horizontal,
                                 metrics.sectionGap + bottomSafe,
                               ),
-                              children: const [
+                              children: [
                                 ImageResourceEmptyStateCard(
                                   icon: Icons.rocket_launch_outlined,
                                   title: '还没有启动图片',
-                                  description: '点击右上角新增，准备启动页和主题可复用的启动素材。',
+                                  description: _emptyDescription,
                                 ),
                               ],
                             ),
@@ -504,6 +521,8 @@ class _LaunchImageGalleryEditorPageState
                                 spacing: metrics.contentGap,
                               );
                               return GridView.builder(
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
                                 padding: EdgeInsets.fromLTRB(
                                   horizontal,
                                   metrics.contentGap,
@@ -524,7 +543,10 @@ class _LaunchImageGalleryEditorPageState
                                     path,
                                   );
                                   return GestureDetector(
-                                    onLongPress: () => _toggleSelection(path),
+                                    onLongPress:
+                                        _isBuiltInGallery
+                                            ? null
+                                            : () => _toggleSelection(path),
                                     onTap:
                                         _isSelectionMode
                                             ? () => _toggleSelection(path)
@@ -532,21 +554,15 @@ class _LaunchImageGalleryEditorPageState
                                     child: Stack(
                                       children: [
                                         Positioned.fill(
-                                          child: ClipRRect(
+                                          child: LazyFileImage(
+                                            path: path,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 360,
                                             borderRadius: BorderRadius.circular(
                                               12,
                                             ),
-                                            child: Image.file(
-                                              File(path),
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (_, __, ___) => Container(
-                                                    color:
-                                                        Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainerLow,
-                                                  ),
-                                            ),
+                                            placeholderIcon:
+                                                Icons.broken_image_outlined,
                                           ),
                                         ),
                                         Positioned(

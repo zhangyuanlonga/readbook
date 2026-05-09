@@ -142,6 +142,7 @@ import 'reader_text_offset_mapper.dart' as text_offset_mapper;
 import 'reader_text_block_presentation.dart';
 import 'reader_paged_viewport_support.dart';
 import 'reader_presentation_resolver.dart';
+import 'reader_runtime_controller.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_viewport_builder.dart';
 
@@ -262,6 +263,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderFeedbackService();
   final ReaderThemeModeService _readerThemeModeService =
       const ReaderThemeModeService();
+  final ReaderRuntimeController _readerRuntimeController =
+      const ReaderRuntimeController();
   final ReaderPageLifecycleDelegate _lifecycleDelegate =
       const ReaderPageLifecycleDelegate();
   final ReaderSettingsPresenter _readerSettingsPresenter =
@@ -307,6 +310,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final AppLogger _logger;
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
+  PageController? _staticPagedTextPageControllerInstance;
   final GlobalKey _readerBodyKey = GlobalKey();
   final GlobalKey<SelectionAreaState> _selectionAreaKey =
       GlobalKey<SelectionAreaState>();
@@ -404,6 +408,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadPausedByRuntime = false;
   bool _isReaderRuntimeVisible = true;
   bool _isAutoReadAdvancingChapter = false;
+  bool _isScrollStepAnimating = false;
   _ScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const _ScrollEdgeAdvanceState();
   double? _swipeDragStartDx;
@@ -515,7 +520,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     milliseconds: 2600,
   );
   static const Duration _kReaderSnackDedupWindow = Duration(milliseconds: 900);
-  static const bool _kDebugEnableSimulatorCurlDemo = true;
+  static const bool _kDebugEnableSimulatorCurlDemo = false;
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
   static const int _kSwitchSourceScoreStep = 6;
@@ -550,6 +555,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
   int get _currentPagedPageCount =>
       max(_pagedPages.length, _pagedBlockPages.length);
+
+  PageController? _resolveStaticPagedTextPageController(int pageCount) {
+    if (pageCount <= 0) {
+      return null;
+    }
+    final safePage = _currentPageIndex.clamp(0, _safePageUpperBound(pageCount));
+    final controller = _staticPagedTextPageControllerInstance;
+    if (controller == null) {
+      _staticPagedTextPageControllerInstance = PageController(
+        initialPage: safePage,
+      );
+      return _staticPagedTextPageControllerInstance;
+    }
+    if (!controller.hasClients && controller.initialPage != safePage) {
+      controller.dispose();
+      _staticPagedTextPageControllerInstance = PageController(
+        initialPage: safePage,
+      );
+      return _staticPagedTextPageControllerInstance;
+    }
+    if (controller.hasClients) {
+      final current = controller.page?.round() ?? controller.initialPage;
+      if (current != safePage) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted ||
+              _staticPagedTextPageControllerInstance != controller ||
+              !controller.hasClients) {
+            return;
+          }
+          final target = _currentPageIndex.clamp(
+            0,
+            _safePageUpperBound(_currentPagedPageCount),
+          );
+          if ((controller.page?.round() ?? controller.initialPage) != target) {
+            controller.jumpToPage(target);
+          }
+        });
+      }
+    }
+    return controller;
+  }
 
   TextAlign _paragraphTextAlign(ReaderSettings settings) {
     return settings.textFullJustifyEnabled
@@ -820,6 +866,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _currentReaderMode.viewportKind ==
             ReaderModeViewportKind.textPaged &&
         _currentReaderMode.swipeTurnEnabled;
+  }
+
+  bool get _isMixedMediaTextDocument =>
+      _document.hasImageBlocks && !_document.isPureImageDocument;
+
+  bool _shouldUseCurlGesturePreview() {
+    return _isSwipePaginationEnabled() &&
+        _currentPagedAnimationStyle() == ReaderPageAnimationStyle.curl &&
+        !_isMixedMediaTextDocument;
   }
 
   ReaderContentMode get _currentContentMode {
@@ -1714,33 +1769,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (notification is ScrollEndNotification ||
         (notification is UserScrollNotification &&
             notification.direction == ScrollDirection.idle)) {
-      var shouldAdvance = _scrollEdgeAdvanceState.isArmed;
-      var actionDirection = _scrollEdgeAdvanceState.actionDirection;
       final isDragEnd =
           notification is ScrollEndNotification &&
           notification.dragDetails != null;
-      final endVelocityDy =
+      final double endVelocityDy =
           notification is ScrollEndNotification
               ? (notification.dragDetails?.velocity.pixelsPerSecond.dy ?? 0)
               : 0;
-      // When a drag lands exactly on the chapter edge, immediately continue
-      // to next/previous chapter instead of requiring another overscroll.
-      if (!shouldAdvance && isDragEnd) {
-        if (actionDirection == 0 && endVelocityDy.abs() >= 36) {
-          actionDirection =
-              endVelocityDy < 0 ? 1 : _kScrollRefreshCurrentChapterAction;
-          shouldAdvance = true;
-        } else if (atBottom) {
-          shouldAdvance = true;
-          actionDirection = 1;
-        } else if (atTop) {
-          shouldAdvance = true;
-          actionDirection = _kScrollRefreshCurrentChapterAction;
-        }
-      }
+      final action = _readerRuntimeController.resolveScrollEdgeDragEndAction(
+        isArmed: _scrollEdgeAdvanceState.isArmed,
+        armedActionDirection: _scrollEdgeAdvanceState.actionDirection,
+        atTop: atTop,
+        atBottom: atBottom,
+        isDragEnd: isDragEnd,
+        velocityDy: endVelocityDy,
+      );
       _resetScrollEdgeAdvanceState();
-      if (shouldAdvance && actionDirection != 0) {
-        unawaited(_handleScrollEdgeChapterAction(actionDirection));
+      if (action == ReaderScrollEdgeAction.nextChapter) {
+        unawaited(_handleScrollEdgeChapterAction(1));
+      } else if (action == ReaderScrollEdgeAction.refreshCurrent) {
+        unawaited(
+          _handleScrollEdgeChapterAction(_kScrollRefreshCurrentChapterAction),
+        );
       }
     }
 
@@ -1756,7 +1806,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     if (_shouldUseContinuousTextFlow) {
-      await _loadAdjacentContinuousTextChapter(forward: direction > 0);
+      _showMessage(
+        direction > 0 ? '正在加载下一章...' : '正在加载上一章...',
+        duration: const Duration(milliseconds: 900),
+        dedupeKey:
+            direction > 0 ? 'loading_next_chapter' : 'loading_prev_chapter',
+      );
+      final chapter = await _loadAdjacentContinuousTextChapter(
+        forward: direction > 0,
+      );
+      if (chapter != null && mounted) {
+        _activateContinuousTextChapterFlow(chapter);
+      } else if (mounted) {
+        final current = _currentIndex;
+        final hasAdjacent =
+            current != null &&
+            _chapterNavigation.findReadableChapterIndex(
+                  _chapters,
+                  current + (direction > 0 ? 1 : -1),
+                  forward: direction > 0,
+                ) !=
+                null;
+        _showMessage(
+          hasAdjacent
+              ? (direction > 0 ? '下一章仍在加载，请稍后再试。' : '上一章仍在加载，请稍后再试。')
+              : (direction > 0 ? '已经是最后一章。' : '已经是第一章。'),
+          dedupeKey:
+              hasAdjacent
+                  ? (direction > 0
+                      ? 'next_chapter_loading_pending'
+                      : 'prev_chapter_loading_pending')
+                  : (direction > 0
+                      ? 'boundary_last_chapter'
+                      : 'boundary_first_chapter'),
+        );
+      }
       return;
     }
     await _jumpChapterFromScrollEdge(forward: direction > 0);
@@ -2283,6 +2367,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _curlAutoTurnController.forward();
   }
 
+  void _snapToPagedTextPage(int pageIndex) {
+    final pageCount = _currentPagedPageCount;
+    if (pageCount <= 0) {
+      return;
+    }
+    final safeIndex = pageIndex.clamp(0, _safePageUpperBound(pageCount));
+    _resetPagedTransitionState();
+    _resetCurlAnimationState();
+    setState(() {
+      _currentPageIndex = safeIndex;
+    });
+    _syncActiveReadingRecordSessionProgress();
+    _scheduleProgressSave();
+  }
+
   Future<void> _debugMaybeTriggerSimulatorCurlDemo() async {
     if (!_kDebugEnableSimulatorCurlDemo || !kDebugMode) {
       return;
@@ -2606,9 +2705,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       builder: (context, constraints) {
         final gestureInsets = MediaQuery.systemGestureInsetsOf(context);
         final enableSwipeTurn = _isSwipePaginationEnabled();
-        final enableCurlPreview =
-            enableSwipeTurn &&
-            _currentPagedAnimationStyle() == ReaderPageAnimationStyle.curl;
+        final enableCurlPreview = _shouldUseCurlGesturePreview();
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {

@@ -10,16 +10,28 @@ import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../../../domain/entities/managed_asset.dart';
 
+const String defaultLaunchImageGalleryId = 'system_default';
+
+final LaunchImageGallery defaultLaunchImageGallery = LaunchImageGallery(
+  id: defaultLaunchImageGalleryId,
+  name: '系统默认',
+  createdAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+  updatedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+  imagePaths: const <String>['assets/branding/selune_launch_scene.png'],
+  isBuiltIn: true,
+  isEditable: false,
+  isDeletable: false,
+);
+
 class LaunchImageGalleryService {
   LaunchImageGalleryService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _assetStore = assetStore ?? ManagedAssetStore();
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
@@ -29,6 +41,11 @@ class LaunchImageGalleryService {
   static const String _activeGalleryIdKey = 'launchImageGallery.activeId';
 
   Future<List<LaunchImageGallery>> loadGalleries() async {
+    final customGalleries = await _loadCustomGalleries();
+    return <LaunchImageGallery>[defaultLaunchImageGallery, ...customGalleries];
+  }
+
+  Future<List<LaunchImageGallery>> _loadCustomGalleries() async {
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_galleriesKey);
     if (raw == null || raw.trim().isEmpty) {
@@ -63,7 +80,14 @@ class LaunchImageGalleryService {
             changed = true;
           }
         }
-        normalizedGalleries.add(gallery.copyWith(imagePaths: normalizedPaths));
+        normalizedGalleries.add(
+          gallery.copyWith(
+            imagePaths: normalizedPaths,
+            isBuiltIn: false,
+            isEditable: true,
+            isDeletable: true,
+          ),
+        );
       }
       if (changed) {
         await saveGalleries(normalizedGalleries);
@@ -76,7 +100,10 @@ class LaunchImageGalleryService {
 
   Future<void> saveGalleries(List<LaunchImageGallery> galleries) async {
     final prefs = await _preferencesFuture;
-    if (galleries.isEmpty) {
+    final customGalleries = galleries
+        .where((gallery) => !gallery.isBuiltIn)
+        .toList(growable: false);
+    if (customGalleries.isEmpty) {
       await prefs.remove(_galleriesKey);
       return;
     }
@@ -84,14 +111,21 @@ class LaunchImageGalleryService {
       _galleriesKey,
       jsonEncode(
         await Future.wait(
-          galleries.map((item) async {
+          customGalleries.map((item) async {
             final persistedPaths = <String>[];
             for (final path in item.imagePaths) {
               persistedPaths.add(
                 await _assetStore.relativizePersistedPath(path) ?? path,
               );
             }
-            return item.copyWith(imagePaths: persistedPaths).toJson();
+            return item
+                .copyWith(
+                  imagePaths: persistedPaths,
+                  isBuiltIn: false,
+                  isEditable: true,
+                  isDeletable: true,
+                )
+                .toJson();
           }),
         ),
       ),
@@ -102,7 +136,7 @@ class LaunchImageGalleryService {
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_activeGalleryIdKey)?.trim();
     if (raw == null || raw.isEmpty) {
-      return null;
+      return defaultLaunchImageGalleryId;
     }
     return raw;
   }
@@ -165,6 +199,9 @@ class LaunchImageGalleryService {
   }
 
   Future<LaunchImageGallery> saveGallery(LaunchImageGallery gallery) async {
+    if (gallery.isBuiltIn) {
+      return gallery;
+    }
     final galleries = await loadGalleries();
     final updatedGallery = gallery.copyWith(updatedAt: DateTime.now().toUtc());
     final updated = <LaunchImageGallery>[
@@ -189,10 +226,17 @@ class LaunchImageGalleryService {
     if (gallery == null) {
       throw const FormatException('Gallery not found.');
     }
+    if (!gallery.isEditable) {
+      throw const FormatException('Built-in gallery cannot be renamed.');
+    }
     await saveGallery(gallery.copyWith(name: normalized));
   }
 
   Future<void> deleteGallery(String galleryId) async {
+    final targetGallery = await loadGallery(galleryId);
+    if (targetGallery != null && !targetGallery.isDeletable) {
+      return;
+    }
     final galleries = await loadGalleries();
     final updated = galleries
         .where((gallery) => gallery.id != galleryId)
@@ -219,6 +263,9 @@ class LaunchImageGalleryService {
     if (gallery == null) {
       throw const FormatException('Gallery not found.');
     }
+    if (!gallery.isEditable) {
+      throw const FormatException('Built-in gallery cannot be edited.');
+    }
     final extension = _normalizeFileExtension(fileName);
     final asset = await _assetStore.persistBytes(
       type: ManagedAssetType.launchImageGalleryImage,
@@ -242,6 +289,9 @@ class LaunchImageGalleryService {
     final gallery = await loadGallery(galleryId);
     if (gallery == null) {
       throw const FormatException('Gallery not found.');
+    }
+    if (!gallery.isEditable) {
+      throw const FormatException('Built-in gallery cannot be edited.');
     }
 
     final normalizedTargets = <String>{};
@@ -286,7 +336,7 @@ class LaunchImageGalleryService {
         continue;
       }
       final file = File(normalized);
-      if (file.existsSync()) {
+      if (file.existsSync() || normalized.startsWith('assets/')) {
         return file.path;
       }
     }

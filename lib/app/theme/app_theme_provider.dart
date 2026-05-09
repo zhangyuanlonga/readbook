@@ -19,7 +19,8 @@ class AppThemeModeNotifier extends Notifier<ThemeMode> {
     _primedThemeMode = switch (raw) {
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,
-      _ => ThemeMode.light,
+      'light' => ThemeMode.light,
+      _ => ThemeMode.system,
     };
   }
 
@@ -33,7 +34,7 @@ class AppThemeModeNotifier extends Notifier<ThemeMode> {
       _loadTriggered = true;
       _load();
     }
-    return ThemeMode.light;
+    return ThemeMode.system;
   }
 
   Future<void> _load() async {
@@ -43,7 +44,8 @@ class AppThemeModeNotifier extends Notifier<ThemeMode> {
     final loaded = switch (raw) {
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,
-      _ => ThemeMode.light,
+      'light' => ThemeMode.light,
+      _ => ThemeMode.system,
     };
 
     if (_hasExplicitSet) {

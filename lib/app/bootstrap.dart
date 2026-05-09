@@ -14,6 +14,7 @@ import 'startup_artwork_store.dart';
 import '../features/source/application/source_health_service.dart';
 import '../features/source/application/source_runtime_diagnostics_service.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/mine/application/mine_page_session_service.dart';
 import '../features/mine/providers.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
 import '../core/logging/app_logger.dart';
@@ -45,6 +46,7 @@ Future<void> bootstrap() async {
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   ActiveAdvancedThemeIdNotifier.prime(prefs);
+  MinePageSessionPriming.prime(prefs);
   AppInterfaceFontSettingsNotifier.prime(prefs);
   AppInterfaceTextScaleNotifier.prime(prefs);
   AppInterfaceFontWeightNotifier.prime(prefs);

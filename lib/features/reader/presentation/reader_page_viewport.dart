@@ -291,6 +291,39 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           ),
         );
         final pageSize = constraints.biggest;
+        Widget buildPage({required int pageIndex}) {
+          return _buildPagedPageContainer(
+            colors: colors,
+            pageIndex: pageIndex,
+            total: pageCount,
+            pageSize: pageSize,
+            pagedViewModel: pagedViewModel,
+            includeBackgroundDecoration:
+                transitionPlan.includeBackgroundDecorationOnPrimaryPage,
+          );
+        }
+
+        if (transitionPlan.renderMode ==
+            ReaderPagedViewportRenderMode.staticPage) {
+          return ReaderTextPagedView(
+            model: pagedViewModel,
+            pageController: _resolveStaticPagedTextPageController(pageCount),
+            pageBuilder: (context, pageIndex) {
+              return buildPage(pageIndex: pageIndex);
+            },
+            onPageChanged: (pageIndex) {
+              if (!mounted) {
+                return;
+              }
+              _updateReaderState(() {
+                _currentPageIndex = pageIndex;
+              });
+              _syncActiveReadingRecordSessionProgress();
+              _scheduleProgressSave();
+            },
+          );
+        }
+
         final pageStack = ReaderPagedViewportTransitionStack(
           plan: transitionPlan,
           pageBuilder:

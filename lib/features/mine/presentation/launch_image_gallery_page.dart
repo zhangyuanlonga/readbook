@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -65,8 +63,7 @@ class _LaunchImageGalleryPageState
       if (!mounted) {
         return;
       }
-      await context.push('/appearance/launch-image/editor?id=${gallery.id}');
-      await _load();
+      await _pushMineRoute('/appearance/launch-image/editor?id=${gallery.id}');
     } finally {
       if (mounted) {
         setState(() {
@@ -77,7 +74,14 @@ class _LaunchImageGalleryPageState
   }
 
   Future<void> _openGalleryEditor(LaunchImageGallery gallery) async {
-    await context.push('/appearance/launch-image/editor?id=${gallery.id}');
+    await _pushMineRoute('/appearance/launch-image/editor?id=${gallery.id}');
+  }
+
+  Future<void> _pushMineRoute(String route) async {
+    await context.push(route);
+    if (!mounted) {
+      return;
+    }
     await _load();
   }
 
@@ -151,7 +155,7 @@ class _LaunchImageGalleryPageState
                               key: ValueKey('launch_gallery_loading'),
                               child: CircularProgressIndicator(),
                             )
-                            : ListView(
+                            : ListView.builder(
                               key: const ValueKey('launch_gallery_content'),
                               padding: EdgeInsets.fromLTRB(
                                 horizontal,
@@ -159,48 +163,54 @@ class _LaunchImageGalleryPageState
                                 horizontal,
                                 metrics.sectionGap + bottomSafe,
                               ),
-                              children: [
-                                AppFadeSlideTransition(
-                                  child: CompactCollectionSearchField(
-                                    controller: _searchController,
-                                    hintText: '搜索启动图集',
-                                    query: _searchQuery,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                    onClear: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _searchQuery = '';
-                                      });
-                                    },
-                                  ),
-                                ),
-                                SizedBox(height: metrics.contentGap),
-                                if (_visibleGalleries.isEmpty)
-                                  AppAnimatedSwitcher(
+                              itemCount:
+                                  _visibleGalleries.isEmpty
+                                      ? 2
+                                      : _visibleGalleries.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == 0) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: metrics.contentGap,
+                                    ),
+                                    child: AppFadeSlideTransition(
+                                      child: CompactCollectionSearchField(
+                                        controller: _searchController,
+                                        hintText: '搜索启动图集',
+                                        query: _searchQuery,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _searchQuery = value;
+                                          });
+                                        },
+                                        onClear: () {
+                                          _searchController.clear();
+                                          setState(() {
+                                            _searchQuery = '';
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                }
+                                if (_visibleGalleries.isEmpty) {
+                                  return AppAnimatedSwitcher(
                                     child: KeyedSubtree(
                                       key: const ValueKey(
                                         'launch_gallery_empty',
                                       ),
                                       child: _buildEmptyState(context),
                                     ),
-                                  )
-                                else
-                                  ..._visibleGalleries.map(
-                                    (gallery) => Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom: metrics.contentGap,
-                                      ),
-                                      child: _buildGalleryCard(
-                                        context,
-                                        gallery,
-                                      ),
-                                    ),
+                                  );
+                                }
+                                final gallery = _visibleGalleries[index - 1];
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: metrics.contentGap,
                                   ),
-                              ],
+                                  child: _buildGalleryCard(context, gallery),
+                                );
+                              },
                             ),
                   ),
                 ),
@@ -253,6 +263,10 @@ class _LaunchImageGalleryPageState
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (gallery.isBuiltIn) ...[
+                  const SizedBox(width: 8),
+                  _buildPill(context, label: '内置'),
+                ],
                 const Spacer(),
                 Icon(
                   Icons.chevron_right_rounded,
@@ -262,9 +276,10 @@ class _LaunchImageGalleryPageState
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 92,
+            AspectRatio(
+              aspectRatio: 3.1,
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(previewCount, (index) {
                   final previewPath =
                       index < gallery.imagePaths.length
@@ -289,19 +304,11 @@ class _LaunchImageGalleryPageState
                             ),
                           ),
                         ),
-                        child:
-                            previewPath == null
-                                ? Icon(
-                                  Icons.image_outlined,
-                                  color: colorScheme.onSurfaceVariant,
-                                )
-                                : ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    File(previewPath),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
+                        child: _buildPreviewSlot(
+                          context,
+                          path: previewPath,
+                          cacheWidth: 280,
+                        ),
                       ),
                     ),
                   );
@@ -309,6 +316,51 @@ class _LaunchImageGalleryPageState
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewSlot(
+    BuildContext context, {
+    required String? path,
+    required int cacheWidth,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (path == null) {
+      return ColoredBox(
+        color: colorScheme.surfaceContainerLow,
+        child: Center(
+          child: Icon(
+            Icons.image_outlined,
+            size: 24,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return LazyFileImage(
+      path: path,
+      fit: BoxFit.cover,
+      cacheWidth: cacheWidth,
+      borderRadius: BorderRadius.circular(10),
+      placeholderIcon: Icons.broken_image_outlined,
+    );
+  }
+
+  Widget _buildPill(BuildContext context, {required String label}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: colorScheme.onSurfaceVariant,
         ),
       ),
     );
