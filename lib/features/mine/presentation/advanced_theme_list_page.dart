@@ -51,7 +51,14 @@ enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
 
 enum _ThemeImportPackageKind { official, red, rgshare }
 
-enum _AdvancedThemeListMoreAction { importBatch, selectThemes }
+enum _AdvancedThemeListMoreAction {
+  importBatch,
+  sortThemes,
+  floatingEdit,
+  selectThemes,
+}
+
+enum _AdvancedThemeSortMode { updatedDesc, nameAsc, categoryAsc }
 
 enum _AdvancedThemeExportDispatchStatus { completed, cancelled, failed }
 
@@ -181,6 +188,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   bool _isAccessLoading = true;
   bool _canUseAdvancedThemes = false;
   bool _isSelectionMode = false;
+  bool _floatingEditEnabled = false;
+  _AdvancedThemeSortMode _themeSortMode = _AdvancedThemeSortMode.updatedDesc;
   String? _savingStatusText;
   int _summaryLoadToken = 0;
 
@@ -311,8 +320,30 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       if (aIsActive != bIsActive) {
         return aIsActive ? -1 : 1;
       }
-      return b.updatedAt.compareTo(a.updatedAt);
+      return switch (_themeSortMode) {
+        _AdvancedThemeSortMode.updatedDesc => b.updatedAt.compareTo(
+          a.updatedAt,
+        ),
+        _AdvancedThemeSortMode.nameAsc => a.name.compareTo(b.name),
+        _AdvancedThemeSortMode.categoryAsc => _compareThemeCategory(a, b),
+      };
     });
+  }
+
+  int _compareThemeCategory(AdvancedThemeSummary a, AdvancedThemeSummary b) {
+    final categoryA = a.category?.trim() ?? '';
+    final categoryB = b.category?.trim() ?? '';
+    if (categoryA.isNotEmpty && categoryB.isNotEmpty) {
+      final compare = categoryA.compareTo(categoryB);
+      if (compare != 0) {
+        return compare;
+      }
+    } else if (categoryA.isNotEmpty) {
+      return -1;
+    } else if (categoryB.isNotEmpty) {
+      return 1;
+    }
+    return a.name.compareTo(b.name);
   }
 
   bool _hasSamePreviewContent(
@@ -456,6 +487,71 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     _showMessage(result);
+  }
+
+  Future<void> _openEditorDialog(String themeId) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('编辑主题'),
+          content: const Text('将打开主题编辑器。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                unawaited(_openEditor(themeId));
+              },
+              child: const Text('编辑'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showThemeSortDialog() async {
+    final selected = await showDialog<_AdvancedThemeSortMode>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('排序主题'),
+          content: RadioGroup<_AdvancedThemeSortMode>(
+            groupValue: _themeSortMode,
+            onChanged: (value) => Navigator.of(dialogContext).pop(value),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                RadioListTile<_AdvancedThemeSortMode>(
+                  value: _AdvancedThemeSortMode.updatedDesc,
+                  title: Text('最近更新'),
+                ),
+                RadioListTile<_AdvancedThemeSortMode>(
+                  value: _AdvancedThemeSortMode.nameAsc,
+                  title: Text('名称 A-Z'),
+                ),
+                RadioListTile<_AdvancedThemeSortMode>(
+                  value: _AdvancedThemeSortMode.categoryAsc,
+                  title: Text('分类优先'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == _themeSortMode || !mounted) {
+      return;
+    }
+    setState(() {
+      _themeSortMode = selected;
+      _themeSummaries = _sortThemeSummaries(_themeSummaries);
+      _pruneSelectionForVisibleThemes();
+    });
   }
 
   Future<void> _duplicateTheme(String themeId) async {
@@ -940,6 +1036,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     switch (action) {
       case _AdvancedThemeListMoreAction.importBatch:
         unawaited(_openBatchImportSheet());
+        break;
+      case _AdvancedThemeListMoreAction.sortThemes:
+        unawaited(_showThemeSortDialog());
+        break;
+      case _AdvancedThemeListMoreAction.floatingEdit:
+        setState(() {
+          _floatingEditEnabled = !_floatingEditEnabled;
+        });
         break;
       case _AdvancedThemeListMoreAction.selectThemes:
         _enterSelectionMode();
@@ -2083,21 +2187,51 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 tooltip: '更多',
                 onSelected: _handleMoreAction,
                 itemBuilder:
-                    (context) =>
-                        const <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
-                          PopupMenuItem(
-                            value: _AdvancedThemeListMoreAction.importBatch,
-                            child: Text('批量导入'),
-                          ),
-                          PopupMenuItem(
-                            value: _AdvancedThemeListMoreAction.selectThemes,
-                            child: Text('选择主题'),
-                          ),
-                        ],
+                    (context) => <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
+                      const PopupMenuItem(
+                        value: _AdvancedThemeListMoreAction.importBatch,
+                        child: Text('批量导入'),
+                      ),
+                      const PopupMenuItem(
+                        value: _AdvancedThemeListMoreAction.sortThemes,
+                        child: Text('排序主题'),
+                      ),
+                      PopupMenuItem(
+                        value: _AdvancedThemeListMoreAction.floatingEdit,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _floatingEditEnabled
+                                  ? Icons.check_box_rounded
+                                  : Icons.check_box_outline_blank_rounded,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            const Text('悬浮编辑按钮'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: _AdvancedThemeListMoreAction.selectThemes,
+                        child: Text('选择主题'),
+                      ),
+                    ],
               ),
             ],
           ],
         ),
+        floatingActionButton:
+            !_isSelectionMode &&
+                    _floatingEditEnabled &&
+                    !_isLoading &&
+                    !_isSaving &&
+                    _visibleThemes.isNotEmpty
+                ? FloatingActionButton(
+                  tooltip: '编辑当前列表首个主题',
+                  onPressed: () => _openEditorDialog(_visibleThemes.first.id),
+                  child: const Icon(Icons.edit_rounded),
+                )
+                : null,
         bottomNavigationBar:
             _isSelectionMode &&
                     !_isAccessLoading &&
@@ -2519,6 +2653,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               ? null
               : _isSelectionMode
               ? () => _toggleThemeSelection(theme.id)
+              : _floatingEditEnabled
+              ? () => _openEditorDialog(theme.id)
               : () => _openEditor(theme.id),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),

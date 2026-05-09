@@ -1849,6 +1849,8 @@ class _AdvancedThemeEditorPageState
     final hexController = TextEditingController(
       text: _formatHex(draftColor.toARGB32()),
     );
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     final result = await showDialog<int>(
       context: context,
@@ -1857,21 +1859,36 @@ class _AdvancedThemeEditorPageState
           builder: (context, setDialogState) {
             return Dialog(
               insetPadding: const EdgeInsets.symmetric(
-                horizontal: 18,
+                horizontal: 16,
                 vertical: 24,
               ),
+              backgroundColor: colorScheme.surfaceContainerHigh,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
+                constraints: const BoxConstraints(maxWidth: 430),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text('选择$title')),
-                          TextButton(
+                          Expanded(
+                            child: Text(
+                              '选择$title',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              _showMessage('吸管取色需要系统截图权限，后续接入。');
+                            },
+                            tooltip: '吸管取色',
+                            icon: const Icon(Icons.colorize_rounded),
+                          ),
+                          FilledButton.tonal(
                             onPressed:
                                 () => Navigator.of(
                                   dialogContext,
@@ -1880,7 +1897,7 @@ class _AdvancedThemeEditorPageState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 18),
                       TextField(
                         controller: hexController,
                         keyboardType: TextInputType.text,
@@ -1899,37 +1916,73 @@ class _AdvancedThemeEditorPageState
                             draftColor = Color(parsed);
                           });
                         },
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
+                          prefixIcon: const Icon(Icons.tag_rounded, size: 18),
                           hintText: '#RRGGBB / #AARRGGBB',
+                          filled: true,
+                          fillColor: colorScheme.surface.withValues(
+                            alpha: 0.72,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       ColorPicker(
                         pickerColor: draftColor,
                         onColorChanged: (color) {
                           setDialogState(() {
                             draftColor = color;
-                            hexController.text = _formatHex(color.toARGB32());
-                            hexController.selection = TextSelection.collapsed(
-                              offset: hexController.text.length,
-                            );
                           });
                         },
-                        enableAlpha: false,
+                        enableAlpha: true,
                         displayThumbColor: true,
                         portraitOnly: true,
-                        paletteType: PaletteType.hueWheel,
-                        pickerAreaHeightPercent: 0.72,
+                        paletteType: PaletteType.hsvWithHue,
+                        colorPickerWidth: 360,
+                        pickerAreaHeightPercent: 0.62,
+                        pickerAreaBorderRadius: const BorderRadius.all(
+                          Radius.circular(12),
+                        ),
                         labelTypes: const [],
-                        hexInputBar: true,
+                        hexInputController: hexController,
                       ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: const Text('取消'),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: draftColor,
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(
+                                color: colorScheme.outline.withValues(
+                                  alpha: 0.38,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _formatHex(draftColor.toARGB32()),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            child: const Text('取消'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],

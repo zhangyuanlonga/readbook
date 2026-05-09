@@ -38,6 +38,18 @@ void main() {
       );
     });
 
+    test('treats title plus images as image-only document', () {
+      final document = ReaderDocument(
+        blocks: const <ReaderBlock>[
+          ReaderTitleBlock(text: '图像章节'),
+          ReaderImageBlock(imageUrl: 'https://example.com/1.jpg'),
+        ],
+      );
+
+      expect(document.isPureImageDocument, isTrue);
+      expect(document.imageUrls, <String>['https://example.com/1.jpg']);
+    });
+
     test('supports json round trip and debug summary', () {
       final document = ReaderDocument(
         blocks: const <ReaderBlock>[

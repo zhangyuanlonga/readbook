@@ -210,6 +210,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   bool _isEditingMetadata = false;
   bool _isSavingMetadata = false;
   String? _metadataInlineNotice;
+  List<BookshelfTaxonomyItem> _detailTags = const <BookshelfTaxonomyItem>[];
+  BookshelfTaxonomyItem? _detailCategory;
   int _detailLoadRequestToken = 0;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _activeSourceId;
@@ -676,6 +678,63 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
+  Widget _buildDetailOrganizationCard() {
+    if (_detailCategory == null && _detailTags.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (_detailCategory != null)
+            _buildDetailTaxonomyChip(
+              item: _detailCategory!,
+              icon: Icons.folder_rounded,
+            ),
+          for (final tag in _detailTags)
+            _buildDetailTaxonomyChip(item: tag, icon: Icons.sell_rounded),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailTaxonomyChip({
+    required BookshelfTaxonomyItem item,
+    required IconData icon,
+  }) {
+    final color = Color(item.colorValue);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            item.name,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget? _buildPresentedIntroCard(BookDetailLoadResult result) {
     final presentedIntro = _resolveIntro(
       _resolvePresentedMetadata(result: result).displayIntro,
@@ -717,6 +776,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           localBookMeta.indexStatus != LocalBookIndexStatus.ready;
 
       final detailCard = _buildDetailCard(result);
+      final organizationCard = _buildDetailOrganizationCard();
       final quickActionsCard = _buildQuickActionsCard(
         auxiliaryState: auxiliaryState,
         hasCatalog: _canOpenCatalogForResult(result),
@@ -733,6 +793,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                 child: Column(
                   children: [
                     quickActionsCard,
+                    if (_detailCategory != null || _detailTags.isNotEmpty) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      organizationCard,
+                    ],
                     if (introCard != null) ...[
                       SizedBox(height: metrics.sectionGap),
                       introCard,
@@ -748,6 +812,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           detailCard,
           SizedBox(height: metrics.sectionGap),
           quickActionsCard,
+          if (_detailCategory != null || _detailTags.isNotEmpty) ...[
+            SizedBox(height: metrics.sectionGap),
+            organizationCard,
+          ],
           if (introCard != null) ...[
             SizedBox(height: metrics.sectionGap),
             introCard,
@@ -1983,6 +2051,69 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         isShelfStateLoading: false,
       ),
     );
+    if (isInBookshelf) {
+      unawaited(
+        _loadDetailOrganizationSnapshot(
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        ),
+      );
+    } else if (mounted) {
+      setState(() {
+        _detailTags = const <BookshelfTaxonomyItem>[];
+        _detailCategory = null;
+      });
+    }
+  }
+
+  Future<void> _loadDetailOrganizationSnapshot({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    final key = '$sourceId::$detailUrl';
+    try {
+      final tagMapFuture = _bookshelfService.getTagMap();
+      final categoryMapFuture = _bookshelfService.getCategoryMap();
+      final tagItemsFuture = _bookshelfService.getTagItems();
+      final categoryItemsFuture = _bookshelfService.getCategoryItems();
+      final tagMap = await tagMapFuture;
+      final categoryMap = await categoryMapFuture;
+      final tagItems = await tagItemsFuture;
+      final categoryItems = await categoryItemsFuture;
+      if (!mounted) {
+        return;
+      }
+      final tagByName = <String, BookshelfTaxonomyItem>{
+        for (final item in tagItems)
+          if (item.name.trim().isNotEmpty) item.name.trim(): item,
+      };
+      final categoryByName = <String, BookshelfTaxonomyItem>{
+        for (final item in categoryItems)
+          if (item.name.trim().isNotEmpty) item.name.trim(): item,
+      };
+      BookshelfTaxonomyItem itemFor(String name) {
+        final normalized = name.trim();
+        return BookshelfTaxonomyItem(
+          name: normalized,
+          colorValue: BookshelfTaxonomyItem.defaultColorForName(normalized),
+        );
+      }
+
+      final tags = (tagMap[key] ?? const <String>[])
+          .map((tag) => tagByName[tag.trim()] ?? itemFor(tag))
+          .where((item) => item.name.isNotEmpty)
+          .toList(growable: false);
+      final categoryName = categoryMap[key]?.trim();
+      setState(() {
+        _detailTags = tags;
+        _detailCategory =
+            categoryName == null || categoryName.isEmpty
+                ? null
+                : (categoryByName[categoryName] ?? itemFor(categoryName));
+      });
+    } catch (_) {
+      // Organization badges are supplemental; detail loading should stay quiet.
+    }
   }
 
   Future<LocalBook?> _loadLocalBookMetaSnapshot({

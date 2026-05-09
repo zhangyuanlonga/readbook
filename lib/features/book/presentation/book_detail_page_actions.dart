@@ -376,8 +376,10 @@ extension on _BookDetailPageState {
     final detail = _result!.detail;
     final initialTagMap = await _bookshelfService.getTagMap();
     final initialTagOrder = await _bookshelfService.getTagOrder();
+    final initialTagItems = await _bookshelfService.getTagItems();
     final initialCategoryMap = await _bookshelfService.getCategoryMap();
     final initialCategoryOrder = await _bookshelfService.getCategoryOrder();
+    final initialCategoryItems = await _bookshelfService.getCategoryItems();
     final bookKey = '${detail.sourceId}::${detail.detailUrl}';
 
     var selectedTags = List<String>.from(
@@ -400,6 +402,14 @@ extension on _BookDetailPageState {
 
     var createTagDraft = '';
     var createCategoryDraft = '';
+    var createTagColor = BookshelfTaxonomyItem.defaultColorForName('新标签');
+    var createCategoryColor = BookshelfTaxonomyItem.defaultColorForName('新分类');
+    final tagColorByName = <String, int>{
+      for (final item in initialTagItems) item.name: item.colorValue,
+    };
+    final categoryColorByName = <String, int>{
+      for (final item in initialCategoryItems) item.name: item.colorValue,
+    };
     String? tagErrorText;
     String? categoryErrorText;
 
@@ -417,6 +427,70 @@ extension on _BookDetailPageState {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final theme = Theme.of(context);
+            const colorChoices = <int>[
+              0xFF6750A4,
+              0xFF386A20,
+              0xFF006A6A,
+              0xFF006D3B,
+              0xFF984061,
+              0xFF8C5000,
+              0xFF00658F,
+              0xFF7D5260,
+            ];
+
+            Widget buildColorPicker({
+              required int selectedColor,
+              required ValueChanged<int> onChanged,
+            }) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final value in colorChoices)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () => onChanged(value),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: Color(value),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            width: selectedColor == value ? 3 : 1,
+                            color:
+                                selectedColor == value
+                                    ? theme.colorScheme.onSurface
+                                    : theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }
+
+            Widget buildNamedChip({
+              required String label,
+              required bool selected,
+              required int colorValue,
+              required ValueChanged<bool> onSelected,
+            }) {
+              final color = Color(colorValue);
+              return FilterChip(
+                avatar: Icon(
+                  selected ? Icons.check_rounded : Icons.circle,
+                  size: 14,
+                  color: color,
+                ),
+                label: Text(label),
+                selected: selected,
+                selectedColor: color.withValues(alpha: 0.16),
+                checkmarkColor: color,
+                side: BorderSide(color: color.withValues(alpha: 0.3)),
+                onSelected: onSelected,
+              );
+            }
 
             void addTagInline() {
               final value = createTagDraft.trim();
@@ -436,10 +510,14 @@ extension on _BookDetailPageState {
                 }
                 return;
               }
+              tagColorByName[value] = createTagColor;
               setSheetState(() {
                 availableTags = <String>[...availableTags, value]..sort();
                 selectedTags = <String>[...selectedTags, value];
                 createTagDraft = '';
+                createTagColor = BookshelfTaxonomyItem.defaultColorForName(
+                  '新标签',
+                );
                 tagErrorText = null;
               });
             }
@@ -453,6 +531,7 @@ extension on _BookDetailPageState {
                 return;
               }
               if (!availableCategories.contains(value)) {
+                categoryColorByName[value] = createCategoryColor;
                 setSheetState(() {
                   availableCategories = <String>[...availableCategories, value]
                     ..sort();
@@ -461,6 +540,9 @@ extension on _BookDetailPageState {
               setSheetState(() {
                 selectedCategory = value;
                 createCategoryDraft = '';
+                createCategoryColor = BookshelfTaxonomyItem.defaultColorForName(
+                  '新分类',
+                );
                 categoryErrorText = null;
               });
             }
@@ -507,6 +589,16 @@ extension on _BookDetailPageState {
                         ),
                         ...availableCategories.map(
                           (category) => ChoiceChip(
+                            avatar: Icon(
+                              Icons.folder_rounded,
+                              size: 14,
+                              color: Color(
+                                categoryColorByName[category] ??
+                                    BookshelfTaxonomyItem.defaultColorForName(
+                                      category,
+                                    ),
+                              ),
+                            ),
                             label: Text(category),
                             selected: selectedCategory == category,
                             onSelected: (_) {
@@ -538,6 +630,15 @@ extension on _BookDetailPageState {
                       },
                       onSubmitted: (_) => addCategoryInline(),
                     ),
+                    const SizedBox(height: 8),
+                    buildColorPicker(
+                      selectedColor: createCategoryColor,
+                      onChanged: (value) {
+                        setSheetState(() {
+                          createCategoryColor = value;
+                        });
+                      },
+                    ),
                     const SizedBox(height: 18),
                     Text(
                       '标签',
@@ -551,9 +652,14 @@ extension on _BookDetailPageState {
                       runSpacing: 8,
                       children: availableTags
                           .map(
-                            (tag) => FilterChip(
-                              label: Text(tag),
+                            (tag) => buildNamedChip(
+                              label: tag,
                               selected: selectedTags.contains(tag),
+                              colorValue:
+                                  tagColorByName[tag] ??
+                                  BookshelfTaxonomyItem.defaultColorForName(
+                                    tag,
+                                  ),
                               onSelected: (selected) {
                                 setSheetState(() {
                                   if (selected) {
@@ -592,6 +698,15 @@ extension on _BookDetailPageState {
                       },
                       onSubmitted: (_) => addTagInline(),
                     ),
+                    const SizedBox(height: 8),
+                    buildColorPicker(
+                      selectedColor: createTagColor,
+                      onChanged: (value) {
+                        setSheetState(() {
+                          createTagColor = value;
+                        });
+                      },
+                    ),
                     const SizedBox(height: 18),
                     Row(
                       children: [
@@ -628,6 +743,22 @@ extension on _BookDetailPageState {
         detail: detail,
         category: selectedCategory,
         tags: selectedTags,
+      );
+      for (final entry in tagColorByName.entries) {
+        await _bookshelfService.upsertTagItem(
+          name: entry.key,
+          colorValue: entry.value,
+        );
+      }
+      for (final entry in categoryColorByName.entries) {
+        await _bookshelfService.upsertCategoryItem(
+          name: entry.key,
+          colorValue: entry.value,
+        );
+      }
+      await _loadDetailOrganizationSnapshot(
+        sourceId: detail.sourceId,
+        detailUrl: detail.detailUrl,
       );
       _showMessage('归类已保存。');
     } catch (_) {

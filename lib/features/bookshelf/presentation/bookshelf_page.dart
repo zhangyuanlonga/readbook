@@ -4,6 +4,8 @@ import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -345,8 +347,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       const <String, _BookshelfProgressDisplay>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
   List<String> _tagOrder = const <String>[];
+  Map<String, BookshelfTaxonomyItem> _tagItemByName =
+      const <String, BookshelfTaxonomyItem>{};
   Map<String, String> _bookCategoriesByKey = const <String, String>{};
   List<String> _categoryOrder = const <String>[];
+  Map<String, BookshelfTaxonomyItem> _categoryItemByName =
+      const <String, BookshelfTaxonomyItem>{};
   List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
   bool _bookshelfMetadataReady = false;
   Object? _derivedBookshelfFingerprint;
@@ -371,6 +377,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
   bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
   bool _gridShowSourceBadge = BookshelfService.defaultGridShowSourceBadge;
+  bool _gridShowTaxonomyBadges = BookshelfService.defaultGridShowTaxonomyBadges;
   bool _gridAlwaysShowSearchBar =
       BookshelfService.defaultGridAlwaysShowSearchBar;
   bool _gridPinSearchBar = BookshelfService.defaultGridPinSearchBar;
@@ -381,6 +388,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
   bool _listShowSourceBadge = BookshelfService.defaultListShowSourceBadge;
+  bool _listShowTaxonomyBadges = BookshelfService.defaultListShowTaxonomyBadges;
   bool _listCompactMode = BookshelfService.defaultListCompactMode;
   bool _listShowRecentReadTime = BookshelfService.defaultListShowRecentReadTime;
   bool _listAlwaysShowSearchBar =
@@ -842,6 +850,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   _BookshelfFilter.all,
                 );
               case BookshelfTaxonomyAction.create ||
+                  BookshelfTaxonomyAction.metadataChanged ||
                   BookshelfTaxonomyAction.orderChanged ||
                   BookshelfTaxonomyAction.assignmentChanged:
                 break;
@@ -861,6 +870,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   _BookshelfFilter.all,
                 );
               case BookshelfTaxonomyAction.create ||
+                  BookshelfTaxonomyAction.metadataChanged ||
                   BookshelfTaxonomyAction.orderChanged ||
                   BookshelfTaxonomyAction.assignmentChanged:
                 break;
@@ -1201,6 +1211,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (_gridShowLatestChapter) {
       extraHeight += ((_gridShowTitle || _gridShowAuthor) ? 1 : 0) + 16;
     }
+    if (_gridShowTaxonomyBadges &&
+        (_bookTagsByKey.isNotEmpty || _bookCategoriesByKey.isNotEmpty)) {
+      extraHeight += 22;
+    }
     if (_gridShowProgressBar) {
       extraHeight +=
           ((_gridShowTitle || _gridShowAuthor || _gridShowLatestChapter)
@@ -1209,6 +1223,75 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           5;
     }
     return extraHeight;
+  }
+
+  Widget _buildBookTaxonomyStrip(
+    BookshelfBook book, {
+    required bool compact,
+    int maxTags = 2,
+  }) {
+    final category = _categoryOfBook(book);
+    final tags = _tagsOfBook(book).take(maxTags).toList(growable: false);
+    if ((category == null || category.isEmpty) && tags.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Wrap(
+      spacing: compact ? 4 : 6,
+      runSpacing: compact ? 4 : 5,
+      children: [
+        if (category != null && category.isNotEmpty)
+          _buildTaxonomyPill(
+            item: _categoryItem(category),
+            icon: Icons.folder_rounded,
+            compact: compact,
+          ),
+        for (final tag in tags)
+          _buildTaxonomyPill(
+            item: _tagItem(tag),
+            icon: Icons.sell_rounded,
+            compact: compact,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTaxonomyPill({
+    required BookshelfTaxonomyItem item,
+    required IconData icon,
+    required bool compact,
+  }) {
+    final color = Color(item.colorValue);
+    return Container(
+      constraints: BoxConstraints(maxWidth: compact ? 92 : 128),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 5 : 7,
+        vertical: compact ? 2 : 3,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: compact ? 10 : 12, color: color),
+          SizedBox(width: compact ? 3 : 4),
+          Flexible(
+            child: Text(
+              item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontSize: compact ? 10 : null,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildReactiveGridCard(BookshelfBook book) {
@@ -1515,6 +1598,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ),
                   ),
                 ],
+                if (!coverOnly && !overlayTitle && _gridShowTaxonomyBadges) ...[
+                  SizedBox(
+                    height:
+                        (_gridShowTitle ||
+                                _gridShowAuthor ||
+                                _gridShowLatestChapter)
+                            ? 4
+                            : 0,
+                  ),
+                  _buildBookTaxonomyStrip(book, compact: true, maxTags: 1),
+                ],
                 if (!coverOnly && !overlayTitle && _gridShowProgressBar) ...[
                   SizedBox(
                     height:
@@ -1782,6 +1876,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ),
                         ),
                       ],
+                      if (_listShowTaxonomyBadges) ...[
+                        SizedBox(height: _listCompactMode ? 5 : 7),
+                        _buildBookTaxonomyStrip(
+                          book,
+                          compact: _listCompactMode,
+                          maxTags: _listCompactMode ? 1 : 2,
+                        ),
+                      ],
                       SizedBox(height: _listCompactMode ? 3 : 4),
                       Text(
                         progressDisplay.summaryText,
@@ -2023,8 +2125,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       identityHashCode(_localBooksById),
       identityHashCode(_bookTagsByKey),
       identityHashCode(_tagOrder),
+      identityHashCode(_tagItemByName),
       identityHashCode(_bookCategoriesByKey),
       identityHashCode(_categoryOrder),
+      identityHashCode(_categoryItemByName),
+      _gridShowTaxonomyBadges,
+      _listShowTaxonomyBadges,
       identityHashCode(_baseFilterOrder),
     );
     if (_derivedBookshelfFingerprint == fingerprint) {
@@ -2230,6 +2336,35 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   String? _categoryOfBook(BookshelfBook book) {
     return _bookCategoriesByKey[_bookKey(book)];
+  }
+
+  Map<String, BookshelfTaxonomyItem> _taxonomyItemsByName(
+    Iterable<BookshelfTaxonomyItem> items,
+  ) {
+    return Map<String, BookshelfTaxonomyItem>.unmodifiable(
+      <String, BookshelfTaxonomyItem>{
+        for (final item in items)
+          if (item.name.trim().isNotEmpty) item.name.trim(): item,
+      },
+    );
+  }
+
+  BookshelfTaxonomyItem _tagItem(String tag) {
+    final normalized = tag.trim();
+    return _tagItemByName[normalized] ??
+        BookshelfTaxonomyItem(
+          name: normalized,
+          colorValue: BookshelfTaxonomyItem.defaultColorForName(normalized),
+        );
+  }
+
+  BookshelfTaxonomyItem _categoryItem(String category) {
+    final normalized = category.trim();
+    return _categoryItemByName[normalized] ??
+        BookshelfTaxonomyItem(
+          name: normalized,
+          colorValue: BookshelfTaxonomyItem.defaultColorForName(normalized),
+        );
   }
 
   String _filterLabel(_BookshelfFilter filter) {
@@ -2826,8 +2961,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final sourceTypeFuture = _loadSourceTypeMap();
     final rawTagMapFuture = _bookshelfService.getTagMap();
     final tagOrderFuture = _bookshelfService.getTagOrder();
+    final tagItemsFuture = _bookshelfService.getTagItems();
     final rawCategoryMapFuture = _bookshelfService.getCategoryMap();
     final categoryOrderFuture = _bookshelfService.getCategoryOrder();
+    final categoryItemsFuture = _bookshelfService.getCategoryItems();
     final baseFilterOrderNamesFuture = _bookshelfService.getBaseFilterOrder();
 
     try {
@@ -2835,8 +2972,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         sourceTypeFuture,
         rawTagMapFuture,
         tagOrderFuture,
+        tagItemsFuture,
         rawCategoryMapFuture,
         categoryOrderFuture,
+        categoryItemsFuture,
         baseFilterOrderNamesFuture,
       ]);
     } catch (_) {
@@ -2850,8 +2989,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final sourceTypeMap = await sourceTypeFuture;
     final rawTagMap = await rawTagMapFuture;
     final tagOrder = await tagOrderFuture;
+    final tagItems = await tagItemsFuture;
     final rawCategoryMap = await rawCategoryMapFuture;
     final categoryOrder = await categoryOrderFuture;
+    final categoryItems = await categoryItemsFuture;
     final baseFilterOrderNames = await baseFilterOrderNamesFuture;
 
     final validBookKeys = books.map(_bookKey).toSet();
@@ -2886,8 +3027,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _sourceTypeBySourceId = sourceTypeMap;
       _bookTagsByKey = tagMap;
       _tagOrder = _normalizeTags(tagOrder);
+      _tagItemByName = _taxonomyItemsByName(tagItems);
       _bookCategoriesByKey = categoryMap;
       _categoryOrder = _normalizeTags(categoryOrder);
+      _categoryItemByName = _taxonomyItemsByName(categoryItems);
       _baseFilterOrder = baseFilterOrderNames
           .map((name) {
             for (final filter in _kDefaultBaseFilters) {
@@ -3341,6 +3484,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         await _bookshelfService.loadListShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadListShowProgressBar();
     final showSourceBadge = await _bookshelfService.loadListShowSourceBadge();
+    final showTaxonomyBadges =
+        await _bookshelfService.loadListShowTaxonomyBadges();
     final compactMode = await _bookshelfService.loadListCompactMode();
     final showRecentReadTime =
         await _bookshelfService.loadListShowRecentReadTime();
@@ -3358,6 +3503,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowLatestChapter == showLatestChapter &&
         _listShowProgressBar == showProgressBar &&
         _listShowSourceBadge == showSourceBadge &&
+        _listShowTaxonomyBadges == showTaxonomyBadges &&
         _listCompactMode == compactMode &&
         _listShowRecentReadTime == showRecentReadTime &&
         _listAlwaysShowSearchBar == alwaysShowSearchBar &&
@@ -3371,6 +3517,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowLatestChapter = showLatestChapter;
       _listShowProgressBar = showProgressBar;
       _listShowSourceBadge = showSourceBadge;
+      _listShowTaxonomyBadges = showTaxonomyBadges;
       _listCompactMode = compactMode;
       _listShowRecentReadTime = showRecentReadTime;
       _listAlwaysShowSearchBar = alwaysShowSearchBar;
@@ -3408,6 +3555,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         await _bookshelfService.loadGridShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadGridShowProgressBar();
     final showSourceBadge = await _bookshelfService.loadGridShowSourceBadge();
+    final showTaxonomyBadges =
+        await _bookshelfService.loadGridShowTaxonomyBadges();
     final alwaysShowSearchBar =
         await _bookshelfService.loadGridAlwaysShowSearchBar();
     final pinSearchBar = await _bookshelfService.loadGridPinSearchBar();
@@ -3430,6 +3579,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridShowLatestChapter == showLatestChapter &&
         _gridShowProgressBar == showProgressBar &&
         _gridShowSourceBadge == showSourceBadge &&
+        _gridShowTaxonomyBadges == showTaxonomyBadges &&
         _gridAlwaysShowSearchBar == alwaysShowSearchBar &&
         _gridPinSearchBar == pinSearchBar &&
         _gridQuickFilterContent == quickFilterContent) {
@@ -3449,6 +3599,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _gridShowLatestChapter = showLatestChapter;
       _gridShowProgressBar = showProgressBar;
       _gridShowSourceBadge = showSourceBadge;
+      _gridShowTaxonomyBadges = showTaxonomyBadges;
       _gridAlwaysShowSearchBar = alwaysShowSearchBar;
       _gridPinSearchBar = pinSearchBar;
       _gridQuickFilterContent = quickFilterContent;

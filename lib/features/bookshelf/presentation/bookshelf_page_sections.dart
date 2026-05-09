@@ -178,8 +178,12 @@ extension on _BookshelfPageState {
 
   double get _bookshelfSearchSectionHeight {
     final quickFilterHeight = _shouldShowBookshelfQuickFilters ? 46.0 : 0.0;
-    final searchHeight = _shouldShowExpandedBookshelfSearch ? 42.0 : 40.0;
-    return 12 + quickFilterHeight + searchHeight;
+    final searchHeight = _shouldShowExpandedBookshelfSearch ? 42.0 : 0.0;
+    final gapHeight =
+        _shouldShowBookshelfQuickFilters && _shouldShowExpandedBookshelfSearch
+            ? 8.0
+            : 0.0;
+    return 12 + quickFilterHeight + gapHeight + searchHeight;
   }
 
   Widget _buildBookshelfSearchSection({
@@ -200,21 +204,11 @@ extension on _BookshelfPageState {
         children: [
           if (_shouldShowBookshelfQuickFilters) ...[
             _buildBookshelfQuickFilterBar(),
-            const SizedBox(height: 8),
+            if (_shouldShowExpandedBookshelfSearch) const SizedBox(height: 8),
           ],
-          _shouldShowExpandedBookshelfSearch
-              ? _buildBookshelfSearchBar()
-              : _buildBookshelfSearchTrigger(),
+          if (_shouldShowExpandedBookshelfSearch) _buildBookshelfSearchBar(),
         ],
       ),
-    );
-  }
-
-  Widget _buildBookshelfSearchTrigger() {
-    return BookshelfInlineSearchTrigger(
-      palette: _resolvedPalette(context),
-      summaryText: _bookshelfSearchSummaryText,
-      onTap: _expandBookshelfSearch,
     );
   }
 

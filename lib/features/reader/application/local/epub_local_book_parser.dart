@@ -138,7 +138,7 @@ class EpubLocalBookParser implements LocalBookParser {
       chapters.add(
         LocalParsedChapter(
           title: resolvedTitle,
-          content: structuredDocument.compatibilityContent,
+          content: _compatibilityContentForChapter(structuredDocument),
           imageUrls: structuredDocument.imageUrls,
           sourceRef: _encodeChapterSourceRef(candidate),
           document: structuredDocument,
@@ -215,7 +215,7 @@ class EpubLocalBookParser implements LocalBookParser {
     );
     return LocalParsedChapter(
       title: chapter.title,
-      content: structuredDocument.compatibilityContent,
+      content: _compatibilityContentForChapter(structuredDocument),
       imageUrls: structuredDocument.imageUrls,
       sourceRef: sourceRef,
       document: structuredDocument,
@@ -1733,6 +1733,9 @@ class EpubLocalBookParser implements LocalBookParser {
     ReaderDocument document, {
     required String chapterTitle,
   }) {
+    if (document.isPureImageDocument) {
+      return document;
+    }
     if (document.blocks.any((block) => block is ReaderTitleBlock)) {
       return document;
     }
@@ -1746,6 +1749,10 @@ class EpubLocalBookParser implements LocalBookParser {
         ...document.blocks,
       ],
     );
+  }
+
+  String _compatibilityContentForChapter(ReaderDocument document) {
+    return document.isPureImageDocument ? '' : document.compatibilityContent;
   }
 
   bool _isBlockElement(String tagName) {

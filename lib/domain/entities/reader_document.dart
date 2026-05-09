@@ -240,8 +240,13 @@ class ReaderDocument {
         block is ReaderFootnoteBlock,
   );
 
-  bool get isPureImageDocument =>
-      blocks.isNotEmpty && blocks.every((block) => block is ReaderImageBlock);
+  bool get isPureImageDocument {
+    final contentBlocks = blocks
+        .where((block) => block is! ReaderTitleBlock)
+        .toList(growable: false);
+    return contentBlocks.isNotEmpty &&
+        contentBlocks.every((block) => block is ReaderImageBlock);
+  }
 
   List<String> get imageUrls {
     return blocks

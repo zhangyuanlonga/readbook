@@ -52,10 +52,20 @@ extension on _BookshelfPageState {
   }
 
   bool get _shouldShowBookshelfSearchSliver {
-    return _books.isNotEmpty ||
-        _alwaysShowBookshelfSearchBar ||
+    return _alwaysShowBookshelfSearchBar ||
         _hasBookshelfSearchKeyword ||
-        _isBookshelfSearchExpanded;
+        _isBookshelfSearchExpanded ||
+        _shouldShowBookshelfQuickFilters;
+  }
+
+  void _closeBookshelfSearch({bool clearKeyword = false}) {
+    _isBookshelfSearchExpanded = false;
+    _bookshelfSearchFocusNode.unfocus();
+    if (!clearKeyword) {
+      return;
+    }
+    _bookshelfSearchController.clear();
+    _bookshelfSearchKeyword = '';
   }
 
   void _updateBookshelfLayoutPreservingScroll(VoidCallback mutation) {
@@ -78,22 +88,6 @@ extension on _BookshelfPageState {
         return;
       }
       controller.jumpTo(target);
-    });
-  }
-
-  void _expandBookshelfSearch() {
-    if (_shouldShowExpandedBookshelfSearch) {
-      _bookshelfSearchFocusNode.requestFocus();
-      return;
-    }
-    _updateBookshelfState(() {
-      _isBookshelfSearchExpanded = true;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _bookshelfSearchFocusNode.requestFocus();
     });
   }
 
@@ -201,6 +195,7 @@ extension on _BookshelfPageState {
     var draftShowLatestChapter = _gridShowLatestChapter;
     var draftShowProgressBar = _gridShowProgressBar;
     var draftShowSourceBadge = _gridShowSourceBadge;
+    var draftShowTaxonomyBadges = _gridShowTaxonomyBadges;
     var draftGridAlwaysShowSearchBar = _gridAlwaysShowSearchBar;
     var draftGridPinSearchBar = _gridPinSearchBar;
     var draftGridQuickFilterContent = _gridQuickFilterContent;
@@ -209,6 +204,7 @@ extension on _BookshelfPageState {
     var draftListShowLatestChapter = _listShowLatestChapter;
     var draftListShowProgressBar = _listShowProgressBar;
     var draftListShowSourceBadge = _listShowSourceBadge;
+    var draftListShowTaxonomyBadges = _listShowTaxonomyBadges;
     var draftListCompactMode = _listCompactMode;
     var draftListShowRecentReadTime = _listShowRecentReadTime;
     var draftListAlwaysShowSearchBar = _listAlwaysShowSearchBar;
@@ -261,6 +257,9 @@ extension on _BookshelfPageState {
                   await _bookshelfService.saveGridShowSourceBadge(
                     draftShowSourceBadge,
                   );
+                  await _bookshelfService.saveGridShowTaxonomyBadges(
+                    draftShowTaxonomyBadges,
+                  );
                   await _bookshelfService.saveGridAlwaysShowSearchBar(
                     draftGridAlwaysShowSearchBar,
                   );
@@ -294,6 +293,9 @@ extension on _BookshelfPageState {
                   );
                   await _bookshelfService.saveListShowSourceBadge(
                     draftListShowSourceBadge,
+                  );
+                  await _bookshelfService.saveListShowTaxonomyBadges(
+                    draftListShowTaxonomyBadges,
                   );
                   await _bookshelfService.saveListCompactMode(
                     draftListCompactMode,
@@ -432,7 +434,7 @@ extension on _BookshelfPageState {
                       title: '搜索框状态',
                       subtitle:
                           alwaysShowSearchBar
-                              ? '当前显示搜索框，关闭后会收起为紧凑入口。'
+                              ? '当前显示搜索框，关闭后会隐藏搜索入口。'
                               : '当前隐藏搜索框，开启后会直接显示搜索框。',
                       onChanged: onAlwaysShowChanged,
                     ),
@@ -784,6 +786,22 @@ extension on _BookshelfPageState {
                         unawaited(persistGridSettings());
                       },
                     ),
+                    buildCompactSwitchTile(
+                      value: draftShowTaxonomyBadges,
+                      title: '显示分类和标签',
+                      subtitle: '在网格书籍下方显示彩色分类和标签。',
+                      onChanged: (value) {
+                        setSheetState(() {
+                          draftShowTaxonomyBadges = value;
+                        });
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          _updateBookshelfState(() {
+                            _gridShowTaxonomyBadges = value;
+                          });
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
                     buildSearchSettings(
                       alwaysShowSearchBar: draftGridAlwaysShowSearchBar,
                       pinSearchBar: draftGridPinSearchBar,
@@ -796,11 +814,13 @@ extension on _BookshelfPageState {
                           _updateBookshelfState(() {
                             _gridAlwaysShowSearchBar = value;
                             if (!value && _useGridView) {
-                              _isBookshelfSearchExpanded = false;
-                              _bookshelfSearchFocusNode.unfocus();
+                              _closeBookshelfSearch(clearKeyword: true);
                             }
                           });
                         });
+                        if (!value && _useGridView) {
+                          _syncSelectionWithBooks();
+                        }
                         unawaited(persistGridSettings());
                       },
                       onPinChanged: (value) {
@@ -938,6 +958,22 @@ extension on _BookshelfPageState {
                       },
                     ),
                     buildCompactSwitchTile(
+                      value: draftListShowTaxonomyBadges,
+                      title: '显示分类和标签',
+                      subtitle: '在列表书籍信息中显示彩色分类和标签。',
+                      onChanged: (value) {
+                        setSheetState(() {
+                          draftListShowTaxonomyBadges = value;
+                        });
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          _updateBookshelfState(() {
+                            _listShowTaxonomyBadges = value;
+                          });
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
+                    buildCompactSwitchTile(
                       value: draftListShowRecentReadTime,
                       title: '显示最近阅读时间',
                       subtitle: '有阅读记录的书籍会在列表中显示最近阅读时间。',
@@ -963,11 +999,13 @@ extension on _BookshelfPageState {
                           _updateBookshelfState(() {
                             _listAlwaysShowSearchBar = value;
                             if (!value && !_useGridView) {
-                              _isBookshelfSearchExpanded = false;
-                              _bookshelfSearchFocusNode.unfocus();
+                              _closeBookshelfSearch(clearKeyword: true);
                             }
                           });
                         });
+                        if (!value && !_useGridView) {
+                          _syncSelectionWithBooks();
+                        }
                         unawaited(persistListSettings());
                       },
                       onPinChanged: (value) {
@@ -1252,11 +1290,31 @@ extension on _BookshelfPageState {
             Widget buildSectionTitle(String title) {
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                child: Text(
-                  title,
-                  style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (title == '分类' || title == '标签')
+                      IconButton(
+                        tooltip: '新增$title',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          _dismissBookshelfBottomSheet(
+                            sheetContext,
+                            title == '分类'
+                                ? 'manage_category::__new__'
+                                : 'manage_tag::__new__',
+                          );
+                        },
+                        icon: const Icon(Icons.add_circle_outline_rounded),
+                      ),
+                  ],
                 ),
               );
             }
@@ -1269,7 +1327,13 @@ extension on _BookshelfPageState {
               VoidCallback? onTap,
               IconData? icon,
               String? subtitle,
+              Color? accentColor,
+              VoidCallback? onManage,
             }) {
+              final leadingColor =
+                  selected
+                      ? colorScheme.primary
+                      : accentColor ?? colorScheme.onSurfaceVariant;
               return Material(
                 color:
                     selected
@@ -1286,14 +1350,7 @@ extension on _BookshelfPageState {
                     child: Row(
                       children: [
                         if (icon != null) ...[
-                          Icon(
-                            icon,
-                            size: 18,
-                            color:
-                                selected
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurfaceVariant,
-                          ),
+                          Icon(icon, size: 18, color: leadingColor),
                           const SizedBox(width: 10),
                         ],
                         Expanded(
@@ -1336,6 +1393,15 @@ extension on _BookshelfPageState {
                           ),
                         ),
                         const SizedBox(width: 6),
+                        if (onManage != null) ...[
+                          IconButton(
+                            tooltip: '编辑',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: onManage,
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                          ),
+                          const SizedBox(width: 2),
+                        ],
                         if (selected)
                           Icon(
                             Icons.check_rounded,
@@ -1454,8 +1520,9 @@ extension on _BookshelfPageState {
                         selected: _activeView.isUncategorized,
                         icon: Icons.folder_off_outlined,
                       ),
-                    ...effectiveVisibleCategories.map(
-                      (category) => buildOptionTile(
+                    ...effectiveVisibleCategories.map((category) {
+                      final item = _categoryItem(category);
+                      return buildOptionTile(
                         value: 'category::$category',
                         label: category,
                         countText: '${categoryBookCount[category] ?? 0}',
@@ -1463,8 +1530,14 @@ extension on _BookshelfPageState {
                             _activeView.isCategory &&
                             _activeView.category == category,
                         icon: Icons.folder_copy_outlined,
-                      ),
-                    ),
+                        accentColor: Color(item.colorValue),
+                        onManage:
+                            () => _dismissBookshelfBottomSheet(
+                              sheetContext,
+                              'manage_category::$category',
+                            ),
+                      );
+                    }),
                     if (searchKeyword.trim().isEmpty &&
                         visibleCategories.length > 6)
                       Padding(
@@ -1497,15 +1570,22 @@ extension on _BookshelfPageState {
                           selected: _activeView.isTag && _activeView.tag == '',
                           icon: Icons.sell_outlined,
                         ),
-                      ...effectiveVisibleTags.map(
-                        (tag) => buildOptionTile(
+                      ...effectiveVisibleTags.map((tag) {
+                        final item = _tagItem(tag);
+                        return buildOptionTile(
                           value: 'tag::$tag',
                           label: tag,
                           countText: '${tagBookCount[tag] ?? 0}',
                           selected: _activeView.isTag && _activeView.tag == tag,
                           icon: Icons.sell_outlined,
-                        ),
-                      ),
+                          accentColor: Color(item.colorValue),
+                          onManage:
+                              () => _dismissBookshelfBottomSheet(
+                                sheetContext,
+                                'manage_tag::$tag',
+                              ),
+                        );
+                      }),
                       if (searchKeyword.trim().isEmpty &&
                           visibleTags.length > 6)
                         Padding(
@@ -1538,6 +1618,20 @@ extension on _BookshelfPageState {
     );
 
     if (!mounted || selected == null) {
+      return;
+    }
+
+    if (selected.startsWith('manage_tag::')) {
+      final tag = selected.substring(12).trim();
+      await _showTaxonomyEditor(kind: BookshelfTaxonomyKind.tag, name: tag);
+      return;
+    }
+    if (selected.startsWith('manage_category::')) {
+      final category = selected.substring(17).trim();
+      await _showTaxonomyEditor(
+        kind: BookshelfTaxonomyKind.category,
+        name: category,
+      );
       return;
     }
 
@@ -1583,6 +1677,325 @@ extension on _BookshelfPageState {
         break;
     }
   }
+
+  Future<void> _showTaxonomyEditor({
+    required BookshelfTaxonomyKind kind,
+    required String name,
+  }) async {
+    final isTag = kind == BookshelfTaxonomyKind.tag;
+    final isNew = name == '__new__' || name.trim().isEmpty;
+    final existingItem =
+        isNew ? null : (isTag ? _tagItem(name) : _categoryItem(name));
+    final initialColor =
+        existingItem?.colorValue ??
+        BookshelfTaxonomyItem.defaultColorForName(isTag ? '新标签' : '新分类');
+
+    final result = await showDialog<_BookshelfTaxonomyEditorResult>(
+      context: context,
+      builder:
+          (dialogContext) => _BookshelfTaxonomyEditorDialog(
+            kind: kind,
+            isNew: isNew,
+            initialName: isNew ? '' : existingItem?.name ?? name.trim(),
+            initialColorValue: initialColor,
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    try {
+      if (result.delete) {
+        if (isTag) {
+          await _bookshelfService.deleteTag(name);
+        } else {
+          await _bookshelfService.deleteCategory(name);
+        }
+        await _loadBookshelf(force: true);
+        _showMessage(isTag ? '标签已删除。' : '分类已删除。');
+        return;
+      }
+
+      final nextName = result.name;
+      if (isTag) {
+        if (!isNew && nextName != name.trim()) {
+          await _bookshelfService.renameTag(fromTag: name, toTag: nextName);
+        }
+        await _bookshelfService.upsertTagItem(
+          name: nextName,
+          colorValue: result.colorValue,
+        );
+      } else {
+        if (!isNew && nextName != name.trim()) {
+          await _bookshelfService.renameCategory(
+            fromCategory: name,
+            toCategory: nextName,
+          );
+        }
+        await _bookshelfService.upsertCategoryItem(
+          name: nextName,
+          colorValue: result.colorValue,
+        );
+      }
+      await _loadBookshelf(force: true);
+      _showMessage(isTag ? '标签已保存。' : '分类已保存。');
+    } catch (_) {
+      _showMessage(isTag ? '标签保存失败，请重试。' : '分类保存失败，请重试。');
+    }
+  }
+}
+
+class _BookshelfTaxonomyEditorResult {
+  const _BookshelfTaxonomyEditorResult.save({
+    required this.name,
+    required this.colorValue,
+  }) : delete = false;
+
+  const _BookshelfTaxonomyEditorResult.delete()
+    : name = '',
+      colorValue = 0,
+      delete = true;
+
+  final String name;
+  final int colorValue;
+  final bool delete;
+}
+
+class _BookshelfTaxonomyEditorDialog extends StatefulWidget {
+  const _BookshelfTaxonomyEditorDialog({
+    required this.kind,
+    required this.isNew,
+    required this.initialName,
+    required this.initialColorValue,
+  });
+
+  final BookshelfTaxonomyKind kind;
+  final bool isNew;
+  final String initialName;
+  final int initialColorValue;
+
+  @override
+  State<_BookshelfTaxonomyEditorDialog> createState() =>
+      _BookshelfTaxonomyEditorDialogState();
+}
+
+class _BookshelfTaxonomyEditorDialogState
+    extends State<_BookshelfTaxonomyEditorDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _hexController;
+  late Color _draftColor;
+  String? _errorText;
+
+  bool get _isTag => widget.kind == BookshelfTaxonomyKind.tag;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftColor = Color(widget.initialColorValue);
+    _nameController = TextEditingController(text: widget.initialName);
+    _hexController = TextEditingController(
+      text: _formatTaxonomyHex(_draftColor.toARGB32()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() {
+        _errorText = _isTag ? '请输入标签名称' : '请输入分类名称';
+      });
+      return;
+    }
+    Navigator.of(context).pop(
+      _BookshelfTaxonomyEditorResult.save(
+        name: name,
+        colorValue: _draftColor.toARGB32(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final title =
+        widget.isNew ? (_isTag ? '新增标签' : '新增分类') : '编辑${_isTag ? '标签' : '分类'}';
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      backgroundColor: colorScheme.surfaceContainerHigh,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 430),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (!widget.isNew)
+                    IconButton(
+                      onPressed:
+                          () => Navigator.of(
+                            context,
+                          ).pop(const _BookshelfTaxonomyEditorResult.delete()),
+                      tooltip: '删除',
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  FilledButton.tonal(onPressed: _save, child: const Text('保存')),
+                ],
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _nameController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: _isTag ? '标签名称' : '分类名称',
+                  errorText: _errorText,
+                  filled: true,
+                  fillColor: colorScheme.surface.withValues(alpha: 0.72),
+                ),
+                onChanged: (_) {
+                  if (_errorText == null) {
+                    return;
+                  }
+                  setState(() {
+                    _errorText = null;
+                  });
+                },
+                onSubmitted: (_) => _save(),
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _hexController,
+                keyboardType: TextInputType.text,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
+                ],
+                onChanged: (value) {
+                  final parsed = _parseTaxonomyHexColor(value);
+                  if (parsed == null) {
+                    return;
+                  }
+                  setState(() {
+                    _draftColor = Color(parsed);
+                  });
+                },
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                  hintText: '#RRGGBB / #AARRGGBB',
+                  filled: true,
+                  fillColor: colorScheme.surface.withValues(alpha: 0.72),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ColorPicker(
+                pickerColor: _draftColor,
+                onColorChanged: (color) {
+                  setState(() {
+                    _draftColor = color;
+                  });
+                },
+                enableAlpha: true,
+                displayThumbColor: true,
+                portraitOnly: true,
+                paletteType: PaletteType.hsvWithHue,
+                colorPickerWidth: 360,
+                pickerAreaHeightPercent: 0.62,
+                pickerAreaBorderRadius: const BorderRadius.all(
+                  Radius.circular(12),
+                ),
+                labelTypes: const [],
+                hexInputController: _hexController,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _draftColor,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color: colorScheme.outline.withValues(alpha: 0.38),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _formatTaxonomyHex(_draftColor.toARGB32()),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+int? _parseTaxonomyHexColor(String raw) {
+  final normalized = raw.trim().toUpperCase();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  final body =
+      normalized.startsWith('#') ? normalized.substring(1) : normalized;
+  if (body.length == 6) {
+    return int.tryParse('FF$body', radix: 16);
+  }
+  if (body.length == 8) {
+    return int.tryParse(body, radix: 16);
+  }
+  return null;
+}
+
+String _formatTaxonomyHex(int? value) {
+  if (value == null) {
+    return '';
+  }
+  final hex = value.toRadixString(16).toUpperCase().padLeft(8, '0');
+  if (hex.startsWith('FF')) {
+    return '#${hex.substring(2)}';
+  }
+  return '#$hex';
 }
 
 class _BookshelfExternalImportSheet extends StatefulWidget {

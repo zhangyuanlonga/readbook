@@ -589,6 +589,10 @@ void main() {
         ),
       );
       expect(parsedChapter.imageUrls, isNotEmpty);
+      final document = _expectDocument(parsedChapter.document);
+      expect(document.isPureImageDocument, isTrue);
+      expect(document.blocks.whereType<ReaderImageBlock>(), isNotEmpty);
+      expect(parsedChapter.content, isEmpty);
       final firstImageUri = Uri.parse(parsedChapter.imageUrls.first);
       expect(firstImageUri.scheme, 'file');
       expect(File.fromUri(firstImageUri).existsSync(), isTrue);
