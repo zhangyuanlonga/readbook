@@ -462,6 +462,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       <String, GlobalKey>{};
   List<_ContinuousTextChapter> _continuousTextChapters =
       const <_ContinuousTextChapter>[];
+  DateTime? _lastInlineImagePrecacheAt;
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',
@@ -775,6 +776,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (imageCount <= 0) {
       return;
     }
+    final now = DateTime.now();
+    final lastPrecacheAt = _lastInlineImagePrecacheAt;
+    if (lastPrecacheAt != null &&
+        now.difference(lastPrecacheAt) < const Duration(milliseconds: 650)) {
+      return;
+    }
+    _lastInlineImagePrecacheAt = now;
     final progressIndex = (_currentScrollRatio() * imageCount).floor();
     _scheduleInlineImagePrecache(
       startIndex: max(0, progressIndex - 1),
@@ -1609,7 +1617,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       onNotification: _onReaderScrollNotification,
       child: ListView.separated(
         controller: _scrollController,
-        cacheExtent: 1800,
+        cacheExtent: _document.hasImageBlocks ? 640 : 1800,
         padding: bodyPadding,
         itemCount: _continuousTextChapters.length,
         separatorBuilder:

@@ -165,6 +165,7 @@ extension on _BookDetailPageState {
     required BookDetailLoadResult result,
     required BookDetailMetadataEditDraft draft,
   }) async {
+    _metadataMutationEpoch += 1;
     final flowResult = await _metadataFlowService.saveRemoteMetadata(
       result: result,
       draft: draft,
@@ -188,6 +189,7 @@ extension on _BookDetailPageState {
     required BookDetailMetadataEditDraft draft,
     required bool defaultSplitLongChapterEnabled,
   }) async {
+    _metadataMutationEpoch += 1;
     final flowResult = await _metadataFlowService.saveLocalMetadata(
       result: result,
       localBook: localBook,

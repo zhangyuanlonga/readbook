@@ -216,6 +216,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   String _activeBookId = '';
   String? _displayTitle;
   BookMetadataOverride? _metadataOverride;
+  int _metadataMutationEpoch = 0;
   StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
   late final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService =
@@ -1920,6 +1921,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required BookDetailLoadResult result,
     int? loadRequestToken,
   }) async {
+    final mutationEpoch = _metadataMutationEpoch;
     if (loadRequestToken != null &&
         !_isActiveDetailLoadRequest(loadRequestToken)) {
       return;
@@ -1950,7 +1952,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         loadRequestToken != null
             ? _isActiveDetailLoadRequest(loadRequestToken)
             : mounted;
-    if (!isActive) {
+    if (!isActive || mutationEpoch != _metadataMutationEpoch) {
       return;
     }
 
@@ -1971,7 +1973,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         loadRequestToken != null
             ? _isActiveDetailLoadRequest(loadRequestToken)
             : mounted;
-    if (!isStillActive) {
+    if (!isStillActive || mutationEpoch != _metadataMutationEpoch) {
       return;
     }
     _updateAuxiliaryState(

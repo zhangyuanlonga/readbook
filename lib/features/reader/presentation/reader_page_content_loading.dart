@@ -33,6 +33,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _chapterImageHeaders = resolvedContentState.imageHeaders;
     _mangaImageRetryNonce.clear();
     _precachedInlineImageUrls.clear();
+    _lastInlineImagePrecacheAt = null;
     _mangaPageIndex = 0;
     _isTextSelectionActive = false;
     _selectionRange = null;
@@ -262,6 +263,14 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     _isScrollEdgeAdvancingChapter = true;
     try {
+      final anchorChapter = forward ? null : _findCurrentContinuousTextChapter();
+      final beforeAnchorStart =
+          anchorChapter == null
+              ? null
+              : _measureContinuousTextChapterLayoutFlow(anchorChapter)
+                  ?.startOffset;
+      final beforeScrollOffset =
+          _scrollController.hasClients ? _scrollController.position.pixels : null;
       final chapter = await _loadContinuousTextChapterFlow(targetIndex);
       if (!mounted || chapter == null) {
         return null;
@@ -276,6 +285,29 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           chapter,
         );
       });
+      if (!forward && anchorChapter != null && beforeAnchorStart != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_scrollController.hasClients) {
+            return;
+          }
+          final afterAnchorStart =
+              _measureContinuousTextChapterLayoutFlow(anchorChapter)
+                  ?.startOffset;
+          if (afterAnchorStart == null) {
+            return;
+          }
+          final delta = afterAnchorStart - beforeAnchorStart;
+          if (delta.abs() <= 0.5) {
+            return;
+          }
+          final position = _scrollController.position;
+          final target = ((beforeScrollOffset ?? position.pixels) + delta)
+              .clamp(position.minScrollExtent, position.maxScrollExtent);
+          if ((position.pixels - target).abs() > 0.5) {
+            _scrollController.jumpTo(target);
+          }
+        });
+      }
       return chapter;
     } finally {
       _isScrollEdgeAdvancingChapter = false;
@@ -432,6 +464,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _chapterImageUrls = activation.contentState.chapterImageUrls;
       _chapterImageHeaders = activation.contentState.imageHeaders;
       _precachedInlineImageUrls.clear();
+      _lastInlineImagePrecacheAt = null;
       _paragraphs = activation.contentState.paragraphs;
       _renderItems = activation.contentState.renderItems;
       _renderTextItemsByParagraph =

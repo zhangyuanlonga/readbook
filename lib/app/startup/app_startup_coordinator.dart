@@ -89,9 +89,11 @@ class AppStartupCoordinator {
 
   Future<void> prepareStartup({
     required bool Function() isMounted,
+    Future<void> Function()? waitUntilReady,
     required VoidCallback markStartupReady,
   }) async {
     await _startupFirstFrameCompleter.future;
+    await waitUntilReady?.call();
     final remainingDelay = _startupMinDuration - _startupStopwatch.elapsed;
     await _waitStartupDelay(remainingDelay);
 

@@ -318,6 +318,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final SourceRuntimeTaskConflictService _taskConflictService;
   StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
   StreamSubscription<BookshelfCollectionChange>? _collectionChangeSub;
+  StreamSubscription<List<LocalBook>>? _localBooksChangeSub;
+  StreamSubscription<List<BookMetadataOverride>>? _metadataOverrideChangeSub;
 
   bool _isLoading = true;
   List<BookshelfBook> _books = const <BookshelfBook>[];
@@ -484,6 +486,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _collectionChangeSub = BookshelfService.watchCollectionChanges.listen(
       _handleCollectionChange,
     );
+    _localBooksChangeSub = _localBookRepository.watchAllBooks().listen(
+      _handleLocalBooksChanged,
+    );
+    _metadataOverrideChangeSub = _bookMetadataOverrideRepository
+        .watchAll()
+        .listen(_handleMetadataOverridesChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -524,6 +532,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     unawaited(_externalImportCoordinator.dispose());
     _taxonomyChangeSub?.cancel();
     _collectionChangeSub?.cancel();
+    _localBooksChangeSub?.cancel();
+    _metadataOverrideChangeSub?.cancel();
     _bookshelfSearchFocusNode.removeListener(
       _handleBookshelfSearchFocusChanged,
     );
@@ -867,6 +877,81 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
     unawaited(_loadBookshelf(force: true));
+  }
+
+  void _handleLocalBooksChanged(List<LocalBook> books) {
+    if (!mounted || _books.isEmpty) {
+      return;
+    }
+    final nextById = <String, LocalBook>{
+      for (final book in books)
+        if (book.id.trim().isNotEmpty) book.id.trim(): book,
+    };
+    var changed = nextById.length != _localBooksById.length;
+    if (!changed) {
+      for (final entry in nextById.entries) {
+        if (_localBooksById[entry.key] != entry.value) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) {
+      return;
+    }
+    _refreshBookshelfPresentationFromMetadata(localBooksById: nextById);
+  }
+
+  void _handleMetadataOverridesChanged(List<BookMetadataOverride> overrides) {
+    if (!mounted || _books.isEmpty) {
+      return;
+    }
+    final nextByKey = <String, BookMetadataOverride>{
+      for (final override in overrides)
+        if (override.targetKey.trim().isNotEmpty)
+          override.targetKey.trim(): override,
+    };
+    var changed = nextByKey.length != _metadataOverridesByTargetKey.length;
+    if (!changed) {
+      for (final entry in nextByKey.entries) {
+        if (_metadataOverridesByTargetKey[entry.key] != entry.value) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) {
+      return;
+    }
+    _refreshBookshelfPresentationFromMetadata(
+      metadataOverridesByTargetKey: nextByKey,
+    );
+  }
+
+  void _refreshBookshelfPresentationFromMetadata({
+    Map<String, LocalBook>? localBooksById,
+    Map<String, BookMetadataOverride>? metadataOverridesByTargetKey,
+  }) {
+    final nextLocalBooksById = localBooksById ?? _localBooksById;
+    final nextOverridesByTargetKey =
+        metadataOverridesByTargetKey ?? _metadataOverridesByTargetKey;
+    final nextPresentationByKey = _bookshelfPresentationQueryService
+        .buildBookshelfPresentationMap(
+          books: _books,
+          localBooksById: nextLocalBooksById,
+          metadataOverridesByTargetKey: nextOverridesByTargetKey,
+        );
+    setState(() {
+      _localBooksById = nextLocalBooksById;
+      _metadataOverridesByTargetKey = nextOverridesByTargetKey;
+      _bookPresentationByKey = nextPresentationByKey;
+      _derivedBookshelfFingerprint = null;
+    });
+    _updateBookCardStatesForBooks(
+      _books,
+      localBooksById: nextLocalBooksById,
+      presentationByKey: nextPresentationByKey,
+    );
   }
 
   Future<void> _maybeAutoRefreshOnTabActivated() async {

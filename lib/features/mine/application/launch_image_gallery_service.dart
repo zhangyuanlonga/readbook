@@ -41,6 +41,10 @@ class LaunchImageGalleryService {
   static const String _activeGalleryIdKey = 'launchImageGallery.activeId';
   static const String _startupEnabledKey = 'launchImageGallery.startupEnabled';
 
+  static bool readStartupEnabled(SharedPreferences prefs) {
+    return prefs.getBool(_startupEnabledKey) ?? true;
+  }
+
   Future<List<LaunchImageGallery>> loadGalleries() async {
     final customGalleries = await _loadCustomGalleries();
     return <LaunchImageGallery>[defaultLaunchImageGallery, ...customGalleries];
@@ -154,7 +158,7 @@ class LaunchImageGalleryService {
 
   Future<bool> loadStartupEnabled() async {
     final prefs = await _preferencesFuture;
-    return prefs.getBool(_startupEnabledKey) ?? true;
+    return readStartupEnabled(prefs);
   }
 
   Future<void> saveStartupEnabled(bool enabled) async {

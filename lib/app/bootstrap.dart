@@ -29,16 +29,10 @@ import 'theme/app_theme_seed_provider.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   _configureImagePicker();
   PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
-  await SourceLogStore.instance.restore();
   final prefs = await SharedPreferences.getInstance();
-  await ManagedFilePathResolver.primeCurrentRoots();
-  await ManagedAssetPathMigrationService(
-    preferences: prefs,
-    logger: AppLogger.instance,
-  ).migrate();
   AppNavigationStylePreferenceNotifier.prime(prefs);
   AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppStandardNavigationBarAppearanceNotifier.prime(prefs);
@@ -52,17 +46,48 @@ Future<void> bootstrap() async {
   AppInterfaceFontWeightNotifier.prime(prefs);
   MinePageVisibilityNotifier.prime(prefs);
   MinePageStartupDestinationNotifier.prime(prefs);
-  await Future.wait<void>([
-    ReaderFontRegistryService().restoreRegisteredFonts(),
-    StartupArtworkStore.prime(preferences: prefs),
-  ]);
+  StartupArtworkStore.primeStartupEnabledSync(prefs);
+  unawaited(StartupArtworkStore.prime(preferences: prefs));
   runApp(const ProviderScope(child: App()));
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(_runDeferredBootstrapTasks());
+    unawaited(_runDeferredBootstrapTasks(prefs));
   });
 }
 
-Future<void> _runDeferredBootstrapTasks() async {
+Future<void> _runDeferredBootstrapTasks(SharedPreferences prefs) async {
+  try {
+    await ManagedFilePathResolver.primeCurrentRoots();
+  } catch (_) {
+    // Path root priming can be retried lazily by individual resolvers.
+  }
+
+  try {
+    await SourceLogStore.instance.restore();
+  } catch (_) {
+    // Ignore startup log restoration failures.
+  }
+
+  try {
+    await ReaderFontRegistryService().restoreRegisteredFonts();
+  } catch (_) {
+    // Ignore broken font restoration during startup.
+  }
+
+  try {
+    await ManagedAssetPathMigrationService(
+      preferences: prefs,
+      logger: AppLogger.instance,
+    ).migrate();
+  } catch (error, stackTrace) {
+    AppLogger.instance.warn(
+      'Deferred managed asset migration failed',
+      context: <String, Object?>{
+        'error': error.toString(),
+        'stackTrace': stackTrace.toString(),
+      },
+    );
+  }
+
   try {
     await SourceRuntimeDiagnosticsService.instance.reportRecoveredInvocations(
       logger: AppLogger.instance,

@@ -296,9 +296,22 @@ class _SystemUiOverlayWrapperState
     unawaited(
       _startupCoordinator.prepareStartup(
         isMounted: () => mounted,
+        waitUntilReady: _waitUntilStartupArtworkReady,
         markStartupReady: _markStartupReady,
       ),
     );
+  }
+
+  Future<void> _waitUntilStartupArtworkReady() async {
+    if (StartupArtworkStore.primedDisabled) {
+      return;
+    }
+    for (var attempt = 0; attempt < 6; attempt += 1) {
+      if (!StartupArtworkStore.isPriming) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
   }
 
   Future<BuildContext?> _resolveStartupDialogContext() async {
@@ -746,8 +759,10 @@ class _SystemUiOverlayWrapperState
 
   @override
   Widget build(BuildContext context) {
+    final showStartupGuard =
+        !_isStartupReady && !StartupArtworkStore.primedDisabled;
     final style =
-        _isStartupReady
+        !showStartupGuard
             ? _adaptiveOverlayStyle(context)
             : _startupOverlayStyle(context);
 
@@ -759,7 +774,7 @@ class _SystemUiOverlayWrapperState
           fit: StackFit.expand,
           children: [
             widget.child,
-            if (!_isStartupReady) const _StartupGuardPage(),
+            if (showStartupGuard) const _StartupGuardPage(),
           ],
         ),
       ),
@@ -813,25 +828,90 @@ class _StartupGuardArtwork extends StatefulWidget {
 class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
   static const String _fallbackStartupArtwork =
       'assets/branding/selune_launch_scene.png';
+  int _seenRevision = -1;
+  ImageProvider? _imageProvider;
+  Object? _imageKey;
+  Timer? _artworkPollTimer;
 
   @override
-  Widget build(BuildContext context) {
-    final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
-    if (StartupArtworkStore.primedDisabled) {
-      return ColoredBox(color: Theme.of(context).colorScheme.surface);
+  void initState() {
+    super.initState();
+    _syncArtwork(precache: false);
+    _artworkPollTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) {
+        return;
+      }
+      if (_seenRevision != StartupArtworkStore.revision ||
+          StartupArtworkStore.isPriming) {
+        _syncArtwork();
+      }
+      if (!StartupArtworkStore.isPriming &&
+          _seenRevision == StartupArtworkStore.revision) {
+        _artworkPollTimer?.cancel();
+        _artworkPollTimer = null;
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncArtwork();
+  }
+
+  @override
+  void dispose() {
+    _artworkPollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _syncArtwork({bool precache = true}) {
+    final revision = StartupArtworkStore.revision;
+    final hasExpectedProvider = _imageProvider != null;
+    if (_seenRevision == revision && hasExpectedProvider) {
+      return;
     }
+    _seenRevision = revision;
+    final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
     final useFile =
         resolvedPath != null &&
         resolvedPath.isNotEmpty &&
         File(resolvedPath).existsSync();
-    final ImageProvider imageProvider =
+    final ImageProvider? nextProvider =
         useFile
             ? FileImage(File(resolvedPath))
             : const AssetImage(_fallbackStartupArtwork);
+    final nextKey = resolvedPath ?? _fallbackStartupArtwork;
+    _imageProvider = nextProvider;
+    _imageKey = nextKey;
+    if (precache && nextProvider != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          precacheImage(nextProvider, context);
+        }
+      });
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_seenRevision != StartupArtworkStore.revision) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _syncArtwork();
+        }
+      });
+    }
+    final imageProvider =
+        _imageProvider ?? const AssetImage(_fallbackStartupArtwork);
     return ColoredBox(
       color: const Color(0xFFF6F8FB),
       child: SizedBox.expand(
         child: Image(
+          key: ValueKey<Object?>(_imageKey),
           image: imageProvider,
           fit: BoxFit.fill,
           alignment: Alignment.center,
