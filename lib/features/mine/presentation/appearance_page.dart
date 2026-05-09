@@ -8,8 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';

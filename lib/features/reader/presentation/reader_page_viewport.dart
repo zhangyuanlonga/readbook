@@ -130,6 +130,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   Widget _buildMangaViewport(_ReaderThemeColors colors) {
     final contentSession = _resolvedContentSession();
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
+    final mediaSize = MediaQuery.sizeOf(context);
     final bottomInset = _effectiveBottomSafeInset(context);
     final mangaModel = _presentationResolver.buildMangaModel(
       contentSession: contentSession,
@@ -151,6 +152,10 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         6,
       ),
       continuousCacheExtent: _resolveMangaCacheExtent(),
+      imageDecodeBudget: _readerImageDecodeBudget(
+        role: ReaderImageDecodeRole.manga,
+        logicalWidth: mediaSize.width,
+      ),
     );
     return _viewportBuilder.buildMangaViewport(
       model: mangaModel,
@@ -213,19 +218,27 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           surfaceMetrics: layoutMetrics,
           paginationSpec: paginationSpec,
           palette: palette,
-          pageCount: _pagedPages.length,
+          pageCount: _currentPagedPageCount,
           currentPageIndex: _currentPageIndex,
           document: _document,
           paragraphs: _paragraphs,
           pagedPages: _pagedPages,
+          pagedBlockPages: _pagedBlockPages,
           textItemsByParagraph: _renderTextItemsByParagraph,
+          imageDecodeBudget: _readerImageDecodeBudget(
+            role: ReaderImageDecodeRole.epubInline,
+            logicalWidth: paginationSpec.contentWidth,
+            logicalHeight: paginationSpec.contentHeight,
+          ),
         );
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensurePagination(spec: paginationSpec);
         });
 
-        if (_pagedPaginationState.isPaginating || _pagedPages.isEmpty) {
+        final hasPagedContent =
+            _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty;
+        if (_pagedPaginationState.isPaginating && !hasPagedContent) {
           return Column(
             children: [
               if (_showsPagedPinnedChapterHeaderFor(_currentViewportKind))
@@ -250,14 +263,14 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
               _buildPagedFooterSection(
                 colors: colors,
                 index: 0,
-                total: max(1, _pagedPages.length),
+                total: max(1, _currentPagedPageCount),
                 layoutMetrics: layoutMetrics,
               ),
             ],
           );
         }
 
-        final pageCount = _pagedPages.length;
+        final pageCount = _currentPagedPageCount;
         final motion = _pagedTextRenderer.motionSpecForStyle(
           _currentPagedAnimationStyle(),
         );

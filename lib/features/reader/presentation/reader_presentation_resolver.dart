@@ -5,6 +5,7 @@ import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_document_render_model.dart';
+import '../application/reader_image_decode_budget.dart';
 import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
 import '../application/reader_surface_metrics.dart';
@@ -101,6 +102,7 @@ class ReaderPresentationResolver {
     required ReaderPresentationPalette palette,
     List<ReaderRenderBlockItem> renderItems = const <ReaderRenderBlockItem>[],
     EdgeInsets? contentPadding,
+    ReaderImageDecodeBudget? imageDecodeBudget,
   }) {
     return ReaderTextScrollViewModel(
       contentSession: contentSession,
@@ -110,6 +112,7 @@ class ReaderPresentationResolver {
       palette: palette,
       renderItems: renderItems,
       contentPadding: contentPadding,
+      imageDecodeBudget: imageDecodeBudget,
     );
   }
 
@@ -124,8 +127,11 @@ class ReaderPresentationResolver {
     ReaderDocument? document,
     List<String> paragraphs = const <String>[],
     List<List<ReaderPagedSlice>> pagedPages = const <List<ReaderPagedSlice>>[],
+    List<List<ReaderPagedBlock>> pagedBlockPages =
+        const <List<ReaderPagedBlock>>[],
     Map<int, ReaderRenderTextItem> textItemsByParagraph =
         const <int, ReaderRenderTextItem>{},
+    ReaderImageDecodeBudget? imageDecodeBudget,
   }) {
     return ReaderTextPagedViewModel(
       contentSession: contentSession,
@@ -138,7 +144,9 @@ class ReaderPresentationResolver {
       document: document,
       paragraphs: paragraphs,
       pagedPages: pagedPages,
+      pagedBlockPages: pagedBlockPages,
       textItemsByParagraph: textItemsByParagraph,
+      imageDecodeBudget: imageDecodeBudget,
     );
   }
 
@@ -152,6 +160,7 @@ class ReaderPresentationResolver {
     required EdgeInsets continuousPadding,
     required EdgeInsets pagedPagePadding,
     required double continuousCacheExtent,
+    ReaderImageDecodeBudget? imageDecodeBudget,
   }) {
     return ReaderMangaViewModel(
       contentSession: contentSession,
@@ -163,6 +172,7 @@ class ReaderPresentationResolver {
       continuousPadding: continuousPadding,
       pagedPagePadding: pagedPagePadding,
       continuousCacheExtent: continuousCacheExtent,
+      imageDecodeBudget: imageDecodeBudget,
     );
   }
 }

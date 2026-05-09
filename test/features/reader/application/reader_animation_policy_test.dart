@@ -63,21 +63,24 @@ void main() {
       expect(policy.inactiveReason, contains('听书模式'));
     });
 
-    test('inline image fallback disables paged text animation', () {
-      final mode = modeResolver.resolve(
-        contentMode: ReaderContentMode.text,
-        settings: const ReaderSettings(
-          pageTurnMode: ReaderPageTurnMode.tapAndSwipe,
-        ),
-        canUsePagedText: false,
-      );
-      final policy = resolver.resolve(
-        mode: mode,
-        hasInlineImageParagraphs: true,
-      );
+    test(
+      'inline images can use paged text animation after block pagination',
+      () {
+        final mode = modeResolver.resolve(
+          contentMode: ReaderContentMode.text,
+          settings: const ReaderSettings(
+            pageTurnMode: ReaderPageTurnMode.tapAndSwipe,
+          ),
+          canUsePagedText: true,
+        );
+        final policy = resolver.resolve(
+          mode: mode,
+          hasInlineImageParagraphs: true,
+        );
 
-      expect(policy.supportsTextPageTurnAnimations, isFalse);
-      expect(policy.inactiveReason, contains('包含插图'));
-    });
+        expect(policy.supportsTextPageTurnAnimations, isTrue);
+        expect(policy.inactiveReason, isNull);
+      },
+    );
   });
 }

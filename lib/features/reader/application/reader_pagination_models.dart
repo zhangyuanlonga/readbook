@@ -30,6 +30,54 @@ class ReaderPagedSlice {
   }
 }
 
+enum ReaderPagedBlockKind { text, image }
+
+class ReaderPagedBlock {
+  const ReaderPagedBlock._({
+    required this.kind,
+    required this.height,
+    this.paragraphIndex,
+    this.start,
+    this.end,
+    this.imageUrl,
+  });
+
+  const ReaderPagedBlock.text({
+    required int paragraphIndex,
+    required int start,
+    required int end,
+    required double height,
+  }) : this._(
+         kind: ReaderPagedBlockKind.text,
+         paragraphIndex: paragraphIndex,
+         start: start,
+         end: end,
+         height: height,
+       );
+
+  const ReaderPagedBlock.image({
+    required String imageUrl,
+    required double height,
+  }) : this._(
+         kind: ReaderPagedBlockKind.image,
+         imageUrl: imageUrl,
+         height: height,
+       );
+
+  final ReaderPagedBlockKind kind;
+  final int? paragraphIndex;
+  final int? start;
+  final int? end;
+  final String? imageUrl;
+  final double height;
+}
+
+class ReaderBlockPaginationResult {
+  const ReaderBlockPaginationResult({required this.pages});
+
+  final List<List<ReaderPagedBlock>> pages;
+}
+
 class ReaderPrecomputedChapterLayout {
   const ReaderPrecomputedChapterLayout({
     required this.paragraphs,

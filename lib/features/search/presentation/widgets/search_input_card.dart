@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
 import '../../application/search_service.dart';
 
 class SearchInputCard extends StatelessWidget {
@@ -40,9 +41,10 @@ class SearchInputCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(vertical: metrics.isCompactDensity ? 4 : 6),
       child: Row(
         children: [
           _ModeChip(
@@ -56,7 +58,7 @@ class SearchInputCard extends StatelessWidget {
                     ? null
                     : () => onContentModeChanged(SearchContentMode.novel),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: metrics.contentGap),
           _ModeChip(
             icon: Icons.auto_stories_rounded,
             label: '漫画',
@@ -68,7 +70,7 @@ class SearchInputCard extends StatelessWidget {
                     ? null
                     : () => onContentModeChanged(SearchContentMode.manga),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: metrics.contentGap + 2),
           _OptionChip(
             icon: Icons.filter_list_rounded,
             label: _buildSourceLabel(),
@@ -85,7 +87,7 @@ class SearchInputCard extends StatelessWidget {
                     ? onClearSourceFilter
                     : null,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: metrics.contentGap),
           _OptionChip(
             icon:
                 isPreciseBookMatch
@@ -101,12 +103,15 @@ class SearchInputCard extends StatelessWidget {
                     : () => onPreciseMatchChanged(!isPreciseBookMatch),
           ),
           if (selectedSourceCount > 0 || isPreciseBookMatch) ...[
-            const SizedBox(width: 8),
+            SizedBox(width: metrics.contentGap),
             TextButton(
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size(0, metrics.controlHeight),
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.isCompactDensity ? 6 : 8,
+                ),
               ),
               onPressed: isSearching ? null : onClearResults,
               child: const Text('清空'),
@@ -146,6 +151,7 @@ class _ModeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final bgColor =
         isActive
             ? (activeBackgroundColor ?? colorScheme.primary)
@@ -162,12 +168,19 @@ class _ModeChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.isCompactDensity ? 10 : 12,
+            vertical: metrics.isCompactDensity ? 6 : 8,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: fgColor),
-              const SizedBox(width: 6),
+              Icon(
+                icon,
+                size: metrics.isCompactDensity ? 15 : 16,
+                color: fgColor,
+              ),
+              SizedBox(width: metrics.isCompactDensity ? 5 : 6),
               Text(
                 label,
                 style: theme.textTheme.labelMedium?.copyWith(
@@ -208,6 +221,7 @@ class _OptionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     final bgColor =
         isActive
@@ -225,22 +239,31 @@ class _OptionChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(8, 5, onClear != null ? 2 : 8, 5),
+          padding: EdgeInsets.fromLTRB(
+            metrics.isCompactDensity ? 7 : 8,
+            metrics.isCompactDensity ? 4 : 5,
+            onClear != null ? 2 : (metrics.isCompactDensity ? 7 : 8),
+            metrics.isCompactDensity ? 4 : 5,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isLoading)
                 SizedBox(
-                  width: 14,
-                  height: 14,
+                  width: metrics.isCompactDensity ? 13 : 14,
+                  height: metrics.isCompactDensity ? 13 : 14,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
                     color: fgColor,
                   ),
                 )
               else
-                Icon(icon, size: 14, color: fgColor),
-              const SizedBox(width: 4),
+                Icon(
+                  icon,
+                  size: metrics.isCompactDensity ? 13 : 14,
+                  color: fgColor,
+                ),
+              SizedBox(width: metrics.isCompactDensity ? 3 : 4),
               Text(
                 label,
                 style: theme.textTheme.labelSmall?.copyWith(
@@ -255,7 +278,11 @@ class _OptionChip extends StatelessWidget {
                   onTap: onClear,
                   child: Padding(
                     padding: const EdgeInsets.all(2),
-                    child: Icon(Icons.close_rounded, size: 14, color: fgColor),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: metrics.isCompactDensity ? 13 : 14,
+                      color: fgColor,
+                    ),
                   ),
                 ),
               ],

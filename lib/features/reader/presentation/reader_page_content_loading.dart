@@ -50,6 +50,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _renderTextItemsByParagraph =
         resolvedContentState.renderTextItemsByParagraph;
     _pagedPages = resolvedContentState.pagedPages;
+    _pagedBlockPages = const <List<ReaderPagedBlock>>[];
     _currentPageIndex = resolvedContentState.currentPageIndex;
     _pagedPaginationState = resolvedContentState.paginationState;
     _resetCatalogSearchCache();
@@ -95,6 +96,32 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     );
   }
 
+  List<_ContinuousTextChapter> _retainContinuousTextWindowFlow(
+    Iterable<_ContinuousTextChapter> chapters, {
+    int? currentChapterIndex,
+  }) {
+    return _chapterWindowController.retainWindow<_ContinuousTextChapter>(
+      items: chapters,
+      chapterIndexOf: (chapter) => chapter.chapterIndex,
+      chapters: _chapters,
+      currentChapterIndex: currentChapterIndex ?? _currentIndex,
+    );
+  }
+
+  List<_ContinuousTextChapter> _insertContinuousTextChapterInWindowFlow(
+    _ContinuousTextChapter chapter, {
+    int? currentChapterIndex,
+  }) {
+    return _chapterWindowController
+        .insertAndRetainWindow<_ContinuousTextChapter>(
+          items: _continuousTextChapters,
+          item: chapter,
+          chapterIndexOf: (item) => item.chapterIndex,
+          chapters: _chapters,
+          currentChapterIndex: currentChapterIndex ?? _currentIndex,
+        );
+  }
+
   ReaderContinuousTextChapter _toContinuousTextChapterSupportFlow(
     _ContinuousTextChapter chapter,
   ) {
@@ -130,13 +157,14 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       return;
     }
 
-    _continuousTextChapters = <_ContinuousTextChapter>[
+    _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
       _buildContinuousTextChapterFlow(
         chapter: chapter,
         chapterIndex: chapterIndex,
         snapshot: snapshot,
       ),
-    ];
+      currentChapterIndex: chapterIndex,
+    );
   }
 
   Future<_ContinuousTextChapter?> _loadContinuousTextChapterFlow(
@@ -199,14 +227,17 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       return;
     }
 
-    final targetIndex = _contentLoadingPresenter
-        .resolveAdjacentContinuousChapterIndex(
-          chapters: _chapters,
-          loadedChapterIndices: _continuousTextChapters
-              .map((item) => item.chapterIndex)
-              .toList(growable: false),
-          forward: forward,
-        );
+    _continuousTextChapters = _retainContinuousTextWindowFlow(
+      _continuousTextChapters,
+    );
+    final targetIndex = _chapterWindowController.resolveAdjacentLoadIndex(
+      chapters: _chapters,
+      loadedChapterIndices: _continuousTextChapters.map(
+        (item) => item.chapterIndex,
+      ),
+      currentChapterIndex: _currentIndex,
+      forward: forward,
+    );
     if (targetIndex == null) {
       return;
     }
@@ -223,10 +254,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         return;
       }
       _updateReaderState(() {
-        _continuousTextChapters = List<_ContinuousTextChapter>.unmodifiable(
-          forward
-              ? <_ContinuousTextChapter>[..._continuousTextChapters, chapter]
-              : <_ContinuousTextChapter>[chapter, ..._continuousTextChapters],
+        _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+          chapter,
         );
       });
     } finally {
@@ -392,7 +421,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     _scheduleReadingRecordSessionStart(initialRatio: activation.initialRatio);
     _scheduleProgressSave();
-    final preloadTaskToken = ++_preloadTaskToken;
+    final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
     unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
   }
 
@@ -444,9 +473,9 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       return;
     }
     _updateReaderState(() {
-      _continuousTextChapters = seeded
-          .map(_fromContinuousTextChapterSupportFlow)
-          .toList(growable: false);
+      _continuousTextChapters = _retainContinuousTextWindowFlow(
+        seeded.map(_fromContinuousTextChapterSupportFlow),
+      );
     });
   }
 
@@ -597,7 +626,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     await _saveProgress();
     _hasPromptedMissingSourceSwitch = false;
     if (_canWarmNeighborPaginationCache()) {
-      final preloadTaskToken = ++_preloadTaskToken;
+      final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
       unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
     }
   }
@@ -650,7 +679,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
               _shouldUseContinuousTextFlow &&
               chapter.imageUrls.isEmpty &&
               chapter.content.trim().isNotEmpty) {
-            _continuousTextChapters = <_ContinuousTextChapter>[
+            _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
               _ContinuousTextChapter(
                 chapterId: chapter.id,
                 chapterUrl: (_chapterUrl ?? '').trim(),
@@ -666,7 +695,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
                         : List<String>.unmodifiable(_paragraphs),
                 isCached: true,
               ),
-            ];
+            );
           } else {
             _continuousTextChapters = const <_ContinuousTextChapter>[];
           }
@@ -727,7 +756,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             _shouldUseContinuousTextFlow &&
             decoded.imageUrls.isEmpty &&
             decoded.content.trim().isNotEmpty) {
-          _continuousTextChapters = <_ContinuousTextChapter>[
+          _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
             _ContinuousTextChapter(
               chapterId: _chapterId,
               chapterUrl: (_chapterUrl ?? '').trim(),
@@ -743,7 +772,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
                       : List<String>.unmodifiable(_paragraphs),
               isCached: true,
             ),
-          ];
+          );
         } else {
           _continuousTextChapters = const <_ContinuousTextChapter>[];
         }
@@ -784,7 +813,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     if (lease == null) {
       return false;
     }
-    final requestToken = ++_chapterContentRequestToken;
+    final requestToken = _readerSessionController.nextChapterContentToken();
 
     double? readingRecordStartRatio;
     final request = _chapterLoadPlanner.resolveLoadRequest(
@@ -945,18 +974,24 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     final isLocalSource = LocalReaderIdentity.isLocalSourceId(
       normalizedSourceId,
     );
+    final budget = _currentResourceBudget(
+      scene: ReaderWorkScene.backgroundPrefetch,
+    );
     final forwardPreloadCount =
-        !isLocalSource && _isInBookshelf
+        !isLocalSource && _isInBookshelf && budget.allowFarPrefetch
             ? _ReaderPageState._kBookshelfForwardCacheChapterCount
-            : _ReaderPageState._kForwardPreloadChapterCount;
+            : min(
+              _ReaderPageState._kForwardPreloadChapterCount,
+              budget.forwardPreloadChapterCount,
+            );
+    final backwardPreloadCount = min(
+      _ReaderPageState._kBackwardPreloadChapterCount,
+      budget.backwardPreloadChapterCount,
+    );
 
     final preloadIndexes = <int>{};
 
-    for (
-      var offset = 1;
-      offset <= _ReaderPageState._kBackwardPreloadChapterCount;
-      offset++
-    ) {
+    for (var offset = 1; offset <= backwardPreloadCount; offset++) {
       final index = currentIndex - offset;
       if (index >= 0) {
         preloadIndexes.add(index);

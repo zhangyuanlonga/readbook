@@ -6,13 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/composition/app_providers.dart' as app_providers;
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../source/application/external_import_catalog.dart';
@@ -21,6 +23,8 @@ import '../../source/application/external_source_import_bridge.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../application/advanced_theme_provider.dart';
+
+enum _FontImportEntryMode { add, processing, completed }
 
 class FontManagementPage extends ConsumerStatefulWidget {
   const FontManagementPage({super.key});
@@ -228,7 +232,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final activeAdvancedTheme =
@@ -275,16 +280,9 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
             ],
           ),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: _isImporting ? null : _importFont,
-            icon:
-                _isImporting
-                    ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.file_upload_outlined),
-            label: Text(_isImporting ? '导入中...' : '导入字体'),
+            onPressed: _isImporting ? null : _showImportFontSheet,
+            icon: const Icon(Icons.file_upload_outlined),
+            label: const Text('导入字体'),
           ),
           body: LayoutBuilder(
             builder: (context, _) {
@@ -304,13 +302,13 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
-                          topInset + 12,
+                          topInset + metrics.contentGap,
                           horizontal,
-                          88 + bottomSafe,
+                          72 + metrics.sectionGap + bottomSafe,
                         ),
                         children: [
                           _buildHero(context),
-                          const SizedBox(height: 12),
+                          SizedBox(height: metrics.contentGap),
                           if (_isLoading)
                             const Padding(
                               padding: EdgeInsets.only(top: 32),
@@ -320,9 +318,11 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                             _buildErrorCard(context)
                           else ...[
                             _buildLibraryHeader(context),
-                            const SizedBox(height: 10),
+                            SizedBox(height: metrics.contentGap),
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
+                              padding: EdgeInsets.only(
+                                bottom: metrics.contentGap,
+                              ),
                               child: _buildSystemDefaultFontCard(
                                 context,
                                 interfaceFontSettings: interfaceFontSettings,
@@ -330,7 +330,9 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                             ),
                             ..._fonts.map(
                               (font) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
+                                padding: EdgeInsets.only(
+                                  bottom: metrics.contentGap,
+                                ),
                                 child: _buildFontCard(
                                   context,
                                   font,
@@ -355,8 +357,9 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
 
   Widget _buildHero(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: EdgeInsets.all(metrics.cardPadding + 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -366,7 +369,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,7 +404,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: metrics.contentGap),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -417,8 +420,13 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
 
   Widget _buildHeroChip(BuildContext context, String text) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      constraints: BoxConstraints(minHeight: metrics.chipHeight * 0.75),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.contentGap,
+        vertical: metrics.isCompactDensity ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.surface.withValues(alpha: 0.74),
         borderRadius: BorderRadius.circular(999),
@@ -752,6 +760,105 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         });
       }
     }
+  }
+
+  Future<void> _showImportFontSheet() async {
+    if (_isImporting || !mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        var mode = _FontImportEntryMode.add;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final steps = <AppTaskStep>[
+              AppTaskStep(label: '添加文件', active: true),
+              AppTaskStep(
+                label: '注册字体',
+                active: mode != _FontImportEntryMode.add,
+              ),
+              AppTaskStep(
+                label: '完成',
+                active: mode == _FontImportEntryMode.completed,
+              ),
+            ];
+            return AppTaskBottomSheet(
+              title: '导入字体',
+              trailing: IconButton(
+                tooltip: '导入说明',
+                onPressed: () {
+                  showDialog<void>(
+                    context: sheetContext,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: const Text('导入说明'),
+                        content: const Text(
+                          '字体导入统一分为：添加文件 -> 注册字体 -> 完成。导入后可用于界面和阅读器设置。',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('知道了'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+                icon: const Icon(Icons.help_outline_rounded),
+              ),
+              maxHeightFactor: 0.38,
+              fitContent: true,
+              steps: steps,
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (mode == _FontImportEntryMode.add)
+                    AppTaskActionCard(
+                      title: '添加字体文件',
+                      description: '支持导入 TTF 和 OTF 字体文件。',
+                      icon: Icons.font_download_outlined,
+                      dashedBorder: true,
+                      onTap: () async {
+                        setSheetState(() {
+                          mode = _FontImportEntryMode.processing;
+                        });
+                        await _importFont();
+                        if (!mounted) {
+                          return;
+                        }
+                        setSheetState(() {
+                          mode = _FontImportEntryMode.completed;
+                        });
+                      },
+                    )
+                  else if (mode == _FontImportEntryMode.processing)
+                    const ImportExportProgressCard(
+                      status: ImportExportTaskStatus(
+                        title: '正在导入字体',
+                        message: '正在注册字体文件…',
+                        detail: '注册字体',
+                      ),
+                    )
+                  else
+                    const ImportExportTaskSheet(
+                      status: ImportExportTaskStatus(
+                        title: '字体导入完成',
+                        message: '已完成',
+                        result: ImportExportTaskResult.success,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _removeFont(ReaderCustomFontEntry font) async {

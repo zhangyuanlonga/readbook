@@ -4,6 +4,7 @@ import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_document_render_model.dart';
+import '../application/reader_image_decode_budget.dart';
 import '../application/reader_session_state.dart';
 import '../application/reader_surface_metrics.dart';
 import 'reader_shell.dart';
@@ -30,6 +31,7 @@ class ReaderTextScrollViewModel {
     this.renderItems = const <ReaderRenderBlockItem>[],
     this.allowSelection = false,
     this.textAlign,
+    this.imageDecodeBudget,
     this.emptyMessage,
     this.contentPadding,
   });
@@ -42,6 +44,7 @@ class ReaderTextScrollViewModel {
   final List<ReaderRenderBlockItem> renderItems;
   final bool allowSelection;
   final TextAlign? textAlign;
+  final ReaderImageDecodeBudget? imageDecodeBudget;
   final String? emptyMessage;
   final EdgeInsets? contentPadding;
 }
@@ -122,7 +125,10 @@ class ReaderTextScrollView extends StatelessWidget {
               ),
               child:
                   imageBuilder?.call(context, item) ??
-                  _DefaultReaderImage(item: item),
+                  _DefaultReaderImage(
+                    item: item,
+                    decodeBudget: model.imageDecodeBudget,
+                  ),
             ),
             _ => const SizedBox.shrink(),
           };
@@ -177,9 +183,10 @@ class _ReaderScrollTextBlock extends StatelessWidget {
 }
 
 class _DefaultReaderImage extends StatelessWidget {
-  const _DefaultReaderImage({required this.item});
+  const _DefaultReaderImage({required this.item, this.decodeBudget});
 
   final ReaderRenderImageItem item;
+  final ReaderImageDecodeBudget? decodeBudget;
 
   @override
   Widget build(BuildContext context) {
@@ -188,6 +195,8 @@ class _DefaultReaderImage extends StatelessWidget {
       child: Image.network(
         item.imageUrl,
         fit: BoxFit.cover,
+        cacheWidth: decodeBudget?.cacheWidth,
+        cacheHeight: decodeBudget?.cacheHeight,
         errorBuilder:
             (_, __, ___) => AspectRatio(
               aspectRatio: 16 / 9,

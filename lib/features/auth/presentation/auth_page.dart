@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
@@ -17,7 +17,6 @@ class AuthPage extends ConsumerStatefulWidget {
 }
 
 class _AuthPageState extends ConsumerState<AuthPage> {
-  static const EdgeInsets _cardPadding = EdgeInsets.fromLTRB(16, 14, 16, 14);
   static const Duration _keyboardInsetAnimationDuration = Duration(
     milliseconds: 180,
   );
@@ -48,7 +47,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
@@ -76,17 +76,17 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: EdgeInsets.fromLTRB(
                     horizontal,
-                    12,
+                    metrics.contentGap,
                     horizontal,
-                    12 + bottomSafe,
+                    metrics.contentGap + bottomSafe,
                   ),
                   children: [
                     _buildIntroCard(context),
-                    const SizedBox(height: 12),
+                    SizedBox(height: metrics.contentGap),
                     _buildModeToggle(colorScheme),
-                    const SizedBox(height: 12),
+                    SizedBox(height: metrics.contentGap),
                     _buildFormCard(context),
-                    const SizedBox(height: 16),
+                    SizedBox(height: metrics.sectionGap),
                     FilledButton(
                       onPressed: _isSubmitting ? null : _submit,
                       child:
@@ -101,7 +101,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                               )
                               : Text(_isRegister ? '注册并登录' : '登录'),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: metrics.contentGap),
                     Text(
                       _isRegister
                           ? '继续即表示你同意相关服务条款与隐私政策。'
@@ -126,7 +126,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
     return Card(
       child: Padding(
-        padding: _cardPadding,
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Row(
           children: [
             CircleAvatar(
@@ -192,7 +192,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   Widget _buildFormCard(BuildContext context) {
     return Card(
       child: Padding(
-        padding: _cardPadding,
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Column(
           children: [
             TextField(

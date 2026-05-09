@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_image_pipeline.dart';
@@ -56,6 +58,20 @@ void main() {
       expect(plainDecoded, isNotNull);
       expect(plainDecoded!.mediaType, 'text/plain');
       expect(plainDecoded.text, 'hello reader');
+    });
+
+    test('rejects oversized data uri payloads', () {
+      final payload = base64Encode(List<int>.filled(8, 1));
+      final dataUri = 'data:image/png;base64,$payload';
+
+      expect(
+        pipeline.decodeDataUriImage(dataUri: dataUri, maxBytes: 4),
+        isNull,
+      );
+      expect(
+        pipeline.decodeDataUriImage(dataUri: dataUri, maxBytes: 8),
+        isNotNull,
+      );
     });
 
     testWidgets('retry error widget reports next retry context', (

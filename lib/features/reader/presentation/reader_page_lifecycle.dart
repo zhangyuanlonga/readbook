@@ -28,6 +28,7 @@ class _ReaderPageDependencyBinder {
         dependencies.bookMetadataOverrideRepository;
     state._localBookRepository = dependencies.localBookRepository;
     state._cachedChapterStore = dependencies.cachedChapterStore;
+    state._resourceBudgetResolver = dependencies.resourceBudgetResolver;
     state._logger = dependencies.logger;
     state._battery = dependencies.battery;
     state._deviceInfo = dependencies.deviceInfo;
@@ -45,12 +46,13 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   void _initializeReaderPage() {
     WidgetsBinding.instance.addObserver(this);
     _bindDependencies();
+    _applyReaderImageCacheBudget();
     _appThemeModeSubscription = ref.listenManual<ThemeMode>(
       appThemeModeProvider,
       (_, next) => _handleAppThemeModeChanged(next),
     );
-    _activeAdvancedThemeSubscription =
-        ref.listenManual<AsyncValue<AppAdvancedTheme?>>(
+    _activeAdvancedThemeSubscription = ref
+        .listenManual<AsyncValue<AppAdvancedTheme?>>(
           activeAdvancedThemeProvider,
           (_, next) => _handleActiveAdvancedThemeChanged(next),
         );
@@ -100,12 +102,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       _syncSystemUiVisibility(force: true);
     });
     unawaited(_refreshReaderInfoSnapshot(force: true));
-    _readerInfoClockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted) {
-        return;
-      }
-      unawaited(_refreshReaderInfoSnapshot());
-    });
+    _scheduleReaderInfoMinuteTick();
 
     _bootstrap();
   }
@@ -125,7 +122,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   void _disposeReaderPage() {
     WidgetsBinding.instance.removeObserver(this);
     _cancelActiveSwitchSourceSearch();
-    _chapterContentRequestToken += 1;
+    _readerSessionController.cancelAll();
+    _flushProgressSave();
     final sourceId = (_sourceId ?? '').trim();
     if (sourceId.isNotEmpty) {
       _sourceRuntimeFacade.clearReadingFlow(
@@ -166,8 +164,21 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _curlAutoTurnController.dispose();
   }
 
+  void _applyReaderImageCacheBudget() {
+    final budget = _readerImageDecodeBudget(
+      role: ReaderImageDecodeRole.epubInline,
+      logicalWidth: MediaQuery.sizeOf(context).width,
+    );
+    final imageCache = PaintingBinding.instance.imageCache;
+    imageCache.maximumSize = budget.imageCacheMaximumSize;
+    imageCache.maximumSizeBytes = budget.imageCacheMaximumSizeBytes;
+  }
+
   void _handleReaderAppLifecycleState(AppLifecycleState state) {
     if (_lifecycleDelegate.shouldPauseReaderRuntime(state)) {
+      _isReaderRuntimeVisible = false;
+      _pauseAutoReadForRuntime();
+      _flushProgressSave();
       unawaited(_setVolumeKeyPageInterceptionEnabled(false));
       unawaited(_restoreSystemReaderBrightness());
       _commitReadingRecordSession();
@@ -175,9 +186,16 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     }
 
     if (_lifecycleDelegate.shouldResumeReaderRuntime(state)) {
+      _isReaderRuntimeVisible = true;
+      unawaited(_refreshReaderInfoSnapshot(force: true));
+      _scheduleReaderInfoMinuteTick();
       unawaited(_syncVolumeKeyPageInterception());
       unawaited(_applySystemReaderBrightness());
       _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
+      if (_isAutoReadPausedByRuntime) {
+        _isAutoReadPausedByRuntime = false;
+        _scheduleAutoReadResume();
+      }
     }
   }
 

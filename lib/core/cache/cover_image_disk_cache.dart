@@ -114,6 +114,7 @@ class CoverImageDiskCache {
   Future<int> compact({
     Duration stalePeriod = _stalePeriod,
     int maxEntries = 300,
+    int maxBytes = -1,
   }) async {
     final directory = await _ensureCacheDir();
     if (!await directory.exists()) {
@@ -128,6 +129,8 @@ class CoverImageDiskCache {
     }
 
     var deletedCount = 0;
+    var totalBytes = 0;
+    final retainedFiles = <File>[];
     final now = DateTime.now();
     for (final file in files) {
       try {
@@ -135,31 +138,32 @@ class CoverImageDiskCache {
         if (now.difference(stat.modified) > stalePeriod) {
           await file.delete();
           deletedCount++;
+          continue;
         }
+        totalBytes += stat.size;
+        retainedFiles.add(file);
       } catch (_) {
         // Ignore single-file cleanup failure and continue.
       }
     }
 
-    final remainingFiles = <File>[];
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is File) {
-        remainingFiles.add(entity);
-      }
-    }
-    if (remainingFiles.length <= maxEntries) {
-      return deletedCount;
-    }
-
-    remainingFiles.sort(
+    retainedFiles.sort(
       (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
     );
-    final overflowCount = remainingFiles.length - maxEntries;
-    for (final file in remainingFiles.take(overflowCount)) {
+    var overflowCount = retainedFiles.length - maxEntries.clamp(0, 1 << 30);
+    final normalizedMaxBytes = maxBytes < 0 ? -1 : maxBytes;
+    for (final file in retainedFiles) {
+      if (overflowCount <= 0 &&
+          (normalizedMaxBytes < 0 || totalBytes <= normalizedMaxBytes)) {
+        break;
+      }
       try {
         if (await file.exists()) {
+          final length = await file.length();
           await file.delete();
           deletedCount++;
+          overflowCount--;
+          totalBytes -= length;
         }
       } catch (_) {
         // Ignore single-file cleanup failure and continue.

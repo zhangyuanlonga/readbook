@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -96,7 +96,8 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
     return PopScope<void>(
@@ -138,9 +139,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
                       horizontal,
-                      12,
+                      metrics.contentGap,
                       horizontal,
-                      20 + bottomSafe,
+                      metrics.sectionGap + bottomSafe,
                     ),
                     children: _buildContent(context),
                   ),
@@ -156,21 +157,22 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   List<Widget> _buildContent(BuildContext context) {
     final session = _session;
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     if (_isLoading) {
-      return const [
-        SizedBox(height: 64),
-        Center(child: CircularProgressIndicator()),
+      return [
+        SizedBox(height: metrics.sectionGap * 3),
+        const Center(child: CircularProgressIndicator()),
       ];
     }
 
     if (session == null) {
       return [
         _buildGuestHero(context),
-        const SizedBox(height: 14),
+        SizedBox(height: metrics.sectionGap),
         Card(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            padding: EdgeInsets.all(metrics.cardPadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -188,7 +190,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     height: 1.45,
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: metrics.sectionGap),
                 FilledButton(
                   onPressed: () => context.push('/auth'),
                   child: const Text('去登录'),
@@ -225,7 +227,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
             ),
           ),
         ),
-      const SizedBox(height: 14),
+      SizedBox(height: metrics.sectionGap),
       _buildInfoCard(
         context,
         title: '个人资料',
@@ -239,7 +241,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
           _ProfileRow(label: '注册时间', value: _formatTime(profile?.createdAt)),
         ],
       ),
-      const SizedBox(height: 12),
+      SizedBox(height: metrics.contentGap),
       _buildInfoCard(
         context,
         title: '账号状态',
@@ -260,10 +262,10 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
           ),
         ],
       ),
-      const SizedBox(height: 12),
+      SizedBox(height: metrics.contentGap),
       Card(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          padding: EdgeInsets.all(metrics.cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -282,38 +284,55 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isLoadingProfile ? null : _refreshPage,
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('刷新资料'),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact =
+                      AppAdaptiveMetrics.resolveForConstraints(
+                        context,
+                        constraints,
+                      ).isCompactDensity;
+                  final refreshButton = OutlinedButton.icon(
+                    onPressed: _isLoadingProfile ? null : _refreshPage,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('刷新资料'),
+                  );
+                  final logoutButton = FilledButton.icon(
+                    onPressed: _isLoggingOut ? null : _handleLogout,
+                    icon:
+                        _isLoggingOut
+                            ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : const Icon(Icons.logout_rounded),
+                    label: Text(_isLoggingOut ? '退出中...' : '退出登录'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.error,
+                      foregroundColor: colorScheme.onError,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _isLoggingOut ? null : _handleLogout,
-                      icon:
-                          _isLoggingOut
-                              ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                              : const Icon(Icons.logout_rounded),
-                      label: Text(_isLoggingOut ? '退出中...' : '退出登录'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colorScheme.error,
-                        foregroundColor: colorScheme.onError,
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        refreshButton,
+                        SizedBox(height: metrics.contentGap),
+                        logoutButton,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: refreshButton),
+                      SizedBox(width: metrics.contentGap),
+                      Expanded(child: logoutButton),
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -325,7 +344,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   Widget _buildGuestHero(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding + 2),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -335,7 +354,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(
+          AppAdaptiveMetrics.of(context).cardRadius + 8,
+        ),
       ),
       child: Row(
         children: [
@@ -381,14 +402,16 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     final initial = displayName.trim().isEmpty ? 'U' : displayName.trim()[0];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding + 2),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [colorScheme.primaryContainer, colorScheme.tertiaryContainer],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(
+          AppAdaptiveMetrics.of(context).cardRadius + 10,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,7 +495,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     final colorScheme = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

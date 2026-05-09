@@ -166,6 +166,9 @@ extension on _BookDetailPageState {
     String? sourceId,
     String? detailUrl,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final coverWidth = metrics.isCompactDensity ? 92.0 : 104.0;
+    final coverHeight = coverWidth * 1.42;
     return Consumer(
       builder: (context, ref, _) {
         ref.watch(activeAdvancedThemeProvider);
@@ -186,9 +189,9 @@ extension on _BookDetailPageState {
             cover: resolvedCover,
             title: title,
             author: author,
-            width: 104,
-            height: 148,
-            borderRadius: BorderRadius.circular(16),
+            width: coverWidth,
+            height: coverHeight,
+            borderRadius: BorderRadius.circular(metrics.cardRadius),
           ),
         );
       },

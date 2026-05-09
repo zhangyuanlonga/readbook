@@ -43,6 +43,24 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     });
   }
 
+  void _scheduleReaderInfoMinuteTick() {
+    _readerInfoClockTimer?.cancel();
+    if (!mounted || !_isReaderRuntimeVisible) {
+      _readerInfoClockTimer = null;
+      return;
+    }
+    _readerInfoClockTimer = Timer(
+      _runtimeWakePolicy.nextMinuteDelay(DateTime.now()),
+      () {
+        if (!mounted || !_isReaderRuntimeVisible) {
+          return;
+        }
+        unawaited(_refreshReaderInfoSnapshot());
+        _scheduleReaderInfoMinuteTick();
+      },
+    );
+  }
+
   void _setContent(
     String content, {
     List<String> imageUrls = const [],
@@ -98,14 +116,17 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
 
-    final targetIndex = _contentLoadingPresenter
-        .resolveAdjacentContinuousChapterIndex(
-          chapters: _chapters,
-          loadedChapterIndices: _continuousTextChapters
-              .map((item) => item.chapterIndex)
-              .toList(growable: false),
-          forward: forward,
-        );
+    _continuousTextChapters = _retainContinuousTextWindowFlow(
+      _continuousTextChapters,
+    );
+    final targetIndex = _chapterWindowController.resolveAdjacentLoadIndex(
+      chapters: _chapters,
+      loadedChapterIndices: _continuousTextChapters.map(
+        (item) => item.chapterIndex,
+      ),
+      currentChapterIndex: _currentIndex,
+      forward: forward,
+    );
     if (targetIndex == null) {
       return;
     }
@@ -122,10 +143,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         return;
       }
       setState(() {
-        _continuousTextChapters = List<_ContinuousTextChapter>.unmodifiable(
-          forward
-              ? <_ContinuousTextChapter>[..._continuousTextChapters, chapter]
-              : <_ContinuousTextChapter>[chapter, ..._continuousTextChapters],
+        _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+          chapter,
         );
       });
     } finally {
@@ -266,6 +285,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isAutoReadSessionEnabled: _isAutoReadSessionEnabled,
       isMangaChapter: _isMangaChapter,
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      isReaderVisible: _isReaderRuntimeVisible,
+      isLowBattery: _isReaderBatteryLowForRuntime,
       showOverlayControls: _showOverlayControls,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent,
@@ -453,6 +474,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isAutoReadAdvancingChapter: _isAutoReadAdvancingChapter,
       isMangaChapter: _isMangaChapter,
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      isReaderVisible: _isReaderRuntimeVisible,
+      isLowBattery: _isReaderBatteryLowForRuntime,
       showOverlayControls: _showOverlayControls,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent,
@@ -488,6 +511,28 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     } catch (_) {
       // ignore
     }
+  }
+
+  bool get _isReaderBatteryLowForRuntime =>
+      _readerBatteryLevel != null && _readerBatteryLevel! <= 15;
+
+  void _pauseAutoReadForRuntime() {
+    if (!_isAutoReadSessionEnabled) {
+      return;
+    }
+    _isAutoReadPausedByRuntime = true;
+    _stopAutoRead();
+  }
+
+  void _pauseAutoReadIfRuntimePolicyRequires() {
+    if (!_runtimeWakePolicy.shouldPauseAutoRead(
+      isReaderVisible: _isReaderRuntimeVisible,
+      showOverlayControls: _showOverlayControls,
+      isLowBattery: _isReaderBatteryLowForRuntime,
+    )) {
+      return;
+    }
+    _pauseAutoReadForRuntime();
   }
 
   void _onScrollChanged() {
@@ -532,9 +577,22 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   void _scheduleProgressSave() {
     _progressDebounceTimer?.cancel();
-    _progressDebounceTimer = Timer(const Duration(milliseconds: 420), () {
-      unawaited(_saveProgress());
-    });
+    final delay = _runtimeWakePolicy.progressSaveDelay(
+      lastSavedAt: _lastProgressSavedAt,
+      now: DateTime.now(),
+    );
+    if (delay <= Duration.zero) {
+      _flushProgressSave();
+      return;
+    }
+    _progressDebounceTimer = Timer(delay, _flushProgressSave);
+  }
+
+  void _flushProgressSave() {
+    _progressDebounceTimer?.cancel();
+    _progressDebounceTimer = null;
+    _lastProgressSavedAt = DateTime.now();
+    unawaited(_saveProgress());
   }
 
   void _maybeStartReadingRecordSession({double? initialRatio}) {
@@ -586,14 +644,18 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       _readingRecordAutoCommitTimer = null;
       return;
     }
-    _readingRecordAutoCommitTimer = Timer(
-      _ReaderPageState._kReadingRecordAutoCommitInterval,
-      () {
-        final restartRatio = _currentScrollRatio();
-        _commitReadingRecordSession();
-        _maybeStartReadingRecordSession(initialRatio: restartRatio);
-      },
+    final interval = _readingRecordCoordinator.autoCommitInterval(
+      hasActiveSession: _activeReadingRecordSession != null,
     );
+    if (interval <= Duration.zero) {
+      _readingRecordAutoCommitTimer = null;
+      return;
+    }
+    _readingRecordAutoCommitTimer = Timer(interval, () {
+      final restartRatio = _currentScrollRatio();
+      _commitReadingRecordSession();
+      _maybeStartReadingRecordSession(initialRatio: restartRatio);
+    });
   }
 
   void _commitReadingRecordSession() {
@@ -783,8 +845,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
 
-    final pages = _pagedPages;
-    if (pages.isEmpty) {
+    final pageCount = _currentPagedPageCount;
+    if (pageCount <= 0) {
       return;
     }
 
@@ -792,7 +854,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     final action = _pagedTransitionLogic.planTurn(
       direction: safeDirection,
       currentPageIndex: _currentPageIndex,
-      pageCount: pages.length,
+      pageCount: pageCount,
       settings: _settings,
       isAnimating: _isPagedTransitionAnimating,
       renderer: _pagedTextRenderer,

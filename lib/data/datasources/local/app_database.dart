@@ -343,12 +343,14 @@ class ChapterCacheBookSummary {
     required this.bookId,
     required this.sourceId,
     required this.cachedCount,
+    required this.estimatedBytes,
     required this.updatedAt,
   });
 
   final String bookId;
   final String sourceId;
   final int cachedCount;
+  final int estimatedBytes;
   final DateTime updatedAt;
 }
 
@@ -404,7 +406,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration {
@@ -580,6 +582,9 @@ class AppDatabase extends _$AppDatabase {
           await migrator.createTable(storedSyncJobs);
           await migrator.createTable(storedSyncConflicts);
         }
+        if (from < 26) {
+          await _ensurePerformanceIndexes();
+        }
         if (from < 13) {
           await _addColumnIfMissing(
             migrator: migrator,
@@ -665,7 +670,28 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       },
+      beforeOpen: (_) async {
+        await _ensurePerformanceIndexes();
+      },
     );
+  }
+
+  Future<void> _ensurePerformanceIndexes() async {
+    const statements = <String>[
+      'CREATE INDEX IF NOT EXISTS idx_chapter_caches_book_id '
+          'ON chapter_caches(book_id)',
+      'CREATE INDEX IF NOT EXISTS idx_chapter_caches_book_source_chapter '
+          'ON chapter_caches(book_id, source_id, chapter_index)',
+      'CREATE INDEX IF NOT EXISTS idx_chapter_caches_updated_at '
+          'ON chapter_caches(updated_at)',
+      'CREATE INDEX IF NOT EXISTS idx_local_chapters_book_chapter '
+          'ON local_chapters(book_id, chapter_index)',
+      'CREATE INDEX IF NOT EXISTS idx_bookmarks_book_chapter_start '
+          'ON bookmarks(book_id, chapter_index, start_offset)',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
   }
 
   Future<void> _removeDeprecatedLocalBookColumns(Migrator migrator) async {
@@ -1407,7 +1433,11 @@ class AppDatabase extends _$AppDatabase {
   Future<List<ChapterCacheBookSummary>> listCachedBooks() async {
     const sql =
         'SELECT book_id AS bookId, source_id AS sourceId, '
-        'COUNT(*) AS cachedCount, MAX(updated_at) AS updatedAt '
+        'COUNT(*) AS cachedCount, '
+        'COALESCE(SUM(LENGTH(cache_key) + LENGTH(book_id) + '
+        'LENGTH(source_id) + COALESCE(LENGTH(chapter_title), 0) + '
+        'LENGTH(chapter_url) + LENGTH(content)), 0) AS estimatedBytes, '
+        'MAX(updated_at) AS updatedAt '
         'FROM chapter_caches '
         'GROUP BY book_id, source_id '
         'ORDER BY updatedAt DESC';
@@ -1420,6 +1450,7 @@ class AppDatabase extends _$AppDatabase {
             bookId: (row.data['bookId'] ?? '').toString(),
             sourceId: (row.data['sourceId'] ?? '').toString(),
             cachedCount: _decodeCount(row.data['cachedCount']),
+            estimatedBytes: _decodeCount(row.data['estimatedBytes']),
             updatedAt: _decodeDateTime(row.data['updatedAt']),
           ),
         )
@@ -1453,10 +1484,85 @@ class AppDatabase extends _$AppDatabase {
     return overflowCount;
   }
 
+  Future<int> pruneChapterCachesByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
+    var deletedCount = 0;
+    if (stalePeriod != null && stalePeriod > Duration.zero) {
+      final cutoff = DateTime.now().subtract(stalePeriod);
+      deletedCount +=
+          await (delete(
+            chapterCaches,
+          )..where((table) => table.updatedAt.isSmallerThanValue(cutoff))).go();
+    }
+
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final totalCount = await countChapterCaches();
+    final overflowCount = totalCount - normalizedMaxEntries;
+    if (overflowCount > 0) {
+      await customStatement(
+        'DELETE FROM chapter_caches '
+        'WHERE cache_key IN ('
+        'SELECT cache_key FROM chapter_caches '
+        'ORDER BY updated_at ASC '
+        'LIMIT ?'
+        ')',
+        <Object>[overflowCount],
+      );
+      deletedCount += overflowCount;
+    }
+
+    final normalizedMaxBytes = maxBytes < 0 ? 0 : maxBytes;
+    var totalBytes = await estimateChapterCachesBytes();
+    if (totalBytes <= normalizedMaxBytes) {
+      return deletedCount;
+    }
+
+    final rows =
+        await customSelect(
+          'SELECT cache_key AS cacheKey, '
+          'LENGTH(cache_key) + LENGTH(book_id) + LENGTH(source_id) + '
+          'COALESCE(LENGTH(chapter_title), 0) + LENGTH(chapter_url) + '
+          'LENGTH(content) AS estimatedBytes '
+          'FROM chapter_caches '
+          'ORDER BY updated_at ASC',
+          readsFrom: {chapterCaches},
+        ).get();
+    final keysToDelete = <String>[];
+    for (final row in rows) {
+      if (totalBytes <= normalizedMaxBytes) {
+        break;
+      }
+      final cacheKey = (row.data['cacheKey'] ?? '').toString();
+      if (cacheKey.trim().isEmpty) {
+        continue;
+      }
+      keysToDelete.add(cacheKey);
+      totalBytes -= _decodeCount(row.data['estimatedBytes']);
+    }
+    if (keysToDelete.isEmpty) {
+      return deletedCount;
+    }
+
+    await batch((batch) {
+      batch.deleteWhere(
+        chapterCaches,
+        (table) => table.cacheKey.isIn(keysToDelete),
+      );
+    });
+    return deletedCount + keysToDelete.length;
+  }
+
   Stream<List<ChapterCacheBookSummary>> watchCachedBooks() {
     const sql =
         'SELECT book_id AS bookId, source_id AS sourceId, '
-        'COUNT(*) AS cachedCount, MAX(updated_at) AS updatedAt '
+        'COUNT(*) AS cachedCount, '
+        'COALESCE(SUM(LENGTH(cache_key) + LENGTH(book_id) + '
+        'LENGTH(source_id) + COALESCE(LENGTH(chapter_title), 0) + '
+        'LENGTH(chapter_url) + LENGTH(content)), 0) AS estimatedBytes, '
+        'MAX(updated_at) AS updatedAt '
         'FROM chapter_caches '
         'GROUP BY book_id, source_id '
         'ORDER BY updatedAt DESC';
@@ -1468,6 +1574,7 @@ class AppDatabase extends _$AppDatabase {
               bookId: (row.data['bookId'] ?? '').toString(),
               sourceId: (row.data['sourceId'] ?? '').toString(),
               cachedCount: _decodeCount(row.data['cachedCount']),
+              estimatedBytes: _decodeCount(row.data['estimatedBytes']),
               updatedAt: _decodeDateTime(row.data['updatedAt']),
             ),
           )

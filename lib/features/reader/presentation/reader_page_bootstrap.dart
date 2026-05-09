@@ -99,17 +99,29 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     final now = DateTime.now();
 
     int? batteryLevel;
-    var batteryReadFailed = false;
-    final shouldSkipBatteryRead = await _shouldSkipBatteryRead();
-    if (shouldSkipBatteryRead) {
-      batteryReadFailed = true;
-    } else {
-      try {
-        batteryLevel = await _battery.batteryLevel;
-      } catch (_) {
+    var batteryReadFailed = _readerBatteryReadFailed;
+    final shouldPollBattery = _runtimeWakePolicy.shouldPollBattery(
+      force: force,
+      infoShowBattery: _settings.infoShowBattery,
+      lastReadAt: _lastReaderBatteryRefreshAt,
+      now: now,
+    );
+    if (shouldPollBattery) {
+      final shouldSkipBatteryRead = await _shouldSkipBatteryRead();
+      if (shouldSkipBatteryRead) {
         batteryReadFailed = true;
         batteryLevel = null;
+      } else {
+        try {
+          batteryLevel = await _battery.batteryLevel;
+          batteryReadFailed = false;
+        } catch (_) {
+          batteryReadFailed = true;
+          batteryLevel = null;
+        }
       }
+    } else {
+      batteryLevel = _readerBatteryLevel;
     }
 
     if (!mounted) {
@@ -137,7 +149,11 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       _readerInfoNow = now;
       _readerBatteryLevel = batteryLevel;
       _readerBatteryReadFailed = batteryReadFailed;
+      if (shouldPollBattery) {
+        _lastReaderBatteryRefreshAt = now;
+      }
     });
+    _pauseAutoReadIfRuntimePolicyRequires();
   }
 
   Future<bool> _shouldSkipBatteryRead() async {

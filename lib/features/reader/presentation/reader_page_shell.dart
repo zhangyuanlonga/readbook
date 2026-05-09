@@ -289,6 +289,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         _bottomOverlayDraftProgressRatio = null;
       }
     });
+    if (visible) {
+      _pauseAutoReadForRuntime();
+    }
     unawaited(_syncVolumeKeyPageInterception());
     if (visible) {
       _overlayControlsController.forward();
@@ -418,6 +421,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
     _autoReadResumeTimer?.cancel();
     _pageTurnModeBeforeAutoRead = _settings.pageTurnMode;
+    _isAutoReadPausedByRuntime = false;
     _applyReaderSettingsWithModeRestore(
       nextSettings: _settings.copyWith(
         pageTurnMode: ReaderPageTurnMode.scroll,
@@ -439,6 +443,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     _isAutoReadAdvancingChapter = false;
+    _isAutoReadPausedByRuntime = false;
     _autoReadResumeTimer?.cancel();
     _stopAutoRead();
 

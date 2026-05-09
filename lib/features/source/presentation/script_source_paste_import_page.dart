@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/widgets/import_export_copy.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -225,15 +226,29 @@ class _ScriptSourcePasteImportPageState
           top: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final metrics = AppAdaptiveMetrics.resolveForConstraints(
+                context,
+                constraints,
+              );
+              final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               return Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxWidth:
-                        constraints.maxWidth > 880 ? 880 : double.infinity,
+                        metrics.isExpandedWindow
+                            ? 880
+                            : metrics.isMediumWindow
+                            ? 760
+                            : double.infinity,
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      metrics.pagePadding,
+                      metrics.contentGap,
+                      metrics.pagePadding,
+                      metrics.sectionGap + keyboardInset,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -241,7 +256,7 @@ class _ScriptSourcePasteImportPageState
                           '将完整书源脚本粘贴到下方，导入后会直接保存到书源列表。',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: metrics.contentGap),
                         Expanded(
                           child: TextField(
                             controller: _controller,
@@ -257,7 +272,7 @@ class _ScriptSourcePasteImportPageState
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: metrics.contentGap),
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(

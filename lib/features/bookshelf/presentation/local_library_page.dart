@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
@@ -318,7 +318,8 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 720);
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -329,16 +330,23 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
             child: ListView(
-              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 24),
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                metrics.contentGap,
+                horizontal,
+                metrics.sectionGap + MediaQuery.viewPaddingOf(context).bottom,
+              ),
               children: [
                 InkWell(
                   onTap: _isImporting ? null : _pickAndImportFiles,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
                   child: Ink(
-                    padding: const EdgeInsets.all(24),
+                    padding: EdgeInsets.all(metrics.cardPadding + 8),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(
+                        metrics.cardRadius + 6,
+                      ),
                       border: Border.all(color: colorScheme.outlineVariant),
                     ),
                     child: Column(
@@ -357,13 +365,15 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                             size: 28,
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        SizedBox(height: metrics.sectionGap),
                         Text(
                           '点击选择本地图书',
-                          style: Theme.of(context).textTheme.headlineSmall
+                          style: (metrics.isCompactDensity
+                                  ? Theme.of(context).textTheme.titleLarge
+                                  : Theme.of(context).textTheme.headlineSmall)
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: metrics.contentGap * 0.8),
                         Text(
                           '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入会等待目录建立完成，完成后可直接阅读。',
                           style: Theme.of(
@@ -373,14 +383,14 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                             height: 1.5,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: metrics.sectionGap),
                         FilledButton.icon(
                           onPressed: _isImporting ? null : _pickAndImportFiles,
                           icon: const Icon(Icons.upload_file_outlined),
                           label: const Text('从文件选择器导入'),
                         ),
                         if (!_isImporting && _lastImportedResult != null) ...[
-                          const SizedBox(height: 12),
+                          SizedBox(height: metrics.contentGap),
                           Wrap(
                             spacing: 10,
                             runSpacing: 10,
@@ -402,12 +412,12 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: metrics.sectionGap),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(metrics.cardPadding),
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,7 +428,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: metrics.contentGap * 0.8),
                       Text(
                         '1. 选择文件后立即导入，不再进入待导入列表。\n2. 进度会依次显示准备、入库、索引、完成。\n3. 显示完成后代表目录已建立，可直接阅读。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -427,10 +437,10 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                         ),
                       ),
                       if ((_lastErrorText ?? '').trim().isNotEmpty) ...[
-                        const SizedBox(height: 12),
+                        SizedBox(height: metrics.contentGap),
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(12),
+                          padding: EdgeInsets.all(metrics.cardPadding * 0.85),
                           decoration: BoxDecoration(
                             color: colorScheme.errorContainer,
                             borderRadius: BorderRadius.circular(14),

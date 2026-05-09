@@ -12,15 +12,17 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     Color? backgroundColor,
     required Widget child,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final floatingColor =
         backgroundColor ??
         readerModalTheme.colorScheme.surface.withValues(alpha: 0.9);
     final borderColor = readerModalTheme.colorScheme.outlineVariant.withValues(
       alpha: 0.35,
     );
-    final useEdgeToEdgeSheet = MediaQuery.sizeOf(context).width < 840;
-    final radius = useEdgeToEdgeSheet ? 24.0 : 28.0;
+    final useEdgeToEdgeSheet = !metrics.isExpandedWindow;
+    final radius = metrics.cardRadius + (useEdgeToEdgeSheet ? 10 : 12);
     final horizontalInset = useEdgeToEdgeSheet ? 0.0 : sheetHorizontal;
+    final resolvedMaxWidth = min(maxWidth, metrics.bottomSheetMaxWidth);
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
@@ -38,7 +40,7 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
           heightFactor: heightFactor,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: useEdgeToEdgeSheet ? double.infinity : maxWidth,
+              maxWidth: useEdgeToEdgeSheet ? double.infinity : resolvedMaxWidth,
             ),
             child: ClipRRect(
               borderRadius:

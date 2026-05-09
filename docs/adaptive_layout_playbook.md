@@ -124,6 +124,9 @@ Flutter 官方整体更推荐：
 后续项目内允许使用的主要判断指标：
 
 - `constraints.maxWidth`
+- `AppAdaptiveMetrics.of(context)`
+- `AppAdaptiveMetrics.resolveForConstraints(...)`
+- `AppAdaptiveMetrics.resolveForSliver(...)`
 - `AppLayout.widthBucketFor(width)`
 - `AppLayout.pageContentMaxWidth()`
 - `AppLayout.sheetHeightFactor()`
@@ -155,6 +158,26 @@ Flutter 官方整体更推荐：
 
 - `840`
   扩展布局起点，适合稳定大屏布局
+
+## 3.4 当前落地模型
+
+新增页面按两层模型处理：
+
+- Window Class：决定页面结构，取值为 `compact`、`medium`、`expanded`
+- Density：决定组件尺寸和信息密度，取值为 `compact`、`regular`、`comfortable`
+
+执行顺序：
+
+1. 页面结构看 `windowClass`
+2. 组件高度、padding、gap、圆角看 `density`
+3. 列数通过 `gridColumnsFor(...)` 按当前容器宽度和最小 item 宽度计算
+4. 弹层读取 `bottomSheetMaxWidth`、`dialogMaxWidth`，小屏横屏优先保证可操作高度
+
+发布前运行：
+
+```bash
+dart run tool/check_adaptive_layout_guard.dart lib
+```
 
 解释：
 
@@ -379,4 +402,3 @@ Flutter 官方整体更推荐：
 一句话总结：
 
 **你的项目应该采用“约束驱动重排 + 小范围等比缩放”的常用组合方案。**
-

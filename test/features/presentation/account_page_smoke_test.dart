@@ -12,6 +12,11 @@ import 'package:shuxiang_reading_next/features/announcement/providers.dart';
 import 'package:shuxiang_reading_next/features/auth/presentation/auth_page.dart';
 import 'package:shuxiang_reading_next/features/auth/presentation/user_profile_page.dart';
 import 'package:shuxiang_reading_next/features/auth/providers.dart';
+import 'package:shuxiang_reading_next/features/error/presentation/error_center_page.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/about_page.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/feedback_page.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/membership_center_page.dart';
+import 'package:shuxiang_reading_next/features/mine/providers.dart' as mine;
 
 import '../../test_utils/adaptive_test_harness.dart';
 
@@ -49,6 +54,25 @@ void main() {
     );
   });
 
+  testWidgets('AboutPage renders on phone and large screens', (tester) async {
+    await runAdaptivePageSmokeMatrix(
+      tester,
+      pageBuilder: () => const AboutPage(),
+      useProviderScope: true,
+      pageName: 'AboutPage',
+    );
+  });
+
+  testWidgets('ErrorCenterPage renders on phone and large screens', (
+    tester,
+  ) async {
+    await runAdaptivePageSmokeMatrix(
+      tester,
+      pageBuilder: () => const ErrorCenterPage(),
+      pageName: 'ErrorCenterPage',
+    );
+  });
+
   testWidgets('UserProfilePage renders on phone and large screens', (
     tester,
   ) async {
@@ -64,6 +88,32 @@ void main() {
           return _FakeUserProfileService();
         }),
       ],
+    );
+  });
+
+  testWidgets('MembershipCenterPage renders on phone and large screens', (
+    tester,
+  ) async {
+    await runAdaptivePageSmokeMatrix(
+      tester,
+      pageBuilder: () => const MembershipCenterPage(),
+      pageName: 'MembershipCenterPage',
+      overrides: <Override>[
+        mine.mineAuthSessionStoreProvider.overrideWith((ref) {
+          return _FakeAuthSessionStore();
+        }),
+      ],
+    );
+  });
+
+  testWidgets('FeedbackComposePage renders on phone and large screens', (
+    tester,
+  ) async {
+    await runAdaptivePageSmokeMatrix(
+      tester,
+      pageBuilder: () => const FeedbackComposePage(),
+      useProviderScope: true,
+      pageName: 'FeedbackComposePage',
     );
   });
 }

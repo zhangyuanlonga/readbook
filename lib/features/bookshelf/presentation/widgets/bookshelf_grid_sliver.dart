@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/layout/app_layout.dart';
+import '../../../../app/widgets/adaptive_grid_sliver.dart';
 
 typedef BookshelfGridItemBuilder =
     Widget Function(BuildContext context, int index);
@@ -27,30 +27,16 @@ class BookshelfGridSliver extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        final width =
-            constraints.crossAxisExtent.clamp(220.0, 2400.0).toDouble();
-        final crossAxisCount =
-            fixedCrossAxisCount?.clamp(2, 6) ??
-            AppLayout.bookshelfGridColumnsForWidth(width);
-        final itemWidth =
-            (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
-        final itemHeight = itemWidth / coverAspectRatio + itemHeightExtra;
-
-        return SliverGrid(
-          delegate: SliverChildBuilderDelegate(
-            itemBuilder,
-            childCount: itemCount,
-          ),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: crossSpacing,
-            mainAxisSpacing: mainSpacing,
-            childAspectRatio: itemWidth / itemHeight,
-          ),
-        );
-      },
+    return AdaptiveGridSliver(
+      itemCount: itemCount,
+      itemBuilder: itemBuilder,
+      fixedCrossAxisCount: fixedCrossAxisCount,
+      minColumns: 2,
+      maxColumns: 6,
+      crossSpacing: crossSpacing,
+      mainSpacing: mainSpacing,
+      itemHeightExtra: itemHeightExtra,
+      itemAspectRatio: coverAspectRatio,
     );
   }
 }

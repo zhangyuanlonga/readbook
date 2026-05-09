@@ -94,11 +94,13 @@ class CachedBookSummary {
   const CachedBookSummary({
     required this.bookId,
     required this.cachedCount,
+    required this.estimatedBytes,
     required this.updatedAt,
   });
 
   final String bookId;
   final int cachedCount;
+  final int estimatedBytes;
   final DateTime updatedAt;
 }
 
@@ -302,6 +304,7 @@ class CacheManagementService {
             (item) => CachedBookSummary(
               bookId: item.bookId,
               cachedCount: item.cachedCount,
+              estimatedBytes: item.estimatedBytes,
               updatedAt: item.updatedAt,
             ),
           )

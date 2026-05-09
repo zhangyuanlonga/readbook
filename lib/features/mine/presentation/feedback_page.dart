@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -120,7 +120,8 @@ class _FeedbackPageState extends State<FeedbackPage>
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
@@ -183,15 +184,15 @@ class _FeedbackPageState extends State<FeedbackPage>
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
-                          topInset + 12,
+                          topInset + metrics.contentGap,
                           horizontal,
-                          20 + bottomSafe + keyboardInset,
+                          metrics.sectionGap + bottomSafe + keyboardInset,
                         ),
                         children: [
                           _buildTypeTabs(context),
-                          const SizedBox(height: 14),
+                          SizedBox(height: metrics.sectionGap),
                           _buildSearchAndFilterRow(context),
-                          const SizedBox(height: 14),
+                          SizedBox(height: metrics.sectionGap),
                           Container(
                             height: 1,
                             color: colorScheme.outlineVariant.withValues(
@@ -316,21 +317,29 @@ class _FeedbackPageState extends State<FeedbackPage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final compact = AppLayout.isPhoneSmallWidthFor(width);
+        final metrics = AppAdaptiveMetrics.resolveForConstraints(
+          context,
+          constraints,
+        );
+        final compact = metrics.isCompactDensity;
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [searchField, const SizedBox(height: 8), statusDropdown],
+            children: [
+              searchField,
+              SizedBox(height: metrics.contentGap),
+              statusDropdown,
+            ],
           );
         }
 
+        final width = constraints.maxWidth;
         final filterWidth = (width * 0.32).clamp(108.0, 144.0).toDouble();
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: searchField),
-            const SizedBox(width: 10),
+            SizedBox(width: metrics.contentGap),
             SizedBox(width: filterWidth, child: statusDropdown),
           ],
         );
@@ -557,7 +566,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
@@ -598,9 +608,9 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
-                          topInset + 12,
+                          topInset + metrics.contentGap,
                           horizontal,
-                          20 + bottomSafe + keyboardInset,
+                          metrics.sectionGap + bottomSafe + keyboardInset,
                         ),
                         children: [
                           if (_isLoading)
@@ -642,11 +652,12 @@ class _FeedbackDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,6 +772,7 @@ class _FeedbackStateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final background =
         isError
             ? colorScheme.errorContainer.withValues(alpha: 0.7)
@@ -769,10 +781,10 @@ class _FeedbackStateCard extends StatelessWidget {
         isError ? colorScheme.onErrorContainer : colorScheme.onSurface;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -850,7 +862,8 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
@@ -889,16 +902,18 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
                     child: ListView(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        topInset + 12,
+                        topInset + metrics.contentGap,
                         horizontal,
-                        20 + bottomSafe + keyboardInset,
+                        metrics.sectionGap + bottomSafe + keyboardInset,
                       ),
                       children: [
                         Container(
-                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                          padding: EdgeInsets.all(metrics.cardPadding),
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(
+                              metrics.cardRadius + 4,
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

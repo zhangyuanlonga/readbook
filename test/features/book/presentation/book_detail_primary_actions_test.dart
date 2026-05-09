@@ -22,7 +22,15 @@ void main() {
     expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
     expect(find.byIcon(Icons.menu_book_rounded), findsOneWidget);
     expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.category_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.bookmarks_rounded), findsOneWidget);
+
+    final shelfTop =
+        tester.getTopLeft(find.byKey(const Key('book_detail_shelf_button'))).dy;
+    final sourceTop =
+        tester
+            .getTopLeft(find.byKey(const Key('book_detail_source_button')))
+            .dy;
+    expect(sourceTop, greaterThan(shelfTop));
   });
 
   testWidgets('uses single-row four-action layout on large width', (
@@ -43,7 +51,15 @@ void main() {
     expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
     expect(find.byIcon(Icons.menu_book_rounded), findsOneWidget);
     expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.category_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.bookmarks_rounded), findsOneWidget);
+
+    final shelfTop =
+        tester.getTopLeft(find.byKey(const Key('book_detail_shelf_button'))).dy;
+    final sourceTop =
+        tester
+            .getTopLeft(find.byKey(const Key('book_detail_source_button')))
+            .dy;
+    expect(sourceTop, shelfTop);
   });
 
   testWidgets('keeps four actions visible at medium width', (tester) async {

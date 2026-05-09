@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
 
+import 'reader_document_render_model.dart';
 import 'reader_pagination_models.dart';
 import 'reader_pagination_spec.dart';
 
@@ -135,6 +136,34 @@ class ReaderPaginationResult {
 
   final List<String> paragraphs;
   final List<List<ReaderPagedSlice>> pages;
+}
+
+class ReaderBlockPaginationRequest {
+  const ReaderBlockPaginationRequest({
+    required this.renderItems,
+    required this.paragraphs,
+    required this.spec,
+    required this.paragraphStyle,
+    this.paragraphModels,
+    this.textScaler = TextScaler.noScaling,
+    this.yieldInterval = const Duration(milliseconds: 8),
+    this.shouldAbort,
+    this.textDirection = TextDirection.ltr,
+    this.textAlign = TextAlign.start,
+    this.imagePlaceholderAspectRatio = 3 / 4,
+  });
+
+  final List<ReaderRenderBlockItem> renderItems;
+  final List<String> paragraphs;
+  final ReaderPaginationSpec spec;
+  final TextStyle paragraphStyle;
+  final List<ReaderPaginationParagraph>? paragraphModels;
+  final TextScaler textScaler;
+  final Duration yieldInterval;
+  final bool Function()? shouldAbort;
+  final TextDirection textDirection;
+  final TextAlign textAlign;
+  final double imagePlaceholderAspectRatio;
 }
 
 class ReaderPaginationEngine {
@@ -437,6 +466,138 @@ class ReaderPaginationEngine {
     );
   }
 
+  Future<ReaderBlockPaginationResult?> paginateBlocks(
+    ReaderBlockPaginationRequest request,
+  ) async {
+    if (request.renderItems.isEmpty) {
+      return const ReaderBlockPaginationResult(
+        pages: <List<ReaderPagedBlock>>[],
+      );
+    }
+
+    final paragraphModels = _resolveParagraphModels(
+      ReaderPaginationRequest(
+        paragraphs: request.paragraphs,
+        spec: request.spec,
+        paragraphStyle: request.paragraphStyle,
+        paragraphModels: request.paragraphModels,
+        textScaler: request.textScaler,
+        yieldInterval: request.yieldInterval,
+        shouldAbort: request.shouldAbort,
+        textDirection: request.textDirection,
+        textAlign: request.textAlign,
+      ),
+    );
+    final pages = <List<ReaderPagedBlock>>[];
+    var currentPage = <ReaderPagedBlock>[];
+    var remainingHeight = request.spec.contentHeight;
+    final yieldStopwatch = Stopwatch()..start();
+
+    Future<bool> maybeYield() async {
+      if (request.shouldAbort?.call() ?? false) {
+        return true;
+      }
+      if (request.yieldInterval <= Duration.zero ||
+          yieldStopwatch.elapsed < request.yieldInterval) {
+        return false;
+      }
+      await Future<void>.delayed(Duration.zero);
+      yieldStopwatch
+        ..reset()
+        ..start();
+      return request.shouldAbort?.call() ?? false;
+    }
+
+    void flushPage() {
+      if (currentPage.isEmpty) {
+        return;
+      }
+      pages.add(List<ReaderPagedBlock>.unmodifiable(currentPage));
+      currentPage = <ReaderPagedBlock>[];
+      remainingHeight = request.spec.contentHeight;
+    }
+
+    for (final item in request.renderItems) {
+      if (await maybeYield()) {
+        return null;
+      }
+      if (item is ReaderRenderImageItem) {
+        final imageHeight = _resolveImagePlaceholderHeight(request);
+        if (currentPage.isNotEmpty &&
+            remainingHeight < imageHeight + _kPageTailSafetyBuffer) {
+          flushPage();
+        }
+        currentPage.add(
+          ReaderPagedBlock.image(imageUrl: item.imageUrl, height: imageHeight),
+        );
+        remainingHeight -= imageHeight;
+        if (remainingHeight <= _kPageTailSafetyBuffer) {
+          flushPage();
+        }
+        continue;
+      }
+      if (item is! ReaderRenderTextItem) {
+        continue;
+      }
+      final paragraphIndex = item.paragraphIndex;
+      if (paragraphIndex == null ||
+          paragraphIndex < 0 ||
+          paragraphIndex >= paragraphModels.length) {
+        continue;
+      }
+      final paragraph = paragraphModels[paragraphIndex];
+      final paragraphResult = await paginateParagraphs(
+        ReaderPaginationRequest(
+          paragraphs: <String>[paragraph.text],
+          spec: request.spec,
+          paragraphStyle: paragraph.paragraphStyle,
+          paragraphModels: <ReaderPaginationParagraph>[
+            ReaderPaginationParagraph(
+              text: paragraph.text,
+              paragraphStyle: paragraph.paragraphStyle,
+              textAlign: paragraph.textAlign,
+              firstLinePrefix: paragraph.firstLinePrefix,
+              spacingAfter: paragraph.spacingAfter,
+            ),
+          ],
+          textScaler: request.textScaler,
+          yieldInterval: request.yieldInterval,
+          shouldAbort: request.shouldAbort,
+          textDirection: request.textDirection,
+          textAlign: request.textAlign,
+        ),
+      );
+      if (paragraphResult == null) {
+        return null;
+      }
+      for (final page in paragraphResult.pages) {
+        for (final slice in page) {
+          if (currentPage.isNotEmpty &&
+              remainingHeight < slice.height + _kPageTailSafetyBuffer) {
+            flushPage();
+          }
+          currentPage.add(
+            ReaderPagedBlock.text(
+              paragraphIndex: paragraphIndex,
+              start: slice.start,
+              end: slice.end,
+              height: slice.height,
+            ),
+          );
+          remainingHeight -= slice.height + paragraph.spacingAfter;
+          if (remainingHeight <= _kPageTailSafetyBuffer) {
+            flushPage();
+          }
+        }
+      }
+    }
+
+    flushPage();
+    return ReaderBlockPaginationResult(
+      pages: List<List<ReaderPagedBlock>>.unmodifiable(pages),
+    );
+  }
+
   static double _normalizeRatio(double value) {
     return value.clamp(0.0, 1.0).toDouble();
   }
@@ -468,6 +629,18 @@ class ReaderPaginationEngine {
       return '';
     }
     return '　' * indentCount;
+  }
+
+  static double _resolveImagePlaceholderHeight(
+    ReaderBlockPaginationRequest request,
+  ) {
+    final aspectRatio =
+        request.imagePlaceholderAspectRatio <= 0
+            ? 3 / 4
+            : request.imagePlaceholderAspectRatio;
+    final width = request.spec.contentWidth;
+    final height = width / aspectRatio;
+    return height.clamp(80.0, request.spec.contentHeight).toDouble();
   }
 }
 

@@ -12,7 +12,8 @@ extension on _AppearancePageState {
   }
 
   Widget _buildAppearancePage(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final selectedThemeMode = ref.watch(appThemeModeProvider);
     final selectedSeedColor = ref.watch(appSeedColorProvider);
     final selectedNavigationStyle = ref.watch(
@@ -34,7 +35,9 @@ extension on _AppearancePageState {
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
     );
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final mediaQuery = MediaQuery.of(context);
+    final topInset = mediaQuery.padding.top + kToolbarHeight;
+    final bottomInset = mediaQuery.viewPadding.bottom;
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -76,9 +79,9 @@ extension on _AppearancePageState {
                   child: ListView(
                     padding: EdgeInsets.fromLTRB(
                       horizontal,
-                      topInset + 12,
+                      topInset + metrics.contentGap,
                       horizontal,
-                      12,
+                      metrics.sectionGap + bottomInset,
                     ),
                     children: _buildSectionContent(
                       context,
@@ -120,19 +123,20 @@ extension on _AppearancePageState {
     required AppCupertinoDockAppearance cupertinoDockAppearance,
     required bool showNavigationLabels,
   }) {
+    final sectionGap = AppAdaptiveMetrics.of(context).contentGap;
     final sections = <Widget>[];
 
     if (widget.section == AppearanceSection.appearance) {
       sections.add(
         _buildThemeModeSection(context, selectedThemeMode: selectedThemeMode),
       );
-      sections.add(const SizedBox(height: 10));
+      sections.add(SizedBox(height: sectionGap));
       sections.add(
         _buildThemeColorSection(context, selectedSeedColor: selectedSeedColor),
       );
-      sections.add(const SizedBox(height: 10));
+      sections.add(SizedBox(height: sectionGap));
       sections.add(_buildAdvancedThemeSummarySection(context));
-      sections.add(const SizedBox(height: 10));
+      sections.add(SizedBox(height: sectionGap));
       sections.add(
         _buildNavigationStyleSection(
           context,
@@ -142,7 +146,7 @@ extension on _AppearancePageState {
           showNavigationLabels: showNavigationLabels,
         ),
       );
-      sections.add(const SizedBox(height: 10));
+      sections.add(SizedBox(height: sectionGap));
       sections.add(
         _buildSectionCard(
           context,
@@ -152,9 +156,9 @@ extension on _AppearancePageState {
           child: const _AppearanceNavigationVisibilityPanel(),
         ),
       );
-      sections.add(const SizedBox(height: 10));
+      sections.add(SizedBox(height: sectionGap));
       sections.add(_buildFontSection(context));
-      sections.add(const SizedBox(height: 10));
+      sections.add(SizedBox(height: sectionGap));
       sections.add(const AppearanceOtherSettingsCard());
     }
 
@@ -1144,13 +1148,15 @@ extension on _AppearancePageState {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final iconBoxSize = metrics.isCompactDensity ? 26.0 : 28.0;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
@@ -1161,31 +1167,37 @@ extension on _AppearancePageState {
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: iconBoxSize,
+                height: iconBoxSize,
                 decoration: BoxDecoration(
                   color: colorScheme.primaryContainer.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(
+                    metrics.cardRadius * 0.58,
+                  ),
                 ),
                 child: Icon(
                   icon,
-                  size: 16,
+                  size: metrics.isCompactDensity ? 15 : 16,
                   color: colorScheme.onPrimaryContainer,
                 ),
               ),
-              const SizedBox(width: 9),
+              SizedBox(width: metrics.contentGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
                       subtitle,
+                      maxLines: metrics.isCompactDensity ? 2 : 3,
+                      overflow: TextOverflow.ellipsis,
                       style: textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         height: 1.3,
@@ -1194,10 +1206,13 @@ extension on _AppearancePageState {
                   ],
                 ),
               ),
-              if (trailing != null) ...[const SizedBox(width: 10), trailing],
+              if (trailing != null) ...[
+                SizedBox(width: metrics.contentGap),
+                trailing,
+              ],
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: metrics.contentGap),
           child,
         ],
       ),

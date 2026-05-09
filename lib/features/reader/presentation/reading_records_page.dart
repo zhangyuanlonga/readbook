@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -63,7 +63,6 @@ class ReadingRecordsPage extends ConsumerStatefulWidget {
 }
 
 class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
-  static const double _kStatsPageBottomGap = 24;
   static const double _kHeatmapCellSize = 14;
   static const double _kHeatmapCellGap = 4;
   static const double _kHeatmapWeekGap = 4;
@@ -221,8 +220,14 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       useSafeArea: true,
       showDragHandle: true,
       builder: (sheetContext) {
+        final metrics = AppAdaptiveMetrics.of(sheetContext);
         return Padding(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + bottomInset),
+          padding: EdgeInsets.fromLTRB(
+            metrics.pagePadding,
+            metrics.contentGap,
+            metrics.pagePadding,
+            metrics.sectionGap + bottomInset,
+          ),
           child: SingleChildScrollView(
             child: _buildDistributionCalendarOverview(
               distribution,
@@ -237,7 +242,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   @override
   Widget build(BuildContext context) {
     ref.watch(activeAdvancedThemeProvider);
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       ref.read(activeAdvancedThemeProvider).valueOrNull,
@@ -308,15 +314,15 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                           appStandardNavigationBarAppearanceProvider,
                         ),
                         left: horizontal,
-                        top: topInset + 12,
+                        top: topInset + metrics.contentGap,
                         right: horizontal,
-                        bottom: _kStatsPageBottomGap,
+                        bottom: metrics.sectionGap,
                       ),
                       children: [
                         _buildControlsCard(),
-                        const SizedBox(height: 6),
+                        SizedBox(height: metrics.contentGap * 0.6),
                         _buildSummaryCard(summary: queryView.summary),
-                        const SizedBox(height: 10),
+                        SizedBox(height: metrics.contentGap),
                         _buildSectionHeading(
                           queryView.distribution.title,
                           subtitle: '当前周期内的阅读时长变化',
@@ -326,7 +332,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                           calendar: queryView.distributionCalendar,
                         ),
                         if (visibleSections.showWeekActivity) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: metrics.contentGap),
                           _buildWeeklyActivityCard(
                             periodRange: queryView.periodRange,
                             dailyRecords: pageState.dailyRecords,
@@ -334,7 +340,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                           ),
                         ],
                         if (visibleSections.showCalendar) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: metrics.contentGap),
                           _buildReadingCalendarCard(
                             queryView.distributionCalendar,
                             dailyRecords: pageState.dailyRecords,
@@ -342,11 +348,11 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                           ),
                         ],
                         if (visibleSections.showRanking) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: metrics.contentGap),
                           _buildDurationRankingSection(queryView.rankings),
                         ],
                         if (visibleSections.showHeatmap) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: metrics.contentGap),
                           _buildHeatmapCard(
                             pageState.dailyRecords,
                             sessions: pageState.sessions,
@@ -368,6 +374,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   Widget _buildControlsCard() {
     final currentPeriodRange = _currentPeriodRange;
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -405,10 +412,13 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
           ),
         ),
         if (_period != ReadingRecordsPeriod.all) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: metrics.contentGap * 0.8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.contentGap * 0.6,
+              vertical: metrics.isCompactDensity ? 2 : 4,
+            ),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(14),
@@ -448,7 +458,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
             ),
           ),
         ],
-        const SizedBox(height: 8),
+        SizedBox(height: metrics.contentGap * 0.8),
         StreamBuilder<bool>(
           stream: _readRecordEnabledStream,
           initialData: true,
@@ -460,7 +470,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
             final colorScheme = Theme.of(context).colorScheme;
             return Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
+              padding: EdgeInsets.all(metrics.cardPadding * 0.8),
               decoration: BoxDecoration(
                 color: colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(12),

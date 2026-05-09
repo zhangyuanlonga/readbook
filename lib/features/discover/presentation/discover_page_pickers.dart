@@ -70,7 +70,8 @@ class _SourcePickerSheetState extends ConsumerState<_SourcePickerSheet> {
     final novelCount = _countByType(_SourceTypeFilter.novel);
     final mangaCount = _countByType(_SourceTypeFilter.manga);
     final unknownCount = _countByType(_SourceTypeFilter.unknown);
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final heightFactor = AppLayout.sheetHeightFactor(
       context,
       compact: 0.92,
@@ -81,7 +82,12 @@ class _SourcePickerSheetState extends ConsumerState<_SourcePickerSheet> {
     return FractionallySizedBox(
       heightFactor: heightFactor,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 16),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          metrics.contentGap * 0.4,
+          horizontal,
+          metrics.sectionGap,
+        ),
         child: Column(
           children: <Widget>[
             Align(
@@ -539,7 +545,8 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
         })
         .toList(growable: false);
 
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final heightFactor = AppLayout.sheetHeightFactor(
       context,
       compact: 0.92,
@@ -550,7 +557,12 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
     return FractionallySizedBox(
       heightFactor: heightFactor,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 16),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          metrics.contentGap * 0.4,
+          horizontal,
+          metrics.sectionGap,
+        ),
         child: Column(
           children: <Widget>[
             Align(

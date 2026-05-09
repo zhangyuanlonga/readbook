@@ -37,7 +37,7 @@ class ReaderModeCapabilitiesResolver {
       case ReaderContentMode.text:
         return ReaderModeCapabilities(
           canAutoRead: true,
-          canUsePagedText: !hasInlineImageParagraphs,
+          canUsePagedText: true,
           supportsCatalogContentSearch: true,
           primaryBottomAction: ReaderPrimaryBottomAction.interfacePanel,
           canSwitchSource: contentCapabilities.canSwitchSource,

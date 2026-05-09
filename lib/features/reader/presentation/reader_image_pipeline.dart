@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../application/reader_image_decode_budget.dart';
+
 typedef ReaderImageRetryCallback = void Function(ReaderImageRetryAction action);
 
 class ReaderImagePipeline {
@@ -46,6 +48,7 @@ class ReaderImagePipeline {
     double placeholderAspectRatio = 3 / 4,
     String retryLabel = '图片加载失败，点击重试',
     ReaderImageRetryCallback? onRetry,
+    ReaderImageDecodeBudget? decodeBudget,
   }) {
     final requestUrl = request.requestUrl;
     final uri = Uri.tryParse(requestUrl);
@@ -71,6 +74,7 @@ class ReaderImagePipeline {
         placeholderAspectRatio: placeholderAspectRatio,
         retryLabel: retryLabel,
         onRetry: onRetry,
+        decodeBudget: decodeBudget,
       );
     }
     if (uri != null && uri.scheme == 'file') {
@@ -79,6 +83,8 @@ class ReaderImagePipeline {
         key: key,
         fit: fit,
         filterQuality: filterQuality,
+        cacheWidth: decodeBudget?.cacheWidth,
+        cacheHeight: decodeBudget?.cacheHeight,
         errorBuilder: (context, error, stackTrace) {
           return buildImageErrorWidget(
             request: request,
@@ -97,6 +103,8 @@ class ReaderImagePipeline {
       headers: headers.isEmpty ? null : headers,
       fit: fit,
       filterQuality: filterQuality,
+      cacheWidth: decodeBudget?.cacheWidth,
+      cacheHeight: decodeBudget?.cacheHeight,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         if (wasSynchronouslyLoaded || frame != null) {
           return child;
@@ -212,9 +220,13 @@ class ReaderImagePipeline {
     double placeholderAspectRatio = 3 / 4,
     String retryLabel = '图片加载失败，点击重试',
     ReaderImageRetryCallback? onRetry,
+    ReaderImageDecodeBudget? decodeBudget,
   }) {
     try {
-      final decoded = decodeDataUriImage(dataUri: request.requestUrl);
+      final decoded = decodeDataUriImage(
+        dataUri: request.requestUrl,
+        maxBytes: decodeBudget?.maxDataUriBytes,
+      );
       if (decoded == null) {
         throw const FormatException('Invalid data URI');
       }
@@ -223,6 +235,8 @@ class ReaderImagePipeline {
         key: key,
         fit: fit,
         filterQuality: filterQuality,
+        cacheWidth: decodeBudget?.cacheWidth,
+        cacheHeight: decodeBudget?.cacheHeight,
         errorBuilder: (context, error, stackTrace) {
           return buildImageErrorWidget(
             request: request,
@@ -244,7 +258,10 @@ class ReaderImagePipeline {
     }
   }
 
-  ReaderDecodedDataUriImage? decodeDataUriImage({required String dataUri}) {
+  ReaderDecodedDataUriImage? decodeDataUriImage({
+    required String dataUri,
+    int? maxBytes,
+  }) {
     final commaIndex = dataUri.indexOf(',');
     if (commaIndex <= 0 || !dataUri.startsWith('data:')) {
       return null;
@@ -257,6 +274,9 @@ class ReaderImagePipeline {
         isBase64
             ? base64Decode(encoded)
             : Uint8List.fromList(utf8.encode(Uri.decodeComponent(encoded)));
+    if (maxBytes != null && maxBytes >= 0 && bytes.length > maxBytes) {
+      return null;
+    }
     return ReaderDecodedDataUriImage(
       mediaType: mediaType,
       bytes: bytes,

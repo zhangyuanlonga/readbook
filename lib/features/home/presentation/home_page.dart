@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -43,7 +43,7 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin<HomePage> {
   static const double _kContinueReadingCardWidth = 104;
-  static const double _kContinueReadingCardHeight = 154;
+  static const double _kContinueReadingCardHeight = 184;
   static const double _kContinueReadingCardCoverSize = 86;
 
   late final ReadingRecordService _readingRecordService;
@@ -98,6 +98,7 @@ class _HomePageState extends ConsumerState<HomePage>
       standardAppearance: standardNavigationAppearance,
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -118,27 +119,27 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  AppSpacing.pageHorizontal(context),
-                  topInset + 8,
-                  AppSpacing.pageHorizontal(context),
-                  bottomInset + 16,
+                  metrics.pagePadding,
+                  topInset + metrics.contentGap,
+                  metrics.pagePadding,
+                  bottomInset + metrics.sectionGap,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildReadingSummarySection(),
-                    const SizedBox(height: 24),
+                    SizedBox(height: metrics.sectionGap),
                     _buildSectionHeader(
                       context,
                       title: '继续阅读',
                       actionLabel: '查看统计',
                       onAction: () => context.push('/stats'),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: metrics.contentGap),
                     _buildContinueReadingSectionBlock(),
-                    const SizedBox(height: 24),
+                    SizedBox(height: metrics.sectionGap),
                     _buildSectionHeader(context, title: '排行'),
-                    const SizedBox(height: 12),
+                    SizedBox(height: metrics.contentGap),
                     _buildRankingPreviewSection(context),
                   ],
                 ),
@@ -168,7 +169,7 @@ class _HomePageState extends ConsumerState<HomePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildCheckInCard(summary),
-                const SizedBox(height: 24),
+                SizedBox(height: AppAdaptiveMetrics.of(context).sectionGap),
                 _buildGoalCard(summary, records),
               ],
             );
@@ -193,10 +194,11 @@ class _HomePageState extends ConsumerState<HomePage>
     final checkedInToday = _engagementState.isCheckedInOn(DateTime.now());
     final streakDays = _engagementState.streakDays();
     final weekCheckInCount = _engagementState.recentCheckInCount(7);
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return _buildSurface(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.all(metrics.cardPadding + 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -232,20 +234,20 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: metrics.contentGap),
             Row(
               children: [
                 Expanded(
                   child: _MetricPill(label: '连续打卡', value: '$streakDays 天'),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: metrics.contentGap),
                 Expanded(
                   child: _MetricPill(
                     label: '本周打卡',
                     value: '$weekCheckInCount / 7',
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: metrics.contentGap),
                 Expanded(
                   child: _MetricPill(
                     label: '今日阅读',
@@ -254,7 +256,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: metrics.contentGap),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -265,7 +267,9 @@ class _HomePageState extends ConsumerState<HomePage>
                         ? null
                         : _handleCheckInToday,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
+                  minimumSize: Size.fromHeight(
+                    metrics.isCompactDensity ? 44 : 52,
+                  ),
                   shape: const StadiumBorder(),
                   backgroundColor:
                       checkedInToday
@@ -317,12 +321,15 @@ class _HomePageState extends ConsumerState<HomePage>
         goalMillis <= 0
             ? 0.0
             : (summary.todayReadMillis / goalMillis).clamp(0.0, 1.0);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final chartHeight = metrics.isCompactDensity ? 250.0 : 294.0;
+    final arcHeight = metrics.isCompactDensity ? 192.0 : 230.0;
 
     const primaryActionLabel = '探索书架';
 
     return _buildSurface(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        padding: EdgeInsets.all(metrics.cardPadding + 2),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final contentWidth = math.min(constraints.maxWidth - 8, 320.0);
@@ -353,7 +360,7 @@ class _HomePageState extends ConsumerState<HomePage>
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: metrics.contentGap),
                 Text(
                   '找一本好书，设定一个目标，养成每天阅读的习惯。',
                   textAlign: TextAlign.center,
@@ -362,18 +369,18 @@ class _HomePageState extends ConsumerState<HomePage>
                     height: 1.45,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: metrics.contentGap * 0.2),
                 SizedBox(
                   width: contentWidth,
-                  height: 294,
+                  height: chartHeight,
                   child: Stack(
                     children: [
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: 36,
+                        bottom: metrics.isCompactDensity ? 34 : 36,
                         child: SizedBox(
-                          height: 230,
+                          height: arcHeight,
                           child: ClipRect(
                             child: CustomPaint(
                               painter: _ReadingGoalArcPainter(
@@ -389,7 +396,7 @@ class _HomePageState extends ConsumerState<HomePage>
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: 66,
+                        bottom: metrics.isCompactDensity ? 58 : 66,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -400,12 +407,12 @@ class _HomePageState extends ConsumerState<HomePage>
                                 context,
                               ).textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                letterSpacing: -0.08,
+                                fontSize: metrics.isCompactDensity ? 14 : 15,
+                                letterSpacing: 0,
                                 height: 1.0,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            SizedBox(height: metrics.contentGap * 0.6),
                             Text(
                               _formatGoalClock(summary.todayReadMillis),
                               textAlign: TextAlign.center,
@@ -413,12 +420,12 @@ class _HomePageState extends ConsumerState<HomePage>
                                 context,
                               ).textTheme.headlineLarge?.copyWith(
                                 fontWeight: FontWeight.w400,
-                                fontSize: 30,
-                                letterSpacing: -1.0,
+                                fontSize: metrics.isCompactDensity ? 26 : 30,
+                                letterSpacing: 0,
                                 height: 0.9,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            SizedBox(height: metrics.contentGap * 0.4),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -701,10 +708,11 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildSurface({required Widget child}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colorScheme.surface.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
@@ -1139,11 +1147,15 @@ class _MetricPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.contentGap,
+        vertical: metrics.isCompactDensity ? 8 : 12,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1157,6 +1169,8 @@ class _MetricPill extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),

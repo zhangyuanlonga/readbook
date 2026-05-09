@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../../app/widgets/adaptive_card.dart';
 import '../../../../app/widgets/resolved_book_cover.dart';
 import '../../../../domain/entities/book.dart';
 import '../../../book/application/book_metadata_presentation_resolver.dart';
@@ -41,6 +43,10 @@ class SearchBookCard extends ConsumerWidget {
       ref.read(activeAdvancedThemeProvider).valueOrNull,
     );
     final showHitCount = sourceHitCount > 1;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final coverWidth = metrics.isCompactDensity ? 50.0 : 56.0;
+    final coverHeight = metrics.isCompactDensity ? 72.0 : 80.0;
+    final introMaxLines = metrics.isCompactDensity ? 1 : 2;
     final displayTitle =
         presentation.displayTitle.isNotEmpty
             ? presentation.displayTitle
@@ -57,117 +63,122 @@ class SearchBookCard extends ConsumerWidget {
         presentation.displayCover?.trim().isNotEmpty == true
             ? presentation.displayCover!.trim()
             : book.coverUrl;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _CoverPreview(
-                coverUrl: displayCover,
-                title: displayTitle,
-                author: displayAuthor,
-                heroTag: heroTag,
-                bookId: book.id,
-                sourceId: book.sourceId,
-                detailUrl: book.detailUrl,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return AdaptiveCard(
+      margin: EdgeInsets.only(bottom: metrics.contentGap),
+      padding: EdgeInsets.all(metrics.cardPadding),
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _CoverPreview(
+            coverUrl: displayCover,
+            title: displayTitle,
+            author: displayAuthor,
+            heroTag: heroTag,
+            bookId: book.id,
+            sourceId: book.sourceId,
+            detailUrl: book.detailUrl,
+            width: coverWidth,
+            height: coverHeight,
+            radius: metrics.cardRadius * 0.66,
+          ),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: metrics.isCompactDensity ? 3 : 4),
+                Wrap(
+                  spacing: metrics.isCompactDensity ? 5 : 6,
+                  runSpacing: metrics.isCompactDensity ? 5 : 6,
                   children: [
-                    Text(
-                      displayTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    _InfoPill(
+                      label: '来源',
+                      value: sourceName,
+                      backgroundColor: palette.primaryContainerColor,
+                      textColor: palette.textPrimaryColor,
                     ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _InfoPill(
-                          label: '来源',
-                          value: sourceName,
-                          backgroundColor: palette.primaryContainerColor,
-                          textColor: palette.textPrimaryColor,
-                        ),
-                        if (displayAuthor != null && displayAuthor.isNotEmpty)
-                          _InfoPill(
-                            label: '作者',
-                            value: displayAuthor,
-                            backgroundColor: palette.primaryContainerColor,
-                            textColor: palette.textPrimaryColor,
-                          ),
-                      ],
-                    ),
-                    if (normalizedLatestChapter != null &&
-                        normalizedLatestChapter!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          '最新章节: $normalizedLatestChapter',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    if (displayIntro != null && displayIntro.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.elevatedSurfaceColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            displayIntro,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: palette.textSecondaryColor,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
+                    if (displayAuthor != null && displayAuthor.isNotEmpty)
+                      _InfoPill(
+                        label: '作者',
+                        value: displayAuthor,
+                        backgroundColor: palette.primaryContainerColor,
+                        textColor: palette.textPrimaryColor,
                       ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (showHitCount)
-                    _SourceHitBadge(
-                      count: sourceHitCount,
-                      backgroundColor: palette.secondaryColor,
-                      textColor: palette.buttonTextColor,
-                    )
-                  else
-                    const SizedBox(height: 20),
-                  Icon(
-                    Icons.chevron_right,
-                    color: colorScheme.onSurfaceVariant,
+                if (normalizedLatestChapter != null &&
+                    normalizedLatestChapter!.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: metrics.isCompactDensity ? 5 : 6,
+                    ),
+                    child: Text(
+                      '最新章节: $normalizedLatestChapter',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ),
-                ],
+                if (displayIntro != null && displayIntro.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: metrics.isCompactDensity ? 5 : 6,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.isCompactDensity ? 7 : 8,
+                        vertical: metrics.isCompactDensity ? 5 : 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.elevatedSurfaceColor,
+                        borderRadius: BorderRadius.circular(
+                          metrics.cardRadius * 0.66,
+                        ),
+                      ),
+                      child: Text(
+                        displayIntro,
+                        maxLines: introMaxLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondaryColor,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(width: metrics.isCompactDensity ? 6 : 8),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (showHitCount)
+                _SourceHitBadge(
+                  count: sourceHitCount,
+                  backgroundColor: palette.secondaryColor,
+                  textColor: palette.buttonTextColor,
+                )
+              else
+                SizedBox(height: metrics.isCompactDensity ? 18 : 20),
+              Icon(
+                Icons.chevron_right,
+                size: metrics.isCompactDensity ? 20 : 24,
+                color: colorScheme.onSurfaceVariant,
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -182,6 +193,9 @@ class _CoverPreview extends StatelessWidget {
     this.bookId,
     this.sourceId,
     this.detailUrl,
+    required this.width,
+    required this.height,
+    required this.radius,
   });
 
   final String? coverUrl;
@@ -191,6 +205,9 @@ class _CoverPreview extends StatelessWidget {
   final String? bookId;
   final String? sourceId;
   final String? detailUrl;
+  final double width;
+  final double height;
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
@@ -213,9 +230,9 @@ class _CoverPreview extends StatelessWidget {
             cover: resolvedCover,
             title: title,
             author: author,
-            width: 56,
-            height: 80,
-            borderRadius: BorderRadius.circular(8),
+            width: width,
+            height: height,
+            borderRadius: BorderRadius.circular(radius),
           ),
         );
       },
@@ -239,12 +256,16 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 7 : 8,
+        vertical: metrics.isCompactDensity ? 2 : 3,
+      ),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(metrics.cardRadius * 0.66),
       ),
       child: Text(
         '$label: $value',
@@ -268,9 +289,13 @@ class _SourceHitBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      constraints: const BoxConstraints(minWidth: 24),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      constraints: BoxConstraints(minWidth: metrics.isCompactDensity ? 22 : 24),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 6 : 7,
+        vertical: 2,
+      ),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),

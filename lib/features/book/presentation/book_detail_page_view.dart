@@ -7,6 +7,7 @@ extension on _BookDetailPageState {
         final activeAdvancedTheme =
             ref.watch(activeAdvancedThemeProvider).valueOrNull;
         final colorScheme = Theme.of(context).colorScheme;
+        final metrics = AppAdaptiveMetrics.of(context);
         final backdrop = resolveAdvancedThemeBackdrop(
           colorScheme,
           activeAdvancedTheme,
@@ -112,9 +113,9 @@ extension on _BookDetailPageState {
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding: EdgeInsets.fromLTRB(
                                 horizontal,
-                                topInset + 16,
+                                topInset + metrics.sectionGap,
                                 horizontal,
-                                16 +
+                                metrics.sectionGap +
                                     bottomSafe +
                                     (_isEditingMetadata ? keyboardInset : 0),
                               ),
@@ -123,7 +124,7 @@ extension on _BookDetailPageState {
                                   _buildMetadataInlineNoticeCard(
                                     _metadataInlineNotice!,
                                   ),
-                                  const SizedBox(height: 12),
+                                  SizedBox(height: metrics.sectionGap),
                                 ],
                                 if (_isMissingParams)
                                   RuntimeFeedbackCard(

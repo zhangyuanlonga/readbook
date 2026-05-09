@@ -77,7 +77,7 @@ void main() {
         reason: 'expected source icon at width=$width',
       );
       expect(
-        find.byIcon(Icons.category_outlined),
+        find.byIcon(Icons.bookmarks_rounded),
         findsOneWidget,
         reason: 'expected organize icon at width=$width',
       );

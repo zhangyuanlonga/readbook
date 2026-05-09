@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -130,7 +130,8 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
             Theme.of(context).colorScheme,
             activeTheme,
           );
-          final horizontal = AppSpacing.pageHorizontal(context);
+          final metrics = AppAdaptiveMetrics.of(context);
+          final horizontal = metrics.pagePadding;
           final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
           final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
@@ -151,9 +152,9 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
                       child: ListView(
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
-                          topInset + 12,
+                          topInset + metrics.contentGap,
                           horizontal,
-                          16 + bottomSafe + keyboardInset,
+                          metrics.sectionGap + bottomSafe + keyboardInset,
                         ),
                         children: [
                           _DebugInputCard(
@@ -170,9 +171,9 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
                               });
                             },
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: metrics.contentGap),
                           _SummaryCard(report: report),
-                          const SizedBox(height: 12),
+                          SizedBox(height: metrics.contentGap),
                           if (_isRunning && report == null)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 36),
@@ -183,7 +184,9 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
                           else
                             ...report.stages.map(
                               (stage) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
+                                padding: EdgeInsets.only(
+                                  bottom: metrics.contentGap,
+                                ),
                                 child: _StageCard(
                                   stage: stage,
                                   formatJson: _formatJson,
@@ -346,10 +349,11 @@ class _DebugInputCard extends StatelessWidget {
       _DebugMode.installedSource => '执行逻辑会尽量贴近书源列表里的单源检测，顶部结论与外部检测保持同一心智。',
       _DebugMode.draft => '当前是草稿调试模式，会执行当前编辑中的脚本内容；结果不代表已安装书源的正式检测结论。',
     };
+    final metrics = AppAdaptiveMetrics.of(context);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(metrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -379,14 +383,14 @@ class _DebugInputCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: metrics.contentGap * 0.8),
             Text(
               helperText,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(height: 1.45),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: metrics.contentGap),
             TextField(
               controller: controller,
               enabled: !isRunning,
@@ -395,7 +399,7 @@ class _DebugInputCard extends StatelessWidget {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: metrics.contentGap),
             DropdownButtonFormField<SourceCheckLevel>(
               initialValue: selectedLevel,
               decoration: const InputDecoration(
@@ -434,10 +438,11 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (report == null) {
+      final metrics = AppAdaptiveMetrics.of(context);
       return Card(
         margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(metrics.cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -456,7 +461,7 @@ class _SummaryCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: metrics.contentGap * 0.8),
               Text(
                 '输入关键词后执行调试，页面会先给出标准结论，再展开详细日志和阶段输出。',
                 style: Theme.of(
@@ -470,6 +475,7 @@ class _SummaryCard extends StatelessWidget {
     }
 
     final summary = report!.summary;
+    final metrics = AppAdaptiveMetrics.of(context);
     final statusColor = switch (summary.status) {
       SourceCheckStatus.healthy => const Color(0xFF2E9B57),
       SourceCheckStatus.warning => const Color(0xFFB97A00),
@@ -479,7 +485,7 @@ class _SummaryCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(metrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -512,7 +518,7 @@ class _SummaryCard extends StatelessWidget {
                 _CopyCardButton(text: _buildSummaryCardCopyText(report!)),
               ],
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: metrics.contentGap),
             Wrap(
               spacing: 10,
               runSpacing: 8,
@@ -526,7 +532,7 @@ class _SummaryCard extends StatelessWidget {
                 if (summary.needsBrowser) const _SummaryChip(label: '存在浏览器风险'),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: metrics.contentGap),
             Text(
               summary.message,
               style: Theme.of(
@@ -572,10 +578,11 @@ class _StageCard extends StatelessWidget {
       _StageOutcome.invalid => const Color(0xFFD27A00),
       _StageOutcome.failed => const Color(0xFFD64545),
     };
+    final metrics = AppAdaptiveMetrics.of(context);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(metrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -606,7 +613,7 @@ class _StageCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: metrics.contentGap * 0.8),
             Text(
               stage.summary,
               style: Theme.of(
@@ -614,7 +621,7 @@ class _StageCard extends StatelessWidget {
               ).textTheme.bodyMedium?.copyWith(height: 1.45),
             ),
             if (stage.highlights.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              SizedBox(height: metrics.contentGap),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -624,21 +631,21 @@ class _StageCard extends StatelessWidget {
               ),
             ],
             if (stage.entries.isNotEmpty) ...[
-              const SizedBox(height: 14),
+              SizedBox(height: metrics.contentGap),
               Text(
                 '执行时间线',
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: metrics.contentGap * 0.8),
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(metrics.cardPadding * 0.85),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: stage.entries
@@ -652,7 +659,7 @@ class _StageCard extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            SizedBox(height: metrics.contentGap),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: EdgeInsets.zero,

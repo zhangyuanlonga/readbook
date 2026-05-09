@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
@@ -349,7 +349,8 @@ class _LaunchImageGalleryEditorPageState
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final gallery = _gallery;
 
@@ -469,9 +470,9 @@ class _LaunchImageGalleryEditorPageState
                         ? ListView(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
-                            12,
+                            metrics.contentGap,
                             horizontal,
-                            16 + bottomSafe,
+                            metrics.sectionGap + bottomSafe,
                           ),
                           children: const [
                             ImageResourceEmptyStateCard(
@@ -481,63 +482,76 @@ class _LaunchImageGalleryEditorPageState
                             ),
                           ],
                         )
-                        : GridView.builder(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            12,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          itemCount: gallery.imagePaths.length,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                crossAxisSpacing: 8,
-                                mainAxisSpacing: 8,
-                                childAspectRatio: 0.66,
+                        : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = metrics.gridColumnsFor(
+                              availableWidth:
+                                  constraints.maxWidth - horizontal * 2,
+                              minItemWidth: 120,
+                              maxColumns: 5,
+                              spacing: metrics.contentGap,
+                            );
+                            return GridView.builder(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                metrics.contentGap,
+                                horizontal,
+                                metrics.sectionGap + bottomSafe,
                               ),
-                          itemBuilder: (context, index) {
-                            final path = gallery.imagePaths[index];
-                            final selected = _selectedPaths.contains(path);
-                            return GestureDetector(
-                              onLongPress: () => _toggleSelection(path),
-                              onTap:
-                                  _isSelectionMode
-                                      ? () => _toggleSelection(path)
-                                      : () => _openPreview(path),
-                              child: Stack(
-                                children: [
-                                  Positioned.fill(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.file(
-                                        File(path),
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (_, __, ___) => Container(
-                                              color:
-                                                  Theme.of(context)
-                                                      .colorScheme
-                                                      .surfaceContainerLow,
-                                            ),
+                              itemCount: gallery.imagePaths.length,
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: columns,
+                                    crossAxisSpacing: metrics.contentGap,
+                                    mainAxisSpacing: metrics.contentGap,
+                                    childAspectRatio: 0.66,
+                                  ),
+                              itemBuilder: (context, index) {
+                                final path = gallery.imagePaths[index];
+                                final selected = _selectedPaths.contains(path);
+                                return GestureDetector(
+                                  onLongPress: () => _toggleSelection(path),
+                                  onTap:
+                                      _isSelectionMode
+                                          ? () => _toggleSelection(path)
+                                          : () => _openPreview(path),
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          child: Image.file(
+                                            File(path),
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (_, __, ___) => Container(
+                                                  color:
+                                                      Theme.of(context)
+                                                          .colorScheme
+                                                          .surfaceContainerLow,
+                                                ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child:
+                                            selected
+                                                ? const ImageResourceSelectionBadge()
+                                                : _isSelectionMode
+                                                ? const SizedBox.shrink()
+                                                : const ImageResourceCornerHint(
+                                                  label: '长按删除',
+                                                  icon: Icons.delete_outline,
+                                                ),
+                                      ),
+                                    ],
                                   ),
-                                  Positioned(
-                                    top: 8,
-                                    right: 8,
-                                    child:
-                                        selected
-                                            ? const ImageResourceSelectionBadge()
-                                            : _isSelectionMode
-                                            ? const SizedBox.shrink()
-                                            : const ImageResourceCornerHint(
-                                              label: '长按删除',
-                                              icon: Icons.delete_outline,
-                                            ),
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             );
                           },
                         ),

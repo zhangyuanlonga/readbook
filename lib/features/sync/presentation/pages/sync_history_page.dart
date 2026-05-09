@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/layout/app_layout.dart';
 import '../../domain/sync_conflict.dart';
 import '../../domain/sync_job.dart';
 import '../../domain/sync_scope.dart';
@@ -15,46 +17,60 @@ class SyncHistoryPage extends ConsumerWidget {
     final conflictsAsync = ref.watch(syncConflictsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('同步历史')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _Section(
-            title: '最近任务',
-            child: jobsAsync.when(
-              data: (jobs) {
-                if (jobs.isEmpty) {
-                  return const Text('当前没有同步任务。');
-                }
-                return Column(
-                  children: [
-                    for (final job in jobs.take(20)) _JobTile(job: job),
-                  ],
-                );
-              },
-              error: (error, _) => Text('加载任务失败：$error'),
-              loading: () => const _LoadingLine('正在加载任务…'),
-            ),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: AppLayout.pageContentMaxWidth(context, maxWidth: 760),
           ),
-          const SizedBox(height: 12),
-          _Section(
-            title: '最近冲突',
-            child: conflictsAsync.when(
-              data: (conflicts) {
-                if (conflicts.isEmpty) {
-                  return const Text('当前没有冲突记录。');
-                }
-                return Column(
-                  children: [
-                    for (final conflict in conflicts.take(20))
-                      _ConflictTile(conflict: conflict),
-                  ],
-                );
-              },
-              error: (error, _) => Text('加载冲突失败：$error'),
-              loading: () => const _LoadingLine('正在加载冲突…'),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              AppAdaptiveMetrics.of(context).pagePadding,
+              AppAdaptiveMetrics.of(context).contentGap,
+              AppAdaptiveMetrics.of(context).pagePadding,
+              AppAdaptiveMetrics.of(context).sectionGap +
+                  MediaQuery.viewPaddingOf(context).bottom,
             ),
+            children: [
+              _Section(
+                title: '最近任务',
+                child: jobsAsync.when(
+                  data: (jobs) {
+                    if (jobs.isEmpty) {
+                      return const Text('当前没有同步任务。');
+                    }
+                    return Column(
+                      children: [
+                        for (final job in jobs.take(20)) _JobTile(job: job),
+                      ],
+                    );
+                  },
+                  error: (error, _) => Text('加载任务失败：$error'),
+                  loading: () => const _LoadingLine('正在加载任务…'),
+                ),
+              ),
+              SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
+              _Section(
+                title: '最近冲突',
+                child: conflictsAsync.when(
+                  data: (conflicts) {
+                    if (conflicts.isEmpty) {
+                      return const Text('当前没有冲突记录。');
+                    }
+                    return Column(
+                      children: [
+                        for (final conflict in conflicts.take(20))
+                          _ConflictTile(conflict: conflict),
+                      ],
+                    );
+                  },
+                  error: (error, _) => Text('加载冲突失败：$error'),
+                  loading: () => const _LoadingLine('正在加载冲突…'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -68,9 +84,10 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(metrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -80,7 +97,7 @@ class _Section extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: metrics.contentGap),
             child,
           ],
         ),
@@ -114,9 +131,15 @@ class _JobTile extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) {
+        final metrics = AppAdaptiveMetrics.of(sheetContext);
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            padding: EdgeInsets.fromLTRB(
+              metrics.pagePadding,
+              metrics.sectionGap,
+              metrics.pagePadding,
+              metrics.sectionGap,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +150,7 @@ class _JobTile extends StatelessWidget {
                     sheetContext,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: metrics.contentGap),
                 _JobDetailLine(label: '配置', value: job.profileId),
                 _JobDetailLine(label: '状态', value: job.status.name),
                 _JobDetailLine(label: '触发方式', value: job.triggerKind.name),

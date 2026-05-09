@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+
 class BookDetailPrimaryActions extends StatelessWidget {
   const BookDetailPrimaryActions({
     super.key,
@@ -33,9 +35,16 @@ class BookDetailPrimaryActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buttonTextStyle = Theme.of(
-      context,
-    ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.0);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final buttonHeight = metrics.isCompactDensity ? 52.0 : 58.0;
+    final buttonGap = metrics.isCompactDensity ? 4.0 : 6.0;
+    final iconSize = metrics.isCompactDensity ? 17.0 : 18.0;
+    final useWrap = availableWidth < 260;
+    final buttonTextStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      fontSize: metrics.isCompactDensity ? 11.5 : null,
+      fontWeight: FontWeight.w600,
+      height: 1.0,
+    );
 
     Widget buildAction({
       required Key key,
@@ -45,18 +54,19 @@ class BookDetailPrimaryActions extends StatelessWidget {
       bool enabled = true,
     }) {
       return SizedBox(
-        height: actionButtonHeight,
+        height: buttonHeight,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             key: key,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(metrics.cardRadius * 0.72),
             onTap: enabled ? onPressed : null,
             child: Opacity(
               opacity: enabled ? 1 : 0.45,
               child: _ActionButtonContent(
                 icon: icon,
                 label: label,
+                iconGap: metrics.isCompactDensity ? 2 : 3,
                 textStyle: buttonTextStyle,
               ),
             ),
@@ -72,8 +82,8 @@ class BookDetailPrimaryActions extends StatelessWidget {
       icon:
           showShelfProgress
               ? SizedBox(
-                width: 18,
-                height: 18,
+                width: iconSize,
+                height: iconSize,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   color: Theme.of(context).colorScheme.onSurface,
@@ -83,7 +93,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
                 isInBookshelf
                     ? Icons.favorite_rounded
                     : Icons.favorite_border_rounded,
-                size: 18,
+                size: iconSize,
                 color: Theme.of(context).colorScheme.onSurface,
               ),
       label: '书架',
@@ -93,7 +103,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
       key: const Key('book_detail_catalog_button'),
       icon: Icon(
         Icons.menu_book_rounded,
-        size: 18,
+        size: iconSize,
         color: Theme.of(context).colorScheme.onSurface,
       ),
       label: '目录',
@@ -104,7 +114,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
       key: const Key('book_detail_source_button'),
       icon: Icon(
         Icons.swap_horiz_rounded,
-        size: 18,
+        size: iconSize,
         color: Theme.of(context).colorScheme.onSurface,
       ),
       label: '书源',
@@ -115,7 +125,7 @@ class BookDetailPrimaryActions extends StatelessWidget {
       key: const Key('book_detail_cache_button'),
       icon: Icon(
         Icons.bookmarks_rounded,
-        size: 18,
+        size: iconSize,
         color: Theme.of(context).colorScheme.onSurface,
       ),
       label: '归类',
@@ -123,14 +133,28 @@ class BookDetailPrimaryActions extends StatelessWidget {
       enabled: isOrganizeEnabled,
     );
 
+    if (useWrap) {
+      final itemWidth = (availableWidth - buttonGap) / 2;
+      return Wrap(
+        spacing: buttonGap,
+        runSpacing: buttonGap,
+        children: [
+          SizedBox(width: itemWidth, child: shelfButton),
+          SizedBox(width: itemWidth, child: catalogButton),
+          SizedBox(width: itemWidth, child: sourceButton),
+          SizedBox(width: itemWidth, child: cacheButton),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(child: shelfButton),
-        const SizedBox(width: actionButtonGap),
+        SizedBox(width: buttonGap),
         Expanded(child: catalogButton),
-        const SizedBox(width: actionButtonGap),
+        SizedBox(width: buttonGap),
         Expanded(child: sourceButton),
-        const SizedBox(width: actionButtonGap),
+        SizedBox(width: buttonGap),
         Expanded(child: cacheButton),
       ],
     );
@@ -141,11 +165,13 @@ class _ActionButtonContent extends StatelessWidget {
   const _ActionButtonContent({
     required this.icon,
     required this.label,
+    required this.iconGap,
     this.textStyle,
   });
 
   final Widget icon;
   final String label;
+  final double iconGap;
   final TextStyle? textStyle;
 
   @override
@@ -155,7 +181,7 @@ class _ActionButtonContent extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           icon,
-          const SizedBox(height: 3),
+          SizedBox(height: iconGap),
           Text(
             label,
             maxLines: 1,

@@ -131,7 +131,19 @@ class ReaderPaginationCacheService {
   }
 
   Future<int> prunePersistedChapterLayouts({required int maxEntries}) async {
+    return prunePersistedChapterLayoutsByBudget(
+      maxEntries: maxEntries,
+      maxBytes: -1,
+    );
+  }
+
+  Future<int> prunePersistedChapterLayoutsByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
     final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final normalizedMaxBytes = maxBytes < 0 ? -1 : maxBytes;
     _memoryCache.clear();
     final directory = await _directoryProvider();
     if (!await directory.exists()) {
@@ -144,20 +156,44 @@ class ReaderPaginationCacheService {
         files.add(entity);
       }
     }
-    if (files.length <= normalizedMaxEntries) {
-      return 0;
-    }
 
-    files.sort(
-      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
-    );
-    final overflowCount = files.length - normalizedMaxEntries;
     var deletedCount = 0;
-    for (final file in files.take(overflowCount)) {
+    var totalBytes = 0;
+    final retainedFiles = <File>[];
+    final now = DateTime.now();
+    for (final file in files) {
       try {
-        if (await file.exists()) {
+        final stat = await file.stat();
+        if (stalePeriod != null &&
+            stalePeriod > Duration.zero &&
+            now.difference(stat.modified) > stalePeriod) {
           await file.delete();
           deletedCount++;
+          continue;
+        }
+        totalBytes += stat.size;
+        retainedFiles.add(file);
+      } catch (_) {
+        // Ignore single-file stat/delete failure.
+      }
+    }
+
+    retainedFiles.sort(
+      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+    );
+    var overflowCount = retainedFiles.length - normalizedMaxEntries;
+    for (final file in retainedFiles) {
+      if (overflowCount <= 0 &&
+          (normalizedMaxBytes < 0 || totalBytes <= normalizedMaxBytes)) {
+        break;
+      }
+      try {
+        if (await file.exists()) {
+          final length = await file.length();
+          await file.delete();
+          deletedCount++;
+          overflowCount--;
+          totalBytes -= length;
         }
       } catch (_) {
         // Ignore single-file cleanup failure and continue.

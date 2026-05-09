@@ -2,7 +2,8 @@ part of 'mine_page.dart';
 
 extension on _MinePageState {
   Widget _buildMinePage(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final activeBottomNavIconGallery = ref.watch(
@@ -103,9 +104,9 @@ extension on _MinePageState {
                       showNavigationLabels: showNavigationLabels,
                       standardAppearance: standardNavigationAppearance,
                       left: horizontal,
-                      top: topInset + 4,
+                      top: topInset + metrics.contentGap * 0.5,
                       right: horizontal,
-                      bottom: 24,
+                      bottom: metrics.sectionGap,
                     ),
                     children: _buildPageChildren(
                       context,
@@ -140,7 +141,7 @@ extension on _MinePageState {
         index: 0,
         child: _buildProfileCard(context, palette: palette),
       ),
-      SizedBox(height: _primarySectionGap),
+      SizedBox(height: _primarySectionGapFor(context)),
       _buildQuickAccessCards(
         context,
         palette: palette,
@@ -158,7 +159,7 @@ extension on _MinePageState {
       if (actions.isEmpty) {
         return;
       }
-      children.add(SizedBox(height: gap ?? _secondarySectionGap));
+      children.add(SizedBox(height: gap ?? _secondarySectionGapFor(context)));
       children.add(
         _buildPageEntrance(
           index: sectionIndex,
@@ -174,7 +175,7 @@ extension on _MinePageState {
       sectionIndex += 1;
     }
 
-    appendSection('外观', appearanceActions, gap: _primarySectionGap);
+    appendSection('外观', appearanceActions, gap: _primarySectionGapFor(context));
     appendSection(
       '配置',
       configurationActions,
@@ -215,14 +216,14 @@ extension on _MinePageState {
       children: [
         _buildMembershipQuickCard(context, palette: palette),
         if (quickCards.isNotEmpty) ...[
-          SizedBox(height: _quickAccessInnerGap),
+          SizedBox(height: _quickAccessInnerGapFor(context)),
           if (quickCards.length == 1)
             quickCards.single
           else
             Row(
               children: [
                 Expanded(child: quickCards[0]),
-                SizedBox(width: _quickAccessInnerGap),
+                SizedBox(width: _quickAccessInnerGapFor(context)),
                 Expanded(child: quickCards[1]),
               ],
             ),
@@ -502,7 +503,7 @@ extension on _MinePageState {
         borderRadius: BorderRadius.circular(16),
         onTap: _openMembershipCenter,
         child: Container(
-          padding: _quickCardPadding,
+          padding: _quickCardPaddingFor(context),
           decoration: BoxDecoration(
             color: palette.cardColor,
             borderRadius: BorderRadius.circular(16),
@@ -566,7 +567,7 @@ extension on _MinePageState {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          padding: _quickCardPadding,
+          padding: _quickCardPaddingFor(context),
           decoration: BoxDecoration(
             color: palette.cardColor,
             borderRadius: BorderRadius.circular(16),
@@ -689,7 +690,7 @@ extension on _MinePageState {
                   )
                   : null,
           child: Padding(
-            padding: _profileCardPadding,
+            padding: _profileCardPaddingFor(context),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [

@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../runtime/sources/source_contract.dart';
 import '../application/source_login_browser_service.dart';
@@ -400,7 +400,8 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final body = LayoutBuilder(
       builder: (context, _) {
         final maxWidth = AppLayout.pageContentMaxWidth(
@@ -418,9 +419,10 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
                       controller: widget.parentScrollController,
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        16,
+                        metrics.contentGap,
                         horizontal,
-                        24,
+                        metrics.sectionGap +
+                            MediaQuery.viewPaddingOf(context).bottom,
                       ),
                       children: [
                         if (_errorText != null)
@@ -436,7 +438,7 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
                               _statusText!,
                               tone: _statusTone,
                             ),
-                            const SizedBox(height: 16),
+                            SizedBox(height: metrics.sectionGap),
                           ],
                           _buildFieldGrid(context),
                         ],
@@ -452,7 +454,12 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+              padding: EdgeInsets.fromLTRB(
+                metrics.pagePadding,
+                metrics.contentGap,
+                metrics.contentGap,
+                metrics.contentGap * 0.8,
+              ),
               child: Row(
                 children: [
                   Expanded(
@@ -950,7 +957,11 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        const spacing = 12.0;
+        final metrics = AppAdaptiveMetrics.resolveForConstraints(
+          context,
+          constraints,
+        );
+        final spacing = metrics.contentGap;
         final availableWidth = constraints.maxWidth;
         return Wrap(
           spacing: spacing,
@@ -989,19 +1000,22 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
       return Align(alignment: alignment, child: child);
     }
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Align(
       alignment: alignment,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
           border: Border.all(
             color: colorScheme.outlineVariant.withValues(alpha: 0.55),
           ),
         ),
         child: Padding(
           padding: EdgeInsets.all(
-            field.type == SourceLoginFieldType.button ? 4 : 0,
+            field.type == SourceLoginFieldType.button
+                ? metrics.contentGap * 0.4
+                : 0,
           ),
           child: child,
         ),
@@ -1083,24 +1097,28 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     bool alignLabelWithHint = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return InputDecoration(
       labelText: label,
       alignLabelWithHint: alignLabelWithHint,
       filled: true,
       fillColor: colorScheme.surfaceContainerLow,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: metrics.cardPadding,
+        vertical: metrics.isCompactDensity ? 12 : 16,
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
         borderSide: BorderSide(
           color: colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
         borderSide: BorderSide(
           color: colorScheme.primary.withValues(alpha: 0.75),
           width: 1.4,
@@ -1115,6 +1133,7 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     String label,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final value =
         _toggleValues[field.name]?.trim().isNotEmpty == true
             ? _toggleValues[field.name]!
@@ -1130,11 +1149,21 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: EdgeInsets.fromLTRB(
+            metrics.cardPadding,
+            metrics.contentGap,
+            metrics.cardPadding,
+            metrics.contentGap * 0.8,
+          ),
           child: Text(label, style: Theme.of(context).textTheme.labelLarge),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          padding: EdgeInsets.fromLTRB(
+            metrics.cardPadding * 0.85,
+            0,
+            metrics.cardPadding * 0.85,
+            metrics.cardPadding * 0.85,
+          ),
           child: Container(
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerLow,
@@ -1167,7 +1196,9 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
                           duration: const Duration(milliseconds: 180),
                           curve: Curves.easeOutCubic,
                           margin: const EdgeInsets.all(4),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: EdgeInsets.symmetric(
+                            vertical: metrics.isCompactDensity ? 10 : 12,
+                          ),
                           decoration: BoxDecoration(
                             color:
                                 selected
@@ -1206,6 +1237,7 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
     String label,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Material(
       color: colorScheme.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(14),
@@ -1217,9 +1249,12 @@ class _SourceLoginPageState extends ConsumerState<SourceLoginPage> {
                 ? null
                 : () => _submit(actionCode: field.action, isLongClick: true),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
+          constraints: BoxConstraints(minHeight: metrics.listTileMinHeight),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.cardPadding,
+            vertical: metrics.isCompactDensity ? 12 : 14,
+          ),
           child: Text(
             label,
             textAlign: TextAlign.center,

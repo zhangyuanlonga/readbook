@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
@@ -272,7 +272,8 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
           Theme.of(context).colorScheme,
           activeAdvancedTheme,
         );
-        final horizontal = AppSpacing.pageHorizontal(context);
+        final metrics = AppAdaptiveMetrics.of(context);
+        final horizontal = metrics.pagePadding;
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
         final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -318,9 +319,9 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                               : ListView(
                                 padding: EdgeInsets.fromLTRB(
                                   horizontal,
-                                  topInset + 12,
+                                  topInset + metrics.contentGap,
                                   horizontal,
-                                  16 + bottomSafe,
+                                  metrics.sectionGap + bottomSafe,
                                 ),
                                 children: [
                                   CompactCollectionSearchField(
@@ -339,13 +340,13 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                       });
                                     },
                                   ),
-                                  const SizedBox(height: 12),
+                                  SizedBox(height: metrics.contentGap),
                                   Text(
                                     '支持切换默认图集，也可以新增、复制、重命名或删除自定义图集。',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(height: 1.35),
                                   ),
-                                  const SizedBox(height: 12),
+                                  SizedBox(height: metrics.contentGap),
                                   for (
                                     var index = 0;
                                     index < _visibleGalleries.length;
@@ -357,7 +358,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                             index ==
                                                     _visibleGalleries.length - 1
                                                 ? 0
-                                                : 10,
+                                                : metrics.contentGap,
                                       ),
                                       child: _buildGalleryCard(
                                         context,
@@ -382,12 +383,13 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     required BottomNavIconGallery gallery,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final active = gallery.id == _activeGalleryId;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
         onTap:
             _isSaving
                 ? null
@@ -395,13 +397,13 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                   '/bottom-nav-icon-galleries/editor?id=${gallery.id}',
                 ),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          padding: EdgeInsets.all(metrics.cardPadding),
           decoration: BoxDecoration(
             color:
                 active
                     ? colorScheme.secondaryContainer.withValues(alpha: 0.32)
                     : colorScheme.surface,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
             border: Border.all(
               color:
                   active

@@ -53,5 +53,27 @@ void main() {
       expect(loaded!.paginationSignature, 'chapter-a|sig');
       expect(loaded.pagedPages.first.first.end, 2);
     });
+
+    test('prunes persisted layouts by byte budget', () async {
+      for (var index = 0; index < 3; index++) {
+        await File(
+          '${tempDir.path}/layout_$index.json',
+        ).writeAsString('{"payload":"${'x' * 256}"}');
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+
+      final deleted = await service.prunePersistedChapterLayoutsByBudget(
+        maxEntries: 10,
+        maxBytes: 300,
+      );
+      final remaining =
+          await tempDir
+              .list(followLinks: false)
+              .where((entity) => entity is File)
+              .length;
+
+      expect(deleted, 2);
+      expect(remaining, 1);
+    });
   });
 }

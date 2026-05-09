@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -590,19 +591,20 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required _BookDetailAuxiliaryState auxiliaryState,
     required BookDetailLoadResult result,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final sections = <Widget>[
       if (presentationState.isLoading) ...[
         _buildInlineRefreshNotice(),
-        const SizedBox(height: 12),
+        SizedBox(height: metrics.sectionGap),
       ],
     ];
 
     if (_isEditingMetadata) {
       sections.addAll(<Widget>[
         _buildEditingDetailCard(result),
-        const SizedBox(height: 12),
+        SizedBox(height: metrics.sectionGap),
         _buildEditingActionCard(result),
-        const SizedBox(height: 12),
+        SizedBox(height: metrics.sectionGap),
         _buildEditingIntroCard(result),
         _buildEditingLocalOptionsCard(),
       ]);
@@ -614,16 +616,48 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           localBookMeta != null &&
           localBookMeta.indexStatus != LocalBookIndexStatus.ready;
 
+      final detailCard = _buildDetailCard(result);
+      final quickActionsCard = _buildQuickActionsCard(
+        auxiliaryState: auxiliaryState,
+        hasCatalog: _canOpenCatalogForResult(result),
+      );
+      if (metrics.isMediumWindow || metrics.isExpandedWindow) {
+        sections.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 5, child: detailCard),
+              SizedBox(width: metrics.sectionGap),
+              Expanded(
+                flex: 4,
+                child: Column(
+                  children: [
+                    quickActionsCard,
+                    if (introCard != null) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      introCard,
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        sections.addAll(<Widget>[
+          detailCard,
+          SizedBox(height: metrics.sectionGap),
+          quickActionsCard,
+          if (introCard != null) ...[
+            SizedBox(height: metrics.sectionGap),
+            introCard,
+          ],
+        ]);
+      }
+
       sections.addAll(<Widget>[
-        _buildDetailCard(result),
-        const SizedBox(height: 12),
-        _buildQuickActionsCard(
-          auxiliaryState: auxiliaryState,
-          hasCatalog: _canOpenCatalogForResult(result),
-        ),
-        if (introCard != null) ...[const SizedBox(height: 12), introCard],
         if (shouldShowLocalIndexStatus) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: metrics.sectionGap),
           _buildLocalIndexStatusCard(localBookMeta),
         ],
       ]);
@@ -631,7 +665,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
     if (presentationState.tocWarningText != null) {
       sections.addAll(<Widget>[
-        const SizedBox(height: 12),
+        SizedBox(height: metrics.sectionGap),
         _buildTocWarningCard(presentationState.tocWarningText!),
       ]);
     }

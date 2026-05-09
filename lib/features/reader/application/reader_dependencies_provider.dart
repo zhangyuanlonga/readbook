@@ -5,10 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/book_metadata_override_repository_impl.dart';
-import '../../../data/repositories/bookmark_repository_impl.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -31,6 +27,7 @@ import 'reader_font_registry_service.dart';
 import 'reader_pagination_cache_service.dart';
 import 'reader_platform_bridge_service.dart';
 import 'reader_preferences_service.dart';
+import 'reader_resource_budget.dart';
 import 'reader_visual_overrides_service.dart';
 import 'reader_system_settings_service.dart';
 import 'reading_record_service.dart';
@@ -63,6 +60,7 @@ class ReaderFeatureDependencies {
     required this.localBookRepository,
     required this.cachedChapterStore,
     required this.readerErrorCenterService,
+    required this.resourceBudgetResolver,
     required this.logger,
     required this.battery,
     required this.deviceInfo,
@@ -91,6 +89,7 @@ class ReaderFeatureDependencies {
   final LocalBookRepository localBookRepository;
   final ReaderCachedChapterStore cachedChapterStore;
   final ReaderErrorCenterService readerErrorCenterService;
+  final ReaderResourceBudgetResolver resourceBudgetResolver;
   final AppLogger logger;
   final Battery battery;
   final DeviceInfoPlugin deviceInfo;
@@ -98,14 +97,28 @@ class ReaderFeatureDependencies {
 
 typedef ReaderFeatureDependenciesFactory = ReaderFeatureDependencies Function();
 
+final ReaderResourceBudget _defaultReaderResourceBudget =
+    const ReaderResourceBudgetResolver().resolve(
+      const ReaderResourceBudgetInput(),
+    );
 final ReaderPaginationCacheService _sharedReaderPaginationCacheService =
-    ReaderPaginationCacheService();
+    ReaderPaginationCacheService(
+      maxMemoryEntries: _defaultReaderResourceBudget.paginationMemoryEntries,
+    );
 
 final readerFeatureDependenciesFactoryProvider =
     Provider<ReaderFeatureDependenciesFactory>((ref) {
       return () {
-        final database = AppDatabase.instance;
-        final localBookRepository = LocalBookRepositoryImpl(database);
+        final database = ref.watch(app_providers.appDatabaseProvider);
+        final localBookRepository = ref.watch(
+          app_providers.localBookRepositoryProvider,
+        );
+        final bookmarkRepository = ref.watch(
+          app_providers.bookmarkRepositoryProvider,
+        );
+        final bookMetadataOverrideRepository = ref.watch(
+          app_providers.bookMetadataOverrideRepositoryProvider,
+        );
         final readerPreferencesService = ReaderPreferencesService();
         final readerVisualOverridesService = ReaderVisualOverridesService();
         final readerPlatformBridgeService = ReaderPlatformBridgeService();
@@ -174,13 +187,12 @@ final readerFeatureDependenciesFactoryProvider =
           taskScheduler: ref.watch(
             app_providers.appSourceRuntimeSchedulerServiceProvider,
           ),
-          bookmarkRepository: BookmarkRepositoryImpl(database),
-          bookMetadataOverrideRepository: BookMetadataOverrideRepositoryImpl(
-            database,
-          ),
+          bookmarkRepository: bookmarkRepository,
+          bookMetadataOverrideRepository: bookMetadataOverrideRepository,
           localBookRepository: localBookRepository,
           cachedChapterStore: ReaderCachedChapterStore(database: database),
           readerErrorCenterService: ReaderErrorCenterService.instance,
+          resourceBudgetResolver: const ReaderResourceBudgetResolver(),
           logger: AppLogger.instance,
           battery: Battery(),
           deviceInfo: DeviceInfoPlugin(),

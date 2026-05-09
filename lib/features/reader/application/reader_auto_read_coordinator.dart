@@ -9,6 +9,8 @@ class ReaderAutoReadCoordinator {
     required bool isAutoReadSessionEnabled,
     required bool isMangaChapter,
     required bool isPagedTextReaderEnabled,
+    required bool isReaderVisible,
+    required bool isLowBattery,
     required bool showOverlayControls,
     required bool isBootstrapping,
     required bool isLoadingContent,
@@ -22,6 +24,8 @@ class ReaderAutoReadCoordinator {
     if (!isAutoReadSessionEnabled ||
         isMangaChapter ||
         isPagedTextReaderEnabled ||
+        !isReaderVisible ||
+        isLowBattery ||
         showOverlayControls ||
         isBootstrapping ||
         isLoadingContent ||
@@ -55,6 +59,8 @@ class ReaderAutoReadCoordinator {
     required bool isAutoReadAdvancingChapter,
     required bool isMangaChapter,
     required bool isPagedTextReaderEnabled,
+    required bool isReaderVisible,
+    required bool isLowBattery,
     required bool showOverlayControls,
     required bool isBootstrapping,
     required bool isLoadingContent,
@@ -65,6 +71,8 @@ class ReaderAutoReadCoordinator {
         !isAutoReadAdvancingChapter &&
         !isMangaChapter &&
         !isPagedTextReaderEnabled &&
+        isReaderVisible &&
+        !isLowBattery &&
         !showOverlayControls &&
         !isBootstrapping &&
         !isLoadingContent &&

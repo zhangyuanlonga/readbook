@@ -738,12 +738,35 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                     ),
                                     const SizedBox(height: 12),
                                     Expanded(
-                                      child: GridView.count(
-                                        crossAxisCount: 3,
-                                        crossAxisSpacing: 10,
-                                        mainAxisSpacing: 10,
-                                        childAspectRatio: 2.35,
-                                        children: children,
+                                      child: LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          final gridMetrics =
+                                              AppAdaptiveMetrics.resolveForConstraints(
+                                                context,
+                                                constraints,
+                                              );
+                                          final columns = gridMetrics
+                                              .gridColumnsFor(
+                                                availableWidth:
+                                                    constraints.maxWidth,
+                                                minItemWidth: 136,
+                                                minColumns: 2,
+                                                maxColumns: 4,
+                                                spacing: gridMetrics.contentGap,
+                                              );
+                                          return GridView.count(
+                                            crossAxisCount: columns,
+                                            crossAxisSpacing:
+                                                gridMetrics.contentGap,
+                                            mainAxisSpacing:
+                                                gridMetrics.contentGap,
+                                            childAspectRatio:
+                                                gridMetrics.isCompactDensity
+                                                    ? 2.1
+                                                    : 2.35,
+                                            children: children,
+                                          );
+                                        },
                                       ),
                                     ),
                                   ],
@@ -1071,7 +1094,8 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                   }
                   final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
                   final safeBottom = _bottomSafeInset(context);
-                  final sheetHorizontal = AppSpacing.pageHorizontal(context);
+                  final metrics = AppAdaptiveMetrics.of(context);
+                  final sheetHorizontal = metrics.pagePadding;
                   final compactSheetBaseWidth = 360.0;
                   final compactSheetVisualWidth = min(
                     AppLayout.pageContentMaxWidth(context, maxWidth: 760),
@@ -1165,6 +1189,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                     bool showValueLabel = true,
                   }) {
                     final safeValue = value.clamp(min, max).toDouble();
+                    final textScale = MediaQuery.textScalerOf(context).scale(1);
 
                     void nudge(double delta) {
                       final next =
@@ -1172,29 +1197,28 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       onChanged(next);
                     }
 
-                    return Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: compactScaleValue(0.5),
-                      ),
-                      child: Row(
+                    Widget controls({required bool stacked}) {
+                      return Row(
                         children: [
-                          SizedBox(
-                            width: compactScaleValue(28),
-                            child: Text(
-                              label,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                fontSize:
-                                    (Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.fontSize ??
-                                        12) *
-                                    compactSheetScale *
-                                    0.95,
+                          if (!stacked)
+                            SizedBox(
+                              width: compactScaleValue(28),
+                              child: Text(
+                                label,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  fontSize:
+                                      (Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.fontSize ??
+                                          12) *
+                                      compactSheetScale *
+                                      0.95,
+                                ),
                               ),
                             ),
-                          ),
+                          if (stacked) const SizedBox.shrink(),
                           IconButton(
                             visualDensity: VisualDensity.compact,
                             constraints: BoxConstraints(
@@ -1228,7 +1252,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               size: compactScaleValue(16),
                             ),
                           ),
-                          if (showValueLabel)
+                          if (showValueLabel && !stacked)
                             SizedBox(
                               width: compactScaleValue(54),
                               child: Text(
@@ -1248,6 +1272,74 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               ),
                             ),
                         ],
+                      );
+                    }
+
+                    Widget stackedLabel() {
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              label,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize:
+                                    (Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.fontSize ??
+                                        12) *
+                                    compactSheetScale *
+                                    0.95,
+                              ),
+                            ),
+                          ),
+                          if (showValueLabel)
+                            Text(
+                              valueLabel,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                fontSize:
+                                    (Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.fontSize ??
+                                        12) *
+                                    compactSheetScale *
+                                    0.94,
+                              ),
+                            ),
+                        ],
+                      );
+                    }
+
+                    return Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: compactScaleValue(0.5),
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final stacked =
+                              textScale >= 1.2 && constraints.maxWidth < 360;
+                          if (!stacked) {
+                            return controls(stacked: false);
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              stackedLabel(),
+                              SizedBox(height: compactScaleValue(2)),
+                              controls(stacked: true),
+                            ],
+                          );
+                        },
                       ),
                     );
                   }
@@ -3493,9 +3585,9 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       'auto_read' => '自动阅读',
                       _ => showInterfaceSettings ? '界面设置' : '设置',
                     };
-                    final textSheetMaxWidth = AppLayout.pageContentMaxWidth(
-                      context,
-                      maxWidth: 760,
+                    final textSheetMaxWidth = min(
+                      AppLayout.pageContentMaxWidth(context, maxWidth: 760),
+                      metrics.bottomSheetMaxWidth,
                     );
 
                     return AnimatedTheme(
@@ -3525,17 +3617,19 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           color: Colors.transparent,
                           child: Padding(
                             padding: EdgeInsets.fromLTRB(
-                              16,
-                              8,
-                              16,
-                              max(14.0, safeBottom + 6),
+                              metrics.pagePadding,
+                              metrics.isCompactDensity ? 6 : 8,
+                              metrics.pagePadding,
+                              max(metrics.sectionGap, safeBottom + 6),
                             ),
                             child: Column(
                               children: [
                                 Container(
                                   width: 42,
                                   height: 4,
-                                  margin: const EdgeInsets.only(bottom: 10),
+                                  margin: EdgeInsets.only(
+                                    bottom: metrics.isCompactDensity ? 8 : 10,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context)
                                         .colorScheme
@@ -3545,7 +3639,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                   ),
                                 ),
                                 SizedBox(
-                                  height: 40,
+                                  height: metrics.controlHeight,
                                   child: Stack(
                                     alignment: Alignment.center,
                                     children: [
@@ -3579,10 +3673,14 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 6),
+                                SizedBox(
+                                  height: metrics.isCompactDensity ? 4 : 6,
+                                ),
                                 Expanded(
                                   child: ListView(
-                                    padding: const EdgeInsets.only(bottom: 12),
+                                    padding: EdgeInsets.only(
+                                      bottom: metrics.sectionGap,
+                                    ),
                                     children: selectedCards,
                                   ),
                                 ),

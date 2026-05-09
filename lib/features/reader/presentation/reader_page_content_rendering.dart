@@ -435,6 +435,14 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     required _ReaderThemeColors colors,
     required int retryNonce,
   }) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final decodeBudget = _readerImageDecodeBudget(
+      role:
+          _isMangaChapter
+              ? ReaderImageDecodeRole.manga
+              : ReaderImageDecodeRole.epubInline,
+      logicalWidth: mediaSize.width,
+    );
     final uri = Uri.tryParse(requestUrl);
     if (_isSvgImageUrl(requestUrl)) {
       return _buildSvgImageWidget(
@@ -450,6 +458,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
         colors: colors,
         sourceUrl: sourceUrl,
         retryNonce: retryNonce,
+        decodeBudget: decodeBudget,
       );
     }
     if (uri != null && uri.scheme == 'file') {
@@ -457,6 +466,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
         File.fromUri(uri),
         fit: BoxFit.fitWidth,
         filterQuality: _resolveMangaFilterQuality(),
+        cacheWidth: decodeBudget.cacheWidth,
+        cacheHeight: decodeBudget.cacheHeight,
         errorBuilder: (context, error, stackTrace) {
           return _buildMangaImageError(colors, sourceUrl, retryNonce);
         },
@@ -468,6 +479,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       headers: _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
       fit: BoxFit.fitWidth,
       filterQuality: _resolveMangaFilterQuality(),
+      cacheWidth: decodeBudget.cacheWidth,
+      cacheHeight: decodeBudget.cacheHeight,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         if (wasSynchronouslyLoaded || frame != null) {
           return child;
@@ -560,9 +573,13 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     required _ReaderThemeColors colors,
     required String sourceUrl,
     required int retryNonce,
+    required ReaderImageDecodeBudget decodeBudget,
   }) {
     try {
-      final decoded = _decodeDataUriImage(dataUri: dataUri);
+      final decoded = _decodeDataUriImage(
+        dataUri: dataUri,
+        maxBytes: decodeBudget.maxDataUriBytes,
+      );
       if (decoded == null) {
         throw const FormatException('Invalid data URI');
       }
@@ -570,6 +587,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
         decoded.bytes,
         fit: BoxFit.fitWidth,
         filterQuality: _resolveMangaFilterQuality(),
+        cacheWidth: decodeBudget.cacheWidth,
+        cacheHeight: decodeBudget.cacheHeight,
         errorBuilder: (context, error, stackTrace) {
           return _buildMangaImageError(colors, sourceUrl, retryNonce);
         },
@@ -579,7 +598,10 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     }
   }
 
-  _DecodedDataUriImage? _decodeDataUriImage({required String dataUri}) {
+  _DecodedDataUriImage? _decodeDataUriImage({
+    required String dataUri,
+    int? maxBytes,
+  }) {
     final commaIndex = dataUri.indexOf(',');
     if (commaIndex <= 0) {
       return null;
@@ -592,6 +614,9 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
         isBase64
             ? base64Decode(encoded)
             : Uint8List.fromList(utf8.encode(Uri.decodeComponent(encoded)));
+    if (maxBytes != null && maxBytes >= 0 && bytes.length > maxBytes) {
+      return null;
+    }
     return _DecodedDataUriImage(
       mediaType: mediaType,
       bytes: bytes,
@@ -627,11 +652,13 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   double _resolveMangaCacheExtent() {
-    return switch (_settings.mangaLoadStrategy) {
+    final budget = _currentResourceBudget();
+    final strategyExtent = switch (_settings.mangaLoadStrategy) {
       ReaderMangaLoadStrategy.balanced => 1800,
       ReaderMangaLoadStrategy.smooth => 3200,
       ReaderMangaLoadStrategy.saveData => 900,
     };
+    return min(strategyExtent, budget.mangaCacheExtent).toDouble();
   }
 
   FilterQuality _resolveMangaFilterQuality() {
@@ -651,8 +678,10 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     bool includeBackgroundDecoration = false,
   }) {
     final pages = pagedViewModel.pagedPages;
+    final blockPages = pagedViewModel.pagedBlockPages;
+    final pageCount = max(pages.length, blockPages.length);
     final layoutMetrics = pagedViewModel.surfaceMetrics;
-    if (pageIndex < 0 || pageIndex >= pages.length) {
+    if (pageIndex < 0 || pageIndex >= pageCount) {
       return const SizedBox.shrink();
     }
 

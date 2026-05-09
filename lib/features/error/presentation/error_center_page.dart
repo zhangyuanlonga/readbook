@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
@@ -26,7 +26,8 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
     return ImportExportTaskOverlay(
@@ -86,14 +87,14 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                     return ListView(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        16,
+                        metrics.sectionGap,
                         horizontal,
-                        16 + bottomSafe,
+                        metrics.sectionGap + bottomSafe,
                       ),
                       children: [
                         Card(
                           child: Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(metrics.cardPadding),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -119,7 +120,7 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: metrics.contentGap),
                         if (entries.isEmpty)
                           const AppEmptyStateCard(
                             icon: Icons.event_note_outlined,
@@ -146,9 +147,11 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
     final levelColor = _levelColor(context, entry.level);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(
+        bottom: AppAdaptiveMetrics.of(context).contentGap,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

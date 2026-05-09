@@ -7,7 +7,7 @@ void main() {
   group('ReaderModeCapabilitiesResolver', () {
     const resolver = ReaderModeCapabilitiesResolver();
 
-    test('text mode keeps text capabilities and respects inline image fallback', () {
+    test('text mode keeps paged text capability for inline images', () {
       const capabilities = ContentCapabilities(
         canSwitchSource: true,
         canCacheChapter: true,
@@ -28,32 +28,41 @@ void main() {
       expect(normal.canAutoRead, isTrue);
       expect(normal.canUsePagedText, isTrue);
       expect(normal.supportsCatalogContentSearch, isTrue);
-      expect(normal.primaryBottomAction, ReaderPrimaryBottomAction.interfacePanel);
+      expect(
+        normal.primaryBottomAction,
+        ReaderPrimaryBottomAction.interfacePanel,
+      );
       expect(normal.canSwitchSource, isTrue);
       expect(normal.canCacheChapter, isTrue);
 
-      expect(withInlineImage.canUsePagedText, isFalse);
+      expect(withInlineImage.canUsePagedText, isTrue);
       expect(withInlineImage.supportsCatalogContentSearch, isTrue);
     });
 
-    test('comic mode disables text-only interactions but keeps provider actions', () {
-      const capabilities = ContentCapabilities(
-        canSwitchSource: true,
-        canCacheChapter: true,
-      );
+    test(
+      'comic mode disables text-only interactions but keeps provider actions',
+      () {
+        const capabilities = ContentCapabilities(
+          canSwitchSource: true,
+          canCacheChapter: true,
+        );
 
-      final resolved = resolver.resolve(
-        contentMode: ReaderContentMode.comic,
-        contentCapabilities: capabilities,
-        hasInlineImageParagraphs: false,
-      );
+        final resolved = resolver.resolve(
+          contentMode: ReaderContentMode.comic,
+          contentCapabilities: capabilities,
+          hasInlineImageParagraphs: false,
+        );
 
-      expect(resolved.canAutoRead, isFalse);
-      expect(resolved.canUsePagedText, isFalse);
-      expect(resolved.supportsCatalogContentSearch, isFalse);
-      expect(resolved.primaryBottomAction, ReaderPrimaryBottomAction.positionPanel);
-      expect(resolved.canSwitchSource, isTrue);
-      expect(resolved.canCacheChapter, isTrue);
-    });
+        expect(resolved.canAutoRead, isFalse);
+        expect(resolved.canUsePagedText, isFalse);
+        expect(resolved.supportsCatalogContentSearch, isFalse);
+        expect(
+          resolved.primaryBottomAction,
+          ReaderPrimaryBottomAction.positionPanel,
+        );
+        expect(resolved.canSwitchSource, isTrue);
+        expect(resolved.canCacheChapter, isTrue);
+      },
+    );
   });
 }

@@ -59,6 +59,17 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       _showChapterBoundaryHint(isFirst: jumpDecision.isFirstBoundary);
       return;
     }
+    final windowMovePlan = _chapterWindowController.buildMovePlan(
+      chapters: _chapters,
+      previousCurrentChapterIndex: _currentIndex,
+      nextCurrentChapterIndex: jumpDecision.targetChapterIndex,
+    );
+    _readerSessionController.cancelPreloadTasks();
+    _readerSessionController.cancelPaginationTasks();
+    _continuousTextChapters = _retainContinuousTextWindowFlow(
+      _continuousTextChapters,
+      currentChapterIndex: windowMovePlan.to?.currentChapterIndex,
+    );
     final chapter = _chapters[jumpDecision.targetChapterIndex!];
 
     final success = await _loadCurrentChapter(

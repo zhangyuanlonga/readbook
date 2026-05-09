@@ -6,8 +6,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/adaptive_setting_tile.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
 import '../application/advanced_theme_provider.dart';
@@ -28,6 +30,7 @@ class SystemSettingsPage extends StatelessWidget {
           activeAdvancedTheme,
         );
         final horizontal = AppSpacing.pageHorizontal(context);
+        final metrics = AppAdaptiveMetrics.of(context);
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
         final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -63,13 +66,13 @@ class SystemSettingsPage extends StatelessWidget {
                       child: ListView(
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
-                          topInset + 12,
+                          topInset + metrics.sectionGap,
                           horizontal,
-                          16 + bottomSafe,
+                          metrics.sectionGap + bottomSafe,
                         ),
                         children: [
                           _buildSystemOverviewCard(context),
-                          const SizedBox(height: 12),
+                          SizedBox(height: metrics.sectionGap),
                           LayoutBuilder(
                             builder: (context, constraints) {
                               final wide =
@@ -134,6 +137,7 @@ class SystemSettingsPage extends StatelessWidget {
   Widget _buildSystemOverviewCard(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -146,21 +150,21 @@ class SystemSettingsPage extends StatelessWidget {
             colorScheme.surface,
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.44),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: EdgeInsets.all(metrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: metrics.isCompactDensity ? 38 : 42,
+                  height: metrics.isCompactDensity ? 38 : 42,
                   decoration: BoxDecoration(
                     color: colorScheme.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
@@ -168,10 +172,10 @@ class SystemSettingsPage extends StatelessWidget {
                   child: Icon(
                     Icons.tune_rounded,
                     color: colorScheme.primary,
-                    size: 22,
+                    size: metrics.isCompactDensity ? 20 : 22,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: metrics.contentGap),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,6 +189,8 @@ class SystemSettingsPage extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         '把书架、阅读与搜索相关开关收在一起，减少层级和空白占用。',
+                        maxLines: metrics.isCompactDensity ? 2 : 3,
+                        overflow: TextOverflow.ellipsis,
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           height: 1.35,
@@ -195,10 +201,10 @@ class SystemSettingsPage extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: metrics.sectionGap),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: metrics.contentGap,
+              runSpacing: metrics.contentGap,
               children: [
                 _buildMetaChip(
                   context,
@@ -225,9 +231,13 @@ Widget _buildMetaChip(
   required String label,
 }) {
   final colorScheme = Theme.of(context).colorScheme;
+  final metrics = AppAdaptiveMetrics.of(context);
 
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    padding: EdgeInsets.symmetric(
+      horizontal: metrics.isCompactDensity ? 8 : 10,
+      vertical: metrics.isCompactDensity ? 6 : 7,
+    ),
     decoration: BoxDecoration(
       color: colorScheme.surface.withValues(alpha: 0.78),
       borderRadius: BorderRadius.circular(999),
@@ -238,8 +248,12 @@ Widget _buildMetaChip(
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 15, color: colorScheme.primary),
-        const SizedBox(width: 6),
+        Icon(
+          icon,
+          size: metrics.isCompactDensity ? 14 : 15,
+          color: colorScheme.primary,
+        ),
+        SizedBox(width: metrics.isCompactDensity ? 5 : 6),
         Text(
           label,
           style: Theme.of(
@@ -266,84 +280,30 @@ Widget _buildCompactSettingCard(
 }) {
   final colorScheme = Theme.of(context).colorScheme;
   final textTheme = Theme.of(context).textTheme;
+  final metrics = AppAdaptiveMetrics.of(context);
 
-  return Container(
-    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-    decoration: BoxDecoration(
-      color: colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(
-        color: colorScheme.outlineVariant.withValues(alpha: 0.46),
-      ),
-    ),
+  return AdaptiveSettingSection(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color:
-                    value
-                        ? colorScheme.primaryContainer.withValues(alpha: 0.92)
-                        : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color:
-                    value
-                        ? colorScheme.onPrimaryContainer
-                        : colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    description,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            if (isLoading || isSaving)
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colorScheme.primary,
-                ),
-              )
-            else
-              Switch.adaptive(value: value, onChanged: onChanged),
-          ],
+        AdaptiveSettingTile(
+          icon: icon,
+          title: title,
+          description: description,
+          active: value,
+          loading: isLoading || isSaving,
+          trailing: Switch.adaptive(value: value, onChanged: onChanged),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: metrics.contentGap),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: metrics.contentGap,
+          runSpacing: metrics.contentGap,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: metrics.isCompactDensity ? 8 : 10,
+                vertical: metrics.isCompactDensity ? 5 : 6,
+              ),
               decoration: BoxDecoration(
                 color:
                     value
@@ -370,16 +330,18 @@ Widget _buildCompactSettingCard(
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: metrics.contentGap),
         Text(
           stateDescription,
+          maxLines: metrics.isCompactDensity ? 2 : 3,
+          overflow: TextOverflow.ellipsis,
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurface,
             height: 1.35,
           ),
         ),
         if (errorText case final message?) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: metrics.contentGap),
           _buildErrorBanner(context, message: message),
         ],
       ],
@@ -389,10 +351,16 @@ Widget _buildCompactSettingCard(
 
 Widget _buildErrorBanner(BuildContext context, {required String message}) {
   final colorScheme = Theme.of(context).colorScheme;
+  final metrics = AppAdaptiveMetrics.of(context);
 
   return Container(
     width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+    padding: EdgeInsets.fromLTRB(
+      metrics.cardPadding,
+      metrics.isCompactDensity ? 8 : 10,
+      metrics.cardPadding,
+      metrics.isCompactDensity ? 8 : 10,
+    ),
     decoration: BoxDecoration(
       color: colorScheme.errorContainer.withValues(alpha: 0.55),
       borderRadius: BorderRadius.circular(12),
@@ -401,8 +369,12 @@ Widget _buildErrorBanner(BuildContext context, {required String message}) {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.error_outline_rounded, size: 16, color: colorScheme.error),
-        const SizedBox(width: 8),
+        Icon(
+          Icons.error_outline_rounded,
+          size: metrics.isCompactDensity ? 15 : 16,
+          color: colorScheme.error,
+        ),
+        SizedBox(width: metrics.contentGap),
         Expanded(
           child: Text(
             message,
@@ -591,72 +563,22 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.46),
-        ),
-      ),
+    return AdaptiveSettingSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.restart_alt_rounded,
-                  size: 20,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '阅读设置恢复默认',
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '把阅读页“界面设置”和“设置”里的恢复入口集中到这里。',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_isSaving)
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                ),
-            ],
+          AdaptiveSettingTile(
+            icon: Icons.restart_alt_rounded,
+            title: '阅读设置恢复默认',
+            description: '把阅读页“界面设置”和“设置”里的恢复入口集中到这里。',
+            loading: _isSaving,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: metrics.contentGap),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: metrics.contentGap,
+            runSpacing: metrics.contentGap,
             children: [
               OutlinedButton.icon(
                 onPressed:
@@ -679,7 +601,7 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
             ],
           ),
           if (_statusText case final String text) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: metrics.contentGap),
             Text(
               text,
               style: textTheme.bodySmall?.copyWith(
@@ -689,7 +611,7 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
             ),
           ],
           if (_errorText case final message?) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: metrics.contentGap),
             _buildErrorBanner(context, message: message),
           ],
         ],
@@ -886,69 +808,20 @@ class _SearchConcurrencySettingPanelState
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.46),
-        ),
-      ),
+    return AdaptiveSettingSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.hub_outlined,
-                  size: 20,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '搜索并发',
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '控制搜索和换源时同时请求的书源数量。脚本书源会同时占用 JS 运行时，默认 ${SearchSystemSettingsService.defaultMaxConcurrentSources}，上限 ${SearchSystemSettingsService.maxMaxConcurrentSources}。',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_isLoading || _isSaving)
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                ),
-            ],
+          AdaptiveSettingTile(
+            icon: Icons.hub_outlined,
+            title: '搜索并发',
+            description:
+                '控制搜索和换源时同时请求的书源数量。默认 ${SearchSystemSettingsService.defaultMaxConcurrentSources}，上限 ${SearchSystemSettingsService.maxMaxConcurrentSources}。',
+            loading: _isLoading || _isSaving,
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: metrics.sectionGap),
           Row(
             children: [
               IconButton.filledTonal(
@@ -958,16 +831,16 @@ class _SearchConcurrencySettingPanelState
                         : () => unawaited(_updateValue(_value - 1)),
                 icon: const Icon(Icons.remove),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: metrics.contentGap),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: metrics.cardPadding,
+                    vertical: metrics.isCompactDensity ? 8 : 10,
                   ),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(metrics.cardRadius),
                     border: Border.all(color: colorScheme.outlineVariant),
                   ),
                   child: Column(
@@ -988,7 +861,7 @@ class _SearchConcurrencySettingPanelState
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: metrics.contentGap),
               IconButton.filledTonal(
                 onPressed:
                     _isLoading || _isSaving
@@ -998,7 +871,7 @@ class _SearchConcurrencySettingPanelState
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: metrics.contentGap),
           Text(
             '范围：${SearchSystemSettingsService.minMaxConcurrentSources} - ${SearchSystemSettingsService.maxMaxConcurrentSources}',
             style: textTheme.bodySmall?.copyWith(
@@ -1006,7 +879,7 @@ class _SearchConcurrencySettingPanelState
             ),
           ),
           if (_errorText != null) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: metrics.contentGap),
             Text(
               _errorText!,
               style: textTheme.bodySmall?.copyWith(

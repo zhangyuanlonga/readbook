@@ -11,6 +11,8 @@ void main() {
         isAutoReadSessionEnabled: true,
         isMangaChapter: false,
         isPagedTextReaderEnabled: false,
+        isReaderVisible: true,
+        isLowBattery: false,
         showOverlayControls: false,
         isBootstrapping: false,
         isLoadingContent: false,
@@ -24,6 +26,8 @@ void main() {
         isAutoReadSessionEnabled: true,
         isMangaChapter: false,
         isPagedTextReaderEnabled: false,
+        isReaderVisible: true,
+        isLowBattery: false,
         showOverlayControls: true,
         isBootstrapping: false,
         isLoadingContent: false,
@@ -36,6 +40,42 @@ void main() {
 
       expect(runnable, isTrue);
       expect(blockedByOverlay, isFalse);
+    });
+
+    test('canRunNow pauses when hidden or low battery', () {
+      final hidden = coordinator.canRunNow(
+        isAutoReadSessionEnabled: true,
+        isMangaChapter: false,
+        isPagedTextReaderEnabled: false,
+        isReaderVisible: false,
+        isLowBattery: false,
+        showOverlayControls: false,
+        isBootstrapping: false,
+        isLoadingContent: false,
+        hasError: false,
+        hasTextContent: true,
+        hasScrollClients: true,
+        maxScrollExtent: 500,
+        scrollOffset: 120,
+      );
+      final lowBattery = coordinator.canRunNow(
+        isAutoReadSessionEnabled: true,
+        isMangaChapter: false,
+        isPagedTextReaderEnabled: false,
+        isReaderVisible: true,
+        isLowBattery: true,
+        showOverlayControls: false,
+        isBootstrapping: false,
+        isLoadingContent: false,
+        hasError: false,
+        hasTextContent: true,
+        hasScrollClients: true,
+        maxScrollExtent: 500,
+        scrollOffset: 120,
+      );
+
+      expect(hidden, isFalse);
+      expect(lowBattery, isFalse);
     });
 
     test('isAtChapterEnd uses edge tolerance', () {
@@ -81,6 +121,8 @@ void main() {
         isAutoReadAdvancingChapter: false,
         isMangaChapter: false,
         isPagedTextReaderEnabled: false,
+        isReaderVisible: true,
+        isLowBattery: false,
         showOverlayControls: false,
         isBootstrapping: false,
         isLoadingContent: false,
@@ -92,6 +134,8 @@ void main() {
         isAutoReadAdvancingChapter: false,
         isMangaChapter: false,
         isPagedTextReaderEnabled: true,
+        isReaderVisible: true,
+        isLowBattery: false,
         showOverlayControls: false,
         isBootstrapping: false,
         isLoadingContent: false,

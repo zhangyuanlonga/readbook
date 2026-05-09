@@ -8,8 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
@@ -66,31 +66,88 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   bool get _isListMode => _layoutMode == _MineLayoutMode.list;
 
-  EdgeInsets get _actionSectionPadding =>
-      _isListMode
-          ? const EdgeInsets.fromLTRB(12, 4, 12, 4)
-          : const EdgeInsets.fromLTRB(14, 8, 14, 8);
+  EdgeInsets _actionSectionPaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.contentGap * 0.4,
+          metrics.cardPadding,
+          metrics.contentGap * 0.4,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.contentGap * 0.8,
+          metrics.cardPadding,
+          metrics.contentGap * 0.8,
+        );
+  }
 
-  double get _primarySectionGap => _isListMode ? 6 : 8;
+  double _primarySectionGapFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode ? metrics.contentGap * 0.65 : metrics.contentGap;
+  }
 
-  double get _secondarySectionGap => _isListMode ? 2 : 4;
+  double _secondarySectionGapFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode ? metrics.contentGap * 0.25 : metrics.contentGap * 0.45;
+  }
 
-  double get _quickAccessInnerGap => _isListMode ? 6 : 8;
+  double _quickAccessInnerGapFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode ? metrics.contentGap * 0.7 : metrics.contentGap;
+  }
 
-  EdgeInsets get _profileCardPadding =>
-      _isListMode
-          ? const EdgeInsets.fromLTRB(12, 9, 12, 9)
-          : const EdgeInsets.fromLTRB(16, 14, 16, 14);
+  EdgeInsets _profileCardPaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.contentGap,
+          metrics.cardPadding,
+          metrics.contentGap,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding + 2,
+          metrics.cardPadding,
+          metrics.cardPadding + 2,
+          metrics.cardPadding,
+        );
+  }
 
-  EdgeInsets get _quickCardPadding =>
-      _isListMode
-          ? const EdgeInsets.fromLTRB(10, 8, 10, 8)
-          : const EdgeInsets.fromLTRB(14, 12, 14, 12);
+  EdgeInsets _quickCardPaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding * 0.8,
+          metrics.contentGap * 0.85,
+          metrics.cardPadding * 0.8,
+          metrics.contentGap * 0.85,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.cardPadding * 0.8,
+          metrics.cardPadding,
+          metrics.cardPadding * 0.8,
+        );
+  }
 
-  EdgeInsets get _actionListTilePadding =>
-      _isListMode
-          ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
-          : const EdgeInsets.fromLTRB(14, 12, 14, 12);
+  EdgeInsets _actionListTilePaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.contentGap,
+          metrics.cardPadding,
+          metrics.contentGap,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.cardPadding * 0.85,
+          metrics.cardPadding,
+          metrics.cardPadding * 0.85,
+        );
+  }
 
   @override
   void initState() {
@@ -426,7 +483,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
     return _buildSectionCardShell(
       context,
-      padding: padding ?? _actionSectionPadding,
+      padding: padding ?? _actionSectionPaddingFor(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -508,7 +565,7 @@ class _MinePageState extends ConsumerState<MinePage> {
   }) {
     return _buildSectionCardShell(
       context,
-      padding: padding ?? _actionSectionPadding,
+      padding: padding ?? _actionSectionPaddingFor(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -580,7 +637,7 @@ class _MinePageState extends ConsumerState<MinePage> {
         borderRadius: BorderRadius.circular(_isListMode ? 16 : 18),
         onTap: item.onTap,
         child: Padding(
-          padding: _actionListTilePadding,
+          padding: _actionListTilePaddingFor(context),
           child: Row(
             children: [
               Stack(

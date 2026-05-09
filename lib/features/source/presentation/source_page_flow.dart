@@ -400,67 +400,35 @@ extension on _SourcePageState {
   }
 
   Widget _buildSearchField(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: SizedBox(
-        height: 40,
-        child: TextField(
-          controller: _searchController,
-          onChanged: (value) {
-            if (!mounted) {
-              return;
-            }
-            _updateSourcePageState(() {
-              _searchQuery = value;
-            });
-          },
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: '搜索书源',
-            isDense: true,
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            suffixIcon:
-                _searchQuery.trim().isEmpty
-                    ? null
-                    : IconButton(
-                      tooltip: '清空',
-                      onPressed: () {
-                        _searchController.clear();
-                        if (!mounted) {
-                          return;
-                        }
-                        _updateSourcePageState(() {
-                          _searchQuery = '';
-                        });
-                      },
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                    ),
-            filled: true,
-            fillColor: colorScheme.surfaceContainerLow,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: colorScheme.primary.withValues(alpha: 0.75),
-              ),
-            ),
-          ),
-        ),
+      padding: EdgeInsets.only(right: metrics.contentGap),
+      child: AdaptiveSearchBar(
+        controller: _searchController,
+        hintText: '搜索书源',
+        onChanged: (value) {
+          if (!mounted) {
+            return;
+          }
+          _updateSourcePageState(() {
+            _searchQuery = value;
+          });
+        },
+        onClear: () {
+          _searchController.clear();
+          if (!mounted) {
+            return;
+          }
+          _updateSourcePageState(() {
+            _searchQuery = '';
+          });
+        },
+        height: metrics.controlHeight,
+        borderRadius: metrics.cardRadius,
+        backgroundColor: colorScheme.surfaceContainerLow,
+        outlineColor: colorScheme.primary.withValues(alpha: 0.75),
       ),
     );
   }
@@ -522,8 +490,12 @@ extension on _SourcePageState {
 
   Widget _buildSummaryChip(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 8 : 10,
+        vertical: metrics.isCompactDensity ? 5 : 6,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(999),
@@ -543,8 +515,12 @@ extension on _SourcePageState {
 
   Widget _buildInfoChip(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 7 : 8,
+        vertical: metrics.isCompactDensity ? 3 : 4,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(999),
@@ -565,6 +541,7 @@ extension on _SourcePageState {
     VoidCallback? onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Material(
       color: colorScheme.secondaryContainer,
       borderRadius: BorderRadius.circular(999),
@@ -572,7 +549,10 @@ extension on _SourcePageState {
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.isCompactDensity ? 7 : 8,
+            vertical: metrics.isCompactDensity ? 3 : 4,
+          ),
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -662,6 +642,8 @@ extension on _SourcePageState {
     final isDeleting = _deletingScriptSourceIds.contains(source.id);
     final busy = isChangingEnabled || isDeleting;
     final isSelected = _selectedBatchSourceIds.contains(source.id);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final effectiveCompact = compact || metrics.isCompactDensity;
     final healthSnapshot = _sourceHealthService.snapshotFor(
       source.id,
       enabled: source.enabled,
@@ -677,7 +659,7 @@ extension on _SourcePageState {
     ];
 
     return Card(
-      margin: EdgeInsets.only(bottom: compact ? 6 : 8),
+      margin: EdgeInsets.only(bottom: effectiveCompact ? 6 : 8),
       shape: _buildOutlinedCardShape(context),
       color:
           highlightRecommended
@@ -686,13 +668,18 @@ extension on _SourcePageState {
               ).colorScheme.secondaryContainer.withValues(alpha: 0.28)
               : null,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(14, compact ? 6 : 8, 8, compact ? 6 : 8),
+        padding: EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          effectiveCompact ? 6 : 8,
+          metrics.isCompactDensity ? 6 : 8,
+          effectiveCompact ? 6 : 8,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(metrics.cardRadius),
                 onTap:
                     busy
                         ? null
@@ -708,7 +695,9 @@ extension on _SourcePageState {
                 onLongPress:
                     busy ? null : () => _toggleSelectedSource(source.id),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: EdgeInsets.symmetric(
+                    vertical: effectiveCompact ? 6 : 8,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -724,7 +713,7 @@ extension on _SourcePageState {
                         ),
                       ),
                       if (highlightRecommended) ...[
-                        const SizedBox(height: 4),
+                        SizedBox(height: effectiveCompact ? 3 : 4),
                         Text(
                           '推荐保留源',
                           style: Theme.of(
@@ -735,7 +724,7 @@ extension on _SourcePageState {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 4),
+                      SizedBox(height: effectiveCompact ? 3 : 4),
                       Text(
                         subtitleParts.join(' · '),
                         maxLines: 1,
@@ -744,10 +733,10 @@ extension on _SourcePageState {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: effectiveCompact ? 5 : 6),
                       Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+                        spacing: effectiveCompact ? 5 : 6,
+                        runSpacing: effectiveCompact ? 5 : 6,
                         children: [
                           if (clusterSummary != null &&
                               clusterSummary.sourceCount >= 2)
@@ -802,7 +791,7 @@ extension on _SourcePageState {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: metrics.contentGap),
             _buildSourceActionRail(
               context,
               source: source,
@@ -825,14 +814,20 @@ extension on _SourcePageState {
     required bool isDeleting,
     required bool isSelected,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final railWidth = metrics.isCompactDensity ? 76.0 : 88.0;
+    final buttonSize = metrics.isCompactDensity ? 30.0 : 32.0;
+    final iconSize = metrics.isCompactDensity ? 17.0 : 18.0;
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 84, maxWidth: 92),
+      constraints: BoxConstraints(minWidth: railWidth, maxWidth: railWidth + 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (_selectedBatchSourceIds.isNotEmpty || isSelected)
             Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+              padding: EdgeInsets.only(
+                bottom: metrics.isCompactDensity ? 2 : 4,
+              ),
               child: Checkbox(
                 value: isSelected,
                 visualDensity: VisualDensity.compact,
@@ -841,7 +836,7 @@ extension on _SourcePageState {
               ),
             ),
           SizedBox(
-            width: 48,
+            width: metrics.isCompactDensity ? 44 : 48,
             child:
                 isChangingEnabled
                     ? const Center(
@@ -873,9 +868,12 @@ extension on _SourcePageState {
               IconButton(
                 tooltip: '编辑',
                 visualDensity: VisualDensity.compact,
-                iconSize: 18,
+                iconSize: iconSize,
                 padding: const EdgeInsets.all(6),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                constraints: BoxConstraints(
+                  minWidth: buttonSize,
+                  minHeight: buttonSize,
+                ),
                 onPressed:
                     busy
                         ? null
@@ -886,9 +884,12 @@ extension on _SourcePageState {
               ),
               PopupMenuButton<_SourceItemMenuAction>(
                 tooltip: '更多',
-                iconSize: 18,
+                iconSize: iconSize,
                 padding: const EdgeInsets.all(6),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                constraints: BoxConstraints(
+                  minWidth: buttonSize,
+                  minHeight: buttonSize,
+                ),
                 icon: _buildSourceMenuIcon(
                   context,
                   snapshot: _sourceHealthService.snapshotFor(
@@ -1034,14 +1035,14 @@ extension on _SourcePageState {
     if (!await _ensureCanAddSource()) {
       return;
     }
-    await _importLocalScriptSources();
+    await _showSourceImportSheet(mode: _SourcePageMenuAction.importLocal);
   }
 
   Future<void> _guardedImportNetworkScriptSource() async {
     if (!await _ensureCanAddSource()) {
       return;
     }
-    await _importNetworkScriptSource();
+    await _showSourceImportSheet(mode: _SourcePageMenuAction.importNetwork);
   }
 
   void _handleSourceItemMenuAction(
@@ -1486,6 +1487,29 @@ extension on _SourcePageState {
     _showMessage(result);
   }
 
+  Future<void> _showSourceImportSheet({
+    required _SourcePageMenuAction mode,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _SourceImportTaskSheet(
+          mode: mode,
+          importLocal: _importLocalScriptSources,
+          importNetwork: _importNetworkScriptSource,
+          openPaste: _openPasteImportPage,
+        );
+      },
+    );
+  }
+
   Future<void> _openDebugPage(ScriptSource source) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1501,67 +1525,59 @@ extension on _SourcePageState {
   }
 
   Future<void> _exportScriptSource(ScriptSource source) async {
-    try {
-      _updateSourcePageState(() {
-        _taskStatus = const ImportExportTaskStatus(
-          title: '正在导出书源',
-          message: '正在写入书源文件并准备系统分享…',
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _SourceExportTaskSheet(
+          source: source,
+          export: () async {
+            final fileName = '${_normalizedSourceFileName(source.name)}.js';
+            if (kIsWeb ||
+                defaultTargetPlatform == TargetPlatform.macOS ||
+                defaultTargetPlatform == TargetPlatform.windows ||
+                defaultTargetPlatform == TargetPlatform.linux) {
+              final location = await getSaveLocation(
+                acceptedTypeGroups: const <XTypeGroup>[
+                  ExternalImportCatalog.scriptSourceTypeGroup,
+                ],
+                suggestedName: fileName,
+                confirmButtonText: '导出书源',
+              );
+              if (location == null) {
+                return false;
+              }
+              final file = File(location.path);
+              await file.writeAsString(source.sourceCode, flush: true);
+              return true;
+            }
+            final tempDir = await getTemporaryDirectory();
+            final file = File('${tempDir.path}/$fileName');
+            await file.writeAsString(source.sourceCode, flush: true);
+            try {
+              final sharePositionOrigin = _resolveSharePositionOrigin();
+              await Share.shareXFiles(
+                [XFile(file.path)],
+                text: '分享书源：${source.name}',
+                subject: source.name,
+                sharePositionOrigin: sharePositionOrigin,
+              );
+              return true;
+            } on MissingPluginException {
+              await Clipboard.setData(ClipboardData(text: source.sourceCode));
+              if (!mounted) {
+                return false;
+              }
+              _showMessage('当前安装包暂不支持系统分享，已复制书源代码，请完整重启 App 后重试。');
+              return false;
+            }
+          },
         );
-      });
-      final fileName = '${_normalizedSourceFileName(source.name)}.js';
-      if (kIsWeb ||
-          defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.linux) {
-        final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[
-            ExternalImportCatalog.scriptSourceTypeGroup,
-          ],
-          suggestedName: fileName,
-          confirmButtonText: '导出书源',
-        );
-        if (location == null) {
-          return;
-        }
-        final file = File(location.path);
-        await file.writeAsString(source.sourceCode, flush: true);
-      } else {
-        final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsString(source.sourceCode, flush: true);
-        try {
-          final sharePositionOrigin = _resolveSharePositionOrigin();
-          await Share.shareXFiles(
-            [XFile(file.path)],
-            text: '分享书源：${source.name}',
-            subject: source.name,
-            sharePositionOrigin: sharePositionOrigin,
-          );
-        } on MissingPluginException {
-          await Clipboard.setData(ClipboardData(text: source.sourceCode));
-          if (!mounted) {
-            return;
-          }
-          _showMessage('当前安装包暂不支持系统分享，已复制书源代码，请完整重启 App 后重试。');
-          return;
-        }
-      }
-      if (!mounted) {
-        return;
-      }
-      _showMessage('已导出书源：${source.name}');
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('导出书源失败：$error');
-    } finally {
-      if (mounted) {
-        _updateSourcePageState(() {
-          _taskStatus = null;
-        });
-      }
-    }
+      },
+    );
   }
 
   String _normalizedSourceFileName(String raw) {
@@ -1914,5 +1930,251 @@ extension on _SourcePageState {
         });
       }
     }
+  }
+}
+
+class _SourceImportTaskSheet extends StatefulWidget {
+  const _SourceImportTaskSheet({
+    required this.mode,
+    required this.importLocal,
+    required this.importNetwork,
+    required this.openPaste,
+  });
+
+  final _SourcePageMenuAction mode;
+  final Future<void> Function() importLocal;
+  final Future<void> Function() importNetwork;
+  final Future<void> Function() openPaste;
+
+  @override
+  State<_SourceImportTaskSheet> createState() => _SourceImportTaskSheetState();
+}
+
+class _SourceImportTaskSheetState extends State<_SourceImportTaskSheet> {
+  _SourceImportEntryMode _mode = _SourceImportEntryMode.add;
+
+  List<AppTaskStep> get _steps {
+    final current = switch (_mode) {
+      _SourceImportEntryMode.add => 0,
+      _SourceImportEntryMode.processing => 1,
+      _SourceImportEntryMode.completed => 2,
+    };
+    return <AppTaskStep>[
+      AppTaskStep(label: '添加文件', active: current >= 0),
+      AppTaskStep(label: '解析导入', active: current >= 1),
+      AppTaskStep(label: '完成', active: current >= 2),
+    ];
+  }
+
+  String get _title {
+    return switch (widget.mode) {
+      _SourcePageMenuAction.importLocal => '导入书源',
+      _SourcePageMenuAction.importNetwork => '网络导入书源',
+      _SourcePageMenuAction.importPaste => '粘贴导入书源',
+      _ => '导入书源',
+    };
+  }
+
+  Future<void> _start() async {
+    setState(() {
+      _mode = _SourceImportEntryMode.processing;
+    });
+    switch (widget.mode) {
+      case _SourcePageMenuAction.importLocal:
+        await widget.importLocal();
+      case _SourcePageMenuAction.importNetwork:
+        await widget.importNetwork();
+      case _SourcePageMenuAction.importPaste:
+        await widget.openPaste();
+      default:
+        break;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _mode = _SourceImportEntryMode.completed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTaskBottomSheet(
+      title: _title,
+      trailing: IconButton(
+        tooltip: '导入说明',
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('导入说明'),
+                content: const Text('书源导入统一分为：添加文件 -> 解析导入 -> 完成。导入后会保存到书源列表。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('知道了'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+        icon: const Icon(Icons.help_outline_rounded),
+      ),
+      maxHeightFactor: 0.38,
+      fitContent: true,
+      steps: _steps,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_mode == _SourceImportEntryMode.add)
+            AppTaskActionCard(
+              title:
+                  widget.mode == _SourcePageMenuAction.importNetwork
+                      ? '输入书源地址'
+                      : widget.mode == _SourcePageMenuAction.importPaste
+                      ? '粘贴书源内容'
+                      : '添加书源文件',
+              description:
+                  widget.mode == _SourcePageMenuAction.importNetwork
+                      ? '通过 URL 获取书源内容并保存。'
+                      : widget.mode == _SourcePageMenuAction.importPaste
+                      ? '把完整书源脚本粘贴后导入。'
+                      : '支持一次选择多个书源脚本文件。',
+              icon:
+                  widget.mode == _SourcePageMenuAction.importNetwork
+                      ? Icons.language_rounded
+                      : widget.mode == _SourcePageMenuAction.importPaste
+                      ? Icons.content_paste_go_rounded
+                      : Icons.library_add_rounded,
+              dashedBorder: true,
+              onTap: _start,
+            )
+          else if (_mode == _SourceImportEntryMode.processing)
+            const ImportExportProgressCard(
+              status: ImportExportTaskStatus(
+                title: '正在导入书源',
+                message: '正在解析并保存书源…',
+                detail: '执行阶段：解析导入',
+              ),
+            )
+          else
+            const ImportExportTaskSheet(
+              status: ImportExportTaskStatus(
+                title: '书源导入完成',
+                message: '已完成',
+                result: ImportExportTaskResult.success,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceExportTaskSheet extends StatefulWidget {
+  const _SourceExportTaskSheet({required this.source, required this.export});
+
+  final ScriptSource source;
+  final Future<bool> Function() export;
+
+  @override
+  State<_SourceExportTaskSheet> createState() => _SourceExportTaskSheetState();
+}
+
+class _SourceExportTaskSheetState extends State<_SourceExportTaskSheet> {
+  _SourceExportEntryMode _mode = _SourceExportEntryMode.prepare;
+
+  List<AppTaskStep> get _steps {
+    final current = switch (_mode) {
+      _SourceExportEntryMode.prepare => 0,
+      _SourceExportEntryMode.processing => 1,
+      _SourceExportEntryMode.completed => 2,
+    };
+    return <AppTaskStep>[
+      AppTaskStep(label: '准备导出', active: current >= 0),
+      AppTaskStep(label: '处理中', active: current >= 1),
+      AppTaskStep(label: '完成', active: current >= 2),
+    ];
+  }
+
+  Future<void> _start() async {
+    setState(() {
+      _mode = _SourceExportEntryMode.processing;
+    });
+    final completed = await widget.export();
+    if (!mounted) {
+      return;
+    }
+    if (!completed) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _mode = _SourceExportEntryMode.completed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTaskBottomSheet(
+      title: '导出书源',
+      trailing: IconButton(
+        tooltip: '导出说明',
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('导出说明'),
+                content: const Text(
+                  '书源导出统一分为：准备导出 -> 处理中 -> 完成。导出后可分享或保存脚本文件。',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('知道了'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+        icon: const Icon(Icons.help_outline_rounded),
+      ),
+      maxHeightFactor: 0.38,
+      fitContent: true,
+      steps: _steps,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_mode == _SourceExportEntryMode.prepare)
+            AppTaskActionCard(
+              title: '导出书源文件',
+              description: '将当前书源脚本导出为可分享或保存的文件。',
+              icon: Icons.ios_share_outlined,
+              dashedBorder: true,
+              onTap: _start,
+            )
+          else if (_mode == _SourceExportEntryMode.processing)
+            ImportExportProgressCard(
+              status: ImportExportTaskStatus(
+                title: '正在导出书源',
+                message: widget.source.name,
+                detail: '准备导出并发起分享/保存',
+              ),
+            )
+          else
+            const ImportExportTaskSheet(
+              status: ImportExportTaskStatus(
+                title: '书源导出完成',
+                message: '已完成',
+                result: ImportExportTaskResult.success,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

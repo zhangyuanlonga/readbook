@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/device/device_identity_service.dart';
@@ -78,7 +78,8 @@ class _AboutPageState extends State<AboutPage> {
           Theme.of(context).colorScheme,
           activeAdvancedTheme,
         );
-        final horizontal = AppSpacing.pageHorizontal(context);
+        final metrics = AppAdaptiveMetrics.of(context);
+        final horizontal = metrics.pagePadding;
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
         final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -112,12 +113,17 @@ class _AboutPageState extends State<AboutPage> {
                       constraints: BoxConstraints(maxWidth: contentMaxWidth),
                       child: LayoutBuilder(
                         builder: (context, innerConstraints) {
-                          final width = innerConstraints.maxWidth;
-                          final isExpanded = AppLayout.isExpandedWidth(width);
+                          final innerMetrics =
+                              AppAdaptiveMetrics.resolveForConstraints(
+                                context,
+                                innerConstraints,
+                              );
+                          final isExpanded = innerMetrics.isExpandedWindow;
+                          final contentGap = innerMetrics.contentGap;
 
                           final leftColumn = <Widget>[
                             _buildIntroCard(context),
-                            const SizedBox(height: 10),
+                            SizedBox(height: contentGap),
                             _buildSectionCard(
                               context,
                               title: '项目当前重点',
@@ -125,7 +131,7 @@ class _AboutPageState extends State<AboutPage> {
                               icon: Icons.track_changes_outlined,
                               items: AboutPage._projectFocus,
                             ),
-                            const SizedBox(height: 10),
+                            SizedBox(height: contentGap),
                             _buildSectionCard(
                               context,
                               title: '当前能力',
@@ -137,7 +143,7 @@ class _AboutPageState extends State<AboutPage> {
 
                           final rightColumn = <Widget>[
                             _buildWebsiteCard(context),
-                            const SizedBox(height: 10),
+                            SizedBox(height: contentGap),
                             _buildTagCard(
                               context,
                               title: '技术栈',
@@ -145,20 +151,20 @@ class _AboutPageState extends State<AboutPage> {
                               icon: Icons.developer_mode_rounded,
                               tags: AboutPage._techStack,
                             ),
-                            const SizedBox(height: 10),
+                            SizedBox(height: contentGap),
                             _buildComplianceCard(context),
                           ];
 
                           return ListView(
                             padding: EdgeInsets.fromLTRB(
                               horizontal,
-                              topInset + 12,
+                              topInset + metrics.contentGap,
                               horizontal,
-                              12 + bottomSafe,
+                              metrics.contentGap + bottomSafe,
                             ),
                             children: [
                               if (!isExpanded) ...leftColumn,
-                              if (!isExpanded) const SizedBox(height: 10),
+                              if (!isExpanded) SizedBox(height: contentGap),
                               if (!isExpanded) ...rightColumn,
                               if (isExpanded)
                                 Row(
@@ -168,7 +174,7 @@ class _AboutPageState extends State<AboutPage> {
                                       flex: 12,
                                       child: Column(children: leftColumn),
                                     ),
-                                    const SizedBox(width: 10),
+                                    SizedBox(width: contentGap),
                                     Expanded(
                                       flex: 10,
                                       child: Column(children: rightColumn),

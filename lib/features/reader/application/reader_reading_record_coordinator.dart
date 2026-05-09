@@ -81,6 +81,12 @@ class ReaderReadingRecordSessionStartResult {
 class ReaderReadingRecordCoordinator {
   const ReaderReadingRecordCoordinator();
 
+  static const Duration defaultAutoCommitInterval = Duration(minutes: 5);
+
+  Duration autoCommitInterval({required bool hasActiveSession}) {
+    return hasActiveSession ? defaultAutoCommitInterval : Duration.zero;
+  }
+
   bool canTrackSession({
     required bool readingRecordEnabled,
     required bool isBootstrapping,

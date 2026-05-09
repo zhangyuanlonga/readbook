@@ -8,10 +8,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/adaptive_grid_sliver.dart';
+import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/import_export_copy.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 
@@ -350,20 +353,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                   );
                                 }
 
-                                return SliverPadding(
-                                  padding: EdgeInsets.fromLTRB(
-                                    horizontal,
-                                    8,
-                                    horizontal,
-                                    16 + bottomSafe + keyboardInset,
-                                  ),
-                                  sliver: SliverList(
-                                    delegate: SliverChildBuilderDelegate((
-                                      context,
-                                      index,
-                                    ) {
-                                      if (index == 0) {
-                                        return Column(
+                                return SliverMainAxisGroup(
+                                  slivers: [
+                                    SliverPadding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontal,
+                                        8,
+                                        horizontal,
+                                        0,
+                                      ),
+                                      sliver: SliverToBoxAdapter(
+                                        child: Column(
                                           children: [
                                             SearchReportSummary(
                                               report: report,
@@ -379,66 +379,85 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                             ],
                                             const SizedBox(height: 10),
                                           ],
-                                        );
-                                      }
-
-                                      final book = books[index - 1];
-                                      final sourceName =
-                                          report.sourceNames[book.sourceId] ??
-                                          book.sourceId;
-                                      final targetKey =
-                                          BookMetadataOverride.remoteTargetKey(
-                                            sourceId: book.sourceId,
-                                            detailUrl: book.detailUrl,
-                                          );
-                                      final heroTag = _buildBookCoverHeroTag(
-                                        book: book,
-                                        listIndex: index - 1,
-                                      );
-
-                                      return SearchBookCard(
-                                        book: book,
-                                        presentation:
-                                            _bookPresentationByTargetKey[targetKey] ??
-                                            const BookDisplayState(
-                                              displayTitle: '',
-                                            ),
-                                        sourceName: sourceName,
-                                        sourceHitCount: report.sourceHitCountOf(
-                                          book,
                                         ),
-                                        heroTag: heroTag,
-                                        normalizedIntro:
-                                            renderState.normalizedIntros[book
-                                                .id],
-                                        normalizedLatestChapter:
-                                            renderState
-                                                .normalizedLatestChapters[book
-                                                .id],
-                                        onTap: () async {
-                                          final selected =
-                                              await _pickSearchResultSource(
-                                                report: report,
-                                                primaryBook: book,
+                                      ),
+                                    ),
+                                    SliverPadding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontal,
+                                        0,
+                                        horizontal,
+                                        16 + bottomSafe + keyboardInset,
+                                      ),
+                                      sliver: AdaptiveGridSliver(
+                                        itemCount: visibleCount,
+                                        minItemWidth: 260,
+                                        minColumns: 1,
+                                        maxColumns: 3,
+                                        mainSpacing: 0,
+                                        childAspectRatio: 1.78,
+                                        itemBuilder: (context, index) {
+                                          final book = books[index];
+                                          final sourceName =
+                                              report.sourceNames[book
+                                                  .sourceId] ??
+                                              book.sourceId;
+                                          final targetKey =
+                                              BookMetadataOverride.remoteTargetKey(
+                                                sourceId: book.sourceId,
+                                                detailUrl: book.detailUrl,
                                               );
-                                          if (selected == null || !mounted) {
-                                            return;
-                                          }
-                                          final selectedHeroTag =
-                                              selected.id == book.id
-                                                  ? heroTag
-                                                  : _buildBookCoverHeroTag(
-                                                    book: selected,
-                                                    listIndex: index - 1,
+                                          final heroTag =
+                                              _buildBookCoverHeroTag(
+                                                book: book,
+                                                listIndex: index,
+                                              );
+
+                                          return SearchBookCard(
+                                            book: book,
+                                            presentation:
+                                                _bookPresentationByTargetKey[targetKey] ??
+                                                const BookDisplayState(
+                                                  displayTitle: '',
+                                                ),
+                                            sourceName: sourceName,
+                                            sourceHitCount: report
+                                                .sourceHitCountOf(book),
+                                            heroTag: heroTag,
+                                            normalizedIntro:
+                                                renderState
+                                                    .normalizedIntros[book.id],
+                                            normalizedLatestChapter:
+                                                renderState
+                                                    .normalizedLatestChapters[book
+                                                    .id],
+                                            onTap: () async {
+                                              final selected =
+                                                  await _pickSearchResultSource(
+                                                    report: report,
+                                                    primaryBook: book,
                                                   );
-                                          await _openBookDetail(
-                                            selected,
-                                            heroTag: selectedHeroTag,
+                                              if (selected == null ||
+                                                  !mounted) {
+                                                return;
+                                              }
+                                              final selectedHeroTag =
+                                                  selected.id == book.id
+                                                      ? heroTag
+                                                      : _buildBookCoverHeroTag(
+                                                        book: selected,
+                                                        listIndex: index,
+                                                      );
+                                              await _openBookDetail(
+                                                selected,
+                                                heroTag: selectedHeroTag,
+                                              );
+                                            },
                                           );
                                         },
-                                      );
-                                    }, childCount: visibleCount + 1),
-                                  ),
+                                      ),
+                                    ),
+                                  ],
                                 );
                               },
                             ),
@@ -471,89 +490,57 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     ResolvedAdvancedThemePalette palette,
   ) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     final isMangaMode = _searchContentMode == SearchContentMode.manga;
     final hintText = isMangaMode ? '输入漫画名或作者' : '输入书名或作者';
 
     return Padding(
-      padding: const EdgeInsets.only(right: 12),
+      padding: EdgeInsets.only(right: metrics.contentGap + 2),
       child: Hero(
         tag: kSearchEntryHeroTag,
         createRectTween:
             (begin, end) => MaterialRectCenterArcTween(begin: begin, end: end),
         child: Material(
           color: Colors.transparent,
-          child: SizedBox(
-            height: 42,
-            child: TextField(
-              controller: _keywordController,
-              focusNode: _searchFocusNode,
-              autofocus: false,
-              textInputAction: TextInputAction.search,
-              textAlignVertical: TextAlignVertical.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontSize: 14,
-                height: 1.2,
-              ),
-              onSubmitted: (_) => _runSearch(),
-              decoration: InputDecoration(
-                hintText: hintText,
-                hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
-                  height: 1.2,
-                  color: palette.textSecondaryColor,
-                ),
-                filled: true,
-                fillColor: palette.searchFieldBackgroundColor,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: resolveAppBorderSide(
-                    theme.colorScheme,
-                    baseColor: palette.outlineColor,
-                    containerColor: palette.searchFieldBackgroundColor,
-                    tone: AppBorderTone.strong,
-                    width: 1.2,
-                  ),
-                ),
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-                suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _keywordController,
-                  builder: (_, value, __) {
-                    if (_isSearching) {
-                      return IconButton(
-                        tooltip: '取消搜索',
-                        onPressed: _runSearch,
-                        icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                      );
-                    }
-                    if (value.text.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      tooltip: '清空输入',
-                      onPressed: () => _keywordController.clear(),
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                    );
-                  },
-                ),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 10,
-                ),
-              ),
-            ),
+          child: AdaptiveSearchBar(
+            controller: _keywordController,
+            focusNode: _searchFocusNode,
+            hintText: hintText,
+            onChanged: (_) {},
+            onSubmitted: (_) => _runSearch(),
+            onClear: _keywordController.clear,
+            height: metrics.controlHeight,
+            borderRadius: metrics.cardRadius,
+            backgroundColor: palette.searchFieldBackgroundColor,
+            foregroundColor: palette.textPrimaryColor,
+            secondaryColor: palette.textSecondaryColor,
+            outlineColor:
+                resolveAppBorderSide(
+                  theme.colorScheme,
+                  baseColor: palette.outlineColor,
+                  containerColor: palette.searchFieldBackgroundColor,
+                  tone: AppBorderTone.strong,
+                  width: 1.2,
+                ).color,
+            suffixBuilder: (context, value) {
+              if (_isSearching) {
+                return IconButton(
+                  tooltip: '取消搜索',
+                  onPressed: _runSearch,
+                  icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                  visualDensity: VisualDensity.compact,
+                );
+              }
+              if (value.text.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return IconButton(
+                tooltip: '清空输入',
+                onPressed: _keywordController.clear,
+                icon: const Icon(Icons.close_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+              );
+            },
           ),
         ),
       ),

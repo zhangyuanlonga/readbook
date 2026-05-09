@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/layout/app_layout.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
 import '../../../../app/widgets/app_status_state_card.dart';
 import '../../application/sync_scope_catalog_service.dart';
@@ -74,82 +76,96 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     final selectableGroups = groups
         .where((group) => group.title != '明确排除')
         .toList(growable: false);
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('同步中心')),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: SegmentedButton<_SyncPanel>(
-                  segments: const [
-                    ButtonSegment<_SyncPanel>(
-                      value: _SyncPanel.account,
-                      icon: Icon(Icons.cloud_outlined),
-                      label: Text('连接 / 账号'),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: AppLayout.pageContentMaxWidth(context, maxWidth: 760),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              metrics.pagePadding,
+              metrics.contentGap,
+              metrics.pagePadding,
+              0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: SegmentedButton<_SyncPanel>(
+                      segments: const [
+                        ButtonSegment<_SyncPanel>(
+                          value: _SyncPanel.account,
+                          icon: Icon(Icons.cloud_outlined),
+                          label: Text('连接 / 账号'),
+                        ),
+                        ButtonSegment<_SyncPanel>(
+                          value: _SyncPanel.content,
+                          icon: Icon(Icons.tune_rounded),
+                          label: Text('同步内容'),
+                        ),
+                        ButtonSegment<_SyncPanel>(
+                          value: _SyncPanel.history,
+                          icon: Icon(Icons.history_rounded),
+                          label: Text('同步历史'),
+                        ),
+                      ],
+                      selected: <_SyncPanel>{_activePanel},
+                      onSelectionChanged: (selection) {
+                        if (selection.isEmpty) {
+                          return;
+                        }
+                        setState(() {
+                          _activePanel = selection.first;
+                        });
+                      },
                     ),
-                    ButtonSegment<_SyncPanel>(
-                      value: _SyncPanel.content,
-                      icon: Icon(Icons.tune_rounded),
-                      label: Text('同步内容'),
-                    ),
-                    ButtonSegment<_SyncPanel>(
-                      value: _SyncPanel.history,
-                      icon: Icon(Icons.history_rounded),
-                      label: Text('同步历史'),
-                    ),
-                  ],
-                  selected: <_SyncPanel>{_activePanel},
-                  onSelectionChanged: (selection) {
-                    if (selection.isEmpty) {
-                      return;
-                    }
-                    setState(() {
-                      _activePanel = selection.first;
-                    });
+                  ),
+                ),
+                SizedBox(height: metrics.contentGap),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final profilesAsync = ref.watch(syncProfilesProvider);
+                    final savedProfiles =
+                        profilesAsync.valueOrNull ?? const <SyncProfile>[];
+                    final primaryProfile =
+                        savedProfiles.isEmpty ? null : savedProfiles.first;
+                    return _SyncHeroButton(
+                      controller: _syncButtonController,
+                      profile: primaryProfile,
+                      isRunning: _runningProfileId != null,
+                      onPressed:
+                          primaryProfile == null
+                              ? null
+                              : () => _handleRunStage4(primaryProfile.id),
+                    );
                   },
                 ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Consumer(
-              builder: (context, ref, _) {
-                final profilesAsync = ref.watch(syncProfilesProvider);
-                final savedProfiles =
-                    profilesAsync.valueOrNull ?? const <SyncProfile>[];
-                final primaryProfile =
-                    savedProfiles.isEmpty ? null : savedProfiles.first;
-                return _SyncHeroButton(
-                  controller: _syncButtonController,
-                  profile: primaryProfile,
-                  isRunning: _runningProfileId != null,
-                  onPressed:
-                      primaryProfile == null
-                          ? null
-                          : () => _handleRunStage4(primaryProfile.id),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: switch (_activePanel) {
-                  _SyncPanel.account => _buildAccountPanel(context),
-                  _SyncPanel.content => _buildContentPanel(
-                    context,
-                    catalog: catalog,
-                    selectableGroups: selectableGroups,
+                SizedBox(height: metrics.contentGap),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: switch (_activePanel) {
+                      _SyncPanel.account => _buildAccountPanel(context),
+                      _SyncPanel.content => _buildContentPanel(
+                        context,
+                        catalog: catalog,
+                        selectableGroups: selectableGroups,
+                      ),
+                      _SyncPanel.history => _buildHistoryPanel(context),
+                    },
                   ),
-                  _SyncPanel.history => _buildHistoryPanel(context),
-                },
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -159,7 +175,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     final profilesAsync = ref.watch(syncProfilesProvider);
     return ListView(
       key: const ValueKey<String>('account'),
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(
+        bottom:
+            AppAdaptiveMetrics.of(context).sectionGap +
+            MediaQuery.viewPaddingOf(context).bottom,
+      ),
       children: [
         _SectionCard(
           title: 'WebDAV 连接',
@@ -209,27 +229,46 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
                 },
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 420;
+                  final children = [
+                    FilledButton(
                       onPressed: _saving ? null : _handleSaveProfile,
                       child: Text(_saving ? '保存中…' : '保存配置'),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.tonal(
+                    FilledButton.tonal(
                       onPressed: _testingDraft ? null : _handleTestDraft,
                       child: Text(_testingDraft ? '测试中…' : '测试连接'),
                     ),
-                  ),
-                ],
+                  ];
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        children[0],
+                        SizedBox(
+                          height: AppAdaptiveMetrics.of(context).contentGap,
+                        ),
+                        children[1],
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: children[0]),
+                      SizedBox(
+                        width: AppAdaptiveMetrics.of(context).contentGap,
+                      ),
+                      Expanded(child: children[1]),
+                    ],
+                  );
+                },
               ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
         _SectionCard(
           title: '已保存配置',
           child: profilesAsync.when(
@@ -278,7 +317,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     final selectedCount = _selectedScopes.length;
     return ListView(
       key: const ValueKey<String>('content'),
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(
+        bottom:
+            AppAdaptiveMetrics.of(context).sectionGap +
+            MediaQuery.viewPaddingOf(context).bottom,
+      ),
       children: [
         _SectionCard(
           title: '同步内容',
@@ -297,7 +340,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
         for (final group in selectableGroups) ...[
           _ScopeGroupCard(
             title: group.title,
@@ -309,7 +352,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
             onToggleGroup: () => _toggleScopeGroup(group.scopes),
             description: _groupDescription(group.title),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
         ],
       ],
     );
@@ -366,7 +409,11 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
     final jobsAsync = ref.watch(syncJobsProvider);
     return ListView(
       key: const ValueKey<String>('history'),
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(
+        bottom:
+            AppAdaptiveMetrics.of(context).sectionGap +
+            MediaQuery.viewPaddingOf(context).bottom,
+      ),
       children: [
         _SectionCard(
           title: '最近同步任务',
@@ -395,7 +442,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
             loading: () => const _LoadingLine('正在加载任务…'),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
         FilledButton.tonal(
           onPressed: () {
             context.push('/sync/history');
@@ -605,6 +652,7 @@ class _SyncHeroButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final hasProfile = profile != null;
     final buttonLabel = switch ((hasProfile, isRunning)) {
       (false, _) => '先保存一个同步配置',
@@ -625,9 +673,9 @@ class _SyncHeroButton extends StatelessWidget {
             Transform.scale(
               scale: isRunning ? 1.0 : glowScale,
               child: Container(
-                height: 112,
+                height: metrics.isCompactDensity ? 96 : 112,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(metrics.cardRadius + 10),
                   boxShadow: [
                     BoxShadow(
                       color: colorScheme.primary.withValues(alpha: 0.16),
@@ -641,7 +689,7 @@ class _SyncHeroButton extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(metrics.cardRadius + 10),
                 onTap:
                     onPressed == null
                         ? null
@@ -649,9 +697,11 @@ class _SyncHeroButton extends StatelessWidget {
                           unawaited(onPressed!());
                         },
                 child: Ink(
-                  height: 112,
+                  height: metrics.isCompactDensity ? 96 : 112,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(
+                      metrics.cardRadius + 10,
+                    ),
                     gradient: LinearGradient(
                       colors:
                           hasProfile
@@ -682,7 +732,9 @@ class _SyncHeroButton extends StatelessWidget {
                     ),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(
+                      metrics.cardRadius + 10,
+                    ),
                     child: Stack(
                       children: [
                         Positioned(
@@ -815,16 +867,17 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: EdgeInsets.all(metrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -834,7 +887,7 @@ class _SectionCard extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: metrics.contentGap),
             child,
           ],
         ),
@@ -948,11 +1001,12 @@ class _ScopeGroupCard extends StatelessWidget {
     final partiallySelected =
         selectedCount > 0 && selectedCount < scopes.length;
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
@@ -960,7 +1014,12 @@ class _ScopeGroupCard extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            padding: EdgeInsets.fromLTRB(
+              metrics.cardPadding,
+              metrics.contentGap,
+              metrics.cardPadding,
+              metrics.contentGap * 0.6,
+            ),
             child: Row(
               children: [
                 _CategoryToggle(
@@ -968,7 +1027,7 @@ class _ScopeGroupCard extends StatelessWidget {
                   partial: partiallySelected,
                   onTap: onToggleGroup,
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: metrics.contentGap),
                 Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
@@ -986,7 +1045,7 @@ class _ScopeGroupCard extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: metrics.contentGap * 0.4),
                           Text(
                             '$description\n已选 $selectedCount / ${scopes.length}',
                             style: Theme.of(context).textTheme.bodySmall
@@ -1015,11 +1074,16 @@ class _ScopeGroupCard extends StatelessWidget {
                 expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: EdgeInsets.fromLTRB(
+                metrics.cardPadding,
+                0,
+                metrics.cardPadding,
+                metrics.cardPadding,
+              ),
               child: Column(
                 children: [
                   const Divider(height: 1),
-                  const SizedBox(height: 8),
+                  SizedBox(height: metrics.contentGap * 0.8),
                   for (final scope in scopes)
                     Padding(
                       padding: const EdgeInsets.only(left: 12),

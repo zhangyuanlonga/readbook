@@ -18,8 +18,11 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_copy.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/membership/membership_features.dart';
@@ -101,6 +104,8 @@ enum _AdvancedThemeImportQueueItemStatus {
   success,
   failure,
 }
+
+enum _AdvancedThemeSingleTaskMode { prepare, processing, completed }
 
 extension on _AdvancedThemeImportQueueItemStatus {
   String get label => switch (this) {
@@ -486,144 +491,39 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _exportTheme(String themeId) async {
-    if (_isSaving) {
+    final theme = await _loadThemeDetail(themeId);
+    if (theme == null || !mounted) {
+      if (mounted) {
+        _showMessage('主题不存在或已被删除');
+      }
       return;
     }
-    setState(() {
-      _isSaving = true;
-      _savingStatusText = '正在准备导出颜色配置…';
-    });
-    try {
-      final service = ref.read(advancedThemeServiceProvider);
-      final theme = await _loadThemeDetail(themeId);
-      if (theme == null) {
-        if (mounted) {
-          _showMessage('主题不存在或已被删除');
-        }
-        return;
-      }
-      final fileName = '${_normalizedFileName(theme.name)}.json';
-      final content = service.encodeThemeColorJson(theme);
-      String? successMessage;
-      if (_shouldUseSaveLocationPicker) {
-        final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[
-            ExternalImportCatalog.advancedThemeJsonTypeGroup,
-          ],
-          suggestedName: fileName,
-          confirmButtonText: '导出',
-        );
-        if (location == null) {
-          _showMessage('已取消导出颜色配置');
-          return;
-        }
-        final file = File(location.path);
-        await file.writeAsString(content, flush: true);
-      } else {
-        final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsString(content, flush: true);
-        final shareResult = await _shareExportedThemeFile(
-          file: file,
-          text: '分享颜色主题：${theme.name}',
-          subject: theme.name,
-          clipboardText: content,
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!shareResult.isCompleted) {
-          _showMessage(shareResult.message ?? '已取消导出颜色配置');
-          return;
-        }
-        successMessage = shareResult.message;
-      }
-      if (!mounted) {
-        return;
-      }
-      _showMessage(successMessage ?? '已导出颜色配置「${theme.name}」');
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('导出失败：${formatAdvancedThemeExportError(error)}');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
+    await _showAdvancedThemeSingleTaskSheet(
+      title: '导出颜色配置',
+      description: '导出当前主题的颜色 JSON 配置。',
+      icon: Icons.palette_outlined,
+      processingMessage: theme.name,
+      processingDetail: '准备导出颜色配置',
+      runTask: () => _runExportTheme(theme),
+    );
   }
 
   Future<void> _exportThemeBundle(String themeId) async {
-    if (_isSaving) {
+    final theme = await _loadThemeDetail(themeId);
+    if (theme == null || !mounted) {
+      if (mounted) {
+        _showMessage('主题不存在或已被删除');
+      }
       return;
     }
-    setState(() {
-      _isSaving = true;
-      _savingStatusText = '正在准备导出主题包…';
-    });
-    try {
-      final service = ref.read(advancedThemeServiceProvider);
-      final theme = await _loadThemeDetail(themeId);
-      if (theme == null) {
-        if (mounted) {
-          _showMessage('主题不存在或已被删除');
-        }
-        return;
-      }
-      final fileName = '${_normalizedFileName(theme.name)}.zip';
-      final bytes = await service.encodeThemeBundleZip(theme);
-      String? successMessage;
-      if (_shouldUseSaveLocationPicker) {
-        final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[
-            ExternalImportCatalog.advancedThemeZipTypeGroup,
-          ],
-          suggestedName: fileName,
-          confirmButtonText: '导出',
-        );
-        if (location == null) {
-          _showMessage('已取消导出主题包');
-          return;
-        }
-        final file = File(location.path);
-        await file.writeAsBytes(bytes, flush: true);
-      } else {
-        final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsBytes(bytes, flush: true);
-        final shareResult = await _shareExportedThemeFile(
-          file: file,
-          text: '分享主题包：${theme.name}',
-          subject: theme.name,
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!shareResult.isCompleted) {
-          _showMessage(shareResult.message ?? '已取消导出主题包');
-          return;
-        }
-        successMessage = shareResult.message;
-      }
-      if (!mounted) {
-        return;
-      }
-      _showMessage(successMessage ?? '已导出主题包「${theme.name}」');
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('导出主题包失败：${formatAdvancedThemeExportError(error)}');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
+    await _showAdvancedThemeSingleTaskSheet(
+      title: '导出主题包',
+      description: '导出当前主题的 ZIP 主题包。',
+      icon: Icons.archive_outlined,
+      processingMessage: theme.name,
+      processingDetail: '准备导出主题包',
+      runTask: () => _runExportThemeBundle(theme),
+    );
   }
 
   bool get _shouldUseSaveLocationPicker {
@@ -670,6 +570,158 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 ? '当前安装包暂不支持系统分享，请完整重启 App 后重试。'
                 : '当前安装包暂不支持系统分享，已复制主题内容，请完整重启 App 后重试。',
       );
+    }
+  }
+
+  Future<void> _showAdvancedThemeSingleTaskSheet({
+    required String title,
+    required String description,
+    required IconData icon,
+    required String processingMessage,
+    required String processingDetail,
+    required Future<bool> Function() runTask,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _AdvancedThemeSingleTaskSheet(
+          title: title,
+          description: description,
+          icon: icon,
+          processingMessage: processingMessage,
+          processingDetail: processingDetail,
+          runTask: runTask,
+        );
+      },
+    );
+  }
+
+  Future<bool> _runExportTheme(AppAdvancedTheme theme) async {
+    setState(() {
+      _isSaving = true;
+      _savingStatusText = '正在准备导出颜色配置…';
+    });
+    try {
+      final service = ref.read(advancedThemeServiceProvider);
+      final fileName = '${_normalizedFileName(theme.name)}.json';
+      final content = service.encodeThemeColorJson(theme);
+      String? successMessage;
+      if (_shouldUseSaveLocationPicker) {
+        final location = await getSaveLocation(
+          acceptedTypeGroups: const <XTypeGroup>[
+            ExternalImportCatalog.advancedThemeJsonTypeGroup,
+          ],
+          suggestedName: fileName,
+          confirmButtonText: '导出',
+        );
+        if (location == null) {
+          _showMessage('已取消导出颜色配置');
+          return false;
+        }
+        final file = File(location.path);
+        await file.writeAsString(content, flush: true);
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsString(content, flush: true);
+        final shareResult = await _shareExportedThemeFile(
+          file: file,
+          text: '分享颜色主题：${theme.name}',
+          subject: theme.name,
+          clipboardText: content,
+        );
+        if (!mounted) {
+          return false;
+        }
+        if (!shareResult.isCompleted) {
+          _showMessage(shareResult.message ?? '已取消导出颜色配置');
+          return false;
+        }
+        successMessage = shareResult.message;
+      }
+      if (!mounted) {
+        return false;
+      }
+      _showMessage(successMessage ?? '已导出颜色配置「${theme.name}」');
+      return true;
+    } catch (error) {
+      if (!mounted) {
+        return false;
+      }
+      _showMessage('导出失败：${formatAdvancedThemeExportError(error)}');
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _runExportThemeBundle(AppAdvancedTheme theme) async {
+    setState(() {
+      _isSaving = true;
+      _savingStatusText = '正在准备导出主题包…';
+    });
+    try {
+      final service = ref.read(advancedThemeServiceProvider);
+      final fileName = '${_normalizedFileName(theme.name)}.zip';
+      final bytes = await service.encodeThemeBundleZip(theme);
+      String? successMessage;
+      if (_shouldUseSaveLocationPicker) {
+        final location = await getSaveLocation(
+          acceptedTypeGroups: const <XTypeGroup>[
+            ExternalImportCatalog.advancedThemeZipTypeGroup,
+          ],
+          suggestedName: fileName,
+          confirmButtonText: '导出',
+        );
+        if (location == null) {
+          _showMessage('已取消导出主题包');
+          return false;
+        }
+        final file = File(location.path);
+        await file.writeAsBytes(bytes, flush: true);
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsBytes(bytes, flush: true);
+        final shareResult = await _shareExportedThemeFile(
+          file: file,
+          text: '分享主题包：${theme.name}',
+          subject: theme.name,
+        );
+        if (!mounted) {
+          return false;
+        }
+        if (!shareResult.isCompleted) {
+          _showMessage(shareResult.message ?? '已取消导出主题包');
+          return false;
+        }
+        successMessage = shareResult.message;
+      }
+      if (!mounted) {
+        return false;
+      }
+      _showMessage(successMessage ?? '已导出主题包「${theme.name}」');
+      return true;
+    } catch (error) {
+      if (!mounted) {
+        return false;
+      }
+      _showMessage('导出主题包失败：${formatAdvancedThemeExportError(error)}');
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -3557,5 +3609,122 @@ class _AdvancedThemeBatchImportSheetState
       return '${(bytes / 1024).toStringAsFixed(1)} KB';
     }
     return '$bytes B';
+  }
+}
+
+class _AdvancedThemeSingleTaskSheet extends StatefulWidget {
+  const _AdvancedThemeSingleTaskSheet({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.processingMessage,
+    required this.processingDetail,
+    required this.runTask,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final String processingMessage;
+  final String processingDetail;
+  final Future<bool> Function() runTask;
+
+  @override
+  State<_AdvancedThemeSingleTaskSheet> createState() =>
+      _AdvancedThemeSingleTaskSheetState();
+}
+
+class _AdvancedThemeSingleTaskSheetState
+    extends State<_AdvancedThemeSingleTaskSheet> {
+  _AdvancedThemeSingleTaskMode _mode = _AdvancedThemeSingleTaskMode.prepare;
+
+  List<AppTaskStep> get _steps {
+    final current = switch (_mode) {
+      _AdvancedThemeSingleTaskMode.prepare => 0,
+      _AdvancedThemeSingleTaskMode.processing => 1,
+      _AdvancedThemeSingleTaskMode.completed => 2,
+    };
+    return <AppTaskStep>[
+      AppTaskStep(label: '准备导出', active: current >= 0),
+      AppTaskStep(label: '处理中', active: current >= 1),
+      AppTaskStep(label: '完成', active: current >= 2),
+    ];
+  }
+
+  Future<void> _start() async {
+    setState(() {
+      _mode = _AdvancedThemeSingleTaskMode.processing;
+    });
+    final completed = await widget.runTask();
+    if (!mounted) {
+      return;
+    }
+    if (!completed) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _mode = _AdvancedThemeSingleTaskMode.completed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTaskBottomSheet(
+      title: widget.title,
+      trailing: IconButton(
+        tooltip: '导出说明',
+        onPressed: () {
+          showDialog<void>(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('导出说明'),
+                content: const Text('导出统一分为：准备导出 -> 处理中 -> 完成。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('知道了'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+        icon: const Icon(Icons.help_outline_rounded),
+      ),
+      maxHeightFactor: 0.38,
+      fitContent: true,
+      steps: _steps,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_mode == _AdvancedThemeSingleTaskMode.prepare)
+            AppTaskActionCard(
+              title: widget.title,
+              description: widget.description,
+              icon: widget.icon,
+              dashedBorder: true,
+              onTap: _start,
+            )
+          else if (_mode == _AdvancedThemeSingleTaskMode.processing)
+            ImportExportProgressCard(
+              status: ImportExportTaskStatus(
+                title: widget.title,
+                message: widget.processingMessage,
+                detail: widget.processingDetail,
+              ),
+            )
+          else
+            const ImportExportTaskSheet(
+              status: ImportExportTaskStatus(
+                title: '导出完成',
+                message: '已完成',
+                result: ImportExportTaskResult.success,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

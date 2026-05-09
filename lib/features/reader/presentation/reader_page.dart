@@ -20,6 +20,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
@@ -74,10 +75,12 @@ import '../application/reader_mode_resolver.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_chapter_cache_decoder.dart';
 import '../application/reader_chapter_load_planner.dart';
+import '../application/reader_chapter_window_controller.dart';
 import '../application/reader_chapter_flow.dart';
 import '../application/reader_chapter_navigation.dart';
 import '../application/reader_document_render_model.dart';
 import '../application/reader_font_registry_service.dart';
+import '../application/reader_image_decode_budget.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
@@ -92,10 +95,14 @@ import '../application/reader_settings_resolution_service.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
+import '../application/reader_session_controller.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_resource_budget.dart';
+import '../application/reader_runtime_wake_policy.dart';
 import '../application/reader_visual_overrides_service.dart';
 import '../application/reader_session_state.dart';
 import '../application/reader_session_state_resolver.dart';
+import '../application/reader_streaming_pagination_controller.dart';
 import '../application/reader_source_switch_coordinator.dart';
 import '../application/reader_source_switch_target_resolver.dart';
 import '../application/reader_reading_record_coordinator.dart';
@@ -221,6 +228,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderChapterFlow _chapterFlow = const ReaderChapterFlow();
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
+  final ReaderChapterWindowController _chapterWindowController =
+      const ReaderChapterWindowController();
   final ReaderJumpFacade _jumpFacade = const ReaderJumpFacade();
   final ReaderJumpPlanner _jumpPlanner = const ReaderJumpPlanner();
   final ReaderNavigationEntryResolver _navigationEntryResolver =
@@ -228,6 +237,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderLayoutResolver _layoutResolver = const ReaderLayoutResolver();
   final ReaderPaginationEngine _paginationEngine =
       const ReaderPaginationEngine();
+  final ReaderStreamingPaginationController _streamingPaginationController =
+      const ReaderStreamingPaginationController();
+  final ReaderImageDecodeBudgetResolver _imageDecodeBudgetResolver =
+      const ReaderImageDecodeBudgetResolver();
   late final ReaderPaginationCacheService _paginationCacheService;
   final ReaderPaginationSpecResolver _paginationSpecResolver =
       const ReaderPaginationSpecResolver();
@@ -241,6 +254,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderCatalogSearchService();
   final ReaderReadingRecordCoordinator _readingRecordCoordinator =
       const ReaderReadingRecordCoordinator();
+  final ReaderRuntimeWakePolicy _runtimeWakePolicy =
+      const ReaderRuntimeWakePolicy();
   final ReaderFeedbackService _readerFeedbackService =
       const ReaderFeedbackService();
   final ReaderThemeModeService _readerThemeModeService =
@@ -280,6 +295,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ScrollTextReaderRenderer();
   final PagedTextReaderRenderer _pagedTextRenderer =
       const PagedTextReaderRenderer();
+  final ReaderSessionController _readerSessionController =
+      ReaderSessionController();
+  late final ReaderResourceBudgetResolver _resourceBudgetResolver;
   late final AppLogger _logger;
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
@@ -362,16 +380,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final Battery _battery;
   late final DeviceInfoPlugin _deviceInfo;
   DateTime _readerInfoNow = DateTime.now();
+  DateTime? _lastReaderBatteryRefreshAt;
+  DateTime? _lastProgressSavedAt;
   int? _readerBatteryLevel;
   bool _readerBatteryReadFailed = false;
   bool _isSystemBrightnessOverrideActive = false;
   Future<bool>? _iosSimulatorCheck;
   bool _hasTriggeredDebugSimulatorCurlDemo = false;
   int _autoReadTaskToken = 0;
-  int _chapterContentRequestToken = 0;
-  int _preloadTaskToken = 0;
+  int get _chapterContentRequestToken =>
+      _readerSessionController.chapterContentGeneration;
+
+  int get _preloadTaskToken => _readerSessionController.preloadGeneration;
+
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
+  bool _isAutoReadPausedByRuntime = false;
+  bool _isReaderRuntimeVisible = true;
   bool _isAutoReadAdvancingChapter = false;
   _ScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const _ScrollEdgeAdvanceState();
@@ -396,10 +421,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _ReaderBackgroundAssetStore();
   double? _bottomOverlayDraftProgressRatio;
   List<List<ReaderPagedSlice>> _pagedPages = const [];
+  List<List<ReaderPagedBlock>> _pagedBlockPages = const [];
   int _currentPageIndex = 0;
   ReaderPaginationSessionState _pagedPaginationState =
       const ReaderPaginationSessionState();
-  int _paginationTaskId = 0;
+  int get _paginationTaskId => _readerSessionController.paginationGeneration;
   ReaderPaginationSpec? _lastPaginationSpec;
   bool _showChapterLoadingIndicator = false;
   bool _showBlockingLoadingCard = false;
@@ -482,9 +508,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     milliseconds: 2600,
   );
   static const Duration _kReaderSnackDedupWindow = Duration(milliseconds: 900);
-  static const Duration _kReadingRecordAutoCommitInterval = Duration(
-    minutes: 2,
-  );
   static const bool _kDebugEnableSimulatorCurlDemo = true;
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
@@ -517,6 +540,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
+  int get _currentPagedPageCount =>
+      max(_pagedPages.length, _pagedBlockPages.length);
 
   TextAlign _paragraphTextAlign(ReaderSettings settings) {
     return settings.textFullJustifyEnabled
@@ -549,6 +574,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   ReaderModeModel get _currentReaderMode => _resolveReaderModeFor(_settings);
 
+  ReaderResourceBudget _currentResourceBudget({
+    ReaderWorkScene scene = ReaderWorkScene.foregroundReading,
+  }) {
+    return _resourceBudgetResolver.resolve(
+      ReaderResourceBudgetInput(
+        batteryTier:
+            (_readerBatteryLevel != null && _readerBatteryLevel! <= 20)
+                ? ReaderBatteryTier.lowBattery
+                : ReaderBatteryTier.normal,
+        networkTier: ReaderNetworkTier.unmetered,
+        scene: scene,
+      ),
+    );
+  }
+
+  ReaderImageDecodeBudget _readerImageDecodeBudget({
+    required ReaderImageDecodeRole role,
+    required double logicalWidth,
+    double? logicalHeight,
+  }) {
+    return _imageDecodeBudgetResolver.resolve(
+      role: role,
+      resourceBudget: _currentResourceBudget(),
+      logicalWidth: logicalWidth,
+      logicalHeight: logicalHeight,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
+  }
+
   bool _isPagedTextReaderEnabledFor(ReaderSettings settings) {
     final mode = _resolveReaderModeFor(settings);
     return mode.isText && mode.isPaged;
@@ -564,7 +618,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ReaderRenderMetrics _currentTextRenderMetrics() {
     if (_isPagedTextReaderEnabled()) {
       return ReaderRenderMetrics(
-        pageCount: _pagedPages.length,
+        pageCount: _currentPagedPageCount,
         currentPageIndex: _currentPageIndex,
       );
     }
@@ -1308,6 +1362,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       palette: _presentationPalette(context),
       renderItems: _renderItems,
       contentPadding: surfaceMetrics.scrollBodyPadding,
+      imageDecodeBudget: _readerImageDecodeBudget(
+        role: ReaderImageDecodeRole.epubInline,
+        logicalWidth: MediaQuery.sizeOf(context).width,
+      ),
     );
     return _viewportBuilder.buildStandardTextViewport(
       model: scrollModel,
@@ -2004,15 +2062,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final pages = _pagedPages;
-    if (pages.isEmpty) {
+    final pageCount = _currentPagedPageCount;
+    if (pageCount <= 0) {
       return;
     }
 
     final direction = delta < 0 ? 1 : -1;
-    final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
+    final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
     final targetIndex = currentIndex + direction;
-    if (targetIndex < 0 || targetIndex >= pages.length) {
+    if (targetIndex < 0 || targetIndex >= pageCount) {
       if (_isCurlPreviewActive) {
         setState(() {
           _curlTransition = _curlTransition.copyWith(
@@ -2085,7 +2143,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (status == AnimationStatus.dismissed && !_curlCommitOnAnimationEnd) {
-      final pageCount = _pagedPages.length;
+      final pageCount = _currentPagedPageCount;
       final currentIndex =
           pageCount <= 0
               ? 0
@@ -2106,7 +2164,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final pageCount = _pagedPages.length;
+    final pageCount = _currentPagedPageCount;
     if (pageCount <= 0) {
       if (!mounted) {
         _curlTransition = const _CurlTransitionState();
@@ -2143,18 +2201,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final pages = _pagedPages;
-    if (pages.isEmpty) {
+    final pageCount = _currentPagedPageCount;
+    if (pageCount <= 0) {
       return;
     }
 
-    final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
+    final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
     if (direction < 0 && currentIndex <= 0) {
       await _jumpToAdjacentReadableChapter(forward: false);
       return;
     }
 
-    if (direction > 0 && currentIndex >= pages.length - 1) {
+    if (direction > 0 && currentIndex >= pageCount - 1) {
       await _jumpToAdjacentReadableChapter(forward: true);
       return;
     }
@@ -2196,7 +2254,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_currentPagedAnimationStyle() != ReaderPageAnimationStyle.curl) {
       return;
     }
-    if (_pagedPages.length < 2) {
+    if (_currentPagedPageCount < 2) {
       return;
     }
     _hasTriggeredDebugSimulatorCurlDemo = true;
@@ -2225,7 +2283,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final taskId = ++_paginationTaskId;
+    final taskId = _readerSessionController.nextPaginationTaskToken();
     unawaited(
       _restoreOrPaginateCurrentChapter(taskId: taskId, spec: spec, plan: plan),
     );
@@ -2353,78 +2411,119 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final paragraphs =
         _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
     final colors = _resolveThemeColors(_effectiveReaderThemeMode(), _settings);
-    final result = await _paginationEngine.paginateParagraphs(
-      ReaderPaginationRequest(
-        paragraphs: paragraphs,
-        spec: spec,
-        paragraphStyle: _paragraphTextStyle(
-          colors,
-        ).copyWith(color: Colors.black),
-        paragraphModels: _buildPaginationParagraphModels(colors, paragraphs),
-        textScaler: MediaQuery.textScalerOf(context),
-        shouldAbort: () => !mounted || taskId != _paginationTaskId,
-      ),
+    final request = ReaderPaginationRequest(
+      paragraphs: paragraphs,
+      spec: spec,
+      paragraphStyle: _paragraphTextStyle(colors).copyWith(color: Colors.black),
+      paragraphModels: _buildPaginationParagraphModels(colors, paragraphs),
+      textScaler: MediaQuery.textScalerOf(context),
+      shouldAbort: () => !mounted || taskId != _paginationTaskId,
     );
-    if (result == null) {
+    if (_document.hasImageBlocks) {
+      await for (final event in _streamingPaginationController.paginateBlocks(
+        ReaderBlockPaginationRequest(
+          renderItems: _renderItems,
+          paragraphs: paragraphs,
+          spec: spec,
+          paragraphStyle: _paragraphTextStyle(
+            colors,
+          ).copyWith(color: Colors.black),
+          paragraphModels: _buildPaginationParagraphModels(colors, paragraphs),
+          textScaler: MediaQuery.textScalerOf(context),
+          shouldAbort: () => !mounted || taskId != _paginationTaskId,
+        ),
+        targetRatio: _pagedPaginationState.pendingRestoreRatio ?? 0,
+      )) {
+        if (!mounted || taskId != _paginationTaskId) {
+          return;
+        }
+        if (event.type == ReaderStreamingPaginationEventType.cancelled) {
+          return;
+        }
+        final pages = event.pages;
+        if (pages.isEmpty) {
+          continue;
+        }
+        final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
+        final targetIndex =
+            pendingRatio == null
+                ? _currentPageIndex.clamp(0, pages.length - 1)
+                : (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
+                    .round()
+                    .clamp(0, pages.length - 1);
+        setState(() {
+          _pagedPaginationState = ReaderPaginationSessionState(
+            signature: signature,
+            isPaginating: !event.completed,
+          );
+          _pagedPages = const <List<ReaderPagedSlice>>[];
+          _pagedBlockPages = pages;
+          _currentPageIndex = targetIndex;
+          _resetCurlAnimationState();
+        });
+      }
       return;
     }
-    final pages = result.pages;
 
-    if (pages.isEmpty) {
+    await for (final event in _streamingPaginationController.paginateText(
+      request,
+      targetRatio: _pagedPaginationState.pendingRestoreRatio ?? 0,
+    )) {
       if (!mounted || taskId != _paginationTaskId) {
         return;
       }
+      if (event.type == ReaderStreamingPaginationEventType.cancelled) {
+        return;
+      }
+      final pages = event.pages;
+      if (pages.isEmpty) {
+        setState(() {
+          _pagedPaginationState = _pagedPaginationState.copyWith(
+            isPaginating: false,
+            pendingRestoreRatio: null,
+          );
+          _pagedPages = const [];
+          _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+          _resetCurlAnimationState();
+        });
+        continue;
+      }
+      var targetIndex = 0;
+      final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
+      if (pendingRatio != null && pages.isNotEmpty) {
+        targetIndex = (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
+            .round()
+            .clamp(0, pages.length - 1);
+      }
       setState(() {
-        _pagedPaginationState = _pagedPaginationState.copyWith(
-          isPaginating: false,
-          pendingRestoreRatio: null,
+        _pagedPaginationState = ReaderPaginationSessionState(
+          signature: signature,
+          isPaginating: !event.completed,
         );
-        _pagedPages = const [];
+        _pagedPages = pages;
+        _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+        _currentPageIndex = targetIndex;
         _resetCurlAnimationState();
       });
-      return;
+      if (event.completed) {
+        if (_paginationCacheService.shouldPersistChapterLayout(
+          sourceId: _sourceId ?? '',
+          chapterUrl: _chapterUrl ?? '',
+        )) {
+          _storePrecomputedChapterLayout(
+            sourceId: _sourceId ?? '',
+            chapterUrl: _chapterUrl ?? '',
+            layout: ReaderPrecomputedChapterLayout(
+              paragraphs: paragraphs,
+              pagedPages: pages,
+              paginationSignature: signature,
+            ),
+          );
+        }
+        unawaited(_debugMaybeTriggerSimulatorCurlDemo());
+      }
     }
-
-    if (!mounted || taskId != _paginationTaskId) {
-      return;
-    }
-
-    var targetIndex = 0;
-    final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
-    if (pendingRatio != null && pages.isNotEmpty) {
-      targetIndex = (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
-          .round()
-          .clamp(0, pages.length - 1);
-    }
-
-    setState(() {
-      _pagedPaginationState = ReaderPaginationSessionState(
-        signature: signature,
-      );
-      _pagedPages = pages;
-      _currentPageIndex = targetIndex;
-    });
-    unawaited(_debugMaybeTriggerSimulatorCurlDemo());
-
-    final normalizedSourceId = (_sourceId ?? '').trim();
-    final normalizedChapterUrl = (_chapterUrl ?? '').trim();
-    if (normalizedSourceId.isNotEmpty && normalizedChapterUrl.isNotEmpty) {
-      _storePrecomputedChapterLayout(
-        sourceId: normalizedSourceId,
-        chapterUrl: normalizedChapterUrl,
-        layout: ReaderPrecomputedChapterLayout(
-          paragraphs: List<String>.unmodifiable(paragraphs),
-          pagedPages: pages,
-          paginationSignature: signature,
-        ),
-      );
-    }
-
-    _scheduleProgressSave();
-    if (_canWarmNeighborPaginationCache()) {
-      final preloadTaskToken = ++_preloadTaskToken;
-      unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
-    }
+    return;
   }
 
   Widget _buildTapAwareBody({required Widget child}) {
@@ -3627,12 +3726,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double regular,
     required double large,
   }) {
-    return AppLayout.sheetHeightFactor(
-      context,
-      compact: compact,
-      regular: regular,
-      large: large,
-    );
+    final metrics = AppAdaptiveMetrics.of(context);
+    if (metrics.isLandscape && metrics.height < 420) {
+      return max(compact, 0.92);
+    }
+    return switch (metrics.windowClass) {
+      AppWindowClass.compact => metrics.isCompactDensity ? compact : regular,
+      AppWindowClass.medium => regular,
+      AppWindowClass.expanded => large,
+    };
   }
 
   Future<_ChapterLoadSnapshot> _fetchChapterContentSnapshot({
@@ -3780,7 +3882,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await _saveProgress();
     _hasPromptedMissingSourceSwitch = false;
     if (_canWarmNeighborPaginationCache()) {
-      final preloadTaskToken = ++_preloadTaskToken;
+      final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
       unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
     }
   }
@@ -3833,7 +3935,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               _shouldUseContinuousTextFlow &&
               chapter.imageUrls.isEmpty &&
               chapter.content.trim().isNotEmpty) {
-            _continuousTextChapters = <_ContinuousTextChapter>[
+            _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
               _ContinuousTextChapter(
                 chapterId: chapter.id,
                 chapterUrl: (_chapterUrl ?? '').trim(),
@@ -3849,7 +3951,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         : List<String>.unmodifiable(_paragraphs),
                 isCached: true,
               ),
-            ];
+            );
           } else {
             _continuousTextChapters = const <_ContinuousTextChapter>[];
           }
@@ -3910,7 +4012,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _shouldUseContinuousTextFlow &&
             decoded.imageUrls.isEmpty &&
             decoded.content.trim().isNotEmpty) {
-          _continuousTextChapters = <_ContinuousTextChapter>[
+          _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
             _ContinuousTextChapter(
               chapterId: _chapterId,
               chapterUrl: (_chapterUrl ?? '').trim(),
@@ -3926,7 +4028,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       : List<String>.unmodifiable(_paragraphs),
               isCached: true,
             ),
-          ];
+          );
         } else {
           _continuousTextChapters = const <_ContinuousTextChapter>[];
         }
@@ -3967,7 +4069,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (lease == null) {
       return false;
     }
-    final requestToken = ++_chapterContentRequestToken;
+    final requestToken = _readerSessionController.nextChapterContentToken();
 
     double? readingRecordStartRatio;
     final request = _chapterLoadPlanner.resolveLoadRequest(
@@ -4266,14 +4368,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final isLocalSource = LocalReaderIdentity.isLocalSourceId(
       normalizedSourceId,
     );
+    final budget = _currentResourceBudget(
+      scene: ReaderWorkScene.backgroundPrefetch,
+    );
     final forwardPreloadCount =
-        !isLocalSource && _isInBookshelf
+        !isLocalSource && _isInBookshelf && budget.allowFarPrefetch
             ? _kBookshelfForwardCacheChapterCount
-            : _kForwardPreloadChapterCount;
+            : min(
+              _kForwardPreloadChapterCount,
+              budget.forwardPreloadChapterCount,
+            );
+    final backwardPreloadCount = min(
+      _kBackwardPreloadChapterCount,
+      budget.backwardPreloadChapterCount,
+    );
 
     final preloadIndexes = <int>{};
 
-    for (var offset = 1; offset <= _kBackwardPreloadChapterCount; offset++) {
+    for (var offset = 1; offset <= backwardPreloadCount; offset++) {
       final index = currentIndex - offset;
       if (index >= 0) {
         preloadIndexes.add(index);

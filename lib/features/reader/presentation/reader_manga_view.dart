@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
+import '../application/reader_image_decode_budget.dart';
 import '../application/reader_session_state.dart';
 import '../application/reader_surface_metrics.dart';
 import 'reader_shell.dart';
@@ -45,6 +46,7 @@ class ReaderMangaViewModel {
     this.continuousPadding,
     this.pagedPagePadding,
     this.continuousCacheExtent,
+    this.imageDecodeBudget,
     this.debugLabel,
   });
 
@@ -59,6 +61,7 @@ class ReaderMangaViewModel {
   final EdgeInsets? continuousPadding;
   final EdgeInsets? pagedPagePadding;
   final double? continuousCacheExtent;
+  final ReaderImageDecodeBudget? imageDecodeBudget;
   final String? debugLabel;
 
   ReaderMangaReadMode get effectiveReadMode =>
@@ -116,6 +119,7 @@ class ReaderMangaImageItem {
     required this.imageCount,
     required this.padding,
     required this.isCurrentItem,
+    this.imageDecodeBudget,
   });
 
   final ReaderContentSession contentSession;
@@ -128,6 +132,7 @@ class ReaderMangaImageItem {
   final int imageCount;
   final EdgeInsets padding;
   final bool isCurrentItem;
+  final ReaderImageDecodeBudget? imageDecodeBudget;
 }
 
 class ReaderMangaContinuousViewport {
@@ -256,6 +261,7 @@ class _ReaderMangaViewState extends State<ReaderMangaView> {
     if (shouldReset) {
       _resetZoomState();
     }
+    _retainHeavyStateAround(_safePageIndex(widget.model.currentIndex));
     _scheduleInitialPositionCallback();
   }
 
@@ -392,6 +398,7 @@ class _ReaderMangaViewState extends State<ReaderMangaView> {
       imageCount: widget.model.imageUrls.length,
       padding: padding,
       isCurrentItem: isCurrentItem,
+      imageDecodeBudget: widget.model.imageDecodeBudget,
     );
     final image =
         widget.imageBuilder?.call(context, item) ??
@@ -409,7 +416,10 @@ class _ReaderMangaViewState extends State<ReaderMangaView> {
     required ReaderMangaImageItem item,
     required Widget child,
   }) {
-    final transformController = _ensureTransformController(item.index);
+    final transformController =
+        _shouldKeepHeavyStateFor(item)
+            ? _ensureTransformController(item.index)
+            : null;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: ColoredBox(
@@ -433,6 +443,7 @@ class _ReaderMangaViewState extends State<ReaderMangaView> {
   }
 
   void _handlePageChanged(int index) {
+    _retainHeavyStateAround(index);
     widget.onPageChanged?.call(index);
     widget.onPageChangedDetails?.call(
       ReaderMangaPageChangedDetails(
@@ -463,6 +474,33 @@ class _ReaderMangaViewState extends State<ReaderMangaView> {
   ) {
     return previous.contentSession.chapterId != next.contentSession.chapterId ||
         previous.effectiveReadMode != next.effectiveReadMode;
+  }
+
+  bool _shouldKeepHeavyStateFor(ReaderMangaImageItem item) {
+    if (_zoomedPageIndexes.contains(item.index)) {
+      return true;
+    }
+    if (item.readMode == ReaderMangaReadMode.continuous) {
+      return false;
+    }
+    final currentIndex = _safePageIndex(widget.model.currentIndex);
+    return (item.index - currentIndex).abs() <= 1;
+  }
+
+  void _retainHeavyStateAround(int currentIndex) {
+    final retained = <int>{
+      currentIndex - 1,
+      currentIndex,
+      currentIndex + 1,
+      ..._zoomedPageIndexes,
+    };
+    final disposable = _transformControllers.keys
+        .where((index) => !retained.contains(index))
+        .toList(growable: false);
+    for (final index in disposable) {
+      _transformControllers.remove(index)?.dispose();
+      _doubleTapDetails.remove(index);
+    }
   }
 
   void _resetZoomState() {
@@ -556,6 +594,8 @@ class _DefaultReaderMangaImage extends StatelessWidget {
       item.imageUrl,
       fit: BoxFit.fitWidth,
       filterQuality: _resolveFilterQuality(item.settings.mangaLoadStrategy),
+      cacheWidth: item.imageDecodeBudget?.cacheWidth,
+      cacheHeight: item.imageDecodeBudget?.cacheHeight,
       loadingBuilder: (context, child, progress) {
         if (progress == null) {
           return child;

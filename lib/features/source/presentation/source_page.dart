@@ -13,12 +13,15 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
+import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
@@ -75,6 +78,8 @@ class _BatchCheckRequest {
   final _BatchCheckScope scope;
 }
 
+enum _SourceExportEntryMode { prepare, processing, completed }
+
 class _BatchCheckProgressState {
   const _BatchCheckProgressState({
     required this.completedCount,
@@ -118,6 +123,8 @@ class _SourceSuggestionAction {
   final String label;
   final VoidCallback? onTap;
 }
+
+enum _SourceImportEntryMode { add, processing, completed }
 
 class _SourceWebsiteClusterSummary {
   const _SourceWebsiteClusterSummary({

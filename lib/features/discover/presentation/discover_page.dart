@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -172,7 +172,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
     final backdrop = _resolvedBackdrop(context);
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       ref.watch(appNavigationStylePreferenceProvider),
@@ -228,8 +229,9 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                               AppLayout.discoverExpandedSidePanelWidth,
                           maxContentWidth:
                               AppLayout.discoverExpandedContentMaxWidth,
-                          topContentPadding: topInset + 12,
-                          bottomContentPadding: 12 + contentBottomInset,
+                          topContentPadding: topInset + metrics.contentGap,
+                          bottomContentPadding:
+                              metrics.contentGap + contentBottomInset,
                         );
                       }
                       if (constraints.maxWidth >=
@@ -240,14 +242,16 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                               AppLayout.discoverMediumSidePanelWidth,
                           maxContentWidth:
                               AppLayout.discoverMediumContentMaxWidth,
-                          topContentPadding: topInset + 12,
-                          bottomContentPadding: 12 + contentBottomInset,
+                          topContentPadding: topInset + metrics.contentGap,
+                          bottomContentPadding:
+                              metrics.contentGap + contentBottomInset,
                         );
                       }
                       return _buildCompactLayout(
                         context,
-                        topContentPadding: topInset + 12,
-                        bottomContentPadding: 12 + contentBottomInset,
+                        topContentPadding: topInset + metrics.contentGap,
+                        bottomContentPadding:
+                            metrics.contentGap + contentBottomInset,
                       );
                     },
                   ),
@@ -279,8 +283,9 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
 
   RoundedRectangleBorder _cardShape(BuildContext context) {
     final palette = _resolvedPalette(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     return RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
       side: resolveAppBorderSide(
         Theme.of(context).colorScheme,
         baseColor: palette.cardBorderColor,
@@ -382,9 +387,17 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
           slivers: <Widget>[
             SliverToBoxAdapter(child: SizedBox(height: topContentPadding)),
             SliverToBoxAdapter(child: _buildSourceSelectorCard(context)),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: AppAdaptiveMetrics.of(context).contentGap,
+              ),
+            ),
             SliverToBoxAdapter(child: _buildCategoryStripCard(context)),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: AppAdaptiveMetrics.of(context).contentGap,
+              ),
+            ),
             ..._buildBooksPaneSlivers(context),
             SliverToBoxAdapter(child: SizedBox(height: bottomContentPadding)),
           ],
@@ -411,7 +424,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           SizedBox(width: sidePanelWidth, child: _buildSidePanel(context)),
-          const SizedBox(width: 12),
+          SizedBox(width: AppAdaptiveMetrics.of(context).contentGap),
           Expanded(
             child: Align(
               alignment: Alignment.topCenter,

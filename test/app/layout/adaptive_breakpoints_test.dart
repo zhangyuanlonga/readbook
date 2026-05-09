@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:shuxiang_reading_next/app/layout/app_adaptive.dart';
 import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
 import 'package:shuxiang_reading_next/app/layout/app_spacing.dart';
 import 'package:shuxiang_reading_next/app/navigation/app_navigation_style_provider.dart';
@@ -11,6 +12,180 @@ import 'package:shuxiang_reading_next/app/widgets/cupertino_dock_navigation_bar.
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
+  testWidgets('AppAdaptiveMetrics 按 Material 风格窗口分级划分结构断点', (tester) async {
+    final compact = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 390,
+      read: AppAdaptiveMetrics.of,
+    );
+    final medium = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 600,
+      read: AppAdaptiveMetrics.of,
+    );
+    final expanded = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 840,
+      read: AppAdaptiveMetrics.of,
+    );
+    final desktop = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 1200,
+      read: AppAdaptiveMetrics.of,
+    );
+
+    expect(compact.windowClass, AppWindowClass.compact);
+    expect(medium.windowClass, AppWindowClass.medium);
+    expect(expanded.windowClass, AppWindowClass.expanded);
+    expect(desktop.windowClass, AppWindowClass.expanded);
+  });
+
+  testWidgets('AppAdaptiveMetrics 将旧宽度分档兼容映射到新窗口分级', (tester) async {
+    expect(
+      AppAdaptiveMetrics.windowClassForBucket(AppWidthBucket.compact),
+      AppWindowClass.compact,
+    );
+    expect(
+      AppAdaptiveMetrics.windowClassForBucket(AppWidthBucket.largePhone),
+      AppWindowClass.compact,
+    );
+    expect(
+      AppAdaptiveMetrics.windowClassForBucket(AppWidthBucket.phoneXl),
+      AppWindowClass.compact,
+    );
+    expect(
+      AppAdaptiveMetrics.windowClassForBucket(AppWidthBucket.medium),
+      AppWindowClass.medium,
+    );
+    expect(
+      AppAdaptiveMetrics.windowClassForBucket(AppWidthBucket.expanded),
+      AppWindowClass.expanded,
+    );
+  });
+
+  testWidgets('AppAdaptiveMetrics 同时参考宽高方向和文字缩放计算密度', (tester) async {
+    final smallPhone = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 360,
+      height: 800,
+      read: AppAdaptiveMetrics.of,
+    );
+    final regularPhone = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 390,
+      height: 844,
+      read: AppAdaptiveMetrics.of,
+    );
+    final scaledPhone = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 412,
+      height: 915,
+      textScaleFactor: 1.3,
+      read: AppAdaptiveMetrics.of,
+    );
+    final landscapePhone = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 780,
+      height: 360,
+      read: AppAdaptiveMetrics.of,
+    );
+    final tablet = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 840,
+      height: 1180,
+      read: AppAdaptiveMetrics.of,
+    );
+
+    expect(smallPhone.density, AppDensity.compact);
+    expect(regularPhone.density, AppDensity.regular);
+    expect(scaledPhone.density, AppDensity.compact);
+    expect(landscapePhone.density, AppDensity.compact);
+    expect(tablet.density, AppDensity.comfortable);
+  });
+
+  testWidgets('AppAdaptiveMetrics 暴露页面和组件尺寸 token', (tester) async {
+    final metrics360 = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 360,
+      height: 800,
+      read: AppAdaptiveMetrics.of,
+    );
+    final metrics390 = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 390,
+      height: 844,
+      read: AppAdaptiveMetrics.of,
+    );
+    final metrics600 = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 600,
+      height: 960,
+      read: AppAdaptiveMetrics.of,
+    );
+    final metrics840 = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 840,
+      height: 1180,
+      read: AppAdaptiveMetrics.of,
+    );
+    final metrics1200 = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 1200,
+      height: 900,
+      read: AppAdaptiveMetrics.of,
+    );
+
+    expect(metrics360.pagePadding, 12);
+    expect(metrics390.pagePadding, 16);
+    expect(metrics600.pagePadding, 20);
+    expect(metrics840.pagePadding, 24);
+    expect(metrics1200.pagePadding, 24);
+    expect(metrics360.controlHeight, 36);
+    expect(metrics390.controlHeight, 40);
+    expect(metrics840.controlHeight, 44);
+    expect(metrics840.dialogMaxWidth, 560);
+    expect(metrics1200.bottomSheetMaxWidth, 720);
+  });
+
+  testWidgets('AppAdaptiveMetrics 支持按当前容器约束重新计算', (tester) async {
+    final metrics = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 840,
+      height: 1180,
+      read:
+          (context) => AppAdaptiveMetrics.resolveForConstraints(
+            context,
+            const BoxConstraints(maxWidth: 390, maxHeight: 640),
+          ),
+    );
+
+    expect(metrics.width, 390);
+    expect(metrics.windowClass, AppWindowClass.compact);
+    expect(metrics.density, AppDensity.regular);
+  });
+
+  testWidgets('AppAdaptiveMetrics gridColumnsFor 按最小 item 宽度计算列数', (
+    tester,
+  ) async {
+    final metrics = await _readFromContext<AppAdaptiveMetrics>(
+      tester,
+      width: 412,
+      read: AppAdaptiveMetrics.of,
+    );
+
+    expect(metrics.gridColumnsFor(minColumns: 2, maxColumns: 6), 3);
+    expect(
+      metrics.gridColumnsFor(
+        availableWidth: 600,
+        minItemWidth: 124,
+        minColumns: 2,
+        maxColumns: 6,
+        spacing: 8,
+      ),
+      4,
+    );
+  });
+
   testWidgets('AppSpacing 在 360、390、430 宽度下使用正确的间距', (tester) async {
     final spacing360 = await _readFromContext<double>(
       tester,
@@ -602,6 +777,7 @@ Future<void> _pumpShellScaffold(
 Future<T> _readFromContext<T>(
   WidgetTester tester, {
   required double width,
+  double height = 844,
   double textScaleFactor = 1,
   required T Function(BuildContext context) read,
 }) async {
@@ -610,6 +786,7 @@ Future<T> _readFromContext<T>(
   await tester.pumpWidget(
     AdaptiveTestHarness(
       width: width,
+      height: height,
       textScaleFactor: textScaleFactor,
       wrapWithMaterialApp: true,
       child: Builder(

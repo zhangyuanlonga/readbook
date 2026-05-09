@@ -8,8 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -260,7 +260,8 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
     );
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -306,9 +307,9 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                           Padding(
                             padding: EdgeInsets.fromLTRB(
                               horizontal,
-                              topInset + 12,
+                              topInset + metrics.contentGap,
                               horizontal,
-                              10,
+                              metrics.contentGap,
                             ),
                             child: CompactCollectionSearchField(
                               controller: _searchController,
@@ -335,31 +336,49 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                                         horizontal,
                                         0,
                                         horizontal,
-                                        16 + bottomSafe,
+                                        metrics.sectionGap + bottomSafe,
                                       ),
                                       children: [_buildEmptyState(context)],
                                     )
-                                    : GridView.builder(
-                                      padding: EdgeInsets.fromLTRB(
-                                        horizontal,
-                                        0,
-                                        horizontal,
-                                        16 + bottomSafe,
-                                      ),
-                                      itemCount: _visibleBackgroundPaths.length,
-                                      gridDelegate:
-                                          const SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: 2,
-                                            crossAxisSpacing: 10,
-                                            mainAxisSpacing: 10,
-                                            childAspectRatio: 0.78,
+                                    : LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final columns = metrics.gridColumnsFor(
+                                          availableWidth:
+                                              constraints.maxWidth -
+                                              horizontal * 2,
+                                          minItemWidth: 150,
+                                          maxColumns: 4,
+                                          spacing: metrics.contentGap,
+                                        );
+                                        return GridView.builder(
+                                          padding: EdgeInsets.fromLTRB(
+                                            horizontal,
+                                            0,
+                                            horizontal,
+                                            metrics.sectionGap + bottomSafe,
                                           ),
-                                      itemBuilder: (context, index) {
-                                        final path =
-                                            _visibleBackgroundPaths[index];
-                                        return _buildBackgroundCard(
-                                          context,
-                                          path,
+                                          itemCount:
+                                              _visibleBackgroundPaths.length,
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: columns,
+                                                crossAxisSpacing:
+                                                    metrics.contentGap,
+                                                mainAxisSpacing:
+                                                    metrics.contentGap,
+                                                childAspectRatio:
+                                                    metrics.isCompactDensity
+                                                        ? 0.76
+                                                        : 0.82,
+                                              ),
+                                          itemBuilder: (context, index) {
+                                            final path =
+                                                _visibleBackgroundPaths[index];
+                                            return _buildBackgroundCard(
+                                              context,
+                                              path,
+                                            );
+                                          },
                                         );
                                       },
                                     ),

@@ -1,39 +1,31 @@
 import 'package:flutter/widgets.dart';
 
+import 'app_adaptive.dart';
 import 'app_layout.dart';
 
 class AppSpacing {
   const AppSpacing._();
 
+  /// Prefer [AppAdaptiveMetrics.pagePadding] for new adaptive page surfaces.
   static double pageHorizontal(BuildContext context) {
     return pageHorizontalForWidth(AppLayout.screenWidth(context));
   }
 
   static double pageHorizontalForWidth(double width) {
-    if (AppLayout.isPhoneSmallWidthFor(width)) {
-      return 12;
-    }
-    final bucket = AppLayout.widthBucketFor(width);
-    return switch (bucket) {
-      AppWidthBucket.medium => 20,
-      AppWidthBucket.expanded => 24,
-      _ => 16,
-    };
+    return AppAdaptiveMetrics.resolveForSize(
+      size: Size(width, 844),
+    ).pagePadding;
   }
 
+  /// Prefer [AppAdaptiveMetrics.cardPadding] for new adaptive components.
   static double cardHorizontal(BuildContext context) {
     return cardHorizontalForWidth(AppLayout.screenWidth(context));
   }
 
   static double cardHorizontalForWidth(double width) {
-    if (AppLayout.isPhoneSmallWidthFor(width)) {
-      return 12;
-    }
-    final bucket = AppLayout.widthBucketFor(width);
-    return switch (bucket) {
-      AppWidthBucket.medium || AppWidthBucket.expanded => 16,
-      _ => 14,
-    };
+    return AppAdaptiveMetrics.resolveForSize(
+      size: Size(width, 844),
+    ).cardPadding;
   }
 
   static EdgeInsets pagePadding(BuildContext context) {

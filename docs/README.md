@@ -28,6 +28,12 @@
   UI、自适应、阅读体验、字体和主题，包含当前断点和布局规则。
 - `docs/adaptive_layout_playbook.md`
   自适应落地策略，统一官方推荐、国内常用做法和本项目后续改造口径。
+- `docs/flutter_adaptive_refactor_plan.md`
+  Flutter 自适应改造阶段计划，按基础设施、书架试点、通用组件、页面改造和验证守卫拆成可打勾任务。
+- `docs/flutter_adaptive_baseline_matrix.md`
+  Flutter 自适应阶段 0 基线矩阵，记录标准视口、文字缩放、P0/P1 页面范围和已知问题类型。
+- `docs/adaptive_visual_regression_checklist.md`
+  自适应视觉回归清单，定义发布前人工验收矩阵、P0/P1 页面范围和代码守卫脚本。
 - `docs/reader_multimodal_plan.md`
   阅读器多内容形态统一规划，覆盖文本、漫画与未来听书模式的壳层、状态、界面与动画分层。
 - `docs/sync_webdav_design.md`
@@ -36,6 +42,10 @@
   同步系统执行计划，按开发约束统一阶段顺序、scope 落地清单、验收口径与文档回填规则。
 - `docs/bookshelf_reader_open_latency_execution_plan.md`
   书架点击书籍加载卡顿治理执行方案，覆盖点击前阻塞链路、阅读页恢复、章节查询瘦身和专项回填口径。
+- `docs/reader_low_resource_execution_plan_2026-05-09.md`
+  阅读器低资源占用改造执行方案，参考 Legado 的低能耗和低内存阅读器设计，按依赖收口、三章窗口、流式分页、资源预算、缓存字节预算、图片治理和定时器低频化拆分阶段任务。
+- `docs/reader_architecture_gap_refactor_plan_2026-05-09.md`
+  阅读器整体架构差距与吸收改造计划，对照 Legado/MD3 梳理阅读会话、三章窗口、图文分页、漫画资源治理、预加载缓存和低唤醒阶段任务。
 - `docs/local_multi_format_reading_plan.md`
   本地多格式阅读开发方案，覆盖 `txt`、`epub`、`md`、`html`、`pdf`、`mobi`、`azw`、`azw3` 的架构原则、阶段计划与风险边界。
 - `docs/cross_platform_boundary_refactor_plan.md`

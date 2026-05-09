@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -85,7 +85,8 @@ class _AnnouncementDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
@@ -172,15 +173,16 @@ class _AnnouncementDetailPageState
       );
     }
 
+    final metrics = AppAdaptiveMetrics.of(context);
     return RefreshIndicator(
       onRefresh: () => _loadDetail(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          topInset + 16,
+          topInset + metrics.sectionGap,
           horizontal,
-          20 + bottomSafe,
+          metrics.sectionGap + bottomSafe,
         ),
         children: [
           Text(
@@ -235,15 +237,16 @@ class _AnnouncementDetailPageState
     required String actionLabel,
     required VoidCallback onAction,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return RefreshIndicator(
       onRefresh: () => _loadDetail(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          topInset + 36,
+          topInset + metrics.sectionGap * 2,
           horizontal,
-          24 + bottomSafe,
+          metrics.sectionGap + bottomSafe,
         ),
         children: [
           AppStatusStateCard(

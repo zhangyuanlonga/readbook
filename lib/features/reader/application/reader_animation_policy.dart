@@ -26,15 +26,6 @@ class ReaderAnimationPolicyResolver {
   }) {
     switch (mode.contentKind) {
       case ReaderContentKind.text:
-        if (hasInlineImageParagraphs) {
-          return const ReaderAnimationPolicy(
-            usesShellOverlayAnimations: true,
-            supportsTextPageTurnAnimations: false,
-            usesMangaModeAnimations: false,
-            reusesTextPageTurnAnimations: false,
-            inactiveReason: '当前章节包含插图，已退回滚动正文，本章不会展示分页动画。',
-          );
-        }
         if (mode.isScroll) {
           return const ReaderAnimationPolicy(
             usesShellOverlayAnimations: true,

@@ -1,6 +1,7 @@
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/cache/cache_budget_policy.dart';
 import '../../core/cache/cover_image_disk_cache.dart';
 import '../../core/logging/app_logger.dart';
 import '../../data/datasources/local/app_database.dart';
@@ -29,10 +30,6 @@ class StartupStorageMaintenanceService {
       'startup.storageMaintenance.lastRunVersion';
   static const String _lastRunAtKey = 'startup.storageMaintenance.lastRunAt';
   static const Duration _repeatInterval = Duration(days: 7);
-  static const int _maxChapterCacheEntries = 3000;
-  static const int _maxPaginationCacheEntries = 1200;
-  static const int _maxCoverCacheEntries = 300;
-
   final Future<SharedPreferences> _preferencesFuture;
   final AppDatabase _database;
   final ReaderPaginationCacheService _paginationCacheService;
@@ -59,13 +56,21 @@ class StartupStorageMaintenanceService {
       return;
     }
 
-    final deletedChapterCaches = await _database.pruneOldestChapterCaches(
-      maxEntries: _maxChapterCacheEntries,
+    final deletedChapterCaches = await _database.pruneChapterCachesByBudget(
+      maxEntries: AppCacheBudgetPolicies.chapterCaches.maxEntries,
+      maxBytes: AppCacheBudgetPolicies.chapterCaches.maxBytes,
+      stalePeriod: AppCacheBudgetPolicies.chapterCaches.stalePeriod,
     );
     final deletedPaginationCaches = await _paginationCacheService
-        .prunePersistedChapterLayouts(maxEntries: _maxPaginationCacheEntries);
+        .prunePersistedChapterLayoutsByBudget(
+          maxEntries: AppCacheBudgetPolicies.paginationLayouts.maxEntries,
+          maxBytes: AppCacheBudgetPolicies.paginationLayouts.maxBytes,
+          stalePeriod: AppCacheBudgetPolicies.paginationLayouts.stalePeriod,
+        );
     final deletedCoverCaches = await _coverImageDiskCache.compact(
-      maxEntries: _maxCoverCacheEntries,
+      maxEntries: AppCacheBudgetPolicies.coverImages.maxEntries,
+      maxBytes: AppCacheBudgetPolicies.coverImages.maxBytes,
+      stalePeriod: AppCacheBudgetPolicies.coverImages.stalePeriod,
     );
     final deletedLegacyResidual =
         await CacheManagementService().clearLegacyResidualOnly();

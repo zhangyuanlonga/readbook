@@ -77,6 +77,9 @@
 - 页面级限宽统一走 `AppLayout.pageContentMaxWidth()`
 - 关于页这类特殊页面可使用单独的最大宽度方法
 - 页面左右留白、卡片内边距、dialog inset 统一走 `AppSpacing`
+- 页面结构统一使用 `AppAdaptiveMetrics.windowClass`
+- 组件密度统一使用 `AppAdaptiveMetrics.density`
+- 书架、搜索结果和字体选择这类网格优先按最小 item 宽度算列数
 
 ### 当前页面级模式
 
@@ -90,6 +93,10 @@
   手机单列，`600+` 双栏，`840+` 放大侧栏和内容区
 - 阅读页：
   以单页为主，局部弹层、设置行和底部 sheet 按宽度做密度与结构切换
+- 搜索页：
+  手机保持单列语义，`600dp+` 结果区进入自适应多列网格
+- 书籍详情页：
+  手机保持单列，`600dp+` 封面信息、操作和简介进入双区布局
 
 ### 设备类型与展示判断
 
@@ -154,9 +161,10 @@
 - 页面骨架优先复用以下模板：
   `LayoutBuilder -> pageContentMaxWidth -> Align -> ConstrainedBox -> ScrollView`
 - 列数、栅格、按钮横竖排切换优先封装进 `AppLayout`
-- 间距优先复用 `AppSpacing`，在限宽容器内优先使用 `*ForWidth()` 版本
-- dialog / sheet 宽高优先复用 `AppLayout.dialogMaxWidth()`、`AppLayout.sheetHeightFactor()`
+- 间距优先复用 `AppSpacing`，新增页面优先读取 `AppAdaptiveMetrics`
+- dialog / sheet 宽高优先读取 `AppAdaptiveMetrics.dialogMaxWidth`、`bottomSheetMaxWidth` 和统一高度策略
 - 发现页、书架这类内容区布局，密度判断应基于当前内容区宽度而不是整屏宽度
+- 禁止新增按具体机型名做适配判断；用 `dart run tool/check_adaptive_layout_guard.dart lib` 做发布前扫描
 
 ### 当前结论
 

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
@@ -183,7 +183,8 @@ class _BottomNavIconGalleryEditorPageState
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
     return PopScope<void>(
@@ -267,21 +268,22 @@ class _BottomNavIconGalleryEditorPageState
                         : ListView(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
-                            12,
+                            metrics.contentGap,
                             horizontal,
-                            16 + bottomSafe,
+                            metrics.sectionGap + bottomSafe,
                           ),
                           children: [
                             _buildBatchToolbar(),
-                            const SizedBox(height: 10),
+                            SizedBox(height: metrics.contentGap),
                             _buildHeaderRow(),
-                            const SizedBox(height: 8),
+                            SizedBox(height: metrics.contentGap * 0.8),
                             for (
                               var index = 0;
                               index < BottomNavIconGalleryTab.values.length;
                               index++
                             ) ...[
-                              if (index > 0) const SizedBox(height: 8),
+                              if (index > 0)
+                                SizedBox(height: metrics.contentGap * 0.8),
                               _buildTabSection(
                                 BottomNavIconGalleryTab.values[index],
                               ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+
 class BookDetailMetaChip extends StatelessWidget {
   const BookDetailMetaChip({
     super.key,
@@ -13,9 +15,13 @@ class BookDetailMetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 8 : 9,
+        vertical: metrics.isCompactDensity ? 4 : 5,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
@@ -53,9 +59,13 @@ class BookDetailSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 0 : 2,
+        vertical: 2,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -63,7 +73,7 @@ class BookDetailSummaryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               cover,
-              const SizedBox(width: 16),
+              SizedBox(width: metrics.sectionGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,7 +81,7 @@ class BookDetailSummaryCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      maxLines: 3,
+                      maxLines: metrics.isCompactDensity ? 2 : 3,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -79,7 +89,7 @@ class BookDetailSummaryCard extends StatelessWidget {
                         color: colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: metrics.contentGap),
                     _BookDetailInfoLine(
                       label: '作者',
                       value:
@@ -87,9 +97,9 @@ class BookDetailSummaryCard extends StatelessWidget {
                               ? author!.trim()
                               : '未知',
                     ),
-                    const SizedBox(height: 7),
+                    SizedBox(height: metrics.isCompactDensity ? 5 : 7),
                     _BookDetailInfoLine(label: '来源', value: sourceName),
-                    const SizedBox(height: 7),
+                    SizedBox(height: metrics.isCompactDensity ? 5 : 7),
                     _BookDetailInfoLine(
                       label: '最新',
                       value:
@@ -124,6 +134,7 @@ class _BookDetailInfoLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
       color: colorScheme.onSurfaceVariant,
       fontWeight: FontWeight.w600,
@@ -136,7 +147,10 @@ class _BookDetailInfoLine extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(width: 44, child: Text(label, style: labelStyle)),
+        SizedBox(
+          width: metrics.isCompactDensity ? 38 : 44,
+          child: Text(label, style: labelStyle),
+        ),
         Expanded(
           child: Text(
             value,
@@ -157,30 +171,49 @@ class BookDetailQuickActionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.isCompactDensity ? 4 : 6,
+          vertical: metrics.isCompactDensity ? 4 : 6,
+        ),
         child: child,
       ),
     );
   }
 }
 
-class BookDetailIntroCard extends StatelessWidget {
+class BookDetailIntroCard extends StatefulWidget {
   const BookDetailIntroCard({super.key, required this.intro});
 
   final String intro;
 
   @override
+  State<BookDetailIntroCard> createState() => _BookDetailIntroCardState();
+}
+
+class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final collapsedLines =
+        metrics.isCompactDensity
+            ? 5
+            : metrics.isMediumWindow || metrics.isExpandedWindow
+            ? 10
+            : 7;
+    final canExpand = widget.intro.trim().length > 120;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,14 +224,34 @@ class BookDetailIntroCard extends StatelessWidget {
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: metrics.contentGap),
           Text(
-            intro,
+            widget.intro,
+            maxLines: _expanded ? null : collapsedLines,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
               height: 1.45,
             ),
           ),
+          if (canExpand) ...[
+            SizedBox(height: metrics.isCompactDensity ? 4 : 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _expanded = !_expanded;
+                  });
+                },
+                child: Text(_expanded ? '收起' : '展开'),
+              ),
+            ),
+          ],
         ],
       ),
     );

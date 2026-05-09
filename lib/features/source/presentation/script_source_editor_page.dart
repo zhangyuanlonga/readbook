@@ -11,6 +11,7 @@ import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:go_router/go_router.dart';
 import 'package:highlight/languages/javascript.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/script_source.dart';
@@ -434,6 +435,7 @@ class _ScriptSourceEditorPageState
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: _systemOverlayStyle,
         child: Scaffold(
+          resizeToAvoidBottomInset: true,
           body: ColoredBox(
             color: _palette.shellBackground,
             child: SafeArea(
@@ -492,6 +494,7 @@ class _ScriptSourceEditorPageState
   }
 
   Widget _buildCodeEditor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return RepaintBoundary(
       child: Theme(
         data: Theme.of(context).copyWith(
@@ -520,7 +523,11 @@ class _ScriptSourceEditorPageState
             wrap: false,
             background: _palette.panelBackground,
             cursorColor: _palette.accent,
-            padding: const EdgeInsets.only(top: 8, right: 12, bottom: 12),
+            padding: EdgeInsets.only(
+              top: metrics.contentGap,
+              right: metrics.cardPadding,
+              bottom: metrics.sectionGap,
+            ),
             textStyle: TextStyle(
               color: _palette.textPrimary,
               fontFamily: 'Menlo, Consolas, "Courier New", monospace',
@@ -545,20 +552,24 @@ class _ScriptSourceEditorPageState
   }
 
   Widget _buildEditorToolbar(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return RepaintBoundary(
       child: ColoredBox(
         color: _palette.tabBackground,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.contentGap * 0.6,
+            vertical: metrics.isCompactDensity ? 3 : 4,
+          ),
           child: Row(
             children: [
               IconButton(
                 tooltip: '返回',
                 onPressed: () => unawaited(_handleBackPressed()),
                 visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints.tightFor(
-                  width: 32,
-                  height: 32,
+                constraints: BoxConstraints.tightFor(
+                  width: metrics.iconButtonSize,
+                  height: metrics.iconButtonSize,
                 ),
                 padding: EdgeInsets.zero,
                 icon: Icon(
@@ -588,6 +599,7 @@ class _ScriptSourceEditorPageState
   }
 
   List<Widget> _buildToolbarActions(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final actions = <Widget>[
       _buildToolbarButton(
         tooltip: '调试',
@@ -603,8 +615,8 @@ class _ScriptSourceEditorPageState
           backgroundColor: _palette.accent,
           foregroundColor: _palette.onAccent,
           visualDensity: VisualDensity.compact,
-          minimumSize: const Size(34, 34),
-          padding: const EdgeInsets.all(7),
+          minimumSize: Size(metrics.iconButtonSize, metrics.iconButtonSize),
+          padding: EdgeInsets.all(metrics.isCompactDensity ? 6 : 7),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         onPressed: _isLoading || _isSaving ? null : _save,
@@ -645,7 +657,7 @@ class _ScriptSourceEditorPageState
             ],
         child: Container(
           width: 38,
-          height: 34,
+          height: metrics.iconButtonSize,
           decoration: BoxDecoration(
             color: _palette.statusBackground,
             borderRadius: BorderRadius.circular(17),
@@ -670,14 +682,15 @@ class _ScriptSourceEditorPageState
     Color? backgroundColor,
     Color? foregroundColor,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return IconButton.filledTonal(
       tooltip: tooltip,
       style: IconButton.styleFrom(
         backgroundColor: backgroundColor ?? _palette.statusBackground,
         foregroundColor: foregroundColor ?? _palette.textPrimary,
         visualDensity: VisualDensity.compact,
-        minimumSize: const Size(34, 34),
-        padding: const EdgeInsets.all(7),
+        minimumSize: Size(metrics.iconButtonSize, metrics.iconButtonSize),
+        padding: EdgeInsets.all(metrics.isCompactDensity ? 6 : 7),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       onPressed: onPressed,

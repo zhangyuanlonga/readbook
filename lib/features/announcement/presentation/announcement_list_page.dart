@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -171,7 +171,8 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
@@ -271,13 +272,14 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     }
 
     final children = <Widget>[];
+    final metrics = AppAdaptiveMetrics.of(context);
     if (latest != null) {
       children.add(_buildLatestCard(context, latest));
-      children.add(const SizedBox(height: 12));
+      children.add(SizedBox(height: metrics.contentGap));
     }
     for (final item in listItems) {
       children.add(_buildAnnouncementCard(context, item));
-      children.add(const SizedBox(height: 10));
+      children.add(SizedBox(height: metrics.contentGap));
     }
     if (_isLoadingMore) {
       children.add(
@@ -314,9 +316,9 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          topInset + 12,
+          topInset + metrics.contentGap,
           horizontal,
-          12 + bottomSafe,
+          metrics.contentGap + bottomSafe,
         ),
         children: children,
       ),
@@ -333,15 +335,16 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     required String actionLabel,
     required VoidCallback onAction,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return RefreshIndicator(
       onRefresh: () => _loadInitial(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          topInset + 36,
+          topInset + metrics.sectionGap * 2,
           horizontal,
-          24 + bottomSafe,
+          metrics.sectionGap + bottomSafe,
         ),
         children: [
           AppStatusStateCard(
@@ -370,7 +373,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       child: InkWell(
         onTap: () => _openAnnouncement(announcement),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -434,7 +437,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       child: InkWell(
         onTap: () => _openAnnouncement(announcement),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

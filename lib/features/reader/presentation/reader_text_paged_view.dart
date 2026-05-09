@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,6 +10,7 @@ import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_document_render_model.dart';
+import '../application/reader_image_decode_budget.dart';
 import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
 import '../application/reader_session_state.dart';
@@ -59,11 +64,14 @@ class ReaderTextPagedViewModel {
     this.document,
     this.paragraphs = const <String>[],
     this.pagedPages = const <List<ReaderPagedSlice>>[],
+    this.pagedBlockPages = const <List<ReaderPagedBlock>>[],
     this.textItemsByParagraph = const <int, ReaderRenderTextItem>{},
+    this.imageDecodeBudget,
     this.pagePadding,
     this.emptyMessage,
     this.allowSelection = false,
     this.textAlign,
+    this.enableLightweightRenderCache = false,
   });
 
   final ReaderContentSession contentSession;
@@ -76,11 +84,14 @@ class ReaderTextPagedViewModel {
   final ReaderDocument? document;
   final List<String> paragraphs;
   final List<List<ReaderPagedSlice>> pagedPages;
+  final List<List<ReaderPagedBlock>> pagedBlockPages;
   final Map<int, ReaderRenderTextItem> textItemsByParagraph;
+  final ReaderImageDecodeBudget? imageDecodeBudget;
   final EdgeInsets? pagePadding;
   final String? emptyMessage;
   final bool allowSelection;
   final TextAlign? textAlign;
+  final bool enableLightweightRenderCache;
 }
 
 ReaderPagedResolvedPage resolveReaderPagedPage({
@@ -88,7 +99,11 @@ ReaderPagedResolvedPage resolveReaderPagedPage({
   required int pageIndex,
 }) {
   final totalPages =
-      model.pagedPages.isNotEmpty ? model.pagedPages.length : model.pageCount;
+      model.pagedBlockPages.isNotEmpty
+          ? model.pagedBlockPages.length
+          : model.pagedPages.isNotEmpty
+          ? model.pagedPages.length
+          : model.pageCount;
   final safePageIndex = pageIndex.clamp(0, math.max(0, totalPages - 1)).toInt();
   final slices =
       model.pagedPages.isNotEmpty && safePageIndex < model.pagedPages.length
@@ -198,7 +213,11 @@ class ReaderTextPagedView extends StatelessWidget {
     }
 
     final effectivePageCount =
-        model.pagedPages.isNotEmpty ? model.pagedPages.length : model.pageCount;
+        model.pagedBlockPages.isNotEmpty
+            ? model.pagedBlockPages.length
+            : model.pagedPages.isNotEmpty
+            ? model.pagedPages.length
+            : model.pageCount;
     if (effectivePageCount <= 0) {
       return emptyBuilder?.call(context, model) ?? _buildDefaultEmptyState();
     }
@@ -244,6 +263,9 @@ class ReaderTextPagedView extends StatelessWidget {
       resolvedPageBuilder: resolvedPageBuilder,
       resolvedSliceBuilder: resolvedSliceBuilder,
       sliceTextSpanBuilder: sliceTextSpanBuilder,
+    ).maybeCachePage(
+      enabled: model.enableLightweightRenderCache,
+      pageIndex: pageIndex,
     );
   }
 
@@ -254,6 +276,41 @@ class ReaderTextPagedView extends StatelessWidget {
         style: TextStyle(color: model.palette.secondaryTextColor),
       ),
     );
+  }
+}
+
+extension _ReaderPagedPageCacheExtension on Widget {
+  Widget maybeCachePage({required bool enabled, required int pageIndex}) {
+    if (!enabled) {
+      return this;
+    }
+    return _ReaderLightweightPagedPageCache(
+      key: ValueKey('reader_paged_page_cache_$pageIndex'),
+      child: this,
+    );
+  }
+}
+
+class _ReaderLightweightPagedPageCache extends StatefulWidget {
+  const _ReaderLightweightPagedPageCache({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ReaderLightweightPagedPageCache> createState() =>
+      _ReaderLightweightPagedPageCacheState();
+}
+
+class _ReaderLightweightPagedPageCacheState
+    extends State<_ReaderLightweightPagedPageCache>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 
@@ -293,6 +350,14 @@ class ReaderPagedPageContent extends StatelessWidget {
   }
 
   Widget _buildDefaultPage(BuildContext context, ReaderPagedResolvedPage page) {
+    final blockPage =
+        model.pagedBlockPages.isNotEmpty &&
+                page.pageIndex < model.pagedBlockPages.length
+            ? model.pagedBlockPages[page.pageIndex]
+            : const <ReaderPagedBlock>[];
+    if (blockPage.isNotEmpty) {
+      return _buildDefaultBlockPage(context, blockPage);
+    }
     if (page.slices.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -325,6 +390,149 @@ class ReaderPagedPageContent extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDefaultBlockPage(
+    BuildContext context,
+    List<ReaderPagedBlock> blocks,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final children = <Widget>[];
+        var dy = 0.0;
+        for (final block in blocks) {
+          final child = switch (block.kind) {
+            ReaderPagedBlockKind.image => _buildDefaultBlockImage(
+              context,
+              block,
+            ),
+            ReaderPagedBlockKind.text => _buildDefaultBlockText(context, block),
+          };
+          children.add(Positioned(top: dy, left: 0, right: 0, child: child));
+          dy += block.height + model.settings.paragraphSpacing;
+        }
+        return ClipRect(
+          child: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: Stack(children: children),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDefaultBlockText(BuildContext context, ReaderPagedBlock block) {
+    final paragraphIndex = block.paragraphIndex ?? -1;
+    final paragraph = _paragraphForIndex(model, paragraphIndex);
+    final start = (block.start ?? 0).clamp(0, paragraph.length);
+    final end = (block.end ?? start).clamp(start, paragraph.length);
+    final renderItem = _textItemForParagraphIndex(model, paragraphIndex);
+    final resolved = resolveReaderTextBlockPresentation(
+      settings: model.settings,
+      primaryTextColor: model.palette.primaryTextColor,
+      secondaryTextColor: model.palette.secondaryTextColor,
+      item: renderItem,
+      isLast: false,
+      paragraphTextAlign: model.textAlign,
+    );
+    final text = paragraph.substring(start, end);
+    final displayText =
+        start == 0 && resolved.displayText.isNotEmpty
+            ? resolved.displayText
+            : text;
+    return RepaintBoundary(
+      child: SizedBox(
+        height: block.height > 0 ? block.height : null,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child:
+              model.allowSelection
+                  ? SelectableText(
+                    displayText,
+                    style: resolved.textStyle,
+                    textAlign: resolved.textAlign,
+                  )
+                  : Text(
+                    displayText,
+                    style: resolved.textStyle,
+                    textAlign: resolved.textAlign,
+                  ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultBlockImage(BuildContext context, ReaderPagedBlock block) {
+    final imageUrl = block.imageUrl ?? '';
+    if (imageUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return RepaintBoundary(
+      child: SizedBox(
+        height: block.height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: _buildImageForUrl(context, imageUrl),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageForUrl(BuildContext context, String imageUrl) {
+    Widget errorBuilder(BuildContext context, Object error, StackTrace? stack) {
+      return ColoredBox(
+        color: Colors.black12,
+        child: Center(
+          child: Text('图片加载失败', style: Theme.of(context).textTheme.bodySmall),
+        ),
+      );
+    }
+
+    final uri = Uri.tryParse(imageUrl);
+    if (uri != null && uri.scheme == 'file') {
+      return Image.file(
+        File.fromUri(uri),
+        fit: BoxFit.contain,
+        cacheWidth: model.imageDecodeBudget?.cacheWidth,
+        cacheHeight: model.imageDecodeBudget?.cacheHeight,
+        errorBuilder: errorBuilder,
+      );
+    }
+    if (imageUrl.startsWith('data:image/')) {
+      final comma = imageUrl.indexOf(',');
+      if (comma > 0) {
+        try {
+          final metadata = imageUrl.substring(0, comma).toLowerCase();
+          final payload = imageUrl.substring(comma + 1);
+          final bytes = Uint8List.fromList(
+            metadata.contains(';base64')
+                ? base64Decode(payload)
+                : utf8.encode(Uri.decodeComponent(payload)),
+          );
+          final maxBytes = model.imageDecodeBudget?.maxDataUriBytes;
+          if (maxBytes != null && bytes.length > maxBytes) {
+            return errorBuilder(context, const FormatException(), null);
+          }
+          return Image.memory(
+            bytes,
+            fit: BoxFit.contain,
+            cacheWidth: model.imageDecodeBudget?.cacheWidth,
+            cacheHeight: model.imageDecodeBudget?.cacheHeight,
+            errorBuilder: errorBuilder,
+          );
+        } catch (_) {
+          return errorBuilder(context, const FormatException(), null);
+        }
+      }
+    }
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.contain,
+      cacheWidth: model.imageDecodeBudget?.cacheWidth,
+      cacheHeight: model.imageDecodeBudget?.cacheHeight,
+      errorBuilder: errorBuilder,
     );
   }
 
@@ -417,7 +625,10 @@ ReaderPagedResolvedSlice _resolveReaderPagedSlice({
     renderItem: renderItem,
     kind: renderItem?.kind ?? ReaderRenderTextKind.paragraph,
     rawText: rawText,
-    displayText: normalizedStart == 0 ? resolved.displayText : rawText,
+    displayText:
+        normalizedStart == 0 && resolved.displayText.isNotEmpty
+            ? resolved.displayText
+            : rawText,
     indentLength: normalizedStart == 0 ? resolved.indentLength : 0,
     textStyle: resolved.textStyle,
     textAlign: resolved.textAlign,

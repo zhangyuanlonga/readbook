@@ -6,6 +6,17 @@ void main() {
   group('ReaderReadingRecordCoordinator', () {
     const coordinator = ReaderReadingRecordCoordinator();
 
+    test('uses low-frequency auto commit interval for active sessions', () {
+      expect(
+        coordinator.autoCommitInterval(hasActiveSession: true),
+        const Duration(minutes: 5),
+      );
+      expect(
+        coordinator.autoCommitInterval(hasActiveSession: false),
+        Duration.zero,
+      );
+    });
+
     test('canTrackSession requires enabled and valid reader context', () {
       final valid = coordinator.canTrackSession(
         readingRecordEnabled: true,

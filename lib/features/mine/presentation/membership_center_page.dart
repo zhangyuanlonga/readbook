@@ -8,8 +8,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_session.dart';
@@ -154,7 +154,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
     );
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     const title = '会员中心';
@@ -207,9 +208,9 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        topInset + 12,
+                        topInset + metrics.contentGap,
                         horizontal,
-                        108 + bottomSafe,
+                        92 + metrics.sectionGap + bottomSafe,
                       ),
                       children: _buildContent(context),
                     ),
@@ -459,13 +460,22 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       showDragHandle: false,
       builder: (context) {
         final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+        final metrics = AppAdaptiveMetrics.of(context);
         return AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.only(bottom: bottomInset),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            child: _buildSupportSheet(context),
+            padding: EdgeInsets.all(metrics.contentGap),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: metrics.bottomSheetMaxWidth,
+                ),
+                child: _buildSupportSheet(context),
+              ),
+            ),
           ),
         );
       },
@@ -537,9 +547,10 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
   List<Widget> _buildContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     if (_isLoading) {
       return [
-        const SizedBox(height: 48),
+        SizedBox(height: metrics.sectionGap * 3),
         Center(child: CircularProgressIndicator(color: colorScheme.primary)),
       ];
     }
@@ -553,9 +564,9 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (_session == null) {
       widgets.addAll([
         _buildHeroCard(context, loggedIn: false),
-        const SizedBox(height: 16),
+        SizedBox(height: metrics.sectionGap),
         _buildFeatureCard(context),
-        const SizedBox(height: 16),
+        SizedBox(height: metrics.sectionGap),
         _buildMembershipStatusStrip(context),
       ]);
       return widgets;
@@ -564,9 +575,9 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (!_hasActiveMembership) {
       widgets.addAll([
         _buildHeroCard(context, loggedIn: true),
-        const SizedBox(height: 16),
+        SizedBox(height: metrics.sectionGap),
         _buildFeatureCard(context),
-        const SizedBox(height: 16),
+        SizedBox(height: metrics.sectionGap),
         _buildMembershipStatusStrip(context),
       ]);
     }
@@ -574,7 +585,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (_hasActiveMembership) {
       widgets.addAll([
         _buildEntitlementCard(context),
-        const SizedBox(height: 16),
+        SizedBox(height: metrics.sectionGap),
         _buildMembershipStatusStrip(context),
       ]);
     }
@@ -582,6 +593,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   }
 
   Widget _buildBottomActionBar(BuildContext context, double bottomSafe) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final primaryLabel =
         _session == null
             ? '登录/注册'
@@ -593,7 +605,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             ? Theme.of(context).colorScheme.primary
             : const Color(0xFFD84B4B);
     return Container(
-      padding: EdgeInsets.fromLTRB(12, 10, 12, 8 + bottomSafe),
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        metrics.contentGap,
+        metrics.pagePadding,
+        metrics.contentGap + bottomSafe,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         border: Border(
@@ -625,9 +642,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               child: Text(primaryLabel),
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          SizedBox(height: metrics.contentGap / 2),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: metrics.contentGap / 2,
+            runSpacing: metrics.contentGap / 2,
             children: [
               if (_session == null)
                 TextButton(
@@ -664,6 +683,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
   Widget _buildTrialNoticeCard(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final message =
         _session == null
             ? '登录账号后可自助领取 7 天试用会员，每个账号限领一次。'
@@ -671,11 +691,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             ? '当前账号正处于试用期内，试用结束后可通过许可证继续开通正式会员。'
             : '当前账号可自助领取 7 天试用会员，每个账号限领一次。';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      margin: EdgeInsets.only(bottom: metrics.contentGap),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: colorScheme.primaryContainer.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
         border: Border.all(color: colorScheme.primary.withValues(alpha: 0.22)),
       ),
       child: Row(
@@ -701,11 +721,14 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   Widget _buildSupportSheet(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 8),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        padding: EdgeInsets.all(metrics.cardPadding + 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -833,6 +856,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
   Widget _buildMembershipStatusStrip(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final label =
         _session == null
             ? '当前状态：未登录'
@@ -846,11 +870,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             ? '可继续管理许可证、设备席位与会员权益。'
             : '可通过许可证激活会员，立即解锁完整能力。';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      margin: EdgeInsets.only(bottom: metrics.contentGap),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.38),
         ),
@@ -979,7 +1003,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   }
 
   Widget _buildFeatureCard(BuildContext context) {
-    final horizontalInset = MediaQuery.sizeOf(context).width * 0.05;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontalInset = metrics.isCompactWindow ? 0.0 : metrics.pagePadding;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontalInset),
       child: Column(
@@ -1001,14 +1026,15 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
   Widget _buildFeatureItem(BuildContext context, _MembershipFeatureItem item) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final accentColor = const Color(0xFFB68A4D);
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      margin: EdgeInsets.only(bottom: metrics.contentGap),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
@@ -1077,7 +1103,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1151,11 +1177,14 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     required Future<void> Function() onRedeemPressed,
   }) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 8),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        padding: EdgeInsets.all(metrics.cardPadding + 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1229,6 +1258,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     required Future<void> Function(MembershipDeviceSeat seat) onReleaseSeat,
   }) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     final activeCount =
         seatSyncResult?.activeDeviceCount ??
         deviceSeats.where((item) => item.isActive).length;
@@ -1236,9 +1266,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         seatSyncResult?.maxDevices ?? (entitlement?.maxDevices ?? 1);
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 8),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        padding: EdgeInsets.all(metrics.cardPadding + 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1308,6 +1340,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       showDragHandle: false,
       builder: (context) {
         final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+        final metrics = AppAdaptiveMetrics.of(context);
         var isRedeeming = false;
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -1332,11 +1365,19 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               curve: Curves.easeOutCubic,
               padding: EdgeInsets.only(bottom: bottomInset),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                child: _buildRedeemCard(
-                  context,
-                  isRedeeming: isRedeeming,
-                  onRedeemPressed: handleRedeem,
+                padding: EdgeInsets.all(metrics.contentGap),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: metrics.bottomSheetMaxWidth,
+                    ),
+                    child: _buildRedeemCard(
+                      context,
+                      isRedeeming: isRedeeming,
+                      onRedeemPressed: handleRedeem,
+                    ),
+                  ),
                 ),
               ),
             );
@@ -1354,6 +1395,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       showDragHandle: false,
       builder: (context) {
         final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+        final metrics = AppAdaptiveMetrics.of(context);
         var deviceSeats = List<MembershipDeviceSeat>.of(_deviceSeats);
         var seatSyncResult = _seatSyncResult;
         var entitlement = _entitlement;
@@ -1376,13 +1418,21 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               curve: Curves.easeOutCubic,
               padding: EdgeInsets.only(bottom: bottomInset),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                child: _buildSeatCard(
-                  context,
-                  seatSyncResult: seatSyncResult,
-                  entitlement: entitlement,
-                  deviceSeats: deviceSeats,
-                  onReleaseSeat: handleRelease,
+                padding: EdgeInsets.all(metrics.contentGap),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: metrics.bottomSheetMaxWidth,
+                    ),
+                    child: _buildSeatCard(
+                      context,
+                      seatSyncResult: seatSyncResult,
+                      entitlement: entitlement,
+                      deviceSeats: deviceSeats,
+                      onReleaseSeat: handleRelease,
+                    ),
+                  ),
                 ),
               ),
             );
@@ -1398,11 +1448,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     required Future<void> Function() onRelease,
   }) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      margin: EdgeInsets.only(bottom: metrics.contentGap),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(

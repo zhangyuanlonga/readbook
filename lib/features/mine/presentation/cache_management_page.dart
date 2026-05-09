@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
@@ -111,7 +111,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
     );
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final canPopRoute = context.canPop();
@@ -163,9 +164,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
                       horizontal,
-                      topInset + 12,
+                      topInset + metrics.contentGap,
                       horizontal,
-                      12 + bottomSafe,
+                      metrics.sectionGap + bottomSafe,
                     ),
                     child: StreamBuilder<List<CachedBookSummary>>(
                       stream: _cacheManagementService.watchCachedBooks(),
@@ -258,9 +259,10 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     required List<CachedBookSummary> summaries,
     required Map<String, CachedBookPresentation> presentationIndex,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return <Widget>[
       _buildSectionTitle(context, '缓存数据'),
-      const SizedBox(height: 6),
+      SizedBox(height: metrics.contentGap * 0.6),
       _buildStorageOptionRow(
         context,
         option: _StorageClearOption.chapterCaches,
@@ -325,9 +327,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
               loader: _cacheManagementService.loadOtherDataDetails,
             ),
       ),
-      const SizedBox(height: 18),
+      SizedBox(height: metrics.sectionGap),
       _buildSectionTitle(context, '本地数据'),
-      const SizedBox(height: 6),
+      SizedBox(height: metrics.contentGap * 0.6),
       _buildReadOnlyStorageRow(
         context,
         icon: Icons.palette_outlined,
@@ -350,7 +352,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
             '${snapshot.localImportedBookCount} 本 · ${_formatBytes(snapshot.localImportedBookBytes)}',
         highRisk: true,
       ),
-      const SizedBox(height: 16),
+      SizedBox(height: metrics.contentGap),
       Wrap(
         spacing: 10,
         runSpacing: 10,
@@ -387,9 +389,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
           ),
         ],
       ),
-      const SizedBox(height: 20),
+      SizedBox(height: metrics.sectionGap),
       _buildSectionTitle(context, '书籍缓存'),
-      const SizedBox(height: 6),
+      SizedBox(height: metrics.contentGap * 0.6),
       ..._buildBookCacheRows(
         context,
         summaries: summaries,
@@ -408,6 +410,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     VoidCallback? onDetailsTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     final selected = _selectedOptions.contains(option);
 
     void toggle() {
@@ -422,40 +425,54 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
 
     return InkWell(
       onTap: _isClearingSelection ? null : toggle,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
-        child: Row(
-          children: [
-            Checkbox(
-              value: selected,
-              visualDensity: VisualDensity.compact,
-              onChanged: _isClearingSelection ? null : (_) => toggle(),
-            ),
-            Icon(icon, size: 18, color: colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            _buildInfoChip(context, statsLabel),
-            if (highRisk) ...[
-              const SizedBox(width: 8),
-              _buildInfoChip(context, '高风险'),
-            ],
-            if (onDetailsTap != null) ...[
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: '查看明细',
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: metrics.listTileMinHeight),
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: metrics.contentGap * 0.8),
+          child: Row(
+            children: [
+              Checkbox(
+                value: selected,
                 visualDensity: VisualDensity.compact,
-                onPressed: onDetailsTap,
-                icon: const Icon(Icons.chevron_right_rounded),
+                onChanged: _isClearingSelection ? null : (_) => toggle(),
               ),
+              Icon(icon, size: 18, color: colorScheme.primary),
+              SizedBox(width: metrics.contentGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildInfoChip(context, statsLabel),
+                        if (highRisk) _buildInfoChip(context, '高风险'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (onDetailsTap != null) ...[
+                SizedBox(width: metrics.contentGap * 0.4),
+                IconButton(
+                  tooltip: '查看明细',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onDetailsTap,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -469,34 +486,46 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     VoidCallback? onDetailsTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return InkWell(
       onTap: onDetailsTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
-        child: Row(
-          children: [
-            const SizedBox(width: 40),
-            Icon(icon, size: 18, color: colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: metrics.listTileMinHeight),
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: metrics.contentGap * 0.8),
+          child: Row(
+            children: [
+              const SizedBox(width: 40),
+              Icon(icon, size: 18, color: colorScheme.primary),
+              SizedBox(width: metrics.contentGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(children: [_buildInfoChip(context, statsLabel)]),
+                  ],
+                ),
               ),
-            ),
-            _buildInfoChip(context, statsLabel),
-            if (onDetailsTap != null) ...[
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: '查看明细',
-                visualDensity: VisualDensity.compact,
-                onPressed: onDetailsTap,
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
+              if (onDetailsTap != null) ...[
+                SizedBox(width: metrics.contentGap * 0.4),
+                IconButton(
+                  tooltip: '查看明细',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onDetailsTap,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -510,7 +539,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     if (summaries.isEmpty) {
       return <Widget>[
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: EdgeInsets.symmetric(
+            vertical: AppAdaptiveMetrics.of(context).contentGap,
+          ),
           child: Row(
             children: [
               const Icon(Icons.inbox_outlined, size: 18),
@@ -547,7 +578,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         InkWell(
           onTap: () => _confirmClearBook(summary, presentation),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+            padding: EdgeInsets.symmetric(
+              vertical: AppAdaptiveMetrics.of(context).contentGap,
+            ),
             child: Row(
               children: [
                 Icon(
@@ -555,22 +588,38 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                   size: 18,
                   color: Theme.of(context).colorScheme.primary,
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: AppAdaptiveMetrics.of(context).contentGap),
                 Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _buildInfoChip(context, '${summary.cachedCount} 章'),
+                          _buildInfoChip(
+                            context,
+                            _formatBytes(summary.estimatedBytes),
+                          ),
+                          _buildInfoChip(context, statusLabel),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                _buildInfoChip(context, '${summary.cachedCount} 章'),
-                const SizedBox(width: 8),
-                _buildInfoChip(context, statusLabel),
-                const SizedBox(width: 4),
+                SizedBox(
+                  width: AppAdaptiveMetrics.of(context).contentGap * 0.4,
+                ),
                 IconButton(
                   tooltip: '清理本书缓存',
                   visualDensity: VisualDensity.compact,
@@ -606,8 +655,13 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
 
   Widget _buildInfoChip(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      constraints: BoxConstraints(minHeight: metrics.chipHeight * 0.75),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.contentGap * 0.8,
+        vertical: metrics.isCompactDensity ? 4 : 5,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(999),
@@ -783,7 +837,9 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       builder: (context) {
         return SafeArea(
           child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.72,
+            height:
+                MediaQuery.sizeOf(context).height *
+                (AppAdaptiveMetrics.of(context).isCompactDensity ? 0.82 : 0.72),
             child: Column(
               children: [
                 Padding(

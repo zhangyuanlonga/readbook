@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../core/errors/app_exception.dart';
 import '../application/source_login_runtime_service.dart';
 import '../providers.dart';
@@ -146,7 +147,7 @@ class _SourceWebLoginPageState extends ConsumerState<SourceWebLoginPage> {
           ),
         ],
       ),
-      body: _buildBody(context, request),
+      body: SafeArea(top: false, child: _buildBody(context, request)),
     );
   }
 
@@ -155,9 +156,10 @@ class _SourceWebLoginPageState extends ConsumerState<SourceWebLoginPage> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_errorText != null) {
+      final metrics = AppAdaptiveMetrics.of(context);
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(metrics.pagePadding + metrics.contentGap),
           child: Text(
             _errorText!,
             style: Theme.of(context).textTheme.bodyLarge,
@@ -172,25 +174,30 @@ class _SourceWebLoginPageState extends ConsumerState<SourceWebLoginPage> {
     if (widget.webLoginViewBuilder case final builder?) {
       return builder(context, request, _handleUrlChanged);
     }
-    return InAppWebView(
-      initialSettings: InAppWebViewSettings(
-        javaScriptEnabled: true,
-        domStorageEnabled: true,
-        mediaPlaybackRequiresUserGesture: false,
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewPaddingOf(context).bottom,
       ),
-      initialUrlRequest: URLRequest(
-        url: WebUri.uri(request.uri),
-        headers: request.headers,
+      child: InAppWebView(
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          mediaPlaybackRequiresUserGesture: false,
+        ),
+        initialUrlRequest: URLRequest(
+          url: WebUri.uri(request.uri),
+          headers: request.headers,
+        ),
+        onLoadStart: (controller, url) {
+          _handleUrlChanged(url?.toString() ?? request.uri.toString());
+        },
+        onLoadStop: (controller, url) async {
+          _handleUrlChanged(url?.toString() ?? request.uri.toString());
+        },
+        onUpdateVisitedHistory: (controller, url, _) {
+          _handleUrlChanged(url?.toString() ?? request.uri.toString());
+        },
       ),
-      onLoadStart: (controller, url) {
-        _handleUrlChanged(url?.toString() ?? request.uri.toString());
-      },
-      onLoadStop: (controller, url) async {
-        _handleUrlChanged(url?.toString() ?? request.uri.toString());
-      },
-      onUpdateVisitedHistory: (controller, url, _) {
-        _handleUrlChanged(url?.toString() ?? request.uri.toString());
-      },
     );
   }
 

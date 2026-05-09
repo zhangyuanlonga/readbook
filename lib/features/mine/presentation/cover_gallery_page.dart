@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
@@ -102,7 +102,8 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
     );
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     return PopScope<void>(
@@ -146,9 +147,9 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                           : ListView(
                             padding: EdgeInsets.fromLTRB(
                               horizontal,
-                              topInset + 12,
+                              topInset + metrics.contentGap,
                               horizontal,
-                              16 + bottomSafe,
+                              metrics.sectionGap + bottomSafe,
                             ),
                             children: [
                               CompactCollectionSearchField(
@@ -167,13 +168,15 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                                   });
                                 },
                               ),
-                              const SizedBox(height: 10),
+                              SizedBox(height: metrics.contentGap),
                               if (_visibleGalleries.isEmpty)
                                 _buildEmptyState(context)
                               else
                                 ..._visibleGalleries.map(
                                   (gallery) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
+                                    padding: EdgeInsets.only(
+                                      bottom: metrics.contentGap,
+                                    ),
                                     child: _buildGalleryCard(context, gallery),
                                   ),
                                 ),
