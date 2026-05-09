@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
@@ -313,60 +314,89 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxWidth),
-                      child:
-                          _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  horizontal,
-                                  topInset + metrics.contentGap,
-                                  horizontal,
-                                  metrics.sectionGap + bottomSafe,
-                                ),
-                                children: [
-                                  CompactCollectionSearchField(
-                                    controller: _searchController,
-                                    hintText: '搜索底栏图集',
-                                    query: _searchQuery,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
-                                    onClear: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _searchQuery = '';
-                                      });
-                                    },
+                      child: AppAnimatedSwitcher(
+                        child:
+                            _isLoading
+                                ? const Center(
+                                  key: ValueKey('bottom_nav_gallery_loading'),
+                                  child: CircularProgressIndicator(),
+                                )
+                                : ListView(
+                                  key: const ValueKey(
+                                    'bottom_nav_gallery_content',
                                   ),
-                                  SizedBox(height: metrics.contentGap),
-                                  Text(
-                                    '支持切换默认图集，也可以新增、复制、重命名或删除自定义图集。',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(height: 1.35),
+                                  padding: EdgeInsets.fromLTRB(
+                                    horizontal,
+                                    topInset + metrics.contentGap,
+                                    horizontal,
+                                    metrics.sectionGap + bottomSafe,
                                   ),
-                                  SizedBox(height: metrics.contentGap),
-                                  for (
-                                    var index = 0;
-                                    index < _visibleGalleries.length;
-                                    index++
-                                  )
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom:
-                                            index ==
-                                                    _visibleGalleries.length - 1
-                                                ? 0
-                                                : metrics.contentGap,
-                                      ),
-                                      child: _buildGalleryCard(
-                                        context,
-                                        gallery: _visibleGalleries[index],
+                                  children: [
+                                    AppFadeSlideTransition(
+                                      child: CompactCollectionSearchField(
+                                        controller: _searchController,
+                                        hintText: '搜索底栏图集',
+                                        query: _searchQuery,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _searchQuery = value;
+                                          });
+                                        },
+                                        onClear: () {
+                                          _searchController.clear();
+                                          setState(() {
+                                            _searchQuery = '';
+                                          });
+                                        },
                                       ),
                                     ),
-                                ],
-                              ),
+                                    SizedBox(height: metrics.contentGap),
+                                    AppFadeSlideTransition(
+                                      delay: const Duration(milliseconds: 36),
+                                      child: Text(
+                                        '支持切换默认图集，也可以新增、复制、重命名或删除自定义图集。',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(height: 1.35),
+                                      ),
+                                    ),
+                                    SizedBox(height: metrics.contentGap),
+                                    if (_visibleGalleries.isEmpty)
+                                      const AppAnimatedSwitcher(
+                                        child: ImageResourceEmptyStateCard(
+                                          key: ValueKey(
+                                            'bottom_nav_gallery_empty',
+                                          ),
+                                          icon: Icons.dock_outlined,
+                                          title: '没有匹配的底栏图集',
+                                          description: '换个关键词，或点击右上角新增自定义图集。',
+                                        ),
+                                      )
+                                    else
+                                      for (
+                                        var index = 0;
+                                        index < _visibleGalleries.length;
+                                        index++
+                                      )
+                                        Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom:
+                                                index ==
+                                                        _visibleGalleries
+                                                                .length -
+                                                            1
+                                                    ? 0
+                                                    : metrics.contentGap,
+                                          ),
+                                          child: _buildGalleryCard(
+                                            context,
+                                            gallery: _visibleGalleries[index],
+                                          ),
+                                        ),
+                                  ],
+                                ),
+                      ),
                     ),
                   ),
                 );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../motion/app_motion_widgets.dart';
+
 enum ImportExportTaskPresentation { overlay, inlineCompact, queuePanel }
 
 enum ImportExportTaskResult { idle, running, success, failure, cancelled }
@@ -69,25 +71,7 @@ class ImportExportTaskOverlay extends StatelessWidget {
         Positioned.fill(
           child: IgnorePointer(
             ignoring: status == null,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              reverseDuration: const Duration(milliseconds: 180),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final fade = CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                );
-                final slide = Tween<Offset>(
-                  begin: const Offset(0, 0.02),
-                  end: Offset.zero,
-                ).animate(fade);
-                return FadeTransition(
-                  opacity: fade,
-                  child: SlideTransition(position: slide, child: child),
-                );
-              },
+            child: AppAnimatedSwitcher(
               child:
                   status == null
                       ? const SizedBox.shrink(key: ValueKey<bool>(false))

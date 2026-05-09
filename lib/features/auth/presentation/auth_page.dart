@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
@@ -81,25 +82,39 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     metrics.contentGap + bottomSafe,
                   ),
                   children: [
-                    _buildIntroCard(context),
+                    AppFadeSlideTransition(child: _buildIntroCard(context)),
                     SizedBox(height: metrics.contentGap),
-                    _buildModeToggle(colorScheme),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 48),
+                      child: _buildModeToggle(colorScheme),
+                    ),
                     SizedBox(height: metrics.contentGap),
-                    _buildFormCard(context),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 72),
+                      child: _buildFormCard(context),
+                    ),
                     SizedBox(height: metrics.sectionGap),
                     FilledButton(
                       onPressed: _isSubmitting ? null : _submit,
-                      child:
-                          _isSubmitting
-                              ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                      child: AppAnimatedSwitcher(
+                        child:
+                            _isSubmitting
+                                ? const SizedBox(
+                                  key: ValueKey<String>('auth_submitting'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : Text(
+                                  _isRegister ? '注册并登录' : '登录',
+                                  key: ValueKey<String>(
+                                    _isRegister ? 'register' : 'login',
+                                  ),
                                 ),
-                              )
-                              : Text(_isRegister ? '注册并登录' : '登录'),
+                      ),
                     ),
                     SizedBox(height: metrics.contentGap),
                     Text(

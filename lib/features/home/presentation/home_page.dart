@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -127,20 +128,34 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildReadingSummarySection(),
+                    AppFadeSlideTransition(
+                      child: _buildReadingSummarySection(),
+                    ),
                     SizedBox(height: metrics.sectionGap),
-                    _buildSectionHeader(
-                      context,
-                      title: '继续阅读',
-                      actionLabel: '查看统计',
-                      onAction: () => context.push('/stats'),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 56),
+                      child: _buildSectionHeader(
+                        context,
+                        title: '继续阅读',
+                        actionLabel: '查看统计',
+                        onAction: () => context.push('/stats'),
+                      ),
                     ),
                     SizedBox(height: metrics.contentGap),
-                    _buildContinueReadingSectionBlock(),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 84),
+                      child: _buildContinueReadingSectionBlock(),
+                    ),
                     SizedBox(height: metrics.sectionGap),
-                    _buildSectionHeader(context, title: '排行'),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 112),
+                      child: _buildSectionHeader(context, title: '排行'),
+                    ),
                     SizedBox(height: metrics.contentGap),
-                    _buildRankingPreviewSection(context),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 140),
+                      child: _buildRankingPreviewSection(context),
+                    ),
                   ],
                 ),
               ),
@@ -165,13 +180,18 @@ class _HomePageState extends ConsumerState<HomePage>
               records: records,
               dailyRecords: dailyRecords,
             );
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCheckInCard(summary),
-                SizedBox(height: AppAdaptiveMetrics.of(context).sectionGap),
-                _buildGoalCard(summary, records),
-              ],
+            return AppAnimatedSwitcher(
+              child: Column(
+                key: ValueKey<String>(
+                  'home_summary_${records.length}_${dailyRecords.length}',
+                ),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCheckInCard(summary),
+                  SizedBox(height: AppAdaptiveMetrics.of(context).sectionGap),
+                  _buildGoalCard(summary, records),
+                ],
+              ),
             );
           },
         );
@@ -184,7 +204,12 @@ class _HomePageState extends ConsumerState<HomePage>
       stream: _readingRecordService.watchLatestRecords(),
       builder: (context, snapshot) {
         final records = snapshot.data ?? const <ReadingRecord>[];
-        return _buildContinueReadingSection(records);
+        return AppAnimatedSwitcher(
+          child: KeyedSubtree(
+            key: ValueKey<String>('continue_reading_${records.length}'),
+            child: _buildContinueReadingSection(records),
+          ),
+        );
       },
     );
   }

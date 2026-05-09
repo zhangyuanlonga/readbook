@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
@@ -84,53 +85,57 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                         )
                         .toList(growable: false);
 
-                    return ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        metrics.sectionGap,
-                        horizontal,
-                        metrics.sectionGap + bottomSafe,
-                      ),
-                      children: [
-                        Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(metrics.cardPadding),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 10),
-                                SwitchListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('包含 INFO 日志'),
-                                  value: _includeInfoLogs,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _includeInfoLogs = value;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                const Text('日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。'),
-                              ],
+                    return AppFadeSlideTransition(
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          metrics.sectionGap,
+                          horizontal,
+                          metrics.sectionGap + bottomSafe,
+                        ),
+                        children: [
+                          Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(metrics.cardPadding),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  SwitchListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('包含 INFO 日志'),
+                                    value: _includeInfoLogs,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _includeInfoLogs = value;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    '日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。',
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        SizedBox(height: metrics.contentGap),
-                        if (entries.isEmpty)
-                          const AppEmptyStateCard(
-                            icon: Icons.event_note_outlined,
-                            title: '暂无错误日志',
-                            description: '当前没有可展示的错误日志记录。',
-                            compact: true,
-                          )
-                        else
-                          ...entries.map(_buildLogCard),
-                      ],
+                          SizedBox(height: metrics.contentGap),
+                          if (entries.isEmpty)
+                            const AppEmptyStateCard(
+                              icon: Icons.event_note_outlined,
+                              title: '暂无错误日志',
+                              description: '当前没有可展示的错误日志记录。',
+                              compact: true,
+                            )
+                          else
+                            ...entries.map(_buildLogCard),
+                        ],
+                      ),
                     );
                   },
                 ),

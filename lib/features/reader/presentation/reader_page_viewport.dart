@@ -287,6 +287,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             toIndex: _curlAnimationToIndex,
             previewProgress: _curlPreviewProgress,
             commitOnAnimationEnd: _curlCommitOnAnimationEnd,
+            isCrossChapter: _isCurlCrossChapterTurn,
           ),
         );
         final pageSize = constraints.biggest;

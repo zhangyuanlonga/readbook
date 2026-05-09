@@ -39,6 +39,12 @@ void main() {
 
       expect(action.type, PagedTransitionActionType.crossChapter);
       expect(action.targetPageIndex, 4);
+      expect(action.motion, isNotNull);
+      expect(action.transitionState, isNotNull);
+      expect(action.transitionState!.isCrossChapter, isTrue);
+      expect(action.transitionState!.fromIndex, 4);
+      expect(action.transitionState!.toIndex, 4);
+      expect(action.transitionState!.style, ReaderPageAnimationStyle.cover);
     });
 
     test('returns immediate action for none animation style', () {

@@ -1,10 +1,49 @@
 enum ReaderSessionTaskKind { chapterContent, preload, pagination }
 
+enum ReaderSessionIntentKind {
+  load,
+  jump,
+  next,
+  previous,
+  changeMode,
+  changeSettings,
+  retry,
+}
+
+class ReaderSessionIntent {
+  const ReaderSessionIntent(this.kind);
+
+  const ReaderSessionIntent.load() : kind = ReaderSessionIntentKind.load;
+  const ReaderSessionIntent.jump() : kind = ReaderSessionIntentKind.jump;
+  const ReaderSessionIntent.next() : kind = ReaderSessionIntentKind.next;
+  const ReaderSessionIntent.previous()
+    : kind = ReaderSessionIntentKind.previous;
+  const ReaderSessionIntent.changeMode()
+    : kind = ReaderSessionIntentKind.changeMode;
+  const ReaderSessionIntent.changeSettings()
+    : kind = ReaderSessionIntentKind.changeSettings;
+  const ReaderSessionIntent.retry() : kind = ReaderSessionIntentKind.retry;
+
+  final ReaderSessionIntentKind kind;
+}
+
 class ReaderSessionTaskToken {
   const ReaderSessionTaskToken({required this.kind, required this.generation});
 
   final ReaderSessionTaskKind kind;
   final int generation;
+}
+
+class ReaderSessionIntentResult {
+  const ReaderSessionIntentResult({
+    this.chapterContentToken,
+    this.preloadTaskToken,
+    this.paginationTaskToken,
+  });
+
+  final int? chapterContentToken;
+  final int? preloadTaskToken;
+  final int? paginationTaskToken;
 }
 
 class ReaderSessionController {
@@ -35,6 +74,33 @@ class ReaderSessionController {
         ReaderSessionTaskKind.preload => nextPreloadTaskToken(),
         ReaderSessionTaskKind.pagination => nextPaginationTaskToken(),
       },
+    );
+  }
+
+  ReaderSessionIntentResult beginIntent(ReaderSessionIntent intent) {
+    return switch (intent.kind) {
+      ReaderSessionIntentKind.load ||
+      ReaderSessionIntentKind.jump ||
+      ReaderSessionIntentKind.next ||
+      ReaderSessionIntentKind.previous ||
+      ReaderSessionIntentKind.retry => _beginChapterContentIntent(),
+      ReaderSessionIntentKind.changeMode ||
+      ReaderSessionIntentKind.changeSettings => _beginPaginationIntent(),
+    };
+  }
+
+  ReaderSessionIntentResult _beginChapterContentIntent() {
+    cancelPreloadTasks();
+    cancelPaginationTasks();
+    return ReaderSessionIntentResult(
+      chapterContentToken: nextChapterContentToken(),
+    );
+  }
+
+  ReaderSessionIntentResult _beginPaginationIntent() {
+    cancelPreloadTasks();
+    return ReaderSessionIntentResult(
+      paginationTaskToken: nextPaginationTaskToken(),
     );
   }
 

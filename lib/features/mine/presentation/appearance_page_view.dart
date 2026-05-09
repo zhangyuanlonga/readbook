@@ -83,16 +83,18 @@ extension on _AppearancePageState {
                       horizontal,
                       metrics.sectionGap + bottomInset,
                     ),
-                    children: _buildSectionContent(
-                      context,
-                      navigationState,
-                      selectedThemeMode: selectedThemeMode,
-                      selectedSeedColor: selectedSeedColor,
-                      selectedNavigationStyle: selectedNavigationStyle,
-                      standardNavigationAppearance:
-                          standardNavigationAppearance,
-                      cupertinoDockAppearance: cupertinoDockAppearance,
-                      showNavigationLabels: showNavigationLabels,
+                    children: _buildMotionEntries(
+                      _buildSectionContent(
+                        context,
+                        navigationState,
+                        selectedThemeMode: selectedThemeMode,
+                        selectedSeedColor: selectedSeedColor,
+                        selectedNavigationStyle: selectedNavigationStyle,
+                        standardNavigationAppearance:
+                            standardNavigationAppearance,
+                        cupertinoDockAppearance: cupertinoDockAppearance,
+                        showNavigationLabels: showNavigationLabels,
+                      ),
                     ),
                   ),
                 ),
@@ -183,6 +185,16 @@ extension on _AppearancePageState {
     }
 
     return sections;
+  }
+
+  List<Widget> _buildMotionEntries(List<Widget> children) {
+    return [
+      for (var index = 0; index < children.length; index++)
+        AppFadeSlideTransition(
+          delay: Duration(milliseconds: (index * 28).clamp(0, 140)),
+          child: children[index],
+        ),
+    ];
   }
 
   Widget _buildNavIconGalleryEntry(BuildContext context) {

@@ -97,6 +97,22 @@ void main() {
     expect(find.byType(PageView), findsOneWidget);
   });
 
+  testWidgets('renders pure manga horizontal mode', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        ReaderMangaView(
+          model: _mangaModel(
+            const ReaderSettings(mangaReadMode: ReaderMangaReadMode.horizontal),
+          ),
+        ),
+      ),
+    );
+
+    final pageView = tester.widget<PageView>(find.byType(PageView));
+    expect(find.byType(ReaderMangaView), findsOneWidget);
+    expect(pageView.scrollDirection, Axis.horizontal);
+  });
+
   testWidgets('renders pure manga continuous mode', (tester) async {
     await tester.pumpWidget(
       _wrap(ReaderMangaView(model: _mangaModel(const ReaderSettings()))),

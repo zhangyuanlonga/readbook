@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_session.dart';
@@ -569,7 +570,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         SizedBox(height: metrics.sectionGap),
         _buildMembershipStatusStrip(context),
       ]);
-      return widgets;
+      return _animateContentEntries(widgets);
     }
 
     if (!_hasActiveMembership) {
@@ -589,7 +590,17 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         _buildMembershipStatusStrip(context),
       ]);
     }
-    return widgets;
+    return _animateContentEntries(widgets);
+  }
+
+  List<Widget> _animateContentEntries(List<Widget> widgets) {
+    return [
+      for (var index = 0; index < widgets.length; index++)
+        AppFadeSlideTransition(
+          delay: Duration(milliseconds: (index * 44).clamp(0, 220).toInt()),
+          child: widgets[index],
+        ),
+    ];
   }
 
   Widget _buildBottomActionBar(BuildContext context, double bottomSafe) {

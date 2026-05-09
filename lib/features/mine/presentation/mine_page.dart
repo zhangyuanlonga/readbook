@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
@@ -880,26 +881,10 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Widget _buildPageEntrance({required int index, required Widget child}) {
-    final delay = (index * 0.08).clamp(0.0, 0.42);
-    final begin = delay;
-    final end = (begin + 0.46).clamp(0.0, 1.0);
-
-    return TweenAnimationBuilder<double>(
+    return AppFadeSlideTransition(
       key: ValueKey<String>('mine_page_entry_$index'),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 520),
-      curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      delay: Duration(milliseconds: (index * 56).clamp(0, 280).toInt()),
       child: child,
-      builder: (context, value, child) {
-        final translateY = (1 - value) * 14;
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, translateY),
-            child: child,
-          ),
-        );
-      },
     );
   }
 

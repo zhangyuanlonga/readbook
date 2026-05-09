@@ -18,6 +18,7 @@ class PagedTransitionState {
     this.direction = 1,
     this.fromIndex = 0,
     this.toIndex = 0,
+    this.isCrossChapter = false,
   });
 
   final bool isAnimating;
@@ -25,6 +26,7 @@ class PagedTransitionState {
   final int direction;
   final int fromIndex;
   final int toIndex;
+  final bool isCrossChapter;
 
   PagedTransitionState copyWith({
     bool? isAnimating,
@@ -32,6 +34,7 @@ class PagedTransitionState {
     int? direction,
     int? fromIndex,
     int? toIndex,
+    bool? isCrossChapter,
   }) {
     return PagedTransitionState(
       isAnimating: isAnimating ?? this.isAnimating,
@@ -39,6 +42,7 @@ class PagedTransitionState {
       direction: direction ?? this.direction,
       fromIndex: fromIndex ?? this.fromIndex,
       toIndex: toIndex ?? this.toIndex,
+      isCrossChapter: isCrossChapter ?? this.isCrossChapter,
     );
   }
 }
@@ -97,9 +101,26 @@ class PagedTransitionController {
 
     switch (turnDecision.type) {
       case PagedTurnDecisionType.crossChapter:
+        final animationStyle = turnDecision.animationStyle;
+        final motion =
+            animationStyle == ReaderPageAnimationStyle.none
+                ? null
+                : renderer.motionSpecForStyle(animationStyle);
         return PagedTransitionAction(
           type: PagedTransitionActionType.crossChapter,
           targetPageIndex: turnDecision.targetPageIndex,
+          motion: motion,
+          transitionState:
+              motion == null
+                  ? null
+                  : PagedTransitionState(
+                    isAnimating: true,
+                    style: animationStyle,
+                    direction: safeDirection,
+                    fromIndex: turnDecision.targetPageIndex,
+                    toIndex: turnDecision.targetPageIndex,
+                    isCrossChapter: true,
+                  ),
         );
       case PagedTurnDecisionType.curl:
         return PagedTransitionAction(

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
@@ -307,25 +308,41 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                           72 + metrics.sectionGap + bottomSafe,
                         ),
                         children: [
-                          _buildHero(context),
+                          AppFadeSlideTransition(child: _buildHero(context)),
                           SizedBox(height: metrics.contentGap),
                           if (_isLoading)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 32),
-                              child: Center(child: CircularProgressIndicator()),
+                            const AppAnimatedSwitcher(
+                              child: Padding(
+                                key: ValueKey('font_loading'),
+                                padding: EdgeInsets.only(top: 32),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
                             )
                           else if (_errorText != null)
-                            _buildErrorCard(context)
-                          else ...[
-                            _buildLibraryHeader(context),
-                            SizedBox(height: metrics.contentGap),
-                            Padding(
-                              padding: EdgeInsets.only(
-                                bottom: metrics.contentGap,
+                            AppAnimatedSwitcher(
+                              child: KeyedSubtree(
+                                key: const ValueKey('font_error'),
+                                child: _buildErrorCard(context),
                               ),
-                              child: _buildSystemDefaultFontCard(
-                                context,
-                                interfaceFontSettings: interfaceFontSettings,
+                            )
+                          else ...[
+                            AppFadeSlideTransition(
+                              delay: const Duration(milliseconds: 40),
+                              child: _buildLibraryHeader(context),
+                            ),
+                            SizedBox(height: metrics.contentGap),
+                            AppFadeSlideTransition(
+                              delay: const Duration(milliseconds: 64),
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: metrics.contentGap,
+                                ),
+                                child: _buildSystemDefaultFontCard(
+                                  context,
+                                  interfaceFontSettings: interfaceFontSettings,
+                                ),
                               ),
                             ),
                             ..._fonts.map(

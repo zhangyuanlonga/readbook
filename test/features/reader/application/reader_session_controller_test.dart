@@ -40,5 +40,42 @@ void main() {
       expect(controller.isActive(preload), isFalse);
       expect(controller.isActive(pagination), isFalse);
     });
+
+    test('chapter intents cancel background work and issue load token', () {
+      final controller = ReaderSessionController();
+      final preload = controller.nextPreloadTaskToken();
+      final pagination = controller.nextPaginationTaskToken();
+
+      final result = controller.beginIntent(const ReaderSessionIntent.next());
+
+      expect(result.chapterContentToken, isNotNull);
+      expect(result.preloadTaskToken, isNull);
+      expect(result.paginationTaskToken, isNull);
+      expect(controller.isActivePreloadTaskToken(preload), isFalse);
+      expect(controller.isActivePaginationTaskToken(pagination), isFalse);
+      expect(
+        controller.isActiveChapterContentToken(result.chapterContentToken!),
+        isTrue,
+      );
+    });
+
+    test('settings intents cancel preload and issue pagination token', () {
+      final controller = ReaderSessionController();
+      final preload = controller.nextPreloadTaskToken();
+      final chapter = controller.nextChapterContentToken();
+
+      final result = controller.beginIntent(
+        const ReaderSessionIntent.changeSettings(),
+      );
+
+      expect(result.chapterContentToken, isNull);
+      expect(result.paginationTaskToken, isNotNull);
+      expect(controller.isActivePreloadTaskToken(preload), isFalse);
+      expect(controller.isActiveChapterContentToken(chapter), isTrue);
+      expect(
+        controller.isActivePaginationTaskToken(result.paginationTaskToken!),
+        isTrue,
+      );
+    });
   });
 }

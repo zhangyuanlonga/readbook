@@ -72,6 +72,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       'detailUrl: ${_detailUrl ?? ''}',
       'title: $_bookTitle',
       'error: ${_errorText ?? ''}',
+      'textPaginationFallbackDiagnostic: ${_textPaginationFallbackDiagnostic ?? ''}',
       if (localBook != null) ...[
         'format: ${localBook.format.name}',
         'indexStatus: ${localBook.indexStatus.name}',

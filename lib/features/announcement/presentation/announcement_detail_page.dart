@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -137,10 +138,13 @@ class _AnnouncementDetailPageState
     required double topInset,
   }) {
     if (_isLoading) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomSafe),
-          child: const CircularProgressIndicator(),
+      return AppAnimatedSwitcher(
+        child: Center(
+          key: const ValueKey('announcement_detail_loading'),
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomSafe),
+            child: const CircularProgressIndicator(),
+          ),
         ),
       );
     }
@@ -174,55 +178,57 @@ class _AnnouncementDetailPageState
     }
 
     final metrics = AppAdaptiveMetrics.of(context);
-    return RefreshIndicator(
-      onRefresh: () => _loadDetail(forceRefresh: true),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          topInset + metrics.sectionGap,
-          horizontal,
-          metrics.sectionGap + bottomSafe,
-        ),
-        children: [
-          Text(
-            announcement.title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+    return AppFadeSlideTransition(
+      child: RefreshIndicator(
+        onRefresh: () => _loadDetail(forceRefresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.sectionGap,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _buildLevelChip(context, announcement.level),
-              const SizedBox(width: 8),
+          children: [
+            Text(
+              announcement.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildLevelChip(context, announcement.level),
+                const SizedBox(width: 8),
+                Text(
+                  _formatTime(announcement.publishFrom),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            if (announcement.publishTo != null) ...[
+              const SizedBox(height: 6),
               Text(
-                _formatTime(announcement.publishFrom),
+                '有效期至 ${_formatTime(announcement.publishTo!)}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
-          ),
-          if (announcement.publishTo != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
             Text(
-              '有效期至 ${_formatTime(announcement.publishTo!)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              announcement.content.trim().isEmpty
+                  ? '暂无公告正文。'
+                  : announcement.content.trim(),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
-          const SizedBox(height: 14),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-          Text(
-            announcement.content.trim().isEmpty
-                ? '暂无公告正文。'
-                : announcement.content.trim(),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
+        ),
       ),
     );
   }

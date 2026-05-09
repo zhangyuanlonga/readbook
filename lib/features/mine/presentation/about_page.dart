@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/device/device_identity_service.dart';
@@ -155,33 +156,36 @@ class _AboutPageState extends State<AboutPage> {
                             _buildComplianceCard(context),
                           ];
 
-                          return ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              topInset + metrics.contentGap,
-                              horizontal,
-                              metrics.contentGap + bottomSafe,
+                          return AppFadeSlideTransition(
+                            child: ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                topInset + metrics.contentGap,
+                                horizontal,
+                                metrics.contentGap + bottomSafe,
+                              ),
+                              children: [
+                                if (!isExpanded) ...leftColumn,
+                                if (!isExpanded) SizedBox(height: contentGap),
+                                if (!isExpanded) ...rightColumn,
+                                if (isExpanded)
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        flex: 12,
+                                        child: Column(children: leftColumn),
+                                      ),
+                                      SizedBox(width: contentGap),
+                                      Expanded(
+                                        flex: 10,
+                                        child: Column(children: rightColumn),
+                                      ),
+                                    ],
+                                  ),
+                              ],
                             ),
-                            children: [
-                              if (!isExpanded) ...leftColumn,
-                              if (!isExpanded) SizedBox(height: contentGap),
-                              if (!isExpanded) ...rightColumn,
-                              if (isExpanded)
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      flex: 12,
-                                      child: Column(children: leftColumn),
-                                    ),
-                                    SizedBox(width: contentGap),
-                                    Expanded(
-                                      flex: 10,
-                                      child: Column(children: rightColumn),
-                                    ),
-                                  ],
-                                ),
-                            ],
                           );
                         },
                       ),

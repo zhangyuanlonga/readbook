@@ -51,6 +51,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         resolvedContentState.renderTextItemsByParagraph;
     _pagedPages = resolvedContentState.pagedPages;
     _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+    _textPaginationFallbackDiagnostic = null;
     _currentPageIndex = resolvedContentState.currentPageIndex;
     _pagedPaginationState = resolvedContentState.paginationState;
     _resetCatalogSearchCache();
@@ -813,7 +814,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     if (lease == null) {
       return false;
     }
-    final requestToken = _readerSessionController.nextChapterContentToken();
+    final requestToken =
+        _readerSessionController
+            .beginIntent(const ReaderSessionIntent.load())
+            .chapterContentToken!;
 
     double? readingRecordStartRatio;
     final request = _chapterLoadPlanner.resolveLoadRequest(
@@ -971,45 +975,18 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     if (normalizedSourceId.isEmpty) {
       return;
     }
-    final isLocalSource = LocalReaderIdentity.isLocalSourceId(
-      normalizedSourceId,
-    );
     final budget = _currentResourceBudget(
       scene: ReaderWorkScene.backgroundPrefetch,
     );
-    final forwardPreloadCount =
-        !isLocalSource && _isInBookshelf && budget.allowFarPrefetch
-            ? _ReaderPageState._kBookshelfForwardCacheChapterCount
-            : min(
-              _ReaderPageState._kForwardPreloadChapterCount,
-              budget.forwardPreloadChapterCount,
-            );
-    final backwardPreloadCount = min(
-      _ReaderPageState._kBackwardPreloadChapterCount,
-      budget.backwardPreloadChapterCount,
+    final orderedIndexes = _neighborPreloadContentIndexes(
+      normalizedSourceId: normalizedSourceId,
+      currentIndex: currentIndex,
+      chapterCount: _chapters.length,
+      budget: budget,
     );
-
-    final preloadIndexes = <int>{};
-
-    for (var offset = 1; offset <= backwardPreloadCount; offset++) {
-      final index = currentIndex - offset;
-      if (index >= 0) {
-        preloadIndexes.add(index);
-      }
-    }
-
-    for (var offset = 1; offset <= forwardPreloadCount; offset++) {
-      final index = currentIndex + offset;
-      if (index < _chapters.length) {
-        preloadIndexes.add(index);
-      }
-    }
-
-    if (preloadIndexes.isEmpty) {
+    if (orderedIndexes.isEmpty) {
       return;
     }
-
-    final orderedIndexes = preloadIndexes.toList(growable: false)..sort();
 
     for (final index in orderedIndexes) {
       if (!mounted || taskToken != _preloadTaskToken) {
@@ -1021,6 +998,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       if (chapterUrl.isEmpty) {
         continue;
       }
+      final preloadIdentity = ReaderPreloadTask.identityFor(
+        type: ReaderPreloadTaskType.content,
+        chapterIndex: index,
+      );
 
       final nextChapterUrl =
           index < _chapters.length - 1
@@ -1043,6 +1024,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
         );
+        _preloadFailureMemory.recordSuccess(preloadIdentity);
         if (_canWarmNeighborPaginationCache() &&
             result.imageUrls.isEmpty &&
             result.content.trim().isNotEmpty &&
@@ -1100,6 +1082,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           }
         }
       } catch (_) {
+        _preloadFailureMemory.recordFailure(preloadIdentity);
         // Preload failures should not interrupt active reading.
       }
     }

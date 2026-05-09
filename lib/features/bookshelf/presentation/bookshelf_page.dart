@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -420,7 +421,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const int _kBooksModeSwitchAnimatedItemLimit = 24;
   static const int _kBooksModeSwitchDisableThreshold = 72;
   static const double _kBooksModeSwitchStaggerStep = 0.07;
-  static const double _kBooksModeSwitchCurveSpan = 0.42;
   static const Duration _kAutoRefreshDebounce = Duration(milliseconds: 800);
   static const Duration _kDuplicateLoadCooldown = Duration(milliseconds: 700);
   static const Duration _kContinueReadingPromptDuration = Duration(seconds: 6);
@@ -1161,35 +1161,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       );
     }
 
-    final delay =
-        (index % _kBooksModeSwitchStaggerGroup) * _kBooksModeSwitchStaggerStep;
-    final begin = delay.clamp(0.0, 1 - _kBooksModeSwitchCurveSpan);
-    final end = begin + _kBooksModeSwitchCurveSpan;
+    final delayMilliseconds =
+        ((index % _kBooksModeSwitchStaggerGroup) *
+                _kBooksModeSwitchStaggerStep *
+                1000)
+            .round();
 
     return RepaintBoundary(
-      child: TweenAnimationBuilder<double>(
+      child: AppFadeSlideTransition(
         key: ValueKey<String>(
           'bookshelf_mode_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
         ),
-        tween: Tween<double>(begin: 0, end: 1),
         duration: _kBooksModeSwitchItemDuration,
-        curve: Interval(begin, end, curve: Curves.easeOutCubic),
+        delay: Duration(milliseconds: delayMilliseconds.clamp(0, 420)),
         child: child,
-        builder: (context, value, builtChild) {
-          final translateY = (1 - value) * 16;
-          final scale = 0.986 + (0.014 * value);
-          return Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, translateY),
-              child: Transform.scale(
-                alignment: Alignment.topCenter,
-                scale: scale,
-                child: builtChild,
-              ),
-            ),
-          );
-        },
       ),
     );
   }

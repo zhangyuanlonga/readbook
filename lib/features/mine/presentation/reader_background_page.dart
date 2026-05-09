@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -299,96 +300,114 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                   maxWidth: AppLayout.settingsContentMaxWidth,
                 ),
               ),
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : Column(
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              topInset + metrics.contentGap,
-                              horizontal,
-                              metrics.contentGap,
-                            ),
-                            child: CompactCollectionSearchField(
-                              controller: _searchController,
-                              hintText: '搜索阅读背景文件名',
-                              query: _searchQuery,
-                              onChanged: (value) {
-                                setState(() {
-                                  _searchQuery = value;
-                                });
-                              },
-                              onClear: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchQuery = '';
-                                });
-                              },
-                            ),
-                          ),
-                          Expanded(
-                            child:
-                                _visibleBackgroundPaths.isEmpty
-                                    ? ListView(
-                                      padding: EdgeInsets.fromLTRB(
-                                        horizontal,
-                                        0,
-                                        horizontal,
-                                        metrics.sectionGap + bottomSafe,
-                                      ),
-                                      children: [_buildEmptyState(context)],
-                                    )
-                                    : LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final columns = metrics.gridColumnsFor(
-                                          availableWidth:
-                                              constraints.maxWidth -
-                                              horizontal * 2,
-                                          minItemWidth: 150,
-                                          maxColumns: 4,
-                                          spacing: metrics.contentGap,
-                                        );
-                                        return GridView.builder(
-                                          padding: EdgeInsets.fromLTRB(
-                                            horizontal,
-                                            0,
-                                            horizontal,
-                                            metrics.sectionGap + bottomSafe,
-                                          ),
-                                          itemCount:
-                                              _visibleBackgroundPaths.length,
-                                          gridDelegate:
-                                              SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: columns,
-                                                crossAxisSpacing:
-                                                    metrics.contentGap,
-                                                mainAxisSpacing:
-                                                    metrics.contentGap,
-                                                childAspectRatio:
-                                                    metrics.isCompactDensity
-                                                        ? 0.76
-                                                        : 0.82,
-                                              ),
-                                          itemBuilder: (context, index) {
-                                            final path =
-                                                _visibleBackgroundPaths[index];
-                                            return _buildBackgroundCard(
-                                              context,
-                                              path,
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                          ),
-                        ],
-                      ),
+              child: AppAnimatedSwitcher(
+                child: _buildBackgroundBody(
+                  context,
+                  metrics: metrics,
+                  horizontal: horizontal,
+                  topInset: topInset,
+                  bottomSafe: bottomSafe,
+                ),
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBackgroundBody(
+    BuildContext context, {
+    required AppAdaptiveMetrics metrics,
+    required double horizontal,
+    required double topInset,
+    required double bottomSafe,
+  }) {
+    if (_isLoading) {
+      return const Center(
+        key: ValueKey('reader_background_loading'),
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    return Column(
+      key: const ValueKey('reader_background_content'),
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.contentGap,
+            horizontal,
+            metrics.contentGap,
+          ),
+          child: AppFadeSlideTransition(
+            child: CompactCollectionSearchField(
+              controller: _searchController,
+              hintText: '搜索阅读背景文件名',
+              query: _searchQuery,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+              onClear: () {
+                _searchController.clear();
+                setState(() {
+                  _searchQuery = '';
+                });
+              },
+            ),
+          ),
+        ),
+        Expanded(
+          child: AppAnimatedSwitcher(
+            child:
+                _visibleBackgroundPaths.isEmpty
+                    ? ListView(
+                      key: const ValueKey('reader_background_empty'),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        0,
+                        horizontal,
+                        metrics.sectionGap + bottomSafe,
+                      ),
+                      children: [_buildEmptyState(context)],
+                    )
+                    : LayoutBuilder(
+                      key: const ValueKey('reader_background_grid'),
+                      builder: (context, constraints) {
+                        final columns = metrics.gridColumnsFor(
+                          availableWidth: constraints.maxWidth - horizontal * 2,
+                          minItemWidth: 150,
+                          maxColumns: 4,
+                          spacing: metrics.contentGap,
+                        );
+                        return GridView.builder(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            0,
+                            horizontal,
+                            metrics.sectionGap + bottomSafe,
+                          ),
+                          itemCount: _visibleBackgroundPaths.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: columns,
+                                crossAxisSpacing: metrics.contentGap,
+                                mainAxisSpacing: metrics.contentGap,
+                                childAspectRatio:
+                                    metrics.isCompactDensity ? 0.76 : 0.82,
+                              ),
+                          itemBuilder: (context, index) {
+                            final path = _visibleBackgroundPaths[index];
+                            return _buildBackgroundCard(context, path);
+                          },
+                        );
+                      },
+                    ),
+          ),
+        ),
+      ],
     );
   }
 

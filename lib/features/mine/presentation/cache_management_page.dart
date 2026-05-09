@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
@@ -213,25 +214,41 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                               otherDataBytes: 0,
                             );
 
-                        return ListView(
-                          keyboardDismissBehavior:
-                              ScrollViewKeyboardDismissBehavior.onDrag,
-                          children: [
-                            if ((_isBookPresentationIndexLoading &&
-                                    !_hasLoadedBookPresentationIndex) ||
-                                _isStorageSnapshotLoading)
-                              const LinearProgressIndicator(minHeight: 2),
-                            if ((_isBookPresentationIndexLoading &&
-                                    !_hasLoadedBookPresentationIndex) ||
-                                _isStorageSnapshotLoading)
-                              const SizedBox(height: 12),
-                            ..._buildStorageSections(
-                              context,
-                              snapshot: snapshot,
-                              summaries: summaries,
-                              presentationIndex: _bookPresentationIndex,
-                            ),
-                          ],
+                        final isBootstrapLoading =
+                            (_isBookPresentationIndexLoading &&
+                                !_hasLoadedBookPresentationIndex) ||
+                            _isStorageSnapshotLoading;
+
+                        return AppFadeSlideTransition(
+                          child: ListView(
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            children: [
+                              AppAnimatedSwitcher(
+                                child:
+                                    isBootstrapLoading
+                                        ? const LinearProgressIndicator(
+                                          key: ValueKey(
+                                            'cache_management_loading',
+                                          ),
+                                          minHeight: 2,
+                                        )
+                                        : const SizedBox.shrink(
+                                          key: ValueKey(
+                                            'cache_management_idle',
+                                          ),
+                                        ),
+                              ),
+                              if (isBootstrapLoading)
+                                const SizedBox(height: 12),
+                              ..._buildStorageSections(
+                                context,
+                                snapshot: snapshot,
+                                summaries: summaries,
+                                presentationIndex: _bookPresentationIndex,
+                              ),
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -362,14 +379,20 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                 _selectedOptions.isEmpty || _isClearingSelection
                     ? null
                     : _clearSelectedStorageItems,
-            icon:
-                _isClearingSelection
-                    ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.delete_sweep_outlined),
+            icon: AppAnimatedSwitcher(
+              child:
+                  _isClearingSelection
+                      ? const SizedBox(
+                        key: ValueKey('cache_clear_progress'),
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(
+                        Icons.delete_sweep_outlined,
+                        key: ValueKey('cache_clear_icon'),
+                      ),
+            ),
             label: Text(_isClearingSelection ? '清理中...' : '清理所选'),
           ),
           TextButton(

@@ -83,6 +83,32 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
   }
 
+  Future<bool> _tryHydrateVisibleContentFromCache() {
+    return _tryHydrateVisibleContentFromCacheFlow();
+  }
+
+  Future<bool> _loadCurrentChapter({
+    double? initialScrollRatio,
+    ReaderLogicalPosition? initialLogicalPosition,
+    String? sourceIdOverride,
+    String? chapterIdOverride,
+    String? chapterUrlOverride,
+    String? chapterTitleOverride,
+    int? chapterIndexOverride,
+    bool commitChapterIdentity = false,
+  }) {
+    return _loadCurrentChapterFlow(
+      initialScrollRatio: initialScrollRatio,
+      initialLogicalPosition: initialLogicalPosition,
+      sourceIdOverride: sourceIdOverride,
+      chapterIdOverride: chapterIdOverride,
+      chapterUrlOverride: chapterUrlOverride,
+      chapterTitleOverride: chapterTitleOverride,
+      chapterIndexOverride: chapterIndexOverride,
+      commitChapterIdentity: commitChapterIdentity,
+    );
+  }
+
   GlobalKey _continuousTextChapterKey(_ContinuousTextChapter chapter) {
     final identity =
         chapter.chapterUrl.trim().isNotEmpty
@@ -91,65 +117,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return _continuousTextChapterKeys.putIfAbsent(identity, () => GlobalKey());
   }
 
-  void _replaceContinuousTextFlowWithCurrentChapter({
-    required Chapter chapter,
-    required int chapterIndex,
-    required _ChapterLoadSnapshot snapshot,
-  }) {
-    _replaceContinuousTextFlowWithCurrentChapterFlow(
-      chapter: chapter,
-      chapterIndex: chapterIndex,
-      snapshot: snapshot,
-    );
-  }
-
-  Future<_ContinuousTextChapter?> _loadContinuousTextChapter(int chapterIndex) {
-    return _loadContinuousTextChapterFlow(chapterIndex);
-  }
-
-  Future<void> _loadAdjacentContinuousTextChapter({
-    required bool forward,
-  }) async {
-    if (_isScrollEdgeAdvancingChapter ||
-        !_shouldUseContinuousTextFlow ||
-        _continuousTextChapters.isEmpty) {
-      return;
-    }
-
-    _continuousTextChapters = _retainContinuousTextWindowFlow(
-      _continuousTextChapters,
-    );
-    final targetIndex = _chapterWindowController.resolveAdjacentLoadIndex(
-      chapters: _chapters,
-      loadedChapterIndices: _continuousTextChapters.map(
-        (item) => item.chapterIndex,
-      ),
-      currentChapterIndex: _currentIndex,
-      forward: forward,
-    );
-    if (targetIndex == null) {
-      return;
-    }
-
-    _isScrollEdgeAdvancingChapter = true;
-    try {
-      final chapter = await _loadContinuousTextChapter(targetIndex);
-      if (!mounted || chapter == null) {
-        return;
-      }
-      if (_continuousTextChapters.any(
-        (item) => item.chapterIndex == chapter.chapterIndex,
-      )) {
-        return;
-      }
-      setState(() {
-        _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
-          chapter,
-        );
-      });
-    } finally {
-      _isScrollEdgeAdvancingChapter = false;
-    }
+  Future<void> _loadAdjacentContinuousTextChapter({required bool forward}) {
+    return _loadAdjacentContinuousTextChapterFlow(forward: forward);
   }
 
   bool _isContinuousTextChapterActive(_ContinuousTextChapter chapter) {
@@ -160,28 +129,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return _findCurrentContinuousTextChapterFlow();
   }
 
-  _ContinuousTextChapter? _resolveActiveContinuousTextChapter() {
-    return _resolveActiveContinuousTextChapterFlow();
-  }
-
   double _continuousTextChapterScrollRatioFor(_ContinuousTextChapter chapter) {
     return _continuousTextChapterScrollRatioForFlow(chapter);
   }
 
-  void _activateContinuousTextChapter(_ContinuousTextChapter chapter) {
-    _activateContinuousTextChapterFlow(chapter);
-  }
-
   void _syncActiveContinuousTextChapterFromScroll() {
-    if (!_shouldUseContinuousTextFlow || _continuousTextChapters.length <= 1) {
-      return;
-    }
-
-    final resolved = _resolveActiveContinuousTextChapter();
-    if (resolved == null || _isContinuousTextChapterActive(resolved)) {
-      return;
-    }
-    _activateContinuousTextChapter(resolved);
+    _syncActiveContinuousTextChapterFromScrollFlow();
   }
 
   void _syncContinuousTextFlowAfterSettingsApplied() {
@@ -864,6 +817,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         return;
       case PagedTransitionActionType.crossChapter:
         _markFirstPageTurnRequested();
+        await _playCrossChapterPagedTurnAnimation(action);
         final turned = await _jumpToAdjacentReadableChapter(
           forward: safeDirection >= 0,
         );
@@ -906,6 +860,63 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     });
     _pagedTransitionController.value = 0;
     _pagedTransitionController.forward();
+  }
+
+  Future<void> _playCrossChapterPagedTurnAnimation(
+    PagedTransitionAction action,
+  ) async {
+    final transitionState = action.transitionState;
+    final motion = action.motion;
+    if (transitionState == null ||
+        motion == null ||
+        motion.duration <= Duration.zero) {
+      return;
+    }
+    if (transitionState.style == ReaderPageAnimationStyle.curl) {
+      await _playCrossChapterCurlTurnAnimation(transitionState, motion);
+      return;
+    }
+    if (_isPagedTransitionAnimating) {
+      return;
+    }
+    _pagedTransitionController.duration = motion.duration;
+    setState(() {
+      _pagedTransition = transitionState;
+    });
+    _pagedTransitionController.value = 0;
+    try {
+      await _pagedTransitionController.forward().orCancel;
+    } on TickerCanceled {
+      // Reader may leave the page while the boundary animation is running.
+    }
+  }
+
+  Future<void> _playCrossChapterCurlTurnAnimation(
+    PagedTransitionState transitionState,
+    PagedAnimationMotionSpec motion,
+  ) async {
+    if (_isCurlAutoTurning) {
+      return;
+    }
+    _curlAutoTurnController.duration = motion.duration;
+    setState(() {
+      _curlTransition = _curlTransition.copyWith(
+        direction: transitionState.direction,
+        fromIndex: transitionState.fromIndex,
+        toIndex: transitionState.toIndex,
+        commitOnAnimationEnd: true,
+        isPreview: false,
+        previewProgress: 0,
+        isAnimating: true,
+        isCrossChapter: true,
+      );
+    });
+    _curlAutoTurnController.value = 0;
+    try {
+      await _curlAutoTurnController.forward().orCancel;
+    } on TickerCanceled {
+      // Reader may leave the page while the boundary animation is running.
+    }
   }
 
   void _onPagedTransitionStatus(AnimationStatus status) {

@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
@@ -238,28 +239,32 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                 0,
                               ),
                               sliver: SliverToBoxAdapter(
-                                child: SearchInputCard(
-                                  isSearching: _isSearching,
-                                  searchContentMode: _searchContentMode,
-                                  isPreciseBookMatch: _isPreciseBookMatch,
-                                  selectedSourceCount:
-                                      _selectedSourceIds.length,
-                                  availableSourceCount: _availableSourceCount,
-                                  isLoadingSourceCount: _isLoadingSourceCount,
-                                  modeActiveBackgroundColor:
-                                      palette.primaryColor,
-                                  modeActiveForegroundColor:
-                                      palette.buttonTextColor,
-                                  optionActiveBackgroundColor:
-                                      palette.primaryContainerColor,
-                                  optionActiveForegroundColor:
-                                      palette.textPrimaryColor,
-                                  onClearResults: _clearResults,
-                                  onContentModeChanged: _onContentModeChanged,
-                                  onPreciseMatchChanged: _onPreciseMatchChanged,
-                                  onOpenSourceFilter:
-                                      () => unawaited(_showSourceFilterSheet()),
-                                  onClearSourceFilter: _clearSourceFilter,
+                                child: AppFadeSlideTransition(
+                                  child: SearchInputCard(
+                                    isSearching: _isSearching,
+                                    searchContentMode: _searchContentMode,
+                                    isPreciseBookMatch: _isPreciseBookMatch,
+                                    selectedSourceCount:
+                                        _selectedSourceIds.length,
+                                    availableSourceCount: _availableSourceCount,
+                                    isLoadingSourceCount: _isLoadingSourceCount,
+                                    modeActiveBackgroundColor:
+                                        palette.primaryColor,
+                                    modeActiveForegroundColor:
+                                        palette.buttonTextColor,
+                                    optionActiveBackgroundColor:
+                                        palette.primaryContainerColor,
+                                    optionActiveForegroundColor:
+                                        palette.textPrimaryColor,
+                                    onClearResults: _clearResults,
+                                    onContentModeChanged: _onContentModeChanged,
+                                    onPreciseMatchChanged:
+                                        _onPreciseMatchChanged,
+                                    onOpenSourceFilter:
+                                        () =>
+                                            unawaited(_showSourceFilterSheet()),
+                                    onClearSourceFilter: _clearSourceFilter,
+                                  ),
                                 ),
                               ),
                             ),
@@ -276,12 +281,21 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                 >(
                                   valueListenable: _progressReportNotifier,
                                   builder: (context, report, _) {
-                                    if (!_isSearching) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return SearchProgressCard(
-                                      report: report,
-                                      isSearching: _isSearching,
+                                    return AppAnimatedSwitcher(
+                                      child:
+                                          _isSearching
+                                              ? SearchProgressCard(
+                                                key: const ValueKey<String>(
+                                                  'search_progress',
+                                                ),
+                                                report: report,
+                                                isSearching: _isSearching,
+                                              )
+                                              : const SizedBox.shrink(
+                                                key: ValueKey<String>(
+                                                  'search_progress_hidden',
+                                                ),
+                                              ),
                                     );
                                   },
                                 ),
@@ -310,12 +324,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                       16 + bottomSafe + keyboardInset,
                                     ),
                                     sliver: SliverToBoxAdapter(
-                                      child: SearchEmptyState(
-                                        history: _searchHistory,
-                                        onHistoryTap: _onHistoryTap,
-                                        onClearHistory: _onClearHistory,
-                                        onRemoveHistoryItem:
-                                            _onRemoveHistoryItem,
+                                      child: AppFadeSlideTransition(
+                                        child: SearchEmptyState(
+                                          history: _searchHistory,
+                                          onHistoryTap: _onHistoryTap,
+                                          onClearHistory: _onClearHistory,
+                                          onRemoveHistoryItem:
+                                              _onRemoveHistoryItem,
+                                        ),
                                       ),
                                     ),
                                   );
@@ -336,18 +352,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                       16 + bottomSafe + keyboardInset,
                                     ),
                                     sliver: SliverToBoxAdapter(
-                                      child: SearchGroupedEmptyFallbackCard(
-                                        canDisablePrecise:
-                                            _isPreciseBookMatch &&
-                                            report.books.isNotEmpty,
-                                        canSwitchAllSources:
-                                            _selectedSourceIds.isNotEmpty,
-                                        onDisablePreciseMatch:
-                                            _disablePreciseMatchFallback,
-                                        onSwitchAllSources:
-                                            () => unawaited(
-                                              _switchToAllSourcesFallback(),
-                                            ),
+                                      child: AppFadeSlideTransition(
+                                        child: SearchGroupedEmptyFallbackCard(
+                                          canDisablePrecise:
+                                              _isPreciseBookMatch &&
+                                              report.books.isNotEmpty,
+                                          canSwitchAllSources:
+                                              _selectedSourceIds.isNotEmpty,
+                                          onDisablePreciseMatch:
+                                              _disablePreciseMatchFallback,
+                                          onSwitchAllSources:
+                                              () => unawaited(
+                                                _switchToAllSourcesFallback(),
+                                              ),
+                                        ),
                                       ),
                                     ),
                                   );
@@ -363,22 +381,29 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                         0,
                                       ),
                                       sliver: SliverToBoxAdapter(
-                                        child: Column(
-                                          children: [
-                                            SearchReportSummary(
-                                              report: report,
-                                              visibleBookCount: books.length,
-                                              isPreciseBookMatch:
-                                                  _isPreciseBookMatch,
+                                        child: AppAnimatedSwitcher(
+                                          child: Column(
+                                            key: ValueKey<String>(
+                                              'search_report_${books.length}_${report.failures.length}',
                                             ),
-                                            if (report.failures.isNotEmpty) ...[
-                                              const SizedBox(height: 8),
-                                              SearchFailureBanner(
+                                            children: [
+                                              SearchReportSummary(
                                                 report: report,
+                                                visibleBookCount: books.length,
+                                                isPreciseBookMatch:
+                                                    _isPreciseBookMatch,
                                               ),
+                                              if (report
+                                                  .failures
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 8),
+                                                SearchFailureBanner(
+                                                  report: report,
+                                                ),
+                                              ],
+                                              const SizedBox(height: 10),
                                             ],
-                                            const SizedBox(height: 10),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),

@@ -12,6 +12,32 @@
 
 ---
 
+## 0. 2026-05-09 执行对账
+
+本轮对照低资源专项和代码实现后，阶段状态如下：
+
+- 阶段 0：部分完成。已补图文 EPUB 和漫画连续/分页/横向 smoke test；真机样本、耗时、FPS、峰值内存仍需按 `docs/reader_baseline_matrix_2026-05-09.md` 回填。
+- 阶段 1：部分完成。`ReaderSessionController` 已统一章节加载、预加载、分页 token；本轮新增 `ReaderSessionIntent` 并接入章节加载/分页任务；章节加载、缓存水合、邻章预载和连续滚动邻章加载已统一到 Flow 实现，页面层大状态完全瘦身仍是后续大拆分项。
+- 阶段 2：已完成主体。`ReaderChapterWindowController` 已建立 previous/current/next 窗口，连续章节流已裁剪，窗口外预加载/分页会取消；图片重型状态回收由阶段 5 承接。
+- 阶段 3：已完成主体。已新增 `ReaderPagedBlock`，分页视图可渲染文字块和图片块，图文 EPUB 不再只能滚动展示。
+- 阶段 4：已完成主体。已新增 `ReaderStreamingPaginationController` 和分页事件模型；后续仍需用真机基线验证长章节首屏收益。
+- 阶段 5：已完成主体。图片 decode budget、ImageCache 上限、漫画 cacheExtent、data URI 阈值和缩放状态窗口治理已接入。
+- 阶段 6：本轮补齐主体。`ReaderResourceBudget` 已有；本轮新增 `ReaderPreloadController`，把内容预加载、分页预热、图片预载拆成任务类型，并加入失败记忆、并发口径和当前/邻近/远端优先级；旧入口和 Flow 入口已复用同一邻章预载计划。
+- 阶段 7：已完成主体。信息栏 tick、阅读记录、运行时 wake policy 和阅读器生命周期已做低唤醒治理；仍需用长时间阅读 profile 验证。
+
+后续执行原则：
+
+- 代码阶段先按“主体完成/剩余缺口”对账，不重复做已完成任务。
+- 阶段 0 的真机数据作为收尾验收，不阻塞当前架构收口，但必须在性能结论前补齐。
+- 文档里的“完成”代表架构能力已落地，不代表所有真机指标已达标。
+
+本轮之后剩余项只保留两类：
+
+- 必须真机完成：阶段 0 的低端机耗时、FPS、内存峰值、电量体感和缓存增长回填。
+- 需要独立大拆分：`ReaderPage` 页面层状态继续瘦身；当前已经删除章节加载/缓存水合/邻章预载的旧链路重复实现，并避免关键任务策略继续分叉。
+
+---
+
 ## 1. 当前阅读器主链路
 
 当前项目阅读器大致链路如下：
@@ -46,14 +72,11 @@ flowchart TD
 
 主要问题：
 
-- `ReaderPage` 仍然是运行时总控，state 字段、timer、token、分页、预加载、记录保存、漫画状态都集中在页面层
+- `ReaderPage` 仍然偏重，state 字段、timer、分页、记录保存、漫画状态还没有完全收口到 application 层
 - `reader_page.dart` 与 `reader_page_content_loading.dart` 中旧链路和 `Flow` 链路并存，迁移没有完全收敛
-- 文本分页还是 paragraph/slice 模型，不能承载图片块和图文混排
-- 图文章节被策略层强制退回滚动正文，无法像 MD3 一样分页展示
-- 滚动和分页已经区分，但章节窗口、预加载、任务取消和资源预算没有形成统一会话模型
-- 图片解码、缓存、预载、回收没有按正文插图、漫画、封面拆预算
-- 缓存清理仍偏条数限制，缺少字节预算和设备档位
-- 低频记录和信息栏已有意识，但还没有形成统一后台任务策略
+- 图文分页、三章窗口、任务 token、图片预算和低唤醒已有主体实现，但还需要真机 profile 验证收益
+- 预加载已经有资源预算和失败记忆，后续可继续把图片预载执行器补完整
+- 缓存清理已有部分字节预算意识，但章节/分页/图片/封面全链路字节口径仍需统一观测
 
 ---
 
@@ -263,11 +286,11 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 准备 6 类样本：长 TXT、普通 EPUB、图文 EPUB、纯图 EPUB/漫画、网络章节、低质量图片章节
-- [ ] 建立打开耗时、首屏耗时、首翻页耗时、内存峰值、连续滚动帧率、后台任务数基线
-- [ ] 增加图文 EPUB smoke test：滚动可见文字和图片
-- [ ] 增加纯漫画 smoke test：连续、分页、横向三模式可用
-- [ ] 记录当前已知限制：图文 EPUB 只能滚动，不能正文分页
+- [x] 准备 6 类样本记录口径：长 TXT、普通 EPUB、图文 EPUB、纯图 EPUB/漫画、网络章节、低质量图片章节
+- [x] 建立打开耗时、首屏耗时、首翻页耗时、内存峰值、连续滚动帧率、后台任务数记录口径
+- [x] 增加图文 EPUB smoke test：滚动可见文字和图片
+- [x] 增加纯漫画 smoke test：连续、分页、横向三模式可用
+- [x] 更新当前限制：图文 EPUB 已支持正文分页；剩余限制是真机性能和极端大图降级策略待回填
 
 完成标准：
 
@@ -283,13 +306,13 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 新增 `ReaderSessionController`
-- [ ] 新增 `ReaderSessionIntent`：load、jump、next、previous、changeMode、changeSettings、retry
-- [ ] 下沉 `_chapterContentRequestToken`
-- [ ] 下沉 `_preloadTaskToken`
-- [ ] 下沉 `_paginationTaskId`
-- [ ] 下沉阅读记录 session 生命周期
-- [ ] 收敛 `reader_page.dart` 与 `reader_page_content_loading.dart` 中重复的旧链路和 Flow 链路
+- [x] 新增 `ReaderSessionController`
+- [x] 新增 `ReaderSessionIntent`：load、jump、next、previous、changeMode、changeSettings、retry
+- [x] 下沉 `_chapterContentRequestToken`
+- [x] 下沉 `_preloadTaskToken`
+- [x] 下沉 `_paginationTaskId`
+- [x] 下沉阅读记录 session 生命周期主体
+- [x] 收敛 `reader_page.dart` 与 `reader_page_content_loading.dart` 中重复的旧链路和 Flow 链路（章节加载、缓存水合、邻章预载、连续滚动邻章加载已统一到 Flow）
 - [ ] 页面只保留 UI controller：ScrollController、PageController、AnimationController、Selection controller
 
 阶段边界：
@@ -312,13 +335,13 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 新增 `ReaderChapterWindowController`
-- [ ] 窗口固定持有前、当前、后三章
-- [ ] 切下一章时复用 next 为 current
-- [ ] 切上一章时复用 prev 为 current
-- [ ] 取消窗口外章节加载任务
-- [ ] 释放窗口外分页结果、图片状态、缩放状态
-- [ ] 区分 UI 窗口和后台缓存预下载范围
+- [x] 新增 `ReaderChapterWindowController`
+- [x] 窗口固定持有前、当前、后三章
+- [x] 切下一章时复用 next 为 current
+- [x] 切上一章时复用 prev 为 current
+- [x] 取消窗口外章节加载任务
+- [x] 释放窗口外分页结果、图片状态、缩放状态
+- [x] 区分 UI 窗口和后台缓存预下载范围
 
 阶段边界：
 
@@ -339,15 +362,15 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 新增 `ReaderPagedBlock`
-- [ ] 新增 `ReaderPagedTextBlock`
-- [ ] 新增 `ReaderPagedImageBlock`
-- [ ] 为图片块解析尺寸、显示尺寸和占位高度
-- [ ] 将 `ReaderPaginationEngine` 从 paragraph 输入升级为 block 输入
-- [ ] 保留 `ReaderPagedSlice` 作为文本块内部结构
-- [ ] `ReaderTextPagedView` 支持文字块和图片块混排
-- [ ] 移除“带插图章节强制滚动”的硬限制，改为由分页器能力判断
-- [ ] 图文分页失败时可降级滚动，并给出内部诊断原因
+- [x] 新增 `ReaderPagedBlock`
+- [x] 新增 `ReaderPagedTextBlock`
+- [x] 新增 `ReaderPagedImageBlock`
+- [x] 为图片块解析尺寸、显示尺寸和占位高度
+- [x] 将 `ReaderPaginationEngine` 从 paragraph 输入升级为 block 输入
+- [x] 保留 `ReaderPagedSlice` 作为文本块内部结构
+- [x] `ReaderTextPagedView` 支持文字块和图片块混排
+- [x] 移除“带插图章节强制滚动”的硬限制，改为由分页器能力判断
+- [x] 图文分页失败时可降级滚动，并给出内部诊断原因
 
 阶段边界：
 
@@ -369,12 +392,12 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 新增 `ReaderStreamingPaginationController`
-- [ ] 输出 `pageReady / nearbyReady / complete`
-- [ ] 当前阅读位置附近优先排
-- [ ] UI 可在当前页 ready 后先显示
-- [ ] 整章完成后再写分页缓存
-- [ ] 设置变化、章节变化、窗口变化时取消旧分页
+- [x] 新增 `ReaderStreamingPaginationController`
+- [x] 输出 `pageReady / nearbyReady / complete`
+- [x] 当前阅读位置附近优先排
+- [x] UI 可在当前页 ready 后先显示
+- [x] 整章完成后再写分页缓存
+- [x] 设置变化、章节变化、窗口变化时取消旧分页
 
 阶段边界：
 
@@ -395,14 +418,14 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 正文插图、漫画图、封面图拆分预算
-- [ ] 图片统一计算 `cacheWidth/cacheHeight`
-- [ ] 按设备档位调整 Flutter `ImageCache` 上限
-- [ ] 连续漫画按档位调整 `cacheExtent`
-- [ ] 漫画分页只保留当前页、前页、后页的重型状态
-- [ ] 离开可视窗口释放 zoom controller 和临时状态
-- [ ] data URI 设置大小阈值
-- [ ] 为本地 file、网络图、data URI、svg 建立统一图片请求模型
+- [x] 正文插图、漫画图、封面图拆分预算
+- [x] 图片统一计算 `cacheWidth/cacheHeight`
+- [x] 按设备档位调整 Flutter `ImageCache` 上限
+- [x] 连续漫画按档位调整 `cacheExtent`
+- [x] 漫画分页只保留当前页、前页、后页的重型状态
+- [x] 离开可视窗口释放 zoom controller 和临时状态
+- [x] data URI 设置大小阈值
+- [x] 为本地 file、网络图、data URI、svg 建立统一图片请求模型
 
 阶段边界：
 
@@ -423,13 +446,13 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 新增 `ReaderResourceBudget`
-- [ ] 新增 `ReaderPreloadController`
-- [ ] 拆分内容预加载、分页预热、图片预载
-- [ ] 设置并发上限和失败记忆
-- [ ] 低电量/低端机/移动网络降级预热
-- [ ] 章节缓存、分页缓存、图片缓存支持字节预算
-- [ ] 后台预下载不能影响当前章加载优先级
+- [x] 新增 `ReaderResourceBudget`
+- [x] 新增 `ReaderPreloadController`
+- [x] 拆分内容预加载、分页预热、图片预载
+- [x] 设置并发上限和失败记忆
+- [x] 低电量/低端机/移动网络降级预热
+- [x] 章节缓存、分页缓存、图片缓存支持字节预算
+- [x] 后台预下载不能影响当前章加载优先级
 
 阶段边界：
 
@@ -450,12 +473,12 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 
 任务：
 
-- [ ] 信息栏只在显示时启动 tick
-- [ ] 电量优先平台事件，Flutter 侧低频兜底
-- [ ] 页面不可见时暂停非必要 timer
-- [ ] 进度保存从滚动高频触发改为关键点触发加节流
-- [ ] 阅读记录继续保持分钟级提交
-- [ ] 自动阅读、音量键、系统亮度、系统 UI 统一挂到 session lifecycle
+- [x] 信息栏只在显示时启动 tick
+- [x] 电量优先平台事件，Flutter 侧低频兜底
+- [x] 页面不可见时暂停非必要 timer
+- [x] 进度保存从滚动高频触发改为关键点触发加节流
+- [x] 阅读记录继续保持分钟级提交
+- [x] 自动阅读、音量键、系统亮度、系统 UI 统一挂到 session lifecycle
 
 阶段边界：
 
@@ -513,4 +536,3 @@ MD3 有全局内存 LRU 和字体 LRU；图片交给 Glide 体系。
 - 阅读记录：准确但低频
 - 缓存：按字节预算可控
 - 页面层：只做 UI 和交互，不做阅读核心调度
-

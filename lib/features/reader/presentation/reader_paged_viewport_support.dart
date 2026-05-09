@@ -32,6 +32,7 @@ class ReaderPagedViewportCurlState {
     this.toIndex = 0,
     this.previewProgress = 0,
     this.commitOnAnimationEnd = true,
+    this.isCrossChapter = false,
   });
 
   static const idle = ReaderPagedViewportCurlState();
@@ -43,6 +44,7 @@ class ReaderPagedViewportCurlState {
   final int toIndex;
   final double previewProgress;
   final bool commitOnAnimationEnd;
+  final bool isCrossChapter;
 
   bool get isActive => isAnimating || isPreview;
 
@@ -53,7 +55,7 @@ class ReaderPagedViewportCurlState {
         fromIndex < pageCount &&
         toIndex >= 0 &&
         toIndex < pageCount &&
-        fromIndex != toIndex;
+        (fromIndex != toIndex || isCrossChapter);
   }
 
   double resolveProgress(Animation<double> animation) {
@@ -149,7 +151,8 @@ class ReaderPagedViewportTransitionResolver {
     final hasActiveAnimatedTransition =
         pagedTransition.isAnimating &&
         pagedTransition.style == renderedAnimationStyle &&
-        pagedTransition.fromIndex != pagedTransition.toIndex &&
+        (pagedTransition.fromIndex != pagedTransition.toIndex ||
+            pagedTransition.isCrossChapter) &&
         _isValidPageIndex(pagedTransition.fromIndex, pageCount) &&
         _isValidPageIndex(pagedTransition.toIndex, pageCount);
 

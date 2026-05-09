@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -309,18 +310,20 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => _loadInitial(forceRefresh: true),
-      child: ListView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          topInset + metrics.contentGap,
-          horizontal,
-          metrics.contentGap + bottomSafe,
+    return AppFadeSlideTransition(
+      child: RefreshIndicator(
+        onRefresh: () => _loadInitial(forceRefresh: true),
+        child: ListView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.contentGap,
+            horizontal,
+            metrics.contentGap + bottomSafe,
+          ),
+          children: children,
         ),
-        children: children,
       ),
     );
   }
@@ -336,29 +339,31 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     required VoidCallback onAction,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
-    return RefreshIndicator(
-      onRefresh: () => _loadInitial(forceRefresh: true),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          topInset + metrics.sectionGap * 2,
-          horizontal,
-          metrics.sectionGap + bottomSafe,
-        ),
-        children: [
-          AppStatusStateCard(
-            icon: Icons.notifications_none,
-            title: title,
-            message: message,
-            tone:
-                title == '加载失败'
-                    ? AppStatusStateTone.error
-                    : AppStatusStateTone.neutral,
-            actionLabel: actionLabel,
-            onAction: onAction,
+    return AppFadeSlideTransition(
+      child: RefreshIndicator(
+        onRefresh: () => _loadInitial(forceRefresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.sectionGap * 2,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
           ),
-        ],
+          children: [
+            AppStatusStateCard(
+              icon: Icons.notifications_none,
+              title: title,
+              message: message,
+              tone:
+                  title == '加载失败'
+                      ? AppStatusStateTone.error
+                      : AppStatusStateTone.neutral,
+              actionLabel: actionLabel,
+              onAction: onAction,
+            ),
+          ],
+        ),
       ),
     );
   }

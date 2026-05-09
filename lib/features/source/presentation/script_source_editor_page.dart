@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:highlight/languages/javascript.dart';
 
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/script_source.dart';
@@ -444,16 +445,27 @@ class _ScriptSourceEditorPageState
                 children: [
                   if (_isLoading) const LinearProgressIndicator(minHeight: 2),
                   _buildEditorToolbar(context),
-                  _EditorIssueBanner(
-                    issueSummaryListenable: _issueSummaryNotifier,
-                    isLoading: _isLoading,
-                    palette: _palette,
+                  AppFadeSlideTransition(
+                    enabled: !_isLoading,
+                    child: _EditorIssueBanner(
+                      issueSummaryListenable: _issueSummaryNotifier,
+                      isLoading: _isLoading,
+                      palette: _palette,
+                    ),
                   ),
                   Expanded(
-                    child:
-                        _isLoading
-                            ? _buildEditorLoadingState(context)
-                            : _buildCodeEditor(context),
+                    child: AppAnimatedSwitcher(
+                      child:
+                          _isLoading
+                              ? KeyedSubtree(
+                                key: const ValueKey<String>('editor_loading'),
+                                child: _buildEditorLoadingState(context),
+                              )
+                              : KeyedSubtree(
+                                key: const ValueKey<String>('editor_code'),
+                                child: _buildCodeEditor(context),
+                              ),
+                    ),
                   ),
                 ],
               ),

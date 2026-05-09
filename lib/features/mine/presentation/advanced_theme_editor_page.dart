@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
@@ -2062,30 +2063,39 @@ class _AdvancedThemeEditorPageState
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child:
                     _isLoading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(
+                          key: ValueKey<String>('advanced_theme_loading'),
+                          child: CircularProgressIndicator(),
+                        )
                         : draft == null
-                        ? const Center(child: Text('高级主题不存在'))
-                        : ListView(
-                          keyboardDismissBehavior:
-                              ScrollViewKeyboardDismissBehavior.onDrag,
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            6,
-                            horizontal,
-                            10 + bottomSafe,
-                          ),
-                          children: [
-                            _buildColorsSection(context),
-                            const SizedBox(height: sectionGap),
-                            _buildResourceSection(context, draft),
-                            const SizedBox(height: sectionGap),
-                            ValueListenableBuilder<int>(
-                              valueListenable: _colorPreviewRevision,
-                              builder: (context, _, _) {
-                                return _buildPreviewSection(context, draft);
-                              },
+                        ? const Center(
+                          key: ValueKey<String>('advanced_theme_missing'),
+                          child: Text('高级主题不存在'),
+                        )
+                        : AppFadeSlideTransition(
+                          key: const ValueKey<String>('advanced_theme_editor'),
+                          child: ListView(
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              6,
+                              horizontal,
+                              10 + bottomSafe,
                             ),
-                          ],
+                            children: [
+                              _buildColorsSection(context),
+                              const SizedBox(height: sectionGap),
+                              _buildResourceSection(context, draft),
+                              const SizedBox(height: sectionGap),
+                              ValueListenableBuilder<int>(
+                                valueListenable: _colorPreviewRevision,
+                                builder: (context, _, _) {
+                                  return _buildPreviewSection(context, draft);
+                                },
+                              ),
+                            ],
+                          ),
                         ),
               ),
             );

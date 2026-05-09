@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -669,7 +670,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _buildTocWarningCard(presentationState.tocWarningText!),
       ]);
     }
-    return sections;
+    return [
+      for (var index = 0; index < sections.length; index++)
+        AppFadeSlideTransition(
+          delay: Duration(milliseconds: (index * 48).clamp(0, 240).toInt()),
+          child: sections[index],
+        ),
+    ];
   }
 
   Widget _buildEditingDetailCard(BookDetailLoadResult result) {

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -907,85 +908,102 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
                         metrics.sectionGap + bottomSafe + keyboardInset,
                       ),
                       children: [
-                        Container(
-                          padding: EdgeInsets.all(metrics.cardPadding),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(
-                              metrics.cardRadius + 4,
+                        AppFadeSlideTransition(
+                          child: Container(
+                            padding: EdgeInsets.all(metrics.cardPadding),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(
+                                metrics.cardRadius + 4,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '轻量提交',
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '当前只支持问题和建议两类。提交前会自动查重，帮助你避免重复反馈。',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 18),
+                        AppFadeSlideTransition(
+                          delay: const Duration(milliseconds: 48),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                '轻量提交',
+                                '反馈类型',
                                 style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '当前只支持问题和建议两类。提交前会自动查重，帮助你避免重复反馈。',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  height: 1.45,
-                                ),
+                              const SizedBox(height: 8),
+                              SegmentedButton<FeedbackType>(
+                                segments: [
+                                  ButtonSegment(
+                                    value: FeedbackType.issue,
+                                    label: Text(FeedbackType.issue.label),
+                                    icon: const Icon(Icons.bug_report_outlined),
+                                  ),
+                                  ButtonSegment(
+                                    value: FeedbackType.suggestion,
+                                    label: Text(FeedbackType.suggestion.label),
+                                    icon: const Icon(Icons.lightbulb_outline),
+                                  ),
+                                ],
+                                selected: {_type},
+                                onSelectionChanged:
+                                    _isSubmitting
+                                        ? null
+                                        : (value) {
+                                          setState(() {
+                                            _type = value.first;
+                                          });
+                                        },
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 18),
-                        Text(
-                          '反馈类型',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        SegmentedButton<FeedbackType>(
-                          segments: [
-                            ButtonSegment(
-                              value: FeedbackType.issue,
-                              label: Text(FeedbackType.issue.label),
-                              icon: const Icon(Icons.bug_report_outlined),
-                            ),
-                            ButtonSegment(
-                              value: FeedbackType.suggestion,
-                              label: Text(FeedbackType.suggestion.label),
-                              icon: const Icon(Icons.lightbulb_outline),
-                            ),
-                          ],
-                          selected: {_type},
-                          onSelectionChanged:
-                              _isSubmitting
-                                  ? null
-                                  : (value) {
-                                    setState(() {
-                                      _type = value.first;
-                                    });
-                                  },
-                        ),
-                        const SizedBox(height: 18),
-                        TextField(
-                          controller: _titleController,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: '标题',
-                            hintText: '用一句话描述问题或建议',
+                        AppFadeSlideTransition(
+                          delay: const Duration(milliseconds: 72),
+                          child: Column(
+                            children: [
+                              TextField(
+                                controller: _titleController,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: '标题',
+                                  hintText: '用一句话描述问题或建议',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _contentController,
+                                minLines: 6,
+                                maxLines: 8,
+                                decoration: const InputDecoration(
+                                  labelText: '详细描述',
+                                  hintText: '请尽量写清楚场景、现象和复现步骤',
+                                  alignLabelWithHint: true,
+                                ),
+                                onSubmitted: (_) => _submit(),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _contentController,
-                          minLines: 6,
-                          maxLines: 8,
-                          decoration: const InputDecoration(
-                            labelText: '详细描述',
-                            hintText: '请尽量写清楚场景、现象和复现步骤',
-                            alignLabelWithHint: true,
-                          ),
-                          onSubmitted: (_) => _submit(),
                         ),
                         const SizedBox(height: 18),
                         FilledButton.icon(
@@ -1001,7 +1019,12 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
                                     ),
                                   )
                                   : const Icon(Icons.send_rounded),
-                          label: Text(_isSubmitting ? '提交中...' : '提交反馈'),
+                          label: AppAnimatedSwitcher(
+                            child: Text(
+                              _isSubmitting ? '提交中...' : '提交反馈',
+                              key: ValueKey<bool>(_isSubmitting),
+                            ),
+                          ),
                         ),
                       ],
                     ),

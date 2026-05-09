@@ -46,7 +46,6 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   void _initializeReaderPage() {
     WidgetsBinding.instance.addObserver(this);
     _bindDependencies();
-    _applyReaderImageCacheBudget();
     _appThemeModeSubscription = ref.listenManual<ThemeMode>(
       appThemeModeProvider,
       (_, next) => _handleAppThemeModeChanged(next),

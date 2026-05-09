@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/layout/app_layout.dart';
+import '../../../../app/motion/app_motion_widgets.dart';
 import '../../domain/sync_conflict.dart';
 import '../../domain/sync_job.dart';
 import '../../domain/sync_scope.dart';
@@ -32,40 +33,45 @@ class SyncHistoryPage extends ConsumerWidget {
                   MediaQuery.viewPaddingOf(context).bottom,
             ),
             children: [
-              _Section(
-                title: '最近任务',
-                child: jobsAsync.when(
-                  data: (jobs) {
-                    if (jobs.isEmpty) {
-                      return const Text('当前没有同步任务。');
-                    }
-                    return Column(
-                      children: [
-                        for (final job in jobs.take(20)) _JobTile(job: job),
-                      ],
-                    );
-                  },
-                  error: (error, _) => Text('加载任务失败：$error'),
-                  loading: () => const _LoadingLine('正在加载任务…'),
+              AppFadeSlideTransition(
+                child: _Section(
+                  title: '最近任务',
+                  child: jobsAsync.when(
+                    data: (jobs) {
+                      if (jobs.isEmpty) {
+                        return const Text('当前没有同步任务。');
+                      }
+                      return Column(
+                        children: [
+                          for (final job in jobs.take(20)) _JobTile(job: job),
+                        ],
+                      );
+                    },
+                    error: (error, _) => Text('加载任务失败：$error'),
+                    loading: () => const _LoadingLine('正在加载任务…'),
+                  ),
                 ),
               ),
               SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
-              _Section(
-                title: '最近冲突',
-                child: conflictsAsync.when(
-                  data: (conflicts) {
-                    if (conflicts.isEmpty) {
-                      return const Text('当前没有冲突记录。');
-                    }
-                    return Column(
-                      children: [
-                        for (final conflict in conflicts.take(20))
-                          _ConflictTile(conflict: conflict),
-                      ],
-                    );
-                  },
-                  error: (error, _) => Text('加载冲突失败：$error'),
-                  loading: () => const _LoadingLine('正在加载冲突…'),
+              AppFadeSlideTransition(
+                delay: const Duration(milliseconds: 48),
+                child: _Section(
+                  title: '最近冲突',
+                  child: conflictsAsync.when(
+                    data: (conflicts) {
+                      if (conflicts.isEmpty) {
+                        return const Text('当前没有冲突记录。');
+                      }
+                      return Column(
+                        children: [
+                          for (final conflict in conflicts.take(20))
+                            _ConflictTile(conflict: conflict),
+                        ],
+                      );
+                    },
+                    error: (error, _) => Text('加载冲突失败：$error'),
+                    loading: () => const _LoadingLine('正在加载冲突…'),
+                  ),
                 ),
               ),
             ],
@@ -132,42 +138,43 @@ class _JobTile extends StatelessWidget {
       context: context,
       builder: (sheetContext) {
         final metrics = AppAdaptiveMetrics.of(sheetContext);
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              metrics.pagePadding,
-              metrics.sectionGap,
-              metrics.pagePadding,
-              metrics.sectionGap,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '任务详情',
-                  style: Theme.of(
-                    sheetContext,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                SizedBox(height: metrics.contentGap),
-                _JobDetailLine(label: '配置', value: job.profileId),
-                _JobDetailLine(label: '状态', value: job.status.name),
-                _JobDetailLine(label: '触发方式', value: job.triggerKind.name),
-                _JobDetailLine(
-                  label: '开始时间',
-                  value: job.startedAt.toLocal().toString(),
-                ),
-                if (job.endedAt != null)
-                  _JobDetailLine(
-                    label: '结束时间',
-                    value: job.endedAt!.toLocal().toString(),
+        return AppFadeSlideTransition(
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                metrics.pagePadding,
+                metrics.sectionGap,
+                metrics.pagePadding,
+                metrics.sectionGap,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '任务详情',
+                    style: Theme.of(sheetContext).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                if ((job.summaryJson ?? '').trim().isNotEmpty)
-                  _JobDetailLine(label: '摘要', value: job.summaryJson!),
-                if ((job.errorMessage ?? '').trim().isNotEmpty)
-                  _JobDetailLine(label: '错误', value: job.errorMessage!),
-              ],
+                  SizedBox(height: metrics.contentGap),
+                  _JobDetailLine(label: '配置', value: job.profileId),
+                  _JobDetailLine(label: '状态', value: job.status.name),
+                  _JobDetailLine(label: '触发方式', value: job.triggerKind.name),
+                  _JobDetailLine(
+                    label: '开始时间',
+                    value: job.startedAt.toLocal().toString(),
+                  ),
+                  if (job.endedAt != null)
+                    _JobDetailLine(
+                      label: '结束时间',
+                      value: job.endedAt!.toLocal().toString(),
+                    ),
+                  if ((job.summaryJson ?? '').trim().isNotEmpty)
+                    _JobDetailLine(label: '摘要', value: job.summaryJson!),
+                  if ((job.errorMessage ?? '').trim().isNotEmpty)
+                    _JobDetailLine(label: '错误', value: job.errorMessage!),
+                ],
+              ),
             ),
           ),
         );

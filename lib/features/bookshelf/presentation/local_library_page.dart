@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
@@ -329,137 +330,145 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                metrics.contentGap,
-                horizontal,
-                metrics.sectionGap + MediaQuery.viewPaddingOf(context).bottom,
-              ),
-              children: [
-                InkWell(
-                  onTap: _isImporting ? null : _pickAndImportFiles,
-                  borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
-                  child: Ink(
-                    padding: EdgeInsets.all(metrics.cardPadding + 8),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(
-                        metrics.cardRadius + 6,
+            child: AppFadeSlideTransition(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  metrics.contentGap,
+                  horizontal,
+                  metrics.sectionGap + MediaQuery.viewPaddingOf(context).bottom,
+                ),
+                children: [
+                  InkWell(
+                    onTap: _isImporting ? null : _pickAndImportFiles,
+                    borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
+                    child: Ink(
+                      padding: EdgeInsets.all(metrics.cardPadding + 8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(
+                          metrics.cardRadius + 6,
+                        ),
+                        border: Border.all(color: colorScheme.outlineVariant),
                       ),
-                      border: Border.all(color: colorScheme.outlineVariant),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Icon(
+                              Icons.library_add_rounded,
+                              color: colorScheme.onPrimaryContainer,
+                              size: 28,
+                            ),
+                          ),
+                          SizedBox(height: metrics.sectionGap),
+                          Text(
+                            '点击选择本地图书',
+                            style: (metrics.isCompactDensity
+                                    ? Theme.of(context).textTheme.titleLarge
+                                    : Theme.of(context).textTheme.headlineSmall)
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          SizedBox(height: metrics.contentGap * 0.8),
+                          Text(
+                            '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入会等待目录建立完成，完成后可直接阅读。',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                          ),
+                          SizedBox(height: metrics.sectionGap),
+                          FilledButton.icon(
+                            onPressed:
+                                _isImporting ? null : _pickAndImportFiles,
+                            icon: const Icon(Icons.upload_file_outlined),
+                            label: const Text('从文件选择器导入'),
+                          ),
+                          if (!_isImporting && _lastImportedResult != null) ...[
+                            SizedBox(height: metrics.contentGap),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed: _openLatestImportedBook,
+                                  icon: const Icon(Icons.menu_book_rounded),
+                                  label: const Text('立即阅读'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _returnToBookshelf,
+                                  icon: const Icon(
+                                    Icons.library_books_outlined,
+                                  ),
+                                  label: const Text('返回书架'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: metrics.sectionGap),
+                  Container(
+                    padding: EdgeInsets.all(metrics.cardPadding),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(
+                        metrics.cardRadius + 2,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Icon(
-                            Icons.library_add_rounded,
-                            color: colorScheme.onPrimaryContainer,
-                            size: 28,
-                          ),
-                        ),
-                        SizedBox(height: metrics.sectionGap),
                         Text(
-                          '点击选择本地图书',
-                          style: (metrics.isCompactDensity
-                                  ? Theme.of(context).textTheme.titleLarge
-                                  : Theme.of(context).textTheme.headlineSmall)
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                          '导入说明',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         SizedBox(height: metrics.contentGap * 0.8),
                         Text(
-                          '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入会等待目录建立完成，完成后可直接阅读。',
+                          '1. 选择文件后立即导入，不再进入待导入列表。\n2. 进度会依次显示准备、入库、索引、完成。\n3. 显示完成后代表目录已建立，可直接阅读。',
                           style: Theme.of(
                             context,
-                          ).textTheme.bodyMedium?.copyWith(
+                          ).textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
-                            height: 1.5,
+                            height: 1.6,
                           ),
                         ),
-                        SizedBox(height: metrics.sectionGap),
-                        FilledButton.icon(
-                          onPressed: _isImporting ? null : _pickAndImportFiles,
-                          icon: const Icon(Icons.upload_file_outlined),
-                          label: const Text('从文件选择器导入'),
-                        ),
-                        if (!_isImporting && _lastImportedResult != null) ...[
+                        if ((_lastErrorText ?? '').trim().isNotEmpty) ...[
                           SizedBox(height: metrics.contentGap),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: _openLatestImportedBook,
-                                icon: const Icon(Icons.menu_book_rounded),
-                                label: const Text('立即阅读'),
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(metrics.cardPadding * 0.85),
+                            decoration: BoxDecoration(
+                              color: colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(
+                              _lastErrorText!,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onErrorContainer,
+                                height: 1.45,
                               ),
-                              OutlinedButton.icon(
-                                onPressed: _returnToBookshelf,
-                                icon: const Icon(Icons.library_books_outlined),
-                                label: const Text('返回书架'),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ],
                     ),
                   ),
-                ),
-                SizedBox(height: metrics.sectionGap),
-                Container(
-                  padding: EdgeInsets.all(metrics.cardPadding),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '导入说明',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: metrics.contentGap * 0.8),
-                      Text(
-                        '1. 选择文件后立即导入，不再进入待导入列表。\n2. 进度会依次显示准备、入库、索引、完成。\n3. 显示完成后代表目录已建立，可直接阅读。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.6,
-                        ),
-                      ),
-                      if ((_lastErrorText ?? '').trim().isNotEmpty) ...[
-                        SizedBox(height: metrics.contentGap),
-                        Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.all(metrics.cardPadding * 0.85),
-                          decoration: BoxDecoration(
-                            color: colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text(
-                            _lastErrorText!,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onErrorContainer,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

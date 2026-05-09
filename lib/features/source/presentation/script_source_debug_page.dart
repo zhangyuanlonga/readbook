@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -157,22 +158,33 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
                           metrics.sectionGap + bottomSafe + keyboardInset,
                         ),
                         children: [
-                          _DebugInputCard(
-                            controller: _keywordController,
-                            selectedLevel: _selectedLevel,
-                            isRunning: _isRunning,
-                            mode:
-                                widget.useInstalledSourceFlow
-                                    ? _DebugMode.installedSource
-                                    : _DebugMode.draft,
-                            onLevelChanged: (value) {
-                              setState(() {
-                                _selectedLevel = value;
-                              });
-                            },
+                          AppFadeSlideTransition(
+                            child: _DebugInputCard(
+                              controller: _keywordController,
+                              selectedLevel: _selectedLevel,
+                              isRunning: _isRunning,
+                              mode:
+                                  widget.useInstalledSourceFlow
+                                      ? _DebugMode.installedSource
+                                      : _DebugMode.draft,
+                              onLevelChanged: (value) {
+                                setState(() {
+                                  _selectedLevel = value;
+                                });
+                              },
+                            ),
                           ),
                           SizedBox(height: metrics.contentGap),
-                          _SummaryCard(report: report),
+                          AppAnimatedSwitcher(
+                            child: KeyedSubtree(
+                              key: ValueKey<String>(
+                                report == null
+                                    ? 'summary_empty'
+                                    : 'summary_${report.summary.status}_${report.stages.length}',
+                              ),
+                              child: _SummaryCard(report: report),
+                            ),
+                          ),
                           SizedBox(height: metrics.contentGap),
                           if (_isRunning && report == null)
                             const Padding(

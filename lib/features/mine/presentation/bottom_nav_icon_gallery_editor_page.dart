@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
@@ -260,36 +261,47 @@ class _BottomNavIconGalleryEditorPageState
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child:
-                    _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _gallery == null
-                        ? const Center(child: Text('图集不存在'))
-                        : ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            metrics.contentGap,
-                            horizontal,
-                            metrics.sectionGap + bottomSafe,
-                          ),
-                          children: [
-                            _buildBatchToolbar(),
-                            SizedBox(height: metrics.contentGap),
-                            _buildHeaderRow(),
-                            SizedBox(height: metrics.contentGap * 0.8),
-                            for (
-                              var index = 0;
-                              index < BottomNavIconGalleryTab.values.length;
-                              index++
-                            ) ...[
-                              if (index > 0)
-                                SizedBox(height: metrics.contentGap * 0.8),
-                              _buildTabSection(
-                                BottomNavIconGalleryTab.values[index],
+                child: AppAnimatedSwitcher(
+                  child:
+                      _isLoading
+                          ? const Center(
+                            key: ValueKey('bottom_nav_editor_loading'),
+                            child: CircularProgressIndicator(),
+                          )
+                          : _gallery == null
+                          ? const Center(
+                            key: ValueKey('bottom_nav_editor_missing'),
+                            child: Text('图集不存在'),
+                          )
+                          : AppFadeSlideTransition(
+                            key: const ValueKey('bottom_nav_editor_content'),
+                            child: ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                metrics.contentGap,
+                                horizontal,
+                                metrics.sectionGap + bottomSafe,
                               ),
-                            ],
-                          ],
-                        ),
+                              children: [
+                                _buildBatchToolbar(),
+                                SizedBox(height: metrics.contentGap),
+                                _buildHeaderRow(),
+                                SizedBox(height: metrics.contentGap * 0.8),
+                                for (
+                                  var index = 0;
+                                  index < BottomNavIconGalleryTab.values.length;
+                                  index++
+                                ) ...[
+                                  if (index > 0)
+                                    SizedBox(height: metrics.contentGap * 0.8),
+                                  _buildTabSection(
+                                    BottomNavIconGalleryTab.values[index],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                ),
               ),
             );
           },

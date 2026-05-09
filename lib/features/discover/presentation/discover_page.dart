@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -1266,11 +1267,14 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 
   Widget _buildLoadingCard(BuildContext context, {required String message}) {
-    return RuntimeFeedbackCard(
-      title: '正在加载',
-      message: message,
-      tone: RuntimeFeedbackTone.loading,
-      compact: true,
+    return AppAnimatedSwitcher(
+      child: RuntimeFeedbackCard(
+        key: ValueKey<String>('discover_loading_$message'),
+        title: '正在加载',
+        message: message,
+        tone: RuntimeFeedbackTone.loading,
+        compact: true,
+      ),
     );
   }
 
@@ -1280,27 +1284,33 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     required VoidCallback onRetry,
     String actionLabel = '重试',
   }) {
-    return RuntimeFeedbackCard(
-      title: '加载失败',
-      message: message,
-      tone: RuntimeFeedbackTone.error,
-      compact: true,
-      actions: [
-        FilledButton.tonalIcon(
-          onPressed: onRetry,
-          icon: const Icon(Icons.refresh_rounded),
-          label: Text(actionLabel),
-        ),
-      ],
+    return AppAnimatedSwitcher(
+      child: RuntimeFeedbackCard(
+        key: ValueKey<String>('discover_error_$message'),
+        title: '加载失败',
+        message: message,
+        tone: RuntimeFeedbackTone.error,
+        compact: true,
+        actions: [
+          FilledButton.tonalIcon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(actionLabel),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildInfoCard(BuildContext context, {required String message}) {
-    return RuntimeFeedbackCard(
-      title: '提示',
-      message: message,
-      tone: RuntimeFeedbackTone.info,
-      compact: true,
+    return AppAnimatedSwitcher(
+      child: RuntimeFeedbackCard(
+        key: ValueKey<String>('discover_info_$message'),
+        title: '提示',
+        message: message,
+        tone: RuntimeFeedbackTone.info,
+        compact: true,
+      ),
     );
   }
 

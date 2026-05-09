@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -135,15 +136,18 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: RefreshIndicator(
                   onRefresh: _refreshPage,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      metrics.contentGap,
-                      horizontal,
-                      metrics.sectionGap + bottomSafe,
+                  child: AppAnimatedSwitcher(
+                    child: ListView(
+                      key: ValueKey<bool>(_isLoading),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        metrics.contentGap,
+                        horizontal,
+                        metrics.sectionGap + bottomSafe,
+                      ),
+                      children: _buildContent(context),
                     ),
-                    children: _buildContent(context),
                   ),
                 ),
               ),
@@ -162,7 +166,12 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     if (_isLoading) {
       return [
         SizedBox(height: metrics.sectionGap * 3),
-        const Center(child: CircularProgressIndicator()),
+        AppFadeSlideTransition(
+          child: const Center(
+            key: ValueKey('user_profile_loading'),
+            child: CircularProgressIndicator(),
+          ),
+        ),
       ];
     }
 

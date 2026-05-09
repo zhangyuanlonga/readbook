@@ -21,6 +21,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
@@ -97,6 +98,7 @@ import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
 import '../application/reader_session_controller.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_preload_controller.dart';
 import '../application/reader_resource_budget.dart';
 import '../application/reader_runtime_wake_policy.dart';
 import '../application/reader_visual_overrides_service.dart';
@@ -297,6 +299,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const PagedTextReaderRenderer();
   final ReaderSessionController _readerSessionController =
       ReaderSessionController();
+  final ReaderPreloadController _preloadController =
+      const ReaderPreloadController();
+  final ReaderPreloadFailureMemory _preloadFailureMemory =
+      ReaderPreloadFailureMemory();
   late final ReaderResourceBudgetResolver _resourceBudgetResolver;
   late final AppLogger _logger;
   final ScrollController _scrollController = ScrollController();
@@ -422,6 +428,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double? _bottomOverlayDraftProgressRatio;
   List<List<ReaderPagedSlice>> _pagedPages = const [];
   List<List<ReaderPagedBlock>> _pagedBlockPages = const [];
+  String? _textPaginationFallbackDiagnostic;
   int _currentPageIndex = 0;
   ReaderPaginationSessionState _pagedPaginationState =
       const ReaderPaginationSessionState();
@@ -538,6 +545,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int get _curlAnimationToIndex => _curlTransition.toIndex;
   double get _curlPreviewProgress => _curlTransition.previewProgress;
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
+  bool get _isCurlCrossChapterTurn => _curlTransition.isCrossChapter;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
   int get _currentPagedPageCount =>
@@ -573,6 +581,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderModeModel get _currentReaderMode => _resolveReaderModeFor(_settings);
+
+  List<int> _neighborPreloadContentIndexes({
+    required String normalizedSourceId,
+    required int currentIndex,
+    required int chapterCount,
+    required ReaderResourceBudget budget,
+  }) {
+    final preloadPlan = _preloadController.buildChapterPlan(
+      currentChapterIndex: currentIndex,
+      chapterCount: chapterCount,
+      budget: budget,
+      isLocalSource: LocalReaderIdentity.isLocalSourceId(normalizedSourceId),
+      isInBookshelf: _isInBookshelf,
+      maxForwardChapterCount: _kForwardPreloadChapterCount,
+      maxBackwardChapterCount: _kBackwardPreloadChapterCount,
+      bookshelfForwardChapterCount: _kBookshelfForwardCacheChapterCount,
+      failureMemory: _preloadFailureMemory,
+    );
+    return preloadPlan
+        .chapterIndexesFor(ReaderPreloadTaskType.content)
+        .toList(growable: false);
+  }
 
   ReaderResourceBudget _currentResourceBudget({
     ReaderWorkScene scene = ReaderWorkScene.foregroundReading,
@@ -805,8 +835,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.mangaReadMode != ReaderMangaReadMode.continuous;
   }
 
-  ReaderModeViewportKind get _currentViewportKind =>
-      _currentReaderMode.viewportKind;
+  ReaderModeViewportKind get _currentViewportKind {
+    final resolved = _currentReaderMode.viewportKind;
+    if (resolved == ReaderModeViewportKind.textPaged &&
+        _textPaginationFallbackDiagnostic != null) {
+      return ReaderModeViewportKind.textScroll;
+    }
+    return resolved;
+  }
 
   bool get _isTextPagedViewport =>
       _currentViewportKind == ReaderModeViewportKind.textPaged;
@@ -1146,6 +1182,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void initState() {
     super.initState();
     _initializeReaderPage();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _applyReaderImageCacheBudget();
   }
 
   @override
@@ -2164,6 +2206,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    if (_isCurlCrossChapterTurn) {
+      setState(() {
+        _curlTransition = const _CurlTransitionState();
+      });
+      _recordFirstPageTurnCompleted(mode: 'curl_cross_chapter');
+      return;
+    }
+
     final pageCount = _currentPagedPageCount;
     if (pageCount <= 0) {
       if (!mounted) {
@@ -2283,7 +2333,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final taskId = _readerSessionController.nextPaginationTaskToken();
+    final taskId =
+        _readerSessionController
+            .beginIntent(const ReaderSessionIntent.changeSettings())
+            .paginationTaskToken!;
     unawaited(
       _restoreOrPaginateCurrentChapter(taskId: taskId, spec: spec, plan: plan),
     );
@@ -2332,6 +2385,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _resetCurlAnimationState();
 
     setState(() {
+      _textPaginationFallbackDiagnostic = null;
       _pagedPaginationState = plan.buildLoadingState();
       _pagedPages = const [];
       _currentPageIndex = 0;
@@ -2442,6 +2496,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
         final pages = event.pages;
         if (pages.isEmpty) {
+          if (event.completed) {
+            _fallbackTextPaginationToScroll(
+              'block pagination completed with no pages',
+            );
+          }
           continue;
         }
         final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
@@ -2452,6 +2511,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     .round()
                     .clamp(0, pages.length - 1);
         setState(() {
+          _textPaginationFallbackDiagnostic = null;
           _pagedPaginationState = ReaderPaginationSessionState(
             signature: signature,
             isPaginating: !event.completed,
@@ -2524,6 +2584,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
     return;
+  }
+
+  void _fallbackTextPaginationToScroll(String diagnostic) {
+    if (!mounted) {
+      return;
+    }
+    _resetPagedTransitionState();
+    _resetCurlAnimationState();
+    setState(() {
+      _textPaginationFallbackDiagnostic = diagnostic;
+      _pagedPaginationState = const ReaderPaginationSessionState();
+      _pagedPages = const <List<ReaderPagedSlice>>[];
+      _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+      _currentPageIndex = 0;
+    });
   }
 
   Widget _buildTapAwareBody({required Widget child}) {
@@ -3737,484 +3812,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     };
   }
 
-  Future<_ChapterLoadSnapshot> _fetchChapterContentSnapshot({
-    required String sourceId,
-    required String chapterId,
-    required String chapterUrl,
-    required String? chapterTitle,
-    required int? chapterIndex,
-  }) async {
-    final contentProvider = _requireContentProvider(
-      sourceId: sourceId,
-      stage: ErrorStage.content,
-    );
-    final contentResult = await contentProvider.loadChapterContent(
-      sourceId: sourceId,
-      chapterUrl: chapterUrl,
-      bookId: _currentBookId,
-      bookTitle: _bookTitle,
-      detailUrl: _detailUrl,
-      chapterId: chapterId,
-      chapterIndex: chapterIndex,
-      chapterTitle: chapterTitle,
-    );
-
-    return _ChapterLoadSnapshot(
-      result: contentResult,
-      isCached: contentResult.fromCache,
-    );
-  }
-
-  Future<void> _applyLoadedChapterSnapshot({
-    required _ChapterLoadSnapshot snapshot,
-    required String chapterId,
-    required String chapterUrl,
-    required String? chapterTitle,
-    required int? chapterIndex,
-    required double targetRatio,
-    required int requestToken,
-    bool commitChapterIdentity = false,
-  }) async {
-    if (!_isActiveChapterContentRequest(requestToken)) {
-      return;
-    }
-
-    final resolvedContinuousIndex = _chapterLoadPlanner
-        .resolveContinuousChapterIndex(
-          chapterIndex: chapterIndex,
-          chapters: _chapters,
-          chapterId: chapterId,
-          chapterUrl: chapterUrl,
-        );
-    final resolvedContinuousChapter =
-        resolvedContinuousIndex >= 0 &&
-                resolvedContinuousIndex < _chapters.length
-            ? _chapters[resolvedContinuousIndex]
-            : null;
-
-    List<String>? precomputedParagraphs;
-    List<List<ReaderPagedSlice>>? precomputedPagedPages;
-    int? precomputedPageIndex;
-    String? precomputedPaginationSignature;
-
-    final canPrepaginate = _chapterLoadPlanner.canPrepaginate(
-      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
-      hasImages: snapshot.result.imageUrls.isNotEmpty,
-      content: snapshot.result.content,
-      maxWidth: _lastPaginationSpec?.contentWidth,
-      maxHeight: _lastPaginationSpec?.contentHeight,
-    );
-
-    if (canPrepaginate) {
-      final paginationSpec = _lastPaginationSpec;
-      if (paginationSpec != null) {
-        final signature = _buildPaginationSignature(
-          spec: paginationSpec,
-          chapterIdOverride: commitChapterIdentity ? chapterId : _chapterId,
-        );
-        final cachedLayout = await _loadPrecomputedChapterLayout(
-          sourceId: _sourceId ?? '',
-          chapterUrl: chapterUrl,
-          signature: signature,
-        );
-        if (cachedLayout != null) {
-          precomputedParagraphs = cachedLayout.paragraphs;
-          precomputedPagedPages = cachedLayout.pagedPages;
-          precomputedPageIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
-            targetRatio: targetRatio,
-            pageCount: cachedLayout.pagedPages.length,
-          );
-          precomputedPaginationSignature = cachedLayout.paginationSignature;
-        }
-      }
-    }
-
-    setState(() {
-      if (commitChapterIdentity) {
-        _currentIndex = chapterIndex;
-        _chapterId = chapterId;
-        _chapterUrl = chapterUrl;
-        _chapterTitle = _chapterLoadPlanner.resolveChapterTitleAfterLoad(
-          commitChapterIdentity: true,
-          loadedDisplayChapterTitle: snapshot.result.displayChapterTitle,
-          targetChapterTitle: chapterTitle,
-          currentChapterTitle: _chapterTitle,
-        );
-      }
-      if (!commitChapterIdentity) {
-        _chapterTitle = _chapterLoadPlanner.resolveChapterTitleAfterLoad(
-          commitChapterIdentity: false,
-          loadedDisplayChapterTitle: snapshot.result.displayChapterTitle,
-          targetChapterTitle: chapterTitle,
-          currentChapterTitle: _chapterTitle,
-        );
-      }
-      _isCurrentChapterCached = snapshot.isCached;
-      _errorText = null;
-      _setContent(
-        snapshot.result.content,
-        imageUrls: snapshot.result.imageUrls,
-        imageHeaders: snapshot.result.imageHeaders,
-        document: snapshot.result.document,
-        precomputedParagraphs: precomputedParagraphs,
-        precomputedPagedPages: precomputedPagedPages,
-        precomputedCurrentPageIndex: precomputedPageIndex,
-        precomputedPaginationSignature: precomputedPaginationSignature,
-      );
-      if (resolvedContinuousChapter != null) {
-        _replaceContinuousTextFlowWithCurrentChapter(
-          chapter: resolvedContinuousChapter,
-          chapterIndex: resolvedContinuousIndex,
-          snapshot: snapshot,
-        );
-      } else {
-        _continuousTextChapters = const <_ContinuousTextChapter>[];
-      }
-      _pagedPaginationState = ReaderPaginationSessionState(
-        signature: precomputedPaginationSignature,
-        pendingRestoreRatio:
-            precomputedPaginationSignature == null ? targetRatio : null,
-      );
-    });
-
-    _restoreScrollPosition(targetRatio);
-
-    await _saveProgress();
-    _hasPromptedMissingSourceSwitch = false;
-    if (_canWarmNeighborPaginationCache()) {
-      final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
-      unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
-    }
-  }
-
-  Future<bool> _tryHydrateVisibleContentFromCache() async {
-    final sourceId = (_sourceId ?? '').trim();
-    if (sourceId.isEmpty) {
-      return false;
-    }
-
-    if (LocalReaderIdentity.isLocalSourceId(sourceId)) {
-      final chapterId = _chapterId.trim();
-      if (chapterId.isEmpty || chapterId.toLowerCase() == 'bootstrap') {
-        return false;
-      }
-
-      try {
-        final chapter = await _localBookRepository.getChapterContentById(
-          chapterId,
-        );
-        if (chapter == null || !chapter.hasReadablePayload) {
-          return false;
-        }
-
-        final previewProgress = _bootstrapProgressForCurrentChapter();
-        var previewRatio = 0.0;
-        if (!mounted) {
-          return false;
-        }
-
-        final resolvedCurrentChapter =
-            _currentIndex != null &&
-                    _currentIndex! >= 0 &&
-                    _currentIndex! < _chapters.length
-                ? _chapters[_currentIndex!]
-                : null;
-
-        setState(() {
-          _isCurrentChapterCached = true;
-          _errorText = null;
-          _setContent(
-            chapter.content,
-            imageUrls: chapter.imageUrls,
-            document: chapter.document,
-          );
-          previewRatio = _resolveDocumentRestoreRatio(
-            progress: previewProgress,
-          );
-          if (resolvedCurrentChapter != null &&
-              _shouldUseContinuousTextFlow &&
-              chapter.imageUrls.isEmpty &&
-              chapter.content.trim().isNotEmpty) {
-            _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
-              _ContinuousTextChapter(
-                chapterId: chapter.id,
-                chapterUrl: (_chapterUrl ?? '').trim(),
-                chapterTitle: resolvedCurrentChapter.title.trim(),
-                displayTitle:
-                    (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
-                chapterIndex: _currentIndex!,
-                content: chapter.content,
-                document: _document,
-                paragraphs:
-                    _paragraphs.isEmpty
-                        ? List<String>.unmodifiable(<String>[chapter.content])
-                        : List<String>.unmodifiable(_paragraphs),
-                isCached: true,
-              ),
-            );
-          } else {
-            _continuousTextChapters = const <_ContinuousTextChapter>[];
-          }
-          _pagedPaginationState = _pagedPaginationState.copyWith(
-            pendingRestoreRatio: previewRatio,
-          );
-        });
-
-        if (previewProgress != null) {
-          _bootstrapProgress = null;
-        }
-        _restoreScrollPosition(previewRatio);
-        _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    final chapterUrl = (_chapterUrl ?? '').trim();
-    if (chapterUrl.isEmpty) {
-      return false;
-    }
-
-    try {
-      final payload = await _cachedChapterStore.getCachedPayload(
-        sourceId: sourceId,
-        chapterUrl: chapterUrl,
-      );
-      if (payload == null || payload.isEmpty) {
-        return false;
-      }
-
-      final decoded = _chapterCacheDecoder.decode(payload);
-      final previewProgress = _bootstrapProgressForCurrentChapter();
-      var previewRatio = 0.0;
-      if (!mounted) {
-        return false;
-      }
-
-      final resolvedCurrentChapter =
-          _currentIndex != null &&
-                  _currentIndex! >= 0 &&
-                  _currentIndex! < _chapters.length
-              ? _chapters[_currentIndex!]
-              : null;
-
-      setState(() {
-        _isCurrentChapterCached = true;
-        _errorText = null;
-        _setContent(
-          decoded.content,
-          imageUrls: decoded.imageUrls,
-          imageHeaders: decoded.imageHeaders,
-        );
-        previewRatio = _resolveDocumentRestoreRatio(progress: previewProgress);
-        if (resolvedCurrentChapter != null &&
-            _shouldUseContinuousTextFlow &&
-            decoded.imageUrls.isEmpty &&
-            decoded.content.trim().isNotEmpty) {
-          _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
-            _ContinuousTextChapter(
-              chapterId: _chapterId,
-              chapterUrl: (_chapterUrl ?? '').trim(),
-              chapterTitle: resolvedCurrentChapter.title.trim(),
-              displayTitle:
-                  (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
-              chapterIndex: _currentIndex!,
-              content: decoded.content,
-              document: _document,
-              paragraphs:
-                  _paragraphs.isEmpty
-                      ? List<String>.unmodifiable(<String>[decoded.content])
-                      : List<String>.unmodifiable(_paragraphs),
-              isCached: true,
-            ),
-          );
-        } else {
-          _continuousTextChapters = const <_ContinuousTextChapter>[];
-        }
-        _pagedPaginationState = _pagedPaginationState.copyWith(
-          pendingRestoreRatio: previewRatio,
-        );
-      });
-
-      if (previewProgress != null) {
-        _bootstrapProgress = null;
-      }
-      _restoreScrollPosition(previewRatio);
-      _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> _loadCurrentChapter({
-    double? initialScrollRatio,
-    ReaderLogicalPosition? initialLogicalPosition,
-    String? sourceIdOverride,
-    String? chapterIdOverride,
-    String? chapterUrlOverride,
-    String? chapterTitleOverride,
-    int? chapterIndexOverride,
-    bool commitChapterIdentity = false,
-  }) async {
-    if (!mounted) {
-      return false;
-    }
-    _cancelBackgroundRefreshConflictForCurrentBook();
-    final lease = await _taskScheduler.acquire(
-      scene: SourceRuntimeSchedulerScene.reader,
-      conflictKeys: _currentConflictKeys(),
-    );
-    if (lease == null) {
-      return false;
-    }
-    final requestToken = _readerSessionController.nextChapterContentToken();
-
-    double? readingRecordStartRatio;
-    final request = _chapterLoadPlanner.resolveLoadRequest(
-      sourceIdOverride: sourceIdOverride,
-      chapterIdOverride: chapterIdOverride,
-      chapterUrlOverride: chapterUrlOverride,
-      chapterTitleOverride: chapterTitleOverride,
-      currentSourceId: _sourceId,
-      currentChapterId: _chapterId,
-      currentChapterUrl: _chapterUrl,
-      currentChapterTitle: _chapterTitle,
-    );
-    if (request == null) {
-      _stopAutoRead();
-      setState(() {
-        _errorText = '当前章节信息不完整。';
-      });
-      return false;
-    }
-
-    final suppressLoadingUi = await _shouldSuppressChapterLoadingUi(
-      sourceId: request.sourceId,
-      chapterUrl: request.chapterUrl,
-    );
-
-    _stopAutoRead();
-    _resetScrollEdgeAdvanceState();
-    _commitReadingRecordSession();
-    setState(() {
-      _isLoadingContent = true;
-      _errorText = null;
-    });
-    if (suppressLoadingUi) {
-      _clearDelayedLoadingUi();
-    } else {
-      _scheduleBlockingLoadingCard();
-      _scheduleChapterLoadingIndicator();
-    }
-
-    try {
-      final resolvedIndex = _chapterLoadPlanner.resolveFetchChapterIndex(
-        chapterIndexOverride: chapterIndexOverride,
-        currentChapterIndex: _currentIndex,
-        chapters: _chapters,
-        chapterUrl: request.chapterUrl,
-      );
-      final snapshot = await _fetchChapterContentSnapshot(
-        sourceId: request.sourceId,
-        chapterId: request.chapterId,
-        chapterUrl: request.chapterUrl,
-        chapterTitle: request.chapterTitle,
-        chapterIndex: resolvedIndex,
-      );
-
-      if (!_isActiveChapterContentRequest(requestToken)) {
-        return false;
-      }
-
-      final targetRatio = _resolveDocumentRestoreRatio(
-        document: snapshot.result.document,
-        logicalPosition: initialLogicalPosition,
-        fallback: initialScrollRatio ?? 0.0,
-      );
-      await _applyLoadedChapterSnapshot(
-        snapshot: snapshot,
-        chapterId: request.chapterId,
-        chapterUrl: request.chapterUrl,
-        chapterTitle: request.chapterTitle,
-        chapterIndex: resolvedIndex,
-        targetRatio: targetRatio,
-        requestToken: requestToken,
-        commitChapterIdentity: commitChapterIdentity,
-      );
-      if (!_isActiveChapterContentRequest(requestToken)) {
-        return false;
-      }
-      readingRecordStartRatio = targetRatio;
-      return true;
-    } on AppException catch (error) {
-      if (!_isActiveChapterContentRequest(requestToken)) {
-        return false;
-      }
-      final readableError = _toUserReadableError(error);
-      _recordReaderFailure(message: readableError, errorCode: error.code);
-      setState(() {
-        _errorText = readableError;
-      });
-      _maybePromptSwitchSourceForMissingSource(error.code);
-      final switched = await _tryAutoSwitchSourceOnFailure();
-      return switched;
-    } catch (_) {
-      if (!_isActiveChapterContentRequest(requestToken)) {
-        return false;
-      }
-      const fallbackError = '加载正文失败。';
-      _recordReaderFailure(message: fallbackError);
-      setState(() {
-        _errorText = fallbackError;
-      });
-      final switched = await _tryAutoSwitchSourceOnFailure();
-      return switched;
-    } finally {
-      if (_isActiveChapterContentRequest(requestToken)) {
-        _clearDelayedLoadingUi();
-        setState(() {
-          _isLoadingContent = false;
-        });
-        unawaited(_syncVolumeKeyPageInterception());
-        if (readingRecordStartRatio != null) {
-          _scheduleReadingRecordSessionStart(
-            initialRatio: readingRecordStartRatio,
-          );
-        }
-        _reconcileAutoRead(restart: true);
-      }
-      lease.release();
-    }
-  }
-
-  bool _isActiveChapterContentRequest(int requestToken) {
-    return mounted && requestToken == _chapterContentRequestToken;
-  }
-
-  Future<bool> _shouldSuppressChapterLoadingUi({
-    required String sourceId,
-    required String chapterUrl,
-  }) async {
-    final normalizedSourceId = sourceId.trim();
-    final normalizedChapterUrl = chapterUrl.trim();
-    if (normalizedSourceId.isEmpty || normalizedChapterUrl.isEmpty) {
-      return false;
-    }
-    if (LocalReaderIdentity.isLocalSourceId(normalizedSourceId)) {
-      return true;
-    }
-    try {
-      return await _cachedChapterStore.hasCachedPayload(
-        sourceId: normalizedSourceId,
-        chapterUrl: normalizedChapterUrl,
-      );
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<void> _refreshBookshelfState() async {
     final sourceId = _sourceId;
     final detailUrl = _detailUrl;
@@ -4354,151 +3951,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     context.push(route);
   }
 
-  Future<void> _preloadNeighbors({required int taskToken}) async {
-    final sourceId = _sourceId;
-    final currentIndex = _currentIndex;
-    if (sourceId == null || currentIndex == null || _chapters.isEmpty) {
-      return;
-    }
-
-    final normalizedSourceId = sourceId.trim();
-    if (normalizedSourceId.isEmpty) {
-      return;
-    }
-    final isLocalSource = LocalReaderIdentity.isLocalSourceId(
-      normalizedSourceId,
-    );
-    final budget = _currentResourceBudget(
-      scene: ReaderWorkScene.backgroundPrefetch,
-    );
-    final forwardPreloadCount =
-        !isLocalSource && _isInBookshelf && budget.allowFarPrefetch
-            ? _kBookshelfForwardCacheChapterCount
-            : min(
-              _kForwardPreloadChapterCount,
-              budget.forwardPreloadChapterCount,
-            );
-    final backwardPreloadCount = min(
-      _kBackwardPreloadChapterCount,
-      budget.backwardPreloadChapterCount,
-    );
-
-    final preloadIndexes = <int>{};
-
-    for (var offset = 1; offset <= backwardPreloadCount; offset++) {
-      final index = currentIndex - offset;
-      if (index >= 0) {
-        preloadIndexes.add(index);
-      }
-    }
-
-    for (var offset = 1; offset <= forwardPreloadCount; offset++) {
-      final index = currentIndex + offset;
-      if (index < _chapters.length) {
-        preloadIndexes.add(index);
-      }
-    }
-
-    if (preloadIndexes.isEmpty) {
-      return;
-    }
-
-    final orderedIndexes = preloadIndexes.toList(growable: false)..sort();
-
-    for (final index in orderedIndexes) {
-      if (!mounted || taskToken != _preloadTaskToken) {
-        return;
-      }
-
-      final chapter = _chapters[index];
-      final chapterUrl = chapter.chapterUrl.trim();
-      if (chapterUrl.isEmpty) {
-        continue;
-      }
-
-      final nextChapterUrl =
-          index < _chapters.length - 1
-              ? _chapters[index + 1].chapterUrl.trim()
-              : '';
-
-      try {
-        final preloadProvider = _requireContentProvider(
-          sourceId: normalizedSourceId,
-          stage: ErrorStage.content,
-        );
-        final result = await preloadProvider.loadChapterContent(
-          sourceId: normalizedSourceId,
-          chapterUrl: chapterUrl,
-          bookId: _currentBookId,
-          bookTitle: _bookTitle,
-          detailUrl: _detailUrl,
-          chapterId: chapter.id,
-          chapterIndex: index,
-          chapterTitle: chapter.title,
-          nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
-        );
-        if (_canWarmNeighborPaginationCache() &&
-            result.imageUrls.isEmpty &&
-            result.content.trim().isNotEmpty &&
-            _lastPaginationSpec != null &&
-            _lastPaginationSpec!.contentWidth >= 20 &&
-            _lastPaginationSpec!.contentHeight >= 40) {
-          final paragraphs = result.document.paragraphs;
-          final effectiveParagraphs =
-              paragraphs.isEmpty ? <String>[result.content] : paragraphs;
-          final signature = _buildPaginationSignature(
-            spec: _lastPaginationSpec!,
-            chapterIdOverride: chapter.id,
-          );
-          if (!mounted) {
-            return;
-          }
-          final textScaler = MediaQuery.textScalerOf(context);
-          if (await _loadPrecomputedChapterLayout(
-                sourceId: normalizedSourceId,
-                chapterUrl: chapterUrl,
-                signature: signature,
-              ) ==
-              null) {
-            final colors = _resolveThemeColors(
-              _effectiveReaderThemeMode(),
-              _settings,
-            );
-            final paginationResult = await _paginationEngine.paginateParagraphs(
-              ReaderPaginationRequest(
-                paragraphs: effectiveParagraphs,
-                spec: _lastPaginationSpec!,
-                paragraphStyle: _paragraphTextStyle(
-                  colors,
-                ).copyWith(color: Colors.black),
-                paragraphModels: _buildPaginationParagraphModels(
-                  colors,
-                  effectiveParagraphs,
-                ),
-                textScaler: textScaler,
-                shouldAbort: () => !mounted || taskToken != _preloadTaskToken,
-              ),
-            );
-            final pages = paginationResult?.pages;
-            if (pages != null && pages.isNotEmpty) {
-              _storePrecomputedChapterLayout(
-                sourceId: normalizedSourceId,
-                chapterUrl: chapterUrl,
-                layout: ReaderPrecomputedChapterLayout(
-                  paragraphs: effectiveParagraphs,
-                  pagedPages: pages,
-                  paginationSignature: signature,
-                ),
-              );
-            }
-          }
-        }
-      } catch (_) {
-        // Preload failures should not interrupt active reading.
-      }
-    }
-  }
-
   List<ReaderCatalogSearchEntry>? _peekCatalogSearchEntries(
     String normalizedKeyword,
   ) {
@@ -4608,6 +4060,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       beforeStateUpdate?.call();
       _settings = nextSettings;
+      _textPaginationFallbackDiagnostic = null;
     });
     _syncContinuousTextFlowAfterSettingsApplied();
     if (didSwitchTextRenderMode) {
@@ -5214,6 +4667,7 @@ class _CurlTransitionState {
     this.toIndex = 0,
     this.previewProgress = 0,
     this.commitOnAnimationEnd = true,
+    this.isCrossChapter = false,
   });
 
   final bool isAnimating;
@@ -5223,6 +4677,7 @@ class _CurlTransitionState {
   final int toIndex;
   final double previewProgress;
   final bool commitOnAnimationEnd;
+  final bool isCrossChapter;
 
   _CurlTransitionState copyWith({
     bool? isAnimating,
@@ -5232,6 +4687,7 @@ class _CurlTransitionState {
     int? toIndex,
     double? previewProgress,
     bool? commitOnAnimationEnd,
+    bool? isCrossChapter,
   }) {
     return _CurlTransitionState(
       isAnimating: isAnimating ?? this.isAnimating,
@@ -5241,6 +4697,7 @@ class _CurlTransitionState {
       toIndex: toIndex ?? this.toIndex,
       previewProgress: previewProgress ?? this.previewProgress,
       commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
+      isCrossChapter: isCrossChapter ?? this.isCrossChapter,
     );
   }
 }

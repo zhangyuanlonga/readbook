@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/layout/app_layout.dart';
+import '../../../../app/motion/app_motion_widgets.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
 import '../../../../app/widgets/app_status_state_card.dart';
 import '../../application/sync_scope_catalog_service.dart';
@@ -150,8 +151,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
                 ),
                 SizedBox(height: metrics.contentGap),
                 Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
+                  child: AppAnimatedSwitcher(
                     child: switch (_activePanel) {
                       _SyncPanel.account => _buildAccountPanel(context),
                       _SyncPanel.content => _buildContentPanel(
@@ -271,38 +271,47 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
         SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
         _SectionCard(
           title: '已保存配置',
-          child: profilesAsync.when(
-            data: (profiles) {
-              if (profiles.isEmpty) {
-                return const AppEmptyStateCard(
-                  icon: Icons.cloud_off_rounded,
-                  title: '还没有已保存配置',
-                  description: '完成一次配置保存后，这里会显示可直接复用的同步配置。',
-                  compact: true,
+          child: AppAnimatedSwitcher(
+            child: profilesAsync.when(
+              data: (profiles) {
+                if (profiles.isEmpty) {
+                  return const AppEmptyStateCard(
+                    key: ValueKey<String>('profiles_empty'),
+                    icon: Icons.cloud_off_rounded,
+                    title: '还没有已保存配置',
+                    description: '完成一次配置保存后，这里会显示可直接复用的同步配置。',
+                    compact: true,
+                  );
+                }
+                return Column(
+                  key: ValueKey<int>(profiles.length),
+                  children: [
+                    for (final profile in profiles)
+                      _SavedProfileTile(
+                        profile: profile,
+                        onTest: () => _handleTestSavedProfile(profile.id),
+                        onSync: () => _handleRunStage4(profile.id),
+                        onDelete: () => _handleDeleteProfile(profile.id),
+                        isRunning: _runningProfileId == profile.id,
+                      ),
+                  ],
                 );
-              }
-              return Column(
-                children: [
-                  for (final profile in profiles)
-                    _SavedProfileTile(
-                      profile: profile,
-                      onTest: () => _handleTestSavedProfile(profile.id),
-                      onSync: () => _handleRunStage4(profile.id),
-                      onDelete: () => _handleDeleteProfile(profile.id),
-                      isRunning: _runningProfileId == profile.id,
-                    ),
-                ],
-              );
-            },
-            error:
-                (error, _) => AppStatusStateCard(
-                  icon: Icons.error_outline_rounded,
-                  title: '加载配置失败',
-                  message: '$error',
-                  tone: AppStatusStateTone.error,
-                  compact: true,
-                ),
-            loading: () => const _LoadingLine('正在加载配置…'),
+              },
+              error:
+                  (error, _) => AppStatusStateCard(
+                    key: ValueKey<String>('profiles_error_$error'),
+                    icon: Icons.error_outline_rounded,
+                    title: '加载配置失败',
+                    message: '$error',
+                    tone: AppStatusStateTone.error,
+                    compact: true,
+                  ),
+              loading:
+                  () => const _LoadingLine(
+                    '正在加载配置…',
+                    key: ValueKey<String>('profiles_loading'),
+                  ),
+            ),
           ),
         ),
       ],
@@ -897,7 +906,7 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _LoadingLine extends StatelessWidget {
-  const _LoadingLine(this.text);
+  const _LoadingLine(this.text, {super.key});
 
   final String text;
 

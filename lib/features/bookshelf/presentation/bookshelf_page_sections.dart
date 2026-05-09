@@ -39,20 +39,23 @@ extension on _BookshelfPageState {
 
   Widget _buildBooksContentSliver(List<BookshelfBook> books) {
     if (_isLoading && _books.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: 12),
-                Expanded(child: Text('正在加载书架...')),
-              ],
+      return SliverToBoxAdapter(
+        child: AppAnimatedSwitcher(
+          child: const Card(
+            key: ValueKey<String>('bookshelf_loading'),
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('正在加载书架...')),
+                ],
+              ),
             ),
           ),
         ),
@@ -61,16 +64,37 @@ extension on _BookshelfPageState {
 
     if (_books.isEmpty && _loadErrorText != null) {
       return SliverToBoxAdapter(
-        child: _buildLoadErrorCard(message: _loadErrorText!),
+        child: AppAnimatedSwitcher(
+          child: KeyedSubtree(
+            key: ValueKey<String>('bookshelf_error_$_loadErrorText'),
+            child: _buildLoadErrorCard(message: _loadErrorText!),
+          ),
+        ),
       );
     }
 
     if (_books.isEmpty) {
-      return SliverToBoxAdapter(child: _buildEmptyCard());
+      return SliverToBoxAdapter(
+        child: AppAnimatedSwitcher(
+          child: KeyedSubtree(
+            key: const ValueKey<String>('bookshelf_empty'),
+            child: _buildEmptyCard(),
+          ),
+        ),
+      );
     }
 
     if (books.isEmpty) {
-      return SliverToBoxAdapter(child: _buildFilterEmptyCard());
+      return SliverToBoxAdapter(
+        child: AppAnimatedSwitcher(
+          child: KeyedSubtree(
+            key: ValueKey<String>(
+              'bookshelf_filter_empty_$_normalizedBookshelfSearchKeyword',
+            ),
+            child: _buildFilterEmptyCard(),
+          ),
+        ),
+      );
     }
 
     if (_useGridView) {

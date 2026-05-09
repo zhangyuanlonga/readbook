@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/cover_gallery.dart';
@@ -459,100 +460,114 @@ class _CoverGalleryEditorPageState
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child:
-                    _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : gallery == null
-                        ? const Center(child: Text('图集不存在'))
-                        : gallery.imagePaths.isEmpty
-                        ? ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            metrics.contentGap,
-                            horizontal,
-                            metrics.sectionGap + bottomSafe,
-                          ),
-                          children: const [
-                            ImageResourceEmptyStateCard(
-                              icon: Icons.photo_library_outlined,
-                              title: '还没有封面图片',
-                              description: '点击右上角新增，准备书架和主题可复用的封面素材。',
-                            ),
-                          ],
-                        )
-                        : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns = metrics.gridColumnsFor(
-                              availableWidth:
-                                  constraints.maxWidth - horizontal * 2,
-                              minItemWidth: 118,
-                              maxColumns: 6,
-                              spacing: metrics.contentGap,
-                            );
-                            return GridView.builder(
+                child: AppAnimatedSwitcher(
+                  child:
+                      _isLoading
+                          ? const Center(
+                            key: ValueKey('cover_editor_loading'),
+                            child: CircularProgressIndicator(),
+                          )
+                          : gallery == null
+                          ? const Center(
+                            key: ValueKey('cover_editor_missing'),
+                            child: Text('图集不存在'),
+                          )
+                          : gallery.imagePaths.isEmpty
+                          ? AppFadeSlideTransition(
+                            key: const ValueKey('cover_editor_empty'),
+                            child: ListView(
                               padding: EdgeInsets.fromLTRB(
                                 horizontal,
                                 metrics.contentGap,
                                 horizontal,
                                 metrics.sectionGap + bottomSafe,
                               ),
-                              itemCount: gallery.imagePaths.length,
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columns,
-                                    crossAxisSpacing: metrics.contentGap,
-                                    mainAxisSpacing: metrics.contentGap,
-                                    childAspectRatio: 0.72,
-                                  ),
-                              itemBuilder: (context, index) {
-                                final path = gallery.imagePaths[index];
-                                final selected = _selectedPaths.contains(path);
-                                return GestureDetector(
-                                  onLongPress: () => _toggleSelection(path),
-                                  onTap:
-                                      _isSelectionMode
-                                          ? () => _toggleSelection(path)
-                                          : () => _openPreview(path),
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          child: Image.file(
-                                            File(path),
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (_, __, ___) => Container(
-                                                  color:
-                                                      Theme.of(context)
-                                                          .colorScheme
-                                                          .surfaceContainerLow,
-                                                ),
+                              children: const [
+                                ImageResourceEmptyStateCard(
+                                  icon: Icons.photo_library_outlined,
+                                  title: '还没有封面图片',
+                                  description: '点击右上角新增，准备书架和主题可复用的封面素材。',
+                                ),
+                              ],
+                            ),
+                          )
+                          : LayoutBuilder(
+                            key: const ValueKey('cover_editor_grid'),
+                            builder: (context, constraints) {
+                              final columns = metrics.gridColumnsFor(
+                                availableWidth:
+                                    constraints.maxWidth - horizontal * 2,
+                                minItemWidth: 118,
+                                maxColumns: 6,
+                                spacing: metrics.contentGap,
+                              );
+                              return GridView.builder(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontal,
+                                  metrics.contentGap,
+                                  horizontal,
+                                  metrics.sectionGap + bottomSafe,
+                                ),
+                                itemCount: gallery.imagePaths.length,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      crossAxisSpacing: metrics.contentGap,
+                                      mainAxisSpacing: metrics.contentGap,
+                                      childAspectRatio: 0.72,
+                                    ),
+                                itemBuilder: (context, index) {
+                                  final path = gallery.imagePaths[index];
+                                  final selected = _selectedPaths.contains(
+                                    path,
+                                  );
+                                  return GestureDetector(
+                                    onLongPress: () => _toggleSelection(path),
+                                    onTap:
+                                        _isSelectionMode
+                                            ? () => _toggleSelection(path)
+                                            : () => _openPreview(path),
+                                    child: Stack(
+                                      children: [
+                                        Positioned.fill(
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Image.file(
+                                              File(path),
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (_, __, ___) => Container(
+                                                    color:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .surfaceContainerLow,
+                                                  ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      Positioned(
-                                        top: 8,
-                                        right: 8,
-                                        child:
-                                            selected
-                                                ? const ImageResourceSelectionBadge()
-                                                : _isSelectionMode
-                                                ? const SizedBox.shrink()
-                                                : const ImageResourceCornerHint(
-                                                  label: '长按删除',
-                                                  icon: Icons.delete_outline,
-                                                ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child:
+                                              selected
+                                                  ? const ImageResourceSelectionBadge()
+                                                  : _isSelectionMode
+                                                  ? const SizedBox.shrink()
+                                                  : const ImageResourceCornerHint(
+                                                    label: '长按删除',
+                                                    icon: Icons.delete_outline,
+                                                  ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                ),
               ),
             );
           },

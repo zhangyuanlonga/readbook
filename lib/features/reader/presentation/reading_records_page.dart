@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
@@ -305,61 +306,63 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     final queryView = pageState.queryView;
                     final visibleSections = pageState.visibleSections;
 
-                    return ListView(
-                      padding: mobileBottomNavigationBodyPadding(
-                        context,
-                        style: effectiveNavigationStyle,
-                        showNavigationLabels: showNavigationLabels,
-                        standardAppearance: ref.watch(
-                          appStandardNavigationBarAppearanceProvider,
+                    return AppFadeSlideTransition(
+                      child: ListView(
+                        padding: mobileBottomNavigationBodyPadding(
+                          context,
+                          style: effectiveNavigationStyle,
+                          showNavigationLabels: showNavigationLabels,
+                          standardAppearance: ref.watch(
+                            appStandardNavigationBarAppearanceProvider,
+                          ),
+                          left: horizontal,
+                          top: topInset + metrics.contentGap,
+                          right: horizontal,
+                          bottom: metrics.sectionGap,
                         ),
-                        left: horizontal,
-                        top: topInset + metrics.contentGap,
-                        right: horizontal,
-                        bottom: metrics.sectionGap,
+                        children: [
+                          _buildControlsCard(),
+                          SizedBox(height: metrics.contentGap * 0.6),
+                          _buildSummaryCard(summary: queryView.summary),
+                          SizedBox(height: metrics.contentGap),
+                          _buildSectionHeading(
+                            queryView.distribution.title,
+                            subtitle: '当前周期内的阅读时长变化',
+                          ),
+                          _buildDurationDistributionCard(
+                            queryView.distribution,
+                            calendar: queryView.distributionCalendar,
+                          ),
+                          if (visibleSections.showWeekActivity) ...[
+                            SizedBox(height: metrics.contentGap),
+                            _buildWeeklyActivityCard(
+                              periodRange: queryView.periodRange,
+                              dailyRecords: pageState.dailyRecords,
+                              sessions: pageState.sessions,
+                            ),
+                          ],
+                          if (visibleSections.showCalendar) ...[
+                            SizedBox(height: metrics.contentGap),
+                            _buildReadingCalendarCard(
+                              queryView.distributionCalendar,
+                              dailyRecords: pageState.dailyRecords,
+                              sessions: pageState.sessions,
+                            ),
+                          ],
+                          if (visibleSections.showRanking) ...[
+                            SizedBox(height: metrics.contentGap),
+                            _buildDurationRankingSection(queryView.rankings),
+                          ],
+                          if (visibleSections.showHeatmap) ...[
+                            SizedBox(height: metrics.contentGap),
+                            _buildHeatmapCard(
+                              pageState.dailyRecords,
+                              sessions: pageState.sessions,
+                              periodRange: queryView.periodRange,
+                            ),
+                          ],
+                        ],
                       ),
-                      children: [
-                        _buildControlsCard(),
-                        SizedBox(height: metrics.contentGap * 0.6),
-                        _buildSummaryCard(summary: queryView.summary),
-                        SizedBox(height: metrics.contentGap),
-                        _buildSectionHeading(
-                          queryView.distribution.title,
-                          subtitle: '当前周期内的阅读时长变化',
-                        ),
-                        _buildDurationDistributionCard(
-                          queryView.distribution,
-                          calendar: queryView.distributionCalendar,
-                        ),
-                        if (visibleSections.showWeekActivity) ...[
-                          SizedBox(height: metrics.contentGap),
-                          _buildWeeklyActivityCard(
-                            periodRange: queryView.periodRange,
-                            dailyRecords: pageState.dailyRecords,
-                            sessions: pageState.sessions,
-                          ),
-                        ],
-                        if (visibleSections.showCalendar) ...[
-                          SizedBox(height: metrics.contentGap),
-                          _buildReadingCalendarCard(
-                            queryView.distributionCalendar,
-                            dailyRecords: pageState.dailyRecords,
-                            sessions: pageState.sessions,
-                          ),
-                        ],
-                        if (visibleSections.showRanking) ...[
-                          SizedBox(height: metrics.contentGap),
-                          _buildDurationRankingSection(queryView.rankings),
-                        ],
-                        if (visibleSections.showHeatmap) ...[
-                          SizedBox(height: metrics.contentGap),
-                          _buildHeatmapCard(
-                            pageState.dailyRecords,
-                            sessions: pageState.sessions,
-                            periodRange: queryView.periodRange,
-                          ),
-                        ],
-                      ],
                     );
                   },
                 ),

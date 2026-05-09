@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
@@ -143,47 +144,65 @@ class _LaunchImageGalleryPageState
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
-                  child:
-                      _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              topInset + metrics.contentGap,
-                              horizontal,
-                              metrics.sectionGap + bottomSafe,
-                            ),
-                            children: [
-                              CompactCollectionSearchField(
-                                controller: _searchController,
-                                hintText: '搜索启动图集',
-                                query: _searchQuery,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _searchQuery = value;
-                                  });
-                                },
-                                onClear: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _searchQuery = '';
-                                  });
-                                },
+                  child: AppAnimatedSwitcher(
+                    child:
+                        _isLoading
+                            ? const Center(
+                              key: ValueKey('launch_gallery_loading'),
+                              child: CircularProgressIndicator(),
+                            )
+                            : ListView(
+                              key: const ValueKey('launch_gallery_content'),
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                topInset + metrics.contentGap,
+                                horizontal,
+                                metrics.sectionGap + bottomSafe,
                               ),
-                              SizedBox(height: metrics.contentGap),
-                              if (_visibleGalleries.isEmpty)
-                                _buildEmptyState(context)
-                              else
-                                ..._visibleGalleries.map(
-                                  (gallery) => Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: metrics.contentGap,
-                                    ),
-                                    child: _buildGalleryCard(context, gallery),
+                              children: [
+                                AppFadeSlideTransition(
+                                  child: CompactCollectionSearchField(
+                                    controller: _searchController,
+                                    hintText: '搜索启动图集',
+                                    query: _searchQuery,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _searchQuery = value;
+                                      });
+                                    },
+                                    onClear: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchQuery = '';
+                                      });
+                                    },
                                   ),
                                 ),
-                            ],
-                          ),
+                                SizedBox(height: metrics.contentGap),
+                                if (_visibleGalleries.isEmpty)
+                                  AppAnimatedSwitcher(
+                                    child: KeyedSubtree(
+                                      key: const ValueKey(
+                                        'launch_gallery_empty',
+                                      ),
+                                      child: _buildEmptyState(context),
+                                    ),
+                                  )
+                                else
+                                  ..._visibleGalleries.map(
+                                    (gallery) => Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: metrics.contentGap,
+                                      ),
+                                      child: _buildGalleryCard(
+                                        context,
+                                        gallery,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                  ),
                 ),
               ),
             );
