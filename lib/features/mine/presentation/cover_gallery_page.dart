@@ -13,6 +13,8 @@ import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_service.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 
+enum _CoverGalleryAction { edit, rename, duplicate, delete }
+
 class CoverGalleryPage extends ConsumerStatefulWidget {
   const CoverGalleryPage({super.key});
 
@@ -73,6 +75,138 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
 
   Future<void> _openGalleryEditor(CoverGallery gallery) async {
     await _pushMineRoute('/cover-galleries/editor?id=${gallery.id}');
+  }
+
+  Future<String?> _showNameDialog({
+    required String title,
+    required String initialValue,
+  }) async {
+    var draftValue = initialValue;
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        void submit() {
+          Navigator.of(dialogContext).pop(draftValue.trim());
+        }
+
+        return AlertDialog(
+          title: Text(title),
+          content: TextFormField(
+            initialValue: initialValue,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '图集名称'),
+            onChanged: (value) {
+              draftValue = value;
+            },
+            onFieldSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('确定')),
+          ],
+        );
+      },
+    );
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    return value.trim();
+  }
+
+  Future<void> _renameGallery(CoverGallery gallery) async {
+    final name = await _showNameDialog(
+      title: '重命名图集',
+      initialValue: gallery.name,
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      await _service.renameGallery(galleryId: gallery.id, name: name);
+      ref.read(coverGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _duplicateGallery(CoverGallery gallery) async {
+    final name = await _showNameDialog(
+      title: '复制图集',
+      initialValue: '${gallery.name} 副本',
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final copied = await _service.duplicateGallery(
+        sourceGalleryId: gallery.id,
+        name: name,
+      );
+      ref.read(coverGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      await _pushMineRoute('/cover-galleries/editor?id=${copied.id}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteGallery(CoverGallery gallery) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('删除图集'),
+            content: Text('确定删除「${gallery.name}」吗？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      await _service.deleteGallery(gallery.id);
+      ref.read(coverGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   Future<void> _pushMineRoute(String route) async {
@@ -246,11 +380,58 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              gallery.name,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    gallery.name,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<_CoverGalleryAction>(
+                  onSelected: (action) {
+                    switch (action) {
+                      case _CoverGalleryAction.edit:
+                        _openGalleryEditor(gallery);
+                        break;
+                      case _CoverGalleryAction.rename:
+                        _renameGallery(gallery);
+                        break;
+                      case _CoverGalleryAction.duplicate:
+                        _duplicateGallery(gallery);
+                        break;
+                      case _CoverGalleryAction.delete:
+                        _deleteGallery(gallery);
+                        break;
+                    }
+                  },
+                  itemBuilder:
+                      (context) => [
+                        const PopupMenuItem<_CoverGalleryAction>(
+                          value: _CoverGalleryAction.edit,
+                          child: Text('编辑图集'),
+                        ),
+                        const PopupMenuItem<_CoverGalleryAction>(
+                          value: _CoverGalleryAction.rename,
+                          child: Text('重命名'),
+                        ),
+                        const PopupMenuItem<_CoverGalleryAction>(
+                          value: _CoverGalleryAction.duplicate,
+                          child: Text('复制图集'),
+                        ),
+                        const PopupMenuItem<_CoverGalleryAction>(
+                          value: _CoverGalleryAction.delete,
+                          child: Text('删除图集'),
+                        ),
+                      ],
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 2),
             Row(

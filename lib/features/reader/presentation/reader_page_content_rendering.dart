@@ -465,7 +465,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       return Image.file(
         File.fromUri(uri),
         fit: BoxFit.fitWidth,
-        filterQuality: _resolveMangaFilterQuality(),
+        gaplessPlayback: true,
+        filterQuality: _resolveReaderImageFilterQuality(),
         cacheWidth: decodeBudget.cacheWidth,
         cacheHeight: decodeBudget.cacheHeight,
         errorBuilder: (context, error, stackTrace) {
@@ -478,7 +479,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       requestUrl,
       headers: _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
       fit: BoxFit.fitWidth,
-      filterQuality: _resolveMangaFilterQuality(),
+      gaplessPlayback: true,
+      filterQuality: _resolveReaderImageFilterQuality(),
       cacheWidth: decodeBudget.cacheWidth,
       cacheHeight: decodeBudget.cacheHeight,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
@@ -586,7 +588,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       return Image.memory(
         decoded.bytes,
         fit: BoxFit.fitWidth,
-        filterQuality: _resolveMangaFilterQuality(),
+        gaplessPlayback: true,
+        filterQuality: _resolveReaderImageFilterQuality(),
         cacheWidth: decodeBudget.cacheWidth,
         cacheHeight: decodeBudget.cacheHeight,
         errorBuilder: (context, error, stackTrace) {
@@ -667,6 +670,13 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       ReaderMangaLoadStrategy.smooth => FilterQuality.high,
       ReaderMangaLoadStrategy.saveData => FilterQuality.low,
     };
+  }
+
+  FilterQuality _resolveReaderImageFilterQuality() {
+    if (!_isMangaChapter && _document.hasImageBlocks) {
+      return FilterQuality.low;
+    }
+    return _resolveMangaFilterQuality();
   }
 
   Widget _buildPagedPageContainer({

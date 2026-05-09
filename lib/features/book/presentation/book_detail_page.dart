@@ -23,6 +23,8 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
+import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -327,6 +329,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         ),
       );
     } else {
+      if (_isLocalContent) {
+        unawaited(_hydrateLocalBookSnapshotIfAvailable());
+      }
       unawaited(_load(includeCatalog: false));
     }
   }
@@ -451,6 +456,46 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return true;
   }
 
+  Future<void> _hydrateLocalBookSnapshotIfAvailable() async {
+    final sourceId = _activeSourceId?.trim();
+    final detailUrl = _activeDetailUrl?.trim();
+    if (sourceId == null ||
+        sourceId.isEmpty ||
+        detailUrl == null ||
+        detailUrl.isEmpty ||
+        !LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      return;
+    }
+
+    final provider = _contentProviderRegistry.findForSourceId(sourceId);
+    if (provider is! LocalContentProvider) {
+      return;
+    }
+
+    final result = await provider.loadBookSnapshotDetail(
+      sourceId: sourceId,
+      bookId: _activeBookId,
+      detailUrl: detailUrl,
+    );
+    if (!mounted || result == null || _result != null) {
+      return;
+    }
+
+    _activeBookId = result.detail.id.trim();
+    _activeSourceId = result.detail.sourceId.trim();
+    _activeDetailUrl = result.detail.detailUrl.trim();
+    _displayTitle = result.detail.title.trim();
+    _updatePresentationState(
+      _presentationState.copyWith(
+        result: result,
+        clearErrorText: true,
+        clearTocWarningText: true,
+      ),
+    );
+    _recordDetailBodyVisible(result: result, source: 'local_book_snapshot');
+    unawaited(_loadSupplementaryState(result: result));
+  }
+
   bool _shouldSkipCachedHydration(BookDetailLoadResult cached) {
     bool hasMeaningfulMismatch(String? routeValue, String? cachedValue) {
       final routeText = (routeValue ?? '').trim();
@@ -484,6 +529,58 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   bool get _isLocalContent => _contentCapabilities.canReindexLocal;
 
   bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
+
+  ImageProvider? _resolveDetailCoverBackdropProvider({
+    required AppAdvancedTheme? activeAdvancedTheme,
+  }) {
+    if ((activeAdvancedTheme
+            ?.configFor(
+              Theme.of(context).brightness == Brightness.dark
+                  ? AppAdvancedThemeMode.dark
+                  : AppAdvancedThemeMode.light,
+            )
+            .wallpaperPath
+            ?.trim()
+            .isNotEmpty ??
+        false)) {
+      return null;
+    }
+
+    final presentation = _resolvePresentedMetadata();
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: presentation.realCoverUrl,
+      customCoverPath:
+          presentation.customCoverPath ?? _localBookMeta?.coverPath,
+      activeTheme: activeAdvancedTheme,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      brightness: Theme.of(context).brightness,
+      bookId: _result?.detail.id ?? _activeBookId,
+      sourceId: _result?.detail.sourceId ?? _activeSourceId,
+      detailUrl: _result?.detail.detailUrl ?? _activeDetailUrl,
+    );
+
+    final filePath = resolvedCover.filePath?.trim() ?? '';
+    if (filePath.isNotEmpty && File(filePath).existsSync()) {
+      return ResizeImage(FileImage(File(filePath)), width: 720);
+    }
+
+    final coverUrl = resolvedCover.imageUrl?.trim() ?? '';
+    if (coverUrl.isEmpty) {
+      return null;
+    }
+    final uri = Uri.tryParse(coverUrl);
+    if (uri == null || !uri.hasScheme) {
+      return null;
+    }
+    if (uri.scheme == 'file') {
+      final file = File.fromUri(uri);
+      if (file.existsSync()) {
+        return ResizeImage(FileImage(file), width: 720);
+      }
+      return null;
+    }
+    return ResizeImage(NetworkImage(coverUrl), width: 720);
+  }
 
   ContentProvider _requireContentProvider({
     required String? sourceId,

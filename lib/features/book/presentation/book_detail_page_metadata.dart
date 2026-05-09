@@ -173,7 +173,11 @@ extension on _BookDetailPageState {
     );
     _metadataOverride = flowResult.metadataOverride;
     _displayTitle = flowResult.presentation.displayTitle;
-    _updatePresentationState(_presentationState.copyWith(result: result));
+    _updatePresentationState(
+      _presentationState.copyWith(
+        result: _resultWithPresentation(result, flowResult.presentation),
+      ),
+    );
     _showMetadataInlineNotice(flowResult.successMessage);
     _showMessage(flowResult.successMessage);
   }
@@ -195,7 +199,11 @@ extension on _BookDetailPageState {
       _auxiliaryState.copyWith(localBookMeta: flowResult.localBook),
     );
     _displayTitle = flowResult.presentation.displayTitle;
-    _updatePresentationState(_presentationState.copyWith(result: result));
+    _updatePresentationState(
+      _presentationState.copyWith(
+        result: _resultWithPresentation(result, flowResult.presentation),
+      ),
+    );
     _showMetadataInlineNotice(flowResult.successMessage);
     _showMessage(flowResult.successMessage);
 
@@ -243,7 +251,11 @@ extension on _BookDetailPageState {
     );
     _metadataOverride = null;
     _displayTitle = flowResult.presentation.displayTitle;
-    _updatePresentationState(_presentationState.copyWith(result: result));
+    _updatePresentationState(
+      _presentationState.copyWith(
+        result: _resultWithPresentation(result, flowResult.presentation),
+      ),
+    );
     _showMetadataInlineNotice(flowResult.successMessage);
     _showMessage(flowResult.successMessage);
   }
@@ -264,9 +276,30 @@ extension on _BookDetailPageState {
       _auxiliaryState.copyWith(localBookMeta: flowResult.localBook),
     );
     _displayTitle = flowResult.presentation.displayTitle;
-    _updatePresentationState(_presentationState.copyWith(result: result));
+    _updatePresentationState(
+      _presentationState.copyWith(
+        result: _resultWithPresentation(result, flowResult.presentation),
+      ),
+    );
     _showMetadataInlineNotice(flowResult.successMessage);
     _showMessage(flowResult.successMessage);
   }
 
+  BookDetailLoadResult _resultWithPresentation(
+    BookDetailLoadResult result,
+    BookDisplayState presentation,
+  ) {
+    return result.copyWith(
+      detail: BookDetail(
+        id: result.detail.id,
+        sourceId: result.detail.sourceId,
+        title: presentation.displayTitle,
+        detailUrl: result.detail.detailUrl,
+        author: presentation.displayAuthor,
+        intro: presentation.displayIntro,
+        coverUrl: presentation.displayCover ?? result.detail.coverUrl,
+        tocUrl: result.detail.tocUrl,
+      ),
+    );
+  }
 }

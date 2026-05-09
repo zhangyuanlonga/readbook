@@ -13,6 +13,8 @@ import '../application/launch_image_gallery_provider.dart';
 import '../application/launch_image_gallery_service.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 
+enum _LaunchGalleryAction { setDefault, edit, rename, duplicate, delete }
+
 class LaunchImageGalleryPage extends ConsumerStatefulWidget {
   const LaunchImageGalleryPage({super.key});
 
@@ -28,6 +30,7 @@ class _LaunchImageGalleryPageState
 
   List<LaunchImageGallery> _galleries = const <LaunchImageGallery>[];
   String _searchQuery = '';
+  bool _startupEnabled = true;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -40,13 +43,38 @@ class _LaunchImageGalleryPageState
 
   Future<void> _load() async {
     final galleries = await _service.loadGalleries();
+    final startupEnabled = await _service.loadStartupEnabled();
     if (!mounted) {
       return;
     }
     setState(() {
       _galleries = galleries;
+      _startupEnabled = startupEnabled;
       _isLoading = false;
     });
+  }
+
+  Future<void> _setStartupEnabled(bool enabled) async {
+    if (_isSaving) {
+      return;
+    }
+    setState(() {
+      _startupEnabled = enabled;
+      _isSaving = true;
+    });
+    try {
+      await _service.saveStartupEnabled(enabled);
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      if (mounted) {
+        _showMessage(enabled ? '启动图已开启' : '启动图已关闭');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   Future<void> _createGallery() async {
@@ -77,12 +105,173 @@ class _LaunchImageGalleryPageState
     await _pushMineRoute('/appearance/launch-image/editor?id=${gallery.id}');
   }
 
+  Future<void> _setDefaultGallery(LaunchImageGallery gallery) async {
+    if (_isSaving) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      await _service.saveActiveGalleryId(gallery.id);
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _renameGallery(LaunchImageGallery gallery) async {
+    final name = await _showNameDialog(
+      title: '重命名图集',
+      initialValue: gallery.name,
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      await _service.renameGallery(galleryId: gallery.id, name: name);
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _duplicateGallery(LaunchImageGallery gallery) async {
+    final name = await _showNameDialog(
+      title: '复制图集',
+      initialValue: '${gallery.name} 副本',
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final copied = await _service.duplicateGallery(
+        sourceGalleryId: gallery.id,
+        name: name,
+      );
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      await _pushMineRoute('/appearance/launch-image/editor?id=${copied.id}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteGallery(LaunchImageGallery gallery) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('删除图集'),
+            content: Text('确定删除「${gallery.name}」吗？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      await _service.deleteGallery(gallery.id);
+      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
   Future<void> _pushMineRoute(String route) async {
     await context.push(route);
     if (!mounted) {
       return;
     }
     await _load();
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<String?> _showNameDialog({
+    required String title,
+    required String initialValue,
+  }) async {
+    var draftValue = initialValue;
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        void submit() {
+          Navigator.of(dialogContext).pop(draftValue.trim());
+        }
+
+        return AlertDialog(
+          title: Text(title),
+          content: TextFormField(
+            initialValue: initialValue,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '图集名称'),
+            onChanged: (value) {
+              draftValue = value;
+            },
+            onFieldSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('确定')),
+          ],
+        );
+      },
+    );
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    return value.trim();
   }
 
   @override
@@ -174,21 +363,8 @@ class _LaunchImageGalleryPageState
                                       bottom: metrics.contentGap,
                                     ),
                                     child: AppFadeSlideTransition(
-                                      child: CompactCollectionSearchField(
-                                        controller: _searchController,
-                                        hintText: '搜索启动图集',
-                                        query: _searchQuery,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _searchQuery = value;
-                                          });
-                                        },
-                                        onClear: () {
-                                          _searchController.clear();
-                                          setState(() {
-                                            _searchQuery = '';
-                                          });
-                                        },
+                                      child: _buildSearchAndStartupSwitch(
+                                        context,
                                       ),
                                     ),
                                   );
@@ -230,6 +406,65 @@ class _LaunchImageGalleryPageState
     );
   }
 
+  Widget _buildSearchAndStartupSwitch(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: CompactCollectionSearchField(
+            controller: _searchController,
+            hintText: '搜索启动图集',
+            query: _searchQuery,
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+            onClear: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Tooltip(
+          message: _startupEnabled ? '启动时显示启动图' : '启动时不显示启动图',
+          child: Container(
+            height: 46,
+            padding: const EdgeInsets.only(left: 10, right: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.rocket_launch_outlined,
+                  size: 18,
+                  color:
+                      _startupEnabled
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                ),
+                Switch.adaptive(
+                  value: _startupEnabled,
+                  onChanged: _isSaving ? null : _setStartupEnabled,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildGalleryCard(BuildContext context, LaunchImageGallery gallery) {
     final colorScheme = Theme.of(context).colorScheme;
     const previewCount = 3;
@@ -248,11 +483,77 @@ class _LaunchImageGalleryPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              gallery.name,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    gallery.name,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<_LaunchGalleryAction>(
+                  onSelected: (action) {
+                    switch (action) {
+                      case _LaunchGalleryAction.setDefault:
+                        _setDefaultGallery(gallery);
+                        break;
+                      case _LaunchGalleryAction.edit:
+                        _openGalleryEditor(gallery);
+                        break;
+                      case _LaunchGalleryAction.rename:
+                        _renameGallery(gallery);
+                        break;
+                      case _LaunchGalleryAction.duplicate:
+                        _duplicateGallery(gallery);
+                        break;
+                      case _LaunchGalleryAction.delete:
+                        _deleteGallery(gallery);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) {
+                    final items = <PopupMenuEntry<_LaunchGalleryAction>>[
+                      const PopupMenuItem<_LaunchGalleryAction>(
+                        value: _LaunchGalleryAction.setDefault,
+                        child: Text('设为默认'),
+                      ),
+                      const PopupMenuItem<_LaunchGalleryAction>(
+                        value: _LaunchGalleryAction.edit,
+                        child: Text('编辑图集'),
+                      ),
+                    ];
+                    if (gallery.isEditable) {
+                      items.add(
+                        const PopupMenuItem<_LaunchGalleryAction>(
+                          value: _LaunchGalleryAction.rename,
+                          child: Text('重命名'),
+                        ),
+                      );
+                      items.add(
+                        const PopupMenuItem<_LaunchGalleryAction>(
+                          value: _LaunchGalleryAction.duplicate,
+                          child: Text('复制图集'),
+                        ),
+                      );
+                      if (gallery.isDeletable) {
+                        items.add(
+                          const PopupMenuItem<_LaunchGalleryAction>(
+                            value: _LaunchGalleryAction.delete,
+                            child: Text('删除图集'),
+                          ),
+                        );
+                      }
+                    }
+                    return items;
+                  },
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 2),
             Row(

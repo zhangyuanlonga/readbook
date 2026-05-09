@@ -31,7 +31,7 @@ class ReaderImageDecodeBudgetResolver {
     required double devicePixelRatio,
   }) {
     final roleScale = switch (role) {
-      ReaderImageDecodeRole.epubInline => 1.0,
+      ReaderImageDecodeRole.epubInline => 0.68,
       ReaderImageDecodeRole.manga => 1.15,
       ReaderImageDecodeRole.cover => 0.75,
     };

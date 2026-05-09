@@ -150,6 +150,28 @@ class CoverGalleryService {
     await saveGallery(gallery.copyWith(name: normalized));
   }
 
+  Future<CoverGallery> duplicateGallery({
+    required String sourceGalleryId,
+    required String name,
+  }) async {
+    final sourceGallery = await loadGallery(sourceGalleryId);
+    if (sourceGallery == null) {
+      throw const FormatException('Gallery not found.');
+    }
+    final normalizedName = name.trim().isEmpty ? '${sourceGallery.name} 副本' : name.trim();
+    final now = DateTime.now().toUtc();
+    final copied = CoverGallery(
+      id: 'cover_gallery_${_uuid.v4()}',
+      name: normalizedName,
+      createdAt: now,
+      updatedAt: now,
+      imagePaths: sourceGallery.imagePaths,
+    );
+    final galleries = await loadGalleries();
+    await saveGalleries(<CoverGallery>[copied, ...galleries]);
+    return copied;
+  }
+
   Future<void> deleteGallery(String galleryId) async {
     final galleries = await loadGalleries();
     final updated = galleries

@@ -817,6 +817,9 @@ class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
   @override
   Widget build(BuildContext context) {
     final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
+    if (StartupArtworkStore.primedDisabled) {
+      return ColoredBox(color: Theme.of(context).colorScheme.surface);
+    }
     final useFile =
         resolvedPath != null &&
         resolvedPath.isNotEmpty &&

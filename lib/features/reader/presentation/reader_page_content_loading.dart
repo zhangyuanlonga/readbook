@@ -32,6 +32,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _chapterImageUrls = resolvedContentState.chapterImageUrls;
     _chapterImageHeaders = resolvedContentState.imageHeaders;
     _mangaImageRetryNonce.clear();
+    _precachedInlineImageUrls.clear();
     _mangaPageIndex = 0;
     _isTextSelectionActive = false;
     _selectionRange = null;
@@ -57,6 +58,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _resetCatalogSearchCache();
     _resetPagedTransitionState();
     _resetCurlAnimationState();
+    _scheduleInlineImagePrecache();
     unawaited(_refreshChapterBookmarks());
   }
 
@@ -429,6 +431,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _content = activation.contentState.content;
       _chapterImageUrls = activation.contentState.chapterImageUrls;
       _chapterImageHeaders = activation.contentState.imageHeaders;
+      _precachedInlineImageUrls.clear();
       _paragraphs = activation.contentState.paragraphs;
       _renderItems = activation.contentState.renderItems;
       _renderTextItemsByParagraph =
@@ -464,6 +467,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         }
       });
     }
+    _scheduleInlineImagePrecache();
     unawaited(_refreshChapterBookmarks());
 
     _scheduleReadingRecordSessionStart(initialRatio: activation.initialRatio);
@@ -663,8 +667,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       }
       _pagedPaginationState = ReaderPaginationSessionState(
         signature: precomputedPaginationSignature,
-        pendingRestoreRatio:
-            precomputedPaginationSignature == null ? targetRatio : null,
+        pendingRestoreRatio: targetRatio,
       );
     });
 
@@ -746,7 +749,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           } else {
             _continuousTextChapters = const <_ContinuousTextChapter>[];
           }
-          _pagedPaginationState = _pagedPaginationState.copyWith(
+          _pagedPaginationState = ReaderPaginationSessionState(
+            signature: _pagedPaginationState.signature,
             pendingRestoreRatio: previewRatio,
           );
         });
@@ -823,7 +827,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         } else {
           _continuousTextChapters = const <_ContinuousTextChapter>[];
         }
-        _pagedPaginationState = _pagedPaginationState.copyWith(
+        _pagedPaginationState = ReaderPaginationSessionState(
+          signature: _pagedPaginationState.signature,
           pendingRestoreRatio: previewRatio,
         );
       });
@@ -896,7 +901,6 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _isLoadingContent = true;
       _errorText = null;
     });
-    _scheduleHiddenLoadingPlaceholder();
     if (suppressLoadingUi) {
       _clearDelayedLoadingUi();
     } else {

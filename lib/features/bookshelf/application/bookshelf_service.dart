@@ -70,7 +70,11 @@ class BookshelfService {
   static const String _gridColumnCountKey = 'bookshelf.grid.columnCount';
   static const String _gridCrossSpacingKey = 'bookshelf.grid.crossSpacing';
   static const String _gridMainSpacingKey = 'bookshelf.grid.mainSpacing';
+  static const String _gridVisualStyleKey = 'bookshelf.grid.visualStyle';
   static const String _gridShowTitleKey = 'bookshelf.grid.showTitle';
+  static const String _gridTitleCenterKey = 'bookshelf.grid.titleCenter';
+  static const String _gridTitleMaxLinesKey = 'bookshelf.grid.titleMaxLines';
+  static const String _gridCoverShadowKey = 'bookshelf.grid.coverShadow';
   static const String _gridShowAuthorKey = 'bookshelf.grid.showAuthor';
   static const String _gridShowLatestChapterKey =
       'bookshelf.grid.showLatestChapter';
@@ -96,7 +100,13 @@ class BookshelfService {
   static const String _listPinSearchBarKey = 'bookshelf.list.search.pinned';
   static const String _listQuickFilterContentKey =
       'bookshelf.list.search.quickFilterContent';
+  static const String _listCompactModeKey = 'bookshelf.list.compactMode';
+  static const String _listShowRecentReadTimeKey =
+      'bookshelf.list.showRecentReadTime';
 
+  static const String gridStandardVisualStyle = 'standard';
+  static const String gridOverlayTitleVisualStyle = 'overlayTitle';
+  static const String gridCoverOnlyVisualStyle = 'coverOnly';
   static const String defaultSortMode = 'default';
   static const String recentReadSortMode = 'recentRead';
   static const String readingProgressSortMode = 'readingProgress';
@@ -107,7 +117,11 @@ class BookshelfService {
   static const int defaultGridColumnCount = 3;
   static const double defaultGridCrossSpacing = 8;
   static const double defaultGridMainSpacing = 12;
+  static const String defaultGridVisualStyle = gridStandardVisualStyle;
   static const bool defaultGridShowTitle = true;
+  static const bool defaultGridTitleCenter = false;
+  static const int defaultGridTitleMaxLines = 1;
+  static const bool defaultGridCoverShadow = true;
   static const bool defaultGridShowAuthor = true;
   static const bool defaultGridShowLatestChapter = true;
   static const bool defaultGridShowProgressBar = true;
@@ -123,6 +137,8 @@ class BookshelfService {
   static const bool defaultListAlwaysShowSearchBar = true;
   static const bool defaultListPinSearchBar = false;
   static const String defaultListQuickFilterContent = 'none';
+  static const bool defaultListCompactMode = false;
+  static const bool defaultListShowRecentReadTime = false;
   static final StreamController<BookshelfTaxonomyChange>
   _taxonomyChangeController =
       StreamController<BookshelfTaxonomyChange>.broadcast();
@@ -380,6 +396,19 @@ class BookshelfService {
     );
   }
 
+  Future<String> loadGridVisualStyle() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeGridVisualStyle(prefs.getString(_gridVisualStyleKey));
+  }
+
+  Future<void> saveGridVisualStyle(String value) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      _gridVisualStyleKey,
+      _normalizeGridVisualStyle(value),
+    );
+  }
+
   Future<bool> loadGridShowTitle() async {
     final prefs = await _preferencesFuture;
     return prefs.getBool(_gridShowTitleKey) ?? defaultGridShowTitle;
@@ -388,6 +417,39 @@ class BookshelfService {
   Future<void> saveGridShowTitle(bool visible) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_gridShowTitleKey, visible);
+  }
+
+  Future<bool> loadGridTitleCenter() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridTitleCenterKey) ?? defaultGridTitleCenter;
+  }
+
+  Future<void> saveGridTitleCenter(bool centered) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridTitleCenterKey, centered);
+  }
+
+  Future<int> loadGridTitleMaxLines() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeGridTitleMaxLines(prefs.getInt(_gridTitleMaxLinesKey));
+  }
+
+  Future<void> saveGridTitleMaxLines(int lines) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setInt(
+      _gridTitleMaxLinesKey,
+      _normalizeGridTitleMaxLines(lines),
+    );
+  }
+
+  Future<bool> loadGridCoverShadow() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridCoverShadowKey) ?? defaultGridCoverShadow;
+  }
+
+  Future<void> saveGridCoverShadow(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridCoverShadowKey, visible);
   }
 
   Future<bool> loadGridShowAuthor() async {
@@ -560,6 +622,27 @@ class BookshelfService {
         fallback: defaultListQuickFilterContent,
       ),
     );
+  }
+
+  Future<bool> loadListCompactMode() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listCompactModeKey) ?? defaultListCompactMode;
+  }
+
+  Future<void> saveListCompactMode(bool compact) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listCompactModeKey, compact);
+  }
+
+  Future<bool> loadListShowRecentReadTime() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowRecentReadTimeKey) ??
+        defaultListShowRecentReadTime;
+  }
+
+  Future<void> saveListShowRecentReadTime(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowRecentReadTimeKey, visible);
   }
 
   Future<String> loadSortMode() async {
@@ -1064,8 +1147,21 @@ class BookshelfService {
     };
   }
 
+  static String _normalizeGridVisualStyle(String? value) {
+    return switch (value?.trim()) {
+      gridOverlayTitleVisualStyle => gridOverlayTitleVisualStyle,
+      gridCoverOnlyVisualStyle => gridCoverOnlyVisualStyle,
+      gridStandardVisualStyle => gridStandardVisualStyle,
+      _ => defaultGridVisualStyle,
+    };
+  }
+
   static int _normalizeGridColumnCount(int? value) {
     return (value ?? defaultGridColumnCount).clamp(2, 6);
+  }
+
+  static int _normalizeGridTitleMaxLines(int? value) {
+    return (value ?? defaultGridTitleMaxLines).clamp(1, 3);
   }
 
   static String _normalizeSearchQuickFilterContent(

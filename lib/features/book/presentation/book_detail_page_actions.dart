@@ -185,7 +185,9 @@ extension on _BookDetailPageState {
         );
         return Hero(
           tag: heroTag,
+          key: ValueKey<String>('hero_${heroTag}_${resolvedCover.cacheKey}'),
           child: ResolvedBookCoverView(
+            key: ValueKey<String>(resolvedCover.cacheKey),
             cover: resolvedCover,
             title: title,
             author: author,

@@ -27,6 +27,14 @@ class LocalBookDetailService {
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
 
+  Future<LocalBook?> loadBookSnapshot({required String bookId}) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+    return _localBookRepository.getBookById(normalizedBookId);
+  }
+
   Future<LocalBookDetailResult> load({
     required String bookId,
     LocalBookDetailLoadMode mode = LocalBookDetailLoadMode.withContent,

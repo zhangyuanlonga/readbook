@@ -39,6 +39,41 @@ class LocalContentProvider extends ContentProvider {
     canReindexLocal: true,
   );
 
+  Future<BookDetailLoadResult?> loadBookSnapshotDetail({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+  }) async {
+    _ensureLocalSource(sourceId, stage: ErrorStage.detail);
+
+    final resolvedBookId = LocalReaderIdentity.resolveBookId(
+      bookId: bookId,
+      detailUrl: detailUrl,
+    );
+    if (resolvedBookId == null || resolvedBookId.isEmpty) {
+      return null;
+    }
+
+    final book = await _requireDetailService().loadBookSnapshot(
+      bookId: resolvedBookId,
+    );
+    if (book == null) {
+      return null;
+    }
+
+    return BookDetailLoadResult(
+      detail: _buildDetailFromLocalBook(book),
+      chapters: const <Chapter>[],
+      sourceName: sourceName,
+      tocFromCache: true,
+      tocError: null,
+      catalogAvailable:
+          book.indexStatus == local_entities.LocalBookIndexStatus.ready &&
+          book.chapterCount > 0,
+      catalogLoaded: false,
+    );
+  }
+
   @override
   bool supportsSourceId(String sourceId) {
     return LocalReaderIdentity.isLocalSourceId(sourceId);
@@ -78,15 +113,7 @@ class LocalContentProvider extends ContentProvider {
       allowBackgroundIndex: !forceRefresh,
     );
 
-    final detail = BookDetail(
-      id: result.book.id,
-      sourceId: LocalReaderIdentity.localSourceId,
-      title: result.book.title,
-      detailUrl: LocalReaderIdentity.buildBookDetailUrl(result.book.id),
-      author: _resolveAuthor(result.book.author),
-      intro: _resolveIntro(result.book.description),
-      coverUrl: _resolveCoverUrl(result.book.coverPath),
-    );
+    final detail = _buildDetailFromLocalBook(result.book);
 
     final chapters = result.chapters
         .map(
@@ -107,7 +134,8 @@ class LocalContentProvider extends ContentProvider {
       tocFromCache: false,
       tocError: null,
       catalogAvailable:
-          result.book.indexStatus == local_entities.LocalBookIndexStatus.ready &&
+          result.book.indexStatus ==
+              local_entities.LocalBookIndexStatus.ready &&
           result.book.chapterCount > 0,
       catalogLoaded: includeCatalog,
     );
@@ -209,6 +237,18 @@ class LocalContentProvider extends ContentProvider {
       code: ErrorCode.unknownSource,
       stage: stage,
       briefMessage: '非本地书籍来源，无法使用本地内容提供器。',
+    );
+  }
+
+  BookDetail _buildDetailFromLocalBook(local_entities.LocalBook book) {
+    return BookDetail(
+      id: book.id,
+      sourceId: LocalReaderIdentity.localSourceId,
+      title: book.title,
+      detailUrl: LocalReaderIdentity.buildBookDetailUrl(book.id),
+      author: _resolveAuthor(book.author),
+      intro: _resolveIntro(book.description),
+      coverUrl: _resolveCoverUrl(book.coverPath),
     );
   }
 

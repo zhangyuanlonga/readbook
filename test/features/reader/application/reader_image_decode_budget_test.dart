@@ -28,6 +28,19 @@ void main() {
 
       expect(low.cacheWidth, lessThan(normal.cacheWidth!));
       expect(
+        resolver
+            .resolve(
+              role: ReaderImageDecodeRole.epubInline,
+              resourceBudget: const ReaderResourceBudgetResolver().resolve(
+                const ReaderResourceBudgetInput(),
+              ),
+              logicalWidth: 400,
+              devicePixelRatio: 2,
+            )
+            .cacheWidth,
+        lessThan(normal.cacheWidth!),
+      );
+      expect(
         low.imageCacheMaximumSizeBytes,
         lessThan(normal.imageCacheMaximumSizeBytes),
       );

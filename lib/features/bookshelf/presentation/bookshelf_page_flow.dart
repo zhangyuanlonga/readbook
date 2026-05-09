@@ -192,7 +192,11 @@ extension on _BookshelfPageState {
     var draftColumns = _gridColumnCount;
     var draftCrossSpacing = _gridCrossSpacing;
     var draftMainSpacing = _gridMainSpacing;
+    var draftGridVisualStyle = _gridVisualStyle;
     var draftShowTitle = _gridShowTitle;
+    var draftGridTitleCenter = _gridTitleCenter;
+    var draftGridTitleMaxLines = _gridTitleMaxLines;
+    var draftGridCoverShadow = _gridCoverShadow;
     var draftShowAuthor = _gridShowAuthor;
     var draftShowLatestChapter = _gridShowLatestChapter;
     var draftShowProgressBar = _gridShowProgressBar;
@@ -205,6 +209,8 @@ extension on _BookshelfPageState {
     var draftListShowLatestChapter = _listShowLatestChapter;
     var draftListShowProgressBar = _listShowProgressBar;
     var draftListShowSourceBadge = _listShowSourceBadge;
+    var draftListCompactMode = _listCompactMode;
+    var draftListShowRecentReadTime = _listShowRecentReadTime;
     var draftListAlwaysShowSearchBar = _listAlwaysShowSearchBar;
     var draftListPinSearchBar = _listPinSearchBar;
     var draftListQuickFilterContent = _listQuickFilterContent;
@@ -232,7 +238,19 @@ extension on _BookshelfPageState {
                     draftCrossSpacing,
                   );
                   await _bookshelfService.saveGridMainSpacing(draftMainSpacing);
+                  await _bookshelfService.saveGridVisualStyle(
+                    _gridVisualStyleStorageValue(draftGridVisualStyle),
+                  );
                   await _bookshelfService.saveGridShowTitle(draftShowTitle);
+                  await _bookshelfService.saveGridTitleCenter(
+                    draftGridTitleCenter,
+                  );
+                  await _bookshelfService.saveGridTitleMaxLines(
+                    draftGridTitleMaxLines,
+                  );
+                  await _bookshelfService.saveGridCoverShadow(
+                    draftGridCoverShadow,
+                  );
                   await _bookshelfService.saveGridShowAuthor(draftShowAuthor);
                   await _bookshelfService.saveGridShowLatestChapter(
                     draftShowLatestChapter,
@@ -276,6 +294,12 @@ extension on _BookshelfPageState {
                   );
                   await _bookshelfService.saveListShowSourceBadge(
                     draftListShowSourceBadge,
+                  );
+                  await _bookshelfService.saveListCompactMode(
+                    draftListCompactMode,
+                  );
+                  await _bookshelfService.saveListShowRecentReadTime(
+                    draftListShowRecentReadTime,
                   );
                   await _bookshelfService.saveListAlwaysShowSearchBar(
                     draftListAlwaysShowSearchBar,
@@ -358,7 +382,7 @@ extension on _BookshelfPageState {
                 required bool value,
                 required String title,
                 String? subtitle,
-                required ValueChanged<bool> onChanged,
+                required ValueChanged<bool>? onChanged,
               }) {
                 return SwitchListTile.adaptive(
                   value: value,
@@ -405,8 +429,11 @@ extension on _BookshelfPageState {
                     buildGroupHeader('搜索设置'),
                     buildCompactSwitchTile(
                       value: alwaysShowSearchBar,
-                      title: '总是显示搜索框',
-                      subtitle: '关闭后显示为紧凑入口，点击后再展开搜索。',
+                      title: '搜索框状态',
+                      subtitle:
+                          alwaysShowSearchBar
+                              ? '当前显示搜索框，关闭后会收起为紧凑入口。'
+                              : '当前隐藏搜索框，开启后会直接显示搜索框。',
                       onChanged: onAlwaysShowChanged,
                     ),
                     buildCompactSwitchTile(
@@ -595,7 +622,111 @@ extension on _BookshelfPageState {
                                 unawaited(persistGridSettings());
                               },
                     ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '网格样式',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          DropdownButtonHideUnderline(
+                            child: DropdownButton<_BookshelfGridVisualStyle>(
+                              value: draftGridVisualStyle,
+                              isDense: true,
+                              borderRadius: BorderRadius.circular(14),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              onChanged: (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                setSheetState(() {
+                                  draftGridVisualStyle = value;
+                                });
+                                _updateBookshelfLayoutPreservingScroll(() {
+                                  _updateBookshelfState(() {
+                                    _gridVisualStyle = value;
+                                  });
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                              items: [
+                                for (final option
+                                    in _BookshelfGridVisualStyle.values)
+                                  DropdownMenuItem<_BookshelfGridVisualStyle>(
+                                    value: option,
+                                    child: Text(_gridVisualStyleLabel(option)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     buildGroupHeader('文字信息'),
+                    BookshelfStepperSettingRow(
+                      title: '书名行数',
+                      subtitle: '控制网格模式下书名最多显示几行。',
+                      valueLabel: '$draftGridTitleMaxLines',
+                      enabled: draftShowTitle,
+                      onDecrease:
+                          !draftShowTitle || draftGridTitleMaxLines <= 1
+                              ? null
+                              : () {
+                                final next = draftGridTitleMaxLines - 1;
+                                setSheetState(() {
+                                  draftGridTitleMaxLines = next;
+                                });
+                                _updateBookshelfLayoutPreservingScroll(() {
+                                  _updateBookshelfState(() {
+                                    _gridTitleMaxLines = next;
+                                  });
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                      onIncrease:
+                          !draftShowTitle || draftGridTitleMaxLines >= 3
+                              ? null
+                              : () {
+                                final next = draftGridTitleMaxLines + 1;
+                                setSheetState(() {
+                                  draftGridTitleMaxLines = next;
+                                });
+                                _updateBookshelfLayoutPreservingScroll(() {
+                                  _updateBookshelfState(() {
+                                    _gridTitleMaxLines = next;
+                                  });
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                    ),
+                    buildCompactSwitchTile(
+                      value: draftGridTitleCenter,
+                      title: '书名居中',
+                      subtitle: '借鉴 MD3 的标题居中样式，只影响网格书名。',
+                      onChanged:
+                          !draftShowTitle
+                              ? null
+                              : (value) {
+                                setSheetState(() {
+                                  draftGridTitleCenter = value;
+                                });
+                                _updateBookshelfState(() {
+                                  _gridTitleCenter = value;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                    ),
                     buildCompactSwitchTile(
                       value: !draftShowTitle,
                       title: '隐藏书籍名称',
@@ -695,27 +826,19 @@ extension on _BookshelfPageState {
                       },
                     ),
                     buildGroupHeader('封面设置'),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: _resolvedPalette(sheetContext).surfaceColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _resolvedPalette(
-                              sheetContext,
-                            ).cardBorderColor.withValues(alpha: 0.55),
-                          ),
-                        ),
-                        child: Text(
-                          '当前暂未提供额外封面设置。',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
+                    buildCompactSwitchTile(
+                      value: draftGridCoverShadow,
+                      title: '封面阴影',
+                      subtitle: '开启后网格封面会保留轻微投影。',
+                      onChanged: (value) {
+                        setSheetState(() {
+                          draftGridCoverShadow = value;
+                        });
+                        _updateBookshelfState(() {
+                          _gridCoverShadow = value;
+                        });
+                        unawaited(persistGridSettings());
+                      },
                     ),
                     buildGroupHeader('其他设置'),
                     buildCompactSwitchTile(
@@ -742,6 +865,20 @@ extension on _BookshelfPageState {
                   children: [
                     buildSectionTitle('列表设置', '调整列表模式下展示哪些信息。'),
                     buildGroupHeader('文字信息'),
+                    buildCompactSwitchTile(
+                      value: draftListCompactMode,
+                      title: '紧凑列表',
+                      subtitle: '缩小封面和行距，提高列表信息密度。',
+                      onChanged: (value) {
+                        setSheetState(() {
+                          draftListCompactMode = value;
+                        });
+                        _updateBookshelfState(() {
+                          _listCompactMode = value;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
                     buildCompactSwitchTile(
                       value: !draftListShowTitle,
                       title: '隐藏书籍名称',
@@ -795,6 +932,20 @@ extension on _BookshelfPageState {
                         });
                         _updateBookshelfState(() {
                           _listShowSourceBadge = next;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
+                    buildCompactSwitchTile(
+                      value: draftListShowRecentReadTime,
+                      title: '显示最近阅读时间',
+                      subtitle: '有阅读记录的书籍会在列表中显示最近阅读时间。',
+                      onChanged: (value) {
+                        setSheetState(() {
+                          draftListShowRecentReadTime = value;
+                        });
+                        _updateBookshelfState(() {
+                          _listShowRecentReadTime = value;
                         });
                         unawaited(persistListSettings());
                       },

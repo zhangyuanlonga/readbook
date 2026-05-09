@@ -528,6 +528,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (position.pixels <= prefetchTopDistance) {
       unawaited(_loadAdjacentContinuousTextChapter(forward: false));
     }
+    if (_document.hasImageBlocks) {
+      _scheduleInlineImagePrecacheNearProgress(limit: 6);
+    }
   }
 
   void _scheduleProgressSave() {

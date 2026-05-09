@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -141,53 +140,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Future<ImageSelectionSource?> _selectBackgroundImageSource() async {
-    if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux) {
-      return ImageSelectionSource.files;
-    }
-
-    return showModalBottomSheet<ImageSelectionSource>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    Icons.photo_library_outlined,
-                    color: colorScheme.primary,
-                  ),
-                  title: const Text('相册'),
-                  subtitle: const Text('从系统照片库选择一张图片'),
-                  onTap:
-                      () => Navigator.of(
-                        context,
-                      ).pop(ImageSelectionSource.gallery),
-                ),
-                ListTile(
-                  leading: Icon(
-                    Icons.folder_open_outlined,
-                    color: colorScheme.primary,
-                  ),
-                  title: const Text('文件'),
-                  subtitle: const Text('从文件 App 或本地目录选择图片'),
-                  onTap:
-                      () =>
-                          Navigator.of(context).pop(ImageSelectionSource.files),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    return _imageSelectionService.chooseImageSource(
+      context,
+      title: '添加应用背景',
+      gallerySubtitle: '从系统照片库选择背景图片',
+      filesSubtitle: '从文件 App 或本地目录选择背景图片',
     );
   }
 

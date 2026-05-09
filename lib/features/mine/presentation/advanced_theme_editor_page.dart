@@ -679,7 +679,14 @@ class _AdvancedThemeEditorPageState
                               final gallery = _launchImageGalleries[index];
                               return _buildLaunchGallerySelectionCard(
                                 context,
-                                gallery: gallery,
+                                title: gallery.name,
+                                subtitle:
+                                    gallery.imagePaths.isEmpty
+                                        ? '暂无图片'
+                                        : '${gallery.imagePaths.length} 张启动图',
+                                previewPaths: _existingImagePaths(
+                                  gallery.imagePaths,
+                                ),
                                 selected: gallery.id == selectedId,
                                 onTap: () {
                                   setSheetState(() {
@@ -1424,13 +1431,13 @@ class _AdvancedThemeEditorPageState
 
   Widget _buildLaunchGallerySelectionCard(
     BuildContext context, {
-    required LaunchImageGallery gallery,
+    required String title,
+    required String subtitle,
+    required List<String> previewPaths,
     required bool selected,
     required VoidCallback onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final previewPaths = _existingImagePaths(gallery.imagePaths);
-    final imageCount = previewPaths.length;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1459,7 +1466,7 @@ class _AdvancedThemeEditorPageState
                 children: [
                   Expanded(
                     child: Text(
-                      gallery.name,
+                      title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -1475,7 +1482,7 @@ class _AdvancedThemeEditorPageState
               ),
               const SizedBox(height: 4),
               Text(
-                imageCount <= 0 ? '暂无图片' : '$imageCount 张启动图',
+                subtitle,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -1497,7 +1504,7 @@ class _AdvancedThemeEditorPageState
                           child: _buildGalleryPreviewThumb(
                             context,
                             previewPath: previewPath,
-                            title: gallery.name,
+                            title: title,
                             width: double.infinity,
                             height: 96,
                             borderRadius: 12,
@@ -1508,7 +1515,7 @@ class _AdvancedThemeEditorPageState
                                     : () => unawaited(
                                       _showImagePreviewDialog(
                                         imagePath: previewPath,
-                                        title: gallery.name,
+                                        title: title,
                                       ),
                                     ),
                           ),

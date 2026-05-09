@@ -1,5 +1,6 @@
 import 'package:file_selector/file_selector.dart' as fs;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 
 enum ImageSelectionSource { auto, gallery, files }
@@ -26,6 +27,71 @@ class ImageSelectionService {
 
   final ip.ImagePicker _mobilePicker;
 
+  Future<ImageSelectionSource?> chooseImageSource(
+    BuildContext context, {
+    required String title,
+    String gallerySubtitle = '从系统照片库选择图片',
+    String filesSubtitle = '从文件 App 或本地目录选择图片',
+    bool useRootNavigator = false,
+  }) {
+    return showModalBottomSheet<ImageSelectionSource>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final bottomInset = _bottomSafeInset(context);
+        return SafeArea(
+          top: false,
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.photo_library_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('相册'),
+                  subtitle: Text(gallerySubtitle),
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pop(ImageSelectionSource.gallery),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.folder_open_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('文件'),
+                  subtitle: Text(filesSubtitle),
+                  onTap:
+                      () =>
+                          Navigator.of(context).pop(ImageSelectionSource.files),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<List<PickedImageData>> pickImages({
     required String confirmButtonText,
     Set<String> allowedExtensions = const {'jpg', 'jpeg', 'png', 'webp'},
@@ -38,6 +104,7 @@ class ImageSelectionService {
 
     return switch (source) {
       ImageSelectionSource.gallery => _pickMultipleWithSystemPicker(
+        confirmButtonText: confirmButtonText,
         allowedExtensions: normalizedExtensions,
       ),
       ImageSelectionSource.files => _pickMultipleWithFileSelector(
@@ -51,6 +118,7 @@ class ImageSelectionService {
               allowedExtensions: normalizedExtensions,
             )
             : _pickMultipleWithSystemPicker(
+              confirmButtonText: confirmButtonText,
               allowedExtensions: normalizedExtensions,
             ),
     };
@@ -68,6 +136,7 @@ class ImageSelectionService {
 
     return switch (source) {
       ImageSelectionSource.gallery => _pickWithSystemPicker(
+        confirmButtonText: confirmButtonText,
         allowedExtensions: normalizedExtensions,
       ),
       ImageSelectionSource.files => _pickWithFileSelector(
@@ -80,7 +149,10 @@ class ImageSelectionService {
               confirmButtonText: confirmButtonText,
               allowedExtensions: normalizedExtensions,
             )
-            : _pickWithSystemPicker(allowedExtensions: normalizedExtensions),
+            : _pickWithSystemPicker(
+              confirmButtonText: confirmButtonText,
+              allowedExtensions: normalizedExtensions,
+            ),
     };
   }
 
@@ -91,10 +163,14 @@ class ImageSelectionService {
   }
 
   Future<PickedImageData?> _pickWithSystemPicker({
+    required String confirmButtonText,
     required Set<String> allowedExtensions,
   }) async {
     if (kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)) {
-      throw const ImageSelectionException('当前设备不支持从相册选择图片。');
+      return _pickWithFileSelector(
+        confirmButtonText: confirmButtonText,
+        allowedExtensions: allowedExtensions,
+      );
     }
     final picked = await _mobilePicker.pickImage(
       source: ip.ImageSource.gallery,
@@ -131,10 +207,14 @@ class ImageSelectionService {
   }
 
   Future<List<PickedImageData>> _pickMultipleWithSystemPicker({
+    required String confirmButtonText,
     required Set<String> allowedExtensions,
   }) async {
     if (kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)) {
-      throw const ImageSelectionException('当前设备不支持从相册选择图片。');
+      return _pickMultipleWithFileSelector(
+        confirmButtonText: confirmButtonText,
+        allowedExtensions: allowedExtensions,
+      );
     }
     final picked = await _mobilePicker.pickMultiImage(
       requestFullMetadata: false,
@@ -250,5 +330,11 @@ class ImageSelectionService {
       return '';
     }
     return fileName.substring(dotIndex + 1).trim().toLowerCase();
+  }
+
+  double _bottomSafeInset(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
+    return viewPadding > gestureInsets ? viewPadding : gestureInsets;
   }
 }

@@ -12,6 +12,9 @@ extension on _BookDetailPageState {
           colorScheme,
           activeAdvancedTheme,
         );
+        final md3CoverBackdrop = _resolveDetailCoverBackdropProvider(
+          activeAdvancedTheme: activeAdvancedTheme,
+        );
         final horizontal = AppSpacing.pageHorizontal(context);
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
         final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
@@ -88,7 +91,25 @@ extension on _BookDetailPageState {
                   },
                 ),
             body: DecoratedBox(
-              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              decoration:
+                  md3CoverBackdrop == null
+                      ? buildAdvancedThemeBackdropDecoration(backdrop)
+                      : buildImageBackdropDecoration(
+                        backgroundColor: colorScheme.surface,
+                        surfaceColor: colorScheme.surfaceContainerLow,
+                        imageProvider: md3CoverBackdrop,
+                        imageOpacity: 0.48,
+                        imageBlurSigma: 18,
+                        imageFit: BoxFit.cover,
+                        overlayColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? Colors.black
+                                : colorScheme.surface,
+                        overlayOpacity:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? 0.58
+                                : 0.72,
+                      ),
               child: LayoutBuilder(
                 builder: (context, _) {
                   final maxWidth = AppLayout.pageContentMaxWidth(

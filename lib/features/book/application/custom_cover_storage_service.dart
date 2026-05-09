@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../../app/images/file_image_cache.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/managed_asset.dart';
@@ -74,6 +75,7 @@ class CustomCoverStorageService {
       assetId: bookKey,
       targetNamePrefix: bookKey,
     );
+    await evictFileImagePath(asset.resolvedPath);
     return asset.relativePath;
   }
 }

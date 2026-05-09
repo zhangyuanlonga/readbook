@@ -7,8 +7,10 @@ class StartupArtworkStore {
   StartupArtworkStore._();
 
   static String? _primedImagePath;
+  static bool _primedDisabled = false;
 
   static String? get primedImagePath => _primedImagePath;
+  static bool get primedDisabled => _primedDisabled;
 
   static Future<void> prime({SharedPreferences? preferences}) async {
     try {
@@ -16,12 +18,21 @@ class StartupArtworkStore {
           await AdvancedThemeService(
             preferences: preferences,
           ).loadActiveTheme();
-      final resolved = await LaunchImageGalleryService(
+      final launchImageGalleryService = LaunchImageGalleryService(
         preferences: preferences,
-      ).loadLaunchImagePathForGallery(activeTheme?.launchImageGalleryId);
+      );
+      if (!await launchImageGalleryService.loadStartupEnabled()) {
+        _primedDisabled = true;
+        _primedImagePath = null;
+        return;
+      }
+      _primedDisabled = false;
+      final resolved = await launchImageGalleryService
+          .loadLaunchImagePathForGallery(activeTheme?.launchImageGalleryId);
       final normalized = resolved?.trim() ?? '';
       _primedImagePath = normalized.isEmpty ? null : normalized;
     } catch (_) {
+      _primedDisabled = false;
       _primedImagePath = null;
     }
   }

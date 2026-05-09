@@ -32,6 +32,16 @@ class ResolvedBookCover {
   final ResolvedBookCoverSource source;
   final String? imageUrl;
   final String? filePath;
+
+  String get cacheKey {
+    final identity = switch (source) {
+      ResolvedBookCoverSource.real => imageUrl,
+      ResolvedBookCoverSource.custom ||
+      ResolvedBookCoverSource.gallery => filePath,
+      ResolvedBookCoverSource.placeholder => null,
+    };
+    return '${source.name}:${identity ?? ''}';
+  }
 }
 
 final ManagedFilePathResolver _managedFilePathResolver =
@@ -115,6 +125,7 @@ class ResolvedBookCoverView extends StatelessWidget {
         borderRadius: borderRadius,
         child: Image.file(
           File(cover.filePath!),
+          key: ValueKey<String>(cover.cacheKey),
           width: width,
           height: height,
           fit: BoxFit.cover,

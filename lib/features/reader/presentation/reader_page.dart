@@ -311,6 +311,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
   PageController? _staticPagedTextPageControllerInstance;
+  final Set<String> _precachedInlineImageUrls = <String>{};
   final GlobalKey _readerBodyKey = GlobalKey();
   final GlobalKey<SelectionAreaState> _selectionAreaKey =
       GlobalKey<SelectionAreaState>();
@@ -435,6 +436,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   List<List<ReaderPagedBlock>> _pagedBlockPages = const [];
   String? _textPaginationFallbackDiagnostic;
   int _currentPageIndex = 0;
+  int _pagedTextControllerSyncGeneration = 0;
   ReaderPaginationSessionState _pagedPaginationState =
       const ReaderPaginationSessionState();
   int get _paginationTaskId => _readerSessionController.paginationGeneration;
@@ -577,18 +579,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     if (controller.hasClients) {
       final current = controller.page?.round() ?? controller.initialPage;
-      if (current != safePage) {
+      if (current != safePage &&
+          !_pagedTransition.isAnimating &&
+          !_isCurlAutoTurning) {
+        final syncGeneration = ++_pagedTextControllerSyncGeneration;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted ||
+              syncGeneration != _pagedTextControllerSyncGeneration ||
               _staticPagedTextPageControllerInstance != controller ||
-              !controller.hasClients) {
+              !controller.hasClients ||
+              _pagedTransition.isAnimating ||
+              _isCurlAutoTurning) {
             return;
           }
           final target = _currentPageIndex.clamp(
             0,
             _safePageUpperBound(_currentPagedPageCount),
           );
-          if ((controller.page?.round() ?? controller.initialPage) != target) {
+          final currentPage = controller.page?.round() ?? controller.initialPage;
+          if (currentPage != target) {
             controller.jumpToPage(target);
           }
         });
@@ -676,6 +685,100 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       logicalWidth: logicalWidth,
       logicalHeight: logicalHeight,
       devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
+  }
+
+  void _scheduleInlineImagePrecache({int startIndex = 0, int limit = 4}) {
+    if (!mounted || _renderItems.isEmpty) {
+      return;
+    }
+    final safeStartIndex = max(0, startIndex);
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final decodeBudget = _readerImageDecodeBudget(
+      role: ReaderImageDecodeRole.epubInline,
+      logicalWidth: mediaWidth,
+    );
+    final imageUrls = _renderItems
+        .whereType<ReaderRenderImageItem>()
+        .skip(safeStartIndex)
+        .map((item) => item.imageUrl)
+        .where((url) => url.trim().isNotEmpty)
+        .take(limit)
+        .toList(growable: false);
+    if (imageUrls.isEmpty) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      for (final imageUrl in imageUrls) {
+        if (!_precachedInlineImageUrls.add(imageUrl)) {
+          continue;
+        }
+        final provider = _readerImageProviderForPrecache(
+          imageUrl,
+          decodeBudget,
+        );
+        if (provider == null) {
+          continue;
+        }
+        precacheImage(provider, context).ignore();
+      }
+    });
+  }
+
+  ImageProvider? _readerImageProviderForPrecache(
+    String imageUrl,
+    ReaderImageDecodeBudget decodeBudget,
+  ) {
+    if (imageUrl.startsWith('data:image/svg+xml') || _isSvgImageUrl(imageUrl)) {
+      return null;
+    }
+    if (imageUrl.startsWith('data:image/')) {
+      final decoded = _decodeDataUriImage(
+        dataUri: imageUrl,
+        maxBytes: decodeBudget.maxDataUriBytes,
+      );
+      if (decoded == null) {
+        return null;
+      }
+      return ResizeImage.resizeIfNeeded(
+        decodeBudget.cacheWidth,
+        decodeBudget.cacheHeight,
+        MemoryImage(decoded.bytes),
+      );
+    }
+    final uri = Uri.tryParse(imageUrl);
+    if (uri != null && uri.scheme == 'file') {
+      return ResizeImage.resizeIfNeeded(
+        decodeBudget.cacheWidth,
+        decodeBudget.cacheHeight,
+        FileImage(File.fromUri(uri)),
+      );
+    }
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    return ResizeImage.resizeIfNeeded(
+      decodeBudget.cacheWidth,
+      decodeBudget.cacheHeight,
+      NetworkImage(
+        imageUrl,
+        headers: _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
+      ),
+    );
+  }
+
+  void _scheduleInlineImagePrecacheNearProgress({int limit = 6}) {
+    final imageCount = _renderItems.whereType<ReaderRenderImageItem>().length;
+    if (imageCount <= 0) {
+      return;
+    }
+    final progressIndex = (_currentScrollRatio() * imageCount).floor();
+    _scheduleInlineImagePrecache(
+      startIndex: max(0, progressIndex - 1),
+      limit: limit,
     );
   }
 
@@ -2375,8 +2478,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final safeIndex = pageIndex.clamp(0, _safePageUpperBound(pageCount));
     _resetPagedTransitionState();
     _resetCurlAnimationState();
+    _pagedTextControllerSyncGeneration += 1;
+    final pageController = _staticPagedTextPageControllerInstance;
+    if (pageController != null && pageController.hasClients) {
+      pageController.jumpToPage(safeIndex);
+    }
     setState(() {
       _currentPageIndex = safeIndex;
+      _pagedPaginationState = _pagedPaginationState.copyWith(
+        pendingRestoreRatio: safeIndex / max(1, pageCount - 1),
+      );
     });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
@@ -2424,7 +2535,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         spec: spec,
         signature: _buildPaginationSignature(spec: spec),
         currentState: _pagedPaginationState,
-        hasExistingPages: _pagedPages.isNotEmpty,
+        hasExistingPages: _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty,
         currentProgressRatio: _currentScrollRatio(),
       ),
     );

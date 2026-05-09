@@ -39,6 +39,7 @@ class LaunchImageGalleryService {
   static const Uuid _uuid = Uuid();
   static const String _galleriesKey = 'launchImageGallery.galleries';
   static const String _activeGalleryIdKey = 'launchImageGallery.activeId';
+  static const String _startupEnabledKey = 'launchImageGallery.startupEnabled';
 
   Future<List<LaunchImageGallery>> loadGalleries() async {
     final customGalleries = await _loadCustomGalleries();
@@ -151,6 +152,16 @@ class LaunchImageGalleryService {
     await prefs.setString(_activeGalleryIdKey, normalized);
   }
 
+  Future<bool> loadStartupEnabled() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_startupEnabledKey) ?? true;
+  }
+
+  Future<void> saveStartupEnabled(bool enabled) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_startupEnabledKey, enabled);
+  }
+
   Future<LaunchImageGallery?> loadActiveGallery() async {
     final activeId = await loadActiveGalleryId();
     if (activeId == null) {
@@ -160,11 +171,17 @@ class LaunchImageGalleryService {
   }
 
   Future<String?> loadActiveLaunchImagePath() async {
+    if (!await loadStartupEnabled()) {
+      return null;
+    }
     final gallery = await loadActiveGallery();
     return resolveGalleryPreviewPath(gallery);
   }
 
   Future<String?> loadLaunchImagePathForGallery(String? galleryId) async {
+    if (!await loadStartupEnabled()) {
+      return null;
+    }
     final normalized = galleryId?.trim() ?? '';
     if (normalized.isEmpty) {
       return null;
@@ -230,6 +247,29 @@ class LaunchImageGalleryService {
       throw const FormatException('Built-in gallery cannot be renamed.');
     }
     await saveGallery(gallery.copyWith(name: normalized));
+  }
+
+  Future<LaunchImageGallery> duplicateGallery({
+    required String sourceGalleryId,
+    required String name,
+  }) async {
+    final sourceGallery = await loadGallery(sourceGalleryId);
+    if (sourceGallery == null) {
+      throw const FormatException('Gallery not found.');
+    }
+    final normalizedName =
+        name.trim().isEmpty ? '${sourceGallery.name} 副本' : name.trim();
+    final now = DateTime.now().toUtc();
+    final copied = LaunchImageGallery(
+      id: 'launch_image_gallery_${_uuid.v4()}',
+      name: normalizedName,
+      createdAt: now,
+      updatedAt: now,
+      imagePaths: sourceGallery.imagePaths,
+    );
+    final galleries = await loadGalleries();
+    await saveGalleries(<LaunchImageGallery>[copied, ...galleries]);
+    return copied;
   }
 
   Future<void> deleteGallery(String galleryId) async {

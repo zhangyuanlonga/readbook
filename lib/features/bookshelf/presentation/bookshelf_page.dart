@@ -76,6 +76,8 @@ enum _BookshelfSortMode {
 
 enum _BookshelfViewKind { base, tag, category }
 
+enum _BookshelfGridVisualStyle { standard, overlayTitle, coverOnly }
+
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
 
 enum _BookshelfBatchAction { delete, updateCover }
@@ -357,7 +359,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   int _gridColumnCount = BookshelfService.defaultGridColumnCount;
   double _gridCrossSpacing = BookshelfService.defaultGridCrossSpacing;
   double _gridMainSpacing = BookshelfService.defaultGridMainSpacing;
+  _BookshelfGridVisualStyle _gridVisualStyle =
+      _BookshelfGridVisualStyle.standard;
   bool _gridShowTitle = BookshelfService.defaultGridShowTitle;
+  bool _gridTitleCenter = BookshelfService.defaultGridTitleCenter;
+  int _gridTitleMaxLines = BookshelfService.defaultGridTitleMaxLines;
+  bool _gridCoverShadow = BookshelfService.defaultGridCoverShadow;
   bool _gridShowAuthor = BookshelfService.defaultGridShowAuthor;
   bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
   bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
@@ -372,6 +379,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
   bool _listShowSourceBadge = BookshelfService.defaultListShowSourceBadge;
+  bool _listCompactMode = BookshelfService.defaultListCompactMode;
+  bool _listShowRecentReadTime = BookshelfService.defaultListShowRecentReadTime;
   bool _listAlwaysShowSearchBar =
       BookshelfService.defaultListAlwaysShowSearchBar;
   bool _listPinSearchBar = BookshelfService.defaultListPinSearchBar;
@@ -1085,6 +1094,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   double get _gridCardItemHeightExtra {
+    if (_gridVisualStyle == _BookshelfGridVisualStyle.coverOnly ||
+        _gridVisualStyle == _BookshelfGridVisualStyle.overlayTitle) {
+      return 0;
+    }
     var extraHeight = 12.0;
     final hasMetaInfo =
         _gridShowTitle ||
@@ -1095,7 +1108,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       extraHeight += 6;
     }
     if (_gridShowTitle) {
-      extraHeight += 18;
+      extraHeight += 18.0 * _gridTitleMaxLines.clamp(1, 3).toDouble();
     }
     if (_gridShowAuthor) {
       extraHeight += (_gridShowTitle ? 2 : 0) + 16;
@@ -1198,6 +1211,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final coverHeroTag = _buildBookCoverHeroTag(book);
     final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
     final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
+    final overlayTitle =
+        _gridVisualStyle == _BookshelfGridVisualStyle.overlayTitle;
+    final coverOnly = _gridVisualStyle == _BookshelfGridVisualStyle.coverOnly;
 
     return Material(
       color: Colors.transparent,
@@ -1235,13 +1251,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: palette.shadowColor,
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          boxShadow:
+                              _gridCoverShadow
+                                  ? [
+                                    BoxShadow(
+                                      color: palette.shadowColor,
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                  : null,
                         ),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
@@ -1351,26 +1370,44 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             ),
                           ),
                         ),
+                      if (overlayTitle && !_isSelectionMode)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _buildGridCoverTitleOverlay(
+                            titleText: titleText,
+                            subtitleText:
+                                _gridShowAuthor ? displayAuthor : null,
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                if (_gridShowTitle ||
-                    _gridShowAuthor ||
-                    _gridShowLatestChapter ||
-                    _gridShowProgressBar)
+                if (!coverOnly &&
+                    !overlayTitle &&
+                    (_gridShowTitle ||
+                        _gridShowAuthor ||
+                        _gridShowLatestChapter ||
+                        _gridShowProgressBar))
                   const SizedBox(height: 6),
-                if (_gridShowTitle) ...[
-                  Text(
-                    titleText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: palette.cardTextColor,
+                if (!coverOnly && !overlayTitle && _gridShowTitle) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      titleText,
+                      maxLines: _gridTitleMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign:
+                          _gridTitleCenter ? TextAlign.center : TextAlign.start,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: palette.cardTextColor,
+                      ),
                     ),
                   ),
                 ],
-                if (_gridShowAuthor) ...[
+                if (!coverOnly && !overlayTitle && _gridShowAuthor) ...[
                   SizedBox(height: _gridShowTitle ? 2 : 0),
                   Text(
                     authorLine,
@@ -1382,7 +1419,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ),
                   ),
                 ],
-                if (_gridShowLatestChapter) ...[
+                if (!coverOnly && !overlayTitle && _gridShowLatestChapter) ...[
                   SizedBox(height: (_gridShowTitle || _gridShowAuthor) ? 1 : 0),
                   Text(
                     latestLine,
@@ -1393,7 +1430,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ),
                   ),
                 ],
-                if (_gridShowProgressBar) ...[
+                if (!coverOnly && !overlayTitle && _gridShowProgressBar) ...[
                   SizedBox(
                     height:
                         (_gridShowTitle ||
@@ -1453,9 +1490,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
     final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
     final isEditingSelected = _isSelectionMode && isSelected;
+    final coverWidth = _listCompactMode ? 52.0 : 68.0;
+    final coverHeight = _listCompactMode ? 74.0 : 96.0;
+    final cardPadding =
+        _listCompactMode
+            ? const EdgeInsets.fromLTRB(12, 9, 12, 9)
+            : const EdgeInsets.fromLTRB(14, 12, 14, 12);
+    final recentReadLine =
+        _listShowRecentReadTime && progress != null
+            ? '最近阅读: ${_formatRelativeReadTime(progress.updatedAt)}'
+            : null;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: _listCompactMode ? 7 : 10),
       color:
           isEditingSelected
               ? palette.noticeSurfaceColor.withValues(alpha: 0.34)
@@ -1482,7 +1529,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 },
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: cardPadding,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1508,8 +1555,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 containedInkWell: true,
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 68,
-                  height: 96,
+                  width: coverWidth,
+                  height: coverHeight,
                   child: Stack(
                     children: [
                       Positioned.fill(
@@ -1522,8 +1569,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           detailUrl: book.detailUrl,
                           heroTag: coverHeroTag,
                           presentation: presentation,
-                          width: 68,
-                          height: 96,
+                          width: coverWidth,
+                          height: coverHeight,
                         ),
                       ),
                       if (_listShowSourceBadge)
@@ -1606,7 +1653,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         ],
                       ),
                       if (_listShowAuthor) ...[
-                        const SizedBox(height: 6),
+                        SizedBox(height: _listCompactMode ? 3 : 6),
                         Text(
                           authorLine,
                           maxLines: 1,
@@ -1620,7 +1667,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         ),
                       ],
                       if (_listShowLatestChapter) ...[
-                        SizedBox(height: _listShowAuthor ? 4 : 6),
+                        SizedBox(
+                          height:
+                              _listCompactMode ? 3 : (_listShowAuthor ? 4 : 6),
+                        ),
                         Text(
                           latestLine,
                           maxLines: 1,
@@ -1633,7 +1683,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ),
                         ),
                       ],
-                      const SizedBox(height: 4),
+                      if (recentReadLine != null) ...[
+                        SizedBox(height: _listCompactMode ? 3 : 4),
+                        Text(
+                          recentReadLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: palette.textSecondaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: _listCompactMode ? 3 : 4),
                       Text(
                         progressDisplay.summaryText,
                         maxLines: 1,
@@ -1650,7 +1714,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         ),
                       ),
                       if (_listShowProgressBar) ...[
-                        const SizedBox(height: 8),
+                        SizedBox(height: _listCompactMode ? 5 : 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
                           child: LinearProgressIndicator(
@@ -1709,6 +1773,57 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ? palette.buttonTextColor
                       : colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridCoverTitleOverlay({
+    required String titleText,
+    required String? subtitleText,
+  }) {
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(12),
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.black.withValues(alpha: 0.72)],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(7, 20, 7, 7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                titleText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+                ),
+              ),
+              if (subtitleText != null && subtitleText.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitleText.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -3141,6 +3256,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         await _bookshelfService.loadListShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadListShowProgressBar();
     final showSourceBadge = await _bookshelfService.loadListShowSourceBadge();
+    final compactMode = await _bookshelfService.loadListCompactMode();
+    final showRecentReadTime =
+        await _bookshelfService.loadListShowRecentReadTime();
     final alwaysShowSearchBar =
         await _bookshelfService.loadListAlwaysShowSearchBar();
     final pinSearchBar = await _bookshelfService.loadListPinSearchBar();
@@ -3155,6 +3273,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowLatestChapter == showLatestChapter &&
         _listShowProgressBar == showProgressBar &&
         _listShowSourceBadge == showSourceBadge &&
+        _listCompactMode == compactMode &&
+        _listShowRecentReadTime == showRecentReadTime &&
         _listAlwaysShowSearchBar == alwaysShowSearchBar &&
         _listPinSearchBar == pinSearchBar &&
         _listQuickFilterContent == quickFilterContent) {
@@ -3166,6 +3286,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowLatestChapter = showLatestChapter;
       _listShowProgressBar = showProgressBar;
       _listShowSourceBadge = showSourceBadge;
+      _listCompactMode = compactMode;
+      _listShowRecentReadTime = showRecentReadTime;
       _listAlwaysShowSearchBar = alwaysShowSearchBar;
       _listPinSearchBar = pinSearchBar;
       _listQuickFilterContent = quickFilterContent;
@@ -3189,7 +3311,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final columns = await _bookshelfService.loadGridColumnCount();
     final crossSpacing = await _bookshelfService.loadGridCrossSpacing();
     final mainSpacing = await _bookshelfService.loadGridMainSpacing();
+    final visualStyle = _gridVisualStyleFromStorageValue(
+      await _bookshelfService.loadGridVisualStyle(),
+    );
     final showTitle = await _bookshelfService.loadGridShowTitle();
+    final titleCenter = await _bookshelfService.loadGridTitleCenter();
+    final titleMaxLines = await _bookshelfService.loadGridTitleMaxLines();
+    final coverShadow = await _bookshelfService.loadGridCoverShadow();
     final showAuthor = await _bookshelfService.loadGridShowAuthor();
     final showLatestChapter =
         await _bookshelfService.loadGridShowLatestChapter();
@@ -3208,7 +3336,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridColumnCount == columns &&
         _gridCrossSpacing == crossSpacing &&
         _gridMainSpacing == mainSpacing &&
+        _gridVisualStyle == visualStyle &&
         _gridShowTitle == showTitle &&
+        _gridTitleCenter == titleCenter &&
+        _gridTitleMaxLines == titleMaxLines &&
+        _gridCoverShadow == coverShadow &&
         _gridShowAuthor == showAuthor &&
         _gridShowLatestChapter == showLatestChapter &&
         _gridShowProgressBar == showProgressBar &&
@@ -3223,7 +3355,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _gridColumnCount = columns;
       _gridCrossSpacing = crossSpacing;
       _gridMainSpacing = mainSpacing;
+      _gridVisualStyle = visualStyle;
       _gridShowTitle = showTitle;
+      _gridTitleCenter = titleCenter;
+      _gridTitleMaxLines = titleMaxLines;
+      _gridCoverShadow = coverShadow;
       _gridShowAuthor = showAuthor;
       _gridShowLatestChapter = showLatestChapter;
       _gridShowProgressBar = showProgressBar;
@@ -3243,6 +3379,35 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       BookshelfService.authorSortMode => _BookshelfSortMode.author,
       BookshelfService.titleSortMode => _BookshelfSortMode.title,
       _ => _BookshelfSortMode.defaultOrder,
+    };
+  }
+
+  _BookshelfGridVisualStyle _gridVisualStyleFromStorageValue(String value) {
+    return switch (value) {
+      BookshelfService.gridOverlayTitleVisualStyle =>
+        _BookshelfGridVisualStyle.overlayTitle,
+      BookshelfService.gridCoverOnlyVisualStyle =>
+        _BookshelfGridVisualStyle.coverOnly,
+      _ => _BookshelfGridVisualStyle.standard,
+    };
+  }
+
+  String _gridVisualStyleStorageValue(_BookshelfGridVisualStyle value) {
+    return switch (value) {
+      _BookshelfGridVisualStyle.standard =>
+        BookshelfService.gridStandardVisualStyle,
+      _BookshelfGridVisualStyle.overlayTitle =>
+        BookshelfService.gridOverlayTitleVisualStyle,
+      _BookshelfGridVisualStyle.coverOnly =>
+        BookshelfService.gridCoverOnlyVisualStyle,
+    };
+  }
+
+  String _gridVisualStyleLabel(_BookshelfGridVisualStyle value) {
+    return switch (value) {
+      _BookshelfGridVisualStyle.standard => '标准',
+      _BookshelfGridVisualStyle.overlayTitle => '封面叠字',
+      _BookshelfGridVisualStyle.coverOnly => '仅封面',
     };
   }
 
