@@ -111,7 +111,7 @@ class MainActivity : FlutterActivity() {
     private var readerVolumeKeyEventChannel: EventChannel? = null
     private var readerVolumeKeyEventSink: EventChannel.EventSink? = null
     private var readerScreenBrightnessMethodChannel: MethodChannel? = null
-    private var pendingInitialPayload: Map<String, Any>? = null
+    private var pendingInitialPayload: Any? = null
     private var interceptReaderVolumeKeys = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -284,7 +284,7 @@ class MainActivity : FlutterActivity() {
         return super.dispatchKeyEvent(event)
     }
 
-    private fun extractPayloadFromIntent(intent: Intent?): Map<String, Any>? {
+    private fun extractPayloadFromIntent(intent: Intent?): Any? {
         intent ?: return null
 
         return when (intent.action) {
@@ -318,19 +318,25 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
-    private fun buildPayloadFromSendMultipleIntent(intent: Intent): Map<String, Any>? {
+    private fun buildPayloadFromSendMultipleIntent(intent: Intent): List<Map<String, Any>>? {
         val uris = readSharedUriList(intent)
         if (uris.isEmpty()) {
             return null
         }
 
+        val payloads = mutableListOf<Map<String, Any>>()
+        val seenUris = mutableSetOf<String>()
         for (uri in uris) {
+            val uriKey = uri.toString()
+            if (!seenUris.add(uriKey)) {
+                continue
+            }
             val payload = buildPayloadFromUri(uri, intent.type)
             if (payload != null) {
-                return payload
+                payloads.add(payload)
             }
         }
-        return null
+        return payloads.takeIf { it.isNotEmpty() }
     }
 
     private fun buildPayloadFromUri(uri: Uri?, mimeTypeHint: String? = null): Map<String, Any>? {

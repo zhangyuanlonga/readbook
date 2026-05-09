@@ -84,10 +84,10 @@ class ExternalImportBridge {
     _channel.setMethodCallHandler(_onMethodCall);
 
     try {
-      final payload = _parsePayload(
+      final payloads = _parsePayloads(
         await _channel.invokeMethod<dynamic>(_methodGetInitialImportPayload),
       );
-      if (payload != null) {
+      for (final payload in payloads) {
         _pushPayload(payload);
       }
     } on MissingPluginException {
@@ -172,8 +172,8 @@ class ExternalImportBridge {
       return null;
     }
 
-    final payload = _parsePayload(call.arguments);
-    if (payload != null) {
+    final payloads = _parsePayloads(call.arguments);
+    for (final payload in payloads) {
       _pushPayload(payload);
     }
     return null;
@@ -185,6 +185,19 @@ class ExternalImportBridge {
     if (!_payloadController.isClosed) {
       _payloadController.add(payload);
     }
+  }
+
+  List<IncomingExternalImportPayload> _parsePayloads(dynamic raw) {
+    if (raw is Iterable) {
+      return raw
+          .map(_parsePayload)
+          .whereType<IncomingExternalImportPayload>()
+          .toList(growable: false);
+    }
+    final payload = _parsePayload(raw);
+    return payload == null
+        ? const <IncomingExternalImportPayload>[]
+        : [payload];
   }
 
   IncomingExternalImportPayload? _parsePayload(dynamic raw) {

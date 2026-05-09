@@ -540,7 +540,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
               ),
               const SizedBox(height: 8),
               AspectRatio(
-                aspectRatio: 4.2,
+                aspectRatio: 5.2,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -590,7 +590,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
       alignment: Alignment.center,
       child: BottomNavIconView(
         icon: resolved,
-        size: 24,
+        size: 18,
         fallbackColor:
             active ? colorScheme.primary : colorScheme.onSurfaceVariant,
       ),

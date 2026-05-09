@@ -98,6 +98,7 @@ class ResolvedBookCoverView extends StatelessWidget {
     required this.width,
     required this.height,
     required this.borderRadius,
+    this.fit = BoxFit.cover,
   });
 
   final ResolvedBookCover cover;
@@ -106,6 +107,7 @@ class ResolvedBookCoverView extends StatelessWidget {
   final double width;
   final double height;
   final BorderRadius borderRadius;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +118,7 @@ class ResolvedBookCoverView extends StatelessWidget {
           imageUrl: cover.imageUrl,
           width: width,
           height: height,
-          fit: BoxFit.cover,
+          fit: fit,
           fallback: _buildPlaceholder(),
         ),
       ),
@@ -128,7 +130,7 @@ class ResolvedBookCoverView extends StatelessWidget {
           key: ValueKey<String>(cover.cacheKey),
           width: width,
           height: height,
-          fit: BoxFit.cover,
+          fit: fit,
           errorBuilder: (_, __, ___) => _buildPlaceholder(),
         ),
       ),

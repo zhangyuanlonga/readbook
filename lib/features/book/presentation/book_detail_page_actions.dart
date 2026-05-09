@@ -186,14 +186,85 @@ extension on _BookDetailPageState {
         return Hero(
           tag: heroTag,
           key: ValueKey<String>('hero_${heroTag}_${resolvedCover.cacheKey}'),
-          child: ResolvedBookCoverView(
-            key: ValueKey<String>(resolvedCover.cacheKey),
-            cover: resolvedCover,
-            title: title,
-            author: author,
-            width: coverWidth,
-            height: coverHeight,
-            borderRadius: BorderRadius.circular(metrics.cardRadius),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap:
+                () => _openCoverPreview(
+                  cover: resolvedCover,
+                  title: title,
+                  author: author,
+                ),
+            child: ResolvedBookCoverView(
+              key: ValueKey<String>(resolvedCover.cacheKey),
+              cover: resolvedCover,
+              title: title,
+              author: author,
+              width: coverWidth,
+              height: coverHeight,
+              borderRadius: BorderRadius.circular(metrics.cardRadius),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openCoverPreview({
+    required ResolvedBookCover cover,
+    required String title,
+    String? author,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.88),
+      builder: (dialogContext) {
+        final size = MediaQuery.sizeOf(dialogContext);
+        final previewMaxWidth = math.max(120.0, size.width - 32);
+        final previewMaxHeight = math.max(180.0, size.height - 112);
+        final coverWidth = math.min(previewMaxWidth, previewMaxHeight / 1.42);
+        final coverHeight = coverWidth * 1.42;
+
+        return GestureDetector(
+          onTap: () => Navigator.of(dialogContext).pop(),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => Navigator.of(dialogContext).pop(),
+                        child: ResolvedBookCoverView(
+                          cover: cover,
+                          title: title,
+                          author: author,
+                          width: coverWidth,
+                          height: coverHeight,
+                          borderRadius: BorderRadius.circular(18),
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      tooltip: '关闭',
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },

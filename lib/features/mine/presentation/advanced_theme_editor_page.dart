@@ -804,9 +804,14 @@ class _AdvancedThemeEditorPageState
   }
 
   String? _selectedWallpaperPreviewPath(AppAdvancedTheme draft) {
-    return _resolveExistingLocalImagePath(
-      draft.configFor(_selectedMode).wallpaperPath,
-    );
+    return _wallpaperPreviewPathForMode(draft, _selectedMode);
+  }
+
+  String? _wallpaperPreviewPathForMode(
+    AppAdvancedTheme draft,
+    AppAdvancedThemeMode mode,
+  ) {
+    return _resolveExistingLocalImagePath(draft.configFor(mode).wallpaperPath);
   }
 
   String? _selectedReaderWallpaperPreviewPath(AppAdvancedTheme draft) {
@@ -1950,12 +1955,19 @@ class _AdvancedThemeEditorPageState
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset =
+        MediaQuery.paddingOf(context).top + kToolbarHeight + 42 + 6;
     final draft = _draft;
     final theme = Theme.of(context);
     const sectionGap = 8.0;
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         title:
             _isEditingName
                 ? ConstrainedBox(
@@ -2002,7 +2014,9 @@ class _AdvancedThemeEditorPageState
             child: Container(
               height: 36,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow,
+                color: theme.colorScheme.surfaceContainerLow.withValues(
+                  alpha: 0.9,
+                ),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: theme.colorScheme.outlineVariant.withValues(
@@ -2015,7 +2029,7 @@ class _AdvancedThemeEditorPageState
                 dividerColor: Colors.transparent,
                 indicatorSize: TabBarIndicatorSize.tab,
                 indicator: BoxDecoration(
-                  color: theme.colorScheme.surface,
+                  color: theme.colorScheme.surface.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: theme.colorScheme.outlineVariant.withValues(
@@ -2102,7 +2116,7 @@ class _AdvancedThemeEditorPageState
                                 ScrollViewKeyboardDismissBehavior.onDrag,
                             padding: EdgeInsets.fromLTRB(
                               horizontal,
-                              6,
+                              topInset,
                               horizontal,
                               10 + bottomSafe,
                             ),

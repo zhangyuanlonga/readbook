@@ -795,8 +795,9 @@ extension on _BookshelfPageState {
                         _updateBookshelfLayoutPreservingScroll(() {
                           _updateBookshelfState(() {
                             _gridAlwaysShowSearchBar = value;
-                            if (value) {
+                            if (!value && _useGridView) {
                               _isBookshelfSearchExpanded = false;
+                              _bookshelfSearchFocusNode.unfocus();
                             }
                           });
                         });
@@ -961,8 +962,9 @@ extension on _BookshelfPageState {
                         _updateBookshelfLayoutPreservingScroll(() {
                           _updateBookshelfState(() {
                             _listAlwaysShowSearchBar = value;
-                            if (value) {
+                            if (!value && !_useGridView) {
                               _isBookshelfSearchExpanded = false;
+                              _bookshelfSearchFocusNode.unfocus();
                             }
                           });
                         });

@@ -432,8 +432,8 @@ class _LaunchImageGalleryPageState
         Tooltip(
           message: _startupEnabled ? '启动时显示启动图' : '启动时不显示启动图',
           child: Container(
-            height: 46,
-            padding: const EdgeInsets.only(left: 10, right: 6),
+            height: 40,
+            padding: const EdgeInsets.only(left: 10, right: 8),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
               borderRadius: BorderRadius.circular(14),
@@ -452,10 +452,18 @@ class _LaunchImageGalleryPageState
                           ? colorScheme.primary
                           : colorScheme.onSurfaceVariant,
                 ),
-                Switch.adaptive(
-                  value: _startupEnabled,
-                  onChanged: _isSaving ? null : _setStartupEnabled,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 38,
+                  height: 28,
+                  child: Transform.scale(
+                    scale: 0.78,
+                    child: Switch.adaptive(
+                      value: _startupEnabled,
+                      onChanged: _isSaving ? null : _setStartupEnabled,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
                 ),
               ],
             ),

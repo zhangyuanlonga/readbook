@@ -12,9 +12,7 @@ extension on _BookDetailPageState {
           colorScheme,
           activeAdvancedTheme,
         );
-        final md3CoverBackdrop = _resolveDetailCoverBackdropProvider(
-          activeAdvancedTheme: activeAdvancedTheme,
-        );
+        ref.watch(coverGalleriesProvider);
         final horizontal = AppSpacing.pageHorizontal(context);
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
         final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
@@ -90,45 +88,49 @@ extension on _BookDetailPageState {
                             const SizedBox.shrink());
                   },
                 ),
-            body: DecoratedBox(
-              decoration:
-                  md3CoverBackdrop == null
-                      ? buildAdvancedThemeBackdropDecoration(backdrop)
-                      : buildImageBackdropDecoration(
-                        backgroundColor: colorScheme.surface,
-                        surfaceColor: colorScheme.surfaceContainerLow,
-                        imageProvider: md3CoverBackdrop,
-                        imageOpacity: 0.48,
-                        imageBlurSigma: 18,
-                        imageFit: BoxFit.cover,
-                        overlayColor:
-                            Theme.of(context).brightness == Brightness.dark
-                                ? Colors.black
-                                : colorScheme.surface,
-                        overlayOpacity:
-                            Theme.of(context).brightness == Brightness.dark
-                                ? 0.58
-                                : 0.72,
-                      ),
-              child: LayoutBuilder(
-                builder: (context, _) {
-                  final maxWidth = AppLayout.pageContentMaxWidth(
-                    context,
-                    maxWidth: AppLayout.bookDetailContentMaxWidth,
-                  );
+            body: AnimatedBuilder(
+              animation: _detailStateListenable,
+              builder: (context, _) {
+                final md3CoverBackdrop = _resolveDetailCoverBackdropProvider(
+                  activeAdvancedTheme: activeAdvancedTheme,
+                );
+                final presentationState = _presentationState;
+                final auxiliaryState = _auxiliaryState;
+                final result = presentationState.result;
+                final errorText = presentationState.errorText;
 
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: AnimatedBuilder(
-                        animation: _detailStateListenable,
-                        builder: (context, _) {
-                          final presentationState = _presentationState;
-                          final auxiliaryState = _auxiliaryState;
-                          final result = presentationState.result;
-                          final errorText = presentationState.errorText;
-                          return RefreshIndicator(
+                return DecoratedBox(
+                  decoration:
+                      md3CoverBackdrop == null
+                          ? buildAdvancedThemeBackdropDecoration(backdrop)
+                          : buildImageBackdropDecoration(
+                            backgroundColor: colorScheme.surface,
+                            surfaceColor: colorScheme.surfaceContainerLow,
+                            imageProvider: md3CoverBackdrop,
+                            imageOpacity: 0.48,
+                            imageBlurSigma: 18,
+                            imageFit: BoxFit.cover,
+                            overlayColor:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.black
+                                    : colorScheme.surface,
+                            overlayOpacity:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? 0.58
+                                    : 0.72,
+                          ),
+                  child: LayoutBuilder(
+                    builder: (context, _) {
+                      final maxWidth = AppLayout.pageContentMaxWidth(
+                        context,
+                        maxWidth: AppLayout.bookDetailContentMaxWidth,
+                      );
+
+                      return Align(
+                        alignment: Alignment.topCenter,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: maxWidth),
+                          child: RefreshIndicator(
                             onRefresh: () => _load(forceRefresh: true),
                             child: ListView(
                               physics: const AlwaysScrollableScrollPhysics(),
@@ -190,13 +192,13 @@ extension on _BookDetailPageState {
                                 ],
                               ],
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
           ),
         );

@@ -308,6 +308,10 @@ class ImageSelectionService {
       mimeTypes.add('image/gif');
       utis.add('com.compuserve.gif');
     }
+    if (allowedExtensions.contains('svg')) {
+      mimeTypes.add('image/svg+xml');
+      utis.add('public.svg-image');
+    }
 
     return fs.XTypeGroup(
       label: 'images',

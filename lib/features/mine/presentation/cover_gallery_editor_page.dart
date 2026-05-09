@@ -274,10 +274,14 @@ class _CoverGalleryEditorPageState
                     child: InteractiveViewer(
                       minScale: 0.8,
                       maxScale: 4,
-                      child: LazyFileImage(
-                        path: path,
-                        fit: BoxFit.contain,
-                        cacheWidth: 1080,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => Navigator.of(context).pop(),
+                        child: LazyFileImage(
+                          path: path,
+                          fit: BoxFit.contain,
+                          cacheWidth: 1080,
+                        ),
                       ),
                     ),
                   ),

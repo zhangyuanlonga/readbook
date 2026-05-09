@@ -772,19 +772,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _isSaving = true;
       _savingStatusText = '正在读取外部主题文件并准备导入…';
     });
-    final cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
-    if (cached == null) {
-      ExternalImportDiagnostics.logCacheFailed(payload);
-      _showMessage(
-        ExternalImportDiagnostics.readFailedMessage(
-          payload.type,
-          payload.label,
-        ),
-      );
-      return;
-    }
 
+    CachedExternalImportFile? cached;
     try {
+      cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
+      if (cached == null) {
+        ExternalImportDiagnostics.logCacheFailed(payload);
+        _showMessage(
+          ExternalImportDiagnostics.readFailedMessage(
+            payload.type,
+            payload.label,
+          ),
+        );
+        return;
+      }
       if (!ExternalImportCatalog.supportsFileLabel(
         ExternalImportPayloadType.advancedTheme,
         cached.label,
@@ -801,9 +802,31 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         );
         return;
       }
+      final mimeType = cached.mimeType ?? payload.mimeType;
+      if (_isBatchBundleFile(path: cached.path, mimeType: mimeType)) {
+        final summary = await _importThemeBatchFile(
+          path: cached.path,
+          mimeType: mimeType,
+          onProgress: (_, message) => _updateSavingStatus(message),
+        );
+        if (!mounted) {
+          return;
+        }
+        ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+        await _load();
+        if (!mounted) {
+          return;
+        }
+        ExternalImportDiagnostics.logImportSucceeded(
+          ExternalImportPayloadType.advancedTheme,
+          cached.label,
+        );
+        _showBatchImportSummary(summary);
+        return;
+      }
       final importedTheme = await _importThemeFromPath(
         path: cached.path,
-        mimeType: cached.mimeType ?? payload.mimeType,
+        mimeType: mimeType,
       );
       if (!mounted) {
         return;
@@ -819,7 +842,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       }
       ExternalImportDiagnostics.logImportFailed(
         ExternalImportPayloadType.advancedTheme,
-        cached.label,
+        cached?.label ?? payload.label,
         error,
       );
       _showMessage(error.message);
@@ -829,14 +852,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       }
       ExternalImportDiagnostics.logImportFailed(
         ExternalImportPayloadType.advancedTheme,
-        cached.label,
+        cached?.label ?? payload.label,
         error,
       );
       _showMessage(
         ExternalImportDiagnostics.importFailedMessage(
           ExternalImportPayloadType.advancedTheme,
           '$error',
-          label: cached.label,
+          label: cached?.label ?? payload.label,
         ),
       );
     } finally {
@@ -1807,21 +1830,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         '即将删除「${theme.name}」。',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        preview.hasAssociatedResources
-                            ? '下面列的是该主题当前绑定的实际资源。共享资源即使勾选，也只有在没有其他主题或设置引用时才会真正删除。'
-                            : '该主题没有额外绑定资源，只会删除主题实体本身。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.45,
-                        ),
-                      ),
                       if (preview.sections.isNotEmpty) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         for (final section in preview.sections) ...[
                           Container(
-                            margin: const EdgeInsets.only(bottom: 12),
+                            margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
                               color: colorScheme.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(18),
@@ -1832,54 +1845,26 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                               ),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                14,
-                                12,
-                                14,
-                                12,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CheckboxListTile(
-                                    value: selections[section.kind] ?? false,
-                                    contentPadding: EdgeInsets.zero,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    title: Text(
-                                      section.title,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    subtitle: Text(section.helperText),
-                                    onChanged: (value) {
-                                      setSheetState(() {
-                                        selections[section.kind] =
-                                            value ?? false;
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 4),
-                                  for (final item in section.items)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        left: 8,
-                                        bottom: 6,
-                                      ),
-                                      child: Text(
-                                        '• $item',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                              child: CheckboxListTile(
+                                value: selections[section.kind] ?? false,
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                title: Text(
+                                  section.title,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                onChanged: (value) {
+                                  setSheetState(() {
+                                    selections[section.kind] = value ?? false;
+                                  });
+                                },
                               ),
                             ),
                           ),
@@ -2453,12 +2438,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 (context) => <PopupMenuEntry<String?>>[
                   const PopupMenuItem<String?>(
                     value: null,
-                    child: Text('全部分类'),
+                    child: Center(child: Text('全部分类')),
                   ),
                   ..._availableCategories.map(
                     (category) => PopupMenuItem<String?>(
                       value: category,
-                      child: Text(category),
+                      child: Center(child: Text(category)),
                     ),
                   ),
                 ],
@@ -2475,12 +2460,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   color: colorScheme.outlineVariant.withValues(alpha: 0.28),
                 ),
               ),
-              child: Row(
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Expanded(
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
                     child: Text(
                       categoryLabel,
                       maxLines: 1,
+                      textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
@@ -2488,11 +2476,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: colorScheme.onSurfaceVariant,
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -2799,49 +2789,55 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     BuildContext context,
     AdvancedThemeSummary theme,
   ) {
-    return Container(
+    final colorScheme = Theme.of(context).colorScheme;
+    const borderRadius = BorderRadius.all(Radius.circular(16));
+    return SizedBox(
       height: 112,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              _buildPreviewSegment(
-                context,
-                mode: AppAdvancedThemeMode.light,
-                config: theme.lightMode,
-                isLeft: true,
-              ),
-              ClipPath(
-                clipper: _DiagonalSplitClipper(),
-                child: _buildPreviewSegment(
-                  context,
-                  mode: AppAdvancedThemeMode.dark,
-                  config: theme.darkMode,
-                  isLeft: false,
-                ),
-              ),
-              IgnorePointer(
-                child: CustomPaint(
-                  painter: _DiagonalSplitLinePainter(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.outlineVariant.withValues(alpha: 0.55),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        clipBehavior: Clip.antiAlias,
+        child: DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+            ),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildPreviewSegment(
+                    context,
+                    mode: AppAdvancedThemeMode.light,
+                    config: theme.lightMode,
+                    isLeft: true,
                   ),
-                ),
-              ),
-            ],
-          );
-        },
+                  ClipPath(
+                    clipper: _DiagonalSplitClipper(),
+                    child: _buildPreviewSegment(
+                      context,
+                      mode: AppAdvancedThemeMode.dark,
+                      config: theme.darkMode,
+                      isLeft: false,
+                    ),
+                  ),
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _DiagonalSplitLinePainter(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.55,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

@@ -1,4 +1,3 @@
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +11,9 @@ import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
+import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
+import '../providers.dart';
 
 class BottomNavIconGalleryEditorPage extends StatefulWidget {
   const BottomNavIconGalleryEditorPage({super.key, required this.galleryId});
@@ -74,26 +75,35 @@ class _BottomNavIconGalleryEditorPageState
     }
     final container = ProviderScope.containerOf(context);
 
-    final picked = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(
-          label: 'Bottom nav icons',
-          extensions: ['svg', 'png', 'gif'],
-          mimeTypes: ['image/svg+xml', 'image/png', 'image/gif'],
-          uniformTypeIdentifiers: [
-            'public.svg-image',
-            'public.png',
-            'com.compuserve.gif',
-          ],
-        ),
-      ],
-      confirmButtonText: '选择图标',
+    final imageSelectionService = container.read(
+      mineImageSelectionServiceProvider,
     );
-    if (picked == null || !mounted) {
+    PickedImageData? picked;
+    try {
+      final source = await imageSelectionService.chooseImageSource(
+        context,
+        title: '添加底栏图标',
+        gallerySubtitle: '从系统照片库选择 PNG 或 GIF 图标',
+        filesSubtitle: '从文件 App 或本地目录选择 SVG / PNG / GIF 图标',
+      );
+      if (source == null || !mounted) {
+        return;
+      }
+      picked = await imageSelectionService.pickImage(
+        confirmButtonText: '选择图标',
+        allowedExtensions: const {'svg', 'png', 'gif'},
+        source: source,
+      );
+      if (picked == null || !mounted) {
+        return;
+      }
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
       return;
     }
+    final selectedIcon = picked;
 
-    final extension = picked.name.split('.').last.trim().toLowerCase();
+    final extension = selectedIcon.name.split('.').last.trim().toLowerCase();
     final format = switch (extension) {
       'svg' => BottomNavIconAssetFormat.svg,
       'png' => BottomNavIconAssetFormat.png,
@@ -108,11 +118,12 @@ class _BottomNavIconGalleryEditorPageState
       _isSaving = true;
     });
     try {
-      final asset = await _service.importIconAsset(
+      final asset = await _service.importIconAssetBytes(
         galleryId: gallery.id,
         tab: tab,
         slot: slot,
-        sourcePath: picked.path,
+        bytes: selectedIcon.bytes,
+        fileName: selectedIcon.name,
         format: format,
       );
       final currentSet = gallery.items[tab] ?? const BottomNavIconSet();
@@ -137,6 +148,15 @@ class _BottomNavIconGalleryEditorPageState
         });
       }
     }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _clearSlot(

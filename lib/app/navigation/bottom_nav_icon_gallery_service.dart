@@ -17,12 +17,11 @@ class BottomNavIconGalleryService {
   BottomNavIconGalleryService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _assetStore = assetStore ?? ManagedAssetStore();
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
@@ -302,6 +301,33 @@ class BottomNavIconGalleryService {
     );
   }
 
+  Future<BottomNavIconAssetRef> importIconAssetBytes({
+    required String galleryId,
+    required BottomNavIconGalleryTab tab,
+    required BottomNavIconVariantSlot slot,
+    required List<int> bytes,
+    required String fileName,
+    required BottomNavIconAssetFormat format,
+  }) async {
+    final imported = await _assetStore.persistBytes(
+      type: ManagedAssetType.bottomNavIcon,
+      scope: ManagedAssetScope.bottomNav,
+      bytes: bytes,
+      collectionId: galleryId,
+      assetId: '${tab.name}_${slot.name}',
+      fileName: fileName,
+      targetNamePrefix: '${tab.name}_${slot.name}',
+    );
+    final destinationPath = imported.resolvedPath!;
+    await evictFileImagePath(destinationPath);
+
+    return BottomNavIconAssetRef(
+      path: destinationPath,
+      format: format,
+      isAsset: false,
+    );
+  }
+
   Future<void> deleteIconAsset(BottomNavIconAssetRef assetRef) async {
     if (assetRef.isAsset) {
       return;
@@ -349,7 +375,9 @@ class BottomNavIconGalleryService {
     final items = <BottomNavIconGalleryTab, BottomNavIconSet>{};
     for (final entry in gallery.items.entries) {
       items[entry.key] = BottomNavIconSet(
-        lightUnselected: await _toPersistedAssetRef(entry.value.lightUnselected),
+        lightUnselected: await _toPersistedAssetRef(
+          entry.value.lightUnselected,
+        ),
         lightSelected: await _toPersistedAssetRef(entry.value.lightSelected),
         darkUnselected: await _toPersistedAssetRef(entry.value.darkUnselected),
         darkSelected: await _toPersistedAssetRef(entry.value.darkSelected),
