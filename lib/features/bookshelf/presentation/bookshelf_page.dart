@@ -14,6 +14,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
@@ -639,7 +640,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 const SizedBox.shrink()
             else ...[
               _buildAnnouncementAction(),
-              if (showTopSearchAction)
+              if (showTopSearchAction &&
+                  ref
+                      .watch(appPlatformCapabilitiesProvider)
+                      .supportsSourceRuntime)
                 IconButton(
                   tooltip: '搜索书籍',
                   onPressed: () => context.push('/search'),

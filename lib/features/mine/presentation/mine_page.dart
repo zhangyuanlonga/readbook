@@ -15,6 +15,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
@@ -236,13 +237,15 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Future<void> _reloadSession({required bool showLoading}) async {
     final snapshot = await _sessionService.loadSession();
+    final supportsSourceRuntime =
+        ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
     if (!mounted) {
       return;
     }
     setState(() {
       _userId = snapshot.session?.userId;
       _username = snapshot.session?.username;
-      _showSourceEntry = snapshot.showSourceEntry;
+      _showSourceEntry = supportsSourceRuntime && snapshot.showSourceEntry;
       _hasMembership = snapshot.hasMembership;
       _hasThemeCustom = snapshot.hasThemeCustom;
       _sourceImportLimit = snapshot.sourceImportLimit;
@@ -464,6 +467,10 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _handleSourceTap() async {
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime) {
+      await _pushMineRoute('/source');
+      return;
+    }
     await _pushMineRoute('/source');
   }
 

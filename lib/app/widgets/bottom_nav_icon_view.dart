@@ -37,11 +37,24 @@ class BottomNavIconView extends StatelessWidget {
           );
         }
         if (!kIsWeb) {
-          return SvgPicture.file(
-            File(assetRef.path),
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
+          return FutureBuilder<String>(
+            future: File(assetRef.path).readAsString(),
+            builder: (context, snapshot) {
+              final svgText = snapshot.data;
+              if (svgText == null || svgText.trim().isEmpty) {
+                return Icon(
+                  icon.fallbackIcon,
+                  size: size,
+                  color: fallbackColor,
+                );
+              }
+              return SvgPicture.string(
+                svgText,
+                width: size,
+                height: size,
+                fit: BoxFit.contain,
+              );
+            },
           );
         }
       } else if (assetRef.format == BottomNavIconAssetFormat.png ||

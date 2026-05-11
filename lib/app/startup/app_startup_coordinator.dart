@@ -28,8 +28,7 @@ class AppStartupCoordinator {
        _showUpdateDialog = showUpdateDialog,
        _logger = logger ?? AppLogger.instance,
        _appUpdateService = appUpdateService ?? AppUpdateService(),
-       _sourceRuntimeFacade =
-           sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+       _sourceRuntimeFacade = sourceRuntimeFacade;
 
   static const Duration _startupMinDuration = Duration(milliseconds: 250);
   static const Duration _startupDeferredTasksDelay = Duration(
@@ -45,7 +44,7 @@ class AppStartupCoordinator {
   final StartupUpdateDialogPresenter _showUpdateDialog;
   final AppLogger _logger;
   final AppUpdateService _appUpdateService;
-  final SourceRuntimeFacade _sourceRuntimeFacade;
+  final SourceRuntimeFacade? _sourceRuntimeFacade;
 
   final Stopwatch _startupStopwatch = Stopwatch()..start();
   final Completer<void> _startupFirstFrameCompleter = Completer<void>();
@@ -129,9 +128,21 @@ class AppStartupCoordinator {
   }
 
   Future<void> _warmupLocalDatabase() async {
+    final sourceRuntimeFacade = _sourceRuntimeFacade;
+    if (sourceRuntimeFacade == null) {
+      _logger.info(
+        'Startup warmup local database skipped',
+        context: <String, Object?>{
+          'reason': 'source_runtime_disabled',
+          'elapsedMs': elapsedMilliseconds,
+        },
+      );
+      return;
+    }
+
     final stopwatch = Stopwatch()..start();
     try {
-      await _sourceRuntimeFacade.listScriptSources();
+      await sourceRuntimeFacade.listScriptSources();
     } catch (_) {
       // Ignore warmup failures to avoid affecting app startup or first frame.
     } finally {

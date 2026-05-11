@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'composition/app_providers.dart' as app_providers;
+import 'platform/app_platform_capabilities.dart';
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_release.dart';
 import '../core/auth/auth_event_bus.dart';
@@ -721,6 +722,10 @@ class _SystemUiOverlayWrapperState
   }
 
   void _onIncomingExternalImportPayload(IncomingExternalImportPayload payload) {
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsLocalFileImport) {
+      return;
+    }
+
     if (mounted) {
       setState(() {
         _externalImportStatus = ImportExportCopy.running(

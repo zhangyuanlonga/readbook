@@ -290,11 +290,11 @@ class ReaderPaginationCacheService {
   }
 
   String _stablePaginationCacheHash(String input) {
-    var hash = 0xcbf29ce484222325;
+    const mask = 0x3fffffff;
+    var hash = 0x001dc5;
     for (final unit in input.codeUnits) {
-      hash ^= unit;
-      hash = (hash * 0x100000001b3) & 0x7fffffffffffffff;
+      hash = ((hash * 16777619) ^ unit) & mask;
     }
-    return hash.toRadixString(16);
+    return '${input.length.toRadixString(16)}_${hash.toRadixString(16)}';
   }
 }

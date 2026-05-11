@@ -550,12 +550,21 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           errorBuilder: errorBuilder,
         );
       }
-      if (uri != null && uri.scheme == 'file') {
-        return SvgPicture.file(
-          File.fromUri(uri),
-          fit: BoxFit.fitWidth,
-          placeholderBuilder: placeholderBuilder,
-          errorBuilder: errorBuilder,
+      if (!kIsWeb && uri != null && uri.scheme == 'file') {
+        return FutureBuilder<String>(
+          future: File.fromUri(uri).readAsString(),
+          builder: (context, snapshot) {
+            final svgText = snapshot.data;
+            if (svgText == null || svgText.trim().isEmpty) {
+              return placeholderBuilder(context);
+            }
+            return SvgPicture.string(
+              svgText,
+              fit: BoxFit.fitWidth,
+              placeholderBuilder: placeholderBuilder,
+              errorBuilder: errorBuilder,
+            );
+          },
         );
       }
       return SvgPicture.network(

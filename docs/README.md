@@ -15,6 +15,8 @@
   当前项目后续开发的强约束文档，明确目录、依赖、Riverpod、路由、原生边界和 code review 一票否决项。
 - `docs/project_architecture_unification_plan.md`
   项目整体统一化总计划，负责串联 reader / non-reader / 共享语义 / 资源系统 / runtime / 测试守卫等跨专题阶段任务。
+- `docs/all_platform_compatibility_plan_2026-05-11.md`
+  全平台兼容总计划，明确首版先做 UI、常用业务和本地阅读，在线书源与脚本源运行时整体延期隔离。
 - `docs/architecture_guard_automation_plan.md`
   阶段 6 自动化守卫专题文档，统一绿色集合、分层越界检查、超大文件预警和总计划回填校验口径。
 - `docs/reader_visual_override_model.md`

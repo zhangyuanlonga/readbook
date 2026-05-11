@@ -42,6 +42,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
     this.activeIconGallery,
     this.frostedEffect = false,
     this.themePalette,
+    this.showSearchButton = true,
     required this.onDestinationSelected,
     required this.onSearchPressed,
   });
@@ -52,6 +53,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   final BottomNavIconGallery? activeIconGallery;
   final bool frostedEffect;
   final DockThemePalette? themePalette;
+  final bool showSearchButton;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onSearchPressed;
 
@@ -83,7 +85,9 @@ class CupertinoDockNavigationBar extends StatelessWidget {
               showLabels
                   ? (destinations.length * 78.0) + 30
                   : (destinations.length * 66.0) + 24;
-          final maxDockWidth = constraints.maxWidth - searchWidth - _kDockGap;
+          final reservedSearchWidth =
+              showSearchButton ? searchWidth + _kDockGap : 0.0;
+          final maxDockWidth = constraints.maxWidth - reservedSearchWidth;
           final dockWidth =
               maxDockWidth <= 180
                   ? maxDockWidth
@@ -131,14 +135,17 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                   ),
                 ),
               ),
-              _SearchIconButton(
-                width: searchWidth,
-                height: searchHeight,
-                showLabel: showLabels,
-                palette: palette,
-                frostedEffect: frostedEffect,
-                onPressed: onSearchPressed,
-              ),
+              if (showSearchButton) ...[
+                const SizedBox(width: _kDockGap),
+                _SearchIconButton(
+                  width: searchWidth,
+                  height: searchHeight,
+                  showLabel: showLabels,
+                  palette: palette,
+                  frostedEffect: frostedEffect,
+                  onPressed: onSearchPressed,
+                ),
+              ],
             ],
           );
         },

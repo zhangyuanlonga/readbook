@@ -1,11 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
@@ -17,6 +13,7 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../../domain/entities/script_source.dart';
+import 'app_database_connection.dart';
 
 part 'app_database.g.dart';
 
@@ -401,7 +398,8 @@ class AppDatabase extends _$AppDatabase {
   static const int _localChapterInsertBatchSize = 64;
   static const int _localChapterInsertYieldEveryChunks = 2;
 
-  AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
+  AppDatabase({QueryExecutor? executor})
+    : super(executor ?? openAppDatabaseConnection());
 
   static final AppDatabase instance = AppDatabase();
 
@@ -3012,25 +3010,4 @@ class AppDatabase extends _$AppDatabase {
     }
     return DateTime.fromMillisecondsSinceEpoch(epoch);
   }
-}
-
-QueryExecutor _openConnection() {
-  return LazyDatabase(() async {
-    final isFlutterTest = Platform.environment.containsKey('FLUTTER_TEST');
-
-    final baseDir =
-        isFlutterTest
-            ? Directory.systemTemp
-            : await getApplicationSupportDirectory();
-
-    final databaseDir = Directory(
-      p.join(baseDir.path, 'shuxiang_reading_next'),
-    );
-    if (!await databaseDir.exists()) {
-      await databaseDir.create(recursive: true);
-    }
-
-    final file = File(p.join(databaseDir.path, 'shuxiang_reading_next.db'));
-    return NativeDatabase.createInBackground(file);
-  });
 }

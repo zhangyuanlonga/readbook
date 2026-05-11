@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'composition/app_providers.dart';
 import 'preferences/app_preferences_service.dart';
 
 enum AppShellTab { home, bookshelf, discover, stats, mine }
@@ -185,7 +186,8 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> setTabVisible(AppShellTab tab, bool visible) async {
-    if (tab == AppShellTab.mine) {
+    if (tab == AppShellTab.mine ||
+        (tab == AppShellTab.discover && !_isDiscoverEnabled)) {
       return;
     }
 
@@ -218,10 +220,18 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   AppShellNavigationState _normalizeState(AppShellNavigationState input) {
-    if (input.configurableVisibleCount > 0) {
-      return input;
+    var normalized = input;
+    if (!_isDiscoverEnabled && normalized.showDiscover) {
+      normalized = normalized.copyWith(showDiscover: false);
     }
-    return input.copyWith(showHome: true);
+    if (normalized.configurableVisibleCount > 0) {
+      return normalized;
+    }
+    return normalized.copyWith(showHome: true);
+  }
+
+  bool get _isDiscoverEnabled {
+    return ref.read(appCapabilitiesProvider).supportsSourceRuntime;
   }
 
   Future<void> _persistState(AppShellNavigationState state) async {

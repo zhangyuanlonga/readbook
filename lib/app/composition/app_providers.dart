@@ -20,11 +20,16 @@ import '../../features/source/application/source_runtime_scheduler_service.dart'
 import '../../features/source/application/source_runtime_task_conflict_service.dart';
 import '../../features/source/debug_service/source_debug_web_service.dart';
 import '../lifecycle/app_lifecycle_coordinator.dart';
+import '../platform/app_platform_capabilities.dart';
 import '../startup/app_announcement_coordinator.dart';
 import '../startup/app_startup_coordinator.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return AppDatabase.instance;
+});
+
+final appCapabilitiesProvider = Provider<AppPlatformCapabilities>((ref) {
+  return ref.watch(appPlatformCapabilitiesProvider);
 });
 
 final bookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
@@ -97,13 +102,11 @@ typedef AppLifecycleCoordinatorFactory = AppLifecycleCoordinator Function();
 final appLifecycleCoordinatorFactoryProvider =
     Provider<AppLifecycleCoordinatorFactory>((ref) {
       return () => AppLifecycleCoordinator(
-        incomingExternalImportStream: ref.watch(
-          appExternalImportBridgeProvider,
-        ).payloadStream,
+        incomingExternalImportStream:
+            ref.watch(appExternalImportBridgeProvider).payloadStream,
         authEventStream: ref.watch(appAuthEventStreamProvider),
-        initializeExternalImportBridge: ref.watch(
-          appExternalImportBridgeProvider,
-        ).initialize,
+        initializeExternalImportBridge:
+            ref.watch(appExternalImportBridgeProvider).initialize,
       );
     });
 
@@ -133,13 +136,17 @@ final appStartupCoordinatorFactoryProvider =
         required Future<BuildContext?> Function() resolveDialogContext,
         required StartupUpdateDialogPresenter showUpdateDialog,
       }) {
+        final capabilities = ref.watch(appCapabilitiesProvider);
         return AppStartupCoordinator(
           sendHeartbeat: sendHeartbeat,
           sendVisitEvent: sendVisitEvent,
           showStartupAnnouncementIfNeeded: showStartupAnnouncementIfNeeded,
           resolveDialogContext: resolveDialogContext,
           showUpdateDialog: showUpdateDialog,
-          sourceRuntimeFacade: ref.watch(appSourceRuntimeFacadeProvider),
+          sourceRuntimeFacade:
+              capabilities.supportsSourceRuntime
+                  ? ref.watch(appSourceRuntimeFacadeProvider)
+                  : null,
         );
       };
     });
