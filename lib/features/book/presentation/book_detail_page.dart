@@ -14,6 +14,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -532,7 +533,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   bool get _isLocalContent => _contentCapabilities.canReindexLocal;
 
-  bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
+  bool get _canSwitchSource {
+    final capabilities = ref.read(appPlatformCapabilitiesProvider);
+    return capabilities.supportsSourceRuntime &&
+        _contentCapabilities.canSwitchSource;
+  }
 
   ImageProvider? _resolveDetailCoverBackdropProvider({
     required AppAdvancedTheme? activeAdvancedTheme,

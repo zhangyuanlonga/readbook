@@ -178,14 +178,14 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 目标：非书源业务在 P0 平台上闭环。
 
-- [ ] 书架：本地书籍展示、继续阅读、最近阅读、筛选排序。
-- [ ] 本地导入：桌面使用文件选择器，移动端保留系统分享/打开方式和选择器。
-- [ ] 详情：本地图书元数据编辑、封面编辑、目录入口、删除/重索引。
-- [ ] 书签：添加、删除、列表、从书签跳转阅读位置。
-- [ ] 阅读记录：日历/统计/最近记录，宽屏适配。
-- [ ] 外观：主题、阅读背景、启动图、底部导航图标、本地资源引用。
-- [ ] 缓存/日志：缓存清理、诊断导出在桌面端路径可控，Web 下隐藏或降级。
-- [ ] 同步：WebDAV 放入 P1+，不阻塞本地首版。
+- [x] 书架：本地书籍展示、继续阅读、最近阅读、筛选排序。
+- [x] 本地导入：桌面使用文件选择器，移动端保留系统分享/打开方式和选择器；不支持文件选择器的平台显示受限状态。
+- [x] 详情：本地图书元数据编辑、封面编辑、目录入口、删除/重索引。
+- [x] 书签：添加、删除、列表、从书签跳转阅读位置。
+- [x] 阅读记录：日历/统计/最近记录，宽屏适配。
+- [x] 外观：主题、阅读背景、启动图、底部导航图标、本地资源引用。
+- [x] 缓存/日志：缓存清理、诊断导出在桌面端路径可控，Web 下隐藏或降级。
+- [x] 同步：WebDAV 放入 P1+，默认关闭，不阻塞本地首版。
 
 验收：
 
@@ -353,3 +353,33 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 - 真实截图仍未批量保存，后续阶段可接入自动截图或人工采样到 `artifacts/adaptive_baseline/phase_2_bookshelf/`。
 - 阶段 2 仅收口 UI 与常用操作可达性；本地阅读业务闭环、桌面键盘/鼠标阅读输入和构建发布矩阵继续放到后续阶段。
+
+## 11. 阶段 3 执行记录（2026-05-11）
+
+### 已完成：常用业务全平台化
+
+- [x] 本地书库导入入口接入 `supportsLocalFileImport`，不支持文件选择器的平台禁用导入按钮并展示受限说明；页面移除直接 `dart:io File` 依赖。
+- [x] 书籍详情换源入口接入 `supportsSourceRuntime`，首版默认关闭书源运行时时不会触发 `SearchService` 换源搜索。
+- [x] WebDAV 同步新增独立能力开关 `APP_ENABLE_WEBDAV_SYNC`，`/sync` 与 `/sync/history` 在未启用时展示统一占位页。
+- [x] 缓存管理页接入 `supportsManagedFileStorage`，受限平台提示路径与批量清理会降级显示。
+- [x] 错误中心接入 `supportsManagedFileStorage`，受限平台提示诊断日志优先复制文本，支持分享的平台继续导出文件。
+- [x] 增加平台能力测试，确认书源运行时与 WebDAV 同步均为显式 opt-in 能力。
+- [x] 增加详情换源回归测试，覆盖“默认关闭时按钮不可交互且不调用 `SearchService`”和“显式启用时可换源”两条路径。
+
+### 平台影响
+
+- 影响平台：Android、iOS、macOS、Windows、Linux、Web 的常用业务入口可用性与受限提示。
+- 不影响平台：未新增原生插件，未改变数据库 schema，未重新打开在线书源、WebView 登录或脚本源调试。
+- 隔离策略：平台差异统一通过 `AppPlatformCapabilities` 暴露给页面；同步、导入、缓存、日志、换源均通过 capability 禁用、降级或占位，避免单端改动误伤另一端 UI。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter test test/app/platform/app_platform_capabilities_test.dart test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/mine/application/cache_management_service_test.dart test/features/reader/application/reading_record_service_test.dart test/features/reader/application/reading_records_query_service_test.dart test/features/mine/application/bookmarks_query_service_test.dart`：通过。
+- [x] `flutter test test/app/layout/adaptive_ui_matrix_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/app/layout/app_adaptive_metrics_test.dart`：通过，确认阶段 3 没有破坏阶段 2 自适应 UI 基线。
+
+### 遗留说明
+
+- 阶段 3 只保证非书源常用业务闭环和受限平台降级；在线书源入口隐藏、发现/搜索本地化和启动书源健康恢复继续归入阶段 5。
+- WebDAV 同步保留为 P1+ 能力，需要后续通过 `--dart-define=APP_ENABLE_WEBDAV_SYNC=true` 单独打开并补同步矩阵验证。
+- 本地阅读格式、桌面键盘/鼠标阅读输入、`txt/epub` 解析一致性继续进入阶段 4。

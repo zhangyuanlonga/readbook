@@ -20,6 +20,7 @@ class AppPlatformCapabilities {
 
   factory AppPlatformCapabilities.current({
     bool sourceRuntimeEnabled = _sourceRuntimeEnabledByDefine,
+    bool webDavSyncEnabled = _webDavSyncEnabledByDefine,
   }) {
     final platform = defaultTargetPlatform;
     final isMobile =
@@ -47,7 +48,7 @@ class AppPlatformCapabilities {
           sourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
       supportsSourceDebugServer:
           sourceRuntimeEnabled && sourceRuntimeSupportedPlatform && !kIsWeb,
-      supportsWebDavSync: supportsNativeFileSystem,
+      supportsWebDavSync: webDavSyncEnabled && supportsNativeFileSystem,
     );
   }
 
@@ -73,6 +74,11 @@ class AppPlatformCapabilities {
 
 const bool _sourceRuntimeEnabledByDefine = bool.fromEnvironment(
   'APP_ENABLE_SOURCE_RUNTIME',
+  defaultValue: false,
+);
+
+const bool _webDavSyncEnabledByDefine = bool.fromEnvironment(
+  'APP_ENABLE_WEBDAV_SYNC',
   defaultValue: false,
 );
 

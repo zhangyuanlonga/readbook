@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shuxiang_reading_next/app/platform/app_platform_capabilities.dart';
 import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
 import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
@@ -113,6 +114,12 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          appPlatformCapabilitiesProvider.overrideWith(
+            (ref) =>
+                AppPlatformCapabilities.current(sourceRuntimeEnabled: true),
+          ),
+        ],
         child: MaterialApp.router(
           theme: ThemeData(splashFactory: NoSplash.splashFactory),
           routerConfig: router,
@@ -157,6 +164,84 @@ void main() {
     expect(find.text('凡人修仙传-B'), findsWidgets);
     expect(detailService.loadedSourceIds, <String>['source_a', 'source_b']);
     expect(searchService.callCount, 1);
+  });
+
+  testWidgets('disables source switch when source runtime is disabled', (
+    tester,
+  ) async {
+    final result = BookDetailLoadResult(
+      detail: const BookDetail(
+        id: 'book_a',
+        sourceId: 'source_a',
+        title: '凡人修仙传-A',
+        detailUrl: 'https://a.example.com/detail',
+        author: '忘语',
+      ),
+      chapters: const <Chapter>[
+        Chapter(
+          id: 'a_1',
+          bookId: 'book_a',
+          title: '第1章 入门',
+          chapterUrl: 'https://a.example.com/c1',
+          index: 0,
+        ),
+      ],
+      sourceName: '源A',
+      tocFromCache: false,
+    );
+    final detailService = _FakeBookDetailService(
+      bySourceId: <String, BookDetailLoadResult>{'source_a': result},
+    );
+    final searchService = _FakeSearchService(
+      const SearchExecutionReport(
+        keyword: '凡人修仙传',
+        sourceCount: 0,
+        successSourceCount: 0,
+        books: <Book>[],
+        failures: <SourceSearchFailure>[],
+        sourceNames: <String, String>{},
+      ),
+    );
+
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder:
+              (context, state) => BookDetailPage(
+                bookId: 'book_a',
+                sourceId: 'source_a',
+                detailUrl: 'https://a.example.com/detail',
+                title: '凡人修仙传',
+                bookDetailService: detailService,
+                switchSourceSearchService: searchService,
+              ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(
+          theme: ThemeData(splashFactory: NoSplash.splashFactory),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 120));
+
+    expect(find.text('凡人修仙传-A'), findsWidgets);
+    final switchButtonFinder = find.text('书源');
+    expect(switchButtonFinder, findsOneWidget);
+    final switchInkWell = tester.widget<InkWell>(
+      find
+          .ancestor(of: switchButtonFinder, matching: find.byType(InkWell))
+          .first,
+    );
+    expect(switchInkWell.onTap, isNull);
+    expect(detailService.loadedSourceIds, <String>['source_a']);
+    expect(searchService.callCount, 0);
   });
 }
 

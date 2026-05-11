@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
 
-class ErrorCenterPage extends StatefulWidget {
+class ErrorCenterPage extends ConsumerStatefulWidget {
   const ErrorCenterPage({super.key});
 
   @override
-  State<ErrorCenterPage> createState() => _ErrorCenterPageState();
+  ConsumerState<ErrorCenterPage> createState() => _ErrorCenterPageState();
 }
 
-class _ErrorCenterPageState extends State<ErrorCenterPage> {
+class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
   final SourceLogStore _store = SourceLogStore.instance;
   final DiagnosticLogExportService _exportService =
       DiagnosticLogExportService();
@@ -30,6 +32,7 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final capabilities = ref.watch(appPlatformCapabilitiesProvider);
 
     return ImportExportTaskOverlay(
       status: _taskStatus,
@@ -125,6 +128,10 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                             ),
                           ),
                           SizedBox(height: metrics.contentGap),
+                          if (!capabilities.supportsManagedFileStorage) ...[
+                            _buildDiagnosticCapabilityNotice(),
+                            SizedBox(height: metrics.contentGap),
+                          ],
                           if (entries.isEmpty)
                             const AppEmptyStateCard(
                               icon: Icons.event_note_outlined,
@@ -143,6 +150,37 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticCapabilityNotice() {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: EdgeInsets.all(metrics.cardPadding),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+        border: Border.all(
+          color: colorScheme.secondary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: colorScheme.secondary),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child: Text(
+              '当前平台不暴露可管理文件路径，诊断日志会优先复制为文本；支持系统分享的平台会继续生成可分享文件。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSecondaryContainer,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

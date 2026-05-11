@@ -229,6 +229,9 @@ domain -> pure dart only
 - `kIsWeb`、`defaultTargetPlatform`、`Platform.isXxx` 不得在页面中反复出现；已有历史代码逐步收口，新代码默认不允许新增。
 - 如果只是 UI 样式差异，优先走自适应断点和主题 token；如果是能力差异，必须走 capability。
 - feature 想隐藏、降级或替换入口时，必须通过 capability 或 feature-level access service，不允许在多个 widget 中各自写一份判断。
+- 书源运行时属于延期能力，首版默认 `APP_ENABLE_SOURCE_RUNTIME=false`；所有换源、在线搜索、WebView 登录、源调试入口必须先经过 `supportsSourceRuntime` / `supportsInteractiveWebView` / `supportsSourceDebugServer`。
+- WebDAV 同步属于 P1+ 能力，首版默认 `APP_ENABLE_WEBDAV_SYNC=false`；同步设置、同步历史和后台同步任务必须先经过 `supportsWebDavSync`，不允许默认进入可点击但必失败的页面。
+- 文件导入、缓存清理、诊断导出等常用业务必须按 `supportsLocalFileImport` 与 `supportsManagedFileStorage` 做禁用、占位或文案降级；不支持平台仍需保留本地阅读、书签、阅读记录和外观设置的可用路径。
 
 ### 5.3 条件导入强制规则
 

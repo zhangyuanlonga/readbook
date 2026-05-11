@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
@@ -117,6 +118,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final canPopRoute = context.canPop();
+    final capabilities = ref.watch(appPlatformCapabilitiesProvider);
 
     return PopScope<void>(
       canPop: canPopRoute,
@@ -241,6 +243,10 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                               ),
                               if (isBootstrapLoading)
                                 const SizedBox(height: 12),
+                              if (!capabilities.supportsManagedFileStorage) ...[
+                                _buildStorageCapabilityNotice(context),
+                                SizedBox(height: metrics.contentGap),
+                              ],
                               ..._buildStorageSections(
                                 context,
                                 snapshot: snapshot,
@@ -268,6 +274,37 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       return;
     }
     context.go('/mine');
+  }
+
+  Widget _buildStorageCapabilityNotice(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: EdgeInsets.all(metrics.cardPadding),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+        border: Border.all(
+          color: colorScheme.secondary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: colorScheme.secondary),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child: Text(
+              '当前平台使用受限存储能力，文件路径和批量清理会按平台能力降级显示；本地阅读、书签和阅读记录不受影响。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSecondaryContainer,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<Widget> _buildStorageSections(

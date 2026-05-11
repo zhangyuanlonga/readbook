@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
@@ -88,6 +88,10 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     if (_isImporting) {
       return;
     }
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsLocalFileImport) {
+      _showMessage('当前平台暂不支持从本地文件选择器导入。');
+      return;
+    }
 
     final files = await openFiles(
       acceptedTypeGroups: const <XTypeGroup>[
@@ -130,7 +134,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       try {
         final displayName =
             file.name.trim().isEmpty
-                ? File(filePath).uri.pathSegments.last
+                ? Uri.file(filePath).pathSegments.last
                 : file.name.trim();
         setState(() {
           _currentImportLabel =
@@ -463,8 +467,13 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
   Widget _buildImportPanel(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final supportsImport = ref.watch(
+      appPlatformCapabilitiesProvider.select(
+        (capabilities) => capabilities.supportsLocalFileImport,
+      ),
+    );
     return InkWell(
-      onTap: _isImporting ? null : _pickAndImportFiles,
+      onTap: _isImporting || !supportsImport ? null : _pickAndImportFiles,
       borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
       child: Ink(
         padding: EdgeInsets.all(metrics.cardPadding + 8),
@@ -498,7 +507,9 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             ),
             SizedBox(height: metrics.contentGap * 0.8),
             Text(
-              '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入完成后会建立目录，ready 状态可直接阅读。',
+              supportsImport
+                  ? '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入完成后会建立目录，ready 状态可直接阅读。'
+                  : '当前平台暂不支持本地文件选择器。首版可继续浏览已有本地图书、书签、阅读记录和外观设置。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
                 height: 1.5,
@@ -510,9 +521,18 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
               runSpacing: 10,
               children: [
                 FilledButton.icon(
-                  onPressed: _isImporting ? null : _pickAndImportFiles,
+                  onPressed:
+                      _isImporting || !supportsImport
+                          ? null
+                          : _pickAndImportFiles,
                   icon: const Icon(Icons.upload_file_outlined),
-                  label: Text(_isImporting ? '导入中' : '选择文件'),
+                  label: Text(
+                    _isImporting
+                        ? '导入中'
+                        : supportsImport
+                        ? '选择文件'
+                        : '暂不可用',
+                  ),
                 ),
                 if (!_isImporting && _lastImportedResult != null) ...[
                   OutlinedButton.icon(
