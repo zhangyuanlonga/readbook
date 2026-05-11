@@ -3672,12 +3672,15 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           keyboardInset: keyboardInset,
                           safeBottom: safeBottom,
                           sheetHorizontal: sheetHorizontal,
-                          maxWidth: textSheetMaxWidth,
+                          maxWidth:
+                              metrics.isExpandedWindow
+                                  ? 520
+                                  : textSheetMaxWidth,
                           heightFactor: _adaptiveReaderSheetHeightFactor(
                             context,
                             compact: 0.84,
                             regular: 0.76,
-                            large: 0.7,
+                            large: 0.84,
                           ),
                           backgroundColor: sheetSurfaceColor,
                           child: Material(

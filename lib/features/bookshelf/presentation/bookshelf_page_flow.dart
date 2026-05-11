@@ -323,20 +323,7 @@ extension on _BookshelfPageState {
               }
 
               Future<void> setBookshelfViewMode(bool useGridView) async {
-                if (_useGridView == useGridView) {
-                  return;
-                }
-                _updateBookshelfState(() {
-                  _useGridView = useGridView;
-                });
-                try {
-                  await _bookshelfService.saveUseGridView(useGridView);
-                } catch (_) {
-                  if (!mounted) {
-                    return;
-                  }
-                  _showMessage('书架视图保存失败，请重试。');
-                }
+                await _setBookshelfViewMode(useGridView);
               }
 
               Widget buildSectionTitle(String title, String subtitle) {

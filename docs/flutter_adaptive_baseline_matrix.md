@@ -1,6 +1,6 @@
 # Flutter 自适应基线矩阵
 
-更新时间：2026-05-09  
+更新时间：2026-05-11  
 用途：记录阶段 0 的基线口径，为后续阶段改造提供统一对照。  
 范围：布局、密度、组件结构与截图检查，不覆盖主题视觉。
 
@@ -20,6 +20,14 @@
   平板基线，用于检查扩展结构和内容最大宽度。
 - [x] `780x360 @3.0`
   手机横屏基线，用于检查高度不足时的紧凑密度。
+- [x] `1024x768 @1.0`
+  小桌面 / 低高窗口基线，用于检查 `NavigationRail`、内容最大宽度和纵向可用空间。
+- [x] `1280x800 @1.0`
+  常规桌面基线，用于检查工作区密度、列表/网格可扫描性和鼠标滚轮路径。
+- [x] `1440x900 @1.0`
+  宽桌面基线，用于检查内容是否被无限拉宽、双栏/多栏结构是否稳定。
+- [x] `1920x1080 @1.0`
+  大桌面基线，用于检查最大宽度、留白比例和大屏信息密度。
 
 ## 2. 文字缩放矩阵
 
@@ -58,7 +66,7 @@
 ## 6. 已有测试基线
 
 - [x] `test/test_utils/adaptive_test_harness.dart`
-  已提供统一 `MediaQuery`、DPR、文字缩放和视口工具。
+  已提供统一 `MediaQuery`、DPR、文字缩放和视口工具；阶段 2 已纳入桌面视口与 `1.0x / 1.3x` 文字缩放矩阵。
 - [x] `test/app/layout/adaptive_breakpoints_test.dart`
   已覆盖断点、间距、网格列数、导航切换和新 adaptive metrics。
 - [x] `test/app/layout/adaptive_ui_matrix_test.dart`
@@ -88,3 +96,12 @@ reader_sheet_780x360_text-1.3.png
 - [x] 当前主要问题类型已记录
 - [x] 已有测试基线已记录
 - [ ] 真实页面截图尚未批量保存，待后续页面试点或自动截图脚本接入
+
+## 9. 阶段 2 基线更新（2026-05-11）
+
+- [x] 桌面视口已纳入自动 smoke 矩阵：`1024x768`、`1280x800`、`1440x900`、`1920x1080`。
+- [x] `runAdaptivePageSmokeMatrix` 默认覆盖 `1.0x` 和 `1.3x` 文字缩放。
+- [x] `adaptive_ui_matrix_test` 已覆盖桌面宽度下的书架网格列数与 `ShellScaffold` 渲染。
+- [x] 书架、本地书库、书籍详情、我的/系统设置、阅读设置浮层已完成阶段 2 桌面结构收口。
+- [x] 阶段 2 验证命令：`flutter analyze`、`flutter test test/app/layout/adaptive_ui_matrix_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/app/layout/app_adaptive_metrics_test.dart`。
+- [ ] 真实截图仍待接入自动导出或人工采样。

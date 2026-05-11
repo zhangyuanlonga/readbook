@@ -10,13 +10,7 @@ import 'package:responsive_framework/responsive_framework.dart';
 /// - phoneXl: 480dp 到 599dp 的超大手机或横屏手机。
 /// - medium: 600dp 到 839dp 的中等宽度设备。
 /// - expanded: 840dp 及以上的大屏设备。
-enum AppWidthBucket {
-  compact,
-  largePhone,
-  phoneXl,
-  medium,
-  expanded,
-}
+enum AppWidthBucket { compact, largePhone, phoneXl, medium, expanded }
 
 class AppLayout {
   const AppLayout._();
@@ -27,8 +21,10 @@ class AppLayout {
   static const String breakpointMediumName = 'APP_MEDIUM';
   static const String breakpointExpandedName = 'APP_EXPANDED';
   static const double compactContentWidth = 340;
+
   /// 390dp 以下视为小屏手机。
   static const double phoneSmallWidth = largePhoneBreakpointWidth;
+
   /// 390dp 起视为大号手机布局。
   static const double largePhoneBreakpointWidth = 390;
   static const double phoneXlBreakpointWidth = 480;
@@ -37,11 +33,13 @@ class AppLayout {
   static const double actionWrapWidth = 420;
   static const double phoneLargeWidth = largePhoneBreakpointWidth;
   static const double railBreakpointWidth = mediumBreakpointWidth;
-  static const double mineContentMaxWidth = 700;
-  static const double bookDetailContentMaxWidth = 920;
+  static const double bookshelfContentMaxWidth = 1320;
+  static const double localLibraryContentMaxWidth = 1040;
+  static const double mineContentMaxWidth = 1040;
+  static const double bookDetailContentMaxWidth = 1120;
   static const double searchContentMaxWidth = 920;
   static const double settingsContentMaxWidth = 760;
-  static const double systemSettingsContentMaxWidth = 560;
+  static const double systemSettingsContentMaxWidth = 960;
   static const double errorCenterContentMaxWidth = 920;
   static const double aboutContentMaxWidth = 920;
   static const double aboutExpandedContentMaxWidth = 1080;
@@ -204,6 +202,15 @@ class AppLayout {
   }
 
   static int mineActionGridColumnsForWidth(double width) {
+    if (width >= 900) {
+      return 4;
+    }
+    if (width >= mediumBreakpointWidth) {
+      return 3;
+    }
+    if (width >= phoneXlBreakpointWidth) {
+      return 2;
+    }
     return 4;
   }
 

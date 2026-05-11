@@ -58,8 +58,8 @@ class BookDetailSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
+    final expanded = metrics.isExpandedWindow;
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -69,53 +69,84 @@ class BookDetailSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          Flex(
+            direction: expanded ? Axis.vertical : Axis.horizontal,
+            crossAxisAlignment:
+                expanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
             children: [
-              cover,
-              SizedBox(width: metrics.sectionGap),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: metrics.isCompactDensity ? 2 : 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        height: 1.18,
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                    SizedBox(height: metrics.contentGap),
-                    _BookDetailInfoLine(
-                      label: '作者',
-                      value:
-                          author != null && author!.trim().isNotEmpty
-                              ? author!.trim()
-                              : '未知',
-                    ),
-                    SizedBox(height: metrics.isCompactDensity ? 5 : 7),
-                    _BookDetailInfoLine(label: '来源', value: sourceName),
-                    SizedBox(height: metrics.isCompactDensity ? 5 : 7),
-                    _BookDetailInfoLine(
-                      label: '最新',
-                      value:
-                          latestChapter != null &&
-                                  latestChapter!.trim().isNotEmpty
-                              ? latestChapter!.trim()
-                              : '暂无',
-                      maxLines: 2,
-                    ),
-                  ],
+              Align(alignment: Alignment.topLeft, child: cover),
+              SizedBox(
+                width: expanded ? 0 : metrics.sectionGap,
+                height: expanded ? metrics.sectionGap : 0,
+              ),
+              Flexible(
+                fit: expanded ? FlexFit.loose : FlexFit.tight,
+                child: _BookDetailSummaryText(
+                  title: title,
+                  sourceName: sourceName,
+                  author: author,
+                  latestChapter: latestChapter,
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BookDetailSummaryText extends StatelessWidget {
+  const _BookDetailSummaryText({
+    required this.title,
+    required this.sourceName,
+    this.author,
+    this.latestChapter,
+  });
+
+  final String title;
+  final String sourceName;
+  final String? author;
+  final String? latestChapter;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          title,
+          maxLines: metrics.isCompactDensity ? 2 : 3,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.18,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        SizedBox(height: metrics.contentGap),
+        _BookDetailInfoLine(
+          label: '作者',
+          value:
+              author != null && author!.trim().isNotEmpty
+                  ? author!.trim()
+                  : '未知',
+        ),
+        SizedBox(height: metrics.isCompactDensity ? 5 : 7),
+        _BookDetailInfoLine(label: '来源', value: sourceName),
+        SizedBox(height: metrics.isCompactDensity ? 5 : 7),
+        _BookDetailInfoLine(
+          label: '最新',
+          value:
+              latestChapter != null && latestChapter!.trim().isNotEmpty
+                  ? latestChapter!.trim()
+                  : '暂无',
+          maxLines: 2,
+        ),
+      ],
     );
   }
 }

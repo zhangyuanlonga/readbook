@@ -75,48 +75,35 @@ class SystemSettingsPage extends StatelessWidget {
                           SizedBox(height: metrics.sectionGap),
                           LayoutBuilder(
                             builder: (context, constraints) {
-                              final wide =
-                                  constraints.maxWidth >=
-                                  AppLayout.railBreakpointWidth;
-                              if (wide) {
+                              final wide = constraints.maxWidth >= 760;
+                              if (!wide) {
                                 return const Column(
                                   children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child:
-                                              _BookshelfAutoRefreshSettingPanel(),
-                                        ),
-                                        SizedBox(width: 12),
-                                        Expanded(
-                                          child:
-                                              _SearchConcurrencySettingPanel(),
-                                        ),
-                                      ],
-                                    ),
+                                    _BookshelfAutoRefreshSettingPanel(),
                                     SizedBox(height: 12),
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: _ReaderSettingsResetPanel(),
-                                        ),
-                                      ],
-                                    ),
+                                    _SearchConcurrencySettingPanel(),
+                                    SizedBox(height: 12),
+                                    _ReaderSettingsResetPanel(),
                                   ],
                                 );
                               }
 
-                              return const Column(
+                              return const Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _BookshelfAutoRefreshSettingPanel(),
-                                  SizedBox(height: 12),
-                                  _SearchConcurrencySettingPanel(),
-                                  SizedBox(height: 12),
-                                  _ReaderSettingsResetPanel(),
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        _BookshelfAutoRefreshSettingPanel(),
+                                        SizedBox(height: 12),
+                                        _ReaderSettingsResetPanel(),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: _SearchConcurrencySettingPanel(),
+                                  ),
                                 ],
                               );
                             },

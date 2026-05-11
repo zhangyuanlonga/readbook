@@ -7,7 +7,19 @@ import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_de
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
-  const widths = <double>[320, 360, 390, 430, 480, 600, 840, 1024];
+  const widths = <double>[
+    320,
+    360,
+    390,
+    430,
+    480,
+    600,
+    840,
+    1024,
+    1280,
+    1440,
+    1920,
+  ];
 
   testWidgets('矩阵测试：sheetHeightFactor 在目标宽度下返回正确结果', (tester) async {
     for (final width in widths) {
@@ -94,6 +106,9 @@ void main() {
       600: 3,
       840: 4,
       1024: 4,
+      1280: 5,
+      1440: 6,
+      1920: 6,
     };
 
     for (final entry in expected.entries) {
@@ -115,36 +130,46 @@ void main() {
       _ViewportCase(name: 'phone_427', size: Size(427, 924), dpr: 3.0),
       _ViewportCase(name: 'phone_480', size: Size(480, 1066), dpr: 3.0),
       _ViewportCase(name: 'phone_landscape', size: Size(640, 360), dpr: 3.0),
+      _ViewportCase(name: 'medium_600', size: Size(600, 960), dpr: 2.0),
       _ViewportCase(name: 'tablet_840', size: Size(840, 1180), dpr: 2.0),
+      _ViewportCase(name: 'desktop_1024', size: Size(1024, 768), dpr: 1.0),
+      _ViewportCase(name: 'desktop_1280', size: Size(1280, 800), dpr: 1.0),
+      _ViewportCase(name: 'desktop_1440', size: Size(1440, 900), dpr: 1.0),
+      _ViewportCase(name: 'desktop_1920', size: Size(1920, 1080), dpr: 1.0),
       _ViewportCase(name: 'tablet_1024', size: Size(1024, 1366), dpr: 2.0),
       _ViewportCase(name: 'large_1366', size: Size(1366, 1024), dpr: 2.0),
     ];
 
     for (final item in cases) {
-      await tester.pumpWidget(
-        AdaptiveTestHarness(
-          width: item.size.width,
-          height: item.size.height,
-          dpr: item.dpr,
-          wrapWithMaterialApp: true,
-          child: const ShellScaffold(
-            location: '/bookshelf',
-            child: ColoredBox(color: Colors.white),
+      for (final textScaleFactor in kAdaptiveSmokeTextScaleCases) {
+        await tester.pumpWidget(
+          AdaptiveTestHarness(
+            width: item.size.width,
+            height: item.size.height,
+            dpr: item.dpr,
+            textScaleFactor: textScaleFactor,
+            wrapWithMaterialApp: true,
+            child: const ShellScaffold(
+              location: '/bookshelf',
+              child: ColoredBox(color: Colors.white),
+            ),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      expect(
-        tester.takeException(),
-        isNull,
-        reason:
-            'unexpected exception at ${item.name} (${item.size.width}x${item.size.height}@${item.dpr})',
-      );
-      if (item.size.width >= AppLayout.railBreakpointWidth) {
-        expect(find.byType(NavigationRail), findsOneWidget);
-      } else {
-        expect(find.byType(NavigationBar), findsOneWidget);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'unexpected exception at ${item.name} '
+              '(${item.size.width}x${item.size.height}@${item.dpr}, '
+              'textScale=$textScaleFactor)',
+        );
+        if (item.size.width >= AppLayout.railBreakpointWidth) {
+          expect(find.byType(NavigationRail), findsOneWidget);
+        } else {
+          expect(find.byType(NavigationBar), findsOneWidget);
+        }
       }
     }
   });

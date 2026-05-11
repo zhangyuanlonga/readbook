@@ -781,7 +781,46 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         auxiliaryState: auxiliaryState,
         hasCatalog: _canOpenCatalogForResult(result),
       );
-      if (metrics.isMediumWindow || metrics.isExpandedWindow) {
+      if (metrics.isExpandedWindow) {
+        sections.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 260, child: detailCard),
+              SizedBox(width: metrics.sectionGap),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  children: [
+                    if (introCard != null) introCard,
+                    if (presentationState.tocWarningText != null) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      _buildTocWarningCard(presentationState.tocWarningText!),
+                    ],
+                  ],
+                ),
+              ),
+              SizedBox(width: metrics.sectionGap),
+              SizedBox(
+                width: 300,
+                child: Column(
+                  children: [
+                    quickActionsCard,
+                    if (_detailCategory != null || _detailTags.isNotEmpty) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      organizationCard,
+                    ],
+                    if (shouldShowLocalIndexStatus) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      _buildLocalIndexStatusCard(localBookMeta),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      } else if (metrics.isMediumWindow) {
         sections.add(
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,7 +870,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       ]);
     }
 
-    if (presentationState.tocWarningText != null) {
+    if (!metrics.isExpandedWindow && presentationState.tocWarningText != null) {
       sections.addAll(<Widget>[
         SizedBox(height: metrics.sectionGap),
         _buildTocWarningCard(presentationState.tocWarningText!),

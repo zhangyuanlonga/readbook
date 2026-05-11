@@ -129,11 +129,11 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 目标：确认首版到底验收什么，避免边做边把书源又带回来。
 
-- [ ] 写入 `AppCapability` / `PlatformCapability` 设计草案。
-- [ ] 明确 P0 平台：Android、iOS、macOS、Windows、Linux。
-- [ ] 明确 P1 Web：先启动和 UI 可用，再逐步补齐本地存储。
-- [ ] 确认首版导航：书架、阅读记录、我的为主；发现/搜索/书源按能力隐藏。
-- [ ] 确认首版阅读格式：`txt`、`epub` 为 P0；`md`、`html` 为 P1；`pdf`、`mobi`、`azw/azw3` 为 P2。
+- [x] 写入 `AppCapability` / `PlatformCapability` 设计草案。
+- [x] 明确 P0 平台：Android、iOS、macOS、Windows、Linux。
+- [x] 明确 P1 Web：先启动和 UI 可用，再逐步补齐本地存储。
+- [x] 确认首版导航：书架、阅读记录、我的为主；发现/搜索/书源按能力隐藏。
+- [x] 确认首版阅读格式：`txt`、`epub` 为 P0；`md`、`html` 为 P1；`pdf`、`mobi`、`azw/azw3` 为 P2。
 
 验收：
 
@@ -144,11 +144,11 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 目标：先让目标平台能编译，再谈体验。
 
-- [ ] 扫描并分类所有 `dart:io` 导入：UI 展示、文件读写、数据库、日志、资源、书源、同步。
-- [ ] 对 UI 中的 `File` / `FileImage` 使用平台安全包装，Web 下提供占位或网络/内存图片路径。
-- [ ] `app/app.dart`、`reader_page.dart` 等直接使用 `Platform.isIOS/isAndroid` 的位置改为平台能力或 `defaultTargetPlatform + kIsWeb`。
-- [ ] `app_database.dart` 拆分原生和 Web 初始化入口。
-- [ ] 书源相关 `dart:io` 和 JS runtime 不参与 Web 首版编译路径。
+- [x] 扫描并分类所有 `dart:io` 导入：UI 展示、文件读写、数据库、日志、资源、书源、同步。
+- [x] 对 UI 中的 `File` / `FileImage` 使用平台安全包装，Web 下提供占位或网络/内存图片路径。
+- [x] `app/app.dart`、`reader_page.dart` 等直接使用 `Platform.isIOS/isAndroid` 的位置改为平台能力或 `defaultTargetPlatform + kIsWeb`。
+- [x] `app_database.dart` 拆分原生和 Web 初始化入口。
+- [x] 书源相关 `dart:io` 和 JS runtime 不参与 Web 首版编译路径。
 - [ ] 在统一构建脚本中加入 Web build 目标。
 
 验收：
@@ -161,13 +161,13 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 目标：移动端、平板、桌面、Web 的主 UI 都不像“拉大的手机应用”。
 
-- [ ] 基于现有 `flutter_adaptive_baseline_matrix.md` 扩展桌面视口：`1024x768`、`1280x800`、`1440x900`、`1920x1080`。
-- [ ] 书架页支持桌面密度：搜索/筛选/导入操作固定在可扫描区域，内容网格按容器宽度重排。
-- [ ] 本地书库页支持桌面文件管理心智：列表、排序、导入状态、重索引状态清晰可见。
-- [ ] 书籍详情页在宽屏使用封面/元信息/目录分区布局，不简单放大手机纵向布局。
-- [ ] 我的/设置页降低大卡片和大留白，桌面端使用内容最大宽度和双栏分组。
-- [ ] 阅读设置弹层在桌面端改为侧栏/浮层，在移动端保留底部弹层。
-- [ ] 所有核心页面覆盖文字缩放 `1.0x` 和 `1.3x`。
+- [x] 基于现有 `flutter_adaptive_baseline_matrix.md` 扩展桌面视口：`1024x768`、`1280x800`、`1440x900`、`1920x1080`。
+- [x] 书架页支持桌面密度：搜索/筛选/导入操作固定在可扫描区域，内容网格按容器宽度重排。
+- [x] 本地书库页支持桌面文件管理心智：列表、排序、导入状态、重索引状态清晰可见。
+- [x] 书籍详情页在宽屏使用封面/元信息/目录分区布局，不简单放大手机纵向布局。
+- [x] 我的/设置页降低大卡片和大留白，桌面端使用内容最大宽度和双栏分组。
+- [x] 阅读设置弹层在桌面端改为侧栏/浮层，在移动端保留底部弹层。
+- [x] 所有核心页面覆盖文字缩放 `1.0x` 和 `1.3x`。
 
 验收：
 
@@ -324,3 +324,32 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - Web 数据库当前使用 Drift 旧 `WebDatabase` 通道，只作为阶段 1 编译和受限运行基线；后续应迁移到 `WasmDatabase` 并补齐 `sqlite3.wasm` / worker 静态资源。
 - Web 虽已能编译，但本地文件导入、托管文件存储、图片/字体资源管理仍按受限能力处理，不进入 P0 验收。
 - 在线书源代码仍保留，默认入口隔离；恢复时应通过 `APP_ENABLE_SOURCE_RUNTIME=true` 和独立书源专题验证。
+
+## 10. 阶段 2 执行记录（2026-05-11）
+
+### 已完成：导航与 UI 自适应收口
+
+- [x] `test/test_utils/adaptive_test_harness.dart` 默认自适应 smoke 矩阵加入桌面视口：`1024x768 @1.0`、`1280x800 @1.0`、`1440x900 @1.0`、`1920x1080 @1.0`。
+- [x] `runAdaptivePageSmokeMatrix` 默认覆盖 `1.0x` 和 `1.3x` 文字缩放。
+- [x] 书架页新增 expanded 桌面工具条，搜索、筛选摘要、排序、视图切换、选择和导入集中在顶部可扫描区域；内容区按 `bookshelfContentMaxWidth` 居中，网格继续使用容器宽度重排。
+- [x] 本地书库页升级为文件管理视图，包含导入面板、书库状态汇总、本地文件列表、按索引状态和更新时间排序、单书重索引状态反馈。
+- [x] 书籍详情页在 expanded 宽屏拆成封面元信息、简介/提示、操作/归类/本地索引状态三列；中屏继续保留双栏，手机保留纵向布局。
+- [x] 我的页 expanded 桌面端拆成左侧账号快捷区和右侧设置分组区；系统设置页使用两列分组，降低单列大留白。
+- [x] 阅读设置浮层在 expanded 桌面端切换为右侧浮层，移动端和中屏仍保留底部弹层心智。
+- [x] `docs/flutter_adaptive_baseline_matrix.md` 与 `docs/adaptive_visual_regression_checklist.md` 已同步阶段 2 桌面矩阵和页面检查口径。
+
+### 平台影响
+
+- 影响平台：Android、iOS、macOS、Windows、Linux、Web 的 UI 自适应表现。
+- 不影响平台能力边界：未新增平台插件，未改变数据库 schema，未重新打开在线书源运行时。
+- 隔离策略：页面仍通过 `AppLayout`、`AppAdaptiveMetrics`、能力 provider 和既有服务完成适配，没有新增分散的端判断。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter test test/app/layout/adaptive_ui_matrix_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/app/layout/app_adaptive_metrics_test.dart`：通过，覆盖手机、横屏、中屏、平板、桌面视口和 `1.0x / 1.3x` 文字缩放。
+
+### 遗留说明
+
+- 真实截图仍未批量保存，后续阶段可接入自动截图或人工采样到 `artifacts/adaptive_baseline/phase_2_bookshelf/`。
+- 阶段 2 仅收口 UI 与常用操作可达性；本地阅读业务闭环、桌面键盘/鼠标阅读输入和构建发布矩阵继续放到后续阶段。

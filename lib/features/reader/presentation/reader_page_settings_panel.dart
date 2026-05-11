@@ -19,10 +19,15 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     final borderColor = readerModalTheme.colorScheme.outlineVariant.withValues(
       alpha: 0.35,
     );
-    final useEdgeToEdgeSheet = !metrics.isExpandedWindow;
+    final useSidePanel = metrics.isExpandedWindow;
+    final useEdgeToEdgeSheet = !useSidePanel;
     final radius = metrics.cardRadius + (useEdgeToEdgeSheet ? 10 : 12);
     final horizontalInset = useEdgeToEdgeSheet ? 0.0 : sheetHorizontal;
-    final resolvedMaxWidth = min(maxWidth, metrics.bottomSheetMaxWidth);
+    final resolvedMaxWidth =
+        useSidePanel
+            ? min(maxWidth, 520.0)
+            : min(maxWidth, metrics.bottomSheetMaxWidth);
+    final sidePanelHeightFactor = heightFactor.clamp(0.76, 0.9).toDouble();
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
@@ -35,9 +40,10 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
             (useEdgeToEdgeSheet ? 0 : max(12.0, safeBottom * 0.55)),
       ),
       child: Align(
-        alignment: Alignment.bottomCenter,
+        alignment:
+            useSidePanel ? Alignment.centerRight : Alignment.bottomCenter,
         child: FractionallySizedBox(
-          heightFactor: heightFactor,
+          heightFactor: useSidePanel ? sidePanelHeightFactor : heightFactor,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: useEdgeToEdgeSheet ? double.infinity : resolvedMaxWidth,

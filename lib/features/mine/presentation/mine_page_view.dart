@@ -136,6 +136,19 @@ extension on _MinePageState {
     required List<_MineActionItem> dataActions,
     required List<_MineActionItem> otherActions,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    if (metrics.isExpandedWindow) {
+      return _buildExpandedPageChildren(
+        context,
+        palette: palette,
+        visibilityState: visibilityState,
+        appearanceActions: appearanceActions,
+        configurationActions: configurationActions,
+        dataActions: dataActions,
+        otherActions: otherActions,
+      );
+    }
+
     final children = <Widget>[
       _buildPageEntrance(
         index: 0,
@@ -184,6 +197,100 @@ extension on _MinePageState {
     appendSection('数据', dataActions);
     appendSection('其他', otherActions);
     return children;
+  }
+
+  List<Widget> _buildExpandedPageChildren(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+    required MinePageVisibilityState visibilityState,
+    required List<_MineActionItem> appearanceActions,
+    required List<_MineActionItem> configurationActions,
+    required List<_MineActionItem> dataActions,
+    required List<_MineActionItem> otherActions,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Column(
+              children: [
+                _buildPageEntrance(
+                  index: 0,
+                  child: _buildProfileCard(context, palette: palette),
+                ),
+                SizedBox(height: metrics.contentGap),
+                _buildQuickAccessCards(
+                  context,
+                  palette: palette,
+                  visibilityState: visibilityState,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: metrics.sectionGap),
+          Expanded(
+            flex: 5,
+            child: Column(
+              children: [
+                if (appearanceActions.isNotEmpty)
+                  _buildPageEntrance(
+                    index: 1,
+                    child: _buildActionSection(
+                      context,
+                      palette: palette,
+                      title: '外观',
+                      actions: appearanceActions,
+                    ),
+                  ),
+                if (configurationActions.isNotEmpty) ...[
+                  SizedBox(height: metrics.contentGap),
+                  _buildPageEntrance(
+                    index: 2,
+                    child: _buildActionSection(
+                      context,
+                      palette: palette,
+                      title: '配置',
+                      actions: configurationActions,
+                      padding:
+                          _isListMode
+                              ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
+                              : null,
+                    ),
+                  ),
+                ],
+                if (dataActions.isNotEmpty) ...[
+                  SizedBox(height: metrics.contentGap),
+                  _buildPageEntrance(
+                    index: 3,
+                    child: _buildActionSection(
+                      context,
+                      palette: palette,
+                      title: '数据',
+                      actions: dataActions,
+                    ),
+                  ),
+                ],
+                if (otherActions.isNotEmpty) ...[
+                  SizedBox(height: metrics.contentGap),
+                  _buildPageEntrance(
+                    index: 4,
+                    child: _buildActionSection(
+                      context,
+                      palette: palette,
+                      title: '其他',
+                      actions: otherActions,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 
   Widget _buildQuickAccessCards(

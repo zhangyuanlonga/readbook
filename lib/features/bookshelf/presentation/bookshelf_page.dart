@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../app/layout/app_adaptive.dart';
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
@@ -601,6 +603,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             : navigationBottomInset + navigationComfortInset;
     final contentTopPadding =
         _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final contentMaxWidth = AppLayout.pageContentMaxWidth(
+      context,
+      maxWidth: AppLayout.bookshelfContentMaxWidth,
+    );
+    final contentHorizontal = math.max(
+      horizontal,
+      (AppLayout.screenWidth(context) - contentMaxWidth) / 2,
+    );
+    final useDesktopToolbar = metrics.isExpandedWindow && !_isSelectionMode;
 
     return ImportExportTaskOverlay(
       status: _taskStatus,
@@ -718,31 +730,36 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
-                    if (_shouldShowBookshelfSearchSliver)
+                    if (useDesktopToolbar)
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          contentHorizontal,
+                          topInset + metrics.contentGap,
+                          contentHorizontal,
+                          metrics.contentGap,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _buildBookshelfDesktopToolbar(
+                            filteredBooks: filteredBooks,
+                          ),
+                        ),
+                      )
+                    else if (_shouldShowBookshelfSearchSliver)
                       _buildBookshelfSearchSliver(
-                        horizontal: horizontal,
+                        horizontal: contentHorizontal,
                         topInset: topInset + 12,
                       ),
-                    if (_books.isNotEmpty)
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          contentTopPadding,
-                          horizontal,
-                          16 + continueReadingReservedSpace,
-                        ),
-                        sliver: _buildBooksContentSliver(filteredBooks),
-                      )
-                    else
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          contentTopPadding,
-                          horizontal,
-                          16 + continueReadingReservedSpace,
-                        ),
-                        sliver: _buildBooksContentSliver(filteredBooks),
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        contentHorizontal,
+                        useDesktopToolbar
+                            ? metrics.contentGap
+                            : contentTopPadding,
+                        contentHorizontal,
+                        16 + continueReadingReservedSpace,
                       ),
+                      sliver: _buildBooksContentSliver(filteredBooks),
+                    ),
                   ],
                 ),
               ),
@@ -785,11 +802,140 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   bool get wantKeepAlive => true;
 
+  Widget _buildBookshelfDesktopToolbar({
+    required List<BookshelfBook> filteredBooks,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(metrics.cardRadius),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.all(metrics.cardPadding),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final actions = <Widget>[
+              Tooltip(
+                message: '书籍排序：${_sortModeLabel(_sortMode)}',
+                child: OutlinedButton.icon(
+                  onPressed: _books.isEmpty ? null : _showSortModeSheet,
+                  icon: const Icon(Icons.sort_rounded),
+                  label: Text(_sortModeLabel(_sortMode)),
+                ),
+              ),
+              IconButton.filledTonal(
+                tooltip: _useGridView ? '切换列表' : '切换网格',
+                onPressed:
+                    () => unawaited(_setBookshelfViewMode(!_useGridView)),
+                icon: Icon(
+                  _useGridView
+                      ? Icons.view_list_rounded
+                      : Icons.grid_view_rounded,
+                ),
+              ),
+              IconButton.filledTonal(
+                tooltip: '选择书籍',
+                onPressed:
+                    _isLoading || filteredBooks.isEmpty
+                        ? null
+                        : _startSelectionMode,
+                icon: const Icon(Icons.checklist_rounded),
+              ),
+              FilledButton.icon(
+                onPressed: _showImportLocalBooksSheet,
+                icon: const Icon(Icons.library_add_rounded),
+                label: const Text('导入'),
+              ),
+            ];
+
+            Widget actionWrap() {
+              return Wrap(
+                spacing: metrics.contentGap * 0.6,
+                runSpacing: metrics.contentGap * 0.6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: actions,
+              );
+            }
+
+            final filterOrSummary =
+                _shouldShowBookshelfQuickFilters
+                    ? _buildBookshelfQuickFilterBar()
+                    : Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _bookshelfSearchSummaryText,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+
+            if (constraints.maxWidth < 1100) {
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _buildBookshelfSearchBar()),
+                      SizedBox(width: metrics.contentGap),
+                      FilledButton.icon(
+                        onPressed: _showImportLocalBooksSheet,
+                        icon: const Icon(Icons.library_add_rounded),
+                        label: const Text('导入'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: metrics.contentGap),
+                  Row(
+                    children: [
+                      Expanded(child: filterOrSummary),
+                      SizedBox(width: metrics.contentGap),
+                      actionWrap(),
+                    ],
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                SizedBox(width: 360, child: _buildBookshelfSearchBar()),
+                SizedBox(width: metrics.contentGap),
+                Expanded(child: filterOrSummary),
+                SizedBox(width: metrics.contentGap),
+                actionWrap(),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void _updateBookshelfState(VoidCallback mutation) {
     if (!mounted) {
       return;
     }
     setState(mutation);
+  }
+
+  Future<void> _setBookshelfViewMode(bool useGridView) async {
+    if (_useGridView == useGridView) {
+      return;
+    }
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        _useGridView = useGridView;
+      });
+    });
+    try {
+      await _bookshelfService.saveUseGridView(useGridView);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书架视图保存失败，请重试。');
+    }
   }
 
   ResolvedAdvancedThemePalette _resolvedPalette(BuildContext context) {
