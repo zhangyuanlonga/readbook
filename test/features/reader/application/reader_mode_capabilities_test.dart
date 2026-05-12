@@ -64,5 +64,23 @@ void main() {
         expect(resolved.canCacheChapter, isTrue);
       },
     );
+
+    test('source runtime gate disables online source actions', () {
+      const capabilities = ContentCapabilities(
+        canSwitchSource: true,
+        canCacheChapter: true,
+      );
+
+      final resolved = resolver.resolve(
+        contentMode: ReaderContentMode.text,
+        contentCapabilities: capabilities,
+        hasInlineImageParagraphs: false,
+        supportsSourceRuntime: false,
+      );
+
+      expect(resolved.canSwitchSource, isFalse);
+      expect(resolved.canCacheChapter, isFalse);
+      expect(resolved.canUsePagedText, isTrue);
+    });
   });
 }

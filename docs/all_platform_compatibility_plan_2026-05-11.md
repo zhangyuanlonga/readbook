@@ -245,13 +245,13 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 目标：不是删书源，而是让首版不被书源拖住。
 
-- [ ] 新增“书源功能未启用/后续版本开放”的统一占位状态。
-- [ ] 隐藏或降级书源页、脚本编辑器、登录页、调试页入口。
-- [ ] 搜索页首版只搜索本地书库，或从主导航移除。
-- [ ] 发现页首版只保留本地推荐/空状态，或从主导航移除。
-- [ ] 书籍详情隐藏切换书源相关操作。
-- [ ] 阅读器禁用在线章节缓存和源切换。
-- [ ] 启动任务不恢复书源健康状态、不上报书源运行时诊断。
+- [x] 新增“书源功能未启用/后续版本开放”的统一占位状态。
+- [x] 隐藏或降级书源页、脚本编辑器、登录页、调试页入口。
+- [x] 搜索页首版只搜索本地书库，或从主导航移除。
+- [x] 发现页首版只保留本地推荐/空状态，或从主导航移除。
+- [x] 书籍详情隐藏切换书源相关操作。
+- [x] 阅读器禁用在线章节缓存和源切换。
+- [x] 启动任务不恢复书源健康状态、不上报书源运行时诊断。
 
 验收：
 
@@ -262,16 +262,16 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 目标：用固定矩阵保护全平台。
 
-- [ ] `flutter analyze`
-- [ ] `flutter test`
-- [ ] 自适应 smoke：手机、横屏、平板、桌面视口。
-- [ ] 阅读器 smoke：打开本地图书、翻页、目录跳转、书签、恢复进度。
+- [x] `flutter analyze`
+- [x] `flutter test`
+- [x] 自适应 smoke：手机、横屏、平板、桌面视口。
+- [x] 阅读器 smoke：打开本地图书、翻页、目录跳转、书签、恢复进度。
 - [ ] 构建矩阵：
   - macOS 主机：Android、iOS、macOS、Web
   - Linux 主机：Android、Linux、Web
   - Windows 主机：Android、Windows、Web
 - [x] 统一构建脚本补齐 Web 产物收集。
-- [ ] 发布说明明确首版不包含在线书源能力。
+- [x] 发布说明明确首版不包含在线书源能力。
 
 验收：
 
@@ -522,3 +522,32 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 - 高级主题编辑页和高级主题导入导出仍有较重的归档/文件读写流程，后续需要继续向 application/service 和条件 adapter 收口。
 - 缓存管理目前完成 capability 降级说明和清理边界，独立“复制诊断摘要”按钮可作为后续体验增强。
+
+## 16. 页面功能阶段 D/E 执行记录（2026-05-12）
+
+### 已完成：延期入口隔离与页面级验证矩阵
+
+- [x] 启动延迟任务中 `SourceRuntimeDiagnosticsService.reportRecoveredInvocations()` 和 `SourceHealthService.hydrate()` 已接入 `supportsSourceRuntime`；默认首版关闭书源运行时时不恢复书源健康状态、不上报书源运行时诊断。
+- [x] `/book/:bookId` 在线详情路由新增 capability 守卫；默认关闭书源运行时时进入 `FeatureDisabledPage`，不创建在线详情加载链路。
+- [x] `/reader/:bookId/:chapterId` 在线章节路由新增 capability 守卫；默认关闭书源运行时时进入 `FeatureDisabledPage`，不创建在线 reader。
+- [x] `ReaderFeatureDependencies` 默认只注册本地内容 provider；只有 `supportsSourceRuntime=true` 时才注册 `SourceContentProvider`。
+- [x] `ReaderModeCapabilitiesResolver` 新增 source runtime gate，换源和在线章节缓存能力必须叠加全局 capability。
+- [x] 补 `deferred_entry_capability_test` 覆盖书源、搜索、发现、在线详情和在线章节禁用页；补 reader provider / mode capability 回归。
+- [x] 在 E 阶段矩阵中发现并修复 `MinePage` 在 `initState` 读取 `MediaQuery` 的生命周期问题，改到 `didChangeDependencies` 后恢复布局模式。
+
+### 平台影响
+
+- 影响平台：Android、iOS、macOS、Windows、Linux、Web 的延期功能入口、在线详情/阅读路由、本地阅读 provider 注册和 Mine 页自适应初始化。
+- 不影响平台：未新增原生插件，未改变数据库 schema，未重新打开在线书源运行时、WebDAV 或在线搜索。
+- 隔离策略：首版本地阅读仍保留 `/local/reader`、本地详情和本地 provider；在线能力统一由 `supportsSourceRuntime` 拦截，避免书源运行时进入启动和阅读主链路。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter test test/app/platform/app_platform_capabilities_test.dart test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/bookshelf/application/bookshelf_page_route_service_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reading_records_page_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/features/reader/application/reader_layout_resolver_test.dart test/features/reader/application/reader_mode_capabilities_test.dart test/features/reader/application/reader_dependencies_provider_test.dart test/features/routes/deferred_entry_capability_test.dart`：通过。
+- [x] `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`：通过，产物位于 `build/web`。
+
+### 遗留说明
+
+- macOS 真实 run、Windows/Linux 真实主机矩阵仍需在对应环境补充；本轮 E 阶段先以自动化测试和 Web build 关闭代码级风险。
+- 书源、在线搜索、发现在线内容、WebView 登录和脚本调试仍保持延期；恢复时必须走独立书源专题和显式 `APP_ENABLE_SOURCE_RUNTIME=true` 验证。

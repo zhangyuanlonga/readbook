@@ -487,24 +487,33 @@
 
 目标：首版不被书源、在线搜索、WebView 登录和调试能力拖住。
 
-- [ ] 书源页、在线搜索、发现、登录、调试全部经过 capability。
-- [ ] 启动任务不恢复书源健康状态，不上报书源运行时诊断。
-- [ ] 详情和阅读器不出现可点击的在线换源或在线章节入口。
+- [x] 书源页、在线搜索、发现、登录、调试全部经过 capability。
+- [x] 启动任务不恢复书源健康状态，不上报书源运行时诊断。
+- [x] 详情和阅读器不出现可点击的在线换源或在线章节入口。
 
 验收：
 
 - 不配置书源、不联网也能完整使用本地阅读。
 - 首版路径中不会出现“书源执行失败”类错误。
 
+本轮执行记录（2026-05-12）：
+
+- `bootstrap` 延迟任务中书源运行时诊断恢复和 `SourceHealthService.hydrate()` 已挂到 `supportsSourceRuntime` 后面；默认首版不再恢复书源健康状态，也不再把未完成书源调用上报到启动日志。
+- `/source`、`/source/login`、`/source/web-login`、脚本编辑、粘贴导入、`/search`、`/discover` 继续统一返回 `FeatureDisabledPage`。
+- `/book/:bookId` 在线详情路由和 `/reader/:bookId/:chapterId` 在线章节路由新增 capability 守卫；默认关闭书源运行时时直接进入禁用页，不创建在线详情或在线 reader。
+- `ReaderFeatureDependencies` 默认只注册本地内容 provider；只有 `supportsSourceRuntime=true` 时才注册 `SourceContentProvider`。
+- 阅读器换源和在线章节缓存能力继续叠加 `supportsSourceRuntime`，避免 provider 能力绕过全局延期策略。
+- 新增 `deferred_entry_capability_test`、`reader_dependencies_provider_test` 和 `reader_mode_capabilities_test` 覆盖延期入口、在线内容 provider 注册和阅读器 source runtime gate。
+
 ### 功能阶段 E：页面级验证矩阵
 
 目标：每个页面的功能兼容都有固定验证。
 
-- [ ] `flutter analyze`
-- [ ] 页面 capability 单元测试。
-- [ ] 路由守卫和 disabled page widget test。
-- [ ] 本地阅读 smoke：导入、打开、目录、书签、记录恢复。
-- [ ] Web：`flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
+- [x] `flutter analyze`
+- [x] 页面 capability 单元测试。
+- [x] 路由守卫和 disabled page widget test。
+- [x] 本地阅读 smoke：导入、打开、目录、书签、记录恢复。
+- [x] Web：`flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
 - [ ] 桌面：至少 macOS run；Windows/Linux 在对应主机补矩阵。
 
 验收记录模板：
@@ -518,6 +527,22 @@
 降级方式：
 验证命令：
 遗留风险：
+```
+
+本轮验收记录（2026-05-12）：
+
+```text
+页面：书源 / 搜索 / 发现 / 在线详情 / 在线阅读 / 本地阅读 / 我的
+阶段：功能阶段 D + 功能阶段 E
+影响平台：Android、iOS、macOS、Windows、Linux、Web 的延期入口、路由守卫和本地阅读首版路径
+不影响平台：未新增原生插件，未改变数据库 schema，未重新打开书源运行时、WebDAV 或在线搜索
+能力边界：supportsSourceRuntime、supportsWebDavSync、supportsLocalFileImport、supportsManagedFileStorage
+降级方式：书源、在线搜索、发现、在线详情和在线章节统一进入 FeatureDisabledPage；本地阅读 provider 和路由继续保留
+验证命令：
+  flutter analyze
+  flutter test test/app/platform/app_platform_capabilities_test.dart test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/bookshelf/application/bookshelf_page_route_service_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reading_records_page_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/features/reader/application/reader_layout_resolver_test.dart test/features/reader/application/reader_mode_capabilities_test.dart test/features/reader/application/reader_dependencies_provider_test.dart test/features/routes/deferred_entry_capability_test.dart
+  flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run
+遗留风险：Windows/Linux 真实主机运行矩阵仍需在对应环境补；macOS 桌面真实 run 待本机窗口验收继续补记录
 ```
 
 ## 7. 当前优先级

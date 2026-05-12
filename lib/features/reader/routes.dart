@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router_transitions.dart';
+import '../../app/composition/app_providers.dart' as app_providers;
+import '../../app/widgets/feature_disabled_page.dart';
 import '../../app/theme/app_interface_typography_provider.dart';
 import '../../domain/entities/book_identity.dart';
 import '../bookshelf/application/local_book_import_service.dart';
+import 'application/local/local_reader_identity.dart';
 import 'presentation/reader_page.dart';
 import 'presentation/reader_route.dart';
 import 'presentation/reading_records_page.dart';
@@ -88,6 +91,28 @@ final List<RouteBase> readerRoutes = <RouteBase>[
       final chapterIndex = int.tryParse(
         state.uri.queryParameters['chapterIndex'] ?? '',
       );
+      final supportsSourceRuntime =
+          ProviderScope.containerOf(
+            context,
+            listen: false,
+          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
+      final isOnlineSource =
+          sourceId != null &&
+          sourceId.trim().isNotEmpty &&
+          !LocalReaderIdentity.isLocalSourceId(sourceId);
+
+      if (isOnlineSource && !supportsSourceRuntime) {
+        return buildFadeTransitionPage(
+          state: state,
+          transitionDuration: const Duration(milliseconds: 180),
+          reverseTransitionDuration: const Duration(milliseconds: 140),
+          beginOpacity: 0.88,
+          child: const FeatureDisabledPage(
+            title: '在线章节暂未启用',
+            message: '当前全平台首版只保证本地阅读。在线章节读取、换源和章节缓存会随书源专题恢复。',
+          ),
+        );
+      }
 
       return buildFadeTransitionPage(
         state: state,

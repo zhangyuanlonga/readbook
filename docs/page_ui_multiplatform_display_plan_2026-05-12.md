@@ -33,6 +33,50 @@
 - 手机横屏只是高度受限的 Mobile Touch，不等同桌面。
 - 功能是否可用仍走 `AppPlatformCapabilities`，不要在页面里散落平台判断。
 
+### 1.3 各端展示口径
+
+Android / iPhone 手机：
+
+- 底部导航、单列纵向页面、触控大按钮。
+- 设置、筛选、更多操作优先使用底部 Sheet。
+- 公告、轻提示使用顶部横幅，自动收起，不阻断启动和阅读。
+- 大图、长详情可全屏打开；少用表格，多用列表和紧凑卡片。
+
+iPad / Android 平板：
+
+- `600dp+` 默认使用 NavigationRail。
+- 常用页面从单列升级为双栏：左列表/导航，右详情/内容。
+- 阅读器保持沉浸，但目录、书签、设置可侧栏化。
+- 弹层优先 Dialog 或侧边面板，卡片尺寸和间距比手机收紧。
+
+Web：
+
+- 默认走 Desktop Like，不使用手机放大版。
+- 侧边导航 + 顶部工具条 + 列表/表格/网格。
+- 受限能力显示统一 disabled 面板，说明原因和替代路径。
+- 弹窗使用 Dialog 或右侧面板；提示使用顶部横幅或右上状态浮层。
+- 正文和详情限制最大宽度，不铺满浏览器。
+
+macOS / Windows / Linux 桌面：
+
+- 侧边导航 + 内容区，主要操作支持鼠标 hover、滚轮、键盘焦点。
+- 文件、缓存、错误、同步、书签等管理页使用双栏/三栏。
+- 资源管理使用顶部工具条 + 网格/列表 + 预览。
+- 详情、确认、编辑使用 Dialog 或侧栏。
+- 阅读器支持键盘翻页、滚轮、窗口缩放分页恢复。
+
+宽屏桌面 / 大屏 Web：
+
+- `1280dp+` 优先使用三栏或主内容 + 侧栏。
+- 左侧导航，中间主列表/内容，右侧详情/预览/状态。
+- 不出现超宽单列卡片；管理类页面优先表格化、批量化。
+- 阅读正文限制最大行宽并居中。
+
+手机横屏：
+
+- 仍按 Mobile Touch 处理，不因为横屏切桌面导航。
+- 优先解决高度不足：工具条收紧、Sheet 可滚动、避免 overflow。
+
 ## 2. 全局 UI 壳
 
 ### 2.1 App Shell / 主导航
@@ -68,6 +112,7 @@
 
 - [x] 建立通用 `AdaptiveActionSurface`：移动端 bottom sheet，桌面端 dialog/popover。
 - [ ] 公告、更新、导入导出进度、错误提示接入统一最大宽度和滚动约束。
+  - [x] 启动公告改为全平台应用内顶部横幅，自动收起，保留查看公告详情入口。
 - [ ] 所有弹窗覆盖 `1.3x` 文字缩放。
 
 ## 3. P0 页面展示计划
@@ -202,7 +247,7 @@ Desktop Like：
 
 - [x] 已有 expanded 双栏基础。
 - [x] Web/桌面默认进入双栏，即使高度较低也不退回手机感大卡片。
-- [ ] 管理入口改为桌面工作台式分组。
+- [x] 管理入口改为桌面工作台式分组。
 
 ### 3.8 系统设置页 `SystemSettingsPage`
 
@@ -545,3 +590,11 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 错误中心在桌面端改为左日志列表、右独立滚动详情；书签页改为左书籍分组、右章节灵感详情；同步历史 600dp+ 任务/冲突并排。
 - 缓存管理明细在桌面端改为 Dialog，移动端继续使用 bottom sheet；受限存储/诊断提示保持可见且不可误触失败入口。
 - 验证：`flutter analyze` 通过；`flutter test test/features/mine/presentation/mine_management_page_test.dart test/features/mine/presentation/advanced_theme_pages_smoke_test.dart test/features/mine/application/cache_management_service_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/mine/application/launch_image_gallery_service_test.dart test/app/navigation/bottom_nav_icon_gallery_service_test.dart` 通过。
+
+### 2026-05-12 我的页多端展示优化
+
+- `MinePage` 在没有用户偏好时，600dp+ 默认使用网格入口，手机继续默认列表；宽屏下左侧账号/快捷区固定宽度，右侧管理入口进一步拆成工作台式分组。
+- 用户卡片在桌面端去掉手机列表式尾部占位和箭头，登录状态 chip 只在未登录时展示，减少横向空洞。
+- 列表模式从过度紧凑改为舒适设置列表，网格模式从宽松卡片改为桌面快捷入口，两种模式共享更接近的标题、图标、间距节奏。
+- 移动端列表分组与顶部用户卡保持同宽；桌面端取消左侧独立账号栏，改为顶部账号/快捷入口横排、下方统一管理区，避免左侧大面积留白。
+- 验证：`flutter analyze` 通过；`flutter test test/features/mine/application/mine_page_preferences_service_test.dart test/features/mine/application/mine_page_session_service_test.dart test/features/mine/presentation/mine_management_page_test.dart` 通过。

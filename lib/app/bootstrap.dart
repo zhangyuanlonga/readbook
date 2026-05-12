@@ -96,30 +96,32 @@ Future<void> _runDeferredBootstrapTasks(SharedPreferences prefs) async {
     }
   }
 
-  try {
-    await SourceRuntimeDiagnosticsService.instance.reportRecoveredInvocations(
-      logger: AppLogger.instance,
-    );
-  } catch (error, stackTrace) {
-    AppLogger.instance.warn(
-      'Deferred diagnostics recovery failed',
-      context: <String, Object?>{
-        'error': error.toString(),
-        'stackTrace': stackTrace.toString(),
-      },
-    );
-  }
+  if (capabilities.supportsSourceRuntime) {
+    try {
+      await SourceRuntimeDiagnosticsService.instance.reportRecoveredInvocations(
+        logger: AppLogger.instance,
+      );
+    } catch (error, stackTrace) {
+      AppLogger.instance.warn(
+        'Deferred diagnostics recovery failed',
+        context: <String, Object?>{
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
 
-  try {
-    await SourceHealthService.instance.hydrate();
-  } catch (error, stackTrace) {
-    AppLogger.instance.warn(
-      'Deferred source health hydrate failed',
-      context: <String, Object?>{
-        'error': error.toString(),
-        'stackTrace': stackTrace.toString(),
-      },
-    );
+    try {
+      await SourceHealthService.instance.hydrate();
+    } catch (error, stackTrace) {
+      AppLogger.instance.warn(
+        'Deferred source health hydrate failed',
+        context: <String, Object?>{
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
   }
 
   if (capabilities.supportsManagedFileStorage &&

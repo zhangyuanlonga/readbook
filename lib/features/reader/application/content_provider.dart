@@ -16,6 +16,22 @@ class ContentCapabilities {
   final bool canRefreshToc;
   final bool canSearchInSource;
   final bool canReindexLocal;
+
+  ContentCapabilities copyWith({
+    bool? canSwitchSource,
+    bool? canCacheChapter,
+    bool? canRefreshToc,
+    bool? canSearchInSource,
+    bool? canReindexLocal,
+  }) {
+    return ContentCapabilities(
+      canSwitchSource: canSwitchSource ?? this.canSwitchSource,
+      canCacheChapter: canCacheChapter ?? this.canCacheChapter,
+      canRefreshToc: canRefreshToc ?? this.canRefreshToc,
+      canSearchInSource: canSearchInSource ?? this.canSearchInSource,
+      canReindexLocal: canReindexLocal ?? this.canReindexLocal,
+    );
+  }
 }
 
 abstract class ContentProvider {

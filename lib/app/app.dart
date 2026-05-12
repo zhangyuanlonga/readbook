@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +20,6 @@ import 'widgets/import_export_copy.dart';
 import 'widgets/import_export_task_overlay.dart';
 import 'lifecycle/app_lifecycle_coordinator.dart';
 import 'layout/app_layout.dart';
-import 'layout/app_spacing.dart';
 import 'router.dart';
 import 'startup/app_announcement_coordinator.dart';
 import 'startup/app_startup_coordinator.dart';
@@ -255,9 +253,14 @@ class _SystemUiOverlayWrapperState
   Color? _lastOverlayBaseColor;
   bool _isStartupReady = false;
   ImportExportTaskStatus? _externalImportStatus;
+  Announcement? _startupAnnouncementBanner;
+  Timer? _startupAnnouncementBannerTimer;
   late final AppLifecycleCoordinator _lifecycleCoordinator;
   late final AppAnnouncementCoordinator _announcementCoordinator;
   late final AppStartupCoordinator _startupCoordinator;
+  static const Duration _startupAnnouncementBannerDuration = Duration(
+    seconds: 7,
+  );
   static const List<String> _dialogFontFallback = [
     'STKaiti',
     'Kaiti SC',
@@ -340,6 +343,7 @@ class _SystemUiOverlayWrapperState
     WidgetsBinding.instance.removeTimingsCallback(
       _startupCoordinator.onFrameTimings,
     );
+    _startupAnnouncementBannerTimer?.cancel();
     _startupCoordinator.dispose();
     _lifecycleCoordinator.dispose();
     super.dispose();
@@ -419,15 +423,16 @@ class _SystemUiOverlayWrapperState
   }
 
   void _presentStartupAnnouncement(Announcement announcement) {
-    final dialogContext = appRootNavigatorKey.currentContext;
-    if (!mounted || dialogContext == null || !dialogContext.mounted) {
+    if (!mounted) {
       return;
     }
-    showDialog<void>(
-      context: dialogContext,
-      builder: (context) {
-        return _buildAnnouncementDialog(context, announcement);
-      },
+    _startupAnnouncementBannerTimer?.cancel();
+    setState(() {
+      _startupAnnouncementBanner = announcement;
+    });
+    _startupAnnouncementBannerTimer = Timer(
+      _startupAnnouncementBannerDuration,
+      () => _dismissStartupAnnouncementBanner(markRead: true),
     );
   }
 
@@ -438,291 +443,32 @@ class _SystemUiOverlayWrapperState
     return AppUpdateDialog.showUpdateDialog(context, release);
   }
 
-  Widget _buildAnnouncementDialog(
-    BuildContext context,
-    Announcement announcement,
-  ) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final dialogMaxHeight = math.min(356.0, screenHeight * 0.44);
-    final contentMaxHeight = math.min(110.0, screenHeight * 0.135);
-    final accent = switch (announcement.level) {
-      AnnouncementLevel.urgent => colorScheme.error,
-      AnnouncementLevel.important => colorScheme.tertiary,
-      AnnouncementLevel.info => colorScheme.primary,
-    };
-    final surface = colorScheme.surface;
-    final backgroundTop = Color.alphaBlend(
-      accent.withValues(alpha: 0.18),
-      surface,
-    );
-    final backgroundBottom = Color.alphaBlend(
-      colorScheme.secondary.withValues(alpha: 0.12),
-      surface,
-    );
-    final contentText =
-        announcement.content.trim().isEmpty
-            ? '暂无公告正文。'
-            : announcement.content.trim();
-    final publishLabel = _formatAnnouncementDialogTime(
-      announcement.publishFrom,
-    );
-    final titleText =
-        announcement.title.trim().isEmpty ? '公告更新' : announcement.title.trim();
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: AppSpacing.dialogInsetPadding(context),
-      child: Align(
-        alignment: const Alignment(0, -0.18),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: math.min(AppLayout.dialogMaxWidth(context), 340),
-            maxHeight: dialogMaxHeight,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [backgroundTop, backgroundBottom],
-                ),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.35),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 24,
-                    offset: const Offset(0, 16),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -46,
-                    top: -42,
-                    child: Container(
-                      width: 132,
-                      height: 132,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.08),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: -34,
-                    bottom: -46,
-                    child: Container(
-                      width: 124,
-                      height: 124,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildAnnouncementLevelChip(
-                                    context,
-                                    announcement,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    titleText,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.15,
-                                          fontFamilyFallback:
-                                              _dialogFontFallback,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    publishLabel,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '关闭',
-                              onPressed: () => Navigator.of(context).pop(),
-                              style: IconButton.styleFrom(
-                                minimumSize: const Size(34, 34),
-                                padding: EdgeInsets.zero,
-                                backgroundColor: colorScheme.surface.withValues(
-                                  alpha: 0.58,
-                                ),
-                              ),
-                              icon: Icon(
-                                Icons.close_rounded,
-                                color: colorScheme.onSurfaceVariant,
-                                size: 18,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Flexible(
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface.withValues(
-                                alpha: 0.88,
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.22,
-                                ),
-                              ),
-                            ),
-                            child: ScrollConfiguration(
-                              behavior: const MaterialScrollBehavior().copyWith(
-                                overscroll: false,
-                              ),
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: 34,
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: accent.withValues(alpha: 0.7),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: 0,
-                                        maxHeight: contentMaxHeight,
-                                      ),
-                                      child: Text(
-                                        contentText,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              height: 1.5,
-                                              fontFamilyFallback:
-                                                  _dialogFontFallback,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('稍后'),
-                            ),
-                            const Spacer(),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: accent,
-                                foregroundColor: colorScheme.onPrimary,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 11,
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                unawaited(
-                                  _announcementCoordinator.markRead(
-                                    announcement.id,
-                                  ),
-                                );
-                              },
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.check_circle_outline_rounded,
-                                    size: 17,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text('我已知晓'),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  void _dismissStartupAnnouncementBanner({required bool markRead}) {
+    final announcement = _startupAnnouncementBanner;
+    _startupAnnouncementBannerTimer?.cancel();
+    _startupAnnouncementBannerTimer = null;
+    if (!mounted || announcement == null) {
+      return;
+    }
+    setState(() {
+      _startupAnnouncementBanner = null;
+    });
+    if (markRead) {
+      unawaited(_announcementCoordinator.markRead(announcement.id));
+    }
   }
 
-  Widget _buildAnnouncementLevelChip(
-    BuildContext context,
-    Announcement announcement,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final (label, color) = switch (announcement.level) {
-      AnnouncementLevel.urgent => ('紧急', colorScheme.error),
-      AnnouncementLevel.important => ('重要', colorScheme.tertiary),
-      AnnouncementLevel.info => ('通知', colorScheme.primary),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
-          fontFamilyFallback: _dialogFontFallback,
-        ),
-      ),
-    );
+  void _openStartupAnnouncement(Announcement announcement) {
+    _dismissStartupAnnouncementBanner(markRead: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      appRouter.push('/announcements/${Uri.encodeComponent(announcement.id)}');
+    });
   }
 
-  String _formatAnnouncementDialogTime(DateTime time) {
+  String _formatAnnouncementBannerTime(DateTime time) {
     final local = time.toLocal();
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
@@ -789,6 +535,13 @@ class _SystemUiOverlayWrapperState
           fit: StackFit.expand,
           children: [
             widget.child,
+            _StartupAnnouncementBannerOverlay(
+              announcement: _startupAnnouncementBanner,
+              fontFallback: _dialogFontFallback,
+              formatTime: _formatAnnouncementBannerTime,
+              onClose: () => _dismissStartupAnnouncementBanner(markRead: true),
+              onOpen: _openStartupAnnouncement,
+            ),
             if (showStartupGuard) const _StartupGuardPage(),
           ],
         ),
@@ -830,6 +583,224 @@ class _StartupGuardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _StartupGuardArtwork();
+  }
+}
+
+class _StartupAnnouncementBannerOverlay extends StatelessWidget {
+  const _StartupAnnouncementBannerOverlay({
+    required this.announcement,
+    required this.fontFallback,
+    required this.formatTime,
+    required this.onClose,
+    required this.onOpen,
+  });
+
+  final Announcement? announcement;
+  final List<String> fontFallback;
+  final String Function(DateTime time) formatTime;
+  final VoidCallback onClose;
+  final ValueChanged<Announcement> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final announcement = this.announcement;
+    return IgnorePointer(
+      ignoring: announcement == null,
+      child: SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            reverseDuration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final offsetAnimation = Tween<Offset>(
+                begin: const Offset(0, -0.18),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: offsetAnimation, child: child),
+              );
+            },
+            child:
+                announcement == null
+                    ? const SizedBox(
+                      key: ValueKey('startup_announcement_banner_empty'),
+                      width: double.infinity,
+                      height: 0,
+                    )
+                    : _StartupAnnouncementBanner(
+                      key: ValueKey(
+                        'startup_announcement_banner_${announcement.id}',
+                      ),
+                      announcement: announcement,
+                      fontFallback: fontFallback,
+                      formatTime: formatTime,
+                      onClose: onClose,
+                      onOpen: () => onOpen(announcement),
+                    ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StartupAnnouncementBanner extends StatelessWidget {
+  const _StartupAnnouncementBanner({
+    super.key,
+    required this.announcement,
+    required this.fontFallback,
+    required this.formatTime,
+    required this.onClose,
+    required this.onOpen,
+  });
+
+  final Announcement announcement;
+  final List<String> fontFallback;
+  final String Function(DateTime time) formatTime;
+  final VoidCallback onClose;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final horizontal = AppLayout.isDesktopLike(context) ? 24.0 : 12.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final maxWidth =
+        AppLayout.isDesktopLike(context) ? 680.0 : screenWidth - horizontal * 2;
+    final (label, accent, icon) = switch (announcement.level) {
+      AnnouncementLevel.urgent => (
+        '紧急公告',
+        colorScheme.error,
+        Icons.priority_high_rounded,
+      ),
+      AnnouncementLevel.important => (
+        '重要公告',
+        colorScheme.tertiary,
+        Icons.campaign_rounded,
+      ),
+      AnnouncementLevel.info => (
+        '公告通知',
+        colorScheme.primary,
+        Icons.notifications_active_outlined,
+      ),
+    };
+    final title =
+        announcement.title.trim().isEmpty ? '公告更新' : announcement.title.trim();
+    final summary = announcement.content.trim();
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontal, 10, horizontal, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                accent.withValues(alpha: 0.12),
+                colorScheme.surface,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accent.withValues(alpha: 0.28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: onOpen,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: accent, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                label,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: accent,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamilyFallback: fontFallback,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  formatTime(announcement.publishFrom),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontFamilyFallback: fontFallback,
+                            ),
+                          ),
+                          if (summary.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              summary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontFamilyFallback: fontFallback,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    TextButton(onPressed: onOpen, child: const Text('查看')),
+                    IconButton(
+                      tooltip: '关闭',
+                      onPressed: onClose,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

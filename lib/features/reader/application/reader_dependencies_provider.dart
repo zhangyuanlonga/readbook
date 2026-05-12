@@ -125,6 +125,7 @@ final readerFeatureDependenciesFactoryProvider =
         final readerSystemSettingsService = ReaderSystemSettingsService();
         final readerBackgroundService = ReaderBackgroundService();
         final localBookStorageService = LocalBookStorageService();
+        final capabilities = ref.watch(app_providers.appCapabilitiesProvider);
         final readingRecordService = ReadingRecordService(database: database);
         final bookshelfService = BookshelfService();
         final localBookIndexService = LocalBookIndexService(
@@ -155,7 +156,7 @@ final readerFeatureDependenciesFactoryProvider =
                 chapterContentService: localChapterContentService,
                 previewService: localBookPreviewService,
               ),
-              SourceContentProvider(),
+              if (capabilities.supportsSourceRuntime) SourceContentProvider(),
             ],
           ),
           preferencesService: readerPreferencesService,

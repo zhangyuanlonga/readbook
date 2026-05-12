@@ -197,69 +197,124 @@ extension on _MinePageState {
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
     return [
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 4,
-            child: Column(
-              children: [
-                _buildPageEntrance(
-                  index: 0,
-                  child: _buildProfileCard(context, palette: palette),
-                ),
-                SizedBox(height: metrics.contentGap),
-                _buildQuickAccessCards(
-                  context,
-                  palette: palette,
-                  visibilityState: visibilityState,
-                ),
-              ],
+      _buildPageEntrance(
+        index: 0,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: _buildProfileCard(context, palette: palette),
             ),
-          ),
-          SizedBox(width: metrics.sectionGap),
-          Expanded(
-            flex: 5,
-            child: Column(
+            SizedBox(width: metrics.contentGap),
+            Expanded(
+              flex: metrics.isExpandedWindow ? 7 : 6,
+              child: _buildQuickAccessCards(
+                context,
+                palette: palette,
+                visibilityState: visibilityState,
+              ),
+            ),
+          ],
+        ),
+      ),
+      SizedBox(height: metrics.sectionGap),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          if (metrics.isExpandedWindow && constraints.maxWidth >= 900) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (appearanceActions.isNotEmpty)
-                  _buildPageEntrance(
-                    index: 1,
-                    child: _buildActionSection(
-                      context,
-                      palette: palette,
-                      title: '外观',
-                      actions: appearanceActions,
+                  Expanded(
+                    flex: 6,
+                    child: _buildPageEntrance(
+                      index: 1,
+                      child: _buildActionSection(
+                        context,
+                        palette: palette,
+                        title: '外观',
+                        actions: appearanceActions,
+                      ),
                     ),
                   ),
-                if (dataActions.isNotEmpty) ...[
-                  SizedBox(height: metrics.contentGap),
-                  _buildPageEntrance(
-                    index: 2,
-                    child: _buildActionSection(
-                      context,
-                      palette: palette,
-                      title: '数据',
-                      actions: dataActions,
+                if (appearanceActions.isNotEmpty &&
+                    (dataActions.isNotEmpty || otherActions.isNotEmpty))
+                  SizedBox(width: metrics.contentGap),
+                if (dataActions.isNotEmpty || otherActions.isNotEmpty)
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      children: [
+                        if (dataActions.isNotEmpty)
+                          _buildPageEntrance(
+                            index: 2,
+                            child: _buildActionSection(
+                              context,
+                              palette: palette,
+                              title: '数据',
+                              actions: dataActions,
+                            ),
+                          ),
+                        if (otherActions.isNotEmpty) ...[
+                          if (dataActions.isNotEmpty)
+                            SizedBox(height: metrics.contentGap),
+                          _buildPageEntrance(
+                            index: 3,
+                            child: _buildActionSection(
+                              context,
+                              palette: palette,
+                              title: '其他',
+                              actions: otherActions,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ],
-                if (otherActions.isNotEmpty) ...[
-                  SizedBox(height: metrics.contentGap),
-                  _buildPageEntrance(
-                    index: 3,
-                    child: _buildActionSection(
-                      context,
-                      palette: palette,
-                      title: '其他',
-                      actions: otherActions,
-                    ),
-                  ),
-                ],
               ],
-            ),
-          ),
-        ],
+            );
+          }
+
+          return Column(
+            children: [
+              if (appearanceActions.isNotEmpty)
+                _buildPageEntrance(
+                  index: 1,
+                  child: _buildActionSection(
+                    context,
+                    palette: palette,
+                    title: '外观',
+                    actions: appearanceActions,
+                  ),
+                ),
+              if (dataActions.isNotEmpty) ...[
+                SizedBox(height: metrics.contentGap),
+                _buildPageEntrance(
+                  index: 2,
+                  child: _buildActionSection(
+                    context,
+                    palette: palette,
+                    title: '数据',
+                    actions: dataActions,
+                  ),
+                ),
+              ],
+              if (otherActions.isNotEmpty) ...[
+                SizedBox(height: metrics.contentGap),
+                _buildPageEntrance(
+                  index: 3,
+                  child: _buildActionSection(
+                    context,
+                    palette: palette,
+                    title: '其他',
+                    actions: otherActions,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     ];
   }
@@ -539,6 +594,7 @@ extension on _MinePageState {
     BuildContext context, {
     required _MineResolvedPalette palette,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -560,10 +616,18 @@ extension on _MinePageState {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.workspace_premium_outlined,
-                size: 22,
-                color: palette.primaryColor,
+              Container(
+                width: metrics.isMediumUpWindow ? 34 : 36,
+                height: metrics.isMediumUpWindow ? 34 : 36,
+                decoration: BoxDecoration(
+                  color: palette.primaryColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.workspace_premium_outlined,
+                  size: 19,
+                  color: palette.primaryColor,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -603,6 +667,7 @@ extension on _MinePageState {
     String? tagText,
     required VoidCallback onTap,
   }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -625,7 +690,15 @@ extension on _MinePageState {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 22, color: palette.primaryColor),
+              Container(
+                width: metrics.isMediumUpWindow ? 34 : 36,
+                height: metrics.isMediumUpWindow ? 34 : 36,
+                decoration: BoxDecoration(
+                  color: palette.primaryColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 19, color: palette.primaryColor),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Row(
@@ -680,6 +753,7 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
   }) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     final displayName =
         _userId == null
             ? '登录 / 注册'
@@ -734,7 +808,10 @@ extension on _MinePageState {
           child: Padding(
             padding: _profileCardPaddingFor(context),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment:
+                  metrics.isMediumUpWindow
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
               children: [
                 Material(
                   color: Colors.transparent,
@@ -892,31 +969,31 @@ extension on _MinePageState {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          _userId == null
-                              ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: palette.noticeSurfaceColor,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: palette.noticeAccentColor.withValues(
-                                      alpha: 0.55,
-                                    ),
+                          if (_userId == null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.noticeSurfaceColor,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: palette.noticeAccentColor.withValues(
+                                    alpha: 0.55,
                                   ),
                                 ),
-                                child: Text(
-                                  statusLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: palette.noticeAccentColor,
-                                  ),
+                              ),
+                              child: Text(
+                                statusLabel,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: palette.noticeAccentColor,
                                 ),
-                              )
-                              : const SizedBox(width: 64, height: 28),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -932,11 +1009,13 @@ extension on _MinePageState {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: palette.textSecondaryColor,
-                ),
+                if (!metrics.isMediumUpWindow) ...[
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: palette.textSecondaryColor,
+                  ),
+                ],
               ],
             ),
           ),

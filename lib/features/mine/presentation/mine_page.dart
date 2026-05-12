@@ -66,6 +66,7 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _hasThemeCustom = false;
   int _sourceImportLimit = 10;
   _MineLayoutMode _layoutMode = _MineLayoutMode.list;
+  bool _didRestoreLayoutMode = false;
   String? _openingRoute;
 
   bool get _isListMode => _layoutMode == _MineLayoutMode.list;
@@ -91,28 +92,23 @@ class _MinePageState extends ConsumerState<MinePage> {
   EdgeInsets _actionSectionPaddingFor(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
     return _isListMode
-        ? EdgeInsets.fromLTRB(
-          metrics.cardPadding,
-          metrics.contentGap * 0.4,
-          metrics.cardPadding,
-          metrics.contentGap * 0.4,
-        )
+        ? EdgeInsets.symmetric(vertical: metrics.contentGap * 0.35)
         : EdgeInsets.fromLTRB(
           metrics.cardPadding,
-          metrics.contentGap * 0.8,
+          metrics.contentGap * 0.55,
           metrics.cardPadding,
-          metrics.contentGap * 0.8,
+          metrics.contentGap * 0.55,
         );
   }
 
   double _primarySectionGapFor(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
-    return _isListMode ? metrics.contentGap * 0.65 : metrics.contentGap;
+    return _isListMode ? metrics.contentGap * 0.85 : metrics.contentGap;
   }
 
   double _secondarySectionGapFor(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
-    return _isListMode ? metrics.contentGap * 0.25 : metrics.contentGap * 0.45;
+    return _isListMode ? metrics.contentGap * 0.75 : metrics.contentGap * 0.45;
   }
 
   double _quickAccessInnerGapFor(BuildContext context) {
@@ -158,16 +154,16 @@ class _MinePageState extends ConsumerState<MinePage> {
     final metrics = AppAdaptiveMetrics.of(context);
     return _isListMode
         ? EdgeInsets.fromLTRB(
-          metrics.cardPadding,
-          metrics.contentGap,
-          metrics.cardPadding,
-          metrics.contentGap,
+          metrics.cardPadding * 0.95,
+          metrics.contentGap * 1.15,
+          metrics.cardPadding * 0.95,
+          metrics.contentGap * 1.15,
         )
         : EdgeInsets.fromLTRB(
-          metrics.cardPadding,
-          metrics.cardPadding * 0.85,
-          metrics.cardPadding,
-          metrics.cardPadding * 0.85,
+          metrics.cardPadding * 0.8,
+          metrics.cardPadding * 0.65,
+          metrics.cardPadding * 0.8,
+          metrics.cardPadding * 0.65,
         );
   }
 
@@ -180,8 +176,17 @@ class _MinePageState extends ConsumerState<MinePage> {
     _sessionService = ref.read(minePageSessionServiceProvider);
     _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
     _applyPrimedSession();
-    _restoreLayoutMode();
     _loadSession();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didRestoreLayoutMode) {
+      return;
+    }
+    _didRestoreLayoutMode = true;
+    unawaited(_restoreLayoutMode());
   }
 
   @override
@@ -203,8 +208,16 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _restoreLayoutMode() async {
+    final preferGridByDefault = AppAdaptiveMetrics.of(context).isMediumUpWindow;
+    final defaultMode =
+        preferGridByDefault ? _MineLayoutMode.grid : _MineLayoutMode.list;
     final raw = await _sessionService.restoreLayoutMode(_layoutModeKey);
-    final mode = raw == 'grid' ? _MineLayoutMode.grid : _MineLayoutMode.list;
+    final mode =
+        raw == null
+            ? defaultMode
+            : raw == 'grid'
+            ? _MineLayoutMode.grid
+            : _MineLayoutMode.list;
     if (!mounted || _layoutMode == mode) {
       return;
     }
@@ -544,27 +557,28 @@ class _MinePageState extends ConsumerState<MinePage> {
               Expanded(
                 child: Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
               if (trailing != null) trailing,
             ],
           ),
-          SizedBox(height: _isListMode ? 8 : 2),
+          const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
               final columns = AppLayout.mineActionGridColumnsForWidth(
                 constraints.maxWidth,
               );
               final denseGrid = columns >= 4;
-              final crossSpacing = denseGrid ? 9.0 : 10.0;
-              final runSpacing = denseGrid ? 9.0 : 10.0;
+              final crossSpacing = denseGrid ? 8.0 : 10.0;
+              final runSpacing = denseGrid ? 8.0 : 10.0;
               final tileHeight = switch (columns) {
-                >= 4 => 92.0,
-                3 => 98.0,
-                _ => 106.0,
+                >= 4 => 82.0,
+                3 => 88.0,
+                _ => 96.0,
               };
               final totalCrossSpacing = crossSpacing * (columns - 1);
               final tileWidth =
@@ -626,19 +640,20 @@ class _MinePageState extends ConsumerState<MinePage> {
               Expanded(
                 child: Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
               if (trailing != null) trailing,
             ],
           ),
-          SizedBox(height: _isListMode ? 8 : 10),
+          const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
               color: palette.cardColor,
-              borderRadius: BorderRadius.circular(_isListMode ? 16 : 18),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: resolveAppBorderColor(
                   Theme.of(context).colorScheme,
@@ -658,8 +673,8 @@ class _MinePageState extends ConsumerState<MinePage> {
                   if (index < actions.length - 1)
                     Divider(
                       height: 1,
-                      indent: 56,
-                      endIndent: 14,
+                      indent: 58,
+                      endIndent: 16,
                       color: resolveAppBorderColor(
                         Theme.of(context).colorScheme,
                         baseColor: palette.cardBorderColor,
@@ -686,7 +701,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(_isListMode ? 16 : 18),
+        borderRadius: BorderRadius.circular(18),
         onTap: item.onTap,
         child: Padding(
           padding: _actionListTilePaddingFor(context),
@@ -696,15 +711,15 @@ class _MinePageState extends ConsumerState<MinePage> {
                 clipBehavior: Clip.none,
                 children: [
                   Container(
-                    width: _isListMode ? 32 : 34,
-                    height: _isListMode ? 32 : 34,
+                    width: _isListMode ? 36 : 34,
+                    height: _isListMode ? 36 : 34,
                     decoration: BoxDecoration(
                       color: iconFill,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       item.icon,
-                      size: _isListMode ? 17 : 18,
+                      size: _isListMode ? 18 : 18,
                       color: palette.textPrimaryColor,
                     ),
                   ),
@@ -776,7 +791,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       SizedBox(height: _isListMode ? 1 : 2),
                       Text(
                         subtitle,
-                        maxLines: 1,
+                        maxLines: _isListMode ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: palette.textSecondaryColor,
@@ -806,8 +821,8 @@ class _MinePageState extends ConsumerState<MinePage> {
   }) {
     final theme = Theme.of(context);
     final iconFill = palette.iconBackgroundColor;
-    final iconSize = denseGrid ? 30.0 : 34.0;
-    final iconGlyphSize = denseGrid ? 17.0 : 19.0;
+    final iconSize = denseGrid ? 28.0 : 32.0;
+    final iconGlyphSize = denseGrid ? 16.0 : 18.0;
     final labelTextStyle =
         denseGrid
             ? theme.textTheme.labelMedium?.copyWith(
@@ -826,15 +841,15 @@ class _MinePageState extends ConsumerState<MinePage> {
         onTap: item.onTap,
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor),
-            color: Colors.transparent,
+            color: palette.cardColor.withValues(alpha: 0.48),
           ),
           child: Padding(
             padding:
                 denseGrid
-                    ? const EdgeInsets.fromLTRB(8, 7, 8, 7)
-                    : const EdgeInsets.fromLTRB(9, 9, 9, 9),
+                    ? const EdgeInsets.fromLTRB(7, 6, 7, 6)
+                    : const EdgeInsets.fromLTRB(8, 8, 8, 8),
             child: Stack(
               children: [
                 Center(
@@ -877,7 +892,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                         ],
                       ),
-                      SizedBox(height: denseGrid ? 4 : 8),
+                      SizedBox(height: denseGrid ? 4 : 6),
                       Text(
                         item.label,
                         maxLines: denseGrid ? 1 : 2,

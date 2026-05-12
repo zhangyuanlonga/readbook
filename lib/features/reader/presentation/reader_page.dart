@@ -22,6 +22,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
@@ -631,6 +632,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               contentCapabilities: _contentCapabilities,
               hasInlineImageParagraphs:
                   _currentChapterHasInlineImageParagraphs(),
+              supportsSourceRuntime:
+                  ref
+                      .read(appPlatformCapabilitiesProvider)
+                      .supportsSourceRuntime,
             )
             .canUsePagedText;
     return _readerModeResolver.resolve(
@@ -1035,6 +1040,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         contentMode: _currentContentMode,
         contentCapabilities: _contentCapabilities,
         hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
+        supportsSourceRuntime:
+            ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime,
       );
 
   bool get _supportsAutoRead => _readerModeCapabilities.canAutoRead;
