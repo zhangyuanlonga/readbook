@@ -4,14 +4,16 @@ extension on _SourcePageState {
   void _handleAuthEvent(AuthEvent event) {
     switch (event.type) {
       case AuthEventType.loggedIn:
+        unawaited(_loadFeatureAccess(refreshRemote: true));
+        break;
       case AuthEventType.loggedOut:
       case AuthEventType.sessionExpired:
-        unawaited(_loadFeatureAccess());
+        unawaited(_loadFeatureAccess(refreshRemote: false));
         break;
     }
   }
 
-  Future<void> _loadFeatureAccess() async {
+  Future<void> _loadFeatureAccess({required bool refreshRemote}) async {
     if (!mounted) {
       return;
     }
@@ -23,7 +25,9 @@ extension on _SourcePageState {
     });
 
     try {
-      final access = await _accessService.loadFeatureAccess();
+      final access = await _accessService.loadFeatureAccess(
+        refreshRemote: refreshRemote,
+      );
       if (!mounted) {
         return;
       }

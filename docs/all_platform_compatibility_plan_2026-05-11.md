@@ -546,8 +546,9 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - [x] `flutter analyze`：通过。
 - [x] `flutter test test/app/platform/app_platform_capabilities_test.dart test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/bookshelf/application/bookshelf_page_route_service_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reading_records_page_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/features/reader/application/reader_layout_resolver_test.dart test/features/reader/application/reader_mode_capabilities_test.dart test/features/reader/application/reader_dependencies_provider_test.dart test/features/routes/deferred_entry_capability_test.dart`：通过。
 - [x] `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`：通过，产物位于 `build/web`。
+- [x] `flutter build macos --debug`：通过，产物位于 `build/macos/Build/Products/Debug/shuxiang_reading_next.app`。
 
 ### 遗留说明
 
-- macOS 真实 run、Windows/Linux 真实主机矩阵仍需在对应环境补充；本轮 E 阶段先以自动化测试和 Web build 关闭代码级风险。
+- macOS 已通过 debug build，真实 run 仍可补窗口手工记录；Windows/Linux 真实主机矩阵仍需在对应环境补充。
 - 书源、在线搜索、发现在线内容、WebView 登录和脚本调试仍保持延期；恢复时必须走独立书源专题和显式 `APP_ENABLE_SOURCE_RUNTIME=true` 验证。

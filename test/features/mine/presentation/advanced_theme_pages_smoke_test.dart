@@ -9,9 +9,12 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_service.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_event_bus.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_features.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
+import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
+import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_editor_state_service.dart';
@@ -21,6 +24,7 @@ import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_s
 import 'package:shuxiang_reading_next/features/mine/application/app_background_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/cover_gallery_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
+import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/reader_background_service.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/advanced_theme_editor_page.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/advanced_theme_list_page.dart';
@@ -190,6 +194,13 @@ void main() {
         preferences: prefs,
         assetStore: _assetStore(),
       );
+      final sessionStore = AuthSessionStore(preferences: prefs);
+      final mineSessionService = MinePageSessionService(
+        authSessionStore: sessionStore,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _FakeMembershipService(),
+      );
+      await mineSessionService.loadSession(refreshRemote: true);
 
       for (var index = 0; index < 50; index += 1) {
         await service.saveTheme(
@@ -233,6 +244,9 @@ void main() {
             mineMembershipServiceProvider.overrideWithValue(
               _FakeMembershipService(),
             ),
+            minePageSessionServiceProvider.overrideWithValue(
+              mineSessionService,
+            ),
             advancedThemePageFlowCoordinatorFactoryProvider.overrideWithValue(
               () => _NoopAdvancedThemePageFlowCoordinator(),
             ),
@@ -267,6 +281,15 @@ AdvancedThemeEditorStateService _editorStateService(
     readerBackgroundService: ReaderBackgroundService(),
     fontRegistryService: ReaderFontRegistryService(),
   );
+}
+
+class _FakeMobileFeatureService extends MobileFeatureService {
+  _FakeMobileFeatureService();
+
+  @override
+  Future<List<MobileFeatureModule>> fetchMyModules() async {
+    return const <MobileFeatureModule>[];
+  }
 }
 
 class _FakeMembershipService extends MembershipService {

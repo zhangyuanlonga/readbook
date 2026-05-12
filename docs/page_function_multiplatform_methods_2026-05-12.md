@@ -514,7 +514,7 @@
 - [x] 路由守卫和 disabled page widget test。
 - [x] 本地阅读 smoke：导入、打开、目录、书签、记录恢复。
 - [x] Web：`flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
-- [ ] 桌面：至少 macOS run；Windows/Linux 在对应主机补矩阵。
+- [x] 桌面：macOS debug build 通过；真实 run、Windows/Linux 在对应主机补矩阵。
 
 验收记录模板：
 
@@ -542,7 +542,8 @@
   flutter analyze
   flutter test test/app/platform/app_platform_capabilities_test.dart test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/bookshelf/application/bookshelf_page_route_service_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reading_records_page_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/features/reader/application/reader_layout_resolver_test.dart test/features/reader/application/reader_mode_capabilities_test.dart test/features/reader/application/reader_dependencies_provider_test.dart test/features/routes/deferred_entry_capability_test.dart
   flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run
-遗留风险：Windows/Linux 真实主机运行矩阵仍需在对应环境补；macOS 桌面真实 run 待本机窗口验收继续补记录
+  flutter build macos --debug
+遗留风险：Windows/Linux 真实主机运行矩阵仍需在对应环境补；macOS 已通过 debug build，真实窗口 run 仍可后续补手工记录
 ```
 
 ## 7. 当前优先级

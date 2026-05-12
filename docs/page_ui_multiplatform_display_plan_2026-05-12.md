@@ -598,3 +598,9 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 列表模式从过度紧凑改为舒适设置列表，网格模式从宽松卡片改为桌面快捷入口，两种模式共享更接近的标题、图标、间距节奏。
 - 移动端列表分组与顶部用户卡保持同宽；桌面端取消左侧独立账号栏，改为顶部账号/快捷入口横排、下方统一管理区，避免左侧大面积留白。
 - 验证：`flutter analyze` 通过；`flutter test test/features/mine/application/mine_page_preferences_service_test.dart test/features/mine/application/mine_page_session_service_test.dart test/features/mine/presentation/mine_management_page_test.dart` 通过。
+
+### 2026-05-12 外观/高级主题桌面展示优化
+
+- 外观页在 840dp+ 改为两列工作台：左侧基础外观（模式、颜色、高级主题状态），右侧导航、底部菜单、字体和其他设置；移动端继续单列。
+- 高级主题列表在 840dp+ 改为左侧搜索/主题列表、右侧主题预览与操作面板；移动端继续保留单列主题卡。
+- 验证：`flutter analyze` 通过；`flutter test test/features/mine/presentation/advanced_theme_pages_smoke_test.dart` 通过。

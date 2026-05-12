@@ -18,12 +18,13 @@ void main() {
       const AuthSession(accessToken: 'token', userId: 'user_1'),
     );
 
+    final featureService = _FakeMobileFeatureService();
     final service = SourcePageAccessService(
       authSessionStore: sessionStore,
-      mobileFeatureService: _FakeMobileFeatureService(),
+      mobileFeatureService: featureService,
     );
 
-    final access = await service.loadFeatureAccess();
+    final access = await service.loadFeatureAccess(refreshRemote: true);
     expect(access.canAccessSourcePage, isTrue);
     expect(access.sourceImportLimit, 12);
     expect(
@@ -41,14 +42,38 @@ void main() {
       ),
       isTrue,
     );
+    expect(featureService.fetchMyModulesCount, 1);
+  });
+
+  test('uses default access without remote refresh', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessionStore = AuthSessionStore(preferences: prefs);
+    await sessionStore.saveSession(
+      const AuthSession(accessToken: 'token', userId: 'user_1'),
+    );
+
+    final featureService = _FakeMobileFeatureService();
+    final service = SourcePageAccessService(
+      authSessionStore: sessionStore,
+      mobileFeatureService: featureService,
+    );
+
+    final access = await service.loadFeatureAccess(refreshRemote: false);
+
+    expect(access.canAccessSourcePage, isTrue);
+    expect(access.sourceImportLimit, 10);
+    expect(featureService.fetchMyModulesCount, 0);
   });
 }
 
 class _FakeMobileFeatureService extends MobileFeatureService {
   _FakeMobileFeatureService() : super(baseUrl: 'https://example.com');
 
+  int fetchMyModulesCount = 0;
+
   @override
   Future<List<MobileFeatureModule>> fetchMyModules() async {
+    fetchMyModulesCount += 1;
     return const [
       MobileFeatureModule(
         code: 'source_entry',

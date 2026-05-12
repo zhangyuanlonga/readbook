@@ -40,6 +40,7 @@ class AppLifecycleCoordinator {
        _now = now ?? DateTime.now;
 
   static const Duration heartbeatThrottle = Duration(minutes: 2);
+  static const Duration visitThrottle = Duration(minutes: 30);
 
   final Stream<IncomingExternalImportPayload> _incomingExternalImportStream;
   final Stream<AuthEvent> _authEventStream;
@@ -57,6 +58,7 @@ class AppLifecycleCoordinator {
   bool _isHeartbeatInFlight = false;
   bool _isVisitInFlight = false;
   DateTime? _lastHeartbeatAt;
+  DateTime? _lastVisitAt;
 
   Future<void> initialize({
     required AppIncomingExternalImportHandler onIncomingExternalImportPayload,
@@ -110,6 +112,11 @@ class AppLifecycleCoordinator {
     if (_isVisitInFlight) {
       return;
     }
+    final now = _now();
+    final last = _lastVisitAt;
+    if (last != null && now.difference(last) < visitThrottle) {
+      return;
+    }
     _isVisitInFlight = true;
     try {
       final trackVisit =
@@ -119,6 +126,7 @@ class AppLifecycleCoordinator {
             visitSeconds: 0,
           );
       await trackVisit();
+      _lastVisitAt = now;
     } catch (_) {
       // Ignore analytics failures to avoid blocking startup or resume.
     } finally {

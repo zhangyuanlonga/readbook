@@ -67,8 +67,41 @@ extension on _AppearancePageState {
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
               context,
-              maxWidth: AppLayout.settingsContentMaxWidth,
+              maxWidth:
+                  widget.section == AppearanceSection.appearance &&
+                          metrics.isExpandedWindow
+                      ? 1120
+                      : AppLayout.settingsContentMaxWidth,
             );
+            final sections = _buildSectionContent(
+              context,
+              navigationState,
+              selectedThemeMode: selectedThemeMode,
+              selectedSeedColor: selectedSeedColor,
+              selectedNavigationStyle: selectedNavigationStyle,
+              standardNavigationAppearance: standardNavigationAppearance,
+              cupertinoDockAppearance: cupertinoDockAppearance,
+              showNavigationLabels: showNavigationLabels,
+            );
+            final content =
+                widget.section == AppearanceSection.appearance &&
+                        metrics.isExpandedWindow
+                    ? _buildDesktopAppearanceWorkspace(
+                      context,
+                      sections: sections,
+                      horizontal: horizontal,
+                      topInset: topInset,
+                      bottomInset: bottomInset,
+                    )
+                    : ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        topInset + metrics.contentGap,
+                        horizontal,
+                        metrics.sectionGap + bottomInset,
+                      ),
+                      children: _buildMotionEntries(sections),
+                    );
 
             return DecoratedBox(
               decoration: buildAdvancedThemeBackdropDecoration(backdrop),
@@ -76,27 +109,7 @@ extension on _AppearancePageState {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      topInset + metrics.contentGap,
-                      horizontal,
-                      metrics.sectionGap + bottomInset,
-                    ),
-                    children: _buildMotionEntries(
-                      _buildSectionContent(
-                        context,
-                        navigationState,
-                        selectedThemeMode: selectedThemeMode,
-                        selectedSeedColor: selectedSeedColor,
-                        selectedNavigationStyle: selectedNavigationStyle,
-                        standardNavigationAppearance:
-                            standardNavigationAppearance,
-                        cupertinoDockAppearance: cupertinoDockAppearance,
-                        showNavigationLabels: showNavigationLabels,
-                      ),
-                    ),
-                  ),
+                  child: content,
                 ),
               ),
             );
@@ -195,6 +208,61 @@ extension on _AppearancePageState {
           child: children[index],
         ),
     ];
+  }
+
+  Widget _buildDesktopAppearanceWorkspace(
+    BuildContext context, {
+    required List<Widget> sections,
+    required double horizontal,
+    required double topInset,
+    required double bottomInset,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final leftSections = <Widget>[
+      for (final index in <int>[0, 1, 2])
+        if (index < sections.length) sections[index],
+    ];
+    final rightSections = <Widget>[
+      for (var index = 3; index < sections.length; index++) sections[index],
+    ];
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        topInset + metrics.contentGap,
+        horizontal,
+        metrics.sectionGap + bottomInset,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: Column(children: _buildDesktopColumnEntries(leftSections)),
+          ),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            flex: 6,
+            child: Column(children: _buildDesktopColumnEntries(rightSections)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildDesktopColumnEntries(List<Widget> children) {
+    final entries = <Widget>[];
+    for (var index = 0; index < children.length; index++) {
+      if (index > 0) {
+        entries.add(const SizedBox(height: 14));
+      }
+      entries.add(
+        AppFadeSlideTransition(
+          delay: Duration(milliseconds: (index * 28).clamp(0, 140)),
+          child: children[index],
+        ),
+      );
+    }
+    return entries;
   }
 
   Widget _buildNavIconGalleryEntry(BuildContext context) {

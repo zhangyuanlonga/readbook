@@ -249,7 +249,9 @@ class _FakeSourcePageAccessService extends SourcePageAccessService {
       );
 
   @override
-  Future<SourcePageFeatureAccess> loadFeatureAccess() async {
+  Future<SourcePageFeatureAccess> loadFeatureAccess({
+    bool refreshRemote = true,
+  }) async {
     return const SourcePageFeatureAccess(
       canAccessSourcePage: true,
       sourceImportLimit: 10,

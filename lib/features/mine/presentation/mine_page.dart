@@ -241,15 +241,20 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _loadSession() async {
-    await _reloadSession(showLoading: true);
+    await _reloadSession(showLoading: true, refreshRemote: false);
   }
 
   Future<void> _refreshMine() async {
-    await _reloadSession(showLoading: false);
+    await _reloadSession(showLoading: false, refreshRemote: true);
   }
 
-  Future<void> _reloadSession({required bool showLoading}) async {
-    final snapshot = await _sessionService.loadSession();
+  Future<void> _reloadSession({
+    required bool showLoading,
+    required bool refreshRemote,
+  }) async {
+    final snapshot = await _sessionService.loadSession(
+      refreshRemote: refreshRemote,
+    );
     final supportsSourceRuntime =
         ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
     if (!mounted) {
@@ -520,9 +525,11 @@ class _MinePageState extends ConsumerState<MinePage> {
   void _handleAuthEvent(AuthEvent event) {
     switch (event.type) {
       case AuthEventType.loggedIn:
+        unawaited(_reloadSession(showLoading: false, refreshRemote: true));
+        break;
       case AuthEventType.loggedOut:
       case AuthEventType.sessionExpired:
-        unawaited(_loadSession());
+        unawaited(_reloadSession(showLoading: false, refreshRemote: false));
         break;
     }
   }

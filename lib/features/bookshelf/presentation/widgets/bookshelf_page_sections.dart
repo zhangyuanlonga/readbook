@@ -334,10 +334,12 @@ class BookshelfEmptyCard extends StatelessWidget {
     super.key,
     required this.onImportLocal,
     required this.palette,
+    this.showImportAction = true,
   });
 
   final VoidCallback onImportLocal;
   final ResolvedAdvancedThemePalette palette;
+  final bool showImportAction;
 
   @override
   Widget build(BuildContext context) {
@@ -345,15 +347,18 @@ class BookshelfEmptyCard extends StatelessWidget {
       icon: Icons.import_contacts_outlined,
       title: '书架暂无内容',
       description: '请先在搜索结果或详情页加入书架。',
-      footer: FilledButton.icon(
-        onPressed: onImportLocal,
-        style: FilledButton.styleFrom(
-          backgroundColor: palette.primaryColor,
-          foregroundColor: palette.buttonTextColor,
-        ),
-        icon: const Icon(Icons.library_add_rounded),
-        label: const Text('导入本地图书'),
-      ),
+      footer:
+          showImportAction
+              ? FilledButton.icon(
+                onPressed: onImportLocal,
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.primaryColor,
+                  foregroundColor: palette.buttonTextColor,
+                ),
+                icon: const Icon(Icons.library_add_rounded),
+                label: const Text('导入本地图书'),
+              )
+              : null,
     );
   }
 }

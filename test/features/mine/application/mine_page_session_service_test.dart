@@ -32,7 +32,7 @@ void main() {
         membershipService: _FakeMembershipService(),
       );
 
-      final snapshot = await service.loadSession();
+      final snapshot = await service.loadSession(refreshRemote: true);
       expect(snapshot.session?.userId, 'user_1');
       expect(snapshot.showSourceEntry, isTrue);
       expect(snapshot.hasMembership, isTrue);
@@ -51,13 +51,46 @@ void main() {
     await service.persistLayoutMode(storageKey: 'layout', value: 'grid');
     expect(await service.restoreLayoutMode('layout'), 'grid');
   });
+
+  test('uses cached remote snapshot when remote refresh is disabled', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = AuthSessionStore(preferences: prefs);
+    await store.saveSession(
+      const AuthSession(
+        accessToken: 'token',
+        userId: 'user_cached',
+        username: 'tester',
+      ),
+    );
+
+    final featureService = _FakeMobileFeatureService();
+    final membershipService = _FakeMembershipService();
+    final service = MinePageSessionService(
+      authSessionStore: store,
+      mobileFeatureService: featureService,
+      membershipService: membershipService,
+    );
+
+    final refreshed = await service.loadSession(refreshRemote: true);
+    final cached = await service.loadSession(refreshRemote: false);
+
+    expect(refreshed.hasThemeCustom, isTrue);
+    expect(cached.hasThemeCustom, isTrue);
+    expect(cached.showSourceEntry, isTrue);
+    expect(cached.sourceImportLimit, 88);
+    expect(featureService.fetchCount, 1);
+    expect(membershipService.fetchCount, 1);
+  });
 }
 
 class _FakeMobileFeatureService extends MobileFeatureService {
   _FakeMobileFeatureService() : super(baseUrl: 'https://example.com');
 
+  int fetchCount = 0;
+
   @override
   Future<List<MobileFeatureModule>> fetchMyModules() async {
+    fetchCount += 1;
     return const [
       MobileFeatureModule(
         code: 'source_entry',
@@ -92,8 +125,11 @@ class _FakeMobileFeatureService extends MobileFeatureService {
 class _FakeMembershipService extends MembershipService {
   _FakeMembershipService() : super(baseUrl: 'https://example.com');
 
+  int fetchCount = 0;
+
   @override
   Future<MembershipEntitlement> fetchEntitlement() async {
+    fetchCount += 1;
     return const MembershipEntitlement(
       vipLevel: 'pro',
       vipStatus: 'active',

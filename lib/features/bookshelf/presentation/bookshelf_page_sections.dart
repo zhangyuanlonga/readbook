@@ -115,9 +115,21 @@ extension on _BookshelfPageState {
   }
 
   Widget _buildEmptyCard() {
-    return BookshelfEmptyCard(
+    final metrics = AppAdaptiveMetrics.of(context);
+    final card = BookshelfEmptyCard(
       onImportLocal: _showImportLocalBooksSheet,
       palette: _resolvedPalette(context),
+      showImportAction: !metrics.isMediumUpWindow,
+    );
+    if (!metrics.isMediumUpWindow) {
+      return card;
+    }
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: card,
+      ),
     );
   }
 

@@ -13,7 +13,7 @@ class SourcePageFeatureAccess {
 }
 
 class SourcePageAccessService {
-  const SourcePageAccessService({
+  SourcePageAccessService({
     required AuthSessionStore authSessionStore,
     required MobileFeatureService mobileFeatureService,
   }) : _authSessionStore = authSessionStore,
@@ -21,8 +21,14 @@ class SourcePageAccessService {
 
   final AuthSessionStore _authSessionStore;
   final MobileFeatureService _mobileFeatureService;
+  SourcePageFeatureAccess? _cachedAccess;
 
-  Future<SourcePageFeatureAccess> loadFeatureAccess() async {
+  Future<SourcePageFeatureAccess> loadFeatureAccess({
+    bool refreshRemote = true,
+  }) async {
+    if (!refreshRemote) {
+      return _cachedAccess ?? _defaultAccess;
+    }
     final session = await _authSessionStore.getSession();
     final modules = await (session == null
             ? _mobileFeatureService.fetchPublicModules()
@@ -30,10 +36,12 @@ class SourcePageAccessService {
         .timeout(const Duration(seconds: 5));
     final sourceEntry = _findFeatureModule(modules, 'source_entry');
     final sourceImport = _findFeatureModule(modules, 'source_import');
-    return SourcePageFeatureAccess(
+    final access = SourcePageFeatureAccess(
       canAccessSourcePage: _isSourceEntryAccessible(sourceEntry),
       sourceImportLimit: sourceImport?.quotaLimit ?? 10,
     );
+    _cachedAccess = access;
+    return access;
   }
 
   bool canAddSource({
@@ -78,5 +86,12 @@ class SourcePageAccessService {
       return true;
     }
     return sourceEntry.visible && sourceEntry.enabled;
+  }
+
+  SourcePageFeatureAccess get _defaultAccess {
+    return const SourcePageFeatureAccess(
+      canAccessSourcePage: true,
+      sourceImportLimit: 10,
+    );
   }
 }

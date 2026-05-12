@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -56,7 +57,9 @@ class MinePageSessionService {
   final MobileFeatureService _mobileFeatureService;
   final MembershipService _membershipService;
 
-  Future<MinePageSessionSnapshot> loadSession() async {
+  Future<MinePageSessionSnapshot> loadSession({
+    bool refreshRemote = true,
+  }) async {
     final session = await _authSessionStore.getSession();
     if (session == null) {
       return const MinePageSessionSnapshot(
@@ -70,6 +73,19 @@ class MinePageSessionService {
     }
 
     final localAvatarPath = await loadLocalAvatarPath(session.userId);
+    final normalizedUserId = session.userId?.trim() ?? '';
+    final cachedRemoteSnapshot =
+        normalizedUserId.isEmpty
+            ? null
+            : await _readRemoteSnapshotCache(normalizedUserId);
+    if (!refreshRemote) {
+      return _buildSnapshot(
+        session: session,
+        localAvatarPath: localAvatarPath,
+        remoteSnapshot: cachedRemoteSnapshot,
+      );
+    }
+
     try {
       final modules = await _mobileFeatureService.fetchMyModules();
       final entitlement = await _membershipService.fetchEntitlement();
@@ -82,9 +98,7 @@ class MinePageSessionService {
           sourceImport = item;
         }
       }
-      return MinePageSessionSnapshot(
-        session: session,
-        localAvatarPath: localAvatarPath,
+      final remoteSnapshot = _MinePageRemoteSnapshot(
         showSourceEntry: sourceEntry?.visible == true,
         hasMembership: entitlement.isActive,
         hasThemeCustom: MembershipFeatures.hasFeature(
@@ -93,14 +107,19 @@ class MinePageSessionService {
         ),
         sourceImportLimit: sourceImport?.quotaLimit ?? 10,
       );
-    } catch (_) {
-      return MinePageSessionSnapshot(
+      if (normalizedUserId.isNotEmpty) {
+        await _writeRemoteSnapshotCache(normalizedUserId, remoteSnapshot);
+      }
+      return _buildSnapshot(
         session: session,
         localAvatarPath: localAvatarPath,
-        showSourceEntry: false,
-        hasMembership: false,
-        hasThemeCustom: false,
-        sourceImportLimit: 10,
+        remoteSnapshot: remoteSnapshot,
+      );
+    } catch (_) {
+      return _buildSnapshot(
+        session: session,
+        localAvatarPath: localAvatarPath,
+        remoteSnapshot: cachedRemoteSnapshot,
       );
     }
   }
@@ -197,4 +216,97 @@ class MinePageSessionService {
 
   String _profileAvatarStorageKey(String userId) =>
       'mine.profile.avatar.path.$userId';
+
+  Future<_MinePageRemoteSnapshot?> _readRemoteSnapshotCache(
+    String userId,
+  ) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      return null;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_remoteSnapshotStorageKey(normalizedUserId));
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      return _MinePageRemoteSnapshot.fromJson(decoded);
+    } catch (_) {
+      await prefs.remove(_remoteSnapshotStorageKey(normalizedUserId));
+      return null;
+    }
+  }
+
+  Future<void> _writeRemoteSnapshotCache(
+    String userId,
+    _MinePageRemoteSnapshot snapshot,
+  ) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _remoteSnapshotStorageKey(normalizedUserId),
+      jsonEncode(snapshot.toJson()),
+    );
+  }
+
+  MinePageSessionSnapshot _buildSnapshot({
+    required AuthSession session,
+    required String? localAvatarPath,
+    required _MinePageRemoteSnapshot? remoteSnapshot,
+  }) {
+    return MinePageSessionSnapshot(
+      session: session,
+      localAvatarPath: localAvatarPath,
+      showSourceEntry: remoteSnapshot?.showSourceEntry ?? false,
+      hasMembership: remoteSnapshot?.hasMembership ?? false,
+      hasThemeCustom: remoteSnapshot?.hasThemeCustom ?? false,
+      sourceImportLimit: remoteSnapshot?.sourceImportLimit ?? 10,
+    );
+  }
+
+  String _remoteSnapshotStorageKey(String userId) =>
+      'mine.session.remoteSnapshot.v1.$userId';
+}
+
+class _MinePageRemoteSnapshot {
+  const _MinePageRemoteSnapshot({
+    required this.showSourceEntry,
+    required this.hasMembership,
+    required this.hasThemeCustom,
+    required this.sourceImportLimit,
+  });
+
+  final bool showSourceEntry;
+  final bool hasMembership;
+  final bool hasThemeCustom;
+  final int sourceImportLimit;
+
+  factory _MinePageRemoteSnapshot.fromJson(Map<String, dynamic> json) {
+    return _MinePageRemoteSnapshot(
+      showSourceEntry: json['showSourceEntry'] == true,
+      hasMembership: json['hasMembership'] == true,
+      hasThemeCustom: json['hasThemeCustom'] == true,
+      sourceImportLimit:
+          json['sourceImportLimit'] is int
+              ? json['sourceImportLimit'] as int
+              : 10,
+    );
+  }
+
+  Map<String, Object> toJson() {
+    return <String, Object>{
+      'showSourceEntry': showSourceEntry,
+      'hasMembership': hasMembership,
+      'hasThemeCustom': hasThemeCustom,
+      'sourceImportLimit': sourceImportLimit,
+      'cachedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+  }
 }

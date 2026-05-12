@@ -118,4 +118,29 @@ void main() {
     expect(heartbeatCalls, 1);
     expect(visitCalls, 1);
   });
+
+  test('sendVisitEvent throttles repeated calls within window', () async {
+    var visitCalls = 0;
+    var now = DateTime(2026, 5, 12, 10);
+    final coordinator = AppLifecycleCoordinator(
+      incomingExternalImportStream:
+          const Stream<IncomingExternalImportPayload>.empty(),
+      authEventStream: const Stream<AuthEvent>.empty(),
+      initializeExternalImportBridge: () async {},
+      authTokenRefresher: _FakeAuthTokenRefresher(),
+      trackVisit: () async {
+        visitCalls += 1;
+      },
+      now: () => now,
+    );
+
+    await coordinator.sendVisitEvent();
+    await coordinator.sendVisitEvent();
+    now = now.add(
+      AppLifecycleCoordinator.visitThrottle + const Duration(seconds: 1),
+    );
+    await coordinator.sendVisitEvent();
+
+    expect(visitCalls, 2);
+  });
 }

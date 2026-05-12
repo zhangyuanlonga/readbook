@@ -221,7 +221,7 @@ class _SourcePageState extends ConsumerState<SourcePage> {
     if (widget.bootstrapOnInit) {
       unawaited(_reloadScriptSourcesSilently());
     }
-    unawaited(_loadFeatureAccess());
+    unawaited(_loadFeatureAccess(refreshRemote: false));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;

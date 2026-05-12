@@ -842,11 +842,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         : _startSelectionMode,
                 icon: const Icon(Icons.checklist_rounded),
               ),
-              FilledButton.icon(
-                onPressed: _showImportLocalBooksSheet,
-                icon: const Icon(Icons.library_add_rounded),
-                label: const Text('导入'),
-              ),
             ];
 
             Widget actionWrap() {
@@ -904,6 +899,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 Expanded(child: filterOrSummary),
                 SizedBox(width: metrics.contentGap),
                 actionWrap(),
+                SizedBox(width: metrics.contentGap),
+                FilledButton.icon(
+                  onPressed: _showImportLocalBooksSheet,
+                  icon: const Icon(Icons.library_add_rounded),
+                  label: const Text('导入'),
+                ),
               ],
             );
           },
