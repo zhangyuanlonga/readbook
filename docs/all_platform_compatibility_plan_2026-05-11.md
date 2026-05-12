@@ -470,3 +470,29 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 - 资源管理、高级主题导入导出、字体管理仍有 service / application 层文件读写，本轮不迁移业务实现，归入功能阶段 C。
 - 书架 flow、底部导航图标、阅读器底层图片 pipeline 仍有历史文件处理路径，后续按页面功能阶段继续收口，不能在页面层新增类似依赖。
+
+## 14. 页面功能阶段 B 执行记录（2026-05-12）
+
+### 已完成：本地阅读主链路入口守卫与桌面输入验收
+
+- [x] 新增 `LocalReaderEntryGuardService`，统一判断本地图书是否存在、索引是否 ready、目标章节是否仍存在。
+- [x] 书架继续阅读入口接入本地入口守卫：本地图书缺失时提示不可用，索引未 ready 或章节缺失时回到详情页提示重建索引。
+- [x] 阅读记录跳转接入本地入口守卫：本地记录不会直接跳进空 reader。
+- [x] 书签跳转接入本地入口守卫：本地书或章节缺失时提示，保留书签记录。
+- [x] 新增 `ReaderDesktopInputResolver`，固定桌面键盘和滚轮阅读动作规则，覆盖方向键、PageUp/PageDown、Space、Home/End、滚轮阈值和节流。
+
+### 平台影响
+
+- 影响平台：Android、iOS、macOS、Windows、Linux、Web 的本地阅读入口、阅读记录和书签跳转行为。
+- 不影响平台：未新增原生插件，未改变数据库 schema，未改变书源运行时默认关闭策略。
+- 隔离策略：入口判断在 application service 内完成，页面只消费 route resolution 或 guard result，不直接读取本地章节表。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter test test/features/bookshelf/application/bookshelf_page_route_service_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reading_records_page_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/reader/application/reader_layout_resolver_test.dart`：通过。
+
+### 遗留说明
+
+- 详情页本地删除/重索引仍可继续拆成更明确的 application action result，归入后续本地资源管理阶段。
+- Web 数据库初始化失败时的整页可恢复错误仍留给 Web 存储专项。

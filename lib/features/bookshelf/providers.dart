@@ -10,6 +10,7 @@ import '../announcement/application/announcement_service.dart';
 import '../book/application/book_detail_service.dart';
 import '../book/application/custom_cover_storage_service.dart';
 import '../reader/application/local/local_book_index_service.dart';
+import '../reader/application/local/local_reader_entry_guard_service.dart';
 import '../reader/application/local/local_book_storage_service.dart';
 import '../reader/application/reader_preferences_service.dart';
 import '../reader/application/reader_entry_route_resolver.dart';
@@ -168,6 +169,12 @@ final bookshelfPageRouteServiceProvider = Provider<BookshelfPageRouteService>((
     ),
     readerEntryRouteResolver: ref.watch(
       bookshelfReaderEntryRouteResolverProvider,
+    ),
+    localReaderEntryGuardService: LocalReaderEntryGuardService(
+      localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+      readerEntryRouteResolver: ref.watch(
+        bookshelfReaderEntryRouteResolverProvider,
+      ),
     ),
   );
 });

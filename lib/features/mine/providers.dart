@@ -12,6 +12,7 @@ import '../../domain/repositories/bookmark_repository.dart';
 import '../../features/reader/application/chapter_cache_service.dart';
 import '../../features/reader/application/reader_pagination_cache_service.dart';
 import '../../features/reader/application/reading_record_service.dart';
+import '../../features/reader/application/local/local_reader_entry_guard_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
 import 'application/advanced_theme_provider.dart';
@@ -58,6 +59,15 @@ final bookmarksQueryServiceProvider = Provider<BookmarksQueryService>((ref) {
     bookshelfService: ref.watch(mineBookshelfServiceProvider),
   );
 });
+
+final bookmarksLocalReaderEntryGuardServiceProvider =
+    Provider<LocalReaderEntryGuardService>((ref) {
+      return LocalReaderEntryGuardService(
+        localBookRepository: ref.watch(
+          app_providers.localBookRepositoryProvider,
+        ),
+      );
+    });
 
 final mineAuthSessionStoreProvider = Provider<AuthSessionStore>((ref) {
   return AuthSessionStore();

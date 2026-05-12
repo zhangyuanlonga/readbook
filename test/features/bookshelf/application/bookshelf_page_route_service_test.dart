@@ -38,14 +38,15 @@ void main() {
         ),
       );
 
-      final route = await service.resolveLatestReadingRecordRoute(record);
+      final resolution = await service.resolveLatestReadingRecordRoute(record);
+      final route = resolution.route;
 
       expect(route, contains('/reader/'));
       expect(route, contains('chapter_2'));
     });
 
     test('falls back to detail route when no chapter locator exists', () async {
-      final route = await service.resolveLatestReadingRecordRoute(
+      final resolution = await service.resolveLatestReadingRecordRoute(
         ReadingRecord(
           bookId: 'book_1',
           sourceId: 'source_1',
@@ -54,6 +55,7 @@ void main() {
           lastReadAt: DateTime.utc(2026, 4, 28),
         ),
       );
+      final route = resolution.route;
 
       expect(route, contains('/book/book_1'));
       expect(route, contains('detailUrl='));

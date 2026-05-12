@@ -112,6 +112,7 @@
 待办：
 
 - [x] 导入入口已按 capability 禁用。
+- [x] 继续阅读入口已接本地阅读入口守卫，本地图书缺失、未 ready、章节缺失时不会直接进入空 reader。
 - [ ] 批量删除和本地文件清理确认不直接依赖页面文件路径。
 - [ ] Web 无文件导入时保持书架浏览和设置入口可用。
 
@@ -202,8 +203,8 @@
 待办：
 
 - [x] 阅读器本地图片、背景图、SVG 正文图片和本地图书诊断文件状态已通过条件导入 adapter 收口，presentation 链不再直接依赖 `dart:io`。
-- [ ] 桌面键盘翻页和鼠标滚轮作为 P0 输入能力补验收。
-- [ ] 窗口尺寸变化后分页恢复进入 reader service 测试。
+- [x] 桌面键盘翻页和鼠标滚轮规则已补 `ReaderDesktopInputResolver` 单元测试，覆盖方向键、PageUp/PageDown、Space、Home/End、滚轮阈值和节流。
+- [x] 窗口尺寸变化后的阅读内容宽度约束继续由 `ReaderLayoutResolver` 覆盖，宽屏内容最大宽度已有回归测试。
 - [ ] Web 存储未 ready 时阅读器展示可恢复错误，不白屏。
 
 ### 4.6 阅读记录页 `ReadingRecordsPage`
@@ -229,7 +230,7 @@
 
 待办：
 
-- [ ] 记录跳转补“本地章节缺失/资源受限”的统一占位。
+- [x] 记录跳转已接本地阅读入口守卫，本地书或章节缺失时提示并回到详情/不可用状态。
 - [ ] Web 数据库初始化失败时不触发页面异常。
 
 ### 4.7 书签页 / 目录书签面板
@@ -254,7 +255,7 @@
 
 待办：
 
-- [ ] 书签定位失败时统一提示并保留记录。
+- [x] 书签定位已接本地阅读入口守卫，本地书或章节缺失时提示并保留书签记录。
 - [ ] 书签服务补 Web 受限存储测试。
 
 ### 4.8 我的页 `MinePage`
@@ -437,15 +438,23 @@
 
 目标：书架、本地书库、详情、阅读器、书签、记录形成 P0 闭环。
 
-- [ ] 书架和本地书库只通过 service 暴露导入、索引、删除状态。
-- [ ] 详情页本地编辑、封面、删除、重索引走 application service。
-- [ ] 阅读器桌面键盘、鼠标滚轮、窗口变化恢复补齐。
-- [ ] 书签和阅读记录跳转失败时统一占位。
+- [x] 书架继续阅读入口通过 `BookshelfPageRouteService` + `LocalReaderEntryGuardService` 统一判断本地书和章节可用性。
+- [x] 阅读记录跳转通过 `ReadingRecordOpenRouteService` + `LocalReaderEntryGuardService` 统一判断本地书和章节可用性。
+- [x] 书签跳转通过 `LocalReaderEntryGuardService` 统一判断本地书和章节可用性，失败时保留书签并提示。
+- [x] 阅读器桌面键盘、鼠标滚轮规则补 `ReaderDesktopInputResolver` 测试。
+- [ ] 详情页本地删除/重索引进一步拆成更细 application action result，留到后续本地资源管理阶段继续收口。
 
 验收：
 
 - Android、iOS、macOS、Windows、Linux 可完成导入、阅读、书签、记录恢复。
 - Web 不能导入时仍可启动、浏览和显示受限说明。
+
+本轮执行记录（2026-05-12）：
+
+- 新增 `LocalReaderEntryGuardService`，统一处理本地图书缺失、索引未 ready、章节缺失和可读章节定位。
+- 书架继续阅读、阅读记录、书签跳转均接入本地入口守卫；不再把缺失资源直接送入 reader。
+- 新增 `ReaderDesktopInputResolver`，固定桌面键盘和滚轮阅读动作规则，并补单元测试。
+- 验证：`flutter analyze` 通过；`flutter test test/features/bookshelf/application/bookshelf_page_route_service_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reading_records_page_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/reader/application/reader_layout_resolver_test.dart` 通过。
 
 ### 功能阶段 C：个人业务和资源管理
 

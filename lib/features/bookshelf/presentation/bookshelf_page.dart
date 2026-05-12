@@ -4189,13 +4189,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Future<void> _openLatestReadingRecord(ReadingRecord record) async {
     _dismissContinueReadingPrompt();
-    final route = await _pageRouteService.resolveLatestReadingRecordRoute(
+    final resolution = await _pageRouteService.resolveLatestReadingRecordRoute(
       record,
     );
     if (!mounted) {
       return;
     }
+    final route = resolution.route;
+    if (route == null || resolution.unavailable) {
+      _showMessage(resolution.message ?? '本地图书暂不可用。');
+      return;
+    }
     context.push(route);
+    if (resolution.message != null) {
+      _showMessage(resolution.message!);
+    }
   }
 
   void _dismissContinueReadingPrompt() {

@@ -15,6 +15,8 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
+import '../../reader/application/local/local_reader_entry_guard_service.dart';
+import '../../reader/application/local/local_reader_identity.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/bookmarks_query_service.dart';
 import '../application/cover_gallery_provider.dart';
@@ -31,6 +33,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   static const Duration _loadTimeout = Duration(seconds: 8);
   late final BookmarksQueryService _bookmarksQueryService;
   late final BookmarkRepository _bookmarkRepository;
+  late final LocalReaderEntryGuardService _localReaderEntryGuardService;
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
 
@@ -45,6 +48,9 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     super.initState();
     _bookmarksQueryService = ref.read(bookmarksQueryServiceProvider);
     _bookmarkRepository = ref.read(mineBookmarkRepositoryProvider);
+    _localReaderEntryGuardService = ref.read(
+      bookmarksLocalReaderEntryGuardServiceProvider,
+    );
     unawaited(_reload());
   }
 
@@ -560,7 +566,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
                     _canOpenBookmark(book)
                         ? _formatTime(bookmark.updatedAt)
                         : '${_formatTime(bookmark.updatedAt)} · 书籍已移除，无法定位',
-                onTap: () => _openBookmark(bookmark, book),
+                onTap: () => unawaited(_openBookmark(bookmark, book)),
                 onDelete: () => unawaited(_deleteBookmark(bookmark)),
               ),
             const SizedBox(height: 12),
@@ -650,16 +656,34 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     return book.sourceId.trim().isNotEmpty && book.detailUrl.trim().isNotEmpty;
   }
 
-  void _openBookmark(Bookmark bookmark, BookshelfBook? book) {
+  Future<void> _openBookmark(Bookmark bookmark, BookshelfBook? book) async {
     if (!_canOpenBookmark(book)) {
       _showMessage('书籍已移出书架，暂无法定位灵感。');
+      return;
+    }
+
+    if (LocalReaderIdentity.isLocalSourceId(book!.sourceId)) {
+      final guard = await _localReaderEntryGuardService.guardBookmark(bookmark);
+      if (!mounted) {
+        return;
+      }
+      final route = guard.route;
+      if (route == null ||
+          guard.action == LocalReaderEntryGuardAction.unavailable) {
+        _showMessage(guard.message ?? '本地图书暂不可用。');
+        return;
+      }
+      context.push(route);
+      if (guard.message != null) {
+        _showMessage(guard.message!);
+      }
       return;
     }
 
     context.push(
       _readerEntryRouteResolver.buildRouteFromBookmark(
         bookmark: bookmark,
-        sourceId: book!.sourceId,
+        sourceId: book.sourceId,
         detailUrl: book.detailUrl,
       ),
     );
