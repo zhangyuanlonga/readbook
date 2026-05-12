@@ -1,0 +1,205 @@
+name: Multiplatform Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Comma-separated targets: all, android, ios, macos, linux, windows, web"
+        required: true
+        default: "all"
+      build_mode:
+        description: "Flutter build mode"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - profile
+          - debug
+      flutter_version:
+        description: "Flutter version used by CI"
+        required: true
+        default: "3.29.3"
+      android_target:
+        description: "Android artifact type"
+        required: true
+        default: "apk"
+        type: choice
+        options:
+          - apk
+          - appbundle
+          - both
+      android_apk_profile:
+        description: "Android APK profile"
+        required: true
+        default: "arm64"
+        type: choice
+        options:
+          - arm64
+          - split
+          - universal
+      build_name:
+        description: "Optional Flutter build-name, for example 1.1.0"
+        required: false
+        default: ""
+      build_number:
+        description: "Optional Flutter build-number, for example 26041801"
+        required: false
+        default: ""
+      artifact_name:
+        description: "Output artifact name prefix"
+        required: true
+        default: "Selune"
+      appread_api_base_url:
+        description: "Optional APPREAD_API_BASE_URL dart-define"
+        required: false
+        default: ""
+      appread_app_name:
+        description: "APPREAD_APP_NAME dart-define"
+        required: true
+        default: "selune"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: android-linux-web
+            label: Android, Linux, Web
+            os: ubuntu-22.04
+            supported_platforms: "android,linux,web"
+          - id: apple
+            label: iOS, macOS
+            os: macos-14
+            supported_platforms: "ios,macos"
+          - id: windows
+            label: Windows
+            os: windows-latest
+            supported_platforms: "windows"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve selected platforms
+        id: platforms
+        shell: bash
+        env:
+          REQUESTED_PLATFORMS: ${{ inputs.platforms }}
+          SUPPORTED_PLATFORMS: ${{ matrix.supported_platforms }}
+        run: |
+          set -euo pipefail
+
+          normalize() {
+            echo "$1" | tr '[:upper:]' '[:lower:]' | tr ',' ' '
+          }
+
+          contains_platform() {
+            local needle="$1"
+            shift
+            local candidate
+            for candidate in "$@"; do
+              if [[ "${candidate}" == "${needle}" ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          read -r -a supported <<<"$(normalize "${SUPPORTED_PLATFORMS}")"
+          read -r -a requested <<<"$(normalize "${REQUESTED_PLATFORMS}")"
+
+          selected=()
+          if [[ "${REQUESTED_PLATFORMS,,}" == "all" ]]; then
+            selected=("${supported[@]}")
+          else
+            for platform in "${requested[@]}"; do
+              if contains_platform "${platform}" "${supported[@]}"; then
+                selected+=("${platform}")
+              fi
+            done
+          fi
+
+          if [[ "${#selected[@]}" -eq 0 ]]; then
+            echo "should_build=false" >> "${GITHUB_OUTPUT}"
+            echo "No selected platforms for this runner."
+            exit 0
+          fi
+
+          selected_csv="$(IFS=,; echo "${selected[*]}")"
+          echo "should_build=true" >> "${GITHUB_OUTPUT}"
+          echo "selected=${selected_csv}" >> "${GITHUB_OUTPUT}"
+          echo "Selected platforms: ${selected_csv}"
+
+      - name: Setup Java
+        if: steps.platforms.outputs.should_build == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        if: steps.platforms.outputs.should_build == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: stable
+          cache: true
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            libgtk-3-dev \
+            liblzma-dev \
+            libsqlite3-dev \
+            ninja-build \
+            pkg-config
+
+      - name: Enable desktop targets
+        if: steps.platforms.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --enable-linux-desktop
+          flutter config --enable-macos-desktop
+          flutter config --enable-windows-desktop
+
+      - name: Build selected platforms
+        if: steps.platforms.outputs.should_build == 'true'
+        shell: bash
+        env:
+          ANDROID_TARGET: ${{ inputs.android_target }}
+          ANDROID_APK_PROFILE: ${{ inputs.android_apk_profile }}
+          APPREAD_API_BASE_URL: ${{ inputs.appread_api_base_url }}
+          APPREAD_APP_NAME: ${{ inputs.appread_app_name }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          OUTPUT_ROOT: build/unified_artifacts
+          VERSION_PROMPT: "0"
+          ALLOW_PARTIAL: "0"
+        run: |
+          set -euo pipefail
+          ./scripts/build_unified_artifacts.sh "${{ steps.platforms.outputs.selected }}" "${{ inputs.build_mode }}"
+
+      - name: Upload artifacts
+        if: steps.platforms.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-${{ matrix.id }}-${{ github.run_number }}
+          path: build/unified_artifacts/**
+          if-no-files-found: error
+          retention-days: 14
