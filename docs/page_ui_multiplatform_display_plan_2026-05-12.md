@@ -570,6 +570,8 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - Scaffold 审计：`docs/page_ui_scaffold_audit_2026-05-12.md`
 - 状态组件审计：`docs/page_ui_state_component_audit_2026-05-12.md`
 - 弹层审计：`docs/page_ui_modal_surface_audit_2026-05-12.md`
+- 列表卡片审计：`docs/page_ui_list_card_interaction_audit_2026-05-12.md`
+- 桌面交互审计：`docs/page_ui_desktop_interaction_audit_2026-05-12.md`
 - 视口矩阵：`docs/flutter_adaptive_baseline_matrix.md`
 - 人工回归清单：`docs/adaptive_visual_regression_checklist.md`
 
@@ -622,3 +624,9 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 新增 `docs/page_ui_state_component_audit_2026-05-12.md`，完成状态组件静态审计和页面优先级归档。
 - 新增 `docs/page_ui_modal_surface_audit_2026-05-12.md`，完成弹层/反馈静态审计和页面优先级归档。
 - 新增 `showAdaptiveActionSurface<T>` 作为统一弹层入口，并将搜索失败明细迁移为样板；移动端继续 bottom sheet，Web/桌面端使用 dialog surface。
+
+### 2026-05-12 UI-G4/G5/G6 组件治理
+
+- 新增 `docs/page_ui_list_card_interaction_audit_2026-05-12.md`，完成列表/卡片交互审计和页面优先级归档。
+- 新增 `docs/page_ui_desktop_interaction_audit_2026-05-12.md`，完成桌面交互审计和页面优先级归档。
+- 新增 `tool/check_ui_component_governance.dart` 并接入 architecture green suite，默认以 warning 汇总方式暴露 UI 组件治理风险。

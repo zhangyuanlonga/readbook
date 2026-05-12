@@ -9,6 +9,7 @@
 
 ```bash
 dart run tool/check_route_inventory.dart
+dart run tool/check_ui_component_governance.dart
 ```
 
 完整架构回归会自动包含路由清单检查：
@@ -92,4 +93,6 @@ Android 低内存设备或模拟器上确认：
 - `docs/page_ui_scaffold_audit_2026-05-12.md`：如果新增或迁移页面 scaffold / 页面骨架。
 - `docs/page_ui_state_component_audit_2026-05-12.md`：如果新增或迁移空、加载、错误、禁用状态。
 - `docs/page_ui_modal_surface_audit_2026-05-12.md`：如果新增或迁移 bottom sheet、dialog、popover、snackbar。
+- `docs/page_ui_list_card_interaction_audit_2026-05-12.md`：如果新增或迁移列表、网格、卡片、tile。
+- `docs/page_ui_desktop_interaction_audit_2026-05-12.md`：如果新增或迁移 hover、focus、keyboard、scrollbar、快捷键。
 - `docs/startup_init_cleanup_execution_plan_2026-05-12.md`：如果页面进入启动链或主 Tab 初始化链。

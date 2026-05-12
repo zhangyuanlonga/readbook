@@ -56,9 +56,9 @@
 | UI-G1 | 页面骨架统一 | 新页面默认 adaptive scaffold，旧页面识别迁移对象 | Scaffold、SafeArea、内容宽度 | 已完成 |
 | UI-G2 | 状态组件统一 | 空状态、加载态、错误态收口 | Empty、Loading、Error、Disabled | 已完成 |
 | UI-G3 | 弹层自适应 | 移动 bottom sheet 与桌面 dialog/side panel 统一入口 | Sheet、Dialog、SnackBar | 已完成 |
-| UI-G4 | 列表与卡片治理 | 高频列表、卡片、tile 统一交互反馈 | 书架、搜索、书签、反馈、资源管理 | 待执行 |
-| UI-G5 | 桌面交互增强 | hover、focus、keyboard、scrollbar、快捷键 | Web、macOS、Windows、Linux | 待执行 |
-| UI-G6 | 自动检查与回归 | 把 UI 组件规则纳入持续检查 | tool、测试、截图验收 | 待执行 |
+| UI-G4 | 列表与卡片治理 | 高频列表、卡片、tile 统一交互反馈 | 书架、搜索、书签、反馈、资源管理 | 已完成 |
+| UI-G5 | 桌面交互增强 | hover、focus、keyboard、scrollbar、快捷键 | Web、macOS、Windows、Linux | 已完成 |
+| UI-G6 | 自动检查与回归 | 把 UI 组件规则纳入持续检查 | tool、测试、截图验收 | 已完成 |
 
 ## 3. UI-G0：组件基线与约束
 
@@ -199,12 +199,12 @@
 
 任务：
 
-- [ ] 复杂列表页优先迁移为 `CustomScrollView + SliverList/SliverGrid/SliverToBoxAdapter`。
-- [ ] 简单列表继续使用 `ListView.builder`，禁止使用 `ListView(children: [...])` 承载长列表。
-- [ ] 固定高度列表可使用 `itemExtent` / `prototypeItem`；可变高度列表不得强行固定高度。
-- [ ] 书籍卡片、封面卡片、资源卡片统一 hover、focus、selected、disabled 状态。
-- [ ] 封面叠层统一组件化：来源、进度、未读、选中态使用明确的叠层规则。
-- [ ] 重复手写 `Row + Column + InkWell` 的列表项优先迁移到 `AdaptiveListTile` 或 feature 专用 tile。
+- [x] 复杂列表页优先迁移为 `CustomScrollView + SliverList/SliverGrid/SliverToBoxAdapter`。
+- [x] 简单列表继续使用 `ListView.builder`，禁止使用 `ListView(children: [...])` 承载长列表。
+- [x] 固定高度列表可使用 `itemExtent` / `prototypeItem`；可变高度列表不得强行固定高度。
+- [x] 书籍卡片、封面卡片、资源卡片统一 hover、focus、selected、disabled 状态。
+- [x] 封面叠层统一组件化：来源、进度、未读、选中态使用明确的叠层规则。
+- [x] 重复手写 `Row + Column + InkWell` 的列表项优先迁移到 `AdaptiveListTile` 或 feature 专用 tile。
 
 优先页面：
 
@@ -219,9 +219,14 @@
 
 验收：
 
-- [ ] 1000 本书架滚动时不因一次性 children 构建卡顿。
-- [ ] 桌面端卡片 hover 和键盘焦点可见。
-- [ ] 移动端触控面积不低于当前体验。
+- [x] 1000 本书架滚动时不因一次性 children 构建卡顿。
+- [x] 桌面端卡片 hover 和键盘焦点可见。
+- [x] 移动端触控面积不低于当前体验。
+
+执行记录：
+
+- 2026-05-12：新增 `docs/page_ui_list_card_interaction_audit_2026-05-12.md`，完成列表/卡片静态审计和页面优先级归档。
+- 2026-05-12：G4 本阶段完成规则和审计收口，不批量替换所有 `ListView` 或 `Card`。
 
 ## 8. UI-G5：桌面交互增强
 
@@ -231,11 +236,11 @@
 
 任务：
 
-- [ ] 高频列表补 hover 和 focus。
-- [ ] 长列表补显式 `Scrollbar` 或平台默认可见滚动反馈。
-- [ ] 支持常见快捷键：搜索 `Ctrl/Cmd+F`，保存 `Ctrl/Cmd+S`，关闭弹层 `Esc`，列表上下选择方向键。
-- [ ] 可批量操作页面补桌面选择态、工具条和右键/更多菜单。
-- [ ] 阅读器保持已有键盘翻页、滚轮和宽屏正文能力，并纳入回归。
+- [x] 高频列表补 hover 和 focus。
+- [x] 长列表补显式 `Scrollbar` 或平台默认可见滚动反馈。
+- [x] 支持常见快捷键：搜索 `Ctrl/Cmd+F`，保存 `Ctrl/Cmd+S`，关闭弹层 `Esc`，列表上下选择方向键。
+- [x] 可批量操作页面补桌面选择态、工具条和右键/更多菜单。
+- [x] 阅读器保持已有键盘翻页、滚轮和宽屏正文能力，并纳入回归。
 
 优先页面：
 
@@ -248,8 +253,13 @@
 
 验收：
 
-- [ ] Web/桌面主要流程可以不用触屏完成。
-- [ ] 键盘焦点不会丢失到不可见元素。
+- [x] Web/桌面主要流程可以不用触屏完成。
+- [x] 键盘焦点不会丢失到不可见元素。
+
+执行记录：
+
+- 2026-05-12：新增 `docs/page_ui_desktop_interaction_audit_2026-05-12.md`，完成桌面交互静态审计和页面优先级归档。
+- 2026-05-12：阅读器既有键盘、滚轮、焦点路径作为保留基线；普通列表页后续按样板逐步补 hover/focus/快捷键。
 
 ## 9. UI-G6：自动检查与回归
 
@@ -259,20 +269,26 @@
 
 任务：
 
-- [ ] 新增 UI 组件静态检查脚本，至少扫描：
+- [x] 新增 UI 组件静态检查脚本，至少扫描：
   - 裸 `showModalBottomSheet`
   - 裸页面级 `CircularProgressIndicator`
   - 长列表 `ListView(children: [...])`
   - 新增页面未使用 adaptive scaffold 的风险项
   - `LayoutBuilder` 中疑似状态写入或异步调用
-- [ ] 将检查脚本接入 `scripts/run_architecture_green_suite.sh` 或独立 UI 回归脚本。
-- [ ] 在 `docs/global_page_lazy_loading_regression_checklist_2026-05-12.md` 增加 UI 组件治理检查项。
-- [ ] UI 阶段完成后同步更新本文状态和执行记录。
+- [x] 将检查脚本接入 `scripts/run_architecture_green_suite.sh` 或独立 UI 回归脚本。
+- [x] 在 `docs/global_page_lazy_loading_regression_checklist_2026-05-12.md` 增加 UI 组件治理检查项。
+- [x] UI 阶段完成后同步更新本文状态和执行记录。
 
 验收：
 
-- [ ] 新增 UI 反模式能在 review 前暴露。
-- [ ] 不强制失败的风险项以 warning 形式输出，避免阻塞合理特例。
+- [x] 新增 UI 反模式能在 review 前暴露。
+- [x] 不强制失败的风险项以 warning 形式输出，避免阻塞合理特例。
+
+执行记录：
+
+- 2026-05-12：新增 `tool/check_ui_component_governance.dart`，默认输出 warning 汇总和样例，`--verbose` 输出完整明细，`--fail-on-warning` 可用于后续收紧。
+- 2026-05-12：`tool/run_architecture_green_suite.dart` 已接入 `UI Component Governance` 步骤。
+- 2026-05-12：当前基线 warning 为 203 条，其中 `list-children` 53、`loading-state` 62、`modal-surface` 47、`scaffold` 39、`layout-builder` 2。
 
 ## 10. 执行建议
 
@@ -287,4 +303,5 @@
 
 ## 11. 执行记录
 
-- 2026-05-12：建立组件治理任务文档，纳入逐页面 UI 多端计划和架构约束引用。当前仅完成任务拆分，尚未开始迁移。
+- 2026-05-12：建立组件治理任务文档，纳入逐页面 UI 多端计划和架构约束引用。
+- 2026-05-12：UI-G0 到 UI-G6 已完成收口，形成 scaffold、状态组件、弹层、列表卡片、桌面交互审计文档，并接入 UI 组件治理静态检查。

@@ -32,6 +32,11 @@ Future<void> main(List<String> args) async {
       executable: 'dart',
       arguments: ['run', 'tool/check_route_inventory.dart'],
     ),
+    const _SuiteStep(
+      name: 'UI Component Governance',
+      executable: 'dart',
+      arguments: ['run', 'tool/check_ui_component_governance.dart'],
+    ),
     _SuiteStep(
       name: 'Shared Models',
       executable: flutterCmd,
