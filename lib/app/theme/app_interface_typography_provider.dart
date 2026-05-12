@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/storage/local_file_stat.dart';
 import '../preferences/app_preferences_service.dart';
 import '../../features/reader/application/reader_font_registry_service.dart';
 
@@ -206,7 +205,7 @@ class AppInterfaceFontSettingsNotifier
       return const AppInterfaceFontSettings();
     }
 
-    if (customPath.isEmpty || !await File(customPath).exists()) {
+    if (customPath.isEmpty || !await localFileExists(customPath)) {
       final fonts = await ReaderFontRegistryService().listRegisteredFonts();
       for (final entry in fonts) {
         if (entry.fontFamilyKey == familyKey) {

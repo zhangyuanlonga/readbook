@@ -496,3 +496,30 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 
 - 详情页本地删除/重索引仍可继续拆成更明确的 application action result，归入后续本地资源管理阶段。
 - Web 数据库初始化失败时的整页可恢复错误仍留给 Web 存储专项。
+
+## 15. 页面功能阶段 C 执行记录（2026-05-12）
+
+### 已完成：个人业务、资源显示和诊断导出降级
+
+- [x] 字体管理页接入 `AppPlatformCapabilities`：受限平台禁用字体导入，保留已有字体状态展示和说明。
+- [x] 字体文件存在性判断从页面和界面字体 provider 中移除，统一走 `localFileExists` 条件导入 adapter。
+- [x] 外观资源集合缩略图、底部导航本地 SVG/PNG/GIF 图标改走 `local_file_image` / `local_file_stat` adapter，Web 回落为占位图标。
+- [x] 诊断日志导出拆成 native/web 条件实现：native 继续生成可分享文件，Web 生成同样文本并由错误中心复制到剪贴板。
+- [x] 新增 `diagnostic_log_export_service_test`，覆盖无可导出日志、native 文件写入和文本兜底内容。
+
+### 平台影响
+
+- 影响平台：Android、iOS、macOS、Windows、Linux、Web 的字体管理、外观资源预览、底部导航图标和诊断日志导出行为。
+- 不影响平台：未重开书源运行时、WebDAV、在线搜索或 WebView；未改变数据库 schema。
+- 隔离策略：页面层不直接读取本地文件图片、SVG 文本或字体文件状态；Web 由条件实现返回占位、不可用状态或文本兜底，避免一个端的文件路径能力影响另一端 UI。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter test test/core/logging/diagnostic_log_export_service_test.dart test/features/mine/application/cache_management_service_test.dart test/features/mine/application/advanced_theme_resource_reference_service_test.dart test/features/mine/application/launch_image_gallery_service_test.dart test/features/mine/presentation/mine_management_page_test.dart test/features/presentation/page_adaptive_smoke_test.dart`：通过。
+- [x] `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`：通过。
+
+### 遗留说明
+
+- 高级主题编辑页和高级主题导入导出仍有较重的归档/文件读写流程，后续需要继续向 application/service 和条件 adapter 收口。
+- 缓存管理目前完成 capability 降级说明和清理边界，独立“复制诊断摘要”按钮可作为后续体验增强。

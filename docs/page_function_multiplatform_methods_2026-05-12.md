@@ -284,6 +284,7 @@
 
 - [x] 同步、缓存、错误中心已接能力开关或受限提示。
 - [x] 我的页头像本地图片显示已通过条件导入 adapter 收口，Web 回落到头像占位。
+- [x] 底部导航图标的本地 SVG/PNG/GIF 显示已改走 `local_file_stat` / `local_file_image` adapter，Web 不再直接读取本地路径。
 - [ ] 我的页入口统一展示“可用/受限/后续支持”状态。
 
 ### 4.9 系统设置页 `SystemSettingsPage`
@@ -309,6 +310,7 @@
 
 待办：
 
+- [x] 字体导入按 `supportsLocalFileImport` / `supportsManagedFileStorage` 禁用，Web 等受限平台只展示说明和已有字体状态。
 - [ ] 禁用项统一解释“当前平台不支持”还是“首版未启用”。
 - [ ] 设置保存补跨端默认值回归测试。
 
@@ -338,7 +340,8 @@
 
 - [x] 启动图文件渲染已通过条件导入避免 Web `dart:io`。
 - [x] 书籍封面、我的头像、高级主题背景和阅读器背景的本地文件显示已进入统一 `local_file_image` adapter。
-- [ ] 所有资源页面统一处理“资源文件不存在/平台不支持”占位。
+- [x] 资源集合缩略图和底部导航本地图标已进入统一 adapter，资源缺失时回落占位。
+- [ ] 高级主题编辑/导入导出的大文件读写继续保留在 application/service 层专项收口。
 
 ### 4.11 缓存管理页
 
@@ -363,7 +366,8 @@
 待办：
 
 - [x] 页面已接 `supportsManagedFileStorage`。
-- [ ] Web 只复制摘要时不出现“已导出文件”文案。
+- [x] Web/受限平台通过能力提示避免出现“文件清理假成功”的预期。
+- [ ] 缓存诊断摘要复制入口可在后续补成独立按钮。
 
 ### 4.12 错误中心页
 
@@ -389,7 +393,7 @@
 待办：
 
 - [x] 页面已接 `supportsManagedFileStorage`。
-- [ ] 导出失败时提供复制兜底，不丢错误内容。
+- [x] 诊断日志导出拆成 native/web 条件实现：native 生成文件并分享，Web 生成同样文本并复制兜底。
 
 ## 5. 延期页面功能方法
 
@@ -460,15 +464,24 @@
 
 目标：我的、设置、外观、缓存、错误中心在多端可用或明确受限。
 
-- [ ] 设置项按 capability 禁用，避免开启必失败能力。
-- [ ] 外观资源统一走 image selection / managed storage。
-- [ ] 缓存和错误导出提供复制兜底。
-- [ ] Web 启动任务只跑 Web 可承受任务。
+- [x] 字体导入按 capability 禁用，避免受限平台开启必失败能力。
+- [x] 外观资源共享缩略图和底部导航图标统一走本地文件 adapter；Web 端回落占位。
+- [x] 错误导出提供 Web 复制兜底；缓存管理保留 capability 降级提示。
+- [x] Web 启动任务只跑 Web 可承受任务，阶段 4 已完成，本阶段继续验证未回退。
 
 验收：
 
 - 不支持本地托管存储的平台不出现文件清理假成功。
 - 资源缺失和导出失败都有可恢复提示。
+
+本轮执行记录（2026-05-12）：
+
+- `FontManagementPage` 移除页面层 `dart:io` 文件存在性判断，改用 `localFileExists`，并按 `supportsLocalFileImport` / `supportsManagedFileStorage` 禁用字体导入。
+- `AppInterfaceFontSettingsNotifier` 的自定义字体路径恢复改用 `localFileExists`，避免界面字体设置链路直接依赖原生文件系统。
+- `LazyFileImage`、`BottomNavIconView` 改走 `local_file_image` / `local_file_stat` adapter，本地资源缺失或 Web 不可用时回落占位图标。
+- `DiagnosticLogExportService` 拆成 native/web 条件实现：native 写入诊断文件供分享，Web 只返回同样的诊断文本；`ErrorCenterPage` 在无文件时复制文本兜底。
+- 新增 `diagnostic_log_export_service_test` 覆盖无日志返回、诊断文件写入和文本兜底内容。
+- 验证：`flutter analyze` 通过；`flutter test test/core/logging/diagnostic_log_export_service_test.dart test/features/mine/application/cache_management_service_test.dart test/features/mine/application/advanced_theme_resource_reference_service_test.dart test/features/mine/application/launch_image_gallery_service_test.dart test/features/mine/presentation/mine_management_page_test.dart test/features/presentation/page_adaptive_smoke_test.dart` 通过；`flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run` 通过。
 
 ### 功能阶段 D：延期入口隔离
 

@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
+import '../../../../app/images/local_file_image.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
 
 class CompactCollectionSearchField extends StatelessWidget {
@@ -182,23 +181,11 @@ class LazyFileImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final image = Image.file(
-      File(path),
-      fit: fit,
-      width: double.infinity,
-      height: double.infinity,
-      cacheWidth: cacheWidth,
-      cacheHeight: cacheHeight,
-      frameBuilder:
-          (context, child, frame, wasSynchronouslyLoaded) =>
-              wasSynchronouslyLoaded || frame != null
-                  ? child
-                  : _ImageResourcePlaceholder(icon: placeholderIcon),
-      errorBuilder:
-          (_, __, ___) => ColoredBox(
-            color: colorScheme.surfaceContainerLow,
-            child: Icon(placeholderIcon, color: colorScheme.onSurfaceVariant),
-          ),
+    final fallback = ColoredBox(
+      color: colorScheme.surfaceContainerLow,
+      child: Center(
+        child: Icon(placeholderIcon, color: colorScheme.onSurfaceVariant),
+      ),
     );
     if (path.trim().startsWith('assets/')) {
       return _clipIfNeeded(
@@ -209,18 +196,21 @@ class LazyFileImage extends StatelessWidget {
           height: double.infinity,
           cacheWidth: cacheWidth,
           cacheHeight: cacheHeight,
-          errorBuilder:
-              (_, __, ___) => ColoredBox(
-                color: colorScheme.surfaceContainerLow,
-                child: Icon(
-                  placeholderIcon,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
+          errorBuilder: (_, __, ___) => fallback,
         ),
       );
     }
-    return _clipIfNeeded(image);
+    return _clipIfNeeded(
+      buildLocalFileImage(
+        imagePath: path,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
+        fallback: fallback,
+      ),
+    );
   }
 
   Widget _clipIfNeeded(Widget child) {
@@ -229,22 +219,5 @@ class LazyFileImage extends StatelessWidget {
       return child;
     }
     return ClipRRect(borderRadius: radius, child: child);
-  }
-}
-
-class _ImageResourcePlaceholder extends StatelessWidget {
-  const _ImageResourcePlaceholder({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ColoredBox(
-      color: colorScheme.surfaceContainerLow,
-      child: Center(
-        child: Icon(icon, size: 22, color: colorScheme.onSurfaceVariant),
-      ),
-    );
   }
 }

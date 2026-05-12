@@ -1,10 +1,9 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../core/storage/local_file_stat.dart';
 import '../../domain/entities/bottom_nav_icon_gallery.dart';
+import '../images/local_file_image.dart';
 import '../navigation/bottom_nav_icon_resolver.dart';
 
 class BottomNavIconView extends StatelessWidget {
@@ -22,8 +21,9 @@ class BottomNavIconView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final assetRef = icon.assetRef;
+    final fallback = Icon(icon.fallbackIcon, size: size, color: fallbackColor);
     if (assetRef == null) {
-      return Icon(icon.fallbackIcon, size: size, color: fallbackColor);
+      return fallback;
     }
 
     try {
@@ -36,27 +36,21 @@ class BottomNavIconView extends StatelessWidget {
             fit: BoxFit.contain,
           );
         }
-        if (!kIsWeb) {
-          return FutureBuilder<String>(
-            future: File(assetRef.path).readAsString(),
-            builder: (context, snapshot) {
-              final svgText = snapshot.data;
-              if (svgText == null || svgText.trim().isEmpty) {
-                return Icon(
-                  icon.fallbackIcon,
-                  size: size,
-                  color: fallbackColor,
-                );
-              }
-              return SvgPicture.string(
-                svgText,
-                width: size,
-                height: size,
-                fit: BoxFit.contain,
-              );
-            },
-          );
-        }
+        return FutureBuilder<String?>(
+          future: readLocalFileText(assetRef.path),
+          builder: (context, snapshot) {
+            final svgText = snapshot.data;
+            if (svgText == null || svgText.trim().isEmpty) {
+              return fallback;
+            }
+            return SvgPicture.string(
+              svgText,
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+            );
+          },
+        );
       } else if (assetRef.format == BottomNavIconAssetFormat.png ||
           assetRef.format == BottomNavIconAssetFormat.gif) {
         if (assetRef.isAsset) {
@@ -65,26 +59,20 @@ class BottomNavIconView extends StatelessWidget {
             width: size,
             height: size,
             fit: BoxFit.contain,
-            errorBuilder:
-                (_, __, ___) =>
-                    Icon(icon.fallbackIcon, size: size, color: fallbackColor),
+            errorBuilder: (_, __, ___) => fallback,
           );
         }
-        if (!kIsWeb) {
-          return Image.file(
-            File(assetRef.path),
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            errorBuilder:
-                (_, __, ___) =>
-                    Icon(icon.fallbackIcon, size: size, color: fallbackColor),
-          );
-        }
+        return buildLocalFileImage(
+          imagePath: assetRef.path,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          fallback: fallback,
+        );
       }
-      return Icon(icon.fallbackIcon, size: size, color: fallbackColor);
+      return fallback;
     } catch (_) {
-      return Icon(icon.fallbackIcon, size: size, color: fallbackColor);
+      return fallback;
     }
   }
 }

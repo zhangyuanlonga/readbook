@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +8,7 @@ import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
@@ -17,6 +17,7 @@ import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
+import '../../../core/storage/local_file_stat.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
@@ -90,7 +91,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         fonts.map((font) async {
           return MapEntry(
             font.fontFamilyKey,
-            await File(font.filePath).exists(),
+            await localFileExists(font.filePath),
           );
         }),
       );
@@ -240,6 +241,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
+    final capabilities = ref.watch(appPlatformCapabilitiesProvider);
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
@@ -281,7 +283,15 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
             ],
           ),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: _isImporting ? null : _showImportFontSheet,
+            onPressed:
+                _isImporting
+                    ? null
+                    : () => _showImportFontSheet(
+                      supportsLocalFileImport:
+                          capabilities.supportsLocalFileImport,
+                      supportsManagedFileStorage:
+                          capabilities.supportsManagedFileStorage,
+                    ),
             icon: const Icon(Icons.file_upload_outlined),
             label: const Text('导入字体'),
           ),
@@ -310,6 +320,11 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                         children: [
                           AppFadeSlideTransition(child: _buildHero(context)),
                           SizedBox(height: metrics.contentGap),
+                          if (!capabilities.supportsManagedFileStorage ||
+                              !capabilities.supportsLocalFileImport) ...[
+                            _buildFontCapabilityNotice(context),
+                            SizedBox(height: metrics.contentGap),
+                          ],
                           if (_isLoading)
                             const AppAnimatedSwitcher(
                               child: Padding(
@@ -429,6 +444,37 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               _buildHeroChip(context, '已导入 ${_fonts.length} 款'),
               _buildHeroChip(context, '支持 TTF / OTF'),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFontCapabilityNotice(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Container(
+      padding: EdgeInsets.all(metrics.cardPadding),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+        border: Border.all(
+          color: colorScheme.secondary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: colorScheme.secondary),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child: Text(
+              '当前平台不暴露可管理文件路径，字体导入会保持禁用；已注册字体仍会按可用状态展示。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSecondaryContainer,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),
@@ -779,8 +825,15 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     }
   }
 
-  Future<void> _showImportFontSheet() async {
+  Future<void> _showImportFontSheet({
+    required bool supportsLocalFileImport,
+    required bool supportsManagedFileStorage,
+  }) async {
     if (_isImporting || !mounted) {
+      return;
+    }
+    if (!supportsLocalFileImport || !supportsManagedFileStorage) {
+      _showSnackBar('当前平台暂不支持导入字体文件。');
       return;
     }
     await showModalBottomSheet<void>(

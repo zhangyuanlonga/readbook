@@ -505,9 +505,16 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
         return;
       }
 
+      final exportFile = exportResult.file;
+      if (exportFile == null) {
+        await Clipboard.setData(ClipboardData(text: exportResult.text));
+        _showMessage('当前平台暂不支持生成诊断文件，已复制完整日志文本。');
+        return;
+      }
+
       try {
         final result = await Share.shareXFiles(
-          [XFile(exportResult.file.path)],
+          [XFile(exportFile.path)],
           text: '请把这份诊断日志发给开发者。安装标识：${exportResult.identity.installId}',
           subject: '诊断日志 ${exportResult.identity.appVersion}',
           sharePositionOrigin: _resolveSharePositionOrigin(),
