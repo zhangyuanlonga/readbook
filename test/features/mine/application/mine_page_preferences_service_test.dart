@@ -56,6 +56,35 @@ void main() {
     );
   });
 
+  test(
+    'core data management entries stay visible even if old prefs hide them',
+    () {
+      final state = MinePageVisibilityState(
+        hiddenItemIds: const [
+          MinePageItemId.tagManagement,
+          MinePageItemId.categoryManagement,
+          MinePageItemId.fontManagement,
+        ],
+      );
+
+      expect(state.isVisible(MinePageItemId.tagManagement), isTrue);
+      expect(state.isVisible(MinePageItemId.categoryManagement), isTrue);
+      expect(state.isVisible(MinePageItemId.fontManagement), isTrue);
+      expect(
+        configurableMinePageItemDefinitions.map((definition) => definition.id),
+        isNot(contains(MinePageItemId.tagManagement)),
+      );
+      expect(
+        configurableMinePageItemDefinitions.map((definition) => definition.id),
+        isNot(contains(MinePageItemId.categoryManagement)),
+      );
+      expect(
+        configurableMinePageItemDefinitions.map((definition) => definition.id),
+        isNot(contains(MinePageItemId.fontManagement)),
+      );
+    },
+  );
+
   test('startup destination defaults to home and persists bookshelf', () async {
     final service = MinePagePreferencesService();
 

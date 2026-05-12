@@ -19,7 +19,7 @@ class AppPlatformCapabilities {
 
   factory AppPlatformCapabilities.current({
     bool? sourceRuntimeEnabled,
-    bool webDavSyncEnabled = _webDavSyncEnabledByDefine,
+    bool? webDavSyncEnabled,
   }) {
     final platform = defaultTargetPlatform;
     final isMobile =
@@ -34,6 +34,9 @@ class AppPlatformCapabilities {
         (_hasSourceRuntimeEnabledDefine
             ? _sourceRuntimeEnabledByDefine
             : isMobile);
+    final resolvedWebDavSyncEnabled =
+        webDavSyncEnabled ??
+        (_hasWebDavSyncEnabledDefine ? _webDavSyncEnabledByDefine : isMobile);
     final sourceRuntimeSupportedPlatform =
         !kIsWeb && (isMobile || resolvedSourceRuntimeEnabled);
 
@@ -51,7 +54,7 @@ class AppPlatformCapabilities {
           resolvedSourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
       supportsInteractiveWebView:
           resolvedSourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
-      supportsWebDavSync: webDavSyncEnabled && supportsNativeFileSystem,
+      supportsWebDavSync: resolvedWebDavSyncEnabled && supportsNativeFileSystem,
     );
   }
 
@@ -86,6 +89,10 @@ const bool _hasSourceRuntimeEnabledDefine = bool.hasEnvironment(
 const bool _webDavSyncEnabledByDefine = bool.fromEnvironment(
   'APP_ENABLE_WEBDAV_SYNC',
   defaultValue: false,
+);
+
+const bool _hasWebDavSyncEnabledDefine = bool.hasEnvironment(
+  'APP_ENABLE_WEBDAV_SYNC',
 );
 
 final appPlatformCapabilitiesProvider = Provider<AppPlatformCapabilities>((

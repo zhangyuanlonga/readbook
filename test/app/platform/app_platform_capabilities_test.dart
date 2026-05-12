@@ -7,31 +7,35 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  test('source runtime defaults to enabled on Android and iOS', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  test(
+    'source runtime and WebDAV sync default to enabled on Android and iOS',
+    () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
-    expect(AppPlatformCapabilities.current().supportsSourceRuntime, isTrue);
-    expect(
-      AppPlatformCapabilities.current().supportsInteractiveWebView,
-      isTrue,
-    );
+      var capabilities = AppPlatformCapabilities.current();
 
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      expect(capabilities.supportsSourceRuntime, isTrue);
+      expect(capabilities.supportsWebDavSync, isTrue);
+      expect(capabilities.supportsInteractiveWebView, isTrue);
 
-    expect(AppPlatformCapabilities.current().supportsSourceRuntime, isTrue);
-    expect(
-      AppPlatformCapabilities.current().supportsInteractiveWebView,
-      isTrue,
-    );
-  });
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
-  test('source runtime defaults to disabled on desktop', () {
+      capabilities = AppPlatformCapabilities.current();
+
+      expect(capabilities.supportsSourceRuntime, isTrue);
+      expect(capabilities.supportsWebDavSync, isTrue);
+      expect(capabilities.supportsInteractiveWebView, isTrue);
+    },
+  );
+
+  test('source runtime and WebDAV sync default to disabled on desktop', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
     final capabilities = AppPlatformCapabilities.current();
 
     expect(capabilities.supportsSourceRuntime, isFalse);
     expect(capabilities.supportsInteractiveWebView, isFalse);
+    expect(capabilities.supportsWebDavSync, isFalse);
   });
 
   test('source runtime explicit override is still respected', () {

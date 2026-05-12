@@ -125,16 +125,19 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
     id: MinePageItemId.tagManagement,
     title: '标签管理',
     sectionTitle: '数据',
+    configurable: false,
   ),
   MinePageItemDefinition(
     id: MinePageItemId.categoryManagement,
     title: '分类管理',
     sectionTitle: '数据',
+    configurable: false,
   ),
   MinePageItemDefinition(
     id: MinePageItemId.fontManagement,
     title: '字体管理',
     sectionTitle: '数据',
+    configurable: false,
   ),
   MinePageItemDefinition(
     id: MinePageItemId.systemSettings,
