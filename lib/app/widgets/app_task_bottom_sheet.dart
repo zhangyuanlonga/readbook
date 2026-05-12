@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../layout/app_adaptive.dart';
+import '../layout/app_layout.dart';
 import '../motion/app_motion_widgets.dart';
 
 class AppTaskStep {
@@ -118,110 +120,124 @@ class AppTaskBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final maxHeight = MediaQuery.sizeOf(context).height * maxHeightFactor;
+    final desktopLike = AppLayout.isDesktopLike(
+      context,
+      platform: Theme.of(context).platform,
+    );
 
     return AppFadeSlideTransition(
       child: SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: Padding(
-            padding: padding,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.35),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: colorScheme.shadow.withValues(alpha: 0.12),
-                    blurRadius: 18,
-                    offset: const Offset(0, -4),
+        child: Align(
+          alignment: desktopLike ? Alignment.center : Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth:
+                  desktopLike
+                      ? metrics.dialogMaxWidth
+                      : metrics.bottomSheetMaxWidth,
+              maxHeight: maxHeight,
+            ),
+            child: Padding(
+              padding: padding,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.35),
                   ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                child: Column(
-                  mainAxisSize:
-                      fitContent ? MainAxisSize.min : MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(
-                            right: trailing != null ? 44 : 0,
-                            left: leading != null ? 44 : 0,
-                          ),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: Text(
-                              title,
-                              textAlign: TextAlign.left,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                        ),
-                        if (leading != null)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: leading!,
-                          ),
-                        if (trailing != null)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: trailing!,
-                          ),
-                      ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.12),
+                      blurRadius: 18,
+                      offset: const Offset(0, -4),
                     ),
-                    if (steps.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Row(
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  child: Column(
+                    mainAxisSize:
+                        fitContent ? MainAxisSize.min : MainAxisSize.max,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Stack(
+                        alignment: Alignment.centerLeft,
                         children: [
-                          for (
-                            var index = 0;
-                            index < steps.length;
-                            index += 1
-                          ) ...[
-                            _AppTaskStepNode(
-                              label: steps[index].label,
-                              active: steps[index].active,
+                          Padding(
+                            padding: EdgeInsets.only(
+                              right: trailing != null ? 44 : 0,
+                              left: leading != null ? 44 : 0,
                             ),
-                            if (index != steps.length - 1)
-                              Expanded(
-                                child: CustomPaint(
-                                  painter: _DashedLinePainter(
-                                    color:
-                                        steps[index + 1].active
-                                            ? colorScheme.primary
-                                            : colorScheme.outlineVariant,
-                                  ),
-                                  child: const SizedBox(
-                                    height: 1.4,
-                                    width: double.infinity,
-                                  ),
-                                ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: Text(
+                                title,
+                                textAlign: TextAlign.left,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                               ),
-                          ],
+                            ),
+                          ),
+                          if (leading != null)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: leading!,
+                            ),
+                          if (trailing != null)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: trailing!,
+                            ),
                         ],
                       ),
-                    ],
-                    if (header != null) ...[
+                      if (steps.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            for (
+                              var index = 0;
+                              index < steps.length;
+                              index += 1
+                            ) ...[
+                              _AppTaskStepNode(
+                                label: steps[index].label,
+                                active: steps[index].active,
+                              ),
+                              if (index != steps.length - 1)
+                                Expanded(
+                                  child: CustomPaint(
+                                    painter: _DashedLinePainter(
+                                      color:
+                                          steps[index + 1].active
+                                              ? colorScheme.primary
+                                              : colorScheme.outlineVariant,
+                                    ),
+                                    child: const SizedBox(
+                                      height: 1.4,
+                                      width: double.infinity,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ],
+                        ),
+                      ],
+                      if (header != null) ...[
+                        const SizedBox(height: 10),
+                        header!,
+                      ],
                       const SizedBox(height: 10),
-                      header!,
+                      if (fitContent) body else Expanded(child: body),
+                      if (footer != null) ...[
+                        const SizedBox(height: 10),
+                        footer!,
+                      ],
                     ],
-                    const SizedBox(height: 10),
-                    if (fitContent) body else Expanded(child: body),
-                    if (footer != null) ...[
-                      const SizedBox(height: 10),
-                      footer!,
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),

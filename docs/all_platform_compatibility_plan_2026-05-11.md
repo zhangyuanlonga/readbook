@@ -4,6 +4,10 @@
 用途：把项目从“Android / iOS 优先”推进到“Android、iOS、macOS、Windows、Linux、Web 全平台可用”的执行计划。  
 当前口径：先兼容 UI、常用业务和本地阅读；在线书源、脚本源运行时、书源登录/调试/迁移能力整体移出首版范围。
 
+关联功能方法计划：`docs/page_function_multiplatform_methods_2026-05-12.md`。本文件负责阶段闭环，逐页面功能多端方法以该文档为准。
+
+关联 UI 展示计划：`docs/page_ui_multiplatform_display_plan_2026-05-12.md`。逐页面 UI 多端展示细则以该文档为准。
+
 ## 0. 结论先行
 
 首版全平台不再以“在线书源闭环”为验收目标，而以以下闭环为目标：
@@ -124,6 +128,13 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - `AppStartupCoordinator` 不再把书源运行时作为首版启动必要依赖。
 
 ## 4. 阶段计划
+
+执行补充：
+
+- 阶段任务继续按整阶段推进，不按阶段内零散小项单独交付。
+- 功能兼容改动按 `docs/page_function_multiplatform_methods_2026-05-12.md` 逐页面回填能力边界、降级方式和验证结果。
+- UI 展示改动按 `docs/page_ui_multiplatform_display_plan_2026-05-12.md` 回填展示模型和截图/运行验收。
+- 每完成一个阶段，必须同步更新本文阶段记录和对应的页面级方法文档。
 
 ### 阶段 0：范围冻结与基线确认
 

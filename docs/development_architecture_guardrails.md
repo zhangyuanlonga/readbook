@@ -3,6 +3,12 @@
 更新时间：2026-05-11  
 用途：作为当前项目后续开发的强约束文档，统一多端架构、目录、依赖、Riverpod、路由、原生桥接、平台能力、UI 适配、测试和代码评审口径，避免“改一个端误伤另一个端”的架构发散。
 
+关联执行文档：
+
+- 全平台兼容总计划：`docs/all_platform_compatibility_plan_2026-05-11.md`
+- 逐页面功能多端兼容方法：`docs/page_function_multiplatform_methods_2026-05-12.md`
+- 逐页面 UI 多端兼容展示计划：`docs/page_ui_multiplatform_display_plan_2026-05-12.md`
+
 ## 0. 结论先行
 
 当前项目后续一律按这套口径收口：
@@ -387,6 +393,8 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 
 ## 8. 页面、Controller、Service 三层职责
 
+页面级功能兼容必须同步维护 `docs/page_function_multiplatform_methods_2026-05-12.md`：新增或修改页面功能时，需要写清该功能在移动端、桌面端和 Web 的状态、能力边界、降级方式和验证结果。UI 展示差异只维护到 `docs/page_ui_multiplatform_display_plan_2026-05-12.md`，不要把功能 capability 和视觉断点混在同一判断里。
+
 ### 8.1 Presentation
 
 负责：
@@ -720,6 +728,8 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 
 - `docs/engineering_guide.md`：工程总览
 - `docs/all_platform_compatibility_plan_2026-05-11.md`：全平台兼容总计划
+- `docs/page_function_multiplatform_methods_2026-05-12.md`：逐页面功能多端兼容方法
+- `docs/page_ui_multiplatform_display_plan_2026-05-12.md`：逐页面 UI 多端兼容展示计划
 - `docs/cross_platform_boundary_refactor_plan.md`：跨端与原生边界
 - `docs/flutter_adaptive_baseline_matrix.md`：自适应基线矩阵
 - `docs/adaptive_visual_regression_checklist.md`：自适应视觉回归清单

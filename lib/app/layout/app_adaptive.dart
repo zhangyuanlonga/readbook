@@ -52,7 +52,15 @@ class AppAdaptiveMetrics {
   bool get isCompactWindow => windowClass == AppWindowClass.compact;
   bool get isMediumWindow => windowClass == AppWindowClass.medium;
   bool get isExpandedWindow => windowClass == AppWindowClass.expanded;
+  bool get isMediumUpWindow => !isCompactWindow;
   bool get isCompactDensity => density == AppDensity.compact;
+
+  bool isDesktopLikeForPlatform({
+    required bool isWeb,
+    required TargetPlatform platform,
+  }) {
+    return isDesktopLikeFor(width: width, isWeb: isWeb, platform: platform);
+  }
 
   static AppAdaptiveMetrics of(BuildContext context) {
     return resolve(context);
@@ -200,6 +208,23 @@ class AppAdaptiveMetrics {
       return AppDensity.comfortable;
     }
     return AppDensity.regular;
+  }
+
+  static bool isDesktopPlatform(TargetPlatform platform) {
+    return platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux;
+  }
+
+  static bool isDesktopLikeFor({
+    required double width,
+    required bool isWeb,
+    required TargetPlatform platform,
+  }) {
+    if (width < AppLayout.mediumBreakpointWidth) {
+      return false;
+    }
+    return isWeb || isDesktopPlatform(platform);
   }
 
   int gridColumnsFor({

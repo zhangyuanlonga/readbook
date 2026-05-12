@@ -786,12 +786,15 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         auxiliaryState: auxiliaryState,
         hasCatalog: _canOpenCatalogForResult(result),
       );
-      if (metrics.isExpandedWindow) {
+      if (metrics.isMediumUpWindow) {
+        final compactDesktop = metrics.isMediumWindow;
+        final sideWidth = compactDesktop ? 220.0 : 260.0;
+        final actionWidth = compactDesktop ? 240.0 : 300.0;
         sections.add(
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 260, child: detailCard),
+              SizedBox(width: sideWidth, child: detailCard),
               SizedBox(width: metrics.sectionGap),
               Expanded(
                 flex: 5,
@@ -807,7 +810,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               ),
               SizedBox(width: metrics.sectionGap),
               SizedBox(
-                width: 300,
+                width: actionWidth,
                 child: Column(
                   children: [
                     quickActionsCard,
@@ -818,32 +821,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                     if (shouldShowLocalIndexStatus) ...[
                       SizedBox(height: metrics.sectionGap),
                       _buildLocalIndexStatusCard(localBookMeta),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      } else if (metrics.isMediumWindow) {
-        sections.add(
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 5, child: detailCard),
-              SizedBox(width: metrics.sectionGap),
-              Expanded(
-                flex: 4,
-                child: Column(
-                  children: [
-                    quickActionsCard,
-                    if (_detailCategory != null || _detailTags.isNotEmpty) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      organizationCard,
-                    ],
-                    if (introCard != null) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      introCard,
                     ],
                   ],
                 ),
@@ -875,7 +852,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       ]);
     }
 
-    if (!metrics.isExpandedWindow && presentationState.tocWarningText != null) {
+    if (!metrics.isMediumUpWindow && presentationState.tocWarningText != null) {
       sections.addAll(<Widget>[
         SizedBox(height: metrics.sectionGap),
         _buildTocWarningCard(presentationState.tocWarningText!),

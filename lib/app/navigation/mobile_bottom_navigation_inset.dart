@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../layout/app_layout.dart';
 import '../widgets/cupertino_dock_navigation_bar.dart';
 import 'app_navigation_style_provider.dart';
 
@@ -18,6 +19,9 @@ double mobileBottomNavigationContentInset(
   AppStandardNavigationBarAppearance standardAppearance =
       const AppStandardNavigationBarAppearance(),
 }) {
+  if (AppLayout.isMediumUp(context)) {
+    return 0;
+  }
   final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
   return switch (style) {
     AppNavigationStyle.standard =>
@@ -50,6 +54,9 @@ double mobileBottomNavigationBodyInset(
       const AppStandardNavigationBarAppearance(),
   double extra = 0,
 }) {
+  if (AppLayout.isMediumUp(context)) {
+    return 0;
+  }
   return mobileBottomNavigationContentInset(
         context,
         style: style,
@@ -71,6 +78,9 @@ EdgeInsets mobileBottomNavigationBodyPadding(
   double right = 0,
   double bottom = 0,
 }) {
+  if (AppLayout.isMediumUp(context)) {
+    return EdgeInsets.fromLTRB(left, top, right, bottom);
+  }
   return EdgeInsets.fromLTRB(
     left,
     top,

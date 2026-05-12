@@ -612,7 +612,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       horizontal,
       (AppLayout.screenWidth(context) - contentMaxWidth) / 2,
     );
-    final useDesktopToolbar = metrics.isExpandedWindow && !_isSelectionMode;
+    final useDesktopToolbar = metrics.isMediumUpWindow && !_isSelectionMode;
 
     return ImportExportTaskOverlay(
       status: _taskStatus,

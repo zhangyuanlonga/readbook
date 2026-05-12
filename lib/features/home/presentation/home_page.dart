@@ -100,6 +100,7 @@ class _HomePageState extends ConsumerState<HomePage>
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final metrics = AppAdaptiveMetrics.of(context);
+    final desktopLike = AppLayout.isMediumUp(context);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -125,42 +126,141 @@ class _HomePageState extends ConsumerState<HomePage>
                   metrics.pagePadding,
                   bottomInset + metrics.sectionGap,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppFadeSlideTransition(
-                      child: _buildReadingSummarySection(),
-                    ),
-                    SizedBox(height: metrics.sectionGap),
-                    AppFadeSlideTransition(
-                      delay: const Duration(milliseconds: 56),
-                      child: _buildSectionHeader(
-                        context,
-                        title: '继续阅读',
-                        actionLabel: '查看统计',
-                        onAction: () => context.push('/stats'),
-                      ),
-                    ),
-                    SizedBox(height: metrics.contentGap),
-                    AppFadeSlideTransition(
-                      delay: const Duration(milliseconds: 84),
-                      child: _buildContinueReadingSectionBlock(),
-                    ),
-                    SizedBox(height: metrics.sectionGap),
-                    AppFadeSlideTransition(
-                      delay: const Duration(milliseconds: 112),
-                      child: _buildSectionHeader(context, title: '排行'),
-                    ),
-                    SizedBox(height: metrics.contentGap),
-                    AppFadeSlideTransition(
-                      delay: const Duration(milliseconds: 140),
-                      child: _buildRankingPreviewSection(context),
-                    ),
-                  ],
-                ),
+                child:
+                    desktopLike
+                        ? _buildDesktopDashboard(context)
+                        : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AppFadeSlideTransition(
+                              child: _buildReadingSummarySection(),
+                            ),
+                            SizedBox(height: metrics.sectionGap),
+                            AppFadeSlideTransition(
+                              delay: const Duration(milliseconds: 56),
+                              child: _buildSectionHeader(
+                                context,
+                                title: '继续阅读',
+                                actionLabel: '查看统计',
+                                onAction: () => context.push('/stats'),
+                              ),
+                            ),
+                            SizedBox(height: metrics.contentGap),
+                            AppFadeSlideTransition(
+                              delay: const Duration(milliseconds: 84),
+                              child: _buildContinueReadingSectionBlock(),
+                            ),
+                            SizedBox(height: metrics.sectionGap),
+                            AppFadeSlideTransition(
+                              delay: const Duration(milliseconds: 112),
+                              child: _buildSectionHeader(context, title: '排行'),
+                            ),
+                            SizedBox(height: metrics.contentGap),
+                            AppFadeSlideTransition(
+                              delay: const Duration(milliseconds: 140),
+                              child: _buildRankingPreviewSection(context),
+                            ),
+                          ],
+                        ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopDashboard(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppFadeSlideTransition(child: _buildDesktopOverviewToolbar(context)),
+        SizedBox(height: metrics.sectionGap),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppFadeSlideTransition(
+                    delay: const Duration(milliseconds: 56),
+                    child: _buildSectionHeader(
+                      context,
+                      title: '继续阅读',
+                      actionLabel: '查看统计',
+                      onAction: () => context.push('/stats'),
+                    ),
+                  ),
+                  SizedBox(height: metrics.contentGap),
+                  AppFadeSlideTransition(
+                    delay: const Duration(milliseconds: 84),
+                    child: _buildContinueReadingSectionBlock(),
+                  ),
+                  SizedBox(height: metrics.sectionGap),
+                  AppFadeSlideTransition(
+                    delay: const Duration(milliseconds: 112),
+                    child: _buildSectionHeader(context, title: '排行'),
+                  ),
+                  SizedBox(height: metrics.contentGap),
+                  AppFadeSlideTransition(
+                    delay: const Duration(milliseconds: 140),
+                    child: _buildRankingPreviewSection(context),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: metrics.sectionGap),
+            Expanded(
+              flex: 4,
+              child: AppFadeSlideTransition(
+                delay: const Duration(milliseconds: 96),
+                child: _buildReadingSummarySection(),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopOverviewToolbar(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return _buildSurface(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.cardPadding + 2,
+          vertical: metrics.cardPadding,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '阅读概览',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => context.go('/bookshelf'),
+              icon: const Icon(Icons.library_books_outlined),
+              label: const Text('书架'),
+            ),
+            SizedBox(width: metrics.contentGap * 0.6),
+            FilledButton.icon(
+              onPressed: () => context.push('/stats'),
+              icon: const Icon(Icons.query_stats_rounded),
+              label: const Text('阅读统计'),
+              style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.onSurface,
+                foregroundColor: colorScheme.surface,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -311,6 +311,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
   PageController? _staticPagedTextPageControllerInstance;
+  final FocusNode _readerFocusNode = FocusNode(debugLabel: 'ReaderPage');
   final Set<String> _precachedInlineImageUrls = <String>{};
   final GlobalKey _readerBodyKey = GlobalKey();
   final GlobalKey<SelectionAreaState> _selectionAreaKey =
@@ -421,6 +422,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   DateTime? _tapPointerDownTime;
   bool _tapPointerMoved = false;
   bool _suppressNextReaderTap = false;
+  DateTime? _lastPointerScrollPageTurnAt;
   DateTime? _lastBackNavigationAt;
   DateTime? _readerInteractionUnlockAt;
   OverlayEntry? _bookmarkToolbarEntry;
@@ -597,7 +599,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             0,
             _safePageUpperBound(_currentPagedPageCount),
           );
-          final currentPage = controller.page?.round() ?? controller.initialPage;
+          final currentPage =
+              controller.page?.round() ?? controller.initialPage;
           if (currentPage != target) {
             controller.jumpToPage(target);
           }
@@ -1291,6 +1294,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       pagedHeaderReserve: reserves.pagedHeaderReserve,
       scrollBottomReserve: scrollBottomReserve ?? reserves.scrollBottomReserve,
       pagedBottomReserve: pagedBottomReserve ?? reserves.pagedBottomReserve,
+      maxContentWidth:
+          AppLayout.isExpandedUp(context)
+              ? ReaderLayoutResolver.desktopReadableContentMaxWidth
+              : null,
     );
   }
 
@@ -2827,6 +2834,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         final enableCurlPreview = _shouldUseCurlGesturePreview();
         return Listener(
           behavior: HitTestBehavior.translucent,
+          onPointerSignal: _handleReaderPointerSignal,
           onPointerDown: (event) {
             if (!_isPrimaryReaderPointerDown(event)) {
               return;

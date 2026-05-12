@@ -47,15 +47,20 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             ),
           );
 
-          return Scaffold(
-            backgroundColor: colors.background,
-            body: SafeArea(
-              top: false,
-              bottom: false,
-              child: ClipRect(
-                child: ReaderShell(
-                  model: shellModel,
-                  child: _buildReaderContent(colors),
+          return Focus(
+            focusNode: _readerFocusNode,
+            autofocus: true,
+            onKeyEvent: _handleReaderKeyEvent,
+            child: Scaffold(
+              backgroundColor: colors.background,
+              body: SafeArea(
+                top: false,
+                bottom: false,
+                child: ClipRect(
+                  child: ReaderShell(
+                    model: shellModel,
+                    child: _buildReaderContent(colors),
+                  ),
                 ),
               ),
             ),

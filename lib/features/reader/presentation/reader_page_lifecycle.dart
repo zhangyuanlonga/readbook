@@ -102,6 +102,11 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     });
     unawaited(_refreshReaderInfoSnapshot(force: true));
     _scheduleReaderInfoMinuteTick();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _readerFocusNode.requestFocus();
+      }
+    });
 
     _bootstrap();
   }
@@ -157,6 +162,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _stopAutoRead();
     _scrollController.dispose();
     _mangaPageController.dispose();
+    _readerFocusNode.dispose();
     _staticPagedTextPageControllerInstance?.dispose();
     _disposeMangaTransformControllers();
     _overlayControlsController.dispose();

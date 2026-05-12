@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
@@ -155,6 +156,35 @@ class AppLayout {
 
   static bool isExpandedUp(BuildContext context) {
     return screenWidth(context) >= expandedBreakpointWidth;
+  }
+
+  static bool isDesktopPlatform(TargetPlatform platform) {
+    return platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux;
+  }
+
+  static bool isDesktopLike(
+    BuildContext context, {
+    bool isWeb = kIsWeb,
+    TargetPlatform? platform,
+  }) {
+    return isDesktopLikeWidth(
+      screenWidth(context),
+      isWeb: isWeb,
+      platform: platform ?? defaultTargetPlatform,
+    );
+  }
+
+  static bool isDesktopLikeWidth(
+    double width, {
+    required bool isWeb,
+    required TargetPlatform platform,
+  }) {
+    if (width < mediumBreakpointWidth) {
+      return false;
+    }
+    return isWeb || isDesktopPlatform(platform);
   }
 
   static bool isExpandedWidth(double width) {

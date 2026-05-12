@@ -49,7 +49,7 @@ void main() {
       expect(spec.paragraphSpacing, 16);
       expect(spec.paragraphIndent, 2);
       expect(spec.letterSpacing, closeTo(0.08, 0.0001));
-      expect(spec.textFullJustifyEnabled, isFalse);
+      expect(spec.textFullJustifyEnabled, isTrue);
       expect(spec.bodyTextItalicEnabled, isFalse);
       expect(spec.fontWeightLevel, ReaderFontWeightLevel.medium);
       expect(spec.fontWeightValue, isNull);

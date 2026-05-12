@@ -75,7 +75,9 @@ class SystemSettingsPage extends StatelessWidget {
                           SizedBox(height: metrics.sectionGap),
                           LayoutBuilder(
                             builder: (context, constraints) {
-                              final wide = constraints.maxWidth >= 760;
+                              final wide =
+                                  metrics.isMediumUpWindow ||
+                                  constraints.maxWidth >= 760;
                               if (!wide) {
                                 return const Column(
                                   children: [

@@ -8,6 +8,8 @@ import 'reader_surface_metrics.dart';
 class ReaderLayoutResolver {
   const ReaderLayoutResolver();
 
+  static const double desktopReadableContentMaxWidth = 760;
+
   bool showsPinnedChapterHeader(ReaderSettings settings) {
     return settings.showChapterHeader;
   }
@@ -69,6 +71,7 @@ class ReaderLayoutResolver {
     required ReaderSettings settings,
     required EdgeInsets safeInsets,
     required double extraBottomPadding,
+    double? maxContentWidth,
   }) {
     return resolveSurfaceMetrics(
       settings: settings,
@@ -77,6 +80,7 @@ class ReaderLayoutResolver {
       pinnedHeaderHeight: 0,
       scrollBottomReserve: extraBottomPadding,
       pagedBottomReserve: 0,
+      maxContentWidth: maxContentWidth,
     ).scrollBodyPadding;
   }
 
@@ -88,16 +92,30 @@ class ReaderLayoutResolver {
     double pagedHeaderReserve = 0,
     required double scrollBottomReserve,
     required double pagedBottomReserve,
+    double? maxContentWidth,
   }) {
     final bodyPadding = resolveBodyPadding(settings);
-    final scrollBodyPadding = bodyPadding.copyWith(
-      bottom: bodyPadding.bottom + safeInsets.bottom + scrollBottomReserve,
-    );
-    final effectivePagePadding = bodyPadding;
-    final contentWidth = max(
+    final availableContentWidth = max(
       0.0,
-      viewportSize.width - effectivePagePadding.horizontal,
+      viewportSize.width - bodyPadding.horizontal,
     );
+    final resolvedContentWidth =
+        maxContentWidth == null || maxContentWidth <= 0
+            ? availableContentWidth
+            : min(availableContentWidth, maxContentWidth);
+    final extraHorizontalInset = max(
+      0.0,
+      (availableContentWidth - resolvedContentWidth) / 2,
+    );
+    final effectivePagePadding = bodyPadding.copyWith(
+      left: bodyPadding.left + extraHorizontalInset,
+      right: bodyPadding.right + extraHorizontalInset,
+    );
+    final scrollBodyPadding = effectivePagePadding.copyWith(
+      bottom:
+          effectivePagePadding.bottom + safeInsets.bottom + scrollBottomReserve,
+    );
+    final contentWidth = resolvedContentWidth;
     final pagedFooterReserve = safeInsets.bottom + pagedBottomReserve;
     final contentHeight = max(
       0.0,
@@ -137,6 +155,7 @@ class ReaderLayoutResolver {
     required double pinnedHeaderHeight,
     double pagedHeaderReserve = 0,
     required double bottomProgressReserve,
+    double? maxContentWidth,
   }) {
     return resolveSurfaceMetrics(
       settings: settings,
@@ -146,6 +165,7 @@ class ReaderLayoutResolver {
       pagedHeaderReserve: pagedHeaderReserve,
       scrollBottomReserve: 0,
       pagedBottomReserve: bottomProgressReserve,
+      maxContentWidth: maxContentWidth,
     );
   }
 

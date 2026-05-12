@@ -74,6 +74,44 @@ void main() {
     expect(expanded.bottomSheetMaxWidth, 720);
   });
 
+  test(
+    'desktop like predicate requires medium width and web or desktop host',
+    () {
+      expect(
+        AppAdaptiveMetrics.isDesktopLikeFor(
+          width: 599,
+          isWeb: true,
+          platform: TargetPlatform.macOS,
+        ),
+        isFalse,
+      );
+      expect(
+        AppAdaptiveMetrics.isDesktopLikeFor(
+          width: 600,
+          isWeb: true,
+          platform: TargetPlatform.android,
+        ),
+        isTrue,
+      );
+      expect(
+        AppAdaptiveMetrics.isDesktopLikeFor(
+          width: 600,
+          isWeb: false,
+          platform: TargetPlatform.windows,
+        ),
+        isTrue,
+      );
+      expect(
+        AppAdaptiveMetrics.isDesktopLikeFor(
+          width: 840,
+          isWeb: false,
+          platform: TargetPlatform.iOS,
+        ),
+        isFalse,
+      );
+    },
+  );
+
   testWidgets('of and resolveForConstraints read MediaQuery and local width', (
     tester,
   ) async {

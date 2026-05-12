@@ -103,5 +103,36 @@ void main() {
       expect(metrics.contentHeight, 640);
       expect(metrics.contentRect, const Rect.fromLTWH(16, 70, 350, 640));
     });
+
+    test('centers and caps text content width for wide reader surfaces', () {
+      const settings = ReaderSettings(
+        bodyMarginTop: 18,
+        bodyMarginBottom: 20,
+        bodyMarginLeft: 24,
+        bodyMarginRight: 24,
+      );
+
+      final metrics = resolver.resolveSurfaceMetrics(
+        settings: settings,
+        viewportSize: const Size(1280, 800),
+        safeInsets: EdgeInsets.zero,
+        pinnedHeaderHeight: 0,
+        scrollBottomReserve: 0,
+        pagedBottomReserve: 0,
+        maxContentWidth: ReaderLayoutResolver.desktopReadableContentMaxWidth,
+      );
+
+      expect(metrics.bodyPadding, const EdgeInsets.fromLTRB(24, 18, 24, 20));
+      expect(
+        metrics.effectivePagePadding,
+        const EdgeInsets.fromLTRB(260, 18, 260, 20),
+      );
+      expect(metrics.scrollBodyPadding, metrics.effectivePagePadding);
+      expect(
+        metrics.contentWidth,
+        ReaderLayoutResolver.desktopReadableContentMaxWidth,
+      );
+      expect(metrics.contentRect, const Rect.fromLTWH(260, 18, 760, 762));
+    });
   });
 }

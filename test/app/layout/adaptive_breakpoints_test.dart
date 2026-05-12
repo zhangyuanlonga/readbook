@@ -293,7 +293,9 @@ void main() {
     expect(bucket840, AppWidthBucket.expanded);
   });
 
-  testWidgets('AppLayout pageContentMaxWidth 在手机上保持原宽，在中大屏上限宽', (tester) async {
+  testWidgets('AppLayout pageContentMaxWidth 在手机上保持原宽，在中大屏按可用宽度限宽', (
+    tester,
+  ) async {
     final width390 = await _readFromContext<double>(
       tester,
       width: 390,
@@ -321,10 +323,20 @@ void main() {
             maxWidth: AppLayout.mineContentMaxWidth,
           ),
     );
+    final width1200 = await _readFromContext<double>(
+      tester,
+      width: 1200,
+      read:
+          (context) => AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.mineContentMaxWidth,
+          ),
+    );
 
     expect(width390, 390);
     expect(width600, 600);
-    expect(width720, AppLayout.mineContentMaxWidth);
+    expect(width720, 720);
+    expect(width1200, AppLayout.mineContentMaxWidth);
   });
 
   testWidgets('AppLayout aboutPageContentMaxWidth 遵循两段式限宽', (tester) async {
@@ -377,7 +389,7 @@ void main() {
     expect(columns600, 3);
   });
 
-  testWidgets('AppLayout mineActionGridColumnsForWidth 遵循固定列数规则', (
+  testWidgets('AppLayout mineActionGridColumnsForWidth 遵循现行手机/中屏/桌面列数规则', (
     tester,
   ) async {
     final columns320 = await _readFromContext<int>(
@@ -405,12 +417,18 @@ void main() {
       width: 600,
       read: (context) => AppLayout.mineActionGridColumnsForWidth(600),
     );
+    final columns900 = await _readFromContext<int>(
+      tester,
+      width: 900,
+      read: (context) => AppLayout.mineActionGridColumnsForWidth(900),
+    );
 
     expect(columns320, 4);
     expect(columns360, 4);
     expect(columns390, 4);
     expect(columns430, 4);
-    expect(columns600, 4);
+    expect(columns600, 3);
+    expect(columns900, 4);
   });
 
   testWidgets('AppLayout 将 390dp 以下视为小屏手机', (tester) async {
@@ -571,7 +589,13 @@ void main() {
     expect(large, 0.85);
   });
 
-  testWidgets('AppLayout clamps text scale 在手机和平板使用不同上限', (tester) async {
+  testWidgets('AppLayout clamps text scale 使用全局界面缩放上下限', (tester) async {
+    final smallScale = await _readFromContext<double>(
+      tester,
+      width: 390,
+      textScaleFactor: 0.4,
+      read: AppLayout.clampedTextScaleFactor,
+    );
     final phoneScale = await _readFromContext<double>(
       tester,
       width: 390,
@@ -585,8 +609,9 @@ void main() {
       read: AppLayout.clampedTextScaleFactor,
     );
 
-    expect(phoneScale, 1.24);
-    expect(tabletScale, 1.3);
+    expect(smallScale, 0.6);
+    expect(phoneScale, 1.5);
+    expect(tabletScale, 1.5);
   });
 
   testWidgets('ShellScaffold 在手机宽度下保留底部导航栏', (tester) async {
@@ -633,12 +658,24 @@ void main() {
         .map((item) => (item as NavigationDestination).label)
         .toList(growable: false);
 
-    expect(labels, <String>['书架', '发现', '统计', '我的']);
-    expect(bar.selectedIndex, 1);
+    expect(labels, <String>['首页', '书架', '发现', '统计', '我的']);
+    expect(bar.selectedIndex, 2);
   });
 
   testWidgets('ShellScaffold 标准底部导航为选中态提供独立图标', (tester) async {
-    await _pumpShellScaffold(tester, width: 390);
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        wrapWithMaterialApp: true,
+        overrides: [
+          appShellNavigationProvider.overrideWith(
+            _AllTabsNavigationNotifier.new,
+          ),
+        ],
+        child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
 
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     final destinations = bar.destinations.cast<NavigationDestination>().toList(
@@ -647,34 +684,42 @@ void main() {
 
     expect(
       (destinations[0].icon as BottomNavIconView).icon.fallbackIcon,
-      Icons.menu_book_outlined,
+      Icons.home_outlined,
     );
     expect(
       (destinations[0].selectedIcon as BottomNavIconView).icon.fallbackIcon,
-      Icons.menu_book_rounded,
+      Icons.home_rounded,
     );
     expect(
       (destinations[1].icon as BottomNavIconView).icon.fallbackIcon,
-      Icons.explore_outlined,
+      Icons.menu_book_outlined,
     );
     expect(
       (destinations[1].selectedIcon as BottomNavIconView).icon.fallbackIcon,
-      Icons.explore,
+      Icons.menu_book_rounded,
     );
     expect(
       (destinations[2].icon as BottomNavIconView).icon.fallbackIcon,
-      Icons.insert_chart_outlined_rounded,
+      Icons.explore_outlined,
     );
     expect(
       (destinations[2].selectedIcon as BottomNavIconView).icon.fallbackIcon,
-      Icons.insert_chart_rounded,
+      Icons.explore,
     );
     expect(
       (destinations[3].icon as BottomNavIconView).icon.fallbackIcon,
-      Icons.person_outline,
+      Icons.insert_chart_outlined_rounded,
     );
     expect(
       (destinations[3].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      Icons.insert_chart_rounded,
+    );
+    expect(
+      (destinations[4].icon as BottomNavIconView).icon.fallbackIcon,
+      Icons.person_outline,
+    );
+    expect(
+      (destinations[4].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.person,
     );
   });
@@ -718,15 +763,37 @@ void main() {
         .map((item) => (item as NavigationDestination).label)
         .toList(growable: false);
 
-    expect(labels, <String>['书架', '我的']);
-    expect(bar.selectedIndex, 0);
+    expect(labels, <String>['首页', '书架', '我的']);
+    expect(bar.selectedIndex, 1);
   });
 
-  testWidgets('ShellScaffold 在 iOS 跟随系统时使用苹果风格底栏', (tester) async {
+  testWidgets('ShellScaffold 在 iOS 跟随系统时默认使用标准底栏', (tester) async {
     await tester.pumpWidget(
       AdaptiveTestHarness(
         width: 390,
         wrapWithMaterialApp: true,
+        child: Theme(
+          data: ThemeData(platform: TargetPlatform.iOS),
+          child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(CupertinoDockNavigationBar), findsNothing);
+  });
+
+  testWidgets('ShellScaffold 在 iOS 手动选择苹果风格时使用 Cupertino dock', (tester) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        wrapWithMaterialApp: true,
+        overrides: [
+          appNavigationStylePreferenceProvider.overrideWith(
+            _CupertinoDockNavigationStyleNotifier.new,
+          ),
+        ],
         child: Theme(
           data: ThemeData(platform: TargetPlatform.iOS),
           child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),

@@ -640,12 +640,35 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-              Text(
-                '按状态和更新时间排序',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+              if (metrics.isMediumUpWindow) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 96,
+                  child: Text(
+                    '格式',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(
+                  width: 96,
+                  child: Text(
+                    '大小',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ] else
+                Text(
+                  '按状态和更新时间排序',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
             ],
           ),
           SizedBox(height: metrics.contentGap),
@@ -731,6 +754,31 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
               ),
             ),
             SizedBox(width: metrics.contentGap),
+            if (metrics.isMediumUpWindow) ...[
+              SizedBox(
+                width: 96,
+                child: Text(
+                  book.format.displayLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 96,
+                child: Text(
+                  _formatFileSize(book.fileSize),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
             Chip(
               visualDensity: VisualDensity.compact,
               label: Text(_localIndexStatusLabel(book.indexStatus)),
@@ -838,7 +886,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                           MediaQuery.viewPaddingOf(context).bottom,
                     ),
                     children: [
-                      if (metrics.isExpandedWindow)
+                      if (metrics.isMediumUpWindow)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

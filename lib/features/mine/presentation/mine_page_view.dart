@@ -137,7 +137,7 @@ extension on _MinePageState {
     required List<_MineActionItem> otherActions,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
-    if (metrics.isExpandedWindow) {
+    if (metrics.isMediumUpWindow) {
       return _buildExpandedPageChildren(
         context,
         palette: palette,

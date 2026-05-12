@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../domain/entities/bottom_nav_icon_gallery.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_border_tokens.dart';
 import 'layout/app_layout.dart';
@@ -104,7 +105,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final shellChild = RepaintBoundary(
       child: widget.navigationShell ?? widget.child!,
     );
-    final useNavigationRail = AppLayout.isMediumUp(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final useNavigationRail =
+        AppLayout.isMediumUp(context) ||
+        metrics.isDesktopLikeForPlatform(isWeb: kIsWeb, platform: platform);
     final enableTabSwipe =
         !kIsWeb && _isMobilePlatform(platform) && !useNavigationRail;
     final navigationStylePreference = ref.watch(
