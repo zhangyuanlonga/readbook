@@ -8,6 +8,7 @@
 - 全平台兼容总计划：`docs/all_platform_compatibility_plan_2026-05-11.md`
 - 逐页面功能多端兼容方法：`docs/page_function_multiplatform_methods_2026-05-12.md`
 - 逐页面 UI 多端兼容展示计划：`docs/page_ui_multiplatform_display_plan_2026-05-12.md`
+- 页面 UI 组件治理任务计划：`docs/page_ui_component_governance_plan_2026-05-12.md`
 
 ## 0. 结论先行
 

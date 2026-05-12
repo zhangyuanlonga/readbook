@@ -4,6 +4,8 @@
 用途：补齐功能兼容计划之外的 UI 展示计划，逐页面定义 Android、iOS、平板、macOS、Windows、Linux、Web 的展示模型、布局差异和验收标准。  
 关系：本文件关注“看起来像对应平台的应用”；`docs/all_platform_compatibility_plan_2026-05-11.md` 关注“功能能不能用”。
 
+组件治理：跨页面通用 UI 组件、弹层、空状态、加载态、列表和桌面交互的迁移任务见 `docs/page_ui_component_governance_plan_2026-05-12.md`。本文继续负责逐页面展示模型。
+
 ## 0. 结论先行
 
 后续 UI 兼容按两套体验模型推进：
@@ -564,10 +566,11 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 
 - 功能范围：`docs/all_platform_compatibility_plan_2026-05-11.md`
 - 架构约束：`docs/development_architecture_guardrails.md`
+- 组件治理：`docs/page_ui_component_governance_plan_2026-05-12.md`
 - 视口矩阵：`docs/flutter_adaptive_baseline_matrix.md`
 - 人工回归清单：`docs/adaptive_visual_regression_checklist.md`
 
-后续每执行完一个 UI 阶段，需要同时更新本文件的勾选状态和执行记录。
+后续每执行完一个 UI 阶段，需要同时更新本文件的勾选状态和执行记录；如果涉及通用组件、弹层、状态组件、列表/卡片或桌面交互，还需要同步更新组件治理计划。
 
 ## 10. 执行记录
 

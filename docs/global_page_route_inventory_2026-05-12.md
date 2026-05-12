@@ -9,6 +9,7 @@
 - `docs/startup_init_cleanup_execution_plan_2026-05-12.md`
 - `docs/books_core_performance_plan.md`
 - `docs/global_page_lazy_loading_execution_plan_2026-05-12.md`
+- `docs/global_page_lazy_loading_regression_checklist_2026-05-12.md`
 
 ## 0. 总体结论
 
@@ -159,6 +160,7 @@
 - 2026-05-12：Phase 0、Phase 1 已完成，页面加载分级进入架构约束，Core Shell 首屏只加载基础快照。
 - 2026-05-12：Phase 2、Phase 3 已完成，书架链路分成基础列表、首屏后补齐、低优先级后台刷新；阅读器重资源 warmup 改为正文可见后触发。
 - 2026-05-12：Phase 4、Phase 5 已完成，我的页不预加载管理页数据，`/appearance` 资源改为按 section / 用户动作加载；受限功能页统一使用 `FeatureDisabledPages` 预设。
+- 2026-05-12：Phase 6 已完成，新增路由清单自动覆盖检查和全局懒加载回归清单，后续新增页面必须同步跑检查并回填文档。
 
 ### 4.1 Core Shell
 
@@ -238,6 +240,7 @@
 2. `docs/page_function_multiplatform_methods_2026-05-12.md` 的功能兼容状态。
 3. `docs/page_ui_multiplatform_display_plan_2026-05-12.md` 的多端展示状态。
 4. 如果页面进入启动链或主 Tab 初始化链，需要同步更新 `docs/startup_init_cleanup_execution_plan_2026-05-12.md`。
+5. 运行 `dart run tool/check_route_inventory.dart`，确保新增 `GoRoute path` 已登记。
 
 页面新增 checklist：
 

@@ -27,6 +27,11 @@ Future<void> main(List<String> args) async {
       executable: 'dart',
       arguments: ['run', 'tool/check_architecture_guardrails.dart'],
     ),
+    const _SuiteStep(
+      name: 'Route Inventory',
+      executable: 'dart',
+      arguments: ['run', 'tool/check_route_inventory.dart'],
+    ),
     _SuiteStep(
       name: 'Shared Models',
       executable: flutterCmd,
