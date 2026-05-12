@@ -18,7 +18,6 @@ import '../../features/book/application/book_presentation_query_service.dart';
 import '../../features/source/application/source_runtime_facade.dart';
 import '../../features/source/application/source_runtime_scheduler_service.dart';
 import '../../features/source/application/source_runtime_task_conflict_service.dart';
-import '../../features/source/debug_service/source_debug_web_service.dart';
 import '../lifecycle/app_lifecycle_coordinator.dart';
 import '../platform/app_platform_capabilities.dart';
 import '../startup/app_announcement_coordinator.dart';
@@ -80,12 +79,6 @@ final appInteractiveVerificationBrowserExecutorProvider =
 
 final appAuthEventStreamProvider = Provider<Stream<AuthEvent>>((ref) {
   return AuthEventBus.instance.stream;
-});
-
-final appSourceDebugWebServiceProvider = Provider<SourceDebugWebService>((ref) {
-  return SourceDebugWebService.shared(
-    sourceRuntimeFacade: ref.watch(appSourceRuntimeFacadeProvider),
-  );
 });
 
 final bookPresentationQueryServiceProvider =

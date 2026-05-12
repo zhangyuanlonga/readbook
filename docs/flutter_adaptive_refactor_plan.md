@@ -452,8 +452,8 @@
   接入点：主题卡片、编辑表单、颜色/资源选择器。
   验收：编辑页 `1.3x` 下表单可滚动，按钮不遮挡。
 
-- [ ] 标签/分类/章节规则/内容清理管理页
-  文件：`lib/features/mine/presentation/mine_management_page.dart`、`lib/features/mine/presentation/chapter_rule_management_page.dart`
+- [ ] 标签/分类管理页
+  文件：`lib/features/mine/presentation/mine_management_page.dart`
   接入点：管理列表、编辑表单、批量操作栏。
   验收：批量操作不遮挡列表。
 

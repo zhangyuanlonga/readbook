@@ -3124,136 +3124,13 @@ return {
 - 发布前可以保留少量有价值信息
 - 不要放敏感 Cookie、Token 或完整加密密钥
 
-## 21. 网页调试服务
+## 21. 运行时边界与维护原则
 
-网页调试服务用于在浏览器中连接 App 本地服务，编辑书源并执行单步或完整链路调试。
-
-### 21.1 连接方式
-
-App 侧启动“书源网页调试服务”后，会提供类似这样的地址：
-
-```text
-http://192.168.1.23:15421
-```
-
-在网页调试台填入该地址后，会调用：
-
-```text
-GET /api/debug/ping
-```
-
-成功后即可加载书源列表、编辑代码、保存和运行调试。
-
-### 21.2 调试接口
-
-统一响应结构：
-
-```js
-{
-  ok: true,
-  data: {},
-  error: null,
-  meta: {
-    requestId: 'req_...',
-    timestamp: '...',
-  },
-}
-```
-
-失败响应：
-
-```js
-{
-  ok: false,
-  data: null,
-  error: {
-    code: 'unknown',
-    message: '...',
-    stage: 'content',
-    detail: '...',
-  },
-}
-```
-
-主要接口：
-
-- `GET /api/debug/ping`
-- `GET /api/sources`
-- `GET /api/sources/:id`
-- `POST /api/sources`
-- `PUT /api/sources/:id`
-- `DELETE /api/sources/:id`
-- `PATCH /api/sources/:id/enabled`
-- `POST /api/debug/search`
-- `POST /api/debug/detail`
-- `POST /api/debug/chapters`
-- `POST /api/debug/content`
-- `POST /api/debug/full-run`
-
-### 21.3 `logs`、`traces`、`stages`
-
-调试接口会尽量返回结构化信息：
-
-- `logs`：调试日志，包括脚本里的 `ctx.log(...)`
-- `traces`：运行轨迹，包括 HTTP 请求、浏览器动作、执行摘要
-- `stages`：完整链路中的阶段结果
-
-单步接口成功时，`logs/traces` 位于 `data`：
-
-```js
-{
-  ok: true,
-  data: {
-    step: 'content',
-    result: {},
-    logs: [],
-    traces: [],
-  },
-}
-```
-
-失败时，结构化信息会放在 `error.detail` 的 JSON 字符串里：
-
-```js
-{
-  error: {
-    stage: 'content',
-    detail: '{"durationMs":91,"logs":[],"traces":[]}',
-  },
-}
-```
-
-### 21.4 推荐调试顺序
-
-推荐在网页调试台中分别验证：
-
-1. 搜索
-2. 详情
-3. 目录
-4. 正文
-5. 完整链路
-
-不要只跑 `full-run`。单步调试能更快定位是入参、网络、解析还是返回对象的问题。
-
-### 21.5 常见错误
-
-`SourceScriptCompileException: not a function` 通常表示脚本调用了不存在的方法，或导出对象里的对应步骤不是函数。
-
-排查顺序：
-
-1. 看错误里的 `stage`
-2. 打开 `logs` 看 `ctx.log(...)` 输出
-3. 打开 `traces` 看请求 URL、状态码和运行摘要
-4. 检查当前阶段调用的 `ctx.*` API 是否存在
-5. 检查返回对象是否是可序列化普通对象
-
-## 22. 运行时边界与维护原则
-
-### 22.1 当前只支持脚本源
+### 21.1 当前只支持脚本源
 
 当前 App 只执行 JavaScript 脚本源，不再导入或执行旧规则 JSON。旧规则可以作为迁移参考，但不能直接作为运行时格式。
 
-### 22.2 执行链路
+### 21.2 执行链路
 
 标准链路是：
 
@@ -3267,7 +3144,7 @@ search -> detail -> chapters -> content
 discoverCategories -> discoverBooks -> detail -> chapters -> content
 ```
 
-### 22.3 阶段职责
+### 21.3 阶段职责
 
 - `search`：只负责找书，返回候选 `Book[]`
 - `detail`：补齐书籍详情、目录地址或跨阶段字段
@@ -3276,11 +3153,11 @@ discoverCategories -> discoverBooks -> detail -> chapters -> content
 - `discoverCategories`：返回发现页分类
 - `discoverBooks`：返回分类分页书籍
 
-### 22.4 运行时隔离
+### 21.4 运行时隔离
 
 宿主会根据场景选择普通容器或隔离容器执行脚本。书源作者不应该依赖全局变量长期保活；需要跨阶段传递的数据应放在 `book.extra`、`chapter.extra`、`ctx.cache` 或 `ctx.session`。
 
-### 22.5 返回值序列化
+### 21.5 返回值序列化
 
 返回值必须可 JSON 序列化。
 
@@ -3292,7 +3169,7 @@ discoverCategories -> discoverBooks -> detail -> chapters -> content
 - 循环引用对象
 - 超大原始响应体
 
-### 22.6 错误处理
+### 21.6 错误处理
 
 脚本里可以抛出普通 `Error`，宿主会归一化为阶段错误。建议错误信息包含关键上下文，但不要包含敏感信息。
 
@@ -3304,7 +3181,7 @@ if (!response.ok) {
 }
 ```
 
-### 22.7 当前未开放给脚本作者的宿主内部能力
+### 21.7 当前未开放给脚本作者的宿主内部能力
 
 下面这些能力存在于宿主实现里，但当前不属于书源作者 API：
 
@@ -3314,7 +3191,7 @@ if (!response.ok) {
 
 这类能力如果未来决定开放，应先补桥接，再更新本文档；在那之前不要把它们当成可用脚本 API。
 
-## 23. 发布前检查
+## 22. 发布前检查
 
 发布前至少检查：
 

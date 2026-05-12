@@ -403,7 +403,7 @@
 | 在线搜索 | 延期 | 主入口隐藏；搜索页可改本地搜索 | 本地搜索先独立完成，在线搜索随书源恢复 |
 | 发现页 | 延期/本地化 | 隐藏或静态本地内容 | 有本地推荐策略或书源运行时恢复 |
 | 书源登录/WebView | 延期 | `supportsInteractiveWebView=false` | 多端 WebView 能力矩阵完成 |
-| 脚本编辑/调试 | 延期 | `supportsSourceDebugServer=false` | 调试服务跨端安全边界完成 |
+| 脚本编辑/调试 | 延期 | `supportsSourceRuntime=false` | 随书源专题恢复 |
 | WebDAV 同步 | P1+ | `supportsWebDavSync=false` 默认占位 | 显式 dart-define + 同步矩阵通过 |
 
 延期规则：

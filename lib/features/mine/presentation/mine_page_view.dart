@@ -53,10 +53,6 @@ extension on _MinePageState {
       activeBottomNavIconGallery: activeBottomNavIconGallery,
       launchImageGalleries: launchImageGalleries,
     );
-    final configurationActions = _buildConfigurationActions(
-      context,
-      visibilityState: visibilityState,
-    );
     final dataActions = _buildDataActions(
       context,
       visibilityState: visibilityState,
@@ -113,7 +109,6 @@ extension on _MinePageState {
                       palette: advancedPalette,
                       visibilityState: visibilityState,
                       appearanceActions: appearanceActions,
-                      configurationActions: configurationActions,
                       dataActions: dataActions,
                       otherActions: otherActions,
                     ),
@@ -132,7 +127,6 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
     required MinePageVisibilityState visibilityState,
     required List<_MineActionItem> appearanceActions,
-    required List<_MineActionItem> configurationActions,
     required List<_MineActionItem> dataActions,
     required List<_MineActionItem> otherActions,
   }) {
@@ -143,7 +137,6 @@ extension on _MinePageState {
         palette: palette,
         visibilityState: visibilityState,
         appearanceActions: appearanceActions,
-        configurationActions: configurationActions,
         dataActions: dataActions,
         otherActions: otherActions,
       );
@@ -189,11 +182,6 @@ extension on _MinePageState {
     }
 
     appendSection('外观', appearanceActions, gap: _primarySectionGapFor(context));
-    appendSection(
-      '配置',
-      configurationActions,
-      padding: _isListMode ? const EdgeInsets.fromLTRB(10, 2, 10, 2) : null,
-    );
     appendSection('数据', dataActions);
     appendSection('其他', otherActions);
     return children;
@@ -204,7 +192,6 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
     required MinePageVisibilityState visibilityState,
     required List<_MineActionItem> appearanceActions,
-    required List<_MineActionItem> configurationActions,
     required List<_MineActionItem> dataActions,
     required List<_MineActionItem> otherActions,
   }) {
@@ -245,26 +232,10 @@ extension on _MinePageState {
                       actions: appearanceActions,
                     ),
                   ),
-                if (configurationActions.isNotEmpty) ...[
-                  SizedBox(height: metrics.contentGap),
-                  _buildPageEntrance(
-                    index: 2,
-                    child: _buildActionSection(
-                      context,
-                      palette: palette,
-                      title: '配置',
-                      actions: configurationActions,
-                      padding:
-                          _isListMode
-                              ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
-                              : null,
-                    ),
-                  ),
-                ],
                 if (dataActions.isNotEmpty) ...[
                   SizedBox(height: metrics.contentGap),
                   _buildPageEntrance(
-                    index: 3,
+                    index: 2,
                     child: _buildActionSection(
                       context,
                       palette: palette,
@@ -276,7 +247,7 @@ extension on _MinePageState {
                 if (otherActions.isNotEmpty) ...[
                   SizedBox(height: metrics.contentGap),
                   _buildPageEntrance(
-                    index: 4,
+                    index: 3,
                     child: _buildActionSection(
                       context,
                       palette: palette,
@@ -455,7 +426,7 @@ extension on _MinePageState {
     return actions;
   }
 
-  List<_MineActionItem> _buildConfigurationActions(
+  List<_MineActionItem> _buildDataActions(
     BuildContext context, {
     required MinePageVisibilityState visibilityState,
   }) {
@@ -478,32 +449,6 @@ extension on _MinePageState {
         ),
       );
     }
-    if (visibilityState.isVisible(MinePageItemId.chapterRule)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.rule_rounded,
-          label: '分章规则',
-          onTap: _pushMineRouteAction('/mine/chapter-rules'),
-        ),
-      );
-    }
-    if (visibilityState.isVisible(MinePageItemId.contentCleanup)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.cleaning_services_outlined,
-          label: '正文净化',
-          onTap: _pushMineRouteAction('/mine/content-cleanup'),
-        ),
-      );
-    }
-    return actions;
-  }
-
-  List<_MineActionItem> _buildDataActions(
-    BuildContext context, {
-    required MinePageVisibilityState visibilityState,
-  }) {
-    final actions = <_MineActionItem>[];
     if (visibilityState.isVisible(MinePageItemId.fontManagement)) {
       actions.add(
         _MineActionItem(
@@ -530,16 +475,6 @@ extension on _MinePageState {
           label: '书源管理',
           subtitle: _buildSourceSubtitle(),
           onTap: _handleSourceTap,
-        ),
-      );
-    }
-    if (visibilityState.isVisible(MinePageItemId.sourceDebugService)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.lan_outlined,
-          label: '网页调试服务',
-          subtitle: '为网站调试台提供局域网本地接口',
-          onTap: _pushMineRouteAction('/mine/source-debug-service'),
         ),
       );
     }

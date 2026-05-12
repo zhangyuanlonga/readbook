@@ -102,7 +102,6 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - `supportsReaderVolumeKeyBridge`
 - `supportsSourceRuntime`
 - `supportsInteractiveWebView`
-- `supportsSourceDebugServer`
 - `supportsWebDavSync`
 
 所有功能入口根据能力项展示、隐藏或降级。

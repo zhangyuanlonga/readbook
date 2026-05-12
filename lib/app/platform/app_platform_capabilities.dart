@@ -14,7 +14,6 @@ class AppPlatformCapabilities {
     required this.supportsReaderVolumeKeyBridge,
     required this.supportsSourceRuntime,
     required this.supportsInteractiveWebView,
-    required this.supportsSourceDebugServer,
     required this.supportsWebDavSync,
   });
 
@@ -46,8 +45,6 @@ class AppPlatformCapabilities {
           sourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
       supportsInteractiveWebView:
           sourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
-      supportsSourceDebugServer:
-          sourceRuntimeEnabled && sourceRuntimeSupportedPlatform && !kIsWeb,
       supportsWebDavSync: webDavSyncEnabled && supportsNativeFileSystem,
     );
   }
@@ -63,7 +60,6 @@ class AppPlatformCapabilities {
   final bool supportsReaderVolumeKeyBridge;
   final bool supportsSourceRuntime;
   final bool supportsInteractiveWebView;
-  final bool supportsSourceDebugServer;
   final bool supportsWebDavSync;
 
   bool get supportsLocalReading =>

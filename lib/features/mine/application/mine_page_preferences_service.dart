@@ -33,12 +33,9 @@ enum MinePageItemId {
   launchGallery,
   tagManagement,
   categoryManagement,
-  chapterRule,
-  contentCleanup,
   fontManagement,
   systemSettings,
   sourceManagement,
-  sourceDebugService,
   cacheManagement,
   feedback,
   officialGroup,
@@ -125,22 +122,12 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   MinePageItemDefinition(
     id: MinePageItemId.tagManagement,
     title: '标签管理',
-    sectionTitle: '配置',
+    sectionTitle: '数据',
   ),
   MinePageItemDefinition(
     id: MinePageItemId.categoryManagement,
     title: '分类管理',
-    sectionTitle: '配置',
-  ),
-  MinePageItemDefinition(
-    id: MinePageItemId.chapterRule,
-    title: '分章规则',
-    sectionTitle: '配置',
-  ),
-  MinePageItemDefinition(
-    id: MinePageItemId.contentCleanup,
-    title: '正文净化',
-    sectionTitle: '配置',
+    sectionTitle: '数据',
   ),
   MinePageItemDefinition(
     id: MinePageItemId.fontManagement,
@@ -155,11 +142,6 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   MinePageItemDefinition(
     id: MinePageItemId.sourceManagement,
     title: '书源管理',
-    sectionTitle: '数据',
-  ),
-  MinePageItemDefinition(
-    id: MinePageItemId.sourceDebugService,
-    title: '网页调试服务',
     sectionTitle: '数据',
   ),
   MinePageItemDefinition(

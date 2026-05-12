@@ -40,11 +40,9 @@
 | `lib/features/mine/presentation/appearance_page_view.dart` | 应用背景空态 | 通过 `ImageResourceEmptyStateCard` 间接接入 |
 | `lib/features/mine/presentation/font_management_page.dart` | 字体库空态 / 加载失败 | 已接 `AppEmptyStateCard` / `AppStatusStateCard` |
 | `lib/features/source/presentation/source_page_flow.dart` | 书源列表空态 / 搜索无结果 | 已接 `AppEmptyStateCard` |
-| `lib/features/mine/presentation/chapter_rule_management_page.dart` | 分章规则空态 / 加载失败 | 已接 `AppEmptyStateCard` / `AppStatusStateCard` |
 | `lib/features/announcement/presentation/announcement_list_page.dart` | 公告列表空态 / 失败态 | 已接 `AppStatusStateCard` |
 | `lib/features/announcement/presentation/announcement_detail_page.dart` | 公告详情无内容 / 失败态 | 已接 `AppStatusStateCard` |
 | `lib/features/error/presentation/error_center_page.dart` | 错误日志为空 | 已接 `AppEmptyStateCard` |
-| `lib/features/mine/presentation/source_debug_service_page.dart` | 最近错误状态卡 | 已接 `AppStatusStateCard` |
 | `lib/features/sync/presentation/pages/sync_settings_page.dart` | 已保存配置为空 / 任务记录为空 / 加载失败 | 已接 `AppEmptyStateCard` / `AppStatusStateCard` |
 | `lib/features/bookshelf/presentation/widgets/bookshelf_page_sections.dart` | 书架空态 / 筛选空态 / 加载失败 | 已做书架业务包装并接入统一组件 |
 | `lib/features/search/presentation/widgets/search_grouped_empty_fallback_card.dart` | 搜索无结果但带操作建议 | 已做搜索业务包装并接入统一组件 |

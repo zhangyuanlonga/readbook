@@ -22,7 +22,7 @@
 当前状态（2026-04-28）：
 
 - 外部导入桥、source runtime health / scheduler / conflict、交互式 webview 验证入口已统一通过 app-level provider 暴露
-- `SourcePage / Bookshelf / AdvancedTheme / FontManagement / SourceDebugServicePage / ScriptSourceDebugPage / ReaderPage` 不再直接抓 `instance` 作为主入口
+- `SourcePage / Bookshelf / AdvancedTheme / FontManagement / ScriptSourceDebugPage / ReaderPage` 不再直接抓 `instance` 作为主入口
 - 阅读页平台能力已收口到 `ReaderPlatformBridgeService`，页面层只消费能力语义，不再直接编排亮度桥和音量键桥
 - `runtime -> application -> presentation` 现有主链已固定为：shared runtime/bridge implementation -> app/provider wiring -> feature application -> presentation
 
@@ -34,7 +34,6 @@
   - `SourceRuntimeSchedulerService`
   - `SourceRuntimeTaskConflictService`
   - `InteractiveVerificationBrowserExecutor`
-  - `SourceDebugWebService`
 - 以 feature application service 暴露能力：
   - `ReaderPlatformBridgeService`
   - `SourceLoginBrowserService`

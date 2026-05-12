@@ -11,7 +11,6 @@ void main() {
 
     expect(disabled.supportsSourceRuntime, isFalse);
     expect(disabled.supportsInteractiveWebView, isFalse);
-    expect(disabled.supportsSourceDebugServer, isFalse);
     expect(disabled.supportsWebDavSync, isFalse);
 
     final enabled = AppPlatformCapabilities.current(

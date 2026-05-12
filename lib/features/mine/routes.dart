@@ -18,7 +18,6 @@ import 'presentation/membership_center_page.dart';
 import 'presentation/mine_management_page.dart';
 import 'presentation/mine_page.dart';
 import 'presentation/reader_background_page.dart';
-import 'presentation/source_debug_service_page.dart';
 import 'presentation/system_settings_page.dart';
 import '../error/presentation/error_center_page.dart';
 
@@ -124,27 +123,6 @@ final List<RouteBase> mineRoutes = <RouteBase>[
         (context, state) => const MineManagementPage(
           section: MineManagementSection.categoryManagement,
         ),
-  ),
-  GoRoute(
-    path: '/mine/chapter-rules',
-    name: 'mine-chapter-rules',
-    builder:
-        (context, state) => const MineManagementPage(
-          section: MineManagementSection.chapterRuleManagement,
-        ),
-  ),
-  GoRoute(
-    path: '/mine/content-cleanup',
-    name: 'mine-content-cleanup',
-    builder:
-        (context, state) => const MineManagementPage(
-          section: MineManagementSection.contentCleanup,
-        ),
-  ),
-  GoRoute(
-    path: '/mine/source-debug-service',
-    name: 'mine-source-debug-service',
-    builder: (context, state) => const SourceDebugServicePage(),
   ),
   GoRoute(
     path: '/membership',

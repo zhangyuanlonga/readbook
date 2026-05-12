@@ -14,7 +14,6 @@ import 'application/source_runtime_scheduler_service.dart';
 import 'application/source_runtime_task_conflict_service.dart';
 import 'application/source_script_import_service.dart';
 import 'application/source_runtime_facade.dart';
-import 'debug_service/source_debug_web_service.dart';
 
 final sourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
   return ref.watch(app_providers.appSourceRuntimeFacadeProvider);
@@ -105,7 +104,3 @@ final sourceRuntimeSchedulerServiceProvider =
     Provider<SourceRuntimeSchedulerService>((ref) {
       return ref.watch(app_providers.appSourceRuntimeSchedulerServiceProvider);
     });
-
-final sourceDebugWebServiceProvider = Provider<SourceDebugWebService>((ref) {
-  return ref.watch(app_providers.appSourceDebugWebServiceProvider);
-});

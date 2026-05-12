@@ -57,7 +57,7 @@
 - `docs/engineering_delivery_guide.md`
   书源列表性能、Android 发布和移动端后端集成。
 - `docs/script_sources/official-source-author-guide.md`
-  唯一保留的书源编写文档，包含作者手册、规范、标准对象、`ctx` API、加解密能力和网页调试服务说明。
+  唯一保留的书源编写文档，包含作者手册、规范、标准对象、`ctx` API 和加解密能力说明。
 
 ## 历史归档
 
