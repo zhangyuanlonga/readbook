@@ -310,15 +310,7 @@ class _SystemUiOverlayWrapperState
   }
 
   Future<void> _waitUntilStartupArtworkReady() async {
-    if (StartupArtworkStore.primedDisabled) {
-      return;
-    }
-    for (var attempt = 0; attempt < 6; attempt += 1) {
-      if (!StartupArtworkStore.isPriming) {
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
+    return;
   }
 
   Future<BuildContext?> _resolveStartupDialogContext() async {

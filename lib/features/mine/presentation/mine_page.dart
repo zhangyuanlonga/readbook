@@ -64,6 +64,7 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _showSourceEntry = false;
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
+  bool _isRemoteAccessResolved = false;
   int _sourceImportLimit = 10;
   _MineLayoutMode _layoutMode = _MineLayoutMode.list;
   bool _didRestoreLayoutMode = false;
@@ -266,6 +267,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       _showSourceEntry = supportsSourceRuntime && snapshot.showSourceEntry;
       _hasMembership = snapshot.hasMembership;
       _hasThemeCustom = snapshot.hasThemeCustom;
+      _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
       _sourceImportLimit = snapshot.sourceImportLimit;
       _localAvatarPath = snapshot.localAvatarPath;
     });
@@ -472,6 +474,16 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (_hasThemeCustom) {
       await _pushMineRoute('/appearance/advanced-themes');
       return;
+    }
+    if (!_isRemoteAccessResolved) {
+      await _refreshMine();
+      if (!mounted) {
+        return;
+      }
+      if (_hasThemeCustom) {
+        await _pushMineRoute('/appearance/advanced-themes');
+        return;
+      }
     }
     await _showMembershipPrompt('高级主题为会员专属功能，开通后可用。');
   }

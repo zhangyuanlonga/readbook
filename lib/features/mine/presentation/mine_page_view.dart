@@ -399,8 +399,8 @@ extension on _MinePageState {
               final base = theme == null ? '未启用' : '当前：${theme.name}';
               return _hasThemeCustom ? base : '$base · 开通会员可用';
             },
-            loading: () => _hasThemeCustom ? '读取中' : 'VIP 专属',
-            error: (_, _) => _hasThemeCustom ? '未启用' : 'VIP 专属',
+            loading: () => _hasThemeCustom ? '读取中' : '校验中',
+            error: (_, _) => _hasThemeCustom ? '未启用' : '校验中',
           ),
           tagText: 'VIP',
           onTap: _handleAdvancedThemeTap,

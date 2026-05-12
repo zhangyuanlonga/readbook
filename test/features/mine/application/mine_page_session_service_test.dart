@@ -38,6 +38,7 @@ void main() {
       expect(snapshot.hasMembership, isTrue);
       expect(snapshot.hasThemeCustom, isTrue);
       expect(snapshot.sourceImportLimit, 88);
+      expect(snapshot.isRemoteAccessResolved, isTrue);
     },
   );
 
@@ -78,6 +79,7 @@ void main() {
     expect(cached.hasThemeCustom, isTrue);
     expect(cached.showSourceEntry, isTrue);
     expect(cached.sourceImportLimit, 88);
+    expect(cached.isRemoteAccessResolved, isTrue);
     expect(featureService.fetchCount, 1);
     expect(membershipService.fetchCount, 1);
   });

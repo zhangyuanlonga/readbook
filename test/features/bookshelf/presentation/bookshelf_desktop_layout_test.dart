@@ -11,7 +11,9 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('desktop empty state keeps one import entry', (tester) async {
+  testWidgets('desktop empty state follows mobile empty actions', (
+    tester,
+  ) async {
     addTearDown(() async {
       await tester.binding.setSurfaceSize(null);
       tester.view.resetDevicePixelRatio();
@@ -35,8 +37,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('导入'), findsOneWidget);
-    expect(find.text('导入本地图书'), findsNothing);
+    expect(find.text('导入'), findsNothing);
+    expect(find.text('默认排序'), findsNothing);
+    expect(find.byIcon(Icons.checklist_rounded), findsNothing);
+    expect(find.text('导入本地图书'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 9));

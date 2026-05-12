@@ -815,15 +815,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         padding: EdgeInsets.all(metrics.cardPadding),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final hasBooks = _books.isNotEmpty;
+            final hasFilteredBooks = filteredBooks.isNotEmpty;
             final actions = <Widget>[
-              Tooltip(
-                message: '书籍排序：${_sortModeLabel(_sortMode)}',
-                child: OutlinedButton.icon(
-                  onPressed: _books.isEmpty ? null : _showSortModeSheet,
-                  icon: const Icon(Icons.sort_rounded),
-                  label: Text(_sortModeLabel(_sortMode)),
+              if (hasBooks)
+                Tooltip(
+                  message: '书籍排序：${_sortModeLabel(_sortMode)}',
+                  child: OutlinedButton.icon(
+                    onPressed: _showSortModeSheet,
+                    icon: const Icon(Icons.sort_rounded),
+                    label: Text(_sortModeLabel(_sortMode)),
+                  ),
                 ),
-              ),
               IconButton.filledTonal(
                 tooltip: _useGridView ? '切换列表' : '切换网格',
                 onPressed:
@@ -834,15 +837,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       : Icons.grid_view_rounded,
                 ),
               ),
-              IconButton.filledTonal(
-                tooltip: '选择书籍',
-                onPressed:
-                    _isLoading || filteredBooks.isEmpty
-                        ? null
-                        : _startSelectionMode,
-                icon: const Icon(Icons.checklist_rounded),
-              ),
+              if (hasFilteredBooks)
+                IconButton.filledTonal(
+                  tooltip: '选择书籍',
+                  onPressed: _isLoading ? null : _startSelectionMode,
+                  icon: const Icon(Icons.checklist_rounded),
+                ),
             ];
+            final showToolbarImport = hasBooks;
 
             Widget actionWrap() {
               return Wrap(
@@ -872,12 +874,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   Row(
                     children: [
                       Expanded(child: _buildBookshelfSearchBar()),
-                      SizedBox(width: metrics.contentGap),
-                      FilledButton.icon(
-                        onPressed: _showImportLocalBooksSheet,
-                        icon: const Icon(Icons.library_add_rounded),
-                        label: const Text('导入'),
-                      ),
+                      if (showToolbarImport) ...[
+                        SizedBox(width: metrics.contentGap),
+                        FilledButton.icon(
+                          onPressed: _showImportLocalBooksSheet,
+                          icon: const Icon(Icons.library_add_rounded),
+                          label: const Text('导入'),
+                        ),
+                      ],
                     ],
                   ),
                   SizedBox(height: metrics.contentGap),
@@ -899,12 +903,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 Expanded(child: filterOrSummary),
                 SizedBox(width: metrics.contentGap),
                 actionWrap(),
-                SizedBox(width: metrics.contentGap),
-                FilledButton.icon(
-                  onPressed: _showImportLocalBooksSheet,
-                  icon: const Icon(Icons.library_add_rounded),
-                  label: const Text('导入'),
-                ),
+                if (showToolbarImport) ...[
+                  SizedBox(width: metrics.contentGap),
+                  FilledButton.icon(
+                    onPressed: _showImportLocalBooksSheet,
+                    icon: const Icon(Icons.library_add_rounded),
+                    label: const Text('导入'),
+                  ),
+                ],
               ],
             );
           },

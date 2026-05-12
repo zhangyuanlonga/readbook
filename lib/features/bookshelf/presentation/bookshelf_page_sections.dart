@@ -119,7 +119,6 @@ extension on _BookshelfPageState {
     final card = BookshelfEmptyCard(
       onImportLocal: _showImportLocalBooksSheet,
       palette: _resolvedPalette(context),
-      showImportAction: !metrics.isMediumUpWindow,
     );
     if (!metrics.isMediumUpWindow) {
       return card;

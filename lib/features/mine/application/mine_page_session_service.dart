@@ -20,6 +20,7 @@ class MinePageSessionSnapshot {
     required this.hasMembership,
     required this.hasThemeCustom,
     required this.sourceImportLimit,
+    required this.isRemoteAccessResolved,
   });
 
   final AuthSession? session;
@@ -28,6 +29,7 @@ class MinePageSessionSnapshot {
   final bool hasMembership;
   final bool hasThemeCustom;
   final int sourceImportLimit;
+  final bool isRemoteAccessResolved;
 }
 
 class MinePageSessionPriming {
@@ -69,6 +71,7 @@ class MinePageSessionService {
         hasMembership: false,
         hasThemeCustom: false,
         sourceImportLimit: 10,
+        isRemoteAccessResolved: true,
       );
     }
 
@@ -268,6 +271,7 @@ class MinePageSessionService {
       hasMembership: remoteSnapshot?.hasMembership ?? false,
       hasThemeCustom: remoteSnapshot?.hasThemeCustom ?? false,
       sourceImportLimit: remoteSnapshot?.sourceImportLimit ?? 10,
+      isRemoteAccessResolved: remoteSnapshot != null,
     );
   }
 

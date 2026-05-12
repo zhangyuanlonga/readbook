@@ -247,6 +247,7 @@ void main() {
             minePageSessionServiceProvider.overrideWithValue(
               mineSessionService,
             ),
+            mineAuthSessionStoreProvider.overrideWithValue(sessionStore),
             advancedThemePageFlowCoordinatorFactoryProvider.overrideWithValue(
               () => _NoopAdvancedThemePageFlowCoordinator(),
             ),
