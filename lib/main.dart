@@ -1,4 +1,4 @@
-import 'package:flutter_appread/app/bootstrap.dart';
+import 'package:shuxiang_reading_next/app/bootstrap.dart';
 
 Future<void> main() async {
   await bootstrap();
@@ -12,6 +12,6 @@ Future<void> main() async {
 // ./scripts/build_unified_artifacts.sh android,ios,macos release
 
 // ./scripts/build_unified_artifacts.sh android,macos debug
-// # 只打 Android APK，并按 ABI 拆分
+// # 只打 Android APK，并按 ABI 拆分j
 // ANDROID_TARGET=apk SPLIT_PER_ABI=1 ./scripts/build_unified_artifacts.sh android release
 // ```

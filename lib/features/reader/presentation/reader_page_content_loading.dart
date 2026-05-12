@@ -1,0 +1,1173 @@
+// ignore_for_file: unused_element
+
+part of 'reader_page.dart';
+
+extension _ReaderPageContentLoadingExtension on _ReaderPageState {
+  void _setContentFlow(
+    String content, {
+    List<String> imageUrls = const [],
+    Map<String, String> imageHeaders = const {},
+    ReaderDocument? document,
+    List<String>? precomputedParagraphs,
+    List<List<ReaderPagedSlice>>? precomputedPagedPages,
+    int? precomputedCurrentPageIndex,
+    String? precomputedPaginationSignature,
+  }) {
+    final resolvedContentState = _contentLoadingController.buildResolvedContent(
+      content: content,
+      imageUrls: imageUrls,
+      imageHeaders: imageHeaders,
+      document: document,
+      precomputedParagraphs: precomputedParagraphs,
+      precomputedPagedPages: precomputedPagedPages,
+      precomputedCurrentPageIndex: precomputedCurrentPageIndex,
+      precomputedPaginationSignature: precomputedPaginationSignature,
+    );
+
+    _stopAutoRead();
+    _resetScrollEdgeAdvanceState();
+    _disposeMangaTransformControllers();
+    _document = resolvedContentState.document;
+    _content = resolvedContentState.content;
+    _chapterImageUrls = resolvedContentState.chapterImageUrls;
+    _chapterImageHeaders = resolvedContentState.imageHeaders;
+    _mangaImageRetryNonce.clear();
+    _precachedInlineImageUrls.clear();
+    _lastInlineImagePrecacheAt = null;
+    _mangaPageIndex = 0;
+    _isTextSelectionActive = false;
+    _selectionRange = null;
+    _selectionStatus = SelectionStatus.none;
+    _selectionStartOffset = 0;
+    _selectionEndOffset = 0;
+    _selectedSnippet = '';
+    _hideBookmarkToolbar();
+    _chapterBookmarks = const <Bookmark>[];
+    _bookmarkRangesByParagraph = const <int, List<_BookmarkRange>>{};
+    if (_mangaPageController.hasClients) {
+      _mangaPageController.jumpToPage(0);
+    }
+    _paragraphs = resolvedContentState.paragraphs;
+    _renderItems = resolvedContentState.renderItems;
+    _renderTextItemsByParagraph =
+        resolvedContentState.renderTextItemsByParagraph;
+    _pagedPages = resolvedContentState.pagedPages;
+    _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+    _textPaginationFallbackDiagnostic = null;
+    _currentPageIndex = resolvedContentState.currentPageIndex;
+    _pagedPaginationState = resolvedContentState.paginationState;
+    _resetCatalogSearchCache();
+    _resetPagedTransitionState();
+    _resetCurlAnimationState();
+    _scheduleInlineImagePrecache();
+    unawaited(_refreshChapterBookmarks());
+  }
+
+  bool _shouldBuildContinuousTextFlowForFlow(ChapterContentResult result) {
+    return _shouldUseContinuousTextFlow &&
+        !result.isImageContent &&
+        result.document.paragraphs.isNotEmpty;
+  }
+
+  _ContinuousTextChapter _buildContinuousTextChapterFlow({
+    required Chapter chapter,
+    required int chapterIndex,
+    required _ChapterLoadSnapshot snapshot,
+  }) {
+    return _fromContinuousTextChapterSupportFlow(
+      _contentLoadingController.buildContinuousTextChapterFromResult(
+        chapter: chapter,
+        chapterIndex: chapterIndex,
+        result: snapshot.result,
+        isCached: snapshot.isCached,
+      ),
+    );
+  }
+
+  _ContinuousTextChapter _fromContinuousTextChapterSupportFlow(
+    ReaderContinuousTextChapter chapter,
+  ) {
+    return _ContinuousTextChapter(
+      chapterId: chapter.chapterId,
+      chapterUrl: chapter.chapterUrl,
+      chapterTitle: chapter.chapterTitle,
+      displayTitle: chapter.displayTitle,
+      chapterIndex: chapter.chapterIndex,
+      content: chapter.content,
+      document: chapter.document,
+      paragraphs: chapter.paragraphs,
+      isCached: chapter.isCached,
+    );
+  }
+
+  List<_ContinuousTextChapter> _retainContinuousTextWindowFlow(
+    Iterable<_ContinuousTextChapter> chapters, {
+    int? currentChapterIndex,
+  }) {
+    return _chapterWindowController.retainWindow<_ContinuousTextChapter>(
+      items: chapters,
+      chapterIndexOf: (chapter) => chapter.chapterIndex,
+      chapters: _chapters,
+      currentChapterIndex: currentChapterIndex ?? _currentIndex,
+    );
+  }
+
+  List<_ContinuousTextChapter> _insertContinuousTextChapterInWindowFlow(
+    _ContinuousTextChapter chapter, {
+    int? currentChapterIndex,
+  }) {
+    return _chapterWindowController
+        .insertAndRetainWindow<_ContinuousTextChapter>(
+          items: _continuousTextChapters,
+          item: chapter,
+          chapterIndexOf: (item) => item.chapterIndex,
+          chapters: _chapters,
+          currentChapterIndex: currentChapterIndex ?? _currentIndex,
+        );
+  }
+
+  ReaderContinuousTextChapter _toContinuousTextChapterSupportFlow(
+    _ContinuousTextChapter chapter,
+  ) {
+    return ReaderContinuousTextChapter(
+      chapterId: chapter.chapterId,
+      chapterUrl: chapter.chapterUrl,
+      chapterTitle: chapter.chapterTitle,
+      displayTitle: chapter.displayTitle,
+      chapterIndex: chapter.chapterIndex,
+      content: chapter.content,
+      document: chapter.document,
+      paragraphs: chapter.paragraphs,
+      isCached: chapter.isCached,
+    );
+  }
+
+  ReaderContinuousTextChapterLayout _toContinuousTextChapterLayoutSupportFlow(
+    _ContinuousTextChapterLayout layout,
+  ) {
+    return ReaderContinuousTextChapterLayout(
+      startOffset: layout.startOffset,
+      endOffset: layout.endOffset,
+    );
+  }
+
+  void _replaceContinuousTextFlowWithCurrentChapterFlow({
+    required Chapter chapter,
+    required int chapterIndex,
+    required _ChapterLoadSnapshot snapshot,
+  }) {
+    if (!_shouldBuildContinuousTextFlowForFlow(snapshot.result)) {
+      _continuousTextChapters = const <_ContinuousTextChapter>[];
+      return;
+    }
+
+    _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+      _buildContinuousTextChapterFlow(
+        chapter: chapter,
+        chapterIndex: chapterIndex,
+        snapshot: snapshot,
+      ),
+      currentChapterIndex: chapterIndex,
+    );
+  }
+
+  Future<_ContinuousTextChapter?> _loadContinuousTextChapterFlow(
+    int chapterIndex,
+  ) async {
+    if (chapterIndex < 0 || chapterIndex >= _chapters.length) {
+      return null;
+    }
+
+    final chapter = _chapters[chapterIndex];
+    if (!_chapterNavigation.isReadableChapter(chapter)) {
+      return null;
+    }
+    if (chapterIndex == _currentIndex &&
+        _chapterImageUrls.isEmpty &&
+        _content.trim().isNotEmpty) {
+      final currentParagraphs =
+          _paragraphs.isEmpty ? <String>[_content] : _paragraphs;
+      return _ContinuousTextChapter(
+        chapterId: _chapterId,
+        chapterUrl: (_chapterUrl ?? '').trim(),
+        chapterTitle: chapter.title.trim(),
+        displayTitle: (_chapterTitle ?? chapter.title).trim(),
+        chapterIndex: chapterIndex,
+        content: _content,
+        document: _document,
+        paragraphs: List<String>.unmodifiable(currentParagraphs),
+        isCached: _isCurrentChapterCached,
+      );
+    }
+
+    final chapterUrl = chapter.chapterUrl.trim();
+    if (chapterUrl.isEmpty) {
+      return null;
+    }
+
+    final snapshot = await _fetchChapterContentSnapshotFlow(
+      sourceId: (_sourceId ?? '').trim(),
+      chapterId: chapter.id,
+      chapterUrl: chapterUrl,
+      chapterTitle: chapter.title,
+      chapterIndex: chapterIndex,
+    );
+    if (!_shouldBuildContinuousTextFlowForFlow(snapshot.result)) {
+      return null;
+    }
+    return _buildContinuousTextChapterFlow(
+      chapter: chapter,
+      chapterIndex: chapterIndex,
+      snapshot: snapshot,
+    );
+  }
+
+  Future<_ContinuousTextChapter?> _loadAdjacentContinuousTextChapterFlow({
+    required bool forward,
+  }) async {
+    if (_isScrollEdgeAdvancingChapter ||
+        !_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.isEmpty) {
+      return null;
+    }
+
+    _continuousTextChapters = _retainContinuousTextWindowFlow(
+      _continuousTextChapters,
+    );
+    final plan = _chapterWindowController.buildWindowPlan(
+      chapters: _chapters,
+      currentChapterIndex: _currentIndex,
+    );
+    final adjacentIndex =
+        forward ? plan?.nextChapterIndex : plan?.previousChapterIndex;
+    if (adjacentIndex == null) {
+      return null;
+    }
+    for (final chapter in _continuousTextChapters) {
+      if (chapter.chapterIndex == adjacentIndex) {
+        return chapter;
+      }
+    }
+
+    final targetIndex = _chapterWindowController.resolveAdjacentLoadIndex(
+      chapters: _chapters,
+      loadedChapterIndices: _continuousTextChapters.map(
+        (item) => item.chapterIndex,
+      ),
+      currentChapterIndex: _currentIndex,
+      forward: forward,
+    );
+    if (targetIndex == null || targetIndex != adjacentIndex) {
+      return null;
+    }
+
+    _isScrollEdgeAdvancingChapter = true;
+    try {
+      final anchorChapter = forward ? null : _findCurrentContinuousTextChapter();
+      final beforeAnchorStart =
+          anchorChapter == null
+              ? null
+              : _measureContinuousTextChapterLayoutFlow(anchorChapter)
+                  ?.startOffset;
+      final beforeScrollOffset =
+          _scrollController.hasClients ? _scrollController.position.pixels : null;
+      final chapter = await _loadContinuousTextChapterFlow(targetIndex);
+      if (!mounted || chapter == null) {
+        return null;
+      }
+      if (_continuousTextChapters.any(
+        (item) => item.chapterIndex == chapter.chapterIndex,
+      )) {
+        return chapter;
+      }
+      _updateReaderState(() {
+        _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+          chapter,
+        );
+      });
+      if (!forward && anchorChapter != null && beforeAnchorStart != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_scrollController.hasClients) {
+            return;
+          }
+          final afterAnchorStart =
+              _measureContinuousTextChapterLayoutFlow(anchorChapter)
+                  ?.startOffset;
+          if (afterAnchorStart == null) {
+            return;
+          }
+          final delta = afterAnchorStart - beforeAnchorStart;
+          if (delta.abs() <= 0.5) {
+            return;
+          }
+          final position = _scrollController.position;
+          final target = ((beforeScrollOffset ?? position.pixels) + delta)
+              .clamp(position.minScrollExtent, position.maxScrollExtent);
+          if ((position.pixels - target).abs() > 0.5) {
+            _scrollController.jumpTo(target);
+          }
+        });
+      }
+      return chapter;
+    } finally {
+      _isScrollEdgeAdvancingChapter = false;
+    }
+  }
+
+  bool _isContinuousTextChapterActiveFlow(_ContinuousTextChapter chapter) {
+    return _contentLoadingController.isContinuousTextChapterActive(
+      chapter: _toContinuousTextChapterSupportFlow(chapter),
+      currentChapterIndex: _currentIndex,
+      currentChapterId: _chapterId,
+      currentChapterUrl: _chapterUrl,
+    );
+  }
+
+  _ContinuousTextChapter? _findCurrentContinuousTextChapterFlow() {
+    for (final chapter in _continuousTextChapters) {
+      if (_isContinuousTextChapterActiveFlow(chapter)) {
+        return chapter;
+      }
+    }
+    return null;
+  }
+
+  _ContinuousTextChapterLayout? _measureContinuousTextChapterLayoutFlow(
+    _ContinuousTextChapter chapter,
+  ) {
+    if (!_scrollController.hasClients) {
+      return null;
+    }
+
+    final context = _continuousTextChapterKey(chapter).currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+
+    final viewport = RenderAbstractViewport.of(renderObject);
+    final startOffset = viewport.getOffsetToReveal(renderObject, 0).offset;
+    return _ContinuousTextChapterLayout(
+      startOffset: startOffset,
+      endOffset: startOffset + renderObject.size.height,
+    );
+  }
+
+  double _continuousTextChapterScrollRatioForFlow(
+    _ContinuousTextChapter chapter,
+  ) {
+    if (!_scrollController.hasClients) {
+      return 0;
+    }
+
+    final layout = _measureContinuousTextChapterLayoutFlow(chapter);
+    if (layout == null) {
+      return 0;
+    }
+
+    final viewportExtent = _scrollController.position.viewportDimension;
+    final available = (layout.endOffset - layout.startOffset - viewportExtent)
+        .clamp(0.0, double.infinity);
+    if (available <= 0) {
+      if (_scrollController.position.pixels <= layout.startOffset) {
+        return 0;
+      }
+      return 1;
+    }
+
+    final local = (_scrollController.position.pixels - layout.startOffset)
+        .clamp(0.0, available);
+    return (local / available).clamp(0.0, 1.0);
+  }
+
+  _ContinuousTextChapter? _resolveActiveContinuousTextChapterFlow() {
+    if (!_scrollController.hasClients || _continuousTextChapters.isEmpty) {
+      return null;
+    }
+    final layouts = <int, ReaderContinuousTextChapterLayout>{};
+    for (final chapter in _continuousTextChapters) {
+      final layout = _measureContinuousTextChapterLayoutFlow(chapter);
+      if (layout == null) {
+        continue;
+      }
+      layouts[chapter.chapterIndex] = _toContinuousTextChapterLayoutSupportFlow(
+        layout,
+      );
+    }
+    final resolved = _contentLoadingController
+        .resolveActiveContinuousTextChapter(
+          chapters: _continuousTextChapters
+              .map(_toContinuousTextChapterSupportFlow)
+              .toList(growable: false),
+          layoutsByChapterIndex: layouts,
+          viewport: ReaderContinuousTextViewportMetrics(
+            pixels: _scrollController.position.pixels,
+            viewportDimension: _scrollController.position.viewportDimension,
+            maxScrollExtent: _scrollController.position.maxScrollExtent,
+          ),
+        );
+    return resolved == null
+        ? null
+        : _fromContinuousTextChapterSupportFlow(resolved);
+  }
+
+  void _activateContinuousTextChapterFlow(_ContinuousTextChapter chapter) {
+    final layout = _measureContinuousTextChapterLayoutFlow(chapter);
+    final activation =
+        layout == null
+            ? _contentLoadingController.buildContinuousTextActivation(
+              chapter: _toContinuousTextChapterSupportFlow(chapter),
+              currentChapterIndex: _currentIndex,
+              currentChapterId: _chapterId,
+              currentChapterUrl: _chapterUrl,
+            )
+            : _contentLoadingController
+                .buildContinuousTextActivationFromViewport(
+                  chapter: _toContinuousTextChapterSupportFlow(chapter),
+                  currentChapterIndex: _currentIndex,
+                  currentChapterId: _chapterId,
+                  currentChapterUrl: _chapterUrl,
+                  layout: _toContinuousTextChapterLayoutSupportFlow(layout),
+                  viewport: ReaderContinuousTextViewportMetrics(
+                    pixels:
+                        _scrollController.hasClients
+                            ? _scrollController.position.pixels
+                            : 0,
+                    viewportDimension:
+                        _scrollController.hasClients
+                            ? _scrollController.position.viewportDimension
+                            : 0,
+                    maxScrollExtent:
+                        _scrollController.hasClients
+                            ? _scrollController.position.maxScrollExtent
+                            : 0,
+                  ),
+                );
+    if (activation == null) {
+      return;
+    }
+    _commitReadingRecordSession();
+    if (!mounted) {
+      return;
+    }
+    final preserveOffset =
+        _scrollController.hasClients ? _scrollController.position.pixels : null;
+
+    _updateReaderState(() {
+      _currentIndex = activation.chapterIndex;
+      _chapterId = activation.chapterId;
+      _chapterUrl = activation.chapterUrl;
+      _chapterTitle = activation.chapterTitle;
+      _isCurrentChapterCached = activation.isCached;
+      _document = activation.contentState.document;
+      _content = activation.contentState.content;
+      _chapterImageUrls = activation.contentState.chapterImageUrls;
+      _chapterImageHeaders = activation.contentState.imageHeaders;
+      _precachedInlineImageUrls.clear();
+      _lastInlineImagePrecacheAt = null;
+      _paragraphs = activation.contentState.paragraphs;
+      _renderItems = activation.contentState.renderItems;
+      _renderTextItemsByParagraph =
+          activation.contentState.renderTextItemsByParagraph;
+      _pagedPages = activation.contentState.pagedPages;
+      _pagedBlockPages = const <List<ReaderPagedBlock>>[];
+      _currentPageIndex = activation.contentState.currentPageIndex;
+      _pagedPaginationState = activation.contentState.paginationState;
+      _isTextSelectionActive = false;
+      _selectionRange = null;
+      _selectionStatus = SelectionStatus.none;
+      _selectionStartOffset = 0;
+      _selectionEndOffset = 0;
+      _selectedSnippet = '';
+      _hideBookmarkToolbar();
+      _chapterBookmarks = const <Bookmark>[];
+      _bookmarkRangesByParagraph = const <int, List<_BookmarkRange>>{};
+      _resetCatalogSearchCache();
+      _resetScrollEdgeAdvanceState();
+    });
+    if (preserveOffset != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        final position = _scrollController.position;
+        final stableOffset = preserveOffset.clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+        if ((position.pixels - stableOffset).abs() > 0.5) {
+          _scrollController.jumpTo(stableOffset);
+        }
+      });
+    }
+    _scheduleInlineImagePrecache();
+    unawaited(_refreshChapterBookmarks());
+
+    _scheduleReadingRecordSessionStart(initialRatio: activation.initialRatio);
+    _scheduleProgressSave();
+    final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
+    unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+  }
+
+  void _syncActiveContinuousTextChapterFromScrollFlow() {
+    if (!_shouldUseContinuousTextFlow || _continuousTextChapters.length <= 1) {
+      return;
+    }
+
+    final resolved = _resolveActiveContinuousTextChapterFlow();
+    if (resolved == null || _isContinuousTextChapterActiveFlow(resolved)) {
+      return;
+    }
+    _activateContinuousTextChapterFlow(resolved);
+  }
+
+  void _syncContinuousTextFlowAfterSettingsAppliedFlow() {
+    final seeded = _contentLoadingController.seedContinuousTextFlow(
+      shouldUseContinuousTextFlow: _shouldUseContinuousTextFlow,
+      isMangaChapter: _isMangaChapter,
+      currentContent: _content,
+      currentChapterIndex: _currentIndex,
+      chapters: _chapters,
+      currentChapterId: _chapterId,
+      currentChapterUrl: _chapterUrl,
+      currentChapterTitle: _chapterTitle,
+      contentState: _contentLoadingController.buildResolvedContent(
+        content: _content,
+        imageUrls: _chapterImageUrls,
+        imageHeaders: _chapterImageHeaders,
+        document: _document,
+        precomputedParagraphs: _paragraphs,
+        precomputedPagedPages: _pagedPages,
+        precomputedCurrentPageIndex: _currentPageIndex,
+        precomputedPaginationSignature: _pagedPaginationState.signature,
+      ),
+      isCurrentChapterCached: _isCurrentChapterCached,
+    );
+    if (seeded.isEmpty) {
+      if (_continuousTextChapters.isEmpty) {
+        return;
+      }
+      _updateReaderState(() {
+        _continuousTextChapters = const <_ContinuousTextChapter>[];
+      });
+      return;
+    }
+
+    if (_continuousTextChapters.isNotEmpty) {
+      return;
+    }
+    _updateReaderState(() {
+      _continuousTextChapters = _retainContinuousTextWindowFlow(
+        seeded.map(_fromContinuousTextChapterSupportFlow),
+      );
+    });
+  }
+
+  Future<_ChapterLoadSnapshot> _fetchChapterContentSnapshotFlow({
+    required String sourceId,
+    required String chapterId,
+    required String chapterUrl,
+    required String? chapterTitle,
+    required int? chapterIndex,
+  }) async {
+    final contentProvider = _contentLoadingPresenter.requireContentProvider(
+      registry: _contentProviderRegistry,
+      sourceId: sourceId,
+      stage: ErrorStage.content,
+    );
+    final snapshot = await _contentLoadingPresenter.fetchChapterContentSnapshot(
+      contentProvider: contentProvider,
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      currentBookId: _currentBookId,
+      bookTitle: _bookTitle,
+      detailUrl: _detailUrl,
+      chapterId: chapterId,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+    );
+
+    return _ChapterLoadSnapshot(
+      result: snapshot.result,
+      isCached: snapshot.isCached,
+    );
+  }
+
+  Future<void> _applyLoadedChapterSnapshotFlow({
+    required _ChapterLoadSnapshot snapshot,
+    required String chapterId,
+    required String chapterUrl,
+    required String? chapterTitle,
+    required int? chapterIndex,
+    required double targetRatio,
+    required int requestToken,
+    bool commitChapterIdentity = false,
+  }) async {
+    if (!_isActiveChapterContentRequestFlow(requestToken)) {
+      return;
+    }
+
+    final resolvedContinuousIndex = _chapterLoadPlanner
+        .resolveContinuousChapterIndex(
+          chapterIndex: chapterIndex,
+          chapters: _chapters,
+          chapterId: chapterId,
+          chapterUrl: chapterUrl,
+        );
+    final resolvedContinuousChapter =
+        resolvedContinuousIndex >= 0 &&
+                resolvedContinuousIndex < _chapters.length
+            ? _chapters[resolvedContinuousIndex]
+            : null;
+
+    List<String>? precomputedParagraphs;
+    List<List<ReaderPagedSlice>>? precomputedPagedPages;
+    int? precomputedPageIndex;
+    String? precomputedPaginationSignature;
+
+    final canPrepaginate = _chapterLoadPlanner.canPrepaginate(
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      hasImages: snapshot.result.imageUrls.isNotEmpty,
+      content: snapshot.result.content,
+      maxWidth: _lastPaginationSpec?.contentWidth,
+      maxHeight: _lastPaginationSpec?.contentHeight,
+    );
+
+    if (canPrepaginate) {
+      final paginationSpec = _lastPaginationSpec;
+      if (paginationSpec != null) {
+        final signature = _buildPaginationSignature(
+          spec: paginationSpec,
+          chapterIdOverride: commitChapterIdentity ? chapterId : _chapterId,
+        );
+        final cachedLayout = await _loadPrecomputedChapterLayout(
+          sourceId: _sourceId ?? '',
+          chapterUrl: chapterUrl,
+          signature: signature,
+        );
+        if (cachedLayout != null) {
+          precomputedParagraphs = cachedLayout.paragraphs;
+          precomputedPagedPages = cachedLayout.pagedPages;
+          precomputedPageIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
+            targetRatio: targetRatio,
+            pageCount: cachedLayout.pagedPages.length,
+          );
+          precomputedPaginationSignature = cachedLayout.paginationSignature;
+        }
+      }
+    }
+
+    _updateReaderState(() {
+      if (commitChapterIdentity) {
+        _currentIndex = chapterIndex;
+        _chapterId = chapterId;
+        _chapterUrl = chapterUrl;
+        _chapterTitle = _chapterLoadPlanner.resolveChapterTitleAfterLoad(
+          commitChapterIdentity: true,
+          loadedDisplayChapterTitle: snapshot.result.displayChapterTitle,
+          targetChapterTitle: chapterTitle,
+          currentChapterTitle: _chapterTitle,
+        );
+      }
+      if (!commitChapterIdentity) {
+        _chapterTitle = _chapterLoadPlanner.resolveChapterTitleAfterLoad(
+          commitChapterIdentity: false,
+          loadedDisplayChapterTitle: snapshot.result.displayChapterTitle,
+          targetChapterTitle: chapterTitle,
+          currentChapterTitle: _chapterTitle,
+        );
+      }
+      _isCurrentChapterCached = snapshot.isCached;
+      _errorText = null;
+      _setContentFlow(
+        snapshot.result.content,
+        imageUrls: snapshot.result.imageUrls,
+        imageHeaders: snapshot.result.imageHeaders,
+        document: snapshot.result.document,
+        precomputedParagraphs: precomputedParagraphs,
+        precomputedPagedPages: precomputedPagedPages,
+        precomputedCurrentPageIndex: precomputedPageIndex,
+        precomputedPaginationSignature: precomputedPaginationSignature,
+      );
+      if (resolvedContinuousChapter != null) {
+        _replaceContinuousTextFlowWithCurrentChapterFlow(
+          chapter: resolvedContinuousChapter,
+          chapterIndex: resolvedContinuousIndex,
+          snapshot: snapshot,
+        );
+      } else {
+        _continuousTextChapters = const <_ContinuousTextChapter>[];
+      }
+      _pagedPaginationState = ReaderPaginationSessionState(
+        signature: precomputedPaginationSignature,
+        pendingRestoreRatio: targetRatio,
+      );
+    });
+
+    _restoreScrollPosition(targetRatio);
+
+    await _saveProgress();
+    _hasPromptedMissingSourceSwitch = false;
+    if (_canWarmNeighborPaginationCache()) {
+      final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
+      unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+    }
+  }
+
+  Future<bool> _tryHydrateVisibleContentFromCacheFlow() async {
+    final sourceId = (_sourceId ?? '').trim();
+    if (sourceId.isEmpty) {
+      return false;
+    }
+
+    if (LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      final chapterId = _chapterId.trim();
+      if (chapterId.isEmpty || chapterId.toLowerCase() == 'bootstrap') {
+        return false;
+      }
+
+      try {
+        final chapter = await _localBookRepository.getChapterContentById(
+          chapterId,
+        );
+        if (chapter == null || !chapter.hasReadablePayload) {
+          return false;
+        }
+
+        final previewProgress = _bootstrapProgressForCurrentChapter();
+        var previewRatio = 0.0;
+        if (!mounted) {
+          return false;
+        }
+
+        final resolvedCurrentChapter =
+            _currentIndex != null &&
+                    _currentIndex! >= 0 &&
+                    _currentIndex! < _chapters.length
+                ? _chapters[_currentIndex!]
+                : null;
+
+        _updateReaderState(() {
+          _isCurrentChapterCached = true;
+          _errorText = null;
+          _setContentFlow(
+            chapter.content,
+            imageUrls: chapter.imageUrls,
+            document: chapter.document,
+          );
+          previewRatio = _resolveDocumentRestoreRatio(
+            progress: previewProgress,
+          );
+          if (resolvedCurrentChapter != null &&
+              _shouldUseContinuousTextFlow &&
+              !_document.isPureImageDocument &&
+              _document.paragraphs.isNotEmpty) {
+            _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+              _ContinuousTextChapter(
+                chapterId: chapter.id,
+                chapterUrl: (_chapterUrl ?? '').trim(),
+                chapterTitle: resolvedCurrentChapter.title.trim(),
+                displayTitle:
+                    (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
+                chapterIndex: _currentIndex!,
+                content: chapter.content,
+                document: _document,
+                paragraphs:
+                    _paragraphs.isEmpty
+                        ? List<String>.unmodifiable(_document.paragraphs)
+                        : List<String>.unmodifiable(_paragraphs),
+                isCached: true,
+              ),
+            );
+          } else {
+            _continuousTextChapters = const <_ContinuousTextChapter>[];
+          }
+          _pagedPaginationState = ReaderPaginationSessionState(
+            signature: _pagedPaginationState.signature,
+            pendingRestoreRatio: previewRatio,
+          );
+        });
+
+        if (previewProgress != null) {
+          _bootstrapProgress = null;
+        }
+        _restoreScrollPosition(previewRatio);
+        _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final chapterUrl = (_chapterUrl ?? '').trim();
+    if (chapterUrl.isEmpty) {
+      return false;
+    }
+
+    try {
+      final payload = await _cachedChapterStore.getCachedPayload(
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+      );
+      if (payload == null || payload.isEmpty) {
+        return false;
+      }
+
+      final decoded = _chapterCacheDecoder.decode(payload);
+      final previewProgress = _bootstrapProgressForCurrentChapter();
+      var previewRatio = 0.0;
+      if (!mounted) {
+        return false;
+      }
+
+      final resolvedCurrentChapter =
+          _currentIndex != null &&
+                  _currentIndex! >= 0 &&
+                  _currentIndex! < _chapters.length
+              ? _chapters[_currentIndex!]
+              : null;
+
+      _updateReaderState(() {
+        _isCurrentChapterCached = true;
+        _errorText = null;
+        _setContentFlow(
+          decoded.content,
+          imageUrls: decoded.imageUrls,
+          imageHeaders: decoded.imageHeaders,
+        );
+        previewRatio = _resolveDocumentRestoreRatio(progress: previewProgress);
+        if (resolvedCurrentChapter != null &&
+            _shouldUseContinuousTextFlow &&
+            !_document.isPureImageDocument &&
+            _document.paragraphs.isNotEmpty) {
+          _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+            _ContinuousTextChapter(
+              chapterId: _chapterId,
+              chapterUrl: (_chapterUrl ?? '').trim(),
+              chapterTitle: resolvedCurrentChapter.title.trim(),
+              displayTitle:
+                  (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
+              chapterIndex: _currentIndex!,
+              content: decoded.content,
+              document: _document,
+              paragraphs:
+                  _paragraphs.isEmpty
+                      ? List<String>.unmodifiable(_document.paragraphs)
+                      : List<String>.unmodifiable(_paragraphs),
+              isCached: true,
+            ),
+          );
+        } else {
+          _continuousTextChapters = const <_ContinuousTextChapter>[];
+        }
+        _pagedPaginationState = ReaderPaginationSessionState(
+          signature: _pagedPaginationState.signature,
+          pendingRestoreRatio: previewRatio,
+        );
+      });
+
+      if (previewProgress != null) {
+        _bootstrapProgress = null;
+      }
+      _restoreScrollPosition(previewRatio);
+      _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _loadCurrentChapterFlow({
+    double? initialScrollRatio,
+    ReaderLogicalPosition? initialLogicalPosition,
+    String? sourceIdOverride,
+    String? chapterIdOverride,
+    String? chapterUrlOverride,
+    String? chapterTitleOverride,
+    int? chapterIndexOverride,
+    bool commitChapterIdentity = false,
+  }) async {
+    if (!mounted) {
+      return false;
+    }
+    _cancelBackgroundRefreshConflictForCurrentBook();
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.reader,
+      conflictKeys: _currentConflictKeys(),
+    );
+    if (lease == null) {
+      return false;
+    }
+    final requestToken =
+        _readerSessionController
+            .beginIntent(const ReaderSessionIntent.load())
+            .chapterContentToken!;
+
+    double? readingRecordStartRatio;
+    final request = _chapterLoadPlanner.resolveLoadRequest(
+      sourceIdOverride: sourceIdOverride,
+      chapterIdOverride: chapterIdOverride,
+      chapterUrlOverride: chapterUrlOverride,
+      chapterTitleOverride: chapterTitleOverride,
+      currentSourceId: _sourceId,
+      currentChapterId: _chapterId,
+      currentChapterUrl: _chapterUrl,
+      currentChapterTitle: _chapterTitle,
+    );
+    if (request == null) {
+      _stopAutoRead();
+      _updateReaderState(() {
+        _errorText = '当前章节信息不完整。';
+      });
+      return false;
+    }
+
+    final suppressLoadingUi = await _shouldSuppressChapterLoadingUiFlow(
+      sourceId: request.sourceId,
+      chapterUrl: request.chapterUrl,
+    );
+
+    _stopAutoRead();
+    _resetScrollEdgeAdvanceState();
+    _commitReadingRecordSession();
+    _updateReaderState(() {
+      _isLoadingContent = true;
+      _errorText = null;
+    });
+    if (suppressLoadingUi) {
+      _clearDelayedLoadingUi();
+    } else {
+      _scheduleBlockingLoadingCard();
+      _scheduleChapterLoadingIndicator();
+    }
+
+    try {
+      final resolvedIndex = _chapterLoadPlanner.resolveFetchChapterIndex(
+        chapterIndexOverride: chapterIndexOverride,
+        currentChapterIndex: _currentIndex,
+        chapters: _chapters,
+        chapterUrl: request.chapterUrl,
+      );
+      final snapshot = await _fetchChapterContentSnapshotFlow(
+        sourceId: request.sourceId,
+        chapterId: request.chapterId,
+        chapterUrl: request.chapterUrl,
+        chapterTitle: request.chapterTitle,
+        chapterIndex: resolvedIndex,
+      );
+
+      if (!_isActiveChapterContentRequestFlow(requestToken)) {
+        return false;
+      }
+
+      final targetRatio = _resolveDocumentRestoreRatio(
+        document: snapshot.result.document,
+        logicalPosition: initialLogicalPosition,
+        fallback: initialScrollRatio ?? 0.0,
+      );
+      await _applyLoadedChapterSnapshotFlow(
+        snapshot: snapshot,
+        chapterId: request.chapterId,
+        chapterUrl: request.chapterUrl,
+        chapterTitle: request.chapterTitle,
+        chapterIndex: resolvedIndex,
+        targetRatio: targetRatio,
+        requestToken: requestToken,
+        commitChapterIdentity: commitChapterIdentity,
+      );
+      if (!_isActiveChapterContentRequestFlow(requestToken)) {
+        return false;
+      }
+      readingRecordStartRatio = targetRatio;
+      return true;
+    } on AppException catch (error) {
+      if (!_isActiveChapterContentRequestFlow(requestToken)) {
+        return false;
+      }
+      final readableError = _toUserReadableError(error);
+      _recordReaderFailure(message: readableError, errorCode: error.code);
+      _updateReaderState(() {
+        _errorText = readableError;
+      });
+      _maybePromptSwitchSourceForMissingSource(error.code);
+      final switched = await _tryAutoSwitchSourceOnFailure();
+      return switched;
+    } catch (_) {
+      if (!_isActiveChapterContentRequestFlow(requestToken)) {
+        return false;
+      }
+      const fallbackError = '加载正文失败。';
+      _recordReaderFailure(message: fallbackError);
+      _updateReaderState(() {
+        _errorText = fallbackError;
+      });
+      final switched = await _tryAutoSwitchSourceOnFailure();
+      return switched;
+    } finally {
+      if (_isActiveChapterContentRequestFlow(requestToken)) {
+        _clearDelayedLoadingUi();
+        _updateReaderState(() {
+          _isLoadingContent = false;
+        });
+        unawaited(_syncVolumeKeyPageInterception());
+        if (readingRecordStartRatio != null) {
+          _scheduleReadingRecordSessionStart(
+            initialRatio: readingRecordStartRatio,
+          );
+        }
+        _reconcileAutoRead(restart: true);
+      }
+      lease.release();
+    }
+  }
+
+  bool _isActiveChapterContentRequestFlow(int requestToken) {
+    return mounted && requestToken == _chapterContentRequestToken;
+  }
+
+  Future<bool> _shouldSuppressChapterLoadingUiFlow({
+    required String sourceId,
+    required String chapterUrl,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedChapterUrl = chapterUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedChapterUrl.isEmpty) {
+      return false;
+    }
+    if (LocalReaderIdentity.isLocalSourceId(normalizedSourceId)) {
+      return true;
+    }
+    try {
+      return await _cachedChapterStore.hasCachedPayload(
+        sourceId: normalizedSourceId,
+        chapterUrl: normalizedChapterUrl,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _preloadNeighborsFlow({required int taskToken}) async {
+    final sourceId = _sourceId;
+    final currentIndex = _currentIndex;
+    if (sourceId == null || currentIndex == null || _chapters.isEmpty) {
+      return;
+    }
+
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty) {
+      return;
+    }
+    final budget = _currentResourceBudget(
+      scene: ReaderWorkScene.backgroundPrefetch,
+    );
+    final orderedIndexes = _neighborPreloadContentIndexes(
+      normalizedSourceId: normalizedSourceId,
+      currentIndex: currentIndex,
+      chapterCount: _chapters.length,
+      budget: budget,
+    );
+    if (orderedIndexes.isEmpty) {
+      return;
+    }
+
+    for (final index in orderedIndexes) {
+      if (!mounted || taskToken != _preloadTaskToken) {
+        return;
+      }
+
+      final chapter = _chapters[index];
+      final chapterUrl = chapter.chapterUrl.trim();
+      if (chapterUrl.isEmpty) {
+        continue;
+      }
+      final preloadIdentity = ReaderPreloadTask.identityFor(
+        type: ReaderPreloadTaskType.content,
+        chapterIndex: index,
+      );
+
+      final nextChapterUrl =
+          index < _chapters.length - 1
+              ? _chapters[index + 1].chapterUrl.trim()
+              : '';
+
+      try {
+        final preloadProvider = _requireContentProvider(
+          sourceId: normalizedSourceId,
+          stage: ErrorStage.content,
+        );
+        final result = await preloadProvider.loadChapterContent(
+          sourceId: normalizedSourceId,
+          chapterUrl: chapterUrl,
+          bookId: _currentBookId,
+          bookTitle: _bookTitle,
+          detailUrl: _detailUrl,
+          chapterId: chapter.id,
+          chapterIndex: index,
+          chapterTitle: chapter.title,
+          nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
+        );
+        _preloadFailureMemory.recordSuccess(preloadIdentity);
+        if (_canWarmNeighborPaginationCache() &&
+            result.imageUrls.isEmpty &&
+            result.content.trim().isNotEmpty &&
+            _lastPaginationSpec != null &&
+            _lastPaginationSpec!.contentWidth >= 20 &&
+            _lastPaginationSpec!.contentHeight >= 40) {
+          final paragraphs = result.document.paragraphs;
+          final effectiveParagraphs =
+              paragraphs.isEmpty ? <String>[result.content] : paragraphs;
+          final signature = _buildPaginationSignature(
+            spec: _lastPaginationSpec!,
+            chapterIdOverride: chapter.id,
+          );
+          if (!mounted) {
+            return;
+          }
+          final textScaler = MediaQuery.textScalerOf(context);
+          if (await _loadPrecomputedChapterLayout(
+                sourceId: normalizedSourceId,
+                chapterUrl: chapterUrl,
+                signature: signature,
+              ) ==
+              null) {
+            final colors = _resolveThemeColors(
+              _effectiveReaderThemeMode(),
+              _settings,
+            );
+            final paginationResult = await _paginationEngine.paginateParagraphs(
+              ReaderPaginationRequest(
+                paragraphs: effectiveParagraphs,
+                spec: _lastPaginationSpec!,
+                paragraphStyle: _paragraphTextStyle(
+                  colors,
+                ).copyWith(color: Colors.black),
+                paragraphModels: _buildPaginationParagraphModels(
+                  colors,
+                  effectiveParagraphs,
+                ),
+                textScaler: textScaler,
+                shouldAbort: () => !mounted || taskToken != _preloadTaskToken,
+              ),
+            );
+            final pages = paginationResult?.pages;
+            if (pages != null && pages.isNotEmpty) {
+              _storePrecomputedChapterLayout(
+                sourceId: normalizedSourceId,
+                chapterUrl: chapterUrl,
+                layout: ReaderPrecomputedChapterLayout(
+                  paragraphs: effectiveParagraphs,
+                  pagedPages: pages,
+                  paginationSignature: signature,
+                ),
+              );
+            }
+          }
+        }
+      } catch (_) {
+        _preloadFailureMemory.recordFailure(preloadIdentity);
+        // Preload failures should not interrupt active reading.
+      }
+    }
+  }
+}

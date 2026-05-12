@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/adaptive_filter_bar.dart';
+import '../../../../app/widgets/adaptive_search_bar.dart';
+import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/app_status_state_card.dart';
+import '../../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../../app/theme/app_border_tokens.dart';
+
 class BookshelfFilterChipData {
   const BookshelfFilterChipData({
     required this.label,
@@ -14,72 +22,119 @@ class BookshelfFilterChipData {
   final VoidCallback? onLongPress;
 }
 
-class BookshelfViewModeEditBar extends StatelessWidget {
-  const BookshelfViewModeEditBar({
+class BookshelfInlineSearchBar extends StatelessWidget {
+  const BookshelfInlineSearchBar({
     super.key,
-    required this.summaryText,
-    required this.useGridView,
-    required this.viewButtonEnabled,
-    required this.editButtonEnabled,
-    required this.isSelectionMode,
-    required this.onToggleViewMode,
-    required this.onToggleEditMode,
+    required this.palette,
+    required this.controller,
+    this.focusNode,
+    required this.onChanged,
+    required this.onClear,
+    this.summaryText,
+    this.hintText = '搜索书名、作者、标签、分类',
   });
 
+  final ResolvedAdvancedThemePalette palette;
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+  final String? summaryText;
+  final String hintText;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdaptiveSearchBar(
+      controller: controller,
+      focusNode: focusNode,
+      onChanged: onChanged,
+      onClear: onClear,
+      hintText: hintText,
+      summaryText: summaryText,
+      backgroundColor: palette.searchFieldBackgroundColor,
+      foregroundColor: palette.textPrimaryColor,
+      secondaryColor: palette.textSecondaryColor,
+      outlineColor: resolveAppBorderColor(
+        Theme.of(context).colorScheme,
+        baseColor: palette.outlineColor,
+        containerColor: palette.searchFieldBackgroundColor,
+        tone: AppBorderTone.strong,
+      ),
+    );
+  }
+}
+
+class BookshelfInlineSearchTrigger extends StatelessWidget {
+  const BookshelfInlineSearchTrigger({
+    super.key,
+    required this.palette,
+    required this.summaryText,
+    required this.onTap,
+    this.label = '搜索书架',
+  });
+
+  final ResolvedAdvancedThemePalette palette;
   final String summaryText;
-  final bool useGridView;
-  final bool viewButtonEnabled;
-  final bool editButtonEnabled;
-  final bool isSelectionMode;
-  final VoidCallback? onToggleViewMode;
-  final VoidCallback? onToggleEditMode;
+  final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
 
-    return Row(
-      children: [
-        Text(
-          summaryText,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+    return SizedBox(
+      height: metrics.controlHeight,
+      child: Material(
+        color: palette.searchFieldBackgroundColor,
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(metrics.cardRadius),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: metrics.cardPadding),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  size: metrics.isCompactDensity ? 17 : 18,
+                  color: palette.textSecondaryColor,
+                ),
+                SizedBox(width: metrics.contentGap),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: palette.textSecondaryColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                SizedBox(width: metrics.contentGap),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: metrics.isCompactDensity ? 6 : 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: palette.surfaceColor.withValues(alpha: 0.78),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    summaryText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: palette.textSecondaryColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        const Spacer(),
-        IconButton(
-          tooltip: useGridView ? '网格模式' : '列表模式',
-          onPressed: viewButtonEnabled ? onToggleViewMode : null,
-          visualDensity: VisualDensity.compact,
-          iconSize: 20,
-          color:
-              viewButtonEnabled
-                  ? (useGridView
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant)
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-          icon: Icon(
-            useGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
-          ),
-        ),
-        IconButton(
-          tooltip: isSelectionMode ? '完成编辑' : '进入编辑',
-          onPressed: editButtonEnabled ? onToggleEditMode : null,
-          visualDensity: VisualDensity.compact,
-          iconSize: 20,
-          color:
-              editButtonEnabled
-                  ? (isSelectionMode
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant)
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-          icon: Icon(
-            isSelectionMode ? Icons.check_rounded : Icons.edit_outlined,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -87,105 +142,187 @@ class BookshelfViewModeEditBar extends StatelessWidget {
 class BookshelfFilterBar extends StatelessWidget {
   const BookshelfFilterBar({
     super.key,
+    required this.palette,
     required this.baseChips,
     required this.customChips,
     required this.highlightFilterAction,
     required this.filterActionMessage,
     required this.onOpenFilterSheet,
+    this.showActionButton = true,
   });
 
+  final ResolvedAdvancedThemePalette palette;
   final List<BookshelfFilterChipData> baseChips;
   final List<BookshelfFilterChipData> customChips;
   final bool highlightFilterAction;
   final String filterActionMessage;
   final VoidCallback? onOpenFilterSheet;
+  final bool showActionButton;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final chipTextStyle = Theme.of(
-      context,
-    ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600);
-
-    Widget buildChip(BookshelfFilterChipData chip, {bool secondary = false}) {
-      final selected = chip.selected;
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: GestureDetector(
-          onLongPress: chip.onLongPress,
-          child: ChoiceChip(
-            label: Text(chip.label),
-            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            selected: selected,
-            showCheckmark: false,
-            onSelected: chip.onTap == null ? null : (_) => chip.onTap!.call(),
-            backgroundColor: colorScheme.surfaceContainerLow.withValues(
-              alpha: 0.35,
-            ),
-            selectedColor:
-                secondary
-                    ? colorScheme.secondaryContainer.withValues(alpha: 0.88)
-                    : colorScheme.primaryContainer.withValues(alpha: 0.82),
-            labelStyle: chipTextStyle?.copyWith(
-              color:
-                  selected
-                      ? (secondary
-                          ? colorScheme.onSecondaryContainer
-                          : colorScheme.onPrimaryContainer)
-                      : colorScheme.onSurfaceVariant,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            side: BorderSide(
-              color:
-                  selected
-                      ? (secondary
-                          ? colorScheme.secondary.withValues(alpha: 0.26)
-                          : colorScheme.primary.withValues(alpha: 0.26))
-                      : colorScheme.outlineVariant.withValues(alpha: 0.72),
-              width: 0.8,
-            ),
+    return AdaptiveFilterBar(
+      chips: [
+        for (final chip in baseChips)
+          AdaptiveFilterChipData(
+            label: chip.label,
+            selected: chip.selected,
+            onTap: chip.onTap,
+            onLongPress: chip.onLongPress,
           ),
+      ],
+      secondaryChips: [
+        for (final chip in customChips)
+          AdaptiveFilterChipData(
+            label: chip.label,
+            selected: chip.selected,
+            onTap: chip.onTap,
+            onLongPress: chip.onLongPress,
+          ),
+      ],
+      highlightAction: highlightFilterAction,
+      actionTooltip: filterActionMessage,
+      onActionPressed: onOpenFilterSheet,
+      showActionButton: showActionButton,
+      backgroundColor: palette.surfaceColor.withValues(alpha: 0.35),
+      selectedColor: palette.noticeSurfaceColor.withValues(alpha: 0.82),
+      secondarySelectedColor: palette.noticeSurfaceColor.withValues(
+        alpha: 0.88,
+      ),
+      foregroundColor: palette.textSecondaryColor,
+      selectedForegroundColor: palette.textPrimaryColor,
+      secondaryForegroundColor: palette.noticeAccentColor,
+      borderColor: resolveAppBorderColor(
+        Theme.of(context).colorScheme,
+        baseColor: palette.cardBorderColor,
+        containerColor: palette.surfaceColor,
+      ),
+      selectedBorderColor: resolveAppBorderColor(
+        Theme.of(context).colorScheme,
+        baseColor: palette.cardBorderColor,
+        containerColor: palette.noticeSurfaceColor,
+        tone: AppBorderTone.strong,
+      ),
+      actionColor:
+          highlightFilterAction
+              ? palette.primaryColor
+              : palette.textSecondaryColor,
+    );
+  }
+}
+
+class BookshelfStepperSettingRow extends StatelessWidget {
+  const BookshelfStepperSettingRow({
+    super.key,
+    required this.title,
+    required this.valueLabel,
+    required this.onDecrease,
+    required this.onIncrease,
+    this.subtitle,
+    this.enabled = true,
+  });
+
+  final String title;
+  final String valueLabel;
+  final VoidCallback? onDecrease;
+  final VoidCallback? onIncrease;
+  final String? subtitle;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final effectiveEnabled = enabled;
+
+    Widget buildButton({
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return IconButton(
+        onPressed: effectiveEnabled ? onPressed : null,
+        visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+        iconSize: 17,
+        style: IconButton.styleFrom(
+          backgroundColor: colorScheme.surfaceContainerLow,
+          foregroundColor: colorScheme.onSurface,
+          disabledBackgroundColor: colorScheme.surfaceContainerLow.withValues(
+            alpha: 0.58,
+          ),
+          disabledForegroundColor: colorScheme.onSurfaceVariant.withValues(
+            alpha: 0.45,
+          ),
+          minimumSize: const Size(36, 36),
+          padding: const EdgeInsets.all(2),
         ),
+        icon: Icon(icon),
       );
     }
 
-    return SizedBox(
-      height: 38,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       child: Row(
         children: [
           Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ...baseChips.map((chip) => buildChip(chip)),
-                ...customChips.map((chip) => buildChip(chip, secondary: true)),
+                Text(
+                  title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color:
+                        effectiveEnabled
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (subtitle case final text?) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    text,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+          const SizedBox(width: 12),
+          buildButton(icon: Icons.remove_rounded, onPressed: onDecrease),
           const SizedBox(width: 6),
-          Tooltip(
-            message: filterActionMessage,
-            child: TextButton.icon(
-              onPressed: onOpenFilterSheet,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(0, 38),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor:
-                    highlightFilterAction
-                        ? colorScheme.primary
+          Container(
+            constraints: const BoxConstraints(minWidth: 60),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: resolveAppBorderColor(
+                  colorScheme,
+                  containerColor: colorScheme.surfaceContainerLow,
+                ),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              valueLabel,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+                color:
+                    effectiveEnabled
+                        ? colorScheme.onSurface
                         : colorScheme.onSurfaceVariant,
               ),
-              icon: const Icon(Icons.filter_list_rounded, size: 18),
-              label: const Text('筛选'),
             ),
           ),
+          const SizedBox(width: 6),
+          buildButton(icon: Icons.add_rounded, onPressed: onIncrease),
         ],
       ),
     );
@@ -193,77 +330,66 @@ class BookshelfFilterBar extends StatelessWidget {
 }
 
 class BookshelfEmptyCard extends StatelessWidget {
-  const BookshelfEmptyCard({super.key, required this.onImportLocal});
+  const BookshelfEmptyCard({
+    super.key,
+    required this.onImportLocal,
+    required this.palette,
+    this.showImportAction = true,
+  });
 
   final VoidCallback onImportLocal;
+  final ResolvedAdvancedThemePalette palette;
+  final bool showImportAction;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Icon(
-              Icons.import_contacts_outlined,
-              color: colorScheme.primary,
-              size: 28,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '书架暂无内容',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '请先在搜索结果或详情页加入书架。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: onImportLocal,
-              icon: const Icon(Icons.library_add_rounded),
-              label: const Text('导入本地图书'),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.import_contacts_outlined,
+      title: '书架暂无内容',
+      description: '请先在搜索结果或详情页加入书架。',
+      footer:
+          showImportAction
+              ? FilledButton.icon(
+                onPressed: onImportLocal,
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.primaryColor,
+                  foregroundColor: palette.buttonTextColor,
+                ),
+                icon: const Icon(Icons.library_add_rounded),
+                label: const Text('导入本地图书'),
+              )
+              : null,
     );
   }
 }
 
 class BookshelfFilterEmptyCard extends StatelessWidget {
-  const BookshelfFilterEmptyCard({super.key, required this.label});
+  const BookshelfFilterEmptyCard({
+    super.key,
+    required this.label,
+    required this.palette,
+    this.searchKeyword,
+  });
 
   final String label;
+  final ResolvedAdvancedThemePalette palette;
+  final String? searchKeyword;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.filter_alt_off_rounded, color: colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '当前“$label”分类暂无书籍',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    final normalizedKeyword = searchKeyword?.trim() ?? '';
+    final hasSearchKeyword = normalizedKeyword.isNotEmpty;
+    return AppEmptyStateCard(
+      icon:
+          hasSearchKeyword
+              ? Icons.search_off_rounded
+              : Icons.filter_alt_off_rounded,
+      title: hasSearchKeyword ? '没有匹配书籍' : '当前分类暂无书籍',
+      description:
+          hasSearchKeyword
+              ? '当前“$label”中没有匹配“$normalizedKeyword”的书籍'
+              : '当前“$label”分类暂无书籍',
+      compact: true,
     );
   }
 }
@@ -273,39 +399,25 @@ class BookshelfLoadErrorCard extends StatelessWidget {
     super.key,
     required this.message,
     required this.onRetry,
+    required this.palette,
   });
 
   final String message;
   final VoidCallback onRetry;
+  final ResolvedAdvancedThemePalette palette;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      color: colorScheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '书架加载失败',
-              style: TextStyle(
-                color: colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              style: TextStyle(color: colorScheme.onErrorContainer),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
+    return AppStatusStateCard(
+      icon: Icons.error_outline_rounded,
+      title: '书架加载失败',
+      message: message,
+      tone: AppStatusStateTone.error,
+      footer: Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
       ),
+      compact: true,
     );
   }
 }

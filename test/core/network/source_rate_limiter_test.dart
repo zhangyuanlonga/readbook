@@ -1,4 +1,4 @@
-import 'package:flutter_appread/core/network/source_rate_limiter.dart';
+import 'package:shuxiang_reading_next/core/network/source_rate_limiter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -5,8 +5,9 @@ import 'dart:math';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
+import '../../../core/storage/managed_asset_store.dart';
+import '../../../domain/entities/managed_asset.dart';
 import '../../../domain/entities/reader_settings.dart';
 
 class ReaderCustomFontEntry {
@@ -55,11 +56,14 @@ class ReaderFontRegistryException implements Exception {
 }
 
 class ReaderFontRegistryService {
-  ReaderFontRegistryService({Future<Directory> Function()? supportDirProvider})
-    : _supportDirProvider =
-          supportDirProvider ?? getApplicationSupportDirectory;
+  ReaderFontRegistryService({
+    Future<Directory> Function()? supportDirProvider,
+    ManagedAssetStore? assetStore,
+  })
+    : _assetStore =
+          assetStore ??
+          ManagedAssetStore(supportDirectoryProvider: supportDirProvider);
 
-  static const String _fontFolderName = 'reader_fonts';
   static const String _registryFileName = 'registry.json';
   static const XTypeGroup _fontTypeGroup = XTypeGroup(
     label: 'font',
@@ -71,7 +75,7 @@ class ReaderFontRegistryService {
     ],
   );
 
-  final Future<Directory> Function() _supportDirProvider;
+  final ManagedAssetStore _assetStore;
   final Set<String> _loadedFamilyKeys = <String>{};
 
   Future<void> restoreRegisteredFonts() async {
@@ -119,32 +123,58 @@ class ReaderFontRegistryService {
       return null;
     }
 
-    final extension = path.extension(pickedFile.name).toLowerCase();
+    return importFontFile(
+      filePath: pickedFile.path,
+      displayName: path.basenameWithoutExtension(pickedFile.name),
+    );
+  }
+
+  Future<ReaderCustomFontEntry> importFontFile({
+    required String filePath,
+    String? displayName,
+  }) async {
+    final normalizedPath = filePath.trim();
+    if (normalizedPath.isEmpty) {
+      throw ReaderFontRegistryException('字体文件路径无效。');
+    }
+    final sourceFile = File(normalizedPath);
+    if (!await sourceFile.exists()) {
+      throw ReaderFontRegistryException('字体文件不存在，无法导入。');
+    }
+
+    final extension = path.extension(sourceFile.path).toLowerCase();
     if (extension != '.ttf' && extension != '.otf') {
       throw ReaderFontRegistryException('仅支持 .ttf 或 .otf 字体文件。');
     }
 
-    final bytes = await pickedFile.readAsBytes();
+    final bytes = await sourceFile.readAsBytes();
     if (bytes.isEmpty) {
       throw ReaderFontRegistryException('字体文件为空，无法导入。');
     }
 
-    final fontsDir = await _resolveFontsDirectory();
     final now = DateTime.now().millisecondsSinceEpoch;
     final randomSuffix = Random().nextInt(0x7fffffff).toRadixString(16);
     final familyKey = 'reader_custom_${now}_$randomSuffix';
-    final targetFile = File(path.join(fontsDir.path, '$familyKey$extension'));
-    await targetFile.writeAsBytes(bytes, flush: true);
+    final asset = await _assetStore.persistBytes(
+      type: ManagedAssetType.readerFont,
+      scope: ManagedAssetScope.typography,
+      bytes: bytes,
+      fileName: '$familyKey$extension',
+      assetId: familyKey,
+      displayName: displayName ?? path.basenameWithoutExtension(sourceFile.path),
+      targetNamePrefix: familyKey,
+    );
+    final targetPath = asset.resolvedPath!;
 
     await _registerFontFromBytes(familyKey: familyKey, bytes: bytes);
 
-    final displayName = _normalizeDisplayName(
-      path.basenameWithoutExtension(pickedFile.name),
+    final normalizedDisplayName = _normalizeDisplayName(
+      displayName ?? path.basenameWithoutExtension(sourceFile.path),
     );
     final entry = ReaderCustomFontEntry(
       fontFamilyKey: familyKey,
-      displayName: displayName,
-      filePath: targetFile.path,
+      displayName: normalizedDisplayName,
+      filePath: targetPath,
       importedAtEpochMs: now,
     );
 
@@ -172,13 +202,36 @@ class ReaderFontRegistryService {
     });
 
     if (removed != null) {
-      final fontFile = File(removed!.filePath);
-      if (await fontFile.exists()) {
-        await fontFile.delete();
-      }
+      await _assetStore.deletePath(removed!.filePath);
       _loadedFamilyKeys.remove(removed!.fontFamilyKey);
       await _saveRegistry(entries);
     }
+  }
+
+  Future<void> renameFontDisplayName({
+    required String familyKey,
+    required String displayName,
+  }) async {
+    final normalizedFamilyKey = familyKey.trim();
+    if (normalizedFamilyKey.isEmpty) {
+      throw ReaderFontRegistryException('字体标识无效。');
+    }
+    final normalizedDisplayName = _normalizeDisplayName(displayName);
+    final entries = await _loadRegistry();
+    final index = entries.indexWhere(
+      (entry) => entry.fontFamilyKey == normalizedFamilyKey,
+    );
+    if (index < 0) {
+      throw ReaderFontRegistryException('未找到要重命名的字体。');
+    }
+    final current = entries[index];
+    entries[index] = ReaderCustomFontEntry(
+      fontFamilyKey: current.fontFamilyKey,
+      displayName: normalizedDisplayName,
+      filePath: current.filePath,
+      importedAtEpochMs: current.importedAtEpochMs,
+    );
+    await _saveRegistry(entries);
   }
 
   Future<ReaderSettings> normalizeCustomFontSettings(
@@ -189,7 +242,10 @@ class ReaderFontRegistryService {
     }
 
     final fontFamilyKey = settings.fontFamilyKey?.trim() ?? '';
-    var customPath = settings.customFontPath?.trim() ?? '';
+    var customPath =
+        await _assetStore.resolvePersistedPath(settings.customFontPath) ??
+        settings.customFontPath?.trim() ??
+        '';
     if (fontFamilyKey.isEmpty) {
       return _fallbackToSystemFont(settings);
     }
@@ -200,7 +256,10 @@ class ReaderFontRegistryService {
         if (entry.fontFamilyKey != fontFamilyKey) {
           continue;
         }
-        final file = File(entry.filePath);
+        final resolvedEntryPath =
+            await _assetStore.resolvePersistedPath(entry.filePath) ??
+            entry.filePath;
+        final file = File(resolvedEntryPath);
         if (await file.exists()) {
           customPath = entry.filePath;
         }
@@ -208,6 +267,7 @@ class ReaderFontRegistryService {
       }
     }
 
+    customPath = await _assetStore.resolvePersistedPath(customPath) ?? customPath;
     if (customPath.isEmpty || !await File(customPath).exists()) {
       return _fallbackToSystemFont(settings);
     }
@@ -270,17 +330,13 @@ class ReaderFontRegistryService {
     return trimmed.replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  Future<Directory> _resolveFontsDirectory() async {
-    final supportDir = await _supportDirProvider();
-    final directory = Directory(path.join(supportDir.path, _fontFolderName));
+  Future<File> _resolveRegistryFile() async {
+    final directory = await _assetStore.resolveDirectory(
+      ManagedAssetType.readerFont,
+    );
     if (!await directory.exists()) {
       await directory.create(recursive: true);
     }
-    return directory;
-  }
-
-  Future<File> _resolveRegistryFile() async {
-    final directory = await _resolveFontsDirectory();
     return File(path.join(directory.path, _registryFileName));
   }
 
@@ -312,7 +368,33 @@ class ReaderFontRegistryService {
         }
         entries.add(entry);
       }
-      return entries;
+      var changed = false;
+      final normalizedEntries = <ReaderCustomFontEntry>[];
+      for (final entry in entries) {
+        final persisted =
+            await _assetStore.relativizePersistedPath(entry.filePath) ??
+            entry.filePath;
+        final resolved =
+            await _assetStore.resolvePersistedPath(persisted) ??
+            entry.filePath;
+        if (persisted != entry.filePath || resolved != entry.filePath) {
+          changed = true;
+          normalizedEntries.add(
+            ReaderCustomFontEntry(
+              fontFamilyKey: entry.fontFamilyKey,
+              displayName: entry.displayName,
+              filePath: resolved,
+              importedAtEpochMs: entry.importedAtEpochMs,
+            ),
+          );
+          continue;
+        }
+        normalizedEntries.add(entry);
+      }
+      if (changed) {
+        await _saveRegistry(normalizedEntries);
+      }
+      return normalizedEntries;
     } catch (_) {
       return <ReaderCustomFontEntry>[];
     }
@@ -320,7 +402,19 @@ class ReaderFontRegistryService {
 
   Future<void> _saveRegistry(List<ReaderCustomFontEntry> entries) async {
     final registryFile = await _resolveRegistryFile();
-    final payload = entries.map((entry) => entry.toJson()).toList();
+    final payload = <Map<String, dynamic>>[];
+    for (final entry in entries) {
+      payload.add(
+        ReaderCustomFontEntry(
+          fontFamilyKey: entry.fontFamilyKey,
+          displayName: entry.displayName,
+          filePath:
+              await _assetStore.relativizePersistedPath(entry.filePath) ??
+              entry.filePath,
+          importedAtEpochMs: entry.importedAtEpochMs,
+        ).toJson(),
+      );
+    }
     await registryFile.writeAsString(jsonEncode(payload), flush: true);
   }
 }

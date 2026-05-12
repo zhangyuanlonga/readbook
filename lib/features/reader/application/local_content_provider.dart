@@ -1,27 +1,34 @@
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/local_book.dart' as local_entities;
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 import 'local/local_chapter_content_service.dart';
+import 'local/local_book_preview_service.dart';
 import 'local/local_reader_identity.dart';
 
 class LocalContentProvider extends ContentProvider {
   LocalContentProvider({
     LocalBookDetailService? detailService,
     LocalChapterContentService? chapterContentService,
-  }) : _detailService = detailService ?? LocalBookDetailService(),
-       _chapterContentService =
-           chapterContentService ?? LocalChapterContentService();
+    LocalBookPreviewService? previewService,
+  }) : _detailService = detailService,
+       _chapterContentService = chapterContentService,
+       _previewService = previewService;
 
   static const String sourceName = '本地导入';
+  static final ManagedFilePathResolver _pathResolver =
+      ManagedFilePathResolver();
 
-  final LocalBookDetailService _detailService;
-  final LocalChapterContentService _chapterContentService;
+  final LocalBookDetailService? _detailService;
+  final LocalChapterContentService? _chapterContentService;
+  final LocalBookPreviewService? _previewService;
 
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
@@ -31,6 +38,41 @@ class LocalContentProvider extends ContentProvider {
     canSearchInSource: false,
     canReindexLocal: true,
   );
+
+  Future<BookDetailLoadResult?> loadBookSnapshotDetail({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+  }) async {
+    _ensureLocalSource(sourceId, stage: ErrorStage.detail);
+
+    final resolvedBookId = LocalReaderIdentity.resolveBookId(
+      bookId: bookId,
+      detailUrl: detailUrl,
+    );
+    if (resolvedBookId == null || resolvedBookId.isEmpty) {
+      return null;
+    }
+
+    final book = await _requireDetailService().loadBookSnapshot(
+      bookId: resolvedBookId,
+    );
+    if (book == null) {
+      return null;
+    }
+
+    return BookDetailLoadResult(
+      detail: _buildDetailFromLocalBook(book),
+      chapters: const <Chapter>[],
+      sourceName: sourceName,
+      tocFromCache: true,
+      tocError: null,
+      catalogAvailable:
+          book.indexStatus == local_entities.LocalBookIndexStatus.ready &&
+          book.chapterCount > 0,
+      catalogLoaded: false,
+    );
+  }
 
   @override
   bool supportsSourceId(String sourceId) {
@@ -45,6 +87,7 @@ class LocalContentProvider extends ContentProvider {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     _ensureLocalSource(sourceId, stage: ErrorStage.detail);
 
@@ -60,21 +103,17 @@ class LocalContentProvider extends ContentProvider {
       );
     }
 
-    final result = await _detailService.load(
+    final result = await _requireDetailService().load(
       bookId: resolvedBookId,
+      mode:
+          includeCatalog
+              ? LocalBookDetailLoadMode.directoryOnly
+              : LocalBookDetailLoadMode.bookOnly,
       forceReindex: forceRefresh,
-      withContent: false,
       allowBackgroundIndex: !forceRefresh,
     );
 
-    final detail = BookDetail(
-      id: result.book.id,
-      sourceId: LocalReaderIdentity.localSourceId,
-      title: result.book.title,
-      detailUrl: LocalReaderIdentity.buildBookDetailUrl(result.book.id),
-      author: _resolveAuthor(result.book.author),
-      coverUrl: _resolveCoverUrl(result.book.coverPath),
-    );
+    final detail = _buildDetailFromLocalBook(result.book);
 
     final chapters = result.chapters
         .map(
@@ -94,6 +133,11 @@ class LocalContentProvider extends ContentProvider {
       sourceName: sourceName,
       tocFromCache: false,
       tocError: null,
+      catalogAvailable:
+          result.book.indexStatus ==
+              local_entities.LocalBookIndexStatus.ready &&
+          result.book.chapterCount > 0,
+      catalogLoaded: includeCatalog,
     );
   }
 
@@ -103,6 +147,7 @@ class LocalContentProvider extends ContentProvider {
     required String bookId,
     required String chapterUrl,
     String? bookTitle,
+    String? detailUrl,
     String? chapterId,
     int? chapterIndex,
     String? chapterTitle,
@@ -135,18 +180,52 @@ class LocalContentProvider extends ContentProvider {
       );
     }
 
-    final chapter = await _chapterContentService.load(
-      bookId: resolvedBookId,
-      chapterId: resolvedChapterId,
-      chapterIndex: chapterIndex,
-    );
-    final imageUrls =
-        chapter.content.trim().isEmpty ? chapter.imageUrls : const <String>[];
+    final chapter =
+        (resolvedChapterId?.trim().toLowerCase() == 'bootstrap')
+            ? await _requirePreviewService().loadTxtBootstrapPreview(
+              bookId: resolvedBookId,
+            )
+            : await _requireChapterContentService().load(
+              bookId: resolvedBookId,
+              chapterId: resolvedChapterId,
+              chapterIndex: chapterIndex,
+            );
 
     return ChapterContentResult(
       content: chapter.content,
       fromCache: true,
-      imageUrls: imageUrls,
+      imageUrls: chapter.imageUrls,
+      document: chapter.document,
+    );
+  }
+
+  LocalBookDetailService _requireDetailService() {
+    final detailService = _detailService;
+    if (detailService != null) {
+      return detailService;
+    }
+    throw StateError(
+      'LocalBookDetailService is required to load local detail.',
+    );
+  }
+
+  LocalChapterContentService _requireChapterContentService() {
+    final chapterContentService = _chapterContentService;
+    if (chapterContentService != null) {
+      return chapterContentService;
+    }
+    throw StateError(
+      'LocalChapterContentService is required to load local chapter content.',
+    );
+  }
+
+  LocalBookPreviewService _requirePreviewService() {
+    final previewService = _previewService;
+    if (previewService != null) {
+      return previewService;
+    }
+    throw StateError(
+      'LocalBookPreviewService is required to load local bootstrap preview.',
     );
   }
 
@@ -161,8 +240,23 @@ class LocalContentProvider extends ContentProvider {
     );
   }
 
+  BookDetail _buildDetailFromLocalBook(local_entities.LocalBook book) {
+    return BookDetail(
+      id: book.id,
+      sourceId: LocalReaderIdentity.localSourceId,
+      title: book.title,
+      detailUrl: LocalReaderIdentity.buildBookDetailUrl(book.id),
+      author: _resolveAuthor(book.author),
+      intro: _resolveIntro(book.description),
+      coverUrl: _resolveCoverUrl(book.coverPath),
+    );
+  }
+
   String? _resolveCoverUrl(String? coverPath) {
-    final normalized = coverPath?.trim() ?? '';
+    final normalized =
+        _pathResolver.tryResolveExistingFilePathSync(coverPath) ??
+        coverPath?.trim() ??
+        '';
     if (normalized.isEmpty) {
       return null;
     }
@@ -175,5 +269,10 @@ class LocalContentProvider extends ContentProvider {
       return normalized;
     }
     return sourceName;
+  }
+
+  String? _resolveIntro(String? intro) {
+    final normalized = intro?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }

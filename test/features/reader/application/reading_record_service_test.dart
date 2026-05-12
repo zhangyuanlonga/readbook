@@ -1,9 +1,9 @@
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/domain/entities/reading_record.dart';
-import 'package:flutter_appread/domain/entities/reading_record_day.dart';
-import 'package:flutter_appread/domain/entities/reading_record_session.dart';
-import 'package:flutter_appread/features/reader/application/reading_record_service.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record_day.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record_session.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -121,6 +121,91 @@ void main() {
       expect(sessions, hasLength(1));
       expect(sessions.first.chapterTitle, '第一章');
     });
+
+    test(
+      'reassigns reading records to the new book identity after switching',
+      () async {
+        final firstStart = DateTime.parse('2026-03-21T10:00:00.000Z');
+        final firstEnd = firstStart.add(const Duration(minutes: 12));
+        final secondStart = DateTime.parse('2026-03-22T10:00:00.000Z');
+        final secondEnd = secondStart.add(const Duration(minutes: 8));
+
+        await service.commitSession(
+          ReadingRecordCommitInput(
+            bookId: 'book_old',
+            sourceId: 'source_old',
+            detailUrl: 'https://example.com/book/old',
+            bookTitle: '测试书',
+            bookAuthor: '作者甲',
+            chapterId: 'chapter_1',
+            chapterTitle: '第一章',
+            chapterIndex: 0,
+            chapterUrl: 'https://example.com/book/old/chapter/1',
+            startAt: firstStart,
+            endAt: firstEnd,
+            readChars: 1800,
+          ),
+        );
+        await service.commitSession(
+          ReadingRecordCommitInput(
+            bookId: 'book_new',
+            sourceId: 'source_new',
+            detailUrl: 'https://example.com/book/new',
+            bookTitle: '测试书',
+            bookAuthor: '作者甲',
+            chapterId: 'chapter_2',
+            chapterTitle: '第二章',
+            chapterIndex: 1,
+            chapterUrl: 'https://example.com/book/new/chapter/2',
+            startAt: secondStart,
+            endAt: secondEnd,
+            readChars: 1200,
+          ),
+        );
+
+        await service.reassignBookIdentity(
+          previousBookId: 'book_old',
+          nextBookId: 'book_new',
+          nextSourceId: 'source_new',
+          nextDetailUrl: 'https://example.com/book/new',
+          nextBookTitle: '测试书',
+          nextBookAuthor: '作者甲',
+        );
+
+        final oldRecord = await database.getReadingRecordByBookId('book_old');
+        final newRecord = await database.getReadingRecordByBookId('book_new');
+        final oldSessions = await database.listReadingRecordSessionsByBookId(
+          'book_old',
+        );
+        final newSessions = await database.listReadingRecordSessionsByBookId(
+          'book_new',
+        );
+        final oldDays = await database.listReadingRecordDaysByBookId(
+          'book_old',
+        );
+        final newDays = await database.listReadingRecordDaysByBookId(
+          'book_new',
+        );
+
+        expect(oldRecord, isNull);
+        expect(oldSessions, isEmpty);
+        expect(oldDays, isEmpty);
+
+        expect(newRecord, isNotNull);
+        expect(newRecord!.sourceId, 'source_new');
+        expect(newRecord.detailUrl, 'https://example.com/book/new');
+        expect(newRecord.bookTitle, '测试书');
+        expect(
+          newRecord.totalReadMillis,
+          const Duration(minutes: 20).inMilliseconds,
+        );
+        expect(newRecord.totalReadChars, 3000);
+        expect(newSessions, hasLength(2));
+        expect(newDays, hasLength(2));
+        expect(newSessions.every((item) => item.bookId == 'book_new'), isTrue);
+        expect(newDays.every((item) => item.bookId == 'book_new'), isTrue);
+      },
+    );
 
     test('sorts merge candidates and filters mismatched authors', () async {
       final now = DateTime.parse('2026-03-21T10:00:00.000Z');

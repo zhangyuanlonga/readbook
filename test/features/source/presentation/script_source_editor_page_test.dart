@@ -1,6 +1,6 @@
-import 'package:flutter_appread/features/source/presentation/script_source_editor_page.dart';
-import 'package:flutter_appread/runtime/sources/source_script_compiler.dart';
-import 'package:flutter_appread/runtime/sources/source_script_template.dart';
+import 'package:shuxiang_reading_next/features/source/presentation/script_source_editor_page.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_script_compiler.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_script_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../test_utils/adaptive_test_harness.dart';
 
@@ -13,8 +13,8 @@ void main() {
     test('json draft shows redirect hint', () {
       final message = validateScriptSourceDraft('{"name":"旧规则"}');
       expect(message, isNotNull);
-      expect(message, contains('旧规则 JSON'));
-      expect(message, contains('规则配置'));
+      expect(message, contains('JSON 配置'));
+      expect(message, contains('当前版本只支持脚本书源'));
     });
 
     test('draft without meta.name shows direct fix hint', () {
@@ -45,6 +45,7 @@ export default {
       await runAdaptivePageSmokeMatrix(
         tester,
         pageBuilder: () => const ScriptSourceEditorPage(),
+        useProviderScope: true,
         pageName: 'ScriptSourceEditorPage',
       );
     });

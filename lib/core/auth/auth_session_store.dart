@@ -20,6 +20,10 @@ class AuthSessionStore {
 
   Future<AuthSession?> getSession() async {
     final prefs = await _preferencesFuture;
+    return readSession(prefs);
+  }
+
+  static AuthSession? readSession(SharedPreferences prefs) {
     final accessToken = (prefs.getString(_accessTokenKey) ?? '').trim();
     if (accessToken.isEmpty) {
       return null;
@@ -94,9 +98,8 @@ class AuthSessionStore {
       await prefs.setString(_accessExpiresAtKey, accessExpiresAt);
     }
 
-    final refreshExpiresAt = session.refreshExpiresAt
-        ?.toUtc()
-        .toIso8601String();
+    final refreshExpiresAt =
+        session.refreshExpiresAt?.toUtc().toIso8601String();
     if (refreshExpiresAt == null || refreshExpiresAt.isEmpty) {
       await prefs.remove(_refreshExpiresAtKey);
     } else {
@@ -114,7 +117,7 @@ class AuthSessionStore {
     await prefs.remove(_refreshExpiresAtKey);
   }
 
-  DateTime? _parseTime(String? raw) {
+  static DateTime? _parseTime(String? raw) {
     final value = raw?.trim() ?? '';
     if (value.isEmpty) {
       return null;

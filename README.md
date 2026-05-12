@@ -11,11 +11,9 @@
 ## 文档入口
 
 - 统一入口：`docs/README.md`
-- AI 快速上下文：`docs/ai_core_context.md`
-- 文档治理规则：`docs/documentation_governance.md`
-- 文档整合映射：`docs/documentation_map_2026-03-07.md`
-- Android 发布说明：`docs/android_release_guide.md`
-- 核心基线：`docs/project_overview.md` / `docs/requirements.md` / `docs/architecture.md` / `docs/project_conventions.md`
+- 开发架构约束：`docs/development_architecture_guardrails.md`
+- 产品与工程总览：`docs/product_guide.md` / `docs/engineering_guide.md`
+- 历史方案归档：`docs/archive/README.md`
 
 ## 快速开始
 
@@ -50,13 +48,22 @@ ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
 ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
 
 # 非交互模式手动指定版本
-BUILD_NAME=1.0.7 BUILD_NUMBER=2 ./scripts/build_unified_artifacts.sh android,ios release
+APPREAD_API_BASE_URL=https://www.sxyd.lltask.top/api \
+APPREAD_APP_NAME=selune ARTIFACT_NAME=Selune \
+BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 \
+./scripts/build_unified_artifacts.sh android,ios release
 ```
 
 产物默认目录：`build/unified_artifacts/<timestamp>-<mode>/`
 同目录下会生成 `manifest.txt`，方便查看每个平台对应的文件名。
 
-更完整的 Android 体积 / ABI / APK / AAB 说明见：`docs/android_release_guide.md`
+版本规则建议：
+- `BUILD_NAME` / `version_name`：给用户看的展示版本，例如 `1.1.0`
+- `BUILD_NUMBER` / `version_code`：给系统比较版本大小的整数构建号，例如 `26041801`
+- `APPREAD_API_BASE_URL`：打包时注入的后端地址，例如 `https://www.sxyd.lltask.top/api`
+- `APPREAD_APP_NAME`：可选，默认 `selune`
+
+更完整的工程交付与移动端发布说明见：`docs/engineering_delivery_guide.md`
 
 ## 开发检查
 

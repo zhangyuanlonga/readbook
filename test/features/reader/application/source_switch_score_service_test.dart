@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/reader/application/source_switch_score_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/source_switch_score_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

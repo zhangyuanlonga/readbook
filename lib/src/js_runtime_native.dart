@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_js/flutter_js.dart';
 
 import 'js_runtime.dart';
@@ -140,6 +142,8 @@ class NativeJsRuntimeAdapter implements JsRuntimeAdapter {
     _runtime.setInspectable(true);
   }
 
+  static Future<void> _executionQueue = Future<void>.value();
+
   final JavascriptRuntime _runtime;
   bool _bootstrapInstalled = false;
 
@@ -156,14 +160,16 @@ class NativeJsRuntimeAdapter implements JsRuntimeAdapter {
 
   @override
   Future<void> installBootstrap(String source, {String? sourceUrl}) async {
-    final result = _runtime.evaluate(
-      source,
-      sourceUrl: sourceUrl ?? 'runtime_bootstrap.js',
-    );
+    await _runExclusive(() {
+      final result = _runtime.evaluate(
+        source,
+        sourceUrl: sourceUrl ?? 'runtime_bootstrap.js',
+      );
 
-    if (result.isError) {
-      throw StateError(result.stringResult);
-    }
+      if (result.isError) {
+        throw StateError(result.stringResult);
+      }
+    });
   }
 
   @override
@@ -188,35 +194,54 @@ $script
 })()
 ''';
 
-    try {
-      final initialResult = await _runtime.evaluateAsync(
-        wrappedScript,
-        sourceUrl: 'playground_user_script.js',
-      );
+    return _runExclusive(() async {
+      try {
+        final initialResult = await _runtime.evaluateAsync(
+          wrappedScript,
+          sourceUrl: 'playground_user_script.js',
+        );
 
-      if (initialResult.isError) {
+        if (initialResult.isError) {
+          return JsExecutionResult(
+            output: initialResult.stringResult,
+            isError: true,
+          );
+        }
+
+        _runtime.executePendingJob();
+        final resolvedResult = await _runtime.handlePromise(initialResult);
+
         return JsExecutionResult(
-          output: initialResult.stringResult,
+          output: resolvedResult.stringResult,
+          isError: resolvedResult.isError,
+        );
+      } on JsEvalResult catch (errorResult) {
+        return JsExecutionResult(
+          output: errorResult.stringResult,
           isError: true,
         );
+      } catch (error) {
+        return JsExecutionResult(output: error.toString(), isError: true);
       }
-
-      _runtime.executePendingJob();
-      final resolvedResult = await _runtime.handlePromise(initialResult);
-
-      return JsExecutionResult(
-        output: resolvedResult.stringResult,
-        isError: resolvedResult.isError,
-      );
-    } on JsEvalResult catch (errorResult) {
-      return JsExecutionResult(output: errorResult.stringResult, isError: true);
-    } catch (error) {
-      return JsExecutionResult(output: error.toString(), isError: true);
-    }
+    });
   }
 
   @override
   void dispose() {
     _runtime.dispose();
+  }
+
+  Future<T> _runExclusive<T>(FutureOr<T> Function() action) {
+    final completer = Completer<T>();
+    _executionQueue = _executionQueue
+        .catchError((_) {})
+        .then((_) async {
+          try {
+            completer.complete(await action());
+          } catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        });
+    return completer.future;
   }
 }

@@ -1,27 +1,33 @@
 import 'dart:async';
-import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-import '../core/analytics/analytics_service.dart';
+import 'composition/app_providers.dart' as app_providers;
+import 'platform/app_platform_capabilities.dart';
 import '../core/app_update/app_update_dialog.dart';
-import '../core/app_update/app_update_service.dart';
+import '../core/app_update/app_update_release.dart';
 import '../core/auth/auth_event_bus.dart';
-import '../core/auth/auth_token_refresher_impl.dart';
-import '../core/device/device_identity_service.dart';
-import '../core/device/device_heartbeat_service.dart';
-import '../core/network/api_client.dart';
-import '../data/datasources/local/app_database.dart';
+import '../core/logging/app_logger.dart';
 import '../domain/entities/announcement.dart';
-import '../features/announcement/application/announcement_read_state_service.dart';
-import '../features/announcement/application/announcement_service.dart';
+import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/source/application/external_import_catalog.dart';
+import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
+import 'widgets/import_export_copy.dart';
+import 'widgets/import_export_task_overlay.dart';
+import 'lifecycle/app_lifecycle_coordinator.dart';
 import 'layout/app_layout.dart';
-import 'layout/app_spacing.dart';
 import 'router.dart';
+import 'startup/app_announcement_coordinator.dart';
+import 'startup/app_startup_coordinator.dart';
+import 'startup_artwork_store.dart';
+import 'startup_artwork_image_provider.dart';
+import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_palette.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
@@ -33,21 +39,64 @@ class App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
+    final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
+    final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
+    final interfaceFontWeight = ref.watch(appInterfaceFontWeightProvider);
+    final activeThemeAppearanceSnapshot = ref.watch(
+      activeThemeAppearanceSnapshotProvider,
+    );
 
     final lightScheme = buildAppLightColorScheme(seedColor);
     final darkScheme = buildAppDarkColorScheme(seedColor);
+    final lightAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
+      lightScheme,
+      activeThemeAppearanceSnapshot?.lightConfig,
+    );
+    final darkAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
+      darkScheme,
+      activeThemeAppearanceSnapshot?.darkConfig,
+    );
+    final lightAdvancedBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      lightScheme,
+      activeThemeAppearanceSnapshot?.lightConfig,
+    );
+    final darkAdvancedBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      darkScheme,
+      activeThemeAppearanceSnapshot?.darkConfig,
+    );
+    final themeBoundAppFontFamily =
+        activeThemeAppearanceSnapshot?.appInterfaceFontFamilyKey?.trim();
+    final fontFamily =
+        themeBoundAppFontFamily != null && themeBoundAppFontFamily.isNotEmpty
+            ? themeBoundAppFontFamily
+            : resolveAppInterfaceFontFamily(interfaceFontSettings);
+    final fontWeight = appInterfaceFontWeightValue(interfaceFontWeight);
 
     return MaterialApp.router(
-      title: '书享阅读',
-      theme: AppTheme.build(lightScheme),
-      darkTheme: AppTheme.build(darkScheme),
+      title: 'Selune',
+      theme: AppTheme.build(
+        lightScheme,
+        advancedPalette: lightAdvancedPalette,
+        advancedBackdrop: lightAdvancedBackdrop,
+        fontFamily: fontFamily,
+        fontWeight: fontWeight,
+      ),
+      darkTheme: AppTheme.build(
+        darkScheme,
+        advancedPalette: darkAdvancedPalette,
+        advancedBackdrop: darkAdvancedBackdrop,
+        fontFamily: fontFamily,
+        fontWeight: fontWeight,
+      ),
       themeMode: themeMode,
       themeAnimationDuration: const Duration(milliseconds: 180),
       themeAnimationCurve: Curves.easeOutCubic,
       routerConfig: appRouter,
       builder: (context, child) {
-        final mediaQuery = MediaQuery.of(context);
-        final textScale = AppLayout.clampedTextScaleFactor(context);
+        final textScale = AppLayout.clampedTextScaleFactor(
+          context,
+          multiplier: interfaceTextScale,
+        );
         final appChild = _SystemUiOverlayWrapper(
           child: child ?? const SizedBox.shrink(),
         );
@@ -56,8 +105,8 @@ class App extends ConsumerWidget {
           child: appChild,
         );
 
-        return MediaQuery(
-          data: mediaQuery.copyWith(textScaler: TextScaler.linear(textScale)),
+        return _MobileKeyboardInsetStabilizer(
+          textScale: textScale,
           child: responsiveChild,
         );
       },
@@ -65,45 +114,154 @@ class App extends ConsumerWidget {
   }
 }
 
-class _SystemUiOverlayWrapper extends StatefulWidget {
+class _MobileKeyboardInsetStabilizer extends StatefulWidget {
+  const _MobileKeyboardInsetStabilizer({
+    required this.textScale,
+    required this.child,
+  });
+
+  final double textScale;
+  final Widget child;
+
+  @override
+  State<_MobileKeyboardInsetStabilizer> createState() =>
+      _MobileKeyboardInsetStabilizerState();
+}
+
+class _MobileKeyboardInsetStabilizerState
+    extends State<_MobileKeyboardInsetStabilizer> {
+  static const Duration _keyboardInsetSettleDuration = Duration(
+    milliseconds: 72,
+  );
+
+  Timer? _keyboardInsetSettleTimer;
+  double _stableBottomInset = 0;
+  double _pendingBottomInset = 0;
+  bool _didSeedStableInset = false;
+
+  bool get _useAndroidPanInsetsStrategy =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  bool get _useIosStabilizedInsetsStrategy =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncKeyboardInset(MediaQuery.viewInsetsOf(context).bottom);
+  }
+
+  @override
+  void dispose() {
+    _keyboardInsetSettleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _syncKeyboardInset(double rawBottomInset) {
+    if (_useAndroidPanInsetsStrategy) {
+      _keyboardInsetSettleTimer?.cancel();
+      _keyboardInsetSettleTimer = null;
+      _pendingBottomInset = 0;
+      _stableBottomInset = 0;
+      _didSeedStableInset = true;
+      return;
+    }
+
+    if (!_useIosStabilizedInsetsStrategy) {
+      _keyboardInsetSettleTimer?.cancel();
+      _keyboardInsetSettleTimer = null;
+      _pendingBottomInset = rawBottomInset;
+      _stableBottomInset = rawBottomInset;
+      _didSeedStableInset = true;
+      return;
+    }
+
+    _pendingBottomInset = rawBottomInset;
+    if (!_didSeedStableInset) {
+      _stableBottomInset = rawBottomInset;
+      _didSeedStableInset = true;
+      return;
+    }
+    if (rawBottomInset <= 0.5) {
+      _keyboardInsetSettleTimer?.cancel();
+      _keyboardInsetSettleTimer = null;
+      if (_stableBottomInset <= 0.5) {
+        return;
+      }
+      setState(() {
+        _stableBottomInset = 0;
+      });
+      return;
+    }
+    if ((_stableBottomInset - rawBottomInset).abs() < 0.5) {
+      return;
+    }
+
+    _keyboardInsetSettleTimer?.cancel();
+    _keyboardInsetSettleTimer = Timer(_keyboardInsetSettleDuration, () {
+      if (!mounted) {
+        return;
+      }
+      if ((_stableBottomInset - _pendingBottomInset).abs() < 0.5) {
+        return;
+      }
+      setState(() {
+        _stableBottomInset = _pendingBottomInset;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final effectiveBottomInset =
+        _useAndroidPanInsetsStrategy ? 0.0 : _stableBottomInset;
+    final effectiveBottomPadding =
+        _useAndroidPanInsetsStrategy
+            ? mediaQuery.viewPadding.bottom
+            : mediaQuery.padding.bottom;
+    final stabilizedMediaQuery =
+        (_useAndroidPanInsetsStrategy || _useIosStabilizedInsetsStrategy)
+            ? mediaQuery.copyWith(
+              textScaler: TextScaler.linear(widget.textScale),
+              viewInsets: mediaQuery.viewInsets.copyWith(
+                bottom: effectiveBottomInset,
+              ),
+              padding: mediaQuery.padding.copyWith(
+                bottom: effectiveBottomPadding,
+              ),
+            )
+            : mediaQuery.copyWith(
+              textScaler: TextScaler.linear(widget.textScale),
+            );
+    return MediaQuery(data: stabilizedMediaQuery, child: widget.child);
+  }
+}
+
+class _SystemUiOverlayWrapper extends ConsumerStatefulWidget {
   const _SystemUiOverlayWrapper({required this.child});
 
   final Widget child;
 
   @override
-  State<_SystemUiOverlayWrapper> createState() =>
+  ConsumerState<_SystemUiOverlayWrapper> createState() =>
       _SystemUiOverlayWrapperState();
 }
 
-class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
+class _SystemUiOverlayWrapperState
+    extends ConsumerState<_SystemUiOverlayWrapper>
     with WidgetsBindingObserver {
-  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
-  StreamSubscription<AuthEvent>? _authEventSub;
-  Brightness? _lastBrightness;
-  bool _hasShownStartupAnnouncement = false;
-  bool _startupAnnouncementScheduled = false;
-  int _startupAnnouncementRetryCount = 0;
+  Color? _lastOverlayBaseColor;
   bool _isStartupReady = false;
-  Timer? _startupDelayTimer;
-  Timer? _startupDeferredTasksTimer;
-  bool _startupDeferredTasksScheduled = false;
-  final AnnouncementService _announcementService = AnnouncementService();
-  final AnnouncementReadStateService _announcementReadStateService =
-      AnnouncementReadStateService();
-  final AppUpdateService _appUpdateService = AppUpdateService();
-  final DeviceIdentityService _deviceIdentityService = DeviceIdentityService();
-  late final AuthTokenRefresherImpl _authTokenRefresher =
-      AuthTokenRefresherImpl();
-  late final DeviceHeartbeatService _deviceHeartbeatService =
-      DeviceHeartbeatService(identityService: _deviceIdentityService);
-  late final AnalyticsService _analyticsService = AnalyticsService(
-    identityService: _deviceIdentityService,
+  ImportExportTaskStatus? _externalImportStatus;
+  Announcement? _startupAnnouncementBanner;
+  Timer? _startupAnnouncementBannerTimer;
+  late final AppLifecycleCoordinator _lifecycleCoordinator;
+  late final AppAnnouncementCoordinator _announcementCoordinator;
+  late final AppStartupCoordinator _startupCoordinator;
+  static const Duration _startupAnnouncementBannerDuration = Duration(
+    seconds: 7,
   );
-  bool _isHeartbeatInFlight = false;
-  bool _isVisitInFlight = false;
-  bool _isStartupUpdateInFlight = false;
-  bool _hasCheckedStartupUpdate = false;
-  DateTime? _lastHeartbeatAt;
   static const List<String> _dialogFontFallback = [
     'STKaiti',
     'Kaiti SC',
@@ -113,50 +271,47 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     'serif',
   ];
 
-  static const Duration _kStartupMinDuration = Duration(milliseconds: 480);
-  static const Duration _kStartupDeferredTasksDelay = Duration(
-    milliseconds: 1200,
-  );
-  static const Duration _kHeartbeatThrottle = Duration(minutes: 2);
-
   @override
   void initState() {
     super.initState();
-    ApiClient.defaultAuthTokenRefresher ??= _authTokenRefresher;
-    WidgetsBinding.instance.addObserver(this);
-    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen(
-      _onIncomingSourceImportPayload,
+    _lifecycleCoordinator =
+        ref.read(app_providers.appLifecycleCoordinatorFactoryProvider)();
+    _announcementCoordinator =
+        ref.read(app_providers.appAnnouncementCoordinatorFactoryProvider)();
+    _startupCoordinator = ref.read(
+      app_providers.appStartupCoordinatorFactoryProvider,
+    )(
+      sendHeartbeat: _lifecycleCoordinator.sendHeartbeat,
+      sendVisitEvent: _lifecycleCoordinator.sendVisitEvent,
+      showStartupAnnouncementIfNeeded: _showStartupAnnouncementIfNeeded,
+      resolveDialogContext: _resolveStartupDialogContext,
+      showUpdateDialog: _showUpdateReleaseDialog,
     );
-    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
-    unawaited(ExternalImportBridge.instance.initialize());
-    unawaited(_prepareStartup());
-  }
-
-  Future<void> _prepareStartup() async {
-    final remaining = _kStartupMinDuration;
-    if (remaining > Duration.zero) {
-      await _waitStartupDelay(remaining);
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isStartupReady = true;
-    });
+    AppLogger.instance.info('Startup init begin');
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addTimingsCallback(
+      _startupCoordinator.onFrameTimings,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_warmupLocalDatabase());
-      _scheduleStartupDeferredTasks();
+      _startupCoordinator.notifyFirstFrameCallback();
     });
+    unawaited(
+      _lifecycleCoordinator.initialize(
+        onIncomingExternalImportPayload: _onIncomingExternalImportPayload,
+        onAuthEvent: _handleAuthEvent,
+      ),
+    );
+    unawaited(
+      _startupCoordinator.prepareStartup(
+        isMounted: () => mounted,
+        waitUntilReady: _waitUntilStartupArtworkReady,
+        markStartupReady: _markStartupReady,
+      ),
+    );
   }
 
-  Future<void> _warmupLocalDatabase() async {
-    try {
-      await AppDatabase.instance.countSourceListItems();
-    } catch (_) {
-      // Ignore warmup failures to avoid affecting app startup or first frame.
-    }
+  Future<void> _waitUntilStartupArtworkReady() async {
+    return;
   }
 
   Future<BuildContext?> _resolveStartupDialogContext() async {
@@ -170,124 +325,28 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     return appRootNavigatorKey.currentContext;
   }
 
-  Future<void> _checkStartupUpdateIfNeeded() async {
-    if (_hasCheckedStartupUpdate || _isStartupUpdateInFlight) {
-      return;
-    }
-    _isStartupUpdateInFlight = true;
-    try {
-      final result = await _appUpdateService.checkUpdate();
-      _hasCheckedStartupUpdate = true;
-      final release = result.release;
-      if (!mounted || !result.hasUpdate || release == null) {
-        return;
-      }
-      final dialogContext = await _resolveStartupDialogContext();
-      if (!mounted || dialogContext == null || !dialogContext.mounted) {
-        return;
-      }
-      await AppUpdateDialog.showUpdateDialog(dialogContext, release);
-    } catch (_) {
-      _hasCheckedStartupUpdate = true;
-    } finally {
-      _isStartupUpdateInFlight = false;
-    }
-  }
-
-  Future<void> _waitStartupDelay(Duration delay) {
-    if (delay <= Duration.zero) {
-      return Future<void>.value();
-    }
-
-    final completer = Completer<void>();
-    _startupDelayTimer?.cancel();
-    _startupDelayTimer = Timer(delay, () {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    });
-
-    return completer.future;
-  }
-
-  void _scheduleStartupDeferredTasks() {
-    if (_startupDeferredTasksScheduled) {
-      return;
-    }
-    _startupDeferredTasksScheduled = true;
-    _startupDeferredTasksTimer?.cancel();
-    _startupDeferredTasksTimer = Timer(_kStartupDeferredTasksDelay, () {
-      unawaited(_runStartupDeferredTasks());
-    });
-  }
-
-  Future<void> _runStartupDeferredTasks() async {
-    if (!mounted) {
-      return;
-    }
-    await _sendHeartbeat();
-    await _sendVisitEvent();
-    await _checkStartupUpdateIfNeeded();
-    if (!mounted) {
-      return;
-    }
-    _showStartupAnnouncementIfNeeded();
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_sendHeartbeat());
-      unawaited(_sendVisitEvent());
-    }
-  }
-
-  Future<void> _sendHeartbeat() async {
-    if (_isHeartbeatInFlight) {
-      return;
-    }
-    final now = DateTime.now();
-    final last = _lastHeartbeatAt;
-    if (last != null && now.difference(last) < _kHeartbeatThrottle) {
-      return;
-    }
-    _isHeartbeatInFlight = true;
-    try {
-      await _deviceHeartbeatService.sendHeartbeat();
-      _lastHeartbeatAt = now;
-    } catch (_) {
-      // Ignore heartbeat failures to avoid blocking startup or resume.
-    } finally {
-      _isHeartbeatInFlight = false;
-    }
-  }
-
-  Future<void> _sendVisitEvent() async {
-    if (_isVisitInFlight) {
-      return;
-    }
-    _isVisitInFlight = true;
-    try {
-      await _analyticsService.trackVisit(visitCount: 1, visitSeconds: 0);
-    } catch (_) {
-      // Ignore analytics failures to avoid blocking startup or resume.
-    } finally {
-      _isVisitInFlight = false;
-    }
+    _lifecycleCoordinator.handleAppLifecycleState(state);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _incomingImportSub?.cancel();
-    _authEventSub?.cancel();
-    _startupDelayTimer?.cancel();
-    _startupDeferredTasksTimer?.cancel();
+    WidgetsBinding.instance.removeTimingsCallback(
+      _startupCoordinator.onFrameTimings,
+    );
+    _startupAnnouncementBannerTimer?.cancel();
+    _startupCoordinator.dispose();
+    _lifecycleCoordinator.dispose();
     super.dispose();
   }
 
   void _handleAuthEvent(AuthEvent event) {
     if (!mounted) {
+      return;
+    }
+    if (event.type == AuthEventType.loggedIn) {
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
@@ -316,14 +375,16 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final brightness = Theme.of(context).brightness;
-    if (_lastBrightness == brightness) {
+    final theme = Theme.of(context);
+    final backgroundColor =
+        theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor;
+    if (_lastOverlayBaseColor?.toARGB32() == backgroundColor.toARGB32()) {
       return;
     }
-    _lastBrightness = brightness;
+    _lastOverlayBaseColor = backgroundColor;
 
     final base =
-        brightness == Brightness.dark
+        ThemeData.estimateBrightnessForColor(backgroundColor) == Brightness.dark
             ? SystemUiOverlayStyle.light
             : SystemUiOverlayStyle.dark;
 
@@ -336,353 +397,71 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     SystemChrome.setSystemUIOverlayStyle(style);
   }
 
-  void _showStartupAnnouncementIfNeeded() {
-    if (!_isStartupReady ||
-        _hasShownStartupAnnouncement ||
-        _startupAnnouncementScheduled) {
-      return;
-    }
-
-    _startupAnnouncementScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startupAnnouncementScheduled = false;
-      if (!mounted || _hasShownStartupAnnouncement) {
-        return;
-      }
-
-      final navigatorContext = appRootNavigatorKey.currentContext;
-      if (navigatorContext == null) {
-        if (_startupAnnouncementRetryCount < 10) {
-          _startupAnnouncementRetryCount += 1;
-          _showStartupAnnouncementIfNeeded();
-        }
-        return;
-      }
-
-      _startupAnnouncementRetryCount = 0;
-      unawaited(_tryShowLatestAnnouncement());
-    });
-  }
-
-  Future<void> _tryShowLatestAnnouncement() async {
-    Announcement? latest;
-    try {
-      latest = await _announcementService.fetchLatestAnnouncement();
-    } catch (_) {
-      return;
-    }
-
+  void _markStartupReady() {
     if (!mounted) {
       return;
     }
+    setState(() {
+      _isStartupReady = true;
+    });
+  }
 
-    final announcement = latest;
-    if (announcement == null) {
-      return;
-    }
-
-    final active = announcement.isActiveAt(DateTime.now().toUtc());
-    if (!active) {
-      return;
-    }
-
-    final isRead = await _announcementReadStateService.isRead(announcement.id);
-    if (isRead) {
-      return;
-    }
-
-    final dialogContext = appRootNavigatorKey.currentContext;
-    if (!mounted || dialogContext == null || !dialogContext.mounted) {
-      return;
-    }
-
-    _hasShownStartupAnnouncement = true;
-    showDialog<void>(
-      context: dialogContext,
-      builder: (context) {
-        return _buildAnnouncementDialog(context, announcement);
-      },
+  void _showStartupAnnouncementIfNeeded() {
+    _announcementCoordinator.showStartupAnnouncementIfNeeded(
+      isStartupReady: _isStartupReady,
+      isMounted: () => mounted,
+      currentNavigatorContext: () => appRootNavigatorKey.currentContext,
+      presentAnnouncement: _presentStartupAnnouncement,
     );
   }
 
-  Widget _buildAnnouncementDialog(
+  void _presentStartupAnnouncement(Announcement announcement) {
+    if (!mounted) {
+      return;
+    }
+    _startupAnnouncementBannerTimer?.cancel();
+    setState(() {
+      _startupAnnouncementBanner = announcement;
+    });
+    _startupAnnouncementBannerTimer = Timer(
+      _startupAnnouncementBannerDuration,
+      () => _dismissStartupAnnouncementBanner(markRead: true),
+    );
+  }
+
+  Future<void> _showUpdateReleaseDialog(
     BuildContext context,
-    Announcement announcement,
+    AppUpdateRelease release,
   ) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final dialogMaxHeight = math.min(356.0, screenHeight * 0.44);
-    final contentMaxHeight = math.min(110.0, screenHeight * 0.135);
-    final accent = switch (announcement.level) {
-      AnnouncementLevel.urgent => colorScheme.error,
-      AnnouncementLevel.important => colorScheme.tertiary,
-      AnnouncementLevel.info => colorScheme.primary,
-    };
-    final surface = colorScheme.surface;
-    final backgroundTop = Color.alphaBlend(
-      accent.withValues(alpha: 0.18),
-      surface,
-    );
-    final backgroundBottom = Color.alphaBlend(
-      colorScheme.secondary.withValues(alpha: 0.12),
-      surface,
-    );
-    final contentText =
-        announcement.content.trim().isEmpty
-            ? '暂无公告正文。'
-            : announcement.content.trim();
-    final publishLabel = _formatAnnouncementDialogTime(
-      announcement.publishFrom,
-    );
-    final titleText =
-        announcement.title.trim().isEmpty ? '公告更新' : announcement.title.trim();
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: AppSpacing.dialogInsetPadding(context),
-      child: Align(
-        alignment: const Alignment(0, -0.18),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: math.min(AppLayout.dialogMaxWidth(context), 340),
-            maxHeight: dialogMaxHeight,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [backgroundTop, backgroundBottom],
-                ),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.35),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 24,
-                    offset: const Offset(0, 16),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -46,
-                    top: -42,
-                    child: Container(
-                      width: 132,
-                      height: 132,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.08),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: -34,
-                    bottom: -46,
-                    child: Container(
-                      width: 124,
-                      height: 124,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildAnnouncementLevelChip(
-                                    context,
-                                    announcement,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    titleText,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.15,
-                                          fontFamilyFallback:
-                                              _dialogFontFallback,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    publishLabel,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '关闭',
-                              onPressed: () => Navigator.of(context).pop(),
-                              style: IconButton.styleFrom(
-                                minimumSize: const Size(34, 34),
-                                padding: EdgeInsets.zero,
-                                backgroundColor: colorScheme.surface.withValues(
-                                  alpha: 0.58,
-                                ),
-                              ),
-                              icon: Icon(
-                                Icons.close_rounded,
-                                color: colorScheme.onSurfaceVariant,
-                                size: 18,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surface.withValues(alpha: 0.88),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.22,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.7),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: 0,
-                                  maxHeight: contentMaxHeight,
-                                ),
-                                child: ScrollConfiguration(
-                                  behavior: const MaterialScrollBehavior()
-                                      .copyWith(overscroll: false),
-                                  child: SingleChildScrollView(
-                                    child: Text(
-                                      contentText,
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            height: 1.5,
-                                            fontFamilyFallback:
-                                                _dialogFontFallback,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('稍后'),
-                            ),
-                            const Spacer(),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: accent,
-                                foregroundColor: colorScheme.onPrimary,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 11,
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                unawaited(
-                                  _announcementReadStateService.markRead(
-                                    announcement.id,
-                                  ),
-                                );
-                              },
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.check_circle_outline_rounded,
-                                    size: 17,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text('我已知晓'),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    return AppUpdateDialog.showUpdateDialog(context, release);
   }
 
-  Widget _buildAnnouncementLevelChip(
-    BuildContext context,
-    Announcement announcement,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final (label, color) = switch (announcement.level) {
-      AnnouncementLevel.urgent => ('紧急', colorScheme.error),
-      AnnouncementLevel.important => ('重要', colorScheme.tertiary),
-      AnnouncementLevel.info => ('通知', colorScheme.primary),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
-          fontFamilyFallback: _dialogFontFallback,
-        ),
-      ),
-    );
+  void _dismissStartupAnnouncementBanner({required bool markRead}) {
+    final announcement = _startupAnnouncementBanner;
+    _startupAnnouncementBannerTimer?.cancel();
+    _startupAnnouncementBannerTimer = null;
+    if (!mounted || announcement == null) {
+      return;
+    }
+    setState(() {
+      _startupAnnouncementBanner = null;
+    });
+    if (markRead) {
+      unawaited(_announcementCoordinator.markRead(announcement.id));
+    }
   }
 
-  String _formatAnnouncementDialogTime(DateTime time) {
+  void _openStartupAnnouncement(Announcement announcement) {
+    _dismissStartupAnnouncementBanner(markRead: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      appRouter.push('/announcements/${Uri.encodeComponent(announcement.id)}');
+    });
+  }
+
+  String _formatAnnouncementBannerTime(DateTime time) {
     final local = time.toLocal();
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
@@ -691,19 +470,36 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     return '$month-$day $hour:$minute';
   }
 
-  void _onIncomingSourceImportPayload(IncomingExternalImportPayload payload) {
+  void _onIncomingExternalImportPayload(IncomingExternalImportPayload payload) {
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsLocalFileImport) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _externalImportStatus = ImportExportCopy.running(
+          title: '已接收外部文件',
+          message:
+              '正在接管${ExternalImportDiagnostics.payloadLabel(payload.type)}并跳转到对应页面…',
+          detail: payload.label,
+        );
+      });
+      Future<void>.delayed(const Duration(milliseconds: 900), () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _externalImportStatus = null;
+        });
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      switch (payload.type) {
-        case ExternalImportPayloadType.source:
-          _safeGo('/source');
-          break;
-        case ExternalImportPayloadType.localBook:
-          _safeGo('/bookshelf');
-          break;
-      }
+      ExternalImportDiagnostics.logNavigationScheduled(payload);
+      final target = ExternalImportCatalog.routeForPayloadType(payload.type);
+      _safeGo(target);
     });
   }
 
@@ -717,19 +513,31 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
   @override
   Widget build(BuildContext context) {
+    final showStartupGuard =
+        !_isStartupReady && !StartupArtworkStore.primedDisabled;
     final style =
-        _isStartupReady
+        !showStartupGuard
             ? _adaptiveOverlayStyle(context)
             : _startupOverlayStyle(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: style,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          widget.child,
-          if (!_isStartupReady) const _StartupGuardPage(),
-        ],
+      child: ImportExportTaskOverlay(
+        status: _externalImportStatus,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            widget.child,
+            _StartupAnnouncementBannerOverlay(
+              announcement: _startupAnnouncementBanner,
+              fontFallback: _dialogFontFallback,
+              formatTime: _formatAnnouncementBannerTime,
+              onClose: () => _dismissStartupAnnouncementBanner(markRead: true),
+              onOpen: _openStartupAnnouncement,
+            ),
+            if (showStartupGuard) const _StartupGuardPage(),
+          ],
+        ),
       ),
     );
   }
@@ -765,124 +573,325 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 class _StartupGuardPage extends StatelessWidget {
   const _StartupGuardPage();
 
-  static const List<String> _brandTextChars = ['书', '享', '阅', '读'];
-  static const List<String> _sloganTextChars = ['享', '受', '阅', '读', '生', '活'];
+  @override
+  Widget build(BuildContext context) {
+    return const _StartupGuardArtwork();
+  }
+}
+
+class _StartupAnnouncementBannerOverlay extends StatelessWidget {
+  const _StartupAnnouncementBannerOverlay({
+    required this.announcement,
+    required this.fontFallback,
+    required this.formatTime,
+    required this.onClose,
+    required this.onOpen,
+  });
+
+  final Announcement? announcement;
+  final List<String> fontFallback;
+  final String Function(DateTime time) formatTime;
+  final VoidCallback onClose;
+  final ValueChanged<Announcement> onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
-    const brandGap = 2.0;
-    const brandLineHeight = 1.02;
-    final brandFontSize = (shortestSide * 0.165).clamp(48.0, 66.0).toDouble();
-    final sloganFontSize = (shortestSide * 0.08).clamp(23.0, 33.0).toDouble();
-    final sloganTopOffset = (brandFontSize * brandLineHeight + brandGap) * 2;
-    final fontFamilyFallback = const [
-      'STKaiti',
-      'Kaiti SC',
-      'KaiTi',
-      'Songti SC',
-      'Noto Serif CJK SC',
-      'serif',
-    ];
-    final backgroundTop = Color.alphaBlend(
-      colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
-      colorScheme.surface,
-    );
-    final backgroundBottom = Color.alphaBlend(
-      colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.04),
-      colorScheme.surface,
-    );
-    final brandColor =
-        isDark
-            ? const Color(0xFFF2EFE8)
-            : colorScheme.onSurface.withValues(alpha: 0.9);
-    final sloganColor = brandColor.withValues(alpha: isDark ? 0.88 : 0.72);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [backgroundTop, backgroundBottom],
-        ),
-      ),
+    final announcement = this.announcement;
+    return IgnorePointer(
+      ignoring: announcement == null,
       child: SafeArea(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _VerticalTextColumn(
-                    characters: _brandTextChars,
-                    gap: brandGap,
-                    style: TextStyle(
-                      color: brandColor,
-                      fontSize: brandFontSize,
-                      height: brandLineHeight,
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.none,
-                      fontFamilyFallback: fontFamilyFallback,
-                    ),
-                  ),
-                  SizedBox(width: shortestSide * 0.048),
-                  Padding(
-                    padding: EdgeInsets.only(top: sloganTopOffset),
-                    child: _VerticalTextColumn(
-                      characters: _sloganTextChars,
-                      gap: 1,
-                      style: TextStyle(
-                        color: sloganColor,
-                        fontSize: sloganFontSize,
-                        height: 1.02,
-                        fontWeight: FontWeight.w500,
-                        decoration: TextDecoration.none,
-                        fontFamilyFallback: fontFamilyFallback,
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            reverseDuration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final offsetAnimation = Tween<Offset>(
+                begin: const Offset(0, -0.18),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: offsetAnimation, child: child),
+              );
+            },
+            child:
+                announcement == null
+                    ? const SizedBox(
+                      key: ValueKey('startup_announcement_banner_empty'),
+                      width: double.infinity,
+                      height: 0,
+                    )
+                    : _StartupAnnouncementBanner(
+                      key: ValueKey(
+                        'startup_announcement_banner_${announcement.id}',
                       ),
+                      announcement: announcement,
+                      fontFallback: fontFallback,
+                      formatTime: formatTime,
+                      onClose: onClose,
+                      onOpen: () => onOpen(announcement),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _VerticalTextColumn extends StatelessWidget {
-  const _VerticalTextColumn({
-    required this.characters,
-    required this.style,
-    this.gap = 0,
+class _StartupAnnouncementBanner extends StatelessWidget {
+  const _StartupAnnouncementBanner({
+    super.key,
+    required this.announcement,
+    required this.fontFallback,
+    required this.formatTime,
+    required this.onClose,
+    required this.onOpen,
   });
 
-  final List<String> characters;
-  final TextStyle style;
-  final double gap;
+  final Announcement announcement;
+  final List<String> fontFallback;
+  final String Function(DateTime time) formatTime;
+  final VoidCallback onClose;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final character in characters)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: gap / 2),
-            child: Text(
-              character,
-              style: style.copyWith(
-                decoration: TextDecoration.none,
-                decorationColor: Colors.transparent,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final horizontal = AppLayout.isDesktopLike(context) ? 24.0 : 12.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final maxWidth =
+        AppLayout.isDesktopLike(context) ? 680.0 : screenWidth - horizontal * 2;
+    final (label, accent, icon) = switch (announcement.level) {
+      AnnouncementLevel.urgent => (
+        '紧急公告',
+        colorScheme.error,
+        Icons.priority_high_rounded,
+      ),
+      AnnouncementLevel.important => (
+        '重要公告',
+        colorScheme.tertiary,
+        Icons.campaign_rounded,
+      ),
+      AnnouncementLevel.info => (
+        '公告通知',
+        colorScheme.primary,
+        Icons.notifications_active_outlined,
+      ),
+    };
+    final title =
+        announcement.title.trim().isEmpty ? '公告更新' : announcement.title.trim();
+    final summary = announcement.content.trim();
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontal, 10, horizontal, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                accent.withValues(alpha: 0.12),
+                colorScheme.surface,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accent.withValues(alpha: 0.28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: onOpen,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: accent, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                label,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: accent,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamilyFallback: fontFallback,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  formatTime(announcement.publishFrom),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontFamilyFallback: fontFallback,
+                            ),
+                          ),
+                          if (summary.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              summary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontFamilyFallback: fontFallback,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    TextButton(onPressed: onOpen, child: const Text('查看')),
+                    IconButton(
+                      tooltip: '关闭',
+                      onPressed: onClose,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StartupGuardArtwork extends StatefulWidget {
+  const _StartupGuardArtwork();
+
+  @override
+  State<_StartupGuardArtwork> createState() => _StartupGuardArtworkState();
+}
+
+class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
+  static const String _fallbackStartupArtwork =
+      'assets/branding/selune_launch_scene.png';
+  int _seenRevision = -1;
+  ImageProvider? _imageProvider;
+  Object? _imageKey;
+  Timer? _artworkPollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncArtwork(precache: false);
+    _artworkPollTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) {
+        return;
+      }
+      if (_seenRevision != StartupArtworkStore.revision ||
+          StartupArtworkStore.isPriming) {
+        _syncArtwork();
+      }
+      if (!StartupArtworkStore.isPriming &&
+          _seenRevision == StartupArtworkStore.revision) {
+        _artworkPollTimer?.cancel();
+        _artworkPollTimer = null;
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncArtwork();
+  }
+
+  @override
+  void dispose() {
+    _artworkPollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _syncArtwork({bool precache = true}) {
+    final revision = StartupArtworkStore.revision;
+    final hasExpectedProvider = _imageProvider != null;
+    if (_seenRevision == revision && hasExpectedProvider) {
+      return;
+    }
+    _seenRevision = revision;
+    final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
+    final fileProvider = resolveStartupArtworkFileProvider(resolvedPath);
+    final ImageProvider nextProvider =
+        fileProvider ?? const AssetImage(_fallbackStartupArtwork);
+    final nextKey = resolvedPath ?? _fallbackStartupArtwork;
+    _imageProvider = nextProvider;
+    _imageKey = nextKey;
+    if (precache) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          precacheImage(nextProvider, context);
+        }
+      });
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_seenRevision != StartupArtworkStore.revision) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _syncArtwork();
+        }
+      });
+    }
+    final imageProvider =
+        _imageProvider ?? const AssetImage(_fallbackStartupArtwork);
+    return ColoredBox(
+      color: const Color(0xFFF6F8FB),
+      child: SizedBox.expand(
+        child: Image(
+          key: ValueKey<Object?>(_imageKey),
+          image: imageProvider,
+          fit: BoxFit.fill,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
     );
   }
 }

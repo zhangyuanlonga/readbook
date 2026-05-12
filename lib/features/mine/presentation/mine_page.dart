@@ -1,18 +1,40 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
-
+import '../../../app/images/local_file_image.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
+import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/theme/app_theme_palette.dart';
+import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
 import '../../../core/auth/auth_event_bus.dart';
-import '../../../core/auth/auth_session_store.dart';
+import '../../../core/media/image_selection_service.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
+import '../application/advanced_theme_provider.dart';
+import '../application/launch_image_gallery_provider.dart';
+import '../application/mine_page_flow_coordinator.dart';
+import '../application/mine_page_preferences_service.dart';
+import '../application/mine_page_session_service.dart';
+import '../providers.dart';
+
+part 'mine_page_view.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -21,281 +43,534 @@ class MinePage extends ConsumerStatefulWidget {
   ConsumerState<MinePage> createState() => _MinePageState();
 }
 
-class _MinePageState extends ConsumerState<MinePage> {
-  String? _highlightedTileId;
-  static const EdgeInsets _profileCardPadding = EdgeInsets.fromLTRB(
-    14,
-    12,
-    14,
-    12,
-  );
-  static const EdgeInsets _actionSectionPadding = EdgeInsets.fromLTRB(
-    14,
-    12,
-    14,
-    14,
-  );
+enum _MineLayoutMode { grid, list }
 
+enum _ProfileAvatarAction { change, remove }
+
+class _MinePageState extends ConsumerState<MinePage> {
+  static const String _layoutModeKey = 'mine.page.layoutMode';
   static final Uri _sourceFeedbackUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
 
-  final AuthSessionStore _authSessionStore = AuthSessionStore();
-  final AppUpdateService _updateService = AppUpdateService();
-  StreamSubscription<AuthEvent>? _authEventSub;
+  late final AppUpdateService _updateService;
+  late final ImageSelectionService _imageSelectionService;
+  late final MinePageFlowCoordinator _pageFlowCoordinator;
+  late final MinePageSessionService _sessionService;
   String? _userId;
   String? _username;
-  bool _isLoadingSession = true;
+  String? _localAvatarPath;
   bool _isCheckingUpdate = false;
+  bool _showSourceEntry = false;
+  bool _hasMembership = false;
+  bool _hasThemeCustom = false;
+  bool _isRemoteAccessResolved = false;
+  int _sourceImportLimit = 10;
+  _MineLayoutMode _layoutMode = _MineLayoutMode.list;
+  bool _didRestoreLayoutMode = false;
+  String? _openingRoute;
+
+  bool get _isListMode => _layoutMode == _MineLayoutMode.list;
+
+  VoidCallback _pushMineRouteAction(String route) {
+    return () => unawaited(_pushMineRoute(route));
+  }
+
+  Future<void> _pushMineRoute(String route) async {
+    if (_openingRoute == route) {
+      return;
+    }
+    _openingRoute = route;
+    try {
+      await context.push(route);
+    } finally {
+      if (_openingRoute == route) {
+        _openingRoute = null;
+      }
+    }
+  }
+
+  EdgeInsets _actionSectionPaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.symmetric(vertical: metrics.contentGap * 0.35)
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.contentGap * 0.55,
+          metrics.cardPadding,
+          metrics.contentGap * 0.55,
+        );
+  }
+
+  double _primarySectionGapFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode ? metrics.contentGap * 0.85 : metrics.contentGap;
+  }
+
+  double _secondarySectionGapFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode ? metrics.contentGap * 0.75 : metrics.contentGap * 0.45;
+  }
+
+  double _quickAccessInnerGapFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode ? metrics.contentGap * 0.7 : metrics.contentGap;
+  }
+
+  EdgeInsets _profileCardPaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.contentGap,
+          metrics.cardPadding,
+          metrics.contentGap,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding + 2,
+          metrics.cardPadding,
+          metrics.cardPadding + 2,
+          metrics.cardPadding,
+        );
+  }
+
+  EdgeInsets _quickCardPaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding * 0.8,
+          metrics.contentGap * 0.85,
+          metrics.cardPadding * 0.8,
+          metrics.contentGap * 0.85,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding,
+          metrics.cardPadding * 0.8,
+          metrics.cardPadding,
+          metrics.cardPadding * 0.8,
+        );
+  }
+
+  EdgeInsets _actionListTilePaddingFor(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return _isListMode
+        ? EdgeInsets.fromLTRB(
+          metrics.cardPadding * 0.95,
+          metrics.contentGap * 1.15,
+          metrics.cardPadding * 0.95,
+          metrics.contentGap * 1.15,
+        )
+        : EdgeInsets.fromLTRB(
+          metrics.cardPadding * 0.8,
+          metrics.cardPadding * 0.65,
+          metrics.cardPadding * 0.8,
+          metrics.cardPadding * 0.65,
+        );
+  }
 
   @override
   void initState() {
     super.initState();
-    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
+    _updateService = ref.read(mineUpdateServiceProvider);
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
+    _pageFlowCoordinator = ref.read(minePageFlowCoordinatorProvider)();
+    _sessionService = ref.read(minePageSessionServiceProvider);
+    _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
+    _applyPrimedSession();
     _loadSession();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didRestoreLayoutMode) {
+      return;
+    }
+    _didRestoreLayoutMode = true;
+    unawaited(_restoreLayoutMode());
+  }
+
+  @override
   void dispose() {
-    _authEventSub?.cancel();
+    unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final seedColor = ref.watch(appSeedColorProvider);
+  Widget build(BuildContext context) => _buildMinePage(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('我的')),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.mineContentMaxWidth,
-          );
-
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: RefreshIndicator(
-                onRefresh: _refreshMine,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    12 + bottomSafe,
-                  ),
-                  children: [
-                    _buildPageEntrance(
-                      index: 0,
-                      child: _buildProfileCard(
-                        context,
-                        subtitle: _buildProfileSubtitle(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildPageEntrance(
-                      index: 1,
-                      child: _buildActionSection(
-                        context,
-                        title: '常用',
-                        actions: [
-                          _MineActionItem(
-                            icon: Icons.palette_outlined,
-                            label: '外观',
-                            colorDot: seedColor,
-                            onTap: () => context.push('/appearance'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.tune_rounded,
-                            label: '系统',
-                            onTap: () => context.push('/system-settings'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.menu_book_rounded,
-                            label: '配置',
-                            onTap: () => context.push('/source'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.cloud_outlined,
-                            label: '缓存',
-                            onTap: () => context.push('/cache'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.bookmarks_outlined,
-                            label: '书签',
-                            onTap: () => context.push('/bookmarks'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.history_rounded,
-                            label: '阅读记录',
-                            onTap: () => context.push('/read-records'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildPageEntrance(
-                      index: 2,
-                      child: _buildActionSection(
-                        context,
-                        title: '其他',
-                        actions: [
-                          _MineActionItem(
-                            icon: Icons.rate_review_outlined,
-                            label: '问题反馈',
-                            onTap: () => context.push('/feedback'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.feedback_outlined,
-                            label: '官方群',
-                            onTap: _openSourceFeedback,
-                          ),
-                          _MineActionItem(
-                            icon: Icons.system_update_alt,
-                            label: '检查更新',
-                            onTap: _checkUpdateFromMine,
-                          ),
-                          _MineActionItem(
-                            icon: Icons.info_outline,
-                            label: '关于',
-                            onTap: () => context.push('/about'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+  void _applyPrimedSession() {
+    final session = MinePageSessionPriming.take();
+    if (session == null) {
+      return;
+    }
+    _userId = session.userId;
+    _username = session.username;
   }
 
-  Widget _buildProfileCard(BuildContext context, {required String subtitle}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final displayName =
-        _userId == null
-            ? '登录 / 注册'
-            : ((_username?.trim().isNotEmpty ?? false) ? _username! : _userId!);
-
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          final target = _userId == null ? '/auth' : '/profile';
-          context.push(target).then((_) => _loadSession());
-        },
-        child: Padding(
-          padding: _profileCardPadding,
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Icon(
-                  Icons.auto_stories_rounded,
-                  color: colorScheme.onPrimaryContainer,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.32,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<void> _restoreLayoutMode() async {
+    final preferGridByDefault = AppAdaptiveMetrics.of(context).isMediumUpWindow;
+    final defaultMode =
+        preferGridByDefault ? _MineLayoutMode.grid : _MineLayoutMode.list;
+    final raw = await _sessionService.restoreLayoutMode(_layoutModeKey);
+    final mode =
+        raw == null
+            ? defaultMode
+            : raw == 'grid'
+            ? _MineLayoutMode.grid
+            : _MineLayoutMode.list;
+    if (!mounted || _layoutMode == mode) {
+      return;
+    }
+    setState(() {
+      _layoutMode = mode;
+    });
   }
 
-  String _buildProfileSubtitle() {
-    if (_isLoadingSession) {
-      return '读取登录状态中...';
-    }
-    if (_userId == null) {
-      return '未登录，点击登录/注册以同步阅读数据。';
-    }
-    return '已登录，点击查看账号信息。';
+  Future<void> _toggleLayoutMode() async {
+    final next =
+        _layoutMode == _MineLayoutMode.grid
+            ? _MineLayoutMode.list
+            : _MineLayoutMode.grid;
+    setState(() {
+      _layoutMode = next;
+    });
+    await _sessionService.persistLayoutMode(
+      storageKey: _layoutModeKey,
+      value: next == _MineLayoutMode.list ? 'list' : 'grid',
+    );
   }
 
   Future<void> _loadSession() async {
-    await _reloadSession(showLoading: true);
+    await _reloadSession(showLoading: true, refreshRemote: false);
   }
 
   Future<void> _refreshMine() async {
-    await _reloadSession(showLoading: false);
+    await _reloadSession(showLoading: false, refreshRemote: true);
   }
 
-  Future<void> _reloadSession({required bool showLoading}) async {
-    if (showLoading && mounted) {
-      setState(() {
-        _isLoadingSession = true;
-      });
-    }
-    final session = await _authSessionStore.getSession();
+  Future<void> _reloadSession({
+    required bool showLoading,
+    required bool refreshRemote,
+  }) async {
+    final snapshot = await _sessionService.loadSession(
+      refreshRemote: refreshRemote,
+    );
+    final supportsSourceRuntime =
+        ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
     if (!mounted) {
       return;
     }
     setState(() {
-      _userId = session?.userId;
-      _username = session?.username;
-      _isLoadingSession = false;
+      _userId = snapshot.session?.userId;
+      _username = snapshot.session?.username;
+      _showSourceEntry = supportsSourceRuntime && snapshot.showSourceEntry;
+      _hasMembership = snapshot.hasMembership;
+      _hasThemeCustom = snapshot.hasThemeCustom;
+      _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
+      _sourceImportLimit = snapshot.sourceImportLimit;
+      _localAvatarPath = snapshot.localAvatarPath;
     });
+    if (snapshot.session == null) {
+      return;
+    }
+    if (!refreshRemote && snapshot.shouldRefreshRemoteAccess) {
+      unawaited(_reloadSession(showLoading: false, refreshRemote: true));
+    }
+  }
+
+  Future<void> _handleAvatarTap(BuildContext context) async {
+    if (_userId == null) {
+      await context.push('/auth');
+      await _loadSession();
+      return;
+    }
+    final action = await showModalBottomSheet<_ProfileAvatarAction>(
+      context: context,
+      useRootNavigator: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final bottomInset = _mineBottomSafeInset(context);
+        return SafeArea(
+          top: false,
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    Icons.photo_camera_back_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('更换头像'),
+                  subtitle: const Text('从本地相册或文件中选择头像'),
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pop(_ProfileAvatarAction.change),
+                ),
+                if (_localAvatarPath != null)
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline_rounded,
+                      color: colorScheme.error,
+                    ),
+                    title: const Text('移除头像'),
+                    subtitle: const Text('恢复默认头像样式'),
+                    onTap:
+                        () => Navigator.of(
+                          context,
+                        ).pop(_ProfileAvatarAction.remove),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    switch (action) {
+      case _ProfileAvatarAction.change:
+        await _pickLocalAvatar();
+        break;
+      case _ProfileAvatarAction.remove:
+        await _removeLocalAvatar();
+        break;
+    }
+  }
+
+  Future<void> _pickLocalAvatar() async {
+    final userId = _userId;
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+    try {
+      final source = await _selectAvatarImageSource();
+      if (source == null || !mounted) {
+        return;
+      }
+      final picked = await _imageSelectionService.pickImage(
+        confirmButtonText: '选择头像',
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp'},
+        source: source,
+      );
+      if (picked == null) {
+        return;
+      }
+      final targetPath = await _sessionService.saveLocalAvatar(
+        userId: userId,
+        picked: picked,
+        existingPath: _localAvatarPath,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _localAvatarPath = targetPath;
+      });
+      _showMessage('头像已更新');
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
+    } on PlatformException catch (error) {
+      _showMessage('选择头像失败：${error.message ?? error.code}');
+    } catch (error) {
+      _showMessage('更新头像失败：$error');
+    }
+  }
+
+  Future<void> _removeLocalAvatar() async {
+    final userId = _userId;
+    if (userId == null || userId.trim().isEmpty) {
+      return;
+    }
+    await _sessionService.removeLocalAvatar(
+      userId: userId,
+      existingPath: _localAvatarPath,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _localAvatarPath = null;
+    });
+    _showMessage('已恢复默认头像');
+  }
+
+  Future<ImageSelectionSource?> _selectAvatarImageSource() async {
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      return ImageSelectionSource.files;
+    }
+    return showModalBottomSheet<ImageSelectionSource>(
+      context: context,
+      useRootNavigator: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final bottomInset = _mineBottomSafeInset(context);
+        return SafeArea(
+          top: false,
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    Icons.photo_library_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('相册'),
+                  subtitle: const Text('从系统照片库选择头像'),
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pop(ImageSelectionSource.gallery),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.folder_open_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('文件'),
+                  subtitle: const Text('从文件目录选择头像'),
+                  onTap:
+                      () =>
+                          Navigator.of(context).pop(ImageSelectionSource.files),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  double _mineBottomSafeInset(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
+    return math.max(viewPadding, gestureInsets);
+  }
+
+  String _buildSourceSubtitle() {
+    if (_sourceImportLimit < 0) {
+      return _hasMembership ? '会员不限数量' : '默认可用';
+    }
+    if (_hasMembership && _sourceImportLimit > 10) {
+      return '当前上限 $_sourceImportLimit 个';
+    }
+    return '默认最多 $_sourceImportLimit 个，扩容需会员';
+  }
+
+  Future<void> _handleAdvancedThemeTap() async {
+    if (_hasThemeCustom) {
+      await _pushMineRoute('/appearance/advanced-themes');
+      return;
+    }
+    if (!_isRemoteAccessResolved) {
+      await _refreshMine();
+      if (!mounted) {
+        return;
+      }
+      if (_hasThemeCustom) {
+        await _pushMineRoute('/appearance/advanced-themes');
+        return;
+      }
+    }
+    await _showMembershipPrompt('高级主题为会员专属功能，开通后可用。');
+  }
+
+  void _handleSyncTap() {
+    if (_hasMembership) {
+      unawaited(_pushMineRoute('/sync'));
+      return;
+    }
+    unawaited(_showMembershipPrompt('多端同步为会员计划功能，当前正在开发中。'));
+  }
+
+  Future<void> _handleSourceTap() async {
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime) {
+      await _pushMineRoute('/source');
+      return;
+    }
+    await _pushMineRoute('/source');
+  }
+
+  Future<void> _openMembershipCenter() async {
+    await _pushMineRoute('/membership');
+    await _refreshMine();
+  }
+
+  Future<void> _showMembershipPrompt(String message) async {
+    final goMembership = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('开通会员可用'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('稍后再说'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('前往会员页'),
+            ),
+          ],
+        );
+      },
+    );
+    if (goMembership == true && mounted) {
+      await _openMembershipCenter();
+    }
   }
 
   void _handleAuthEvent(AuthEvent event) {
     switch (event.type) {
+      case AuthEventType.loggedIn:
+        unawaited(_reloadSession(showLoading: false, refreshRemote: true));
+        break;
       case AuthEventType.loggedOut:
       case AuthEventType.sessionExpired:
-        unawaited(_loadSession());
+        unawaited(_reloadSession(showLoading: false, refreshRemote: false));
         break;
     }
   }
 
   Widget _buildActionSection(
     BuildContext context, {
+    required _MineResolvedPalette palette,
     required String title,
     required List<_MineActionItem> actions,
+    EdgeInsetsGeometry? padding,
     Widget? trailing,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
+    if (_layoutMode == _MineLayoutMode.list) {
+      return _buildActionListSection(
+        context,
+        palette: palette,
+        title: title,
+        actions: actions,
+        padding: padding,
+        trailing: trailing,
+      );
+    }
 
     return _buildSectionCardShell(
       context,
-      padding: _actionSectionPadding,
+      padding: padding ?? _actionSectionPaddingFor(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -304,8 +579,9 @@ class _MinePageState extends ConsumerState<MinePage> {
               Expanded(
                 child: Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -319,42 +595,46 @@ class _MinePageState extends ConsumerState<MinePage> {
                 constraints.maxWidth,
               );
               final denseGrid = columns >= 4;
-              final crossSpacing = denseGrid ? 9.0 : 10.0;
-              final mainSpacing = denseGrid ? 9.0 : 10.0;
-              final mainAxisExtent = switch (columns) {
-                >= 4 => 92.0,
-                3 => 102.0,
-                _ => 110.0,
+              final crossSpacing = denseGrid ? 8.0 : 10.0;
+              final runSpacing = denseGrid ? 8.0 : 10.0;
+              final tileHeight = switch (columns) {
+                >= 4 => 82.0,
+                3 => 88.0,
+                _ => 96.0,
               };
+              final totalCrossSpacing = crossSpacing * (columns - 1);
+              final tileWidth =
+                  (constraints.maxWidth - totalCrossSpacing) / columns;
 
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: actions.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: crossSpacing,
-                  mainAxisSpacing: mainSpacing,
-                  mainAxisExtent: mainAxisExtent,
-                ),
-                itemBuilder: (context, index) {
-                  final item = actions[index];
-                  final tileId = 'mine_${title}_$index';
-                  return _buildGridEntrance(
-                    section: title,
-                    index: index,
-                    child: _buildActionTile(
-                      context,
-                      item: item,
-                      denseGrid: denseGrid,
-                      tileId: tileId,
-                      highlighted: _highlightedTileId == tileId,
-                      borderColor: colorScheme.outlineVariant.withValues(
-                        alpha: denseGrid ? 0.34 : 0.42,
+              return Wrap(
+                spacing: crossSpacing,
+                runSpacing: runSpacing,
+                children: [
+                  for (var index = 0; index < actions.length; index++)
+                    SizedBox(
+                      width: tileWidth,
+                      height: tileHeight,
+                      child: _buildGridEntrance(
+                        section: title,
+                        index: index,
+                        child: _buildActionTile(
+                          context,
+                          item: actions[index],
+                          denseGrid: denseGrid,
+                          borderColor: resolveAppBorderColor(
+                            Theme.of(context).colorScheme,
+                            baseColor: palette.cardBorderColor,
+                            containerColor: palette.cardColor,
+                            tone:
+                                denseGrid
+                                    ? AppBorderTone.subtle
+                                    : AppBorderTone.defaultTone,
+                          ),
+                          palette: palette,
+                        ),
                       ),
                     ),
-                  );
-                },
+                ],
               );
             },
           ),
@@ -363,18 +643,208 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
+  Widget _buildActionListSection(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+    required String title,
+    required List<_MineActionItem> actions,
+    EdgeInsetsGeometry? padding,
+    Widget? trailing,
+  }) {
+    return _buildSectionCardShell(
+      context,
+      padding: padding ?? _actionSectionPaddingFor(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: palette.cardColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: resolveAppBorderColor(
+                  Theme.of(context).colorScheme,
+                  baseColor: palette.cardBorderColor,
+                  containerColor: palette.cardColor,
+                ),
+              ),
+            ),
+            child: Column(
+              children: [
+                for (var index = 0; index < actions.length; index++) ...[
+                  _buildActionListTile(
+                    context,
+                    item: actions[index],
+                    palette: palette,
+                  ),
+                  if (index < actions.length - 1)
+                    Divider(
+                      height: 1,
+                      indent: 58,
+                      endIndent: 16,
+                      color: resolveAppBorderColor(
+                        Theme.of(context).colorScheme,
+                        baseColor: palette.cardBorderColor,
+                        containerColor: palette.cardColor,
+                        tone: AppBorderTone.subtle,
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionListTile(
+    BuildContext context, {
+    required _MineActionItem item,
+    required _MineResolvedPalette palette,
+  }) {
+    final iconFill = palette.iconBackgroundColor;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: item.onTap,
+        child: Padding(
+          padding: _actionListTilePaddingFor(context),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: _isListMode ? 36 : 34,
+                    height: _isListMode ? 36 : 34,
+                    decoration: BoxDecoration(
+                      color: iconFill,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      item.icon,
+                      size: _isListMode ? 18 : 18,
+                      color: palette.textPrimaryColor,
+                    ),
+                  ),
+                  if (item.colorDot != null)
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: item.colorDot,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: palette.cardColor,
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            item.label,
+                            style: (_isListMode
+                                    ? Theme.of(context).textTheme.bodyMedium
+                                    : Theme.of(context).textTheme.bodyLarge)
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: palette.cardTextColor,
+                                ),
+                          ),
+                        ),
+                        if (item.tagText case final tagText?) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: palette.noticeAccentColor.withValues(
+                                alpha: 0.14,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              tagText,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: palette.noticeAccentColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (item.subtitle case final subtitle?) ...[
+                      SizedBox(height: _isListMode ? 1 : 2),
+                      Text(
+                        subtitle,
+                        maxLines: _isListMode ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondaryColor,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: palette.textSecondaryColor,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildActionTile(
     BuildContext context, {
     required _MineActionItem item,
     required bool denseGrid,
-    required String tileId,
-    required bool highlighted,
     required Color borderColor,
+    required _MineResolvedPalette palette,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final iconSize = denseGrid ? 30.0 : 34.0;
-    final iconGlyphSize = denseGrid ? 17.0 : 19.0;
+    final iconFill = palette.iconBackgroundColor;
+    final iconSize = denseGrid ? 28.0 : 32.0;
+    final iconGlyphSize = denseGrid ? 16.0 : 18.0;
     final labelTextStyle =
         denseGrid
             ? theme.textTheme.labelMedium?.copyWith(
@@ -390,92 +860,99 @@ class _MinePageState extends ConsumerState<MinePage> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onHighlightChanged: (value) {
-          if (value) {
-            if (_highlightedTileId == tileId) {
-              return;
-            }
-            setState(() {
-              _highlightedTileId = tileId;
-            });
-            return;
-          }
-          if (_highlightedTileId != tileId) {
-            return;
-          }
-          setState(() {
-            _highlightedTileId = null;
-          });
-        },
         onTap: item.onTap,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          scale: highlighted ? 0.965 : 1,
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor),
-              color: Colors.transparent,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(9, 9, 9, 9),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: iconSize,
-                              height: iconSize,
-                              decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer.withValues(
-                                  alpha: denseGrid ? 0.4 : 0.46,
-                                ),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                item.icon,
-                                size: iconGlyphSize,
-                                color: colorScheme.onSurface,
-                              ),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+            color: palette.cardColor.withValues(alpha: 0.48),
+          ),
+          child: Padding(
+            padding:
+                denseGrid
+                    ? const EdgeInsets.fromLTRB(7, 6, 7, 6)
+                    : const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            child: Stack(
+              children: [
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: iconSize,
+                            height: iconSize,
+                            decoration: BoxDecoration(
+                              color: iconFill,
+                              shape: BoxShape.circle,
                             ),
-                            if (item.colorDot != null)
-                              Positioned(
-                                right: -1,
-                                bottom: -1,
-                                child: Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: item.colorDot,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: colorScheme.surface,
-                                      width: 1.2,
-                                    ),
+                            child: Icon(
+                              item.icon,
+                              size: iconGlyphSize,
+                              color: palette.textPrimaryColor,
+                            ),
+                          ),
+                          if (item.colorDot != null)
+                            Positioned(
+                              right: -1,
+                              bottom: -1,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: item.colorDot,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: palette.cardColor,
+                                    width: 1.2,
                                   ),
                                 ),
                               ),
-                          ],
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: denseGrid ? 4 : 6),
+                      Text(
+                        item.label,
+                        maxLines: denseGrid ? 1 : 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: labelTextStyle,
+                      ),
+                    ],
+                  ),
+                ),
+                if (denseGrid &&
+                    item.tagText != null &&
+                    item.tagText!.isNotEmpty)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.noticeAccentColor.withValues(
+                          alpha: 0.14,
                         ),
-                        SizedBox(height: denseGrid ? 6 : 8),
-                        Text(
-                          item.label,
-                          maxLines: denseGrid ? 1 : 2,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          style: labelTextStyle,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        item.tagText!,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: palette.noticeAccentColor,
+                          height: 1.0,
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -492,26 +969,10 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Widget _buildPageEntrance({required int index, required Widget child}) {
-    final delay = (index * 0.08).clamp(0.0, 0.42);
-    final begin = delay;
-    final end = (begin + 0.46).clamp(0.0, 1.0);
-
-    return TweenAnimationBuilder<double>(
+    return AppFadeSlideTransition(
       key: ValueKey<String>('mine_page_entry_$index'),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 520),
-      curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      delay: Duration(milliseconds: (index * 56).clamp(0, 280).toInt()),
       child: child,
-      builder: (context, value, child) {
-        final translateY = (1 - value) * 14;
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, translateY),
-            child: child,
-          ),
-        );
-      },
     );
   }
 
@@ -606,11 +1067,39 @@ class _MineActionItem {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.subtitle,
+    this.tagText,
     this.colorDot,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final String? subtitle;
+  final String? tagText;
   final Color? colorDot;
+}
+
+class _MineResolvedPalette {
+  const _MineResolvedPalette({
+    required this.cardColor,
+    required this.cardTextColor,
+    required this.cardBorderColor,
+    required this.iconBackgroundColor,
+    required this.textPrimaryColor,
+    required this.textSecondaryColor,
+    required this.primaryColor,
+    required this.noticeAccentColor,
+    required this.noticeSurfaceColor,
+  });
+
+  final Color cardColor;
+  final Color cardTextColor;
+  final Color cardBorderColor;
+  final Color iconBackgroundColor;
+  final Color textPrimaryColor;
+  final Color textSecondaryColor;
+  final Color primaryColor;
+  final Color noticeAccentColor;
+  final Color noticeSurfaceColor;
 }

@@ -1,26 +1,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.jiangyan.shuxiangread">
+    package="com.jiangyan.selune">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
-            android:name="com.jiangyan.shuxiangread.MainActivity"
+            android:name="com.jiangyan.selune.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustPan">
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -28,19 +32,132 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="content"
                     android:mimeType="application/json" />
                 <data
                     android:scheme="content"
+                    android:mimeType="application/zip" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-zip-compressed" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/javascript" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/javascript" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-javascript" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/markdown" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/x-markdown" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/html" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/pdf" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/epub+zip" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-mobipocket-ebook" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/vnd.amazon.ebook" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/vnd.amazon.mobi8-ebook" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="font/ttf" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="font/otf" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/font-sfnt" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-font-ttf" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-font-opentype" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-font-otf" />
+                <data
+                    android:scheme="content"
                     android:mimeType="text/plain" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/markdown" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/x-markdown" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/html" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/pdf" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/epub+zip" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-mobipocket-ebook" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/vnd.amazon.ebook" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/vnd.amazon.mobi8-ebook" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="font/ttf" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="font/otf" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/font-sfnt" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-font-ttf" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-font-opentype" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-font-otf" />
                 <data
                     android:scheme="content"
                     android:mimeType="application/octet-stream" />
                 <data
                     android:scheme="file"
                     android:mimeType="application/json" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/zip" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-zip-compressed" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/javascript" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/javascript" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-javascript" />
                 <data
                     android:scheme="file"
                     android:mimeType="text/plain" />
@@ -52,6 +169,25 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/x-javascript" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/x-mobipocket-ebook" />
+                <data android:mimeType="application/vnd.amazon.ebook" />
+                <data android:mimeType="application/vnd.amazon.mobi8-ebook" />
+                <data android:mimeType="font/ttf" />
+                <data android:mimeType="font/otf" />
+                <data android:mimeType="application/font-sfnt" />
+                <data android:mimeType="application/x-font-ttf" />
+                <data android:mimeType="application/x-font-opentype" />
+                <data android:mimeType="application/x-font-otf" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
@@ -59,6 +195,25 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/x-javascript" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/x-mobipocket-ebook" />
+                <data android:mimeType="application/vnd.amazon.ebook" />
+                <data android:mimeType="application/vnd.amazon.mobi8-ebook" />
+                <data android:mimeType="font/ttf" />
+                <data android:mimeType="font/otf" />
+                <data android:mimeType="application/font-sfnt" />
+                <data android:mimeType="application/x-font-ttf" />
+                <data android:mimeType="application/x-font-opentype" />
+                <data android:mimeType="application/x-font-otf" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>

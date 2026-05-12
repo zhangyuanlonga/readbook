@@ -502,6 +502,8 @@ class _HeadlessWebViewSession implements WebViewSession {
         }
 
         try {
+          await _waitForDocumentReady(controller);
+          await _waitForRenderSettle(controller);
           final webViewDelay = activeLoad.request.webViewDelay;
           if (webViewDelay != null &&
               webViewDelay.inMilliseconds > 0 &&
@@ -559,6 +561,43 @@ class _HeadlessWebViewSession implements WebViewSession {
       rethrow;
     } finally {
       _startFuture = null;
+    }
+  }
+
+  Future<void> _waitForDocumentReady(InAppWebViewController controller) async {
+    const maxAttempts = 20;
+    for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
+      final state = await controller.evaluateJavascript(
+        source: 'document.readyState',
+      );
+      final readyState = _stringifyJsValue(state).toLowerCase();
+      if (readyState == 'complete' || readyState == 'interactive') {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  Future<void> _waitForRenderSettle(InAppWebViewController controller) async {
+    try {
+      await controller.evaluateJavascript(
+        source: '''
+          (async function() {
+            if (typeof requestAnimationFrame !== 'function') {
+              await new Promise(function(resolve) { setTimeout(resolve, 120); });
+              return true;
+            }
+            await new Promise(function(resolve) {
+              requestAnimationFrame(function() {
+                requestAnimationFrame(resolve);
+              });
+            });
+            return true;
+          })();
+        ''',
+      );
+    } catch (_) {
+      await Future<void>.delayed(const Duration(milliseconds: 120));
     }
   }
 

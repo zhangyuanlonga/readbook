@@ -4,6 +4,7 @@ import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
 import '../logging/app_logger.dart';
+import '../membership/membership_service.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import 'auth_event_bus.dart';
@@ -16,6 +17,7 @@ class AuthService {
     String? baseUrl,
     DeviceHeartbeatService? heartbeatService,
     AnalyticsService? analyticsService,
+    MembershipService? membershipService,
     AuthSessionStore? sessionStore,
   }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
        _client =
@@ -29,12 +31,16 @@ class AuthService {
        _analyticsService =
            analyticsService ??
            AnalyticsService(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
+       _membershipService =
+           membershipService ??
+           MembershipService(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
        _sessionStore = sessionStore ?? AuthSessionStore();
 
   final ApiClient _client;
   final String _baseUrl;
   final DeviceHeartbeatService _heartbeatService;
   final AnalyticsService _analyticsService;
+  final MembershipService _membershipService;
   final AuthSessionStore _sessionStore;
   final AppLogger _logger = AppLogger.instance;
 
@@ -146,6 +152,7 @@ class AuthService {
   Future<void> _persistAuthenticatedSession(AuthSession session) async {
     await _sessionStore.saveSession(session);
     await _runPostAuthBootstrap();
+    AuthEventBus.instance.emitLoggedIn();
   }
 
   Future<void> _runPostAuthBootstrap() async {
@@ -154,6 +161,18 @@ class AuthService {
     } catch (error, stackTrace) {
       _logger.warn(
         'Post-auth heartbeat failed',
+        context: {
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
+
+    try {
+      await _membershipService.syncCurrentDeviceSeat();
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Post-auth device seat sync failed',
         context: {
           'error': error.toString(),
           'stackTrace': stackTrace.toString(),

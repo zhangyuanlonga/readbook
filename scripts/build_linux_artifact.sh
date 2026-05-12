@@ -9,11 +9,49 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/linux/artifacts}"
-ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value}"
+}
+
+validate_version_overrides() {
+  BUILD_NAME="$(trim_whitespace "${BUILD_NAME}")"
+  BUILD_NUMBER="$(trim_whitespace "${BUILD_NUMBER}")"
+
+  if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+    echo "Error: BUILD_NAME must look like 1.1 or 1.1.0. Current: ${BUILD_NAME}" >&2
+    exit 1
+  fi
+
+  if [[ -n "${BUILD_NUMBER}" && ! "${BUILD_NUMBER}" =~ ^[0-9]+$ ]]; then
+    echo "Error: BUILD_NUMBER must be an integer build code like 26041801. Current: ${BUILD_NUMBER}" >&2
+    exit 1
+  fi
+}
+
+append_dart_defines() {
+  local array_name="$1"
+  local define_value
+
+  if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
+    printf -v define_value '%q' "--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}"
+    eval "${array_name}+=(${define_value})"
+  fi
+  if [[ -n "${APPREAD_APP_NAME}" ]]; then
+    printf -v define_value '%q' "--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}"
+    eval "${array_name}+=(${define_value})"
+  fi
+}
 
 usage() {
   cat <<USAGE
@@ -26,7 +64,7 @@ Arguments:
 Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   OUTPUT_DIR   Output artifacts folder (default: build/linux/artifacts)
-  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
+  ARTIFACT_NAME Final artifact display name prefix (default: Selune)
   BUILD_NAME   Override Flutter --build-name
   BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
@@ -35,6 +73,7 @@ Environment variables:
 Examples:
   ./scripts/build_linux_artifact.sh release
   OUTPUT_DIR=/tmp/out ./scripts/build_linux_artifact.sh profile
+  BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 ./scripts/build_linux_artifact.sh release
 USAGE
 }
 
@@ -64,11 +103,15 @@ if ! command -v tar >/dev/null 2>&1; then
   exit 1
 fi
 
+validate_version_overrides
+
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
 echo "==> Build mode  : ${BUILD_MODE}"
 echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
+echo "==> API base    : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> App name    : ${APPREAD_APP_NAME:-dart default}"
 echo "==> Output dir  : ${OUTPUT_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -91,6 +134,7 @@ fi
 if [[ -n "${BUILD_NUMBER}" ]]; then
   CMD+=(--build-number="${BUILD_NUMBER}")
 fi
+append_dart_defines CMD
 "${CMD[@]}"
 
 BUNDLE_DIR="${PROJECT_ROOT}/build/linux/x64/${BUILD_MODE}/bundle"
@@ -100,24 +144,37 @@ if [[ ! -d "${BUNDLE_DIR}" ]]; then
 fi
 
 artifact_base_name() {
-  local base="${ARTIFACT_NAME}"
-  if [[ -n "${BUILD_NAME}" ]]; then
-    base="${base} v${BUILD_NAME}"
+  echo "${ARTIFACT_NAME}"
+}
+
+artifact_version_suffix() {
+  local version_label=""
+  if [[ -n "${BUILD_NAME}" && -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NAME}-${BUILD_NUMBER}"
+  elif [[ -n "${BUILD_NAME}" ]]; then
+    version_label="${BUILD_NAME}"
+  elif [[ -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NUMBER}"
   fi
-  echo "${base}"
+
+  if [[ -n "${version_label}" ]]; then
+    echo "-${version_label}"
+  else
+    echo ""
+  fi
 }
 
 artifact_mode_suffix() {
   if [[ "${BUILD_MODE}" == "release" ]]; then
     echo ""
   else
-    echo " ${BUILD_MODE}"
+    echo "-${BUILD_MODE}"
   fi
 }
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
-ARCHIVE_PATH="${ARTIFACT_DIR}/$(artifact_base_name) Linux$(artifact_mode_suffix).tar.gz"
+ARCHIVE_PATH="${ARTIFACT_DIR}/$(artifact_base_name)-Linux$(artifact_version_suffix)$(artifact_mode_suffix).tar.gz"
 
 mkdir -p "${ARTIFACT_DIR}"
 

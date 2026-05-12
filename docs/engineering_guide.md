@@ -1,13 +1,14 @@
 # 工程指南
 
-更新时间：2026-03-25
+更新时间：2026-04-01
 用途：统一技术架构、模块边界、开发规范和测试要求。
 
 ## 1. 架构目标
 
-- 对外兼容书源规则，对内保持稳定且可演进的数据模型
-- 将规则执行复杂度与阅读业务复杂度分离
+- 以脚本源运行时作为唯一在线书源执行链
+- 将脚本执行复杂度与阅读业务复杂度分离
 - 支持后续扩展更多内容类型和规则能力
+- 后续新增代码统一按 `docs/development_architecture_guardrails.md` 收口
 
 ## 2. 技术栈
 
@@ -23,33 +24,31 @@
 - UI 层：`features`
 - Domain 层：`entities + use cases`
 - Data 层：`repositories + local/remote data source`
-- Core 层：`rule engine + network + parser + logger`
+- Core / Runtime 层：`runtime + network + logger`
 
 ## 4. 核心模块职责
 
-### 4.1 Source Adapter
+### 4.1 Script Source Runtime
 
-- 接收外部书源 JSON 并校验
-- 转换为内部统一模型 `SourceDefinition`
-- 保留原始字段，便于后续增强兼容
+- 编译、注册并执行脚本源
+- 对外暴露搜索、发现、详情、目录、正文统一能力
+- 维护运行时书源注册表与宿主桥接能力
 
-### 4.2 Rule Engine
-
-- 解析规则表达式
-- 对响应内容执行提取逻辑
-- 返回结构化结果
-
-### 4.3 Fetch Pipeline
+### 4.2 Fetch Pipeline
 
 - 封装统一 HTTP 访问行为
 - 输出可追踪日志
 - 处理超时、重试、Header 和 Cookie
 
-### 4.4 Reader Engine
+### 4.3 Reader Engine
 
 - 文本分页或滚动渲染
 - 章节预加载
 - 阅读设置和进度持久化
+- 阅读器页面壳层后续统一按三层维护：
+  - `ReaderShell`
+  - `ReaderContentSession`
+  - `ReadingMode`
 
 ## 5. 代码规范
 
@@ -63,11 +62,13 @@
 - `domain` 不依赖 `data`
 - `data` 实现 `domain` 仓库接口
 - `core` 不依赖具体业务 feature
+- 页面不得直接依赖 `AppDatabase`、`RepositoryImpl`、平台通道
+- 具体依赖方向、Riverpod DI、路由和原生边界约束见 `docs/development_architecture_guardrails.md`
 
 ## 7. 状态管理与错误处理
 
 - 页面状态与业务状态分离
-- 不在 Widget 中直接写网络或规则执行逻辑
+- 不在 Widget 中直接写网络或脚本源执行逻辑
 - 禁止直接吞异常
 - 所有 catch 至少记录一条结构化日志
 - 用户文案与开发日志分离
@@ -88,6 +89,7 @@
 
 - 项目定位和需求变化：更新 `docs/product_guide.md`
 - 架构变化：更新 `docs/engineering_guide.md`
+- 开发约束或 code review 口径变化：更新 `docs/development_architecture_guardrails.md`
 - 专题变化：更新对应专题文档
 - 不再围绕旧兼容体系新增平行规划文档
 

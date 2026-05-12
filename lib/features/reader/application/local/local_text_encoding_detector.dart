@@ -1,6 +1,10 @@
 import 'dart:convert';
 
 import 'package:charset/charset.dart';
+import 'package:charset_converter/charset_converter.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_charset_detector/flutter_charset_detector.dart';
 
 class LocalTextDecodeResult {
   const LocalTextDecodeResult({
@@ -40,6 +44,8 @@ class LocalTextEncodingDetector {
       return null;
     }
     return switch (normalized) {
+      'ansi' => 'gb18030',
+      'x-ansi' => 'gb18030',
       'utf8' => 'utf-8',
       'utf-8' => 'utf-8',
       'utf16' => 'utf-16',
@@ -49,7 +55,10 @@ class LocalTextEncodingDetector {
       'utf16le' => 'utf-16le',
       'utf-16le' => 'utf-16le',
       'gb2312' => 'gbk',
+      'gb_2312-80' => 'gbk',
       'cp936' => 'gbk',
+      'windows936' => 'gbk',
+      'windows-936' => 'gbk',
       'gbk' => 'gbk',
       'gb18030' => 'gb18030',
       'big5-hkscs' => 'big5',
@@ -122,6 +131,14 @@ class LocalTextEncodingDetector {
     }
 
     final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
     final contentBytes =
         bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
 
@@ -178,6 +195,301 @@ class LocalTextEncodingDetector {
     );
   }
 
+  Future<LocalTextDecodeResult> decodeBestEffortAsync(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) async {
+    if (bytes.isEmpty) {
+      return const LocalTextDecodeResult(
+        text: '',
+        charsetName: 'utf-8',
+        bomLength: 0,
+        fallbackUsed: true,
+      );
+    }
+
+    final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
+    final contentBytes =
+        bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
+
+    final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    final normalizedHinted =
+        normalizeCharsetName(hintedCharset) ??
+        bom.charsetName ??
+        _detectUtf16ZeroPattern(contentBytes);
+
+    final candidates = <_AsyncDecodeCandidate>[];
+
+    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
+    if (mobileDecoded != null && mobileDecoded.string.trim().isNotEmpty) {
+      candidates.add(
+        _AsyncDecodeCandidate(
+          result: LocalTextDecodeResult(
+            text: mobileDecoded.string,
+            charsetName: mobileDecoded.charset,
+            bomLength: bom.length,
+          ),
+          source: _AsyncDecodeSource.plugin,
+        ),
+      );
+    }
+
+    if (normalizedPreferred != null) {
+      final preferredDecoded = await _tryDecodeWithPlatformConverter(
+        charsetName: normalizedPreferred,
+        bytes: contentBytes,
+      );
+      if (preferredDecoded != null && preferredDecoded.trim().isNotEmpty) {
+        candidates.add(
+          _AsyncDecodeCandidate(
+            result: LocalTextDecodeResult(
+              text: preferredDecoded,
+              charsetName: normalizedPreferred,
+              bomLength: bom.length,
+            ),
+            source: _AsyncDecodeSource.preferred,
+          ),
+        );
+      }
+    }
+
+    final fallback = decodeBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    candidates.add(
+      _AsyncDecodeCandidate(
+        result: fallback,
+        source: _AsyncDecodeSource.fallback,
+      ),
+    );
+
+    final bestCandidate = _pickBestAsyncCandidate(
+      candidates,
+      hintedCharset: normalizedHinted,
+      htmlAware: htmlAware,
+    );
+    if (bestCandidate != null) {
+      return bestCandidate.result;
+    }
+
+    return LocalTextDecodeResult(
+      text: utf8.decode(contentBytes, allowMalformed: true),
+      charsetName: 'utf-8',
+      bomLength: bom.length,
+      fallbackUsed: true,
+    );
+  }
+
+  LocalTextDecodeResult? decodeDirectBytes(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) {
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final decoded = decodeBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (decoded.text.trim().isEmpty) {
+      return null;
+    }
+    return decoded;
+  }
+
+  LocalTextDecodeResult? decodeWithFrozenCharset(
+    List<int> bytes, {
+    required String charsetName,
+  }) {
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final normalizedCharset = normalizeCharsetName(charsetName);
+    if (normalizedCharset == null || normalizedCharset.isEmpty) {
+      return null;
+    }
+
+    final bom = _detectBom(bytes);
+    final contentBytes = _stripCompatibleBom(
+      bytes,
+      bom: bom,
+      charsetName: normalizedCharset,
+    );
+    final decoded = tryDecodeByCharset(contentBytes, normalizedCharset);
+    if (decoded == null || decoded.trim().isEmpty) {
+      return null;
+    }
+    return LocalTextDecodeResult(
+      text: decoded.replaceFirst('\uFEFF', ''),
+      charsetName: normalizedCharset,
+      bomLength: bom.length,
+    );
+  }
+
+  Future<LocalTextDecodeResult?> decodeDirectBytesAsync(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) async {
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final decoded = await decodeBestEffortAsync(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (decoded.text.trim().isEmpty) {
+      return null;
+    }
+    return decoded;
+  }
+
+  LocalTextDecodeResult? decodeSampleBestEffort(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) {
+    if (bytes.isEmpty) {
+      return null;
+    }
+
+    final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
+
+    final decoded = decodeBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (decoded.text.trim().isEmpty) {
+      return null;
+    }
+    return decoded;
+  }
+
+  Future<LocalTextDecodeResult?> decodeSampleBestEffortAsync(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) async {
+    if (bytes.isEmpty) {
+      return null;
+    }
+
+    final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
+
+    final contentBytes =
+        bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
+    final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    final normalizedHinted =
+        normalizeCharsetName(hintedCharset) ??
+        bom.charsetName ??
+        _detectUtf16ZeroPattern(contentBytes);
+
+    final candidates = <_AsyncDecodeCandidate>[];
+
+    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
+    if (mobileDecoded != null && mobileDecoded.string.trim().isNotEmpty) {
+      candidates.add(
+        _AsyncDecodeCandidate(
+          result: LocalTextDecodeResult(
+            text: mobileDecoded.string,
+            charsetName: mobileDecoded.charset,
+            bomLength: bom.length,
+          ),
+          source: _AsyncDecodeSource.plugin,
+        ),
+      );
+    }
+
+    if (normalizedPreferred != null) {
+      final preferredDecoded = await _tryDecodeWithPlatformConverter(
+        charsetName: normalizedPreferred,
+        bytes: contentBytes,
+      );
+      if (preferredDecoded != null && preferredDecoded.trim().isNotEmpty) {
+        candidates.add(
+          _AsyncDecodeCandidate(
+            result: LocalTextDecodeResult(
+              text: preferredDecoded,
+              charsetName: normalizedPreferred,
+              bomLength: bom.length,
+            ),
+            source: _AsyncDecodeSource.preferred,
+          ),
+        );
+      }
+    }
+
+    final fallback = decodeSampleBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (fallback != null) {
+      candidates.add(
+        _AsyncDecodeCandidate(
+          result: fallback,
+          source: _AsyncDecodeSource.fallback,
+        ),
+      );
+    }
+    return _pickBestAsyncCandidate(
+      candidates,
+      hintedCharset: normalizedHinted,
+      htmlAware: htmlAware,
+    )?.result;
+  }
+
   _BomInfo _detectBom(List<int> bytes) {
     if (bytes.length >= 3 &&
         bytes[0] == 0xEF &&
@@ -192,6 +504,37 @@ class LocalTextEncodingDetector {
       return const _BomInfo(length: 2, charsetName: 'utf-16le');
     }
     return const _BomInfo(length: 0, charsetName: null);
+  }
+
+  String? _tryDecodeUtf8Sample(List<int> bytes, {required _BomInfo bom}) {
+    if (bom.charsetName != null && bom.charsetName != 'utf-8') {
+      return null;
+    }
+
+    final contentBytes =
+        bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
+    for (
+      var truncatedTailBytes = 0;
+      truncatedTailBytes <= 3 && truncatedTailBytes < contentBytes.length;
+      truncatedTailBytes += 1
+    ) {
+      final candidateLength = contentBytes.length - truncatedTailBytes;
+      if (candidateLength <= 0) {
+        break;
+      }
+      try {
+        final decoded = utf8.decode(
+          contentBytes.sublist(0, candidateLength),
+          allowMalformed: false,
+        );
+        if (decoded.trim().isNotEmpty) {
+          return decoded;
+        }
+      } on FormatException {
+        continue;
+      }
+    }
+    return null;
   }
 
   String? _detectUtf16ZeroPattern(List<int> bytes) {
@@ -293,6 +636,25 @@ class LocalTextEncodingDetector {
     return String.fromCharCodes(codeUnits);
   }
 
+  List<int> _stripCompatibleBom(
+    List<int> bytes, {
+    required _BomInfo bom,
+    required String charsetName,
+  }) {
+    if (bom.length <= 0 || bytes.length <= bom.length) {
+      return List<int>.from(bytes);
+    }
+    if (bom.charsetName == null) {
+      return List<int>.from(bytes);
+    }
+    if (charsetName == bom.charsetName ||
+        (charsetName == 'utf-16' &&
+            (bom.charsetName == 'utf-16le' || bom.charsetName == 'utf-16be'))) {
+      return bytes.sublist(bom.length);
+    }
+    return List<int>.from(bytes);
+  }
+
   int _scoreDecodedText(
     String text, {
     required String charsetName,
@@ -359,6 +721,10 @@ class LocalTextEncodingDetector {
     if (hintedCharset != null && hintedCharset == charsetName) {
       score += 140;
     }
+    if ((charsetName == 'gb18030' || charsetName == 'gbk') &&
+        (hanCount > 0 || cjkPunctuationCount > 0)) {
+      score += 48;
+    }
     if (charsetName == 'utf-8') {
       score += 24;
     }
@@ -402,6 +768,108 @@ class LocalTextEncodingDetector {
     }
     return score;
   }
+
+  bool get _shouldUsePluginDetector {
+    if (kIsWeb) {
+      return true;
+    }
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  bool get _shouldUsePlatformConverter {
+    if (kIsWeb) {
+      return false;
+    }
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.windows;
+  }
+
+  Future<_MobileAutoDecodeResult?> _tryAutoDecodeOnMobile(
+    List<int> bytes,
+  ) async {
+    if (!_shouldUsePluginDetector || bytes.isEmpty) {
+      return null;
+    }
+    try {
+      final result = await CharsetDetector.autoDecode(
+        Uint8List.fromList(bytes),
+      );
+      final charset = normalizeCharsetName(result.charset);
+      final text = result.string.trim();
+      if (charset == null || text.isEmpty) {
+        return null;
+      }
+      return _MobileAutoDecodeResult(charset: charset, string: result.string);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _tryDecodeWithPlatformConverter({
+    required String charsetName,
+    required List<int> bytes,
+  }) async {
+    final directDecoded = tryDecodeByCharset(bytes, charsetName);
+    if (directDecoded != null) {
+      return directDecoded;
+    }
+
+    if (!_shouldUsePlatformConverter || bytes.isEmpty) {
+      return null;
+    }
+    try {
+      if (!await CharsetConverter.checkAvailability(charsetName)) {
+        return null;
+      }
+      return CharsetConverter.decode(charsetName, Uint8List.fromList(bytes));
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  _AsyncDecodeCandidate? _pickBestAsyncCandidate(
+    List<_AsyncDecodeCandidate> candidates, {
+    required String? hintedCharset,
+    required bool htmlAware,
+  }) {
+    if (candidates.isEmpty) {
+      return null;
+    }
+    _AsyncDecodeCandidate? best;
+    var bestScore = -0x7fffffff;
+    for (final candidate in candidates) {
+      final text = candidate.result.text.trim();
+      if (text.isEmpty) {
+        continue;
+      }
+      var score = _scoreDecodedText(
+        candidate.result.text,
+        charsetName: candidate.result.charsetName,
+        hintedCharset: hintedCharset,
+        htmlAware: htmlAware,
+      );
+      score += switch (candidate.source) {
+        _AsyncDecodeSource.plugin => 0,
+        _AsyncDecodeSource.preferred => 80,
+        _AsyncDecodeSource.fallback => 40,
+      };
+      if (best == null || score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
 }
 
 class _BomInfo {
@@ -409,4 +877,20 @@ class _BomInfo {
 
   final int length;
   final String? charsetName;
+}
+
+class _MobileAutoDecodeResult {
+  const _MobileAutoDecodeResult({required this.charset, required this.string});
+
+  final String charset;
+  final String string;
+}
+
+enum _AsyncDecodeSource { plugin, preferred, fallback }
+
+class _AsyncDecodeCandidate {
+  const _AsyncDecodeCandidate({required this.result, required this.source});
+
+  final LocalTextDecodeResult result;
+  final _AsyncDecodeSource source;
 }

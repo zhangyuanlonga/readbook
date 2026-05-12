@@ -1,26 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../providers.dart';
 
-class AuthPage extends StatefulWidget {
+class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key});
 
   @override
-  State<AuthPage> createState() => _AuthPageState();
+  ConsumerState<AuthPage> createState() => _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
-  static const EdgeInsets _cardPadding = EdgeInsets.fromLTRB(16, 14, 16, 14);
+class _AuthPageState extends ConsumerState<AuthPage> {
+  static const Duration _keyboardInsetAnimationDuration = Duration(
+    milliseconds: 180,
+  );
 
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
 
   bool _isRegister = false;
   bool _isSubmitting = false;
@@ -36,12 +41,21 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _authService = ref.read(authServiceProvider);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: Text(_isRegister ? '注册' : '登录')),
       body: LayoutBuilder(
         builder: (context, _) {
@@ -50,47 +64,70 @@ class _AuthPageState extends State<AuthPage> {
             maxWidth: AppLayout.mineContentMaxWidth,
           );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
-                ),
-                children: [
-                  _buildIntroCard(context),
-                  const SizedBox(height: 12),
-                  _buildModeToggle(colorScheme),
-                  const SizedBox(height: 12),
-                  _buildFormCard(context),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child:
-                        _isSubmitting
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                            : Text(_isRegister ? '注册并登录' : '登录'),
+          return AnimatedPadding(
+            duration: _keyboardInsetAnimationDuration,
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    metrics.contentGap,
+                    horizontal,
+                    metrics.contentGap + bottomSafe,
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _isRegister ? '继续即表示你同意相关服务条款与隐私政策。' : '没有账号？可切换到注册创建新账号。',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  children: [
+                    AppFadeSlideTransition(child: _buildIntroCard(context)),
+                    SizedBox(height: metrics.contentGap),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 48),
+                      child: _buildModeToggle(colorScheme),
                     ),
-                  ),
-                ],
+                    SizedBox(height: metrics.contentGap),
+                    AppFadeSlideTransition(
+                      delay: const Duration(milliseconds: 72),
+                      child: _buildFormCard(context),
+                    ),
+                    SizedBox(height: metrics.sectionGap),
+                    FilledButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      child: AppAnimatedSwitcher(
+                        child:
+                            _isSubmitting
+                                ? const SizedBox(
+                                  key: ValueKey<String>('auth_submitting'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : Text(
+                                  _isRegister ? '注册并登录' : '登录',
+                                  key: ValueKey<String>(
+                                    _isRegister ? 'register' : 'login',
+                                  ),
+                                ),
+                      ),
+                    ),
+                    SizedBox(height: metrics.contentGap),
+                    Text(
+                      _isRegister
+                          ? '继续即表示你同意相关服务条款与隐私政策。'
+                          : '没有账号？可切换到注册创建新账号。',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -104,7 +141,7 @@ class _AuthPageState extends State<AuthPage> {
 
     return Card(
       child: Padding(
-        padding: _cardPadding,
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Row(
           children: [
             CircleAvatar(
@@ -122,7 +159,7 @@ class _AuthPageState extends State<AuthPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isRegister ? '欢迎加入书享阅读' : '欢迎回来',
+                    _isRegister ? '欢迎加入 Selune' : '欢迎回来',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -170,7 +207,7 @@ class _AuthPageState extends State<AuthPage> {
   Widget _buildFormCard(BuildContext context) {
     return Card(
       child: Padding(
-        padding: _cardPadding,
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
         child: Column(
           children: [
             TextField(
@@ -272,7 +309,11 @@ class _AuthPageState extends State<AuthPage> {
         return;
       }
       _showMessage(_isRegister ? '注册成功，已登录。' : '登录成功。');
-      context.go('/profile');
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go('/profile');
+      }
     } on ApiException catch (error) {
       _showMessage(
         _isRegister && error.statusCode == 409

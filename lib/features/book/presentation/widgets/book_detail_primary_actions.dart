@@ -1,124 +1,161 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+
 class BookDetailPrimaryActions extends StatelessWidget {
   const BookDetailPrimaryActions({
     super.key,
     required this.availableWidth,
     required this.isInBookshelf,
+    required this.isShelfStateLoading,
     required this.isShelfActionLoading,
-    required this.onRead,
     required this.onToggleBookshelf,
+    required this.onOpenCatalog,
+    required this.onSwitchSource,
+    required this.onOpenOrganize,
+    this.isCatalogEnabled = true,
+    this.isSwitchSourceEnabled = true,
+    this.isOrganizeEnabled = true,
   });
 
-  static const double actionRowCompactThreshold = 260;
-  static const double shortLabelThreshold = 210;
-  static const double hideIconThreshold = 186;
-  static const double actionButtonHeight = 34;
-  static const double actionButtonGapCompact = 8;
-  static const double actionButtonGapRegular = 10;
-  static const double readShortWidth = 104;
-  static const double readLongWidth = 140;
-  static const double shelfShortWidth = 96;
-  static const double shelfLongWidth = 128;
+  static const double actionButtonHeight = 62;
+  static const double actionButtonGap = 4;
 
   final double availableWidth;
   final bool isInBookshelf;
+  final bool isShelfStateLoading;
   final bool isShelfActionLoading;
-  final VoidCallback? onRead;
   final VoidCallback? onToggleBookshelf;
+  final VoidCallback? onOpenCatalog;
+  final VoidCallback? onSwitchSource;
+  final VoidCallback? onOpenOrganize;
+  final bool isCatalogEnabled;
+  final bool isSwitchSourceEnabled;
+  final bool isOrganizeEnabled;
 
   @override
   Widget build(BuildContext context) {
-    final buttonTextStyle = Theme.of(
-      context,
-    ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.05);
-    final compactStyle = availableWidth < actionRowCompactThreshold;
-    final useShortLabels = availableWidth < shortLabelThreshold;
-    final hideActionIcons = availableWidth < hideIconThreshold;
-
-    final readLabel = useShortLabels ? '阅读' : '开始阅读';
-    final shelfLabel =
-        useShortLabels
-            ? (isInBookshelf ? '移出' : '加入')
-            : (isInBookshelf ? '移出书架' : '加入书架');
-
-    final readButton = SizedBox(
-      height: actionButtonHeight,
-      child: FilledButton(
-        key: const Key('book_detail_read_button'),
-        style: FilledButton.styleFrom(
-          textStyle: buttonTextStyle,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
-        onPressed: onRead,
-        child: _ActionButtonContent(
-          icon: Icons.chrome_reader_mode_outlined,
-          label: readLabel,
-          hideIcon: hideActionIcons,
-        ),
-      ),
+    final metrics = AppAdaptiveMetrics.of(context);
+    final buttonHeight = metrics.isCompactDensity ? 52.0 : 58.0;
+    final buttonGap = metrics.isCompactDensity ? 4.0 : 6.0;
+    final iconSize = metrics.isCompactDensity ? 17.0 : 18.0;
+    final useWrap = availableWidth < 260;
+    final buttonTextStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      fontSize: metrics.isCompactDensity ? 11.5 : null,
+      fontWeight: FontWeight.w600,
+      height: 1.0,
     );
 
-    final shelfButton = SizedBox(
-      height: actionButtonHeight,
-      child: OutlinedButton(
-        key: const Key('book_detail_shelf_button'),
-        style: OutlinedButton.styleFrom(
-          textStyle: buttonTextStyle,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    Widget buildAction({
+      required Key key,
+      required Widget icon,
+      required String label,
+      required VoidCallback? onPressed,
+      bool enabled = true,
+    }) {
+      return SizedBox(
+        height: buttonHeight,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: key,
+            borderRadius: BorderRadius.circular(metrics.cardRadius * 0.72),
+            onTap: enabled ? onPressed : null,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.45,
+              child: _ActionButtonContent(
+                icon: icon,
+                label: label,
+                iconGap: metrics.isCompactDensity ? 2 : 3,
+                textStyle: buttonTextStyle,
+              ),
+            ),
+          ),
         ),
-        onPressed: isShelfActionLoading ? null : onToggleBookshelf,
-        child: _ActionButtonContent(
-          icon:
-              isInBookshelf
-                  ? Icons.bookmark_remove_outlined
-                  : Icons.bookmark_add_outlined,
-          label: isShelfActionLoading ? '处理中' : shelfLabel,
-          hideIcon: isShelfActionLoading || hideActionIcons,
-        ),
+      );
+    }
+
+    final showShelfProgress = isShelfActionLoading;
+    final isShelfUnavailable = isShelfStateLoading || isShelfActionLoading;
+    final shelfButton = buildAction(
+      key: const Key('book_detail_shelf_button'),
+      icon:
+          showShelfProgress
+              ? SizedBox(
+                width: iconSize,
+                height: iconSize,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              )
+              : Icon(
+                isInBookshelf
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                size: iconSize,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+      label: '书架',
+      onPressed: isShelfUnavailable ? null : onToggleBookshelf,
+    );
+    final catalogButton = buildAction(
+      key: const Key('book_detail_catalog_button'),
+      icon: Icon(
+        Icons.menu_book_rounded,
+        size: iconSize,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
+      label: '目录',
+      onPressed: onOpenCatalog,
+      enabled: isCatalogEnabled,
+    );
+    final sourceButton = buildAction(
+      key: const Key('book_detail_source_button'),
+      icon: Icon(
+        Icons.swap_horiz_rounded,
+        size: iconSize,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+      label: '书源',
+      onPressed: onSwitchSource,
+      enabled: isSwitchSourceEnabled,
+    );
+    final cacheButton = buildAction(
+      key: const Key('book_detail_cache_button'),
+      icon: Icon(
+        Icons.bookmarks_rounded,
+        size: iconSize,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+      label: '归类',
+      onPressed: onOpenOrganize,
+      enabled: isOrganizeEnabled,
     );
 
-    final buttonGap =
-        compactStyle ? actionButtonGapCompact : actionButtonGapRegular;
-    final readIdealWidth = useShortLabels ? readShortWidth : readLongWidth;
-    final shelfIdealWidth = useShortLabels ? shelfShortWidth : shelfLongWidth;
-    final minPairWidth = shelfShortWidth * 2 + buttonGap;
-    final idealPairWidth = readIdealWidth + shelfIdealWidth + buttonGap;
-
-    if (availableWidth < minPairWidth) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    if (useWrap) {
+      final itemWidth = (availableWidth - buttonGap) / 2;
+      return Wrap(
+        spacing: buttonGap,
+        runSpacing: buttonGap,
         children: [
-          SizedBox(width: double.infinity, child: readButton),
-          const SizedBox(height: 6),
-          SizedBox(width: double.infinity, child: shelfButton),
+          SizedBox(width: itemWidth, child: shelfButton),
+          SizedBox(width: itemWidth, child: catalogButton),
+          SizedBox(width: itemWidth, child: sourceButton),
+          SizedBox(width: itemWidth, child: cacheButton),
         ],
       );
     }
 
-    if (availableWidth >= idealPairWidth) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(width: readIdealWidth, child: readButton),
-          SizedBox(width: buttonGap),
-          SizedBox(width: shelfIdealWidth, child: shelfButton),
-        ],
-      );
-    }
-
-    final equalWidth = (availableWidth - buttonGap) / 2;
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(width: equalWidth, child: readButton),
+        Expanded(child: shelfButton),
         SizedBox(width: buttonGap),
-        SizedBox(width: equalWidth, child: shelfButton),
+        Expanded(child: catalogButton),
+        SizedBox(width: buttonGap),
+        Expanded(child: sourceButton),
+        SizedBox(width: buttonGap),
+        Expanded(child: cacheButton),
       ],
     );
   }
@@ -128,26 +165,31 @@ class _ActionButtonContent extends StatelessWidget {
   const _ActionButtonContent({
     required this.icon,
     required this.label,
-    required this.hideIcon,
+    required this.iconGap,
+    this.textStyle,
   });
 
-  final IconData icon;
+  final Widget icon;
   final String label;
-  final bool hideIcon;
+  final double iconGap;
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
+    return Center(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!hideIcon) ...[Icon(icon, size: 14), const SizedBox(width: 3)],
+          icon,
+          SizedBox(height: iconGap),
           Text(
             label,
             maxLines: 1,
             softWrap: false,
-            overflow: TextOverflow.fade,
+            overflow: TextOverflow.ellipsis,
+            style: textStyle?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ],
       ),

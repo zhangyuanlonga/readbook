@@ -1,61 +1,101 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/widgets/import_export_task_overlay.dart';
+import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../domain/entities/local_book.dart';
+import '../../../domain/repositories/local_book_repository.dart';
+import '../../reader/application/local/local_book_index_service.dart';
+import '../../reader/application/local/local_book_workflow_policy.dart';
+import '../../source/application/external_import_catalog.dart';
+import '../application/bookshelf_reader_open_service.dart';
 import '../application/local_book_import_service.dart';
+import '../providers.dart';
 
-class LocalLibraryPage extends StatefulWidget {
+class LocalLibraryPage extends ConsumerStatefulWidget {
   const LocalLibraryPage({super.key});
 
   @override
-  State<LocalLibraryPage> createState() => _LocalLibraryPageState();
+  ConsumerState<LocalLibraryPage> createState() => _LocalLibraryPageState();
 }
 
-class _LocalLibraryPageState extends State<LocalLibraryPage> {
-  final LocalBookImportService _localBookImportService =
-      LocalBookImportService();
+class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
+  late final LocalBookImportService _localBookImportService;
+  late final BookshelfReaderOpenService _readerOpenService;
+  late final LocalBookRepository _localBookRepository;
+  late final LocalBookIndexService _localBookIndexService;
+  StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
 
   bool _isImporting = false;
   int _importTotal = 0;
   int _importCompleted = 0;
   String? _currentImportLabel;
-  List<_PendingImportItem> _pendingItems = <_PendingImportItem>[];
-
-  int get _pendingSelectedCount =>
-      _pendingItems.where((item) => item.selected).length;
-  bool get _hasPending => _pendingItems.isNotEmpty;
-  bool get _allPendingSelected =>
-      _pendingItems.isNotEmpty && _pendingItems.every((item) => item.selected);
+  String? _lastErrorText;
+  String? _currentStageText;
+  LocalBookImportResult? _lastImportedResult;
+  ImportExportTaskStatus? _taskStatus;
+  LocalBookImportStage? _lastProgressStage;
+  PersistentBottomSheetController? _taskSheetController;
+  String? _reindexingBookId;
+  String? _reindexStatusText;
+  String? _reindexErrorText;
 
   @override
   void initState() {
     super.initState();
+    _localBookImportService = ref.read(localBookImportServiceProvider);
+    _readerOpenService = ref.read(bookshelfReaderOpenServiceProvider);
+    _localBookRepository = ref.read(bookshelfLocalBookRepositoryProvider);
+    _localBookIndexService = ref.read(bookshelfLocalBookIndexServiceProvider);
+    _localIndexEventSubscription = LocalBookIndexService.watchEvents.listen(
+      _handleLocalIndexEvent,
+    );
   }
 
-  Future<void> _pickFilesToPending() async {
+  @override
+  void dispose() {
+    _taskSheetController?.close();
+    _localIndexEventSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleLocalIndexEvent(LocalBookIndexEvent event) {
+    if (!mounted || event.bookId != _reindexingBookId) {
+      return;
+    }
+    setState(() {
+      _reindexStatusText =
+          event.status == LocalBookIndexStatus.ready
+              ? '重索引完成，共 ${event.chapterCount} 章'
+              : _localIndexStatusLabel(event.status);
+      if (event.status == LocalBookIndexStatus.ready ||
+          event.status == LocalBookIndexStatus.failed) {
+        _reindexingBookId = null;
+      }
+    });
+  }
+
+  Future<void> _pickAndImportFiles() async {
     if (_isImporting) {
+      return;
+    }
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsLocalFileImport) {
+      _showMessage('当前平台暂不支持从本地文件选择器导入。');
       return;
     }
 
     final files = await openFiles(
-      acceptedTypeGroups: const [
-        XTypeGroup(
-          label: 'Book Files',
-          extensions: ['txt', 'epub'],
-          uniformTypeIdentifiers: [
-            'public.plain-text',
-            'org.idpf.epub-container',
-          ],
-        ),
+      acceptedTypeGroups: const <XTypeGroup>[
+        ExternalImportCatalog.localBookTypeGroup,
       ],
       confirmButtonText: '选择本地图书',
     );
@@ -64,469 +104,148 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       return;
     }
 
-    final items = <_PendingImportItem>[];
+    setState(() {
+      _isImporting = true;
+      _importTotal = files.length;
+      _importCompleted = 0;
+      _currentImportLabel = null;
+      _currentStageText = '正在准备导入';
+      _lastErrorText = null;
+      _lastImportedResult = null;
+      _lastProgressStage = null;
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入本地图书',
+        message: '正在准备处理 ${files.length} 个文件…',
+        detail: '图文内容较多时，解析和提取资源会耗时更久。',
+        progress: 0,
+        progressLabel: '0/$files.length',
+      );
+    });
+    _showOrRefreshTaskSheet();
+
+    var successCount = 0;
+    final failedBooks = <String>[];
     for (final file in files) {
       final filePath = file.path.trim();
       if (filePath.isEmpty) {
         continue;
       }
-      final name = file.name.trim().isEmpty ? p.basename(filePath) : file.name;
-      items.add(_PendingImportItem.file(path: filePath, name: name));
-    }
 
-    _appendPendingItems(items);
-  }
-
-  Future<void> _addUrlToPending() async {
-    if (_isImporting) {
-      return;
-    }
-
-    final input = await _showUrlImportPage();
-    if (!mounted || input == null) {
-      return;
-    }
-
-    final rawUrl = input.trim();
-    if (rawUrl.isEmpty) {
-      _showMessage('链接不能为空。');
-      return;
-    }
-
-    final uri = Uri.tryParse(rawUrl);
-    final scheme = uri?.scheme.toLowerCase();
-    final isHttpScheme = scheme == 'http' || scheme == 'https';
-    if (uri == null || uri.host.isEmpty || !isHttpScheme) {
-      _showMessage('链接格式无效，请输入 http/https 开头的图书地址。');
-      return;
-    }
-
-    _appendPendingItems([_PendingImportItem.url(url: rawUrl)]);
-  }
-
-  void _appendPendingItems(List<_PendingImportItem> items) {
-    if (items.isEmpty) {
-      return;
-    }
-
-    final existingKeys = _pendingItems.map((item) => item.key).toSet();
-    var added = 0;
-    final updated = List<_PendingImportItem>.from(_pendingItems);
-    for (final item in items) {
-      if (existingKeys.contains(item.key)) {
-        continue;
-      }
-      existingKeys.add(item.key);
-      updated.add(item);
-      added += 1;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _pendingItems = updated;
-    });
-
-    if (added > 0) {
-      _showMessage('已添加 $added 本待导入。');
-    } else {
-      _showMessage('待导入列表中已存在这些图书。');
-    }
-  }
-
-  Future<void> _importPendingItems() async {
-    if (_isImporting) {
-      return;
-    }
-
-    final selected = _pendingItems.where((item) => item.selected).toList();
-    if (selected.isEmpty) {
-      _showMessage('请先选择要导入的图书。');
-      return;
-    }
-
-    _setImporting(true, total: selected.length, completed: 0);
-
-    final succeededKeys = <String>{};
-    var successCount = 0;
-    var failureCount = 0;
-    for (final item in selected) {
       try {
-        item.errorText = null;
-        item.status = _PendingImportStatus.importing;
-        _updateCurrentImportLabel(item.title);
-        if (item.type == _PendingImportType.file) {
-          await _importFromFileItem(item);
-        } else {
-          await _importFromUrlItem(item);
-        }
-        succeededKeys.add(item.key);
-        item.status = _PendingImportStatus.succeeded;
+        final displayName =
+            file.name.trim().isEmpty
+                ? Uri.file(filePath).pathSegments.last
+                : file.name.trim();
+        setState(() {
+          _currentImportLabel =
+              LocalBookImportService.normalizeImportedDisplayName(displayName);
+        });
+        final result = await _localBookImportService.importFromFile(
+          filePath: filePath,
+          displayName: displayName,
+          waitForIndexing:
+              LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+          onProgress: (progress) {
+            if (!mounted) {
+              return;
+            }
+            final nextStage = progress.stage;
+            final shouldUpdateStage = _lastProgressStage != nextStage;
+            setState(() {
+              _lastProgressStage = nextStage;
+              _currentStageText = switch (progress.stage) {
+                LocalBookImportStage.preparing => '准备文件',
+                LocalBookImportStage.persisted => '写入书架',
+                LocalBookImportStage.indexing => '建立目录',
+                LocalBookImportStage.completed => '完成导入',
+              };
+              if (shouldUpdateStage || _taskStatus == null) {
+                _taskStatus = ImportExportTaskStatus(
+                  title: '正在导入本地图书',
+                  message:
+                      '${progress.displayName} · ${_currentStageText ?? '处理中'}',
+                  detail: progress.detail,
+                  progress:
+                      _importTotal <= 0
+                          ? null
+                          : _importCompleted / _importTotal,
+                  progressLabel:
+                      _importTotal <= 0
+                          ? null
+                          : '$_importCompleted/$_importTotal',
+                );
+              }
+            });
+            _showOrRefreshTaskSheet();
+          },
+        );
+        _lastImportedResult = result;
         successCount += 1;
       } on AppException catch (error) {
-        item.errorText = error.briefMessage;
-        item.status = _PendingImportStatus.failed;
-        failureCount += 1;
-      } on _ImportException catch (error) {
-        item.errorText = error.message;
-        item.status = _PendingImportStatus.failed;
-        failureCount += 1;
+        failedBooks.add(file.name.trim().isEmpty ? filePath : file.name.trim());
+        _lastErrorText = error.briefMessage;
       } catch (error) {
-        item.errorText = '导入失败：$error';
-        item.status = _PendingImportStatus.failed;
-        failureCount += 1;
+        failedBooks.add(file.name.trim().isEmpty ? filePath : file.name.trim());
+        _lastErrorText = '导入失败：$error';
       } finally {
-        _setImportProgress(
-          completed: _importCompleted + 1,
-          currentLabel:
-              item.status == _PendingImportStatus.succeeded ? null : item.title,
-        );
+        if (mounted) {
+          setState(() {
+            _importCompleted += 1;
+            if (_isImporting) {
+              _taskStatus = ImportExportTaskStatus(
+                title: '正在导入本地图书',
+                message:
+                    _currentImportLabel?.trim().isNotEmpty == true
+                        ? '${_currentImportLabel!} · ${_currentStageText ?? '处理中'}'
+                        : (_currentStageText ?? '处理中'),
+                detail: _taskStatus?.detail,
+                progress:
+                    _importTotal <= 0 ? null : _importCompleted / _importTotal,
+                progressLabel:
+                    _importTotal <= 0
+                        ? null
+                        : '$_importCompleted/$_importTotal',
+              );
+            }
+          });
+          _showOrRefreshTaskSheet();
+        }
       }
     }
 
-    if (mounted) {
-      setState(() {
-        _pendingItems = _pendingItems
-            .where((item) => !succeededKeys.contains(item.key))
-            .toList(growable: false);
-      });
+    if (!mounted) {
+      return;
     }
 
-    _setImporting(false);
+    setState(() {
+      _isImporting = false;
+      _currentStageText = successCount > 0 ? '完成导入，可直接阅读' : null;
+      _taskStatus =
+          successCount > 0
+              ? ImportExportTaskStatus(
+                title: '本地图书已导入',
+                message: '目录已建立，可直接阅读。',
+                detail: _currentImportLabel,
+                progress: 1,
+                progressLabel: '$_importCompleted/$_importTotal',
+                result: ImportExportTaskResult.success,
+              )
+              : null;
+    });
+    _showOrRefreshTaskSheet();
 
     if (successCount > 0) {
-      if (failureCount > 0) {
-        _showMessage('已导入 $successCount 本书，失败 $failureCount 本。');
-      } else {
-        _showMessage('已导入 $successCount 本书。');
-      }
-      _returnToBookshelf();
-      return;
-    }
-
-    if (failureCount > 0) {
-      _showMessage('导入失败，请检查待导入列表的错误提示。');
-    }
-  }
-
-  Future<LocalBookImportResult> _importFromFileItem(
-    _PendingImportItem item,
-  ) async {
-    final path = item.path?.trim() ?? '';
-    if (path.isEmpty) {
-      throw const _ImportException('文件路径无效。');
-    }
-
-    return _localBookImportService.importFromFile(
-      filePath: path,
-      displayName: item.title,
-      waitForIndexing: true,
-      onProgress: (progress) => _handleImportProgress(item, progress),
-    );
-  }
-
-  Future<LocalBookImportResult> _importFromUrlItem(
-    _PendingImportItem item,
-  ) async {
-    final rawUrl = item.url?.trim() ?? '';
-    if (rawUrl.isEmpty) {
-      throw const _ImportException('链接不能为空。');
-    }
-
-    final uri = Uri.tryParse(rawUrl);
-    final scheme = uri?.scheme.toLowerCase();
-    final isHttpScheme = scheme == 'http' || scheme == 'https';
-    if (uri == null || uri.host.isEmpty || !isHttpScheme) {
-      throw const _ImportException('链接格式无效，请输入 http/https 地址。');
-    }
-
-    final tempDir = await getTemporaryDirectory();
-    final tempPath = p.join(
-      tempDir.path,
-      'local_import_${DateTime.now().millisecondsSinceEpoch}.tmp',
-    );
-
-    File? tempFile;
-    try {
-      _handlePendingStatus(item, _PendingImportStatus.downloading);
-      final response = await Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 12),
-          receiveTimeout: const Duration(seconds: 24),
-          sendTimeout: const Duration(seconds: 12),
-          followRedirects: true,
-          maxRedirects: 5,
-          validateStatus:
-              (status) => status != null && status >= 200 && status < 400,
-          headers: const {'Accept': '*/*'},
+      final failureCount = failedBooks.length;
+      _showMessage(
+        LocalBookWorkflowPolicy.localLibraryImportSuccessMessage(
+          successCount: successCount,
+          failureCount: failureCount,
         ),
-      ).download(rawUrl, tempPath);
-
-      tempFile = File(tempPath);
-      if (!await tempFile.exists()) {
-        throw const _ImportException('下载失败，未生成临时文件。');
-      }
-
-      final fileName = _resolveFileName(uri, response.headers);
-      final extension = _resolveExtension(fileName, response.headers);
-      if (extension.isEmpty) {
-        throw const _ImportException('仅支持 txt/epub 文件。');
-      }
-
-      final safeBase = _sanitizeFileToken(
-        p.basenameWithoutExtension(fileName.isEmpty ? 'local_book' : fileName),
       );
-      final finalPath = p.join(
-        tempDir.path,
-        '${safeBase}_${DateTime.now().millisecondsSinceEpoch}$extension',
-      );
-
-      final finalized = await tempFile.rename(finalPath);
-
-      try {
-        return await _localBookImportService.importFromFile(
-          filePath: finalized.path,
-          displayName: '$safeBase$extension',
-          waitForIndexing: true,
-          onProgress: (progress) => _handleImportProgress(item, progress),
-        );
-      } finally {
-        try {
-          if (await finalized.exists()) {
-            await finalized.delete();
-          }
-        } catch (_) {
-          // ignore cleanup failure
-        }
-      }
-    } on DioException catch (error) {
-      final statusCode = error.response?.statusCode;
-      if (statusCode != null) {
-        throw _ImportException('链接导入失败：HTTP $statusCode。');
-      }
-
-      final message = error.message?.trim();
-      throw _ImportException(
-        '链接导入失败：${message == null || message.isEmpty ? '网络请求异常' : message}',
-      );
-    } finally {
-      if (tempFile != null) {
-        try {
-          if (await tempFile.exists()) {
-            await tempFile.delete();
-          }
-        } catch (_) {
-          // ignore cleanup failure
-        }
-      }
-    }
-  }
-
-  void _togglePendingSelection(_PendingImportItem item, bool selected) {
-    setState(() {
-      item.selected = selected;
-    });
-  }
-
-  void _toggleSelectAllPending() {
-    final next = !_allPendingSelected;
-    setState(() {
-      for (final item in _pendingItems) {
-        item.selected = next;
-      }
-    });
-  }
-
-  void _clearPending() {
-    setState(() {
-      _pendingItems = <_PendingImportItem>[];
-    });
-  }
-
-  void _removePendingItem(_PendingImportItem item) {
-    setState(() {
-      _pendingItems =
-          _pendingItems.where((entry) => entry.id != item.id).toList();
-    });
-  }
-
-  Future<void> _editPendingItemTitle(_PendingImportItem item) async {
-    if (_isImporting) {
       return;
     }
-    final edited = await _showEditTitlePage(item.title);
-    if (!mounted || edited == null) {
-      return;
-    }
-    final normalized =
-        LocalBookImportService.normalizeImportedDisplayName(edited).trim();
-    if (normalized.isEmpty || normalized == item.title) {
-      return;
-    }
-    setState(() {
-      item.title = normalized;
-    });
-  }
 
-  Future<String?> _showUrlImportPage() async {
-    return Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(
-        builder: (pageContext) => const _LocalUrlImportPage(),
-      ),
-    );
-  }
-
-  Future<String?> _showEditTitlePage(String initialTitle) async {
-    return Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(
-        builder:
-            (pageContext) => _PendingTitleEditPage(initialTitle: initialTitle),
-      ),
-    );
-  }
-
-  void _setImporting(bool value, {int? total, int? completed}) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _isImporting = value;
-      if (total != null) {
-        _importTotal = total;
-      }
-      if (completed != null) {
-        _importCompleted = completed;
-      }
-      if (!value) {
-        _importTotal = 0;
-        _importCompleted = 0;
-        _currentImportLabel = null;
-      }
-    });
-  }
-
-  void _setImportProgress({required int completed, String? currentLabel}) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _importCompleted = completed;
-      _currentImportLabel = currentLabel;
-    });
-  }
-
-  void _updateCurrentImportLabel(String? label) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _currentImportLabel = label;
-    });
-  }
-
-  void _handlePendingStatus(
-    _PendingImportItem item,
-    _PendingImportStatus status, {
-    String? errorText,
-  }) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      item.status = status;
-      if (errorText != null) {
-        item.errorText = errorText;
-      }
-      _currentImportLabel = item.title;
-    });
-  }
-
-  void _handleImportProgress(
-    _PendingImportItem item,
-    LocalBookImportProgress progress,
-  ) {
-    final nextStatus = switch (progress.stage) {
-      LocalBookImportStage.preparing => _PendingImportStatus.importing,
-      LocalBookImportStage.persisted => _PendingImportStatus.persisted,
-      LocalBookImportStage.indexing => _PendingImportStatus.indexing,
-      LocalBookImportStage.completed => _PendingImportStatus.succeeded,
-    };
-    _handlePendingStatus(item, nextStatus);
-  }
-
-  double? get _importProgressValue {
-    if (!_isImporting || _importTotal <= 0) {
-      return null;
-    }
-    return (_importCompleted / _importTotal).clamp(0, 1).toDouble();
-  }
-
-  String get _importProgressText {
-    if (_importTotal <= 0) {
-      return '准备导入';
-    }
-    if (_importCompleted >= _importTotal) {
-      return '导入完成';
-    }
-    final current = _currentImportLabel?.trim();
-    if (current != null && current.isNotEmpty) {
-      return '正在处理《$current》';
-    }
-    return '正在导入';
-  }
-
-  String _sanitizeFileToken(String value) {
-    final sanitized = value
-        .trim()
-        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
-        .replaceAll(RegExp(r'\s+'), '_');
-    if (sanitized.isEmpty) {
-      return 'local_book';
-    }
-    return sanitized;
-  }
-
-  String _resolveFileName(Uri uri, Headers headers) {
-    final disposition = headers.value('content-disposition');
-    if (disposition != null) {
-      final utf8Match = RegExp(
-        r"filename\*=UTF-8''([^;]+)",
-      ).firstMatch(disposition);
-      if (utf8Match != null) {
-        return Uri.decodeFull(utf8Match.group(1) ?? '').trim();
-      }
-      final normalMatch = RegExp(
-        r'filename="?([^";]+)"?',
-      ).firstMatch(disposition);
-      if (normalMatch != null) {
-        return (normalMatch.group(1) ?? '').trim();
-      }
-    }
-
-    if (uri.pathSegments.isNotEmpty) {
-      return uri.pathSegments.last.trim();
-    }
-
-    return 'local_book';
-  }
-
-  String _resolveExtension(String fileName, Headers headers) {
-    final extension = p.extension(fileName).toLowerCase();
-    if (extension == '.txt' || extension == '.epub') {
-      return extension;
-    }
-
-    final contentType = headers.value('content-type')?.toLowerCase() ?? '';
-    if (contentType.contains('epub')) {
-      return '.epub';
-    }
-    if (contentType.contains('text/plain')) {
-      return '.txt';
-    }
-
-    return '';
+    _showMessage(_lastErrorText ?? '导入失败，请重试。');
   }
 
   void _showMessage(String text) {
@@ -535,6 +254,55 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _showOrRefreshTaskSheet() {
+    if (!mounted) {
+      return;
+    }
+    final status = _taskStatus;
+    final scaffold = Scaffold.maybeOf(context);
+    if (status == null || scaffold == null) {
+      return;
+    }
+    if (_taskSheetController == null) {
+      _taskSheetController = scaffold.showBottomSheet(
+        (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              return ImportExportTaskSheet(
+                status: _taskStatus ?? status,
+                primaryAction:
+                    !_isImporting && _lastImportedResult != null
+                        ? FilledButton.icon(
+                          onPressed: _openLatestImportedBook,
+                          icon: const Icon(Icons.menu_book_rounded),
+                          label: const Text('立即阅读'),
+                        )
+                        : null,
+                secondaryAction:
+                    !_isImporting && _lastImportedResult != null
+                        ? OutlinedButton.icon(
+                          onPressed: _returnToBookshelf,
+                          icon: const Icon(Icons.library_books_outlined),
+                          label: const Text('返回书架'),
+                        )
+                        : null,
+              );
+            },
+          );
+        },
+        backgroundColor: Colors.transparent,
+        enableDrag: false,
+      );
+      _taskSheetController!.closed.whenComplete(() {
+        if (mounted) {
+          _taskSheetController = null;
+        }
+      });
+      return;
+    }
+    _taskSheetController!.setState?.call(() {});
   }
 
   void _returnToBookshelf() {
@@ -554,217 +322,310 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final pendingCount = _pendingItems.length;
+  Future<void> _openLatestImportedBook() async {
+    final result = _lastImportedResult;
+    if (result == null || !mounted) {
+      return;
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('导入本地图书'),
-        actions: [
-          if (_isImporting) ...[
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: Text(
-                '$_importCompleted/$_importTotal',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+    final plan = await _readerOpenService.resolve(
+      book: result.bookshelfBook,
+      openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
+      localBookHint: result.localBook,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    switch (plan.action) {
+      case BookshelfReaderOpenAction.openReader:
+        final route = plan.readerRoute;
+        if (route == null) {
+          return;
+        }
+        context.push(route);
+        return;
+      case BookshelfReaderOpenAction.openDetail:
+        context.push(
+          '/local/book/${result.localBook.id}?sourceId=${Uri.encodeComponent(result.bookshelfBook.sourceId)}&detailUrl=${Uri.encodeComponent(result.bookshelfBook.detailUrl)}',
+        );
+        return;
+    }
+  }
+
+  Future<void> _reindexBook(LocalBook book) async {
+    if (_reindexingBookId != null) {
+      return;
+    }
+    setState(() {
+      _reindexingBookId = book.id;
+      _reindexStatusText = '正在重索引 ${book.title}';
+      _reindexErrorText = null;
+    });
+    try {
+      await _localBookIndexService.ensureIndexed(bookId: book.id, force: true);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _reindexingBookId = null;
+        _reindexStatusText = '重索引完成';
+      });
+    } on AppException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _reindexingBookId = null;
+        _reindexErrorText = error.briefMessage;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _reindexingBookId = null;
+        _reindexErrorText = '重索引失败：$error';
+      });
+    }
+  }
+
+  Future<void> _openLocalBook(LocalBook book) async {
+    if (!mounted) {
+      return;
+    }
+    context.push('/local/book/${book.id}');
+  }
+
+  List<LocalBook> _sortLocalBooks(List<LocalBook> books) {
+    final sorted = List<LocalBook>.from(books);
+    sorted.sort((a, b) {
+      final readyCompare = _localIndexSortRank(
+        a.indexStatus,
+      ).compareTo(_localIndexSortRank(b.indexStatus));
+      if (readyCompare != 0) {
+        return readyCompare;
+      }
+      final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+      if (updatedCompare != 0) {
+        return updatedCompare;
+      }
+      return a.title.compareTo(b.title);
+    });
+    return sorted;
+  }
+
+  int _localIndexSortRank(LocalBookIndexStatus status) {
+    return switch (status) {
+      LocalBookIndexStatus.indexing => 0,
+      LocalBookIndexStatus.failed => 1,
+      LocalBookIndexStatus.stale => 2,
+      LocalBookIndexStatus.pending => 3,
+      LocalBookIndexStatus.ready => 4,
+    };
+  }
+
+  String _localIndexStatusLabel(LocalBookIndexStatus status) {
+    return switch (status) {
+      LocalBookIndexStatus.pending => '等待索引',
+      LocalBookIndexStatus.indexing => '正在索引',
+      LocalBookIndexStatus.ready => '可阅读',
+      LocalBookIndexStatus.stale => '需要重索引',
+      LocalBookIndexStatus.failed => '索引失败',
+    };
+  }
+
+  Color _localIndexStatusColor(
+    BuildContext context,
+    LocalBookIndexStatus status,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return switch (status) {
+      LocalBookIndexStatus.ready => colorScheme.primary,
+      LocalBookIndexStatus.indexing => colorScheme.tertiary,
+      LocalBookIndexStatus.failed => colorScheme.error,
+      LocalBookIndexStatus.pending ||
+      LocalBookIndexStatus.stale => colorScheme.secondary,
+    };
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes <= 0) {
+      return '未知大小';
+    }
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    final digits = value >= 10 || unitIndex == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(digits)} ${units[unitIndex]}';
+  }
+
+  Widget _buildImportPanel(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final supportsImport = ref.watch(
+      appPlatformCapabilitiesProvider.select(
+        (capabilities) => capabilities.supportsLocalFileImport,
+      ),
+    );
+    return InkWell(
+      onTap: _isImporting || !supportsImport ? null : _pickAndImportFiles,
+      borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
+      child: Ink(
+        padding: EdgeInsets.all(metrics.cardPadding + 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.library_add_rounded,
+                color: colorScheme.onPrimaryContainer,
+                size: 27,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colorScheme.primary,
-                ),
+            SizedBox(height: metrics.sectionGap),
+            Text(
+              '导入本地图书',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            SizedBox(height: metrics.contentGap * 0.8),
+            Text(
+              supportsImport
+                  ? '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。导入完成后会建立目录，ready 状态可直接阅读。'
+                  : '当前平台暂不支持本地文件选择器。首版可继续浏览已有本地图书、书签、阅读记录和外观设置。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.5,
               ),
+            ),
+            SizedBox(height: metrics.sectionGap),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed:
+                      _isImporting || !supportsImport
+                          ? null
+                          : _pickAndImportFiles,
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: Text(
+                    _isImporting
+                        ? '导入中'
+                        : supportsImport
+                        ? '选择文件'
+                        : '暂不可用',
+                  ),
+                ),
+                if (!_isImporting && _lastImportedResult != null) ...[
+                  OutlinedButton.icon(
+                    onPressed: _openLatestImportedBook,
+                    icon: const Icon(Icons.menu_book_rounded),
+                    label: const Text('立即阅读'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _returnToBookshelf,
+                    icon: const Icon(Icons.library_books_outlined),
+                    label: const Text('返回书架'),
+                  ),
+                ],
+              ],
             ),
           ],
-        ],
-      ),
-      bottomNavigationBar:
-          _hasPending
-              ? SafeArea(
-                top: false,
-                child: Container(
-                  padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainer,
-                    border: Border(
-                      top: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '已选 $_pendingSelectedCount / ${_pendingItems.length}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                      FilledButton(
-                        onPressed:
-                            _isImporting || _pendingSelectedCount == 0
-                                ? null
-                                : _importPendingItems,
-                        child: const Text('导入选中'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              : null,
-      body: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          if (_isImporting)
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
-              sliver: SliverToBoxAdapter(child: _buildImportProgressCard()),
-            ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              _isImporting ? 12 : 12,
-              horizontal,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(child: _buildImportSection()),
-          ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 0),
-            sliver: SliverToBoxAdapter(child: _buildImportListHeader()),
-          ),
-          if (pendingCount == 0)
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 24),
-              sliver: SliverToBoxAdapter(child: _buildImportListEmptyState()),
-            )
-          else
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 24),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final item = _pendingItems[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _buildPendingItemTile(item),
-                  );
-                }, childCount: pendingCount),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildImportSection() {
+  Widget _buildLibraryStatusPanel(BuildContext context, List<LocalBook> books) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
-
+    final readyCount =
+        books
+            .where((book) => book.indexStatus == LocalBookIndexStatus.ready)
+            .length;
+    final needsIndexCount =
+        books
+            .where((book) => book.indexStatus != LocalBookIndexStatus.ready)
+            .length;
+    final totalBytes = books.fold<int>(0, (sum, book) => sum + book.fileSize);
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '导入方式',
+            '书库状态',
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 6),
-          Text(
-            '先选择本地图书，确认后再导入；批量导入会等待解析完成，再返回书架列表。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+          SizedBox(height: metrics.contentGap),
+          Wrap(
+            spacing: metrics.contentGap,
+            runSpacing: metrics.contentGap,
+            children: [
+              _buildStatusChip(context, '总数', '${books.length} 本'),
+              _buildStatusChip(context, '可读', '$readyCount 本'),
+              _buildStatusChip(context, '待处理', '$needsIndexCount 本'),
+              _buildStatusChip(context, '占用', _formatFileSize(totalBytes)),
+            ],
+          ),
+          if ((_currentStageText ?? '').trim().isNotEmpty ||
+              (_reindexStatusText ?? '').trim().isNotEmpty) ...[
+            SizedBox(height: metrics.contentGap),
+            _buildInlineStatusBanner(
+              context,
+              icon: Icons.sync_rounded,
+              text: _currentStageText ?? _reindexStatusText!,
             ),
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = AppLayout.isPhoneSmallWidthFor(
-                constraints.maxWidth,
-              );
-              final fileButton = FilledButton.icon(
-                onPressed: _isImporting ? null : _pickFilesToPending,
-                icon: const Icon(Icons.upload_file_outlined),
-                label: const Text('选择文件'),
-              );
-              final linkButton = OutlinedButton.icon(
-                onPressed: _isImporting ? null : _addUrlToPending,
-                icon: const Icon(Icons.link_rounded),
-                label: const Text('添加链接'),
-              );
-
-              if (isNarrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [fileButton, const SizedBox(height: 8), linkButton],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(child: fileButton),
-                  const SizedBox(width: 8),
-                  Expanded(child: linkButton),
-                ],
-              );
-            },
-          ),
+          ],
+          if ((_lastErrorText ?? '').trim().isNotEmpty ||
+              (_reindexErrorText ?? '').trim().isNotEmpty) ...[
+            SizedBox(height: metrics.contentGap),
+            _buildInlineStatusBanner(
+              context,
+              icon: Icons.error_outline_rounded,
+              text: _lastErrorText ?? _reindexErrorText!,
+              error: true,
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildImportListHeader() {
+  Widget _buildLocalBooksPanel(BuildContext context, List<LocalBook> books) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
-    final pendingCount = _pendingItems.length;
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '待导入 ($pendingCount)',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        TextButton(
-          onPressed: _pendingItems.isEmpty ? null : _toggleSelectAllPending,
-          child: Text(_allPendingSelected ? '取消全选' : '全选'),
-        ),
-        const SizedBox(width: 4),
-        TextButton(
-          onPressed: _pendingItems.isEmpty ? null : _clearPending,
-          child: const Text('清空'),
-        ),
-        Icon(Icons.playlist_add_check_rounded, color: colorScheme.primary),
-      ],
-    );
-  }
-
-  Widget _buildImportProgressCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final progressValue = _importProgressValue;
-
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(16),
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,491 +634,286 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
             children: [
               Expanded(
                 child: Text(
-                  _importProgressText,
+                  '本地文件',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-              Text(
-                '$_importCompleted/$_importTotal',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+              if (metrics.isMediumUpWindow) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 96,
+                  child: Text(
+                    '格式',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(
+                  width: 96,
+                  child: Text(
+                    '大小',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ] else
+                Text(
+                  '按状态和更新时间排序',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progressValue,
-              minHeight: 8,
-              backgroundColor: colorScheme.surface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '每本书完成入库后会继续解析目录，只有解析完成才算本次导入完成。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
+          SizedBox(height: metrics.contentGap),
+          if (books.isEmpty)
+            Text(
+              '还没有本地图书。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            for (var index = 0; index < books.length; index++) ...[
+              _buildLocalBookRow(context, books[index]),
+              if (index < books.length - 1)
+                Divider(
+                  height: metrics.sectionGap,
+                  color: colorScheme.outlineVariant,
+                ),
+            ],
         ],
       ),
     );
   }
 
-  Widget _buildImportListEmptyState() {
+  Widget _buildLocalBookRow(BuildContext context, LocalBook book) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '暂无图书',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '选择文件或添加链接后，会出现在这里。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPendingItemTile(_PendingImportItem item) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final subtitleColor =
-        item.errorText == null
-            ? colorScheme.onSurfaceVariant
-            : colorScheme.error;
-    final statusMeta = _statusPresentation(item.status, colorScheme);
-
-    return Material(
-      color: colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _togglePendingSelection(item, !item.selected),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Checkbox(
-                value: item.selected,
-                onChanged:
-                    _isImporting
-                        ? null
-                        : (value) {
-                          if (value != null) {
-                            _togglePendingSelection(item, value);
-                          }
-                        },
+    final statusColor = _localIndexStatusColor(context, book.indexStatus);
+    final busy = _reindexingBookId == book.id;
+    return InkWell(
+      borderRadius: BorderRadius.circular(metrics.cardRadius),
+      onTap: () => unawaited(_openLocalBook(book)),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: metrics.contentGap * 0.45),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
+              child:
+                  busy
+                      ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: statusColor,
                         ),
-                        const SizedBox(width: 6),
-                        IconButton(
-                          tooltip: '编辑名称',
-                          visualDensity: VisualDensity.compact,
-                          onPressed:
-                              _isImporting
-                                  ? null
-                                  : () => _editPendingItemTitle(item),
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                        ),
-                      ],
+                      )
+                      : Icon(
+                        Icons.insert_drive_file_outlined,
+                        color: statusColor,
+                      ),
+            ),
+            SizedBox(width: metrics.contentGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    book.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.errorText ?? item.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: subtitleColor),
+                  ),
+                  SizedBox(height: metrics.contentGap * 0.3),
+                  Text(
+                    '${book.format.displayLabel} · ${book.chapterCount} 章 · ${_formatFileSize(book.fileSize)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: metrics.contentGap),
+            if (metrics.isMediumUpWindow) ...[
+              SizedBox(
+                width: 96,
+                child: Text(
+                  book.format.displayLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(width: 6),
-              _buildStatusChip(
-                label: statusMeta.label,
-                color: statusMeta.color,
-                textColor: statusMeta.color,
-              ),
-              IconButton(
-                tooltip: '移除',
-                onPressed: _isImporting ? null : () => _removePendingItem(item),
-                icon: const Icon(Icons.close_rounded),
+              SizedBox(
+                width: 96,
+                child: Text(
+                  _formatFileSize(book.fileSize),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
             ],
-          ),
+            Chip(
+              visualDensity: VisualDensity.compact,
+              label: Text(_localIndexStatusLabel(book.indexStatus)),
+              side: BorderSide(color: statusColor.withValues(alpha: 0.35)),
+              backgroundColor: statusColor.withValues(alpha: 0.08),
+              labelStyle: TextStyle(color: statusColor),
+            ),
+            IconButton(
+              tooltip: '重索引',
+              onPressed: busy ? null : () => unawaited(_reindexBook(book)),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusChip({
-    required String label,
-    required Color color,
-    Color? textColor,
-  }) {
-    final background = color.withValues(alpha: 0.12);
+  Widget _buildStatusChip(BuildContext context, String label, String value) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.cardPadding * 0.8,
+        vertical: metrics.contentGap * 0.65,
+      ),
       decoration: BoxDecoration(
-        color: background,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: textColor ?? color,
-          fontWeight: FontWeight.w600,
+        '$label $value',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: colorScheme.onSurfaceVariant,
         ),
       ),
     );
   }
 
-  _PendingStatusPresentation _statusPresentation(
-    _PendingImportStatus status,
-    ColorScheme colorScheme,
-  ) {
-    return switch (status) {
-      _PendingImportStatus.pending => _PendingStatusPresentation(
-        label: '待导入',
-        color: colorScheme.primary,
-      ),
-      _PendingImportStatus.downloading => _PendingStatusPresentation(
-        label: '下载中',
-        color: colorScheme.tertiary,
-      ),
-      _PendingImportStatus.importing => _PendingStatusPresentation(
-        label: '入库中',
-        color: colorScheme.primary,
-      ),
-      _PendingImportStatus.persisted => _PendingStatusPresentation(
-        label: '已入库',
-        color: colorScheme.secondary,
-      ),
-      _PendingImportStatus.indexing => _PendingStatusPresentation(
-        label: '解析中',
-        color: colorScheme.secondary,
-      ),
-      _PendingImportStatus.succeeded => _PendingStatusPresentation(
-        label: '已完成',
-        color: colorScheme.primary,
-      ),
-      _PendingImportStatus.failed => _PendingStatusPresentation(
-        label: '失败',
-        color: colorScheme.error,
-      ),
-    };
-  }
-}
-
-enum _PendingImportType { file, url }
-
-enum _PendingImportStatus {
-  pending,
-  downloading,
-  importing,
-  persisted,
-  indexing,
-  succeeded,
-  failed,
-}
-
-class _PendingImportItem {
-  _PendingImportItem._({
-    required this.id,
-    required this.type,
-    required String title,
-    required this.subtitle,
-    this.path,
-    this.url,
-  }) : title = LocalBookImportService.normalizeImportedDisplayName(title),
-       selected = true,
-       errorText = null,
-       status = _PendingImportStatus.pending;
-
-  factory _PendingImportItem.file({
-    required String path,
-    required String name,
+  Widget _buildInlineStatusBanner(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+    bool error = false,
   }) {
-    return _PendingImportItem._(
-      id: 'file_${path.hashCode}_${DateTime.now().microsecondsSinceEpoch}',
-      type: _PendingImportType.file,
-      title: name.trim().isEmpty ? p.basename(path) : name.trim(),
-      subtitle: path,
-      path: path,
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = error ? colorScheme.error : colorScheme.primary;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(metrics.cardPadding * 0.8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color:
+                    error
+                        ? colorScheme.onErrorContainer
+                        : colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
-  }
-
-  factory _PendingImportItem.url({required String url}) {
-    final uri = Uri.tryParse(url.trim());
-    final title =
-        uri != null && uri.pathSegments.isNotEmpty
-            ? uri.pathSegments.last
-            : uri?.host ?? url.trim();
-    return _PendingImportItem._(
-      id: 'url_${url.hashCode}_${DateTime.now().microsecondsSinceEpoch}',
-      type: _PendingImportType.url,
-      title: title.trim().isEmpty ? url.trim() : title.trim(),
-      subtitle: url.trim(),
-      url: url.trim(),
-    );
-  }
-
-  final String id;
-  final _PendingImportType type;
-  String title;
-  final String subtitle;
-  final String? path;
-  final String? url;
-  bool selected;
-  String? errorText;
-  _PendingImportStatus status;
-
-  String get key => switch (type) {
-    _PendingImportType.file => 'file:${path ?? ''}',
-    _PendingImportType.url => 'url:${url ?? ''}',
-  };
-}
-
-class _ImportException implements Exception {
-  const _ImportException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => message;
-}
-
-class _PendingStatusPresentation {
-  const _PendingStatusPresentation({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-}
-
-class _LocalUrlImportPage extends StatefulWidget {
-  const _LocalUrlImportPage();
-
-  @override
-  State<_LocalUrlImportPage> createState() => _LocalUrlImportPageState();
-}
-
-class _PendingTitleEditPage extends StatefulWidget {
-  const _PendingTitleEditPage({required this.initialTitle});
-
-  final String initialTitle;
-
-  @override
-  State<_PendingTitleEditPage> createState() => _PendingTitleEditPageState();
-}
-
-class _PendingTitleEditPageState extends State<_PendingTitleEditPage> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialTitle,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    Navigator.of(context).pop(_controller.text);
   }
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 760);
-    final keyboardInset = AppLayout.keyboardInset(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final canSubmit = _controller.text.trim().isNotEmpty;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('编辑书名'),
-        actions: [
-          TextButton(
-            onPressed: canSubmit ? _submit : null,
-            child: const Text('完成'),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: SafeArea(
-          top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '导入前可先调整书名，后续会按这个名称入库。',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _controller,
-                      autofocus: true,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: (_) {
-                        if (canSubmit) {
-                          _submit();
-                        }
-                      },
-                      decoration: const InputDecoration(
-                        hintText: '请输入书名',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: canSubmit ? _submit : null,
-                      icon: const Icon(Icons.check_rounded),
-                      label: const Text('保存名称'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final maxWidth = AppLayout.pageContentMaxWidth(
+      context,
+      maxWidth: AppLayout.localLibraryContentMaxWidth,
     );
-  }
-}
-
-class _LocalUrlImportPageState extends State<_LocalUrlImportPage> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    Navigator.of(context).pop(_controller.text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 760);
-    final keyboardInset = AppLayout.keyboardInset(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final canSubmit = _controller.text.trim().isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('链接导入本地图书'),
-        actions: [
-          TextButton(
-            onPressed: canSubmit ? _submit : null,
-            child: const Text('导入'),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: SafeArea(
-          top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '请输入 txt/epub 文件链接（http/https）',
-                      style: Theme.of(context).textTheme.bodyMedium,
+      appBar: AppBar(title: const Text('本地书库')),
+      body: SafeArea(
+        child: StreamBuilder<List<LocalBook>>(
+          stream: _localBookRepository.watchAllBooks(),
+          builder: (context, snapshot) {
+            final books = _sortLocalBooks(snapshot.data ?? const <LocalBook>[]);
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: AppFadeSlideTransition(
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      metrics.contentGap,
+                      horizontal,
+                      metrics.sectionGap +
+                          MediaQuery.viewPaddingOf(context).bottom,
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _controller,
-                      autofocus: true,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: (_) {
-                        if (canSubmit) {
-                          _submit();
-                        }
-                      },
-                      decoration: const InputDecoration(
-                        hintText: 'https://example.com/book.txt',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: canSubmit ? _submit : null,
-                      icon: const Icon(Icons.file_download_outlined),
-                      label: const Text('加入待导入'),
-                    ),
-                  ],
+                    children: [
+                      if (metrics.isMediumUpWindow)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: _buildImportPanel(context),
+                            ),
+                            SizedBox(width: metrics.sectionGap),
+                            Expanded(
+                              flex: 5,
+                              child: _buildLibraryStatusPanel(context, books),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        _buildImportPanel(context),
+                        SizedBox(height: metrics.sectionGap),
+                        _buildLibraryStatusPanel(context, books),
+                      ],
+                      SizedBox(height: metrics.sectionGap),
+                      _buildLocalBooksPanel(context, books),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

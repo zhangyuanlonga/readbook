@@ -39,6 +39,8 @@ class SourceRegistry {
     RuntimeSourceDefinition definition, {
     String revision = 'local-1',
   }) {
+    final existing = _sources[runtimeId];
+    existing?.definition.dispose?.call();
     final registered = RegisteredSource(
       runtime: SourceRuntimeInfo(
         id: runtimeId,
@@ -55,20 +57,21 @@ class SourceRegistry {
   RegisteredSource? getById(String sourceId) => _sources[sourceId];
 
   List<RegisteredSource> all({bool enabledOnly = true}) {
-    final values = _sources.values;
-    if (!enabledOnly) {
-      return values.toList(growable: false);
-    }
-    return values
-        .where((RegisteredSource source) => source.definition.manifest.enabled)
-        .toList(growable: false);
+    // Host enable/disable state is owned by the app database.
+    // Registered runtime sources are already the enabled set that the host
+    // chose to load, so manifest.enabled must not filter them again.
+    return _sources.values.toList(growable: false);
   }
 
   void remove(String sourceId) {
-    _sources.remove(sourceId);
+    final removed = _sources.remove(sourceId);
+    removed?.definition.dispose?.call();
   }
 
   void clear() {
+    for (final source in _sources.values) {
+      source.definition.dispose?.call();
+    }
     _sources.clear();
     _slugCounts.clear();
   }

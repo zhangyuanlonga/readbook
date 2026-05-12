@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/layout/app_layout.dart';
+import '../../../../app/widgets/adaptive_grid_sliver.dart';
 
 typedef BookshelfGridItemBuilder =
     Widget Function(BuildContext context, int index);
@@ -10,41 +10,33 @@ class BookshelfGridSliver extends StatelessWidget {
     super.key,
     required this.itemCount,
     required this.itemBuilder,
+    this.fixedCrossAxisCount,
     this.crossSpacing = 8,
     this.mainSpacing = 12,
     this.itemHeightExtra = 42,
+    this.coverAspectRatio = 68 / 96,
   });
 
   final int itemCount;
   final BookshelfGridItemBuilder itemBuilder;
+  final int? fixedCrossAxisCount;
   final double crossSpacing;
   final double mainSpacing;
   final double itemHeightExtra;
+  final double coverAspectRatio;
 
   @override
   Widget build(BuildContext context) {
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        final width =
-            constraints.crossAxisExtent.clamp(220.0, 2400.0).toDouble();
-        final crossAxisCount = AppLayout.bookshelfGridColumnsForWidth(width);
-        final itemWidth =
-            (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
-        final itemHeight = itemWidth * 1.32 + itemHeightExtra;
-
-        return SliverGrid(
-          delegate: SliverChildBuilderDelegate(
-            itemBuilder,
-            childCount: itemCount,
-          ),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: crossSpacing,
-            mainAxisSpacing: mainSpacing,
-            childAspectRatio: itemWidth / itemHeight,
-          ),
-        );
-      },
+    return AdaptiveGridSliver(
+      itemCount: itemCount,
+      itemBuilder: itemBuilder,
+      fixedCrossAxisCount: fixedCrossAxisCount,
+      minColumns: 2,
+      maxColumns: 6,
+      crossSpacing: crossSpacing,
+      mainSpacing: mainSpacing,
+      itemHeightExtra: itemHeightExtra,
+      itemAspectRatio: coverAspectRatio,
     );
   }
 }

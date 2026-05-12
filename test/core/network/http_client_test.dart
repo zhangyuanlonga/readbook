@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_appread/core/errors/app_exception.dart';
-import 'package:flutter_appread/core/network/http_client.dart';
-import 'package:flutter_appread/core/network/request_context.dart';
-import 'package:flutter_appread/core/network/source_rate_limiter.dart';
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/network/http_client.dart';
+import 'package:shuxiang_reading_next/core/network/request_context.dart';
+import 'package:shuxiang_reading_next/core/network/source_rate_limiter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

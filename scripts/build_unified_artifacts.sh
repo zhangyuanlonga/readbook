@@ -15,9 +15,12 @@ ANDROID_APK_PROFILE="${ANDROID_APK_PROFILE:-arm64}" # arm64 | split | universal
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for ANDROID_APK_PROFILE=split
 APP_NAME="${APP_NAME:-Runner}"           # iOS APP_NAME
 MACOS_APP_NAME="${MACOS_APP_NAME:-}"     # macOS APP_NAME
-ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+FULL_VERSION="${FULL_VERSION:-}"
+APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 VERSION_PROMPT="${VERSION_PROMPT:-1}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
@@ -36,7 +39,7 @@ Usage:
   ./scripts/build_unified_artifacts.sh [platforms] [build_mode]
 
 Arguments:
-  platforms   auto | android,ios,macos,linux,windows (default: auto)
+  platforms   auto | android,ios,macos,linux,windows,web (default: auto)
   build_mode  debug | profile | release (default: release)
 
 Environment variables:
@@ -47,6 +50,7 @@ Environment variables:
   SPLIT_PER_ABI    Legacy alias. Set to 1 for ANDROID_APK_PROFILE=split
   APP_NAME         iOS app bundle name (default: Runner)
   MACOS_APP_NAME   Optional macOS .app name without .app
+  FULL_VERSION     Full Flutter version like 1.1.0+26041801
   BUILD_NAME       Override Flutter --build-name
   BUILD_NUMBER     Override Flutter --build-number
   VERSION_PROMPT   1 to ask interactively before build when TTY is available
@@ -58,9 +62,10 @@ Environment variables:
 
 Examples:
   ./scripts/build_unified_artifacts.sh
-  ./scripts/build_unified_artifacts.sh android,ios,macos release
+  ./scripts/build_unified_artifacts.sh android,ios,macos,web release
   ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
   ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
+  FULL_VERSION=1.1.0+26041802 ./scripts/build_unified_artifacts.sh android,ios release
 USAGE
 }
 
@@ -90,9 +95,9 @@ host_os() {
 
 default_platforms_for_host() {
   case "$(host_os)" in
-    darwin) echo "android ios macos" ;;
-    linux) echo "android linux" ;;
-    windows) echo "android windows" ;;
+    darwin) echo "android ios macos web" ;;
+    linux) echo "android linux web" ;;
+    windows) echo "android windows web" ;;
     *) echo "android" ;;
   esac
 }
@@ -105,6 +110,7 @@ is_platform_supported_on_host() {
     ios|macos) [[ "$(host_os)" == "darwin" ]] ;;
     linux) [[ "$(host_os)" == "linux" ]] ;;
     windows) [[ "$(host_os)" == "windows" ]] ;;
+    web) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -137,13 +143,23 @@ trim_whitespace() {
 }
 
 resolve_version_overrides() {
-  local pubspec_version current_name current_number input
+  local pubspec_version current_name current_number current_full_version input
 
   pubspec_version="$(read_pubspec_version)"
   current_name="${pubspec_version%%+*}"
   current_number=""
   if [[ "${pubspec_version}" == *"+"* ]]; then
     current_number="${pubspec_version##*+}"
+  fi
+
+  if [[ -n "${FULL_VERSION}" ]]; then
+    FULL_VERSION="$(trim_whitespace "${FULL_VERSION}")"
+    if [[ "${FULL_VERSION}" == *"+"* ]]; then
+      BUILD_NAME="${FULL_VERSION%%+*}"
+      BUILD_NUMBER="${FULL_VERSION##*+}"
+    else
+      BUILD_NAME="${FULL_VERSION}"
+    fi
   fi
 
   if [[ -z "${BUILD_NAME}" ]]; then
@@ -153,17 +169,23 @@ resolve_version_overrides() {
     BUILD_NUMBER="${current_number}"
   fi
 
+  current_full_version="${BUILD_NAME:-none}"
+  if [[ -n "${BUILD_NUMBER}" ]]; then
+    current_full_version="${BUILD_NAME}+${BUILD_NUMBER}"
+  fi
+
   if [[ "${VERSION_PROMPT}" == "1" && -t 0 ]]; then
     echo "==> Current pubspec version: ${pubspec_version:-unknown}"
-    read -r -p "==> Confirm build name [${BUILD_NAME:-none}]: " input
+    read -r -p "==> Confirm full version [${current_full_version}]: " input
     input="$(trim_whitespace "${input}")"
     if [[ -n "${input}" ]]; then
-      BUILD_NAME="${input}"
-    fi
-    read -r -p "==> Confirm build number [${BUILD_NUMBER:-none}]: " input
-    input="$(trim_whitespace "${input}")"
-    if [[ -n "${input}" ]]; then
-      BUILD_NUMBER="${input}"
+      FULL_VERSION="${input}"
+      if [[ "${FULL_VERSION}" == *"+"* ]]; then
+        BUILD_NAME="${FULL_VERSION%%+*}"
+        BUILD_NUMBER="${FULL_VERSION##*+}"
+      else
+        BUILD_NAME="${FULL_VERSION}"
+      fi
     fi
   fi
 
@@ -171,7 +193,7 @@ resolve_version_overrides() {
   BUILD_NUMBER="$(trim_whitespace "${BUILD_NUMBER}")"
 
   if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
-    echo "Error: BUILD_NAME must look like 1.0.6." >&2
+    echo "Error: BUILD_NAME must look like 1.1 or 1.1.0." >&2
     exit 1
   fi
   if [[ -n "${BUILD_NUMBER}" && ! "${BUILD_NUMBER}" =~ ^[0-9]+$ ]]; then
@@ -205,7 +227,7 @@ normalize_platforms() {
 
   for token in "${tokens[@]}"; do
     case "${token}" in
-      android|ios|macos|linux|windows) ;;
+      android|ios|macos|linux|windows|web) ;;
       *)
         echo "Error: unsupported platform '${token}'." >&2
         usage >&2
@@ -347,6 +369,8 @@ mkdir -p "${SESSION_DIR}" "${STAGING_ROOT}"
   echo "build_mode: ${BUILD_MODE}"
   echo "build_name: ${BUILD_NAME:-pubspec default}"
   echo "build_number: ${BUILD_NUMBER:-pubspec default}"
+  echo "api_base_url: ${APPREAD_API_BASE_URL:-dart default}"
+  echo "app_name: ${APPREAD_APP_NAME:-dart default}"
   echo "platforms: ${PLATFORMS[*]}"
   echo ""
 } > "${MANIFEST_FILE}"
@@ -360,6 +384,8 @@ echo "==> Android target: ${ANDROID_TARGET}"
 echo "==> Android APK  : ${ANDROID_APK_PROFILE}"
 echo "==> Build name   : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number : ${BUILD_NUMBER:-pubspec default}"
+echo "==> API base URL : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> App name     : ${APPREAD_APP_NAME:-dart default}"
 echo "==> Output folder: ${SESSION_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -386,6 +412,8 @@ for platform in "${PLATFORMS[@]-}"; do
         SPLIT_PER_ABI="${SPLIT_PER_ABI}" \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
+        APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_android_artifacts.sh" "${ANDROID_TARGET}" "${BUILD_MODE}"
       ;;
     ios)
@@ -408,6 +436,8 @@ for platform in "${PLATFORMS[@]-}"; do
           SKIP_POD_INSTALL="${SKIP_POD_INSTALL}" \
           BUILD_NAME="${BUILD_NAME}" \
           BUILD_NUMBER="${BUILD_NUMBER}" \
+          APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+          APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
           "${SCRIPT_DIR}/build_ios_ipa_nocodesign.sh"
       fi
       ;;
@@ -421,6 +451,8 @@ for platform in "${PLATFORMS[@]-}"; do
         SKIP_POD_INSTALL="${SKIP_POD_INSTALL}" \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
+        APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_macos_artifact.sh" "${BUILD_MODE}"
       ;;
     linux)
@@ -431,6 +463,8 @@ for platform in "${PLATFORMS[@]-}"; do
         SKIP_PUB_GET=1 \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
+        APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_linux_artifact.sh" "${BUILD_MODE}"
       ;;
     windows)
@@ -441,7 +475,39 @@ for platform in "${PLATFORMS[@]-}"; do
         SKIP_PUB_GET=1 \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
+        APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_windows_artifact.sh" "${BUILD_MODE}"
+      ;;
+    web)
+      run_platform_build "web" env \
+        FLUTTER_CMD="${FLUTTER_CMD}" \
+        BUILD_NAME="${BUILD_NAME}" \
+        BUILD_NUMBER="${BUILD_NUMBER}" \
+        APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
+        ARTIFACT_NAME="${ARTIFACT_NAME}" \
+        bash -c '
+        set -euo pipefail
+        build_mode="$1"
+        output_dir="$2"
+        flutter_args=(build web "--${build_mode}" --no-web-resources-cdn --no-wasm-dry-run)
+        if [[ -n "${BUILD_NAME}" ]]; then
+          flutter_args+=(--build-name "${BUILD_NAME}")
+        fi
+        if [[ -n "${BUILD_NUMBER}" ]]; then
+          flutter_args+=(--build-number "${BUILD_NUMBER}")
+        fi
+        if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
+          flutter_args+=(--dart-define "APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}")
+        fi
+        if [[ -n "${APPREAD_APP_NAME}" ]]; then
+          flutter_args+=(--dart-define "APPREAD_APP_NAME=${APPREAD_APP_NAME}")
+        fi
+        "${FLUTTER_CMD}" "${flutter_args[@]}"
+        mkdir -p "${output_dir}"
+        tar -czf "${output_dir}/${ARTIFACT_NAME}-web-${build_mode}.tar.gz" -C build/web .
+      ' _ "${BUILD_MODE}" "${STAGING_ROOT}/web"
       ;;
   esac
 done

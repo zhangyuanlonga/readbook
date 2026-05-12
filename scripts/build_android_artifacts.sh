@@ -13,11 +13,49 @@ BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for APK_PROFILE=split
 APK_PROFILE="${APK_PROFILE:-}"           # arm64 | split | universal
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/artifacts/android}"
-ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value}"
+}
+
+validate_version_overrides() {
+  BUILD_NAME="$(trim_whitespace "${BUILD_NAME}")"
+  BUILD_NUMBER="$(trim_whitespace "${BUILD_NUMBER}")"
+
+  if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+    echo "Error: BUILD_NAME must look like 1.1 or 1.1.0. Current: ${BUILD_NAME}" >&2
+    exit 1
+  fi
+
+  if [[ -n "${BUILD_NUMBER}" && ! "${BUILD_NUMBER}" =~ ^[0-9]+$ ]]; then
+    echo "Error: BUILD_NUMBER must be an integer build code like 26041801. Current: ${BUILD_NUMBER}" >&2
+    exit 1
+  fi
+}
+
+append_dart_defines() {
+  local array_name="$1"
+  local define_value
+
+  if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
+    printf -v define_value '%q' "--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}"
+    eval "${array_name}+=(${define_value})"
+  fi
+  if [[ -n "${APPREAD_APP_NAME}" ]]; then
+    printf -v define_value '%q' "--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}"
+    eval "${array_name}+=(${define_value})"
+  fi
+}
 
 usage() {
   cat <<USAGE
@@ -31,9 +69,11 @@ Arguments:
 Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
   APK_PROFILE   APK output profile: arm64 | split | universal (default: arm64)
+                arm64 uses --target-platform android-arm64 to preserve the raw versionCode.
+                split uses --split-per-abi, which lets Android append ABI-specific versionCode offsets.
   SPLIT_PER_ABI Legacy alias. Set to 1 for APK_PROFILE=split
   OUTPUT_DIR    Output artifacts folder (default: artifacts/android)
-  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
+  ARTIFACT_NAME Final artifact display name prefix (default: Selune)
   BUILD_NAME    Override Flutter --build-name
   BUILD_NUMBER  Override Flutter --build-number
   SKIP_CLEAN    1 to skip flutter clean
@@ -44,6 +84,7 @@ Examples:
   APK_PROFILE=split ./scripts/build_android_artifacts.sh apk release
   APK_PROFILE=universal ./scripts/build_android_artifacts.sh apk release
   ./scripts/build_android_artifacts.sh both release
+  BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 ./scripts/build_android_artifacts.sh apk release
 USAGE
 }
 
@@ -83,40 +124,55 @@ if ! command -v "${FLUTTER_CMD}" >/dev/null 2>&1; then
   exit 1
 fi
 
+validate_version_overrides
+
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
 mkdir -p "${SESSION_DIR}"
 
 artifact_base_name() {
-  local base="${ARTIFACT_NAME}"
-  if [[ -n "${BUILD_NAME}" ]]; then
-    base="${base} v${BUILD_NAME}"
+  echo "${ARTIFACT_NAME}"
+}
+
+artifact_version_suffix() {
+  local version_label=""
+  if [[ -n "${BUILD_NAME}" && -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NAME}-${BUILD_NUMBER}"
+  elif [[ -n "${BUILD_NAME}" ]]; then
+    version_label="${BUILD_NAME}"
+  elif [[ -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NUMBER}"
   fi
-  echo "${base}"
+
+  if [[ -n "${version_label}" ]]; then
+    echo "-${version_label}"
+  else
+    echo ""
+  fi
 }
 
 artifact_mode_suffix() {
   if [[ "${BUILD_MODE}" == "release" ]]; then
     echo ""
   else
-    echo " ${BUILD_MODE}"
+    echo "-${BUILD_MODE}"
   fi
 }
 
 android_apk_name() {
   local abi_label="$1"
   local name
-  name="$(artifact_base_name) 安卓"
+  name="$(artifact_base_name)-Android"
   if [[ -n "${abi_label}" ]]; then
-    name="${name} ${abi_label}"
+    name="${name}-${abi_label}"
   fi
-  name="${name}$(artifact_mode_suffix).apk"
+  name="${name}$(artifact_version_suffix)$(artifact_mode_suffix).apk"
   echo "${name}"
 }
 
 android_aab_name() {
   local name
-  name="$(artifact_base_name) 安卓$(artifact_mode_suffix).aab"
+  name="$(artifact_base_name)-Android$(artifact_version_suffix)$(artifact_mode_suffix).aab"
   echo "${name}"
 }
 
@@ -127,6 +183,8 @@ echo "==> Build mode  : ${BUILD_MODE}"
 echo "==> APK profile : ${APK_PROFILE}"
 echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
+echo "==> API base    : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> App name    : ${APPREAD_APP_NAME:-dart default}"
 echo "==> Output dir  : ${SESSION_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -143,9 +201,12 @@ fi
 
 build_apk() {
   local cmd=("${FLUTTER_CMD}" build apk "--${BUILD_MODE}")
-  if [[ "${APK_PROFILE}" == "split" || "${APK_PROFILE}" == "arm64" ]]; then
+  if [[ "${APK_PROFILE}" == "split" ]]; then
     echo "==> flutter build apk --${BUILD_MODE} --split-per-abi"
     cmd+=(--split-per-abi)
+  elif [[ "${APK_PROFILE}" == "arm64" ]]; then
+    echo "==> flutter build apk --${BUILD_MODE} --target-platform android-arm64"
+    cmd+=(--target-platform android-arm64)
   else
     echo "==> flutter build apk --${BUILD_MODE}"
   fi
@@ -155,12 +216,13 @@ build_apk() {
   if [[ -n "${BUILD_NUMBER}" ]]; then
     cmd+=(--build-number="${BUILD_NUMBER}")
   fi
+  append_dart_defines cmd
   "${cmd[@]}"
 
   local apk_dir="${PROJECT_ROOT}/build/app/outputs/flutter-apk"
   local copied=0
 
-  if [[ "${APK_PROFILE}" == "split" || "${APK_PROFILE}" == "arm64" ]]; then
+  if [[ "${APK_PROFILE}" == "split" ]]; then
     while IFS= read -r -d '' file; do
       local base
       base="$(basename "${file}")"
@@ -170,12 +232,15 @@ build_apk() {
         *armeabi-v7a*) abi_label="armeabi-v7a" ;;
         *x86_64*) abi_label="x86_64" ;;
       esac
-      if [[ "${APK_PROFILE}" == "arm64" && "${abi_label}" != "arm64-v8a" ]]; then
-        continue
-      fi
       cp "${file}" "${SESSION_DIR}/$(android_apk_name "${abi_label}")"
       copied=1
     done < <(find "${apk_dir}" -maxdepth 1 -type f -name "app-*-${BUILD_MODE}.apk" -print0)
+  elif [[ "${APK_PROFILE}" == "arm64" ]]; then
+    local apk_file="${apk_dir}/app-${BUILD_MODE}.apk"
+    if [[ -f "${apk_file}" ]]; then
+      cp "${apk_file}" "${SESSION_DIR}/$(android_apk_name "arm64-v8a")"
+      copied=1
+    fi
   else
     local apk_file="${apk_dir}/app-${BUILD_MODE}.apk"
     if [[ -f "${apk_file}" ]]; then
@@ -199,6 +264,7 @@ build_appbundle() {
   if [[ -n "${BUILD_NUMBER}" ]]; then
     cmd+=(--build-number="${BUILD_NUMBER}")
   fi
+  append_dart_defines cmd
   "${cmd[@]}"
 
   local aab_file="${PROJECT_ROOT}/build/app/outputs/bundle/${BUILD_MODE}/app-${BUILD_MODE}.aab"

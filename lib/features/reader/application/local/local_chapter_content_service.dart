@@ -1,43 +1,30 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
-
-import 'package:charset/charset.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
-import '../../../../data/datasources/local/app_database.dart';
-import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
-import 'epub_local_book_parser.dart';
-import 'local_book_parser.dart';
 import 'local_book_index_service.dart';
 import 'local_book_storage_service.dart';
+import 'local_text_encoding_detector.dart';
 
 class LocalChapterContentService {
   LocalChapterContentService({
-    LocalBookRepository? localBookRepository,
-    LocalBookIndexService? indexService,
-    EpubLocalBookParser? epubParser,
-    LocalBookStorageService? storageService,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _indexService =
-           indexService ??
-           LocalBookIndexService(
-             localBookRepository:
-                 localBookRepository ??
-                 LocalBookRepositoryImpl(AppDatabase.instance),
-           ),
-       _epubParser = epubParser ?? const EpubLocalBookParser(),
-       _storageService = storageService ?? LocalBookStorageService();
+    required LocalBookRepository localBookRepository,
+    required LocalBookIndexService indexService,
+    required LocalBookStorageService storageService,
+  }) : _localBookRepository = localBookRepository,
+       _indexService = indexService,
+       _storageService = storageService;
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
-  final EpubLocalBookParser _epubParser;
   final LocalBookStorageService _storageService;
+  final LocalTextEncodingDetector _textEncodingDetector =
+      const LocalTextEncodingDetector();
 
   Future<LocalChapter> load({
     required String bookId,
@@ -53,8 +40,10 @@ class LocalChapterContentService {
       );
     }
 
-    var book = await _localBookRepository.getBookById(normalizedBookId);
-    if (book == null) {
+    final originalBook = await _localBookRepository.getBookById(
+      normalizedBookId,
+    );
+    if (originalBook == null) {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.content,
@@ -65,25 +54,39 @@ class LocalChapterContentService {
     final refreshedBook = await _indexService.refreshBookState(
       bookId: normalizedBookId,
     );
-    if (refreshedBook != null) {
-      book = refreshedBook;
-    }
-
-    if (_needsReindex(book)) {
-      await _indexService.ensureIndexed(bookId: normalizedBookId);
-      final refreshed = await _localBookRepository.getBookById(
-        normalizedBookId,
+    final book = refreshedBook ?? originalBook;
+    final normalizedChapterId = (chapterId ?? '').trim().toLowerCase();
+    if (normalizedChapterId == 'bootstrap') {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: 'TXT 预览已迁移到独立预览服务，请通过预览入口打开。',
       );
-      if (refreshed != null) {
-        book = refreshed;
-      }
     }
-
     final chapter = await _resolveChapter(
       book: book,
       chapterId: chapterId,
       chapterIndex: chapterIndex,
     );
+    if (_needsReindex(book)) {
+      if (chapter != null &&
+          _canUseLegacyTxtOffsetFallback(
+            originalBook: originalBook,
+            refreshedBook: refreshedBook,
+            chapter: chapter,
+          )) {
+        unawaited(_indexService.ensureIndexed(bookId: normalizedBookId));
+        final readableBook = await _hydrateReadableBook(book);
+        final hydratedContent = await _loadTxtChapterContentByOffsets(
+          chapter: chapter,
+          book: readableBook,
+        );
+        return chapter.copyWith(content: hydratedContent);
+      }
+
+      _ensureBookReadyForReading(book);
+    }
+
     if (chapter == null) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -96,34 +99,59 @@ class LocalChapterContentService {
       return chapter;
     }
 
-    final readableBook = await _hydrateReadableBook(book);
-
-    if (book.format == LocalBookFormat.txt) {
-      final hydratedContent = await _loadTxtChapterContentByOffsets(
-        chapter: chapter,
-        book: readableBook,
-      );
-      return chapter.copyWith(content: hydratedContent);
-    }
-
-    final hydrated = await _loadEpubChapterContent(
-      chapter: chapter,
-      book: readableBook,
-    );
-    await _localBookRepository.updateChapterContent(
-      chapterId: chapter.id,
-      content: hydrated.content,
-      imageUrls: hydrated.imageUrls,
-    );
-    return chapter.copyWith(
-      content: hydrated.content,
-      imageUrls: hydrated.imageUrls,
+    throw AppException(
+      code: ErrorCode.ruleMatchEmpty,
+      stage: ErrorStage.content,
+      briefMessage: '本地章节正文缺失，请重建目录或重新导入后重试。',
     );
   }
 
   bool _needsReindex(LocalBook book) {
     return book.indexStatus != LocalBookIndexStatus.ready ||
         book.chapterCount <= 0;
+  }
+
+  void _ensureBookReadyForReading(LocalBook book) {
+    if (!_needsReindex(book)) {
+      return;
+    }
+
+    switch (book.indexStatus) {
+      case LocalBookIndexStatus.pending:
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地图书目录尚未建立完成，请稍后重试。',
+        );
+      case LocalBookIndexStatus.indexing:
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地图书正在建立目录，请稍后重试。',
+        );
+      case LocalBookIndexStatus.stale:
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地图书目录已过期，请先重新索引。',
+        );
+      case LocalBookIndexStatus.failed:
+        final lastError = book.lastError?.trim();
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage:
+              (lastError != null && lastError.isNotEmpty)
+                  ? '本地图书索引失败：$lastError'
+                  : '本地图书索引失败，请先重新索引。',
+        );
+      case LocalBookIndexStatus.ready:
+        throw AppException(
+          code: ErrorCode.ruleMatchEmpty,
+          stage: ErrorStage.content,
+          briefMessage: '未解析到可读章节，请重新索引后重试。',
+        );
+    }
   }
 
   Future<LocalChapter?> _resolveChapter({
@@ -133,8 +161,9 @@ class LocalChapterContentService {
   }) async {
     final normalizedChapterId = (chapterId ?? '').trim();
     if (normalizedChapterId.isNotEmpty) {
-      final byId = await _localBookRepository.getChapterById(
-        normalizedChapterId,
+      final byId = await _loadChapterByIdentity(
+        book: book,
+        chapterId: normalizedChapterId,
       );
       if (byId != null) {
         if (byId.bookId.trim() != book.id.trim()) {
@@ -153,27 +182,56 @@ class LocalChapterContentService {
         chapterIndex,
         chapterCount: book.chapterCount,
       );
-      final byIndex = await _localBookRepository.getChapterByIndex(
-        book.id,
-        safeIndex,
+      final byIndex = await _loadChapterByIndex(
+        book: book,
+        chapterIndex: safeIndex,
       );
       if (byIndex != null) {
         return byIndex;
       }
     }
 
-    final chapters = await _localBookRepository.getChapters(book.id);
-    if (chapters.isEmpty) {
+    final chapterMetas = await _localBookRepository.getChapterMetas(book.id);
+    if (chapterMetas.isEmpty) {
       return null;
     }
     if (chapterIndex == null) {
-      return chapters.first;
+      return _loadChapterByIdentity(
+        book: book,
+        chapterId: chapterMetas.first.id,
+      );
     }
     final fallbackIndex = _safeChapterIndex(
       chapterIndex,
-      chapterCount: chapters.length,
+      chapterCount: chapterMetas.length,
     );
-    return chapters[fallbackIndex];
+    return _loadChapterByIdentity(
+      book: book,
+      chapterId: chapterMetas[fallbackIndex].id,
+    );
+  }
+
+  Future<LocalChapter?> _loadChapterByIdentity({
+    required LocalBook book,
+    required String chapterId,
+  }) {
+    if (book.format == LocalBookFormat.txt) {
+      return _localBookRepository.getChapterContentById(chapterId);
+    }
+    return _localBookRepository.getChapterById(chapterId);
+  }
+
+  Future<LocalChapter?> _loadChapterByIndex({
+    required LocalBook book,
+    required int chapterIndex,
+  }) {
+    if (book.format == LocalBookFormat.txt) {
+      return _localBookRepository.getChapterContentByIndex(
+        book.id,
+        chapterIndex,
+      );
+    }
+    return _localBookRepository.getChapterByIndex(book.id, chapterIndex);
   }
 
   int _safeChapterIndex(int chapterIndex, {required int chapterCount}) {
@@ -184,14 +242,34 @@ class LocalChapterContentService {
   }
 
   bool _canUseStoredChapterContent({required LocalChapter chapter}) {
-    return chapter.content.trim().isNotEmpty;
+    return chapter.hasReadablePayload;
   }
 
-  Future<LocalParsedChapter> _loadEpubChapterContent({
+  bool _canUseLegacyTxtOffsetFallback({
+    required LocalBook originalBook,
+    required LocalBook? refreshedBook,
     required LocalChapter chapter,
-    required LocalBook book,
   }) {
-    return _epubParser.parseChapter(book: book, chapter: chapter);
+    if (originalBook.format != LocalBookFormat.txt ||
+        originalBook.indexStatus != LocalBookIndexStatus.ready ||
+        !chapter.hasOffsetRange ||
+        chapter.hasReadablePayload) {
+      return false;
+    }
+    final nextBook = refreshedBook;
+    if (nextBook == null ||
+        nextBook.indexStatus != LocalBookIndexStatus.stale) {
+      return false;
+    }
+    final metadataChanged =
+        originalBook.sourceFileSize != nextBook.sourceFileSize ||
+        originalBook.sourceFileLastModifiedMs !=
+            nextBook.sourceFileLastModifiedMs ||
+        originalBook.storageFileLastModifiedMs !=
+            nextBook.storageFileLastModifiedMs ||
+        originalBook.fileSize != nextBook.fileSize ||
+        originalBook.splitLongChapter != nextBook.splitLongChapter;
+    return !metadataChanged;
   }
 
   Future<LocalBook> _hydrateReadableBook(LocalBook book) async {
@@ -230,7 +308,9 @@ class LocalChapterContentService {
     final fileLength = await file.length();
     var safeStart = startOffset.clamp(0, fileLength).toInt();
     var safeEnd = endOffset.clamp(0, fileLength).toInt();
-    final normalizedCharset = _normalizeCharsetName(book.charset);
+    final normalizedCharset = LocalTextEncodingDetector.normalizeCharsetName(
+      book.charset,
+    );
     if (normalizedCharset == 'utf-16' ||
         normalizedCharset == 'utf-16le' ||
         normalizedCharset == 'utf-16be') {
@@ -253,7 +333,8 @@ class LocalChapterContentService {
     try {
       await handle.setPosition(safeStart);
       final bytes = await handle.read(safeEnd - safeStart);
-      final text = _decodeBytes(bytes, preferredCharset: book.charset).trim();
+      final decoded = _decodeTxtBytesWithBookCharset(bytes: bytes, book: book);
+      final text = decoded?.text.trim() ?? '';
       if (text.isEmpty) {
         throw AppException(
           code: ErrorCode.ruleMatchEmpty,
@@ -267,125 +348,23 @@ class LocalChapterContentService {
     }
   }
 
-  String _decodeBytes(List<int> bytes, {required String? preferredCharset}) {
-    final normalized = _normalizeCharsetName(preferredCharset);
-    if (normalized != null) {
-      if (normalized == 'utf-16le' || normalized == 'utf-16be') {
-        final preferred = _tryDecodeByCharset(bytes, normalized);
-        final alternate = _tryDecodeByCharset(
-          bytes,
-          normalized == 'utf-16le' ? 'utf-16be' : 'utf-16le',
-        );
-        final best = _pickBetterDecodedText(preferred, alternate);
-        if (best != null) {
-          return best;
-        }
-      }
-      final preferred = _tryDecodeByCharset(bytes, normalized);
-      if (preferred != null) {
-        return preferred;
-      }
+  LocalTextDecodeResult? _decodeTxtBytesWithBookCharset({
+    required List<int> bytes,
+    required LocalBook book,
+  }) {
+    final normalizedCharset = LocalTextEncodingDetector.normalizeCharsetName(
+      book.charset,
+    );
+    if (normalizedCharset != null) {
+      return _textEncodingDetector.decodeWithFrozenCharset(
+        bytes,
+        charsetName: normalizedCharset,
+      );
     }
-
-    for (final candidate in const <String>[
-      'utf-8',
-      'utf-16be',
-      'utf-16le',
-      'gbk',
-      'gb18030',
-      'latin1',
-    ]) {
-      final decoded = _tryDecodeByCharset(bytes, candidate);
-      if (decoded != null) {
-        return decoded;
-      }
-    }
-    return utf8.decode(bytes, allowMalformed: true);
-  }
-
-  String? _pickBetterDecodedText(String? primary, String? alternate) {
-    final primaryScore = _decodedTextScore(primary);
-    final alternateScore = _decodedTextScore(alternate);
-    if (primaryScore == null && alternateScore == null) {
-      return null;
-    }
-    if (alternateScore != null &&
-        (primaryScore == null || alternateScore > primaryScore)) {
-      return alternate;
-    }
-    return primary;
-  }
-
-  int? _decodedTextScore(String? value) {
-    final text = value?.trim();
-    if (text == null || text.isEmpty) {
-      return null;
-    }
-    var hanCount = 0;
-    var replacementCount = 0;
-    var nulCount = 0;
-    var controlCount = 0;
-    for (final rune in text.runes) {
-      if (rune >= 0x4E00 && rune <= 0x9FFF) {
-        hanCount += 1;
-      }
-      if (rune == 0xFFFD) {
-        replacementCount += 1;
-      }
-      if (rune == 0) {
-        nulCount += 1;
-      }
-      if (rune < 0x20 && rune != 0x09 && rune != 0x0A && rune != 0x0D) {
-        controlCount += 1;
-      }
-    }
-    return hanCount * 8 -
-        replacementCount * 20 -
-        nulCount * 40 -
-        controlCount * 12;
-  }
-
-  String? _normalizeCharsetName(String? value) {
-    final normalized = value?.trim().toLowerCase() ?? '';
-    if (normalized.isEmpty) {
-      return null;
-    }
-    return switch (normalized) {
-      'utf8' => 'utf-8',
-      'utf-8' => 'utf-8',
-      'utf16' => 'utf-16',
-      'utf-16' => 'utf-16',
-      'utf16be' => 'utf-16be',
-      'utf-16be' => 'utf-16be',
-      'utf16le' => 'utf-16le',
-      'utf-16le' => 'utf-16le',
-      'gb2312' => 'gbk',
-      'gbk' => 'gbk',
-      'gb18030' => 'gb18030',
-      'latin1' => 'latin1',
-      'iso-8859-1' => 'latin1',
-      _ => normalized,
-    };
-  }
-
-  String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
-    try {
-      switch (charsetName) {
-        case 'utf-8':
-          return utf8.decode(bytes, allowMalformed: false);
-        case 'latin1':
-          return latin1.decode(bytes, allowInvalid: true);
-        default:
-          final encoding = Charset.getByName(charsetName);
-          if (encoding == null) {
-            return null;
-          }
-          return encoding.decode(bytes);
-      }
-    } on FormatException {
-      return null;
-    } on ArgumentError {
-      return null;
-    }
+    return _textEncodingDetector.decodeDirectBytes(
+      bytes,
+      preferredCharset: book.charset,
+      hintedCharset: book.charset,
+    );
   }
 }

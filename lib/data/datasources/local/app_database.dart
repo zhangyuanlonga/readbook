@@ -1,41 +1,21 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../../domain/entities/bookmark.dart';
+import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
+import '../../../domain/entities/reader_document.dart';
+import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../../domain/entities/script_source.dart';
-import '../../../domain/entities/source_definition.dart';
+import 'app_database_connection.dart';
 
 part 'app_database.g.dart';
-
-class Sources extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get baseUrl => text()();
-  TextColumn get group => text().nullable()();
-  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
-  TextColumn get comment => text().nullable()();
-  TextColumn get headersJson => text().withDefault(const Constant('{}'))();
-  TextColumn get rulesJson => text().withDefault(const Constant('{}'))();
-  TextColumn get healthStatus =>
-      text().withDefault(const Constant('unknown'))();
-  DateTimeColumn get lastCheckedAt => dateTime().nullable()();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-  TextColumn get rawJson => text().withDefault(const Constant('{}'))();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
 
 class ChapterCaches extends Table {
   TextColumn get cacheKey => text()();
@@ -64,6 +44,7 @@ class StoredLocalBooks extends Table {
   TextColumn get charset => text().nullable()();
   IntColumn get fileSize => integer()();
   TextColumn get author => text().nullable()();
+  TextColumn get description => text().nullable()();
   TextColumn get coverPath => text().nullable()();
   IntColumn get sourceFileSize => integer().nullable()();
   IntColumn get sourceFileLastModifiedMs => integer().nullable()();
@@ -90,6 +71,7 @@ class StoredLocalChapters extends Table {
   TextColumn get title => text()();
   TextColumn get content => text()();
   TextColumn get imageUrlsJson => text().withDefault(const Constant('[]'))();
+  TextColumn get documentJson => text().nullable()();
   TextColumn get sourceRef => text().nullable()();
   IntColumn get startOffset => integer().nullable()();
   IntColumn get endOffset => integer().nullable()();
@@ -116,6 +98,7 @@ class StoredBookmarks extends Table {
   IntColumn get startOffset => integer()();
   IntColumn get endOffset => integer()();
   TextColumn get snippet => text()();
+  TextColumn get note => text().nullable()();
   BoolColumn get isBold => boolean().withDefault(const Constant(false))();
   BoolColumn get isUnderline => boolean().withDefault(const Constant(false))();
   BoolColumn get isWavy => boolean().withDefault(const Constant(false))();
@@ -128,6 +111,25 @@ class StoredBookmarks extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+}
+
+class StoredBookMetadataOverrides extends Table {
+  TextColumn get targetKey => text()();
+  TextColumn get bookId => text().nullable()();
+  TextColumn get sourceId => text().nullable()();
+  TextColumn get detailUrl => text().nullable()();
+  TextColumn get title => text().nullable()();
+  TextColumn get author => text().nullable()();
+  TextColumn get intro => text().nullable()();
+  TextColumn get coverPath => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'book_metadata_overrides';
+
+  @override
+  Set<Column<Object>> get primaryKey => {targetKey};
 }
 
 class StoredReadingRecords extends Table {
@@ -194,6 +196,21 @@ class StoredReadingRecordSessions extends Table {
   String get tableName => 'reading_record_sessions';
 }
 
+class StoredReadingBookStatuses extends Table {
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get bookTitle => text()();
+  TextColumn get statusOverride => text()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  String get tableName => 'reading_book_statuses';
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookId};
+}
+
 class SearchSourceHits extends Table {
   TextColumn get titleNorm => text()();
   TextColumn get authorNorm => text()();
@@ -221,6 +238,10 @@ class StoredScriptSources extends Table {
   TextColumn get group => text().nullable()();
   TextColumn get author => text().nullable()();
   TextColumn get description => text().nullable()();
+  TextColumn get checkKeyword => text().nullable()();
+  TextColumn get primaryHost => text().nullable()();
+  TextColumn get registrableDomain => text().nullable()();
+  TextColumn get clusterKey => text().nullable()();
   TextColumn get sourceCode => text()();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -233,44 +254,85 @@ class StoredScriptSources extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-class SourceListCountSummary {
-  const SourceListCountSummary({
-    required this.totalCount,
-    required this.enabledCount,
-    required this.novelCount,
-    required this.mangaCount,
-  });
+class StoredSyncProfiles extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get driverType => text()();
+  TextColumn get endpointUrl => text()();
+  TextColumn get basePath => text()();
+  TextColumn get username => text()();
+  TextColumn get secretRef => text().nullable()();
+  TextColumn get enabledScopesJson =>
+      text().withDefault(const Constant('[]'))();
+  TextColumn get scopeConfigJson => text().nullable()();
+  BoolColumn get isAutoSyncEnabled =>
+      boolean().withDefault(const Constant(false))();
+  DateTimeColumn get lastSyncAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
-  final int totalCount;
-  final int enabledCount;
-  final int novelCount;
-  final int mangaCount;
+  @override
+  String get tableName => 'sync_profiles';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
 }
 
-class SourceListItem {
-  const SourceListItem({
-    required this.id,
-    required this.name,
-    required this.baseUrl,
-    required this.group,
-    required this.enabled,
-    required this.comment,
-    required this.sourceType,
-    required this.lastCheckStatus,
-    required this.lastCheckedAt,
-  });
+class StoredSyncScopeStates extends Table {
+  TextColumn get profileId => text()();
+  TextColumn get scope => text()();
+  TextColumn get lastBaseSnapshotJson => text().nullable()();
+  TextColumn get lastRemoteRevision => text().nullable()();
+  TextColumn get lastRemoteHash => text().nullable()();
+  TextColumn get lastLocalHash => text().nullable()();
+  DateTimeColumn get lastSyncedAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
-  final String id;
-  final String name;
-  final String baseUrl;
-  final String? group;
-  final bool enabled;
-  final String? comment;
-  final int sourceType;
-  final SourceHealthStatus lastCheckStatus;
-  final DateTime? lastCheckedAt;
+  @override
+  String get tableName => 'sync_scope_states';
 
-  bool get isMangaSource => sourceType == 2;
+  @override
+  Set<Column<Object>> get primaryKey => {profileId, scope};
+}
+
+class StoredSyncJobs extends Table {
+  TextColumn get id => text()();
+  TextColumn get profileId => text()();
+  TextColumn get triggerKind => text()();
+  TextColumn get direction =>
+      text().withDefault(const Constant('bidirectional'))();
+  TextColumn get status => text()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get endedAt => dateTime().nullable()();
+  TextColumn get summaryJson => text().nullable()();
+  TextColumn get errorMessage => text().nullable()();
+
+  @override
+  String get tableName => 'sync_jobs';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class StoredSyncConflicts extends Table {
+  TextColumn get id => text()();
+  TextColumn get profileId => text()();
+  TextColumn get scope => text()();
+  TextColumn get recordKey => text()();
+  TextColumn get basePayloadJson => text().nullable()();
+  TextColumn get localPayloadJson => text().nullable()();
+  TextColumn get remotePayloadJson => text().nullable()();
+  TextColumn get resolution =>
+      text().withDefault(const Constant('unresolved'))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get resolvedAt => dateTime().nullable()();
+
+  @override
+  String get tableName => 'sync_conflicts';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
 }
 
 class ChapterCacheBookSummary {
@@ -278,12 +340,14 @@ class ChapterCacheBookSummary {
     required this.bookId,
     required this.sourceId,
     required this.cachedCount,
+    required this.estimatedBytes,
     required this.updatedAt,
   });
 
   final String bookId;
   final String sourceId;
   final int cachedCount;
+  final int estimatedBytes;
   final DateTime updatedAt;
 }
 
@@ -313,29 +377,34 @@ class SearchSourceHitUpsert {
 
 @DriftDatabase(
   tables: [
-    Sources,
     ChapterCaches,
     StoredLocalBooks,
     StoredLocalChapters,
     StoredBookmarks,
+    StoredBookMetadataOverrides,
     StoredReadingRecords,
     StoredReadingRecordDays,
     StoredReadingRecordSessions,
+    StoredReadingBookStatuses,
     SearchSourceHits,
     StoredScriptSources,
+    StoredSyncProfiles,
+    StoredSyncScopeStates,
+    StoredSyncJobs,
+    StoredSyncConflicts,
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
+  static const int _localChapterInsertBatchSize = 64;
+  static const int _localChapterInsertYieldEveryChunks = 2;
+
+  AppDatabase({QueryExecutor? executor})
+    : super(executor ?? openAppDatabaseConnection());
 
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 17;
-
-  static const String _mangaSourceMatcherSql =
-      '(raw_json LIKE \'%"sourceType":2,%\' OR '
-      'raw_json LIKE \'%"sourceType":2}%\')';
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration {
@@ -350,9 +419,6 @@ class AppDatabase extends _$AppDatabase {
         if (from < 3) {
           await migrator.createTable(storedLocalBooks);
           await migrator.createTable(storedLocalChapters);
-        }
-        if (from < 4) {
-          // rulesJson stores serialized SourceRuleSet; no table migration required.
         }
         if (from < 5) {
           await migrator.createTable(searchSourceHits);
@@ -437,6 +503,86 @@ class AppDatabase extends _$AppDatabase {
                 ),
           );
         }
+        if (from < 19) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'primary_host',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.primaryHost,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'registrable_domain',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.registrableDomain,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'cluster_key',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.clusterKey,
+                ),
+          );
+        }
+        if (from < 20) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'check_keyword',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.checkKeyword,
+                ),
+          );
+        }
+        if (from < 21) {
+          await migrator.createTable(storedReadingBookStatuses);
+        }
+        if (from < 22) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'description',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.description,
+                ),
+          );
+        }
+        if (from < 23) {
+          await migrator.createTable(storedBookMetadataOverrides);
+        }
+        if (from < 24) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedBookmarks.tableName,
+            columnName: 'note',
+            addColumn:
+                () => migrator.addColumn(storedBookmarks, storedBookmarks.note),
+          );
+        }
+        if (from < 25) {
+          await migrator.createTable(storedSyncProfiles);
+          await migrator.createTable(storedSyncScopeStates);
+          await migrator.createTable(storedSyncJobs);
+          await migrator.createTable(storedSyncConflicts);
+        }
+        if (from < 26) {
+          await _ensurePerformanceIndexes();
+        }
         if (from < 13) {
           await _addColumnIfMissing(
             migrator: migrator,
@@ -509,8 +655,41 @@ class AppDatabase extends _$AppDatabase {
                 ),
           );
         }
+        if (from < 18) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalChapters.tableName,
+            columnName: 'document_json',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalChapters,
+                  storedLocalChapters.documentJson,
+                ),
+          );
+        }
+      },
+      beforeOpen: (_) async {
+        await _ensurePerformanceIndexes();
       },
     );
+  }
+
+  Future<void> _ensurePerformanceIndexes() async {
+    const statements = <String>[
+      'CREATE INDEX IF NOT EXISTS idx_chapter_caches_book_id '
+          'ON chapter_caches(book_id)',
+      'CREATE INDEX IF NOT EXISTS idx_chapter_caches_book_source_chapter '
+          'ON chapter_caches(book_id, source_id, chapter_index)',
+      'CREATE INDEX IF NOT EXISTS idx_chapter_caches_updated_at '
+          'ON chapter_caches(updated_at)',
+      'CREATE INDEX IF NOT EXISTS idx_local_chapters_book_chapter '
+          'ON local_chapters(book_id, chapter_index)',
+      'CREATE INDEX IF NOT EXISTS idx_bookmarks_book_chapter_start '
+          'ON bookmarks(book_id, chapter_index, start_offset)',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
   }
 
   Future<void> _removeDeprecatedLocalBookColumns(Migrator migrator) async {
@@ -522,7 +701,7 @@ class AppDatabase extends _$AppDatabase {
 
     await customStatement(
       'ALTER TABLE ${_quoteIdentifier(tableName)} '
-      'RENAME TO ${_quoteIdentifier('${tableName}_legacy_v14')}',
+      'RENAME TO ${_quoteIdentifier('${tableName}_migration_v14_backup')}',
     );
     await migrator.createTable(storedLocalBooks);
     await customStatement('''
@@ -565,10 +744,10 @@ class AppDatabase extends _$AppDatabase {
         split_long_chapter,
         created_at,
         updated_at
-      FROM ${_quoteIdentifier('${tableName}_legacy_v14')}
+      FROM ${_quoteIdentifier('${tableName}_migration_v14_backup')}
     ''');
     await customStatement(
-      'DROP TABLE ${_quoteIdentifier('${tableName}_legacy_v14')}',
+      'DROP TABLE ${_quoteIdentifier('${tableName}_migration_v14_backup')}',
     );
   }
 
@@ -595,44 +774,6 @@ class AppDatabase extends _$AppDatabase {
   String _quoteIdentifier(String identifier) {
     final escaped = identifier.replaceAll('"', '""');
     return '"$escaped"';
-  }
-
-  Future<List<SourceDefinition>> getAllSources() async {
-    final rows =
-        await (select(sources)..orderBy([
-          (table) => OrderingTerm.asc(table.group),
-          (table) => OrderingTerm.asc(table.name),
-        ])).get();
-    return rows.map(_mapRowToSource).toList();
-  }
-
-  Future<Map<String, int>> querySourceTypeMap() async {
-    final rows =
-        await customSelect(
-          'SELECT id, CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType '
-          'FROM sources',
-          readsFrom: {sources},
-        ).get();
-
-    final result = <String, int>{};
-    for (final row in rows) {
-      final sourceId = (row.data['id'] ?? '').toString().trim();
-      if (sourceId.isEmpty) {
-        continue;
-      }
-      result[sourceId] = _decodeInt(row.data['sourceType']) ?? 0;
-    }
-    return result;
-  }
-
-  Stream<List<SourceDefinition>> watchAllSources() {
-    final query = select(sources)..orderBy([
-      (table) => OrderingTerm.asc(table.group),
-      (table) => OrderingTerm.asc(table.name),
-    ]);
-    return query.watch().map(
-      (rows) => rows.map(_mapRowToSource).toList(growable: false),
-    );
   }
 
   Future<List<ScriptSource>> getAllScriptSources() async {
@@ -677,6 +818,10 @@ class AppDatabase extends _$AppDatabase {
         group: Value(source.group),
         author: Value(source.author),
         description: Value(source.description),
+        checkKeyword: Value(source.checkKeyword),
+        primaryHost: Value(source.primaryHost),
+        registrableDomain: Value(source.registrableDomain),
+        clusterKey: Value(source.clusterKey),
         sourceCode: Value(source.sourceCode),
         enabled: Value(source.enabled),
         createdAt: Value(source.createdAt),
@@ -713,225 +858,120 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearScriptSources() => delete(storedScriptSources).go();
 
-  Stream<List<SourceListItem>> watchSourceListItems() {
-    final sql =
-        'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-        'enabled, comment, '
-        'CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType, '
-        'health_status AS healthStatus, last_checked_at AS lastCheckedAt '
-        'FROM sources '
-        'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
-
-    return customSelect(sql, readsFrom: {sources}).watch().map(
-      (rows) => rows.map(_mapSourceListItem).toList(growable: false),
-    );
+  Future<List<StoredSyncProfile>> getAllSyncProfiles() {
+    return (select(storedSyncProfiles)
+      ..orderBy([(table) => OrderingTerm.asc(table.name)])).get();
   }
 
-  Future<List<SourceListItem>> querySourceListItems({
-    required int limit,
-    required int offset,
-    String keyword = '',
-    bool? enabledOnly,
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) async {
-    final safeLimit = limit < 1 ? 1 : limit;
-    final safeOffset = offset < 0 ? 0 : offset;
-    final filter = _buildSourceListSqlFilter(
-      keyword: keyword,
-      enabledOnly: enabledOnly,
-      isMangaSource: isMangaSource,
-      groupEquals: groupEquals,
-      includeUngroupedOnly: includeUngroupedOnly,
-    );
-
-    final rows =
-        await customSelect(
-          'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-          'enabled, comment, '
-          'CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType, '
-          'health_status AS healthStatus, last_checked_at AS lastCheckedAt '
-          'FROM sources '
-          '${filter.whereClause} '
-          'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC '
-          'LIMIT ? OFFSET ?',
-          variables: <Variable<Object>>[
-            ...filter.variables,
-            Variable<int>(safeLimit),
-            Variable<int>(safeOffset),
-          ],
-          readsFrom: {sources},
-        ).get();
-
-    return rows.map(_mapSourceListItem).toList(growable: false);
+  Stream<List<StoredSyncProfile>> watchAllSyncProfiles() {
+    final query = select(storedSyncProfiles)
+      ..orderBy([(table) => OrderingTerm.asc(table.name)]);
+    return query.watch();
   }
 
-  Future<int> countSourceListItems({
-    String keyword = '',
-    bool? enabledOnly,
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) async {
-    final filter = _buildSourceListSqlFilter(
-      keyword: keyword,
-      enabledOnly: enabledOnly,
-      isMangaSource: isMangaSource,
-      groupEquals: groupEquals,
-      includeUngroupedOnly: includeUngroupedOnly,
-    );
-
-    final row =
-        await customSelect(
-          'SELECT COUNT(*) AS totalCount '
-          'FROM sources '
-          '${filter.whereClause}',
-          variables: filter.variables,
-          readsFrom: {sources},
-        ).getSingle();
-
-    final value = row.data['totalCount'];
-    if (value is int) {
-      return value;
-    }
-    if (value is BigInt) {
-      return value.toInt();
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    if (value is String) {
-      return int.tryParse(value.trim()) ?? 0;
-    }
-    return 0;
-  }
-
-  Future<SourceListCountSummary> summarizeSourceListItems({
-    String keyword = '',
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) async {
-    final filter = _buildSourceListSqlFilter(
-      keyword: keyword,
-      isMangaSource: isMangaSource,
-      groupEquals: groupEquals,
-      includeUngroupedOnly: includeUngroupedOnly,
-    );
-
-    final row =
-        await customSelect(
-          'SELECT COUNT(*) AS totalCount, '
-          'SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabledCount, '
-          'SUM(CASE WHEN $_mangaSourceMatcherSql THEN 1 ELSE 0 END) AS mangaCount '
-          'FROM sources '
-          '${filter.whereClause}',
-          variables: filter.variables,
-          readsFrom: {sources},
-        ).getSingle();
-
-    final totalCount = _decodeInt(row.data['totalCount']) ?? 0;
-    final enabledCount = _decodeInt(row.data['enabledCount']) ?? 0;
-    final mangaCount = _decodeInt(row.data['mangaCount']) ?? 0;
-    final safeMangaCount = mangaCount.clamp(0, totalCount);
-    final novelCount = (totalCount - safeMangaCount).clamp(0, totalCount);
-
-    return SourceListCountSummary(
-      totalCount: totalCount,
-      enabledCount: enabledCount.clamp(0, totalCount),
-      novelCount: novelCount,
-      mangaCount: safeMangaCount,
-    );
-  }
-
-  Future<SourceDefinition?> getSourceById(String sourceId) async {
-    final normalized = sourceId.trim();
+  Future<StoredSyncProfile?> getSyncProfileById(String id) {
+    final normalized = id.trim();
     if (normalized.isEmpty) {
-      return null;
+      return Future<StoredSyncProfile?>.value(null);
     }
+    return (select(storedSyncProfiles)
+      ..where((table) => table.id.equals(normalized))).getSingleOrNull();
+  }
 
-    final row =
-        await (select(sources)
-          ..where((table) => table.id.equals(normalized))).getSingleOrNull();
+  Future<void> upsertSyncProfile(StoredSyncProfilesCompanion companion) {
+    return into(storedSyncProfiles).insertOnConflictUpdate(companion);
+  }
 
-    if (row == null) {
-      return null;
+  Future<void> deleteSyncProfile(String id) {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return Future<void>.value();
     }
-
-    return _mapRowToSource(row);
+    return (delete(storedSyncProfiles)
+      ..where((table) => table.id.equals(normalized))).go();
   }
 
-  Future<void> upsertSources(List<SourceDefinition> items) async {
-    if (items.isEmpty) {
-      return;
+  Future<List<StoredSyncScopeState>> listSyncScopeStatesByProfileId(
+    String profileId,
+  ) {
+    final normalized = profileId.trim();
+    if (normalized.isEmpty) {
+      return Future<List<StoredSyncScopeState>>.value(
+        const <StoredSyncScopeState>[],
+      );
     }
-
-    final now = DateTime.now();
-
-    await batch((batch) {
-      for (final item in items) {
-        batch.insert(
-          sources,
-          _toCompanion(item, now),
-          mode: InsertMode.insertOrReplace,
-        );
-      }
-    });
+    return (select(storedSyncScopeStates)
+          ..where((table) => table.profileId.equals(normalized))
+          ..orderBy([(table) => OrderingTerm.asc(table.scope)]))
+        .get();
   }
 
-  Future<void> setSourceEnabled(String id, bool enabled) {
-    return (update(sources)..where((table) => table.id.equals(id))).write(
-      SourcesCompanion(
-        enabled: Value(enabled),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
-  Future<void> setSourceGroup(String id, String? group) {
-    final normalized = group?.trim();
-    return (update(sources)..where((table) => table.id.equals(id))).write(
-      SourcesCompanion(
-        group: Value(
-          normalized == null || normalized.isEmpty ? null : normalized,
-        ),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
-  Future<List<String>> listSourceGroups() async {
-    final query =
-        await customSelect(
-          'SELECT DISTINCT "group" FROM sources',
-          readsFrom: {sources},
-        ).get();
-    final groups = <String>{};
-    for (final row in query) {
-      final value = row.data['group'] as String?;
-      final normalized = value?.trim() ?? '';
-      if (normalized.isNotEmpty) {
-        groups.add(normalized);
-      }
+  Future<StoredSyncScopeState?> getSyncScopeState({
+    required String profileId,
+    required String scope,
+  }) {
+    final normalizedProfileId = profileId.trim();
+    final normalizedScope = scope.trim();
+    if (normalizedProfileId.isEmpty || normalizedScope.isEmpty) {
+      return Future<StoredSyncScopeState?>.value(null);
     }
-    final sorted = groups.toList()..sort((a, b) => a.compareTo(b));
-    return sorted;
+    return (select(storedSyncScopeStates)
+          ..where((table) => table.profileId.equals(normalizedProfileId))
+          ..where((table) => table.scope.equals(normalizedScope)))
+        .getSingleOrNull();
   }
 
-  Future<void> deleteSource(String id) {
-    return (delete(sources)..where((table) => table.id.equals(id))).go();
+  Future<void> upsertSyncScopeState(StoredSyncScopeStatesCompanion companion) {
+    return into(storedSyncScopeStates).insertOnConflictUpdate(companion);
   }
 
-  Future<void> deleteSourcesByIds(List<String> ids) {
-    if (ids.isEmpty) {
-      return Future.value();
+  Future<List<StoredSyncJob>> listSyncJobs({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncJobs)
+      ..orderBy([(table) => OrderingTerm.desc(table.startedAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
     }
-
-    return (delete(sources)..where((table) => table.id.isIn(ids))).go();
+    return query.get();
   }
 
-  Future<void> clearSources() => delete(sources).go();
+  Stream<List<StoredSyncJob>> watchSyncJobs({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncJobs)
+      ..orderBy([(table) => OrderingTerm.desc(table.startedAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.watch();
+  }
+
+  Future<void> upsertSyncJob(StoredSyncJobsCompanion companion) {
+    return into(storedSyncJobs).insertOnConflictUpdate(companion);
+  }
+
+  Future<List<StoredSyncConflict>> listSyncConflicts({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncConflicts)
+      ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.get();
+  }
+
+  Stream<List<StoredSyncConflict>> watchSyncConflicts({String? profileId}) {
+    final normalizedProfileId = profileId?.trim() ?? '';
+    final query = select(storedSyncConflicts)
+      ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]);
+    if (normalizedProfileId.isNotEmpty) {
+      query.where((table) => table.profileId.equals(normalizedProfileId));
+    }
+    return query.watch();
+  }
+
+  Future<void> upsertSyncConflict(StoredSyncConflictsCompanion companion) {
+    return into(storedSyncConflicts).insertOnConflictUpdate(companion);
+  }
 
   Future<ChapterCache?> getChapterCache(String cacheKey) {
     final normalizedKey = cacheKey.trim();
@@ -1128,6 +1168,55 @@ class AppDatabase extends _$AppDatabase {
     return latestByPairKey;
   }
 
+  Future<Map<String, int>> getCachedChapterCountsByBookSource(
+    List<MapEntry<String, String>> bookSourcePairs,
+  ) async {
+    final normalizedPairs = <MapEntry<String, String>>[];
+    final requestPairKeys = <String>{};
+    final requestBookIds = <String>{};
+    final requestSourceIds = <String>{};
+
+    for (final pair in bookSourcePairs) {
+      final bookId = pair.key.trim();
+      final sourceId = pair.value.trim();
+      if (bookId.isEmpty || sourceId.isEmpty) {
+        continue;
+      }
+      final pairKey = _bookSourcePairKey(bookId: bookId, sourceId: sourceId);
+      if (!requestPairKeys.add(pairKey)) {
+        continue;
+      }
+      normalizedPairs.add(MapEntry(bookId, sourceId));
+      requestBookIds.add(bookId);
+      requestSourceIds.add(sourceId);
+    }
+
+    if (normalizedPairs.isEmpty) {
+      return <String, int>{};
+    }
+
+    final rows =
+        await (select(chapterCaches)..where(
+          (table) =>
+              table.bookId.isIn(requestBookIds) &
+              table.sourceId.isIn(requestSourceIds),
+        )).get();
+
+    final countsByPairKey = <String, int>{};
+    for (final row in rows) {
+      final pairKey = _bookSourcePairKey(
+        bookId: row.bookId,
+        sourceId: row.sourceId,
+      );
+      if (!requestPairKeys.contains(pairKey)) {
+        continue;
+      }
+      countsByPairKey[pairKey] = (countsByPairKey[pairKey] ?? 0) + 1;
+    }
+
+    return countsByPairKey;
+  }
+
   String _bookSourcePairKey({
     required String bookId,
     required String sourceId,
@@ -1268,6 +1357,37 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearSearchSourceHits() => delete(searchSourceHits).go();
 
+  Future<int> countSearchSourceHits() async {
+    const sql = 'SELECT COUNT(*) AS totalCount FROM search_source_hits';
+    final row =
+        await customSelect(sql, readsFrom: {searchSourceHits}).getSingle();
+    return _decodeCount(row.data['totalCount']);
+  }
+
+  Future<int> estimateChapterCachesBytes() async {
+    const sql =
+        'SELECT COALESCE(SUM('
+        'LENGTH(cache_key) + LENGTH(book_id) + LENGTH(source_id) + '
+        'COALESCE(LENGTH(chapter_title), 0) + LENGTH(chapter_url) + LENGTH(content)'
+        '), 0) AS totalBytes '
+        'FROM chapter_caches';
+    final row = await customSelect(sql, readsFrom: {chapterCaches}).getSingle();
+    return _decodeCount(row.data['totalBytes']);
+  }
+
+  Future<int> estimateSearchSourceHitsBytes() async {
+    const sql =
+        'SELECT COALESCE(SUM('
+        'LENGTH(title_norm) + LENGTH(author_norm) + LENGTH(source_id) + '
+        'LENGTH(source_name) + LENGTH(title) + COALESCE(LENGTH(author), 0) + '
+        'COALESCE(LENGTH(latest_chapter), 0)'
+        '), 0) AS totalBytes '
+        'FROM search_source_hits';
+    final row =
+        await customSelect(sql, readsFrom: {searchSourceHits}).getSingle();
+    return _decodeCount(row.data['totalBytes']);
+  }
+
   int _decodeCount(Object? value) {
     if (value is int) {
       return value;
@@ -1311,7 +1431,11 @@ class AppDatabase extends _$AppDatabase {
   Future<List<ChapterCacheBookSummary>> listCachedBooks() async {
     const sql =
         'SELECT book_id AS bookId, source_id AS sourceId, '
-        'COUNT(*) AS cachedCount, MAX(updated_at) AS updatedAt '
+        'COUNT(*) AS cachedCount, '
+        'COALESCE(SUM(LENGTH(cache_key) + LENGTH(book_id) + '
+        'LENGTH(source_id) + COALESCE(LENGTH(chapter_title), 0) + '
+        'LENGTH(chapter_url) + LENGTH(content)), 0) AS estimatedBytes, '
+        'MAX(updated_at) AS updatedAt '
         'FROM chapter_caches '
         'GROUP BY book_id, source_id '
         'ORDER BY updatedAt DESC';
@@ -1324,6 +1448,7 @@ class AppDatabase extends _$AppDatabase {
             bookId: (row.data['bookId'] ?? '').toString(),
             sourceId: (row.data['sourceId'] ?? '').toString(),
             cachedCount: _decodeCount(row.data['cachedCount']),
+            estimatedBytes: _decodeCount(row.data['estimatedBytes']),
             updatedAt: _decodeDateTime(row.data['updatedAt']),
           ),
         )
@@ -1331,10 +1456,111 @@ class AppDatabase extends _$AppDatabase {
         .toList(growable: false);
   }
 
+  Future<int> countChapterCaches() async {
+    const sql = 'SELECT COUNT(*) AS totalCount FROM chapter_caches';
+    final row = await customSelect(sql, readsFrom: {chapterCaches}).getSingle();
+    return _decodeCount(row.data['totalCount']);
+  }
+
+  Future<int> pruneOldestChapterCaches({required int maxEntries}) async {
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final totalCount = await countChapterCaches();
+    final overflowCount = totalCount - normalizedMaxEntries;
+    if (overflowCount <= 0) {
+      return 0;
+    }
+
+    await customStatement(
+      'DELETE FROM chapter_caches '
+      'WHERE cache_key IN ('
+      'SELECT cache_key FROM chapter_caches '
+      'ORDER BY updated_at ASC '
+      'LIMIT ?'
+      ')',
+      <Object>[overflowCount],
+    );
+    return overflowCount;
+  }
+
+  Future<int> pruneChapterCachesByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
+    var deletedCount = 0;
+    if (stalePeriod != null && stalePeriod > Duration.zero) {
+      final cutoff = DateTime.now().subtract(stalePeriod);
+      deletedCount +=
+          await (delete(
+            chapterCaches,
+          )..where((table) => table.updatedAt.isSmallerThanValue(cutoff))).go();
+    }
+
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final totalCount = await countChapterCaches();
+    final overflowCount = totalCount - normalizedMaxEntries;
+    if (overflowCount > 0) {
+      await customStatement(
+        'DELETE FROM chapter_caches '
+        'WHERE cache_key IN ('
+        'SELECT cache_key FROM chapter_caches '
+        'ORDER BY updated_at ASC '
+        'LIMIT ?'
+        ')',
+        <Object>[overflowCount],
+      );
+      deletedCount += overflowCount;
+    }
+
+    final normalizedMaxBytes = maxBytes < 0 ? 0 : maxBytes;
+    var totalBytes = await estimateChapterCachesBytes();
+    if (totalBytes <= normalizedMaxBytes) {
+      return deletedCount;
+    }
+
+    final rows =
+        await customSelect(
+          'SELECT cache_key AS cacheKey, '
+          'LENGTH(cache_key) + LENGTH(book_id) + LENGTH(source_id) + '
+          'COALESCE(LENGTH(chapter_title), 0) + LENGTH(chapter_url) + '
+          'LENGTH(content) AS estimatedBytes '
+          'FROM chapter_caches '
+          'ORDER BY updated_at ASC',
+          readsFrom: {chapterCaches},
+        ).get();
+    final keysToDelete = <String>[];
+    for (final row in rows) {
+      if (totalBytes <= normalizedMaxBytes) {
+        break;
+      }
+      final cacheKey = (row.data['cacheKey'] ?? '').toString();
+      if (cacheKey.trim().isEmpty) {
+        continue;
+      }
+      keysToDelete.add(cacheKey);
+      totalBytes -= _decodeCount(row.data['estimatedBytes']);
+    }
+    if (keysToDelete.isEmpty) {
+      return deletedCount;
+    }
+
+    await batch((batch) {
+      batch.deleteWhere(
+        chapterCaches,
+        (table) => table.cacheKey.isIn(keysToDelete),
+      );
+    });
+    return deletedCount + keysToDelete.length;
+  }
+
   Stream<List<ChapterCacheBookSummary>> watchCachedBooks() {
     const sql =
         'SELECT book_id AS bookId, source_id AS sourceId, '
-        'COUNT(*) AS cachedCount, MAX(updated_at) AS updatedAt '
+        'COUNT(*) AS cachedCount, '
+        'COALESCE(SUM(LENGTH(cache_key) + LENGTH(book_id) + '
+        'LENGTH(source_id) + COALESCE(LENGTH(chapter_title), 0) + '
+        'LENGTH(chapter_url) + LENGTH(content)), 0) AS estimatedBytes, '
+        'MAX(updated_at) AS updatedAt '
         'FROM chapter_caches '
         'GROUP BY book_id, source_id '
         'ORDER BY updatedAt DESC';
@@ -1346,6 +1572,7 @@ class AppDatabase extends _$AppDatabase {
               bookId: (row.data['bookId'] ?? '').toString(),
               sourceId: (row.data['sourceId'] ?? '').toString(),
               cachedCount: _decodeCount(row.data['cachedCount']),
+              estimatedBytes: _decodeCount(row.data['estimatedBytes']),
               updatedAt: _decodeDateTime(row.data['updatedAt']),
             ),
           )
@@ -1395,6 +1622,7 @@ class AppDatabase extends _$AppDatabase {
         charset: Value(_nullableString(book.charset)),
         fileSize: Value(book.fileSize < 0 ? 0 : book.fileSize),
         author: Value(_nullableString(book.author)),
+        description: Value(_nullableString(book.description)),
         coverPath: Value(_nullableString(book.coverPath)),
         sourceFileSize: Value(book.sourceFileSize),
         sourceFileLastModifiedMs: Value(book.sourceFileLastModifiedMs),
@@ -1426,11 +1654,63 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalBook(row);
   }
 
+  Future<LocalBook?> getLocalBookBySourcePath(String sourcePath) async {
+    final normalized = sourcePath.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedLocalBooks)
+              ..where((table) => table.sourcePath.equals(normalized))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapRowToLocalBook(row);
+  }
+
+  Future<LocalBook?> findLocalBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) async {
+    final normalizedTitle = _normalizeImportFingerprintText(title);
+    if (normalizedTitle.isEmpty || sourceFileSize < 0) {
+      return null;
+    }
+
+    final rows =
+        await (select(storedLocalBooks)
+              ..where(
+                (table) =>
+                    table.format.equals(format.name) &
+                    table.sourceFileSize.equals(sourceFileSize),
+              )
+              ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]))
+            .get();
+    for (final row in rows) {
+      if (_normalizeImportFingerprintText(row.title) == normalizedTitle) {
+        return _mapRowToLocalBook(row);
+      }
+    }
+    return null;
+  }
+
   Future<List<LocalBook>> getAllLocalBooks() async {
     final rows =
         await (select(storedLocalBooks)
           ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
     return rows.map(_mapRowToLocalBook).toList(growable: false);
+  }
+
+  Stream<List<LocalBook>> watchAllLocalBooks() {
+    final query = select(storedLocalBooks)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    return query.watch().map(
+      (rows) => rows.map(_mapRowToLocalBook).toList(growable: false),
+    );
   }
 
   Future<void> updateLocalBookIndexState({
@@ -1485,7 +1765,9 @@ class AppDatabase extends _$AppDatabase {
             final normalizedTitle = chapter.title.trim();
             final normalizedContent = chapter.content.trim();
             final hasImages = chapter.imageUrls.isNotEmpty;
-            final hasSourceRef = (chapter.sourceRef?.trim().isNotEmpty ?? false);
+            final hasDocument = chapter.document != null;
+            final hasSourceRef =
+                (chapter.sourceRef?.trim().isNotEmpty ?? false);
             final hasExternalRange =
                 chapter.startOffset != null &&
                 chapter.endOffset != null &&
@@ -1495,35 +1777,58 @@ class AppDatabase extends _$AppDatabase {
                 (normalizedContent.isNotEmpty ||
                     hasExternalRange ||
                     hasImages ||
+                    hasDocument ||
                     hasSourceRef);
           })
           .toList(growable: false);
 
       if (sanitizedChapters.isNotEmpty) {
-        await batch((batch) {
-          for (final chapter in sanitizedChapters) {
-            final normalizedId = chapter.id.trim();
-            final normalizedTitle = chapter.title.trim();
+        var chunkIndex = 0;
+        for (
+          var start = 0;
+          start < sanitizedChapters.length;
+          start += _localChapterInsertBatchSize
+        ) {
+          final end =
+              (start + _localChapterInsertBatchSize)
+                  .clamp(0, sanitizedChapters.length)
+                  .toInt();
+          final chunk = sanitizedChapters.sublist(start, end);
+          await batch((batch) {
+            for (final chapter in chunk) {
+              final normalizedId = chapter.id.trim();
+              final normalizedTitle = chapter.title.trim();
 
-            batch.insert(
-              storedLocalChapters,
-              StoredLocalChaptersCompanion(
-                id: Value(normalizedId),
-                bookId: Value(normalizedBookId),
-                chapterIndex: Value(chapter.chapterIndex),
-                title: Value(normalizedTitle),
-                content: Value(chapter.content),
-                imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
-                sourceRef: Value(chapter.sourceRef),
-                startOffset: Value(chapter.startOffset),
-                endOffset: Value(chapter.endOffset),
-                createdAt: Value(chapter.createdAt),
-                updatedAt: Value(chapter.updatedAt),
-              ),
-              mode: InsertMode.insertOrReplace,
-            );
+              batch.insert(
+                storedLocalChapters,
+                StoredLocalChaptersCompanion(
+                  id: Value(normalizedId),
+                  bookId: Value(normalizedBookId),
+                  chapterIndex: Value(chapter.chapterIndex),
+                  title: Value(normalizedTitle),
+                  content: Value(chapter.content),
+                  imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
+                  documentJson: Value(
+                    chapter.document == null
+                        ? null
+                        : jsonEncode(chapter.document!.toJson()),
+                  ),
+                  sourceRef: Value(chapter.sourceRef),
+                  startOffset: Value(chapter.startOffset),
+                  endOffset: Value(chapter.endOffset),
+                  createdAt: Value(chapter.createdAt),
+                  updatedAt: Value(chapter.updatedAt),
+                ),
+                mode: InsertMode.insertOrReplace,
+              );
+            }
+          });
+          chunkIndex += 1;
+          if (chunkIndex % _localChapterInsertYieldEveryChunks == 0 &&
+              end < sanitizedChapters.length) {
+            await Future<void>.delayed(Duration.zero);
           }
-        });
+        }
       }
 
       await (update(storedLocalBooks)
@@ -1565,6 +1870,7 @@ class AppDatabase extends _$AppDatabase {
             storedLocalChapters.chapterIndex,
             storedLocalChapters.title,
             storedLocalChapters.imageUrlsJson,
+            storedLocalChapters.documentJson,
             storedLocalChapters.sourceRef,
             storedLocalChapters.startOffset,
             storedLocalChapters.endOffset,
@@ -1586,6 +1892,9 @@ class AppDatabase extends _$AppDatabase {
             content: '',
             imageUrls: _decodeStringList(
               row.read(storedLocalChapters.imageUrlsJson),
+            ),
+            document: _decodeReaderDocument(
+              row.read(storedLocalChapters.documentJson),
             ),
             sourceRef: row.read(storedLocalChapters.sourceRef),
             createdAt: row.read(storedLocalChapters.createdAt)!,
@@ -1620,6 +1929,99 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalChapter(row);
   }
 
+  Future<LocalChapter?> getLocalChapterContentByIndex({
+    required String bookId,
+    required int chapterIndex,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+
+    final query =
+        selectOnly(storedLocalChapters)
+          ..addColumns([
+            storedLocalChapters.id,
+            storedLocalChapters.bookId,
+            storedLocalChapters.chapterIndex,
+            storedLocalChapters.title,
+            storedLocalChapters.content,
+            storedLocalChapters.imageUrlsJson,
+            storedLocalChapters.sourceRef,
+            storedLocalChapters.createdAt,
+            storedLocalChapters.updatedAt,
+            storedLocalChapters.startOffset,
+            storedLocalChapters.endOffset,
+          ])
+          ..where(storedLocalChapters.bookId.equals(normalizedBookId))
+          ..where(storedLocalChapters.chapterIndex.equals(chapterIndex))
+          ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    return LocalChapter(
+      id: row.read(storedLocalChapters.id)!,
+      bookId: row.read(storedLocalChapters.bookId)!,
+      chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
+      title: row.read(storedLocalChapters.title)!,
+      content: row.read(storedLocalChapters.content) ?? '',
+      imageUrls: _decodeStringList(row.read(storedLocalChapters.imageUrlsJson)),
+      sourceRef: row.read(storedLocalChapters.sourceRef),
+      createdAt: row.read(storedLocalChapters.createdAt)!,
+      updatedAt: row.read(storedLocalChapters.updatedAt)!,
+      startOffset: row.read(storedLocalChapters.startOffset),
+      endOffset: row.read(storedLocalChapters.endOffset),
+    );
+  }
+
+  Future<LocalChapter?> getLocalChapterMetaByIndex({
+    required String bookId,
+    required int chapterIndex,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+
+    final query =
+        selectOnly(storedLocalChapters)
+          ..addColumns([
+            storedLocalChapters.id,
+            storedLocalChapters.bookId,
+            storedLocalChapters.chapterIndex,
+            storedLocalChapters.title,
+            storedLocalChapters.sourceRef,
+            storedLocalChapters.startOffset,
+            storedLocalChapters.endOffset,
+            storedLocalChapters.createdAt,
+            storedLocalChapters.updatedAt,
+          ])
+          ..where(storedLocalChapters.bookId.equals(normalizedBookId))
+          ..where(storedLocalChapters.chapterIndex.equals(chapterIndex))
+          ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    return LocalChapter(
+      id: row.read(storedLocalChapters.id)!,
+      bookId: row.read(storedLocalChapters.bookId)!,
+      chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
+      title: row.read(storedLocalChapters.title)!,
+      content: '',
+      sourceRef: row.read(storedLocalChapters.sourceRef),
+      createdAt: row.read(storedLocalChapters.createdAt)!,
+      updatedAt: row.read(storedLocalChapters.updatedAt)!,
+      startOffset: row.read(storedLocalChapters.startOffset),
+      endOffset: row.read(storedLocalChapters.endOffset),
+    );
+  }
+
   Future<LocalChapter?> getLocalChapterById(String chapterId) async {
     final normalizedId = chapterId.trim();
     if (normalizedId.isEmpty) {
@@ -1637,10 +2039,55 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalChapter(row);
   }
 
+  Future<LocalChapter?> getLocalChapterContentById(String chapterId) async {
+    final normalizedId = chapterId.trim();
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    final query =
+        selectOnly(storedLocalChapters)
+          ..addColumns([
+            storedLocalChapters.id,
+            storedLocalChapters.bookId,
+            storedLocalChapters.chapterIndex,
+            storedLocalChapters.title,
+            storedLocalChapters.content,
+            storedLocalChapters.imageUrlsJson,
+            storedLocalChapters.sourceRef,
+            storedLocalChapters.createdAt,
+            storedLocalChapters.updatedAt,
+            storedLocalChapters.startOffset,
+            storedLocalChapters.endOffset,
+          ])
+          ..where(storedLocalChapters.id.equals(normalizedId))
+          ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    return LocalChapter(
+      id: row.read(storedLocalChapters.id)!,
+      bookId: row.read(storedLocalChapters.bookId)!,
+      chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
+      title: row.read(storedLocalChapters.title)!,
+      content: row.read(storedLocalChapters.content) ?? '',
+      imageUrls: _decodeStringList(row.read(storedLocalChapters.imageUrlsJson)),
+      sourceRef: row.read(storedLocalChapters.sourceRef),
+      createdAt: row.read(storedLocalChapters.createdAt)!,
+      updatedAt: row.read(storedLocalChapters.updatedAt)!,
+      startOffset: row.read(storedLocalChapters.startOffset),
+      endOffset: row.read(storedLocalChapters.endOffset),
+    );
+  }
+
   Future<void> updateLocalChapterContent({
     required String chapterId,
     required String content,
     List<String> imageUrls = const <String>[],
+    ReaderDocument? document,
   }) async {
     final normalizedChapterId = chapterId.trim();
     if (normalizedChapterId.isEmpty) {
@@ -1651,6 +2098,9 @@ class AppDatabase extends _$AppDatabase {
       StoredLocalChaptersCompanion(
         content: Value(content),
         imageUrlsJson: Value(jsonEncode(imageUrls)),
+        documentJson: Value(
+          document == null ? null : jsonEncode(document.toJson()),
+        ),
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -1700,6 +2150,7 @@ class AppDatabase extends _$AppDatabase {
         startOffset: Value(safeStartOffset),
         endOffset: Value(safeEndOffset),
         snippet: Value(normalizedSnippet),
+        note: Value(_nullableString(bookmark.note)),
         isBold: Value(bookmark.isBold),
         isUnderline: Value(bookmark.isUnderline),
         isWavy: Value(bookmark.isWavy),
@@ -1757,6 +2208,134 @@ class AppDatabase extends _$AppDatabase {
 
     return (delete(storedBookmarks)
       ..where((table) => table.bookId.equals(normalizedBookId))).go();
+  }
+
+  Future<void> upsertBookMetadataOverride(
+    BookMetadataOverride metadataOverride,
+  ) async {
+    final normalizedTargetKey = metadataOverride.targetKey.trim();
+    if (normalizedTargetKey.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    await into(storedBookMetadataOverrides).insert(
+      StoredBookMetadataOverridesCompanion(
+        targetKey: Value(normalizedTargetKey),
+        bookId: Value(_nullableString(metadataOverride.bookId)),
+        sourceId: Value(_nullableString(metadataOverride.sourceId)),
+        detailUrl: Value(_nullableString(metadataOverride.detailUrl)),
+        title: Value(_nullableString(metadataOverride.title)),
+        author: Value(_nullableString(metadataOverride.author)),
+        intro: Value(_nullableString(metadataOverride.intro)),
+        coverPath: Value(_nullableString(metadataOverride.coverPath)),
+        createdAt: Value(metadataOverride.createdAt),
+        updatedAt: Value(
+          metadataOverride.updatedAt == metadataOverride.createdAt
+              ? now
+              : metadataOverride.updatedAt,
+        ),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<BookMetadataOverride?> getBookMetadataOverrideByTargetKey(
+    String targetKey,
+  ) async {
+    final normalizedTargetKey = targetKey.trim();
+    if (normalizedTargetKey.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedBookMetadataOverrides)..where(
+          (table) => table.targetKey.equals(normalizedTargetKey),
+        )).getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapRowToBookMetadataOverride(row);
+  }
+
+  Future<BookMetadataOverride?> getBookMetadataOverrideByLocalBookId(
+    String bookId,
+  ) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+    return getBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.localTargetKey(normalizedBookId),
+    );
+  }
+
+  Future<BookMetadataOverride?> getBookMetadataOverrideByRemoteBook({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return null;
+    }
+    return getBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.remoteTargetKey(
+        sourceId: normalizedSourceId,
+        detailUrl: normalizedDetailUrl,
+      ),
+    );
+  }
+
+  Future<List<BookMetadataOverride>> getAllBookMetadataOverrides() async {
+    final rows =
+        await (select(storedBookMetadataOverrides)
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
+    return rows.map(_mapRowToBookMetadataOverride).toList(growable: false);
+  }
+
+  Stream<List<BookMetadataOverride>> watchBookMetadataOverrides() {
+    final query = select(storedBookMetadataOverrides)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    return query.watch().map(
+      (rows) => rows.map(_mapRowToBookMetadataOverride).toList(growable: false),
+    );
+  }
+
+  Future<void> deleteBookMetadataOverrideByTargetKey(String targetKey) {
+    final normalizedTargetKey = targetKey.trim();
+    if (normalizedTargetKey.isEmpty) {
+      return Future<void>.value();
+    }
+    return (delete(storedBookMetadataOverrides)
+      ..where((table) => table.targetKey.equals(normalizedTargetKey))).go();
+  }
+
+  Future<void> deleteBookMetadataOverrideByLocalBookId(String bookId) {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return Future<void>.value();
+    }
+    return deleteBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.localTargetKey(normalizedBookId),
+    );
+  }
+
+  Future<void> deleteBookMetadataOverrideByRemoteBook({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return Future<void>.value();
+    }
+    return deleteBookMetadataOverrideByTargetKey(
+      BookMetadataOverride.remoteTargetKey(
+        sourceId: normalizedSourceId,
+        detailUrl: normalizedDetailUrl,
+      ),
+    );
   }
 
   Future<void> upsertReadingRecord(ReadingRecord record) async {
@@ -1968,6 +2547,22 @@ class AppDatabase extends _$AppDatabase {
     return rows.map(_mapRowToReadingRecordSession).toList(growable: false);
   }
 
+  Future<List<ReadingRecordSession>> listAllReadingRecordSessions() async {
+    final rows =
+        await (select(storedReadingRecordSessions)
+          ..orderBy([(table) => OrderingTerm.asc(table.startAt)])).get();
+    return rows.map(_mapRowToReadingRecordSession).toList(growable: false);
+  }
+
+  Future<List<ReadingRecordDay>> listAllReadingRecordDays() async {
+    final rows =
+        await (select(storedReadingRecordDays)..orderBy([
+          (table) => OrderingTerm.desc(table.dateKey),
+          (table) => OrderingTerm.desc(table.lastReadAt),
+        ])).get();
+    return rows.map(_mapRowToReadingRecordDay).toList(growable: false);
+  }
+
   Future<List<ReadingRecordSession>> listReadingRecordSessionsByBookIdAndDate({
     required String bookId,
     required String dateKey,
@@ -2080,6 +2675,60 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Stream<List<ReadingBookStatusEntry>> watchReadingBookStatuses() {
+    final query = select(storedReadingBookStatuses)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    return query.watch().map(
+      (rows) => rows
+          .map<ReadingBookStatusEntry>(_mapRowToReadingBookStatus)
+          .toList(growable: false),
+    );
+  }
+
+  Future<List<ReadingBookStatusEntry>> listReadingBookStatuses() async {
+    final rows =
+        await (select(storedReadingBookStatuses)
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
+    return rows
+        .map<ReadingBookStatusEntry>(_mapRowToReadingBookStatus)
+        .toList(growable: false);
+  }
+
+  Future<void> upsertReadingBookStatus(ReadingBookStatusEntry status) async {
+    final normalizedBookId = status.bookId.trim();
+    final normalizedSourceId = status.sourceId.trim();
+    final normalizedDetailUrl = status.detailUrl.trim();
+    final normalizedTitle = status.bookTitle.trim();
+    if (normalizedBookId.isEmpty ||
+        normalizedSourceId.isEmpty ||
+        normalizedDetailUrl.isEmpty ||
+        normalizedTitle.isEmpty) {
+      return;
+    }
+
+    await into(storedReadingBookStatuses).insert(
+      StoredReadingBookStatusesCompanion(
+        bookId: Value(normalizedBookId),
+        sourceId: Value(normalizedSourceId),
+        detailUrl: Value(normalizedDetailUrl),
+        bookTitle: Value(normalizedTitle),
+        statusOverride: Value(status.override.name),
+        updatedAt: Value(status.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<void> deleteReadingBookStatus(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+
+    await (delete(storedReadingBookStatuses)
+      ..where((table) => table.bookId.equals(normalizedBookId))).go();
+  }
+
   Stream<int> watchTotalReadingMillis() {
     final sumExpression = storedReadingRecords.totalReadMillis.sum();
     final query = selectOnly(storedReadingRecords)..addColumns([sumExpression]);
@@ -2137,6 +2786,7 @@ class AppDatabase extends _$AppDatabase {
       sourcePath: row.sourcePath,
       charset: row.charset,
       author: row.author,
+      description: row.description,
       coverPath: row.coverPath,
       sourceFileSize: row.sourceFileSize,
       sourceFileLastModifiedMs: row.sourceFileLastModifiedMs,
@@ -2159,12 +2809,31 @@ class AppDatabase extends _$AppDatabase {
       title: row.title,
       content: row.content,
       imageUrls: _decodeStringList(row.imageUrlsJson),
+      document: _decodeReaderDocument(row.documentJson),
       sourceRef: row.sourceRef,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       startOffset: row.startOffset,
       endOffset: row.endOffset,
     );
+  }
+
+  ReaderDocument? _decodeReaderDocument(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return null;
+      }
+      return ReaderDocument.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Bookmark _mapRowToBookmark(StoredBookmark row) {
@@ -2176,12 +2845,30 @@ class AppDatabase extends _$AppDatabase {
       startOffset: row.startOffset,
       endOffset: row.endOffset,
       snippet: row.snippet,
+      note: _nullableString(row.note),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       isBold: row.isBold,
       isUnderline: row.isUnderline,
       isWavy: row.isWavy,
       color: row.color,
+    );
+  }
+
+  BookMetadataOverride _mapRowToBookMetadataOverride(
+    StoredBookMetadataOverride row,
+  ) {
+    return BookMetadataOverride(
+      targetKey: row.targetKey,
+      bookId: _nullableString(row.bookId),
+      sourceId: _nullableString(row.sourceId),
+      detailUrl: _nullableString(row.detailUrl),
+      title: _nullableString(row.title),
+      author: _nullableString(row.author),
+      intro: _nullableString(row.intro),
+      coverPath: _nullableString(row.coverPath),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     );
   }
 
@@ -2242,56 +2929,19 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  SourceDefinition _mapRowToSource(Source row) {
-    final rules = _decodeMap(row.rulesJson);
-    final headers = _decodeMap(
-      row.headersJson,
-    ).map((key, value) => MapEntry(key, value.toString()));
-    final raw = _decodeMap(row.rawJson);
-    final originalSource = _decodeNullableMap(raw['originalSource']);
-
-    final status = SourceHealthStatus.values.firstWhere(
-      (item) => item.name == row.healthStatus,
-      orElse: () => SourceHealthStatus.unknown,
-    );
-
-    final sourceType =
-        _decodeInt(raw['sourceType']) ??
-        _decodeInt(originalSource?['bookSourceType']) ??
-        0;
-
-    final hasExploreEnabled = raw.containsKey('exploreEnabled');
-    final exploreEnabled =
-        hasExploreEnabled
-            ? _decodeBool(raw['exploreEnabled'])
-            : _decodeBool(originalSource?['enabledExplore']);
-
-    final exploreUrl =
-        _nullableString(raw['exploreUrl']) ??
-        _nullableString(originalSource?['exploreUrl']) ??
-        _nullableString(originalSource?['discoverUrl']);
-    final jsCapability = SourceJsCapability.values.firstWhere(
-      (item) => item.name == _nullableString(raw['jsCapability']),
-      orElse: () => SourceJsCapability.full,
-    );
-
-    return SourceDefinition(
-      id: row.id,
-      name: row.name,
-      baseUrl: row.baseUrl,
-      group: row.group,
-      enabled: row.enabled,
-      sourceType: sourceType,
-      comment: row.comment,
-      headers: headers,
-      rules: SourceRuleSet.fromJson(rules),
-      lastCheckStatus: status,
-      lastCheckedAt: row.lastCheckedAt,
-      lastCheckMessage: _nullableString(raw['lastCheckMessage']),
-      exploreEnabled: exploreEnabled,
-      exploreUrl: exploreUrl,
-      jsCapability: jsCapability,
-      originalSource: originalSource,
+  ReadingBookStatusEntry _mapRowToReadingBookStatus(
+    StoredReadingBookStatuse row,
+  ) {
+    return ReadingBookStatusEntry(
+      bookId: row.bookId,
+      sourceId: row.sourceId,
+      detailUrl: row.detailUrl,
+      bookTitle: row.bookTitle,
+      override: ReadingBookStatusOverride.values.firstWhere(
+        (item) => item.name == row.statusOverride,
+        orElse: () => ReadingBookStatusOverride.reading,
+      ),
+      updatedAt: row.updatedAt,
     );
   }
 
@@ -2302,211 +2952,15 @@ class AppDatabase extends _$AppDatabase {
       group: _nullableString(row.group),
       author: _nullableString(row.author),
       description: _nullableString(row.description),
+      checkKeyword: _nullableString(row.checkKeyword),
+      primaryHost: _nullableString(row.primaryHost),
+      registrableDomain: _nullableString(row.registrableDomain),
+      clusterKey: _nullableString(row.clusterKey),
       sourceCode: row.sourceCode,
       enabled: row.enabled,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     );
-  }
-
-  SourcesCompanion _toCompanion(SourceDefinition source, DateTime now) {
-    final rulesJson = jsonEncode(source.rules.toJson());
-    final headersJson = jsonEncode(source.headers);
-    final rawJson = jsonEncode(source.toJson());
-
-    return SourcesCompanion(
-      id: Value(source.id),
-      name: Value(source.name),
-      baseUrl: Value(source.baseUrl),
-      group: Value(source.group),
-      enabled: Value(source.enabled),
-      comment: Value(source.comment),
-      headersJson: Value(headersJson),
-      rulesJson: Value(rulesJson),
-      healthStatus: Value(source.lastCheckStatus.name),
-      lastCheckedAt: Value(source.lastCheckedAt),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      rawJson: Value(rawJson),
-    );
-  }
-
-  SourceListItem _mapSourceListItem(QueryRow row) {
-    return SourceListItem(
-      id: (row.data['id'] ?? '').toString(),
-      name: (row.data['name'] ?? '').toString(),
-      baseUrl: (row.data['baseUrl'] ?? '').toString(),
-      group: _nullableString(row.data['sourceGroup']),
-      enabled: _decodeBool(row.data['enabled']),
-      comment: _nullableString(row.data['comment']),
-      sourceType: _decodeInt(row.data['sourceType']) ?? 0,
-      lastCheckStatus: _decodeSourceHealthStatus(
-        row.data['healthStatus']?.toString(),
-      ),
-      lastCheckedAt: _decodeNullableDateTime(row.data['lastCheckedAt']),
-    );
-  }
-
-  _SourceListSqlFilter _buildSourceListSqlFilter({
-    required String keyword,
-    bool? enabledOnly,
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) {
-    final clauses = <String>[];
-    final variables = <Variable<Object>>[];
-
-    final normalizedKeyword = keyword.trim().toLowerCase();
-    if (normalizedKeyword.isNotEmpty) {
-      final pattern = '%$normalizedKeyword%';
-      const keywordClause =
-          "(LOWER(name) LIKE ? "
-          "OR LOWER(base_url) LIKE ?)";
-      clauses.add(keywordClause);
-      for (var i = 0; i < 2; i++) {
-        variables.add(Variable<String>(pattern));
-      }
-    }
-
-    if (enabledOnly != null) {
-      clauses.add('enabled = ?');
-      variables.add(Variable<int>(enabledOnly ? 1 : 0));
-    }
-
-    if (isMangaSource != null) {
-      clauses.add(
-        isMangaSource
-            ? _mangaSourceMatcherSql
-            : 'NOT ($_mangaSourceMatcherSql)',
-      );
-    }
-
-    if (groupEquals != null && groupEquals.trim().isNotEmpty) {
-      clauses.add('"group" = ?');
-      variables.add(Variable<String>(groupEquals.trim()));
-    } else if (includeUngroupedOnly) {
-      clauses.add('("group" IS NULL OR TRIM("group") = \'\')');
-    }
-
-    final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';
-    return _SourceListSqlFilter(whereClause: whereClause, variables: variables);
-  }
-
-  int? _decodeInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    if (value is String) {
-      return int.tryParse(value.trim());
-    }
-    return null;
-  }
-
-  bool _decodeBool(Object? value) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is int) {
-      return value != 0;
-    }
-    if (value is num) {
-      return value != 0;
-    }
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      return normalized == '1' || normalized == 'true';
-    }
-    return false;
-  }
-
-  DateTime? _decodeNullableDateTime(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is DateTime) {
-      return value;
-    }
-    if (value is int) {
-      return _decodeEpochDateTime(value);
-    }
-    if (value is num) {
-      return _decodeEpochDateTime(value.toInt());
-    }
-    if (value is String) {
-      final normalized = value.trim();
-      if (normalized.isEmpty) {
-        return null;
-      }
-      final parsedDateTime = DateTime.tryParse(normalized);
-      if (parsedDateTime != null) {
-        return parsedDateTime;
-      }
-      final parsedEpoch = int.tryParse(normalized);
-      if (parsedEpoch != null) {
-        return _decodeEpochDateTime(parsedEpoch);
-      }
-    }
-    return null;
-  }
-
-  DateTime _decodeEpochDateTime(int epoch) {
-    final absEpoch = epoch.abs();
-    if (absEpoch >= 1000000000000000) {
-      return DateTime.fromMicrosecondsSinceEpoch(epoch);
-    }
-    if (absEpoch >= 1000000000000) {
-      return DateTime.fromMillisecondsSinceEpoch(epoch);
-    }
-    if (absEpoch >= 1000000000) {
-      return DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
-    }
-    return DateTime.fromMillisecondsSinceEpoch(epoch);
-  }
-
-  SourceHealthStatus _decodeSourceHealthStatus(String? rawStatus) {
-    final normalized = rawStatus?.trim();
-    return SourceHealthStatus.values.firstWhere(
-      (item) => item.name == normalized,
-      orElse: () => SourceHealthStatus.unknown,
-    );
-  }
-
-  Map<String, dynamic>? _decodeNullableMap(Object? value) {
-    if (value is! Map) {
-      return null;
-    }
-
-    return value.map((key, item) => MapEntry(key.toString(), item));
-  }
-
-  String? _nullableString(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    final text = value.toString().trim();
-    if (text.isEmpty) {
-      return null;
-    }
-    return text;
-  }
-
-  Map<String, dynamic> _decodeMap(String source) {
-    try {
-      final decoded = jsonDecode(source);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-      return const {};
-    } on FormatException {
-      return const {};
-    }
   }
 
   List<String> _decodeStringList(String? raw) {
@@ -2527,33 +2981,33 @@ class AppDatabase extends _$AppDatabase {
       return const <String>[];
     }
   }
-}
 
-QueryExecutor _openConnection() {
-  return LazyDatabase(() async {
-    final isFlutterTest = Platform.environment.containsKey('FLUTTER_TEST');
-
-    final baseDir =
-        isFlutterTest
-            ? Directory.systemTemp
-            : await getApplicationSupportDirectory();
-
-    final databaseDir = Directory(p.join(baseDir.path, 'flutter_appread'));
-    if (!await databaseDir.exists()) {
-      await databaseDir.create(recursive: true);
+  String? _nullableString(Object? value) {
+    if (value == null) {
+      return null;
     }
+    final text = value.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    return text;
+  }
 
-    final file = File(p.join(databaseDir.path, 'appread_sources.db'));
-    return NativeDatabase.createInBackground(file);
-  });
-}
+  String _normalizeImportFingerprintText(String value) {
+    return value.trim().replaceAll(RegExp(r'\s+'), '').toLowerCase();
+  }
 
-class _SourceListSqlFilter {
-  const _SourceListSqlFilter({
-    required this.whereClause,
-    required this.variables,
-  });
-
-  final String whereClause;
-  final List<Variable<Object>> variables;
+  DateTime _decodeEpochDateTime(int epoch) {
+    final absEpoch = epoch.abs();
+    if (absEpoch >= 1000000000000000) {
+      return DateTime.fromMicrosecondsSinceEpoch(epoch);
+    }
+    if (absEpoch >= 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch);
+    }
+    if (absEpoch >= 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(epoch);
+  }
 }

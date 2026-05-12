@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -11,6 +12,7 @@ import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
 import 'txt_auto_chapter_patterns.dart';
+import 'txt_chapter_rule_service.dart';
 import 'local_text_encoding_detector.dart';
 
 class TxtLocalBookParser implements LocalBookParser {
@@ -23,9 +25,10 @@ class TxtLocalBookParser implements LocalBookParser {
   static const int _chapterPatternDetectionGapThreshold = 1000;
   static const int _maxLengthWithPattern = 102400;
   static const int _splitBreakMinDistance = 800;
-  static final List<TxtAutoChapterPattern> _builtInChapterPatterns =
-      defaultEnabledTxtAutoChapterPatterns;
-
+  static const int _backgroundYieldByteBudget = 512 * 1024;
+  static const int _backgroundYieldStepBudget = 8;
+  static const LocalTextEncodingDetector _textEncodingDetector =
+      LocalTextEncodingDetector();
   @override
   bool supports(LocalBookFormat format) {
     return format == LocalBookFormat.txt;
@@ -42,9 +45,20 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
+    final enabledRules = await TxtChapterRuleService().loadEnabledPatterns();
     final fileLength = await file.length();
+    final yieldGate = _CooperativeYieldGate(
+      byteBudget: _backgroundYieldByteBudget,
+      stepBudget: _backgroundYieldStepBudget,
+    );
     if (_canUseStreamingIndex(book, fileLength)) {
-      final parsed = await _parseWithStreamingIndex(file, book, fileLength);
+      final parsed = await _parseWithStreamingIndex(
+        file,
+        book,
+        fileLength,
+        enabledRules: enabledRules,
+        yieldGate: yieldGate,
+      );
       if (parsed != null) {
         return parsed;
       }
@@ -59,7 +73,11 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final decoded = _decodeBookText(book, bytes);
+    final decoded = await _decodeBookText(
+      book,
+      bytes,
+      enabledRules: enabledRules,
+    );
     final text = decoded.text;
     if (text.trim().isEmpty) {
       throw AppException(
@@ -69,7 +87,10 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final selectedPattern = _detectChapterPattern(text);
+    final selectedPattern = _detectChapterPattern(
+      text,
+      enabledRules: enabledRules,
+    );
     final chapters = _withByteOffsets(
       _splitChapters(
         text: text,
@@ -93,80 +114,261 @@ class TxtLocalBookParser implements LocalBookParser {
   }
 
   bool _canUseStreamingIndex(LocalBook book, int fileLength) {
-    return fileLength >= _streamingIndexThresholdBytes &&
-        _normalizeCharsetName(book.charset) == 'utf-8';
+    return fileLength >= _streamingIndexThresholdBytes;
   }
 
   Future<LocalParsedBook?> _parseWithStreamingIndex(
     File file,
     LocalBook book,
-    int fileLength,
-  ) async {
+    int fileLength, {
+    required List<TxtAutoChapterPattern> enabledRules,
+    required _CooperativeYieldGate yieldGate,
+  }) async {
     final sampleLength =
         fileLength < _chapterPatternDetectionSampleLength
             ? fileLength
             : _chapterPatternDetectionSampleLength;
-    final sampleBytes = await file
-        .openRead(0, sampleLength)
-        .fold<BytesBuilder>(
-          BytesBuilder(copy: false),
-          (builder, chunk) => builder..add(chunk),
-        );
-    final rawSample = sampleBytes.takeBytes();
-    if (rawSample.isEmpty) {
-      return null;
-    }
-
-    final bomInfo = _detectBom(rawSample);
-    if (bomInfo.charsetName != null && bomInfo.charsetName != 'utf-8') {
-      return null;
-    }
-    final sampleText = utf8.decode(
-      rawSample.sublist(bomInfo.length),
-      allowMalformed: true,
+    final sampleChunks = await _readStreamingSampleChunks(
+      file,
+      fileLength: fileLength,
+      sampleLength: sampleLength,
+      yieldGate: yieldGate,
     );
-    if (sampleText.trim().isEmpty) {
+    if (sampleChunks.isEmpty) {
       return null;
     }
 
-    final selectedPattern = _detectChapterPattern(sampleText);
+    final sampleDecoded = await _decodeStreamingSampleChunks(
+      book: book,
+      chunks: sampleChunks,
+      fileLength: fileLength,
+      enabledRules: enabledRules,
+      yieldGate: yieldGate,
+    );
+    if (sampleDecoded == null || sampleDecoded.text.trim().isEmpty) {
+      return null;
+    }
+
+    final charsetName = sampleDecoded.charsetName;
+    final bomInfo = _detectBom(sampleChunks.first.bytes);
+    final selectedPattern = _detectChapterPattern(
+      sampleDecoded.text,
+      enabledRules: enabledRules,
+    );
     final chapters =
         selectedPattern == null
             ? await _splitByFixedLengthStreaming(
               file,
               fileLength: fileLength,
               bomLength: bomInfo.length,
+              charsetName: charsetName,
+              yieldGate: yieldGate,
             )
             : await _splitByPatternStreaming(
               file,
               fileLength: fileLength,
               bomLength: bomInfo.length,
+              charsetName: charsetName,
               pattern: selectedPattern.compiled,
               splitLongChapter: book.splitLongChapter,
+              yieldGate: yieldGate,
             );
     if (chapters.isEmpty) {
       return null;
     }
-    return LocalParsedBook(chapters: chapters, charset: 'utf-8');
+    final hydratedChapters = await _hydrateChapterContentsFromOffsets(
+      file,
+      chapters,
+      charsetName: charsetName,
+      yieldGate: yieldGate,
+    );
+    return LocalParsedBook(chapters: hydratedChapters, charset: charsetName);
+  }
+
+  Future<List<_StreamingSampleChunk>> _readStreamingSampleChunks(
+    File file, {
+    required int fileLength,
+    required int sampleLength,
+    required _CooperativeYieldGate yieldGate,
+  }) async {
+    if (fileLength <= 0 || sampleLength <= 0) {
+      return const <_StreamingSampleChunk>[];
+    }
+    final ranges = <(int, int)>[(0, sampleLength)];
+    if (fileLength > sampleLength * 2) {
+      final middleStart = ((fileLength - sampleLength) ~/ 2).clamp(
+        0,
+        fileLength - sampleLength,
+      );
+      ranges.add((middleStart, sampleLength));
+    }
+    if (fileLength > sampleLength * 3) {
+      final tailStart = (fileLength - sampleLength).clamp(
+        0,
+        fileLength - sampleLength,
+      );
+      ranges.add((tailStart, sampleLength));
+    }
+
+    final uniqueRanges = <String, (int, int)>{};
+    for (final range in ranges) {
+      uniqueRanges['${range.$1}:${range.$2}'] = range;
+    }
+
+    final chunks = <_StreamingSampleChunk>[];
+    for (final range in uniqueRanges.values) {
+      final builder = BytesBuilder(copy: false);
+      await file.openRead(range.$1, range.$1 + range.$2).forEach(builder.add);
+      final bytes = builder.takeBytes();
+      if (bytes.isEmpty) {
+        continue;
+      }
+      chunks.add(_StreamingSampleChunk(start: range.$1, bytes: bytes));
+      await yieldGate.maybeYield(processedBytes: bytes.length);
+    }
+    return chunks;
+  }
+
+  Future<_DecodedBookText?> _decodeStreamingSampleChunks({
+    required LocalBook book,
+    required List<_StreamingSampleChunk> chunks,
+    required int fileLength,
+    required List<TxtAutoChapterPattern> enabledRules,
+    required _CooperativeYieldGate yieldGate,
+  }) async {
+    final results = <_ScoredDecodedChunk>[];
+    final preferredCharset = _normalizeCharsetName(book.charset);
+    for (final chunk in chunks) {
+      final decoded =
+          preferredCharset != null
+              ? _textEncodingDetector.decodeWithFrozenCharset(
+                chunk.bytes,
+                charsetName: preferredCharset,
+              )
+              : _textEncodingDetector.decodeSampleBestEffort(
+                    chunk.bytes,
+                    hintedCharset: preferredCharset,
+                  ) ??
+                  await _textEncodingDetector.decodeSampleBestEffortAsync(
+                    chunk.bytes,
+                    hintedCharset: preferredCharset,
+                  );
+      if (decoded == null || decoded.text.trim().isEmpty) {
+        continue;
+      }
+      results.add(
+        _ScoredDecodedChunk(
+          decoded: _DecodedBookText(
+            text: decoded.text,
+            charsetName: decoded.charsetName,
+            bomLength: decoded.bomLength,
+          ),
+          score: _scoreStreamingSampleChunk(
+            chunk: chunk,
+            fileLength: fileLength,
+            book: book,
+            decoded: decoded,
+            enabledRules: enabledRules,
+          ),
+        ),
+      );
+      await yieldGate.maybeYield(processedBytes: chunk.bytes.length);
+    }
+    if (results.isEmpty) {
+      return null;
+    }
+
+    final aggregated = <String, int>{};
+    final bestByCharset = <String, _ScoredDecodedChunk>{};
+    for (final result in results) {
+      final charset = result.decoded.charsetName;
+      aggregated[charset] = (aggregated[charset] ?? 0) + result.score;
+      final current = bestByCharset[charset];
+      if (current == null || result.score > current.score) {
+        bestByCharset[charset] = result;
+      }
+    }
+
+    String? bestCharset;
+    var bestScore = -0x7fffffff;
+    for (final entry in aggregated.entries) {
+      if (entry.value > bestScore) {
+        bestCharset = entry.key;
+        bestScore = entry.value;
+      }
+    }
+    if (bestCharset == null) {
+      return null;
+    }
+    return bestByCharset[bestCharset]?.decoded;
+  }
+
+  int _scoreStreamingSampleChunk({
+    required _StreamingSampleChunk chunk,
+    required int fileLength,
+    required LocalBook book,
+    required LocalTextDecodeResult decoded,
+    required List<TxtAutoChapterPattern> enabledRules,
+  }) {
+    var score = _scoreDecodedText(
+      decoded.text,
+      enabledRules: enabledRules,
+      charsetName: decoded.charsetName,
+      hintedCharset: _normalizeCharsetName(book.charset),
+    );
+    final midpoint = chunk.start + (chunk.bytes.length ~/ 2);
+    final normalizedPosition =
+        fileLength <= 0 ? 0.0 : midpoint / fileLength.toDouble();
+    if (normalizedPosition >= 0.25 && normalizedPosition <= 0.75) {
+      score += 80;
+    } else if (normalizedPosition > 0.75) {
+      score += 50;
+    } else {
+      score += 10;
+    }
+    if ((decoded.charsetName == 'utf-16' ||
+            decoded.charsetName == 'utf-16le' ||
+            decoded.charsetName == 'utf-16be') &&
+        _zeroByteRatio(chunk.bytes) < 0.12) {
+      score -= 240;
+    }
+    if (decoded.fallbackUsed) {
+      score -= 120;
+    }
+    return score;
+  }
+
+  double _zeroByteRatio(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return 0;
+    }
+    final zeroCount = bytes.where((byte) => byte == 0).length;
+    return zeroCount / bytes.length;
   }
 
   Future<List<LocalParsedChapter>> _splitByFixedLengthStreaming(
     File file, {
     required int fileLength,
     required int bomLength,
+    required String charsetName,
+    required _CooperativeYieldGate yieldGate,
   }) async {
     if (fileLength <= bomLength) {
       return const <LocalParsedChapter>[];
     }
 
     final chapters = <LocalParsedChapter>[];
-    var start = bomLength;
+    var start = _alignStreamOffsetForCharset(
+      bomLength,
+      charsetName: charsetName,
+    );
     var index = 0;
     while (start < fileLength) {
       final end = await _findChunkEndByMaxBytesInFile(
         file,
         start,
         min(start + _chunkLengthWithoutPattern, fileLength),
+        charsetName: charsetName,
       );
       final safeEnd = end <= start ? fileLength : end;
       if (safeEnd <= start) {
@@ -181,7 +383,15 @@ class TxtLocalBookParser implements LocalBookParser {
           endOffset: safeEnd,
         ),
       );
-      start = await _skipLeadingWhitespaceBytes(file, safeEnd, fileLength);
+      final processedBytes = safeEnd - start;
+      start = await _skipLeadingWhitespaceBytes(
+        file,
+        safeEnd,
+        fileLength,
+        charsetName: charsetName,
+      );
+      start = _alignStreamOffsetForCharset(start, charsetName: charsetName);
+      await yieldGate.maybeYield(processedBytes: processedBytes);
     }
     return chapters;
   }
@@ -190,14 +400,20 @@ class TxtLocalBookParser implements LocalBookParser {
     File file, {
     required int fileLength,
     required int bomLength,
+    required String charsetName,
     required RegExp pattern,
     required bool splitLongChapter,
+    required _CooperativeYieldGate yieldGate,
   }) async {
     final chapters = <LocalParsedChapter>[];
     final handle = await file.open(mode: FileMode.read);
     try {
-      await handle.setPosition(bomLength);
-      var bufferStartOffset = bomLength;
+      final normalizedStart = _alignStreamOffsetForCharset(
+        bomLength,
+        charsetName: charsetName,
+      );
+      await handle.setPosition(normalizedStart);
+      var bufferStartOffset = normalizedStart;
       var carry = <int>[];
       String? currentTitle;
       int? currentContentStart;
@@ -269,43 +485,25 @@ class TxtLocalBookParser implements LocalBookParser {
           break;
         }
         final buffer = <int>[...carry, ...chunk];
-        var lineStartIndex = 0;
-        for (var index = 0; index < buffer.length; index += 1) {
-          final byte = buffer[index];
-          if (byte != 0x0A && byte != 0x0D) {
-            continue;
-          }
-          if (byte == 0x0D && index + 1 == buffer.length) {
-            break;
-          }
-          var separatorLength = 1;
-          if (byte == 0x0D &&
-              index + 1 < buffer.length &&
-              buffer[index + 1] == 0x0A) {
-            separatorLength = 2;
-          }
-          final lineBytes = buffer.sublist(lineStartIndex, index);
-          final lineStart = bufferStartOffset + lineStartIndex;
-          final lineEnd = bufferStartOffset + index + separatorLength;
-          processLine(
-            utf8.decode(lineBytes, allowMalformed: true),
-            lineStart,
-            lineEnd,
-          );
-          lineStartIndex = index + separatorLength;
-          if (separatorLength == 2) {
-            index += 1;
-          }
+        final parsedLines = _extractStreamingLines(
+          buffer,
+          bufferStartOffset: bufferStartOffset,
+          charsetName: charsetName,
+        );
+        for (final line in parsedLines.lines) {
+          processLine(line.text, line.startOffset, line.endOffset);
         }
-        carry = buffer.sublist(lineStartIndex);
-        bufferStartOffset += buffer.length - carry.length;
+        carry = parsedLines.carryBytes;
+        bufferStartOffset = parsedLines.nextBufferOffset;
+        await yieldGate.maybeYield(processedBytes: chunk.length);
       }
 
       if (carry.isNotEmpty) {
+        final lineEnd = bufferStartOffset + carry.length;
         processLine(
-          utf8.decode(carry, allowMalformed: true),
+          _decodeStreamingLine(carry, charsetName: charsetName),
           bufferStartOffset,
-          fileLength,
+          lineEnd,
         );
       }
 
@@ -323,7 +521,12 @@ class TxtLocalBookParser implements LocalBookParser {
     if (chapters.isEmpty || !splitLongChapter) {
       return chapters;
     }
-    return _splitLongChaptersByOffsets(file, chapters);
+    return _splitLongChaptersByOffsets(
+      file,
+      chapters,
+      charsetName: charsetName,
+      yieldGate: yieldGate,
+    );
   }
 
   bool _matchesChapterTitleLine(RegExp pattern, String lineText) {
@@ -335,8 +538,10 @@ class TxtLocalBookParser implements LocalBookParser {
 
   Future<List<LocalParsedChapter>> _splitLongChaptersByOffsets(
     File file,
-    List<LocalParsedChapter> chapters,
-  ) async {
+    List<LocalParsedChapter> chapters, {
+    required String charsetName,
+    required _CooperativeYieldGate yieldGate,
+  }) async {
     final output = <LocalParsedChapter>[];
     for (final chapter in chapters) {
       final start = chapter.startOffset;
@@ -357,6 +562,7 @@ class TxtLocalBookParser implements LocalBookParser {
           file,
           pieceStart,
           min(pieceStart + _maxLengthWithPattern, end),
+          charsetName: charsetName,
         );
         final safePieceEnd = pieceEnd <= pieceStart ? end : pieceEnd;
         if (safePieceEnd <= pieceStart) {
@@ -371,67 +577,320 @@ class TxtLocalBookParser implements LocalBookParser {
             endOffset: safePieceEnd,
           ),
         );
-        pieceStart = await _skipLeadingWhitespaceBytes(file, safePieceEnd, end);
+        final processedBytes = safePieceEnd - pieceStart;
+        pieceStart = await _skipLeadingWhitespaceBytes(
+          file,
+          safePieceEnd,
+          end,
+          charsetName: charsetName,
+        );
+        pieceStart = _alignStreamOffsetForCharset(
+          pieceStart,
+          charsetName: charsetName,
+        );
+        await yieldGate.maybeYield(processedBytes: processedBytes);
       }
     }
     return output;
   }
 
+  Future<List<LocalParsedChapter>> _hydrateChapterContentsFromOffsets(
+    File file,
+    List<LocalParsedChapter> chapters, {
+    required String charsetName,
+    required _CooperativeYieldGate yieldGate,
+  }) async {
+    if (chapters.isEmpty) {
+      return const <LocalParsedChapter>[];
+    }
+
+    final normalizedCharset = _normalizeCharsetName(charsetName) ?? charsetName;
+    final hydrated = <LocalParsedChapter>[];
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      for (final chapter in chapters) {
+        final startOffset = chapter.startOffset;
+        final endOffset = chapter.endOffset;
+        if (startOffset == null ||
+            endOffset == null ||
+            endOffset <= startOffset) {
+          hydrated.add(chapter);
+          continue;
+        }
+
+        await handle.setPosition(startOffset);
+        final bytes = await handle.read(endOffset - startOffset);
+        final content =
+            _decodeStoredBytes(bytes, charsetName: normalizedCharset).trim();
+        hydrated.add(
+          LocalParsedChapter(
+            title: chapter.title,
+            content: content,
+            startOffset: chapter.startOffset,
+            endOffset: chapter.endOffset,
+          ),
+        );
+        await yieldGate.maybeYield(processedBytes: bytes.length);
+      }
+    } finally {
+      await handle.close();
+    }
+    return hydrated;
+  }
+
   Future<int> _findChunkEndByMaxBytesInFile(
     File file,
     int start,
-    int proposedEnd,
-  ) async {
+    int proposedEnd, {
+    required String charsetName,
+  }) async {
     if (proposedEnd <= start) {
       return start;
     }
+    final normalizedStart = _alignStreamOffsetForCharset(
+      start,
+      charsetName: charsetName,
+    );
+    final normalizedEnd = _alignStreamOffsetForCharset(
+      proposedEnd,
+      charsetName: charsetName,
+    );
+    if (normalizedEnd <= normalizedStart) {
+      return normalizedStart;
+    }
     final bytes = await file
-        .openRead(start, proposedEnd)
+        .openRead(normalizedStart, normalizedEnd)
         .fold<BytesBuilder>(
           BytesBuilder(copy: false),
           (builder, chunk) => builder..add(chunk),
         );
     final buffer = bytes.takeBytes();
     if (buffer.isEmpty) {
-      return proposedEnd;
+      return normalizedEnd;
     }
-    for (
-      var index = buffer.length - 1;
-      index >= _splitBreakMinDistance;
-      index -= 1
-    ) {
-      final byte = buffer[index];
-      if (byte == 0x0A || byte == 0x0D) {
-        return start + index;
+    final parsedLines = _extractStreamingLines(
+      buffer,
+      bufferStartOffset: normalizedStart,
+      charsetName: charsetName,
+    );
+    for (var index = parsedLines.lines.length - 1; index >= 0; index -= 1) {
+      final line = parsedLines.lines[index];
+      if (line.endOffset - normalizedStart >= _splitBreakMinDistance) {
+        return line.endOffset;
       }
     }
-    return proposedEnd;
+    return normalizedEnd;
   }
 
-  Future<int> _skipLeadingWhitespaceBytes(File file, int start, int end) async {
+  Future<int> _skipLeadingWhitespaceBytes(
+    File file,
+    int start,
+    int end, {
+    required String charsetName,
+  }) async {
     if (start >= end) {
       return end;
     }
+    final normalizedStart = _alignStreamOffsetForCharset(
+      start,
+      charsetName: charsetName,
+    );
+    final normalizedEnd = _alignStreamOffsetForCharset(
+      end,
+      charsetName: charsetName,
+    );
     final bytes = await file
-        .openRead(start, end)
+        .openRead(normalizedStart, normalizedEnd)
         .fold<BytesBuilder>(
           BytesBuilder(copy: false),
           (builder, chunk) => builder..add(chunk),
         );
     final buffer = bytes.takeBytes();
-    var index = 0;
-    while (index < buffer.length) {
-      final byte = buffer[index];
+    if (buffer.isEmpty) {
+      return normalizedEnd;
+    }
+
+    if (_isUtf16Charset(charsetName)) {
+      var offset = 0;
+      while (offset + 1 < buffer.length) {
+        final unit = _readUtf16CodeUnit(
+          buffer,
+          offset,
+          littleEndian: charsetName == 'utf-16le' || charsetName == 'utf-16',
+        );
+        final char = String.fromCharCode(unit);
+        if (char.trim().isEmpty) {
+          offset += 2;
+          continue;
+        }
+        break;
+      }
+      return normalizedStart + offset;
+    }
+
+    var offset = 0;
+    while (offset < buffer.length) {
+      final byte = buffer[offset];
       if (byte == 0x0A || byte == 0x0D || byte == 0x09 || byte == 0x20) {
-        index += 1;
+        offset += 1;
         continue;
       }
       break;
     }
-    return start + index;
+    return normalizedStart + offset;
   }
 
-  _ResolvedTxtChapterPattern? _detectChapterPattern(String text) {
+  int _alignStreamOffsetForCharset(int offset, {required String charsetName}) {
+    if (_isUtf16Charset(charsetName) && offset.isOdd) {
+      return offset - 1;
+    }
+    return offset;
+  }
+
+  bool _isUtf16Charset(String charsetName) {
+    return charsetName == 'utf-16' ||
+        charsetName == 'utf-16le' ||
+        charsetName == 'utf-16be';
+  }
+
+  _StreamingLineExtraction _extractStreamingLines(
+    List<int> buffer, {
+    required int bufferStartOffset,
+    required String charsetName,
+  }) {
+    if (_isUtf16Charset(charsetName)) {
+      return _extractUtf16StreamingLines(
+        buffer,
+        bufferStartOffset: bufferStartOffset,
+        littleEndian: charsetName == 'utf-16le' || charsetName == 'utf-16',
+      );
+    }
+    return _extractByteStreamingLines(
+      buffer,
+      bufferStartOffset: bufferStartOffset,
+      charsetName: charsetName,
+    );
+  }
+
+  _StreamingLineExtraction _extractByteStreamingLines(
+    List<int> buffer, {
+    required int bufferStartOffset,
+    required String charsetName,
+  }) {
+    final lines = <_StreamingLine>[];
+    var lineStartIndex = 0;
+    for (var index = 0; index < buffer.length; index += 1) {
+      final byte = buffer[index];
+      if (byte != 0x0A && byte != 0x0D) {
+        continue;
+      }
+      if (byte == 0x0D && index + 1 == buffer.length) {
+        break;
+      }
+      var separatorLength = 1;
+      if (byte == 0x0D &&
+          index + 1 < buffer.length &&
+          buffer[index + 1] == 0x0A) {
+        separatorLength = 2;
+      }
+      final lineBytes = buffer.sublist(lineStartIndex, index);
+      lines.add(
+        _StreamingLine(
+          text: _decodeStreamingLine(lineBytes, charsetName: charsetName),
+          startOffset: bufferStartOffset + lineStartIndex,
+          endOffset: bufferStartOffset + index + separatorLength,
+        ),
+      );
+      lineStartIndex = index + separatorLength;
+      if (separatorLength == 2) {
+        index += 1;
+      }
+    }
+    final carryBytes = buffer.sublist(lineStartIndex);
+    return _StreamingLineExtraction(
+      lines: lines,
+      carryBytes: carryBytes,
+      nextBufferOffset: bufferStartOffset + buffer.length - carryBytes.length,
+    );
+  }
+
+  _StreamingLineExtraction _extractUtf16StreamingLines(
+    List<int> buffer, {
+    required int bufferStartOffset,
+    required bool littleEndian,
+  }) {
+    final lines = <_StreamingLine>[];
+    var lineStartIndex = 0;
+    var index = 0;
+    while (index + 1 < buffer.length) {
+      final unit = _readUtf16CodeUnit(
+        buffer,
+        index,
+        littleEndian: littleEndian,
+      );
+      if (unit != 0x0A && unit != 0x0D) {
+        index += 2;
+        continue;
+      }
+      if (unit == 0x0D && index + 3 >= buffer.length) {
+        break;
+      }
+      var separatorLength = 2;
+      if (unit == 0x0D && index + 3 < buffer.length) {
+        final nextUnit = _readUtf16CodeUnit(
+          buffer,
+          index + 2,
+          littleEndian: littleEndian,
+        );
+        if (nextUnit == 0x0A) {
+          separatorLength = 4;
+        }
+      }
+      final lineBytes = buffer.sublist(lineStartIndex, index);
+      lines.add(
+        _StreamingLine(
+          text: _decodeStreamingLine(
+            lineBytes,
+            charsetName: littleEndian ? 'utf-16le' : 'utf-16be',
+          ),
+          startOffset: bufferStartOffset + lineStartIndex,
+          endOffset: bufferStartOffset + index + separatorLength,
+        ),
+      );
+      lineStartIndex = index + separatorLength;
+      index = lineStartIndex;
+    }
+    final carryBytes = buffer.sublist(lineStartIndex);
+    return _StreamingLineExtraction(
+      lines: lines,
+      carryBytes: carryBytes,
+      nextBufferOffset: bufferStartOffset + buffer.length - carryBytes.length,
+    );
+  }
+
+  int _readUtf16CodeUnit(
+    List<int> bytes,
+    int offset, {
+    required bool littleEndian,
+  }) {
+    if (littleEndian) {
+      return bytes[offset] | (bytes[offset + 1] << 8);
+    }
+    return (bytes[offset] << 8) | bytes[offset + 1];
+  }
+
+  String _decodeStreamingLine(List<int> bytes, {required String charsetName}) {
+    if (bytes.isEmpty) {
+      return '';
+    }
+    return _tryDecodeByCharset(bytes, charsetName) ??
+        utf8.decode(bytes, allowMalformed: true);
+  }
+
+  _ResolvedTxtChapterPattern? _detectChapterPattern(
+    String text, {
+    required List<TxtAutoChapterPattern> enabledRules,
+  }) {
     final sample =
         text.length > _chapterPatternDetectionSampleLength
             ? text.substring(0, _chapterPatternDetectionSampleLength)
@@ -441,7 +900,7 @@ class TxtLocalBookParser implements LocalBookParser {
     var maxRawMatches = 0;
     int? earliestStart;
 
-    for (final chapterPattern in _builtInChapterPatterns.reversed) {
+    for (final chapterPattern in enabledRules.reversed) {
       final pattern = chapterPattern.compiled;
       final matches = pattern.allMatches(sample).toList(growable: false);
       if (matches.isEmpty) {
@@ -690,13 +1149,37 @@ class TxtLocalBookParser implements LocalBookParser {
         .toList(growable: false);
   }
 
-  _DecodedBookText _decodeBookText(LocalBook book, List<int> bytes) {
+  Future<_DecodedBookText> _decodeBookText(
+    LocalBook book,
+    List<int> bytes, {
+    required List<TxtAutoChapterPattern> enabledRules,
+  }) async {
+    final normalizedPreferred = _normalizeCharsetName(book.charset);
+    if (normalizedPreferred != null) {
+      final decoded = _textEncodingDetector.decodeWithFrozenCharset(
+        bytes,
+        charsetName: normalizedPreferred,
+      );
+      if (decoded == null || decoded.text.trim().isEmpty) {
+        throw AppException(
+          code: ErrorCode.decode,
+          stage: ErrorStage.content,
+          briefMessage: '已冻结的文本编码无法解码当前 TXT，请重新设置编码后重试。',
+        );
+      }
+      return _DecodedBookText(
+        text: decoded.text,
+        charsetName: decoded.charsetName,
+        bomLength: decoded.bomLength,
+      );
+    }
+
     final bomInfo = _detectBom(bytes);
     final bomLength = bomInfo.length;
     final contentBytes =
         bomLength > 0 ? bytes.sublist(bomLength) : List<int>.from(bytes);
 
-    final preferredCharset = _normalizeCharsetName(book.charset);
+    final preferredCharset = normalizedPreferred;
     final hintedCharset =
         preferredCharset ??
         bomInfo.charsetName ??
@@ -732,7 +1215,7 @@ class TxtLocalBookParser implements LocalBookParser {
 
       final score = _scoreDecodedText(
         text,
-        enabledRules: _builtInChapterPatterns,
+        enabledRules: enabledRules,
         charsetName: candidate,
         hintedCharset: hintedCharset,
       );
@@ -747,13 +1230,38 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     if (best != null) {
+      final mobileDecoded = await _textEncodingDetector.decodeBestEffortAsync(
+        bytes,
+        preferredCharset: book.charset,
+        hintedCharset: hintedCharset,
+        candidateCharsets: candidateCharsets,
+      );
+      final mobileScore = _scoreDecodedText(
+        mobileDecoded.text,
+        enabledRules: enabledRules,
+        charsetName: mobileDecoded.charsetName,
+        hintedCharset: hintedCharset,
+      );
+      if (mobileDecoded.text.trim().isNotEmpty && mobileScore >= bestScore) {
+        return _DecodedBookText(
+          text: mobileDecoded.text,
+          charsetName: mobileDecoded.charsetName,
+          bomLength: mobileDecoded.bomLength,
+        );
+      }
       return best;
     }
 
+    final decoded = await _textEncodingDetector.decodeBestEffortAsync(
+      bytes,
+      preferredCharset: book.charset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+    );
     return _DecodedBookText(
-      text: utf8.decode(contentBytes, allowMalformed: true),
-      charsetName: 'utf-8',
-      bomLength: bomLength,
+      text: decoded.text,
+      charsetName: decoded.charsetName,
+      bomLength: decoded.bomLength,
     );
   }
 
@@ -978,6 +1486,14 @@ class TxtLocalBookParser implements LocalBookParser {
     return LocalTextEncodingDetector.tryDecodeByCharset(bytes, charsetName);
   }
 
+  String _decodeStoredBytes(List<int> bytes, {required String charsetName}) {
+    if (bytes.isEmpty) {
+      return '';
+    }
+    return _tryDecodeByCharset(bytes, charsetName) ??
+        utf8.decode(bytes, allowMalformed: true);
+  }
+
   int _encodedLength(String text, String charsetName) {
     switch (charsetName) {
       case 'utf-8':
@@ -1017,8 +1533,74 @@ class _BomInfo {
   final String? charsetName;
 }
 
+class _StreamingLine {
+  const _StreamingLine({
+    required this.text,
+    required this.startOffset,
+    required this.endOffset,
+  });
+
+  final String text;
+  final int startOffset;
+  final int endOffset;
+}
+
+class _StreamingLineExtraction {
+  const _StreamingLineExtraction({
+    required this.lines,
+    required this.carryBytes,
+    required this.nextBufferOffset,
+  });
+
+  final List<_StreamingLine> lines;
+  final List<int> carryBytes;
+  final int nextBufferOffset;
+}
+
+class _StreamingSampleChunk {
+  const _StreamingSampleChunk({required this.start, required this.bytes});
+
+  final int start;
+  final List<int> bytes;
+}
+
+class _ScoredDecodedChunk {
+  const _ScoredDecodedChunk({required this.decoded, required this.score});
+
+  final _DecodedBookText decoded;
+  final int score;
+}
+
 class _ResolvedTxtChapterPattern {
   const _ResolvedTxtChapterPattern({required this.compiled});
 
   final RegExp compiled;
+}
+
+class _CooperativeYieldGate {
+  _CooperativeYieldGate({required this.byteBudget, required this.stepBudget});
+
+  final int byteBudget;
+  final int stepBudget;
+
+  int _pendingBytes = 0;
+  int _pendingSteps = 0;
+
+  Future<void> maybeYield({
+    int processedBytes = 0,
+    int processedSteps = 1,
+  }) async {
+    if (processedBytes > 0) {
+      _pendingBytes += processedBytes;
+    }
+    if (processedSteps > 0) {
+      _pendingSteps += processedSteps;
+    }
+    if (_pendingBytes < byteBudget && _pendingSteps < stepBudget) {
+      return;
+    }
+    _pendingBytes = 0;
+    _pendingSteps = 0;
+    await Future<void>.delayed(Duration.zero);
+  }
 }

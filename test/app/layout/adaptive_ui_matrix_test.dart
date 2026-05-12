@@ -1,13 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_appread/app/layout/app_layout.dart';
-import 'package:flutter_appread/app/shell_scaffold.dart';
-import 'package:flutter_appread/features/book/presentation/widgets/book_detail_primary_actions.dart';
+import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
+import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
+import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_primary_actions.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
-  const widths = <double>[320, 360, 390, 430, 480, 600, 840, 1024];
+  const widths = <double>[
+    320,
+    360,
+    390,
+    430,
+    480,
+    600,
+    840,
+    1024,
+    1280,
+    1440,
+    1920,
+  ];
 
   testWidgets('矩阵测试：sheetHeightFactor 在目标宽度下返回正确结果', (tester) async {
     for (final width in widths) {
@@ -37,31 +49,49 @@ void main() {
     }
   });
 
-  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持完整文案和图标', (
-    tester,
-  ) async {
+  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持四个操作文案和图标', (tester) async {
     for (final width in widths) {
       await _pumpPrimaryActions(tester, width: width);
 
       expect(
-        find.text('开始阅读'),
+        find.text('书架'),
         findsOneWidget,
-        reason: 'expected full read label at width=$width',
+        reason: 'expected shelf label at width=$width',
       );
       expect(
-        find.text('加入书架'),
+        find.text('目录'),
         findsOneWidget,
-        reason: 'expected full shelf label at width=$width',
+        reason: 'expected catalog label at width=$width',
       );
       expect(
-        find.byIcon(Icons.chrome_reader_mode_outlined),
+        find.text('书源'),
         findsOneWidget,
-        reason: 'expected read icon at width=$width',
+        reason: 'expected source label at width=$width',
       );
       expect(
-        find.byIcon(Icons.bookmark_add_outlined),
+        find.text('归类'),
+        findsOneWidget,
+        reason: 'expected organize label at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.favorite_border_rounded),
         findsOneWidget,
         reason: 'expected shelf icon at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.menu_book_rounded),
+        findsOneWidget,
+        reason: 'expected catalog icon at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.swap_horiz_rounded),
+        findsOneWidget,
+        reason: 'expected source icon at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.bookmarks_rounded),
+        findsOneWidget,
+        reason: 'expected organize icon at width=$width',
       );
     }
   });
@@ -76,6 +106,9 @@ void main() {
       600: 3,
       840: 4,
       1024: 4,
+      1280: 5,
+      1440: 6,
+      1920: 6,
     };
 
     for (final entry in expected.entries) {
@@ -88,9 +121,7 @@ void main() {
     }
   });
 
-  testWidgets('矩阵测试：ShellScaffold 在手机和平板尺寸下可正常渲染', (
-    tester,
-  ) async {
+  testWidgets('矩阵测试：ShellScaffold 在手机和平板尺寸下可正常渲染', (tester) async {
     const cases = <_ViewportCase>[
       _ViewportCase(name: 'phone_360', size: Size(360, 800), dpr: 3.0),
       _ViewportCase(name: 'phone_390', size: Size(390, 844), dpr: 3.0),
@@ -99,36 +130,46 @@ void main() {
       _ViewportCase(name: 'phone_427', size: Size(427, 924), dpr: 3.0),
       _ViewportCase(name: 'phone_480', size: Size(480, 1066), dpr: 3.0),
       _ViewportCase(name: 'phone_landscape', size: Size(640, 360), dpr: 3.0),
+      _ViewportCase(name: 'medium_600', size: Size(600, 960), dpr: 2.0),
       _ViewportCase(name: 'tablet_840', size: Size(840, 1180), dpr: 2.0),
+      _ViewportCase(name: 'desktop_1024', size: Size(1024, 768), dpr: 1.0),
+      _ViewportCase(name: 'desktop_1280', size: Size(1280, 800), dpr: 1.0),
+      _ViewportCase(name: 'desktop_1440', size: Size(1440, 900), dpr: 1.0),
+      _ViewportCase(name: 'desktop_1920', size: Size(1920, 1080), dpr: 1.0),
       _ViewportCase(name: 'tablet_1024', size: Size(1024, 1366), dpr: 2.0),
       _ViewportCase(name: 'large_1366', size: Size(1366, 1024), dpr: 2.0),
     ];
 
     for (final item in cases) {
-      await tester.pumpWidget(
-        AdaptiveTestHarness(
-          width: item.size.width,
-          height: item.size.height,
-          dpr: item.dpr,
-          wrapWithMaterialApp: true,
-          child: const ShellScaffold(
-            location: '/bookshelf',
-            child: ColoredBox(color: Colors.white),
+      for (final textScaleFactor in kAdaptiveSmokeTextScaleCases) {
+        await tester.pumpWidget(
+          AdaptiveTestHarness(
+            width: item.size.width,
+            height: item.size.height,
+            dpr: item.dpr,
+            textScaleFactor: textScaleFactor,
+            wrapWithMaterialApp: true,
+            child: const ShellScaffold(
+              location: '/bookshelf',
+              child: ColoredBox(color: Colors.white),
+            ),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      expect(
-        tester.takeException(),
-        isNull,
-        reason:
-            'unexpected exception at ${item.name} (${item.size.width}x${item.size.height}@${item.dpr})',
-      );
-      if (item.size.width >= AppLayout.railBreakpointWidth) {
-        expect(find.byType(NavigationRail), findsOneWidget);
-      } else {
-        expect(find.byType(NavigationBar), findsOneWidget);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'unexpected exception at ${item.name} '
+              '(${item.size.width}x${item.size.height}@${item.dpr}, '
+              'textScale=$textScaleFactor)',
+        );
+        if (item.size.width >= AppLayout.railBreakpointWidth) {
+          expect(find.byType(NavigationRail), findsOneWidget);
+        } else {
+          expect(find.byType(NavigationBar), findsOneWidget);
+        }
       }
     }
   });
@@ -171,9 +212,12 @@ Future<void> _pumpPrimaryActions(
                 return BookDetailPrimaryActions(
                   availableWidth: constraints.maxWidth,
                   isInBookshelf: false,
+                  isShelfStateLoading: false,
                   isShelfActionLoading: false,
-                  onRead: () {},
                   onToggleBookshelf: () {},
+                  onOpenCatalog: () {},
+                  onSwitchSource: () {},
+                  onOpenOrganize: () {},
                 );
               },
             ),

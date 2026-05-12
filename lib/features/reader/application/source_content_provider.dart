@@ -44,6 +44,7 @@ class SourceContentProvider extends ContentProvider {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) {
     return _detailService.load(
       sourceId: sourceId,
@@ -52,6 +53,7 @@ class SourceContentProvider extends ContentProvider {
       fallbackTitle: fallbackTitle,
       fallbackAuthor: fallbackAuthor,
       forceRefresh: forceRefresh,
+      includeCatalog: includeCatalog,
     );
   }
 
@@ -61,6 +63,7 @@ class SourceContentProvider extends ContentProvider {
     required String bookId,
     required String chapterUrl,
     String? bookTitle,
+    String? detailUrl,
     String? chapterId,
     int? chapterIndex,
     String? chapterTitle,
@@ -71,6 +74,7 @@ class SourceContentProvider extends ContentProvider {
       chapterUrl: chapterUrl,
       bookId: bookId,
       bookTitle: bookTitle,
+      detailUrl: detailUrl,
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
       nextChapterUrl: nextChapterUrl,

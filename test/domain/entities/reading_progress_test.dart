@@ -1,4 +1,5 @@
-import 'package:flutter_appread/domain/entities/reading_progress.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_progress.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_logical_position.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -14,6 +15,13 @@ void main() {
         chapterIndex: 0,
         updatedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
         chapterPositionRatio: 0.42,
+        logicalPosition: const ReaderLogicalPosition(
+          chapterIndex: 0,
+          blockIndex: 3,
+          offsetInBlock: 10,
+          chapterPositionRatio: 0.42,
+          pageIndex: 2,
+        ),
       );
 
       final json = progress.toJson();
@@ -22,21 +30,25 @@ void main() {
       expect(restored.bookId, progress.bookId);
       expect(restored.chapterTitle, progress.chapterTitle);
       expect(restored.chapterPositionRatio, 0.42);
+      expect(restored.logicalPosition, isNotNull);
+      expect(restored.logicalPosition!.blockIndex, 3);
+      expect(restored.logicalPosition!.pageIndex, 2);
     });
 
-    test('defaults ratio to zero when loading legacy payload', () {
-      final restored = ReadingProgress.fromJson({
-        'bookId': 'book_legacy',
-        'sourceId': 'src_legacy',
-        'detailUrl': 'https://example.com/book/legacy',
-        'chapterId': 'c_1',
-        'chapterUrl': 'https://example.com/book/legacy/c1',
-        'chapterTitle': '第一章',
-        'chapterIndex': 1,
-        'updatedAt': '2026-02-12T12:00:00.000Z',
-      });
-
-      expect(restored.chapterPositionRatio, 0);
+    test('rejects legacy payload without chapter position ratio', () {
+      expect(
+        () => ReadingProgress.fromJson({
+          'bookId': 'book_legacy',
+          'sourceId': 'src_legacy',
+          'detailUrl': 'https://example.com/book/legacy',
+          'chapterId': 'c_1',
+          'chapterUrl': 'https://example.com/book/legacy/c1',
+          'chapterTitle': '第一章',
+          'chapterIndex': 1,
+          'updatedAt': '2026-02-12T12:00:00.000Z',
+        }),
+        throwsFormatException,
+      );
     });
 
     test('clamps ratio into valid range', () {

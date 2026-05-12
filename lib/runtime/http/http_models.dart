@@ -23,6 +23,7 @@ class RuntimeHttpRequest {
     this.execution = RuntimeRequestExecution.http,
     this.proxy,
     this.bodyType = RuntimeBodyType.auto,
+    this.skipLoginCheck = false,
   });
 
   final Uri uri;
@@ -38,6 +39,7 @@ class RuntimeHttpRequest {
   final RuntimeRequestExecution execution;
   final String? proxy;
   final RuntimeBodyType bodyType;
+  final bool skipLoginCheck;
 
   Uri get resolvedUri {
     if (query.isEmpty) {
@@ -63,6 +65,7 @@ class RuntimeHttpRequest {
     RuntimeRequestExecution? execution,
     String? proxy = _sentinelString,
     RuntimeBodyType? bodyType,
+    bool? skipLoginCheck,
   }) {
     return RuntimeHttpRequest(
       uri: uri ?? this.uri,
@@ -78,6 +81,7 @@ class RuntimeHttpRequest {
       execution: execution ?? this.execution,
       proxy: identical(proxy, _sentinelString) ? this.proxy : proxy,
       bodyType: bodyType ?? this.bodyType,
+      skipLoginCheck: skipLoginCheck ?? this.skipLoginCheck,
     );
   }
 }
@@ -104,6 +108,28 @@ class RuntimeHttpResponse {
   final bool redirected;
 
   String? get contentType => headers['content-type'];
+
+  RuntimeHttpResponse copyWith({
+    bool? ok,
+    int? status,
+    Uri? uri,
+    Map<String, String>? headers,
+    Object? text = _sentinel,
+    Object? json = _sentinel,
+    Object? bytes = _sentinel,
+    bool? redirected,
+  }) {
+    return RuntimeHttpResponse(
+      ok: ok ?? this.ok,
+      status: status ?? this.status,
+      uri: uri ?? this.uri,
+      headers: headers ?? this.headers,
+      text: identical(text, _sentinel) ? this.text : text as String?,
+      json: identical(json, _sentinel) ? this.json : json,
+      bytes: identical(bytes, _sentinel) ? this.bytes : bytes as Uint8List?,
+      redirected: redirected ?? this.redirected,
+    );
+  }
 
   Map<String, Object?> toJson() {
     return <String, Object?>{

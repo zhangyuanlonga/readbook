@@ -6,22 +6,28 @@ class BrowserChallengeRequest {
     required this.reason,
     this.waitFor = const <String, Object?>{},
     this.timeout = const Duration(minutes: 2),
+    this.refetchAfterSuccess = true,
+    this.html,
   });
 
   final Uri uri;
   final String reason;
   final Map<String, Object?> waitFor;
   final Duration timeout;
+  final bool refetchAfterSuccess;
+  final String? html;
 }
 
 class BrowserOpenRequest {
   const BrowserOpenRequest({
     required this.uri,
     this.timeout = const Duration(minutes: 2),
+    this.html,
   });
 
   final Uri uri;
   final Duration timeout;
+  final String? html;
 }
 
 class BrowserEvalRequest {
@@ -29,11 +35,13 @@ class BrowserEvalRequest {
     required this.uri,
     required this.script,
     this.timeout = const Duration(seconds: 10),
+    this.webViewDelay,
   });
 
   final Uri uri;
   final String script;
   final Duration timeout;
+  final Duration? webViewDelay;
 }
 
 abstract class BrowserRuntime {

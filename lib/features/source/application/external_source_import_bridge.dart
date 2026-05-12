@@ -4,27 +4,38 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum ExternalImportPayloadType { source, localBook }
+import 'external_import_diagnostics.dart';
+
+enum ExternalImportPayloadType { localBook, scriptSource, advancedTheme, font }
 
 class IncomingExternalImportPayload {
-  const IncomingExternalImportPayload.source({
-    required this.bytes,
-    required this.label,
-  }) : type = ExternalImportPayloadType.source,
-       uri = null,
-       mimeType = null;
-
   const IncomingExternalImportPayload.localBook({
     required this.uri,
     required this.label,
     this.mimeType,
-  }) : type = ExternalImportPayloadType.localBook,
-       bytes = null;
+  }) : type = ExternalImportPayloadType.localBook;
+
+  const IncomingExternalImportPayload.scriptSource({
+    required this.uri,
+    required this.label,
+    this.mimeType,
+  }) : type = ExternalImportPayloadType.scriptSource;
+
+  const IncomingExternalImportPayload.advancedTheme({
+    required this.uri,
+    required this.label,
+    this.mimeType,
+  }) : type = ExternalImportPayloadType.advancedTheme;
+
+  const IncomingExternalImportPayload.font({
+    required this.uri,
+    required this.label,
+    this.mimeType,
+  }) : type = ExternalImportPayloadType.font;
 
   final ExternalImportPayloadType type;
-  final Uint8List? bytes;
   final String label;
-  final String? uri;
+  final String uri;
   final String? mimeType;
 }
 
@@ -46,7 +57,7 @@ class ExternalImportBridge {
   static final ExternalImportBridge instance = ExternalImportBridge._();
 
   static const MethodChannel _channel = MethodChannel(
-    'com.jiangyan.shuxiangread/source_import_intent',
+    'com.jiangyan.selune/source_import_intent',
   );
   static const String _methodGetInitialImportPayload =
       'getInitialImportPayload';
@@ -73,10 +84,10 @@ class ExternalImportBridge {
     _channel.setMethodCallHandler(_onMethodCall);
 
     try {
-      final payload = _parsePayload(
+      final payloads = _parsePayloads(
         await _channel.invokeMethod<dynamic>(_methodGetInitialImportPayload),
       );
-      if (payload != null) {
+      for (final payload in payloads) {
         _pushPayload(payload);
       }
     } on MissingPluginException {
@@ -111,9 +122,11 @@ class ExternalImportBridge {
   Future<CachedExternalImportFile?> cacheExternalFileFromUri(
     IncomingExternalImportPayload payload,
   ) async {
-    if (payload.type != ExternalImportPayloadType.localBook ||
-        payload.uri == null ||
-        payload.uri!.trim().isEmpty) {
+    if ((payload.type != ExternalImportPayloadType.localBook &&
+            payload.type != ExternalImportPayloadType.scriptSource &&
+            payload.type != ExternalImportPayloadType.advancedTheme &&
+            payload.type != ExternalImportPayloadType.font) ||
+        payload.uri.trim().isEmpty) {
       return null;
     }
 
@@ -121,6 +134,12 @@ class ExternalImportBridge {
       final raw = await _channel.invokeMethod<dynamic>(
         _methodCacheExternalFileFromUri,
         <String, dynamic>{
+          'type': switch (payload.type) {
+            ExternalImportPayloadType.localBook => 'localBook',
+            ExternalImportPayloadType.scriptSource => 'scriptSource',
+            ExternalImportPayloadType.advancedTheme => 'advancedTheme',
+            ExternalImportPayloadType.font => 'font',
+          },
           'uri': payload.uri,
           'label': payload.label,
           'mimeType': payload.mimeType,
@@ -153,22 +172,39 @@ class ExternalImportBridge {
       return null;
     }
 
-    final payload = _parsePayload(call.arguments);
-    if (payload != null) {
+    final payloads = _parsePayloads(call.arguments);
+    for (final payload in payloads) {
       _pushPayload(payload);
     }
     return null;
   }
 
   void _pushPayload(IncomingExternalImportPayload payload) {
+    ExternalImportDiagnostics.logPayloadQueued(payload);
     _pendingPayloads.addLast(payload);
     if (!_payloadController.isClosed) {
       _payloadController.add(payload);
     }
   }
 
+  List<IncomingExternalImportPayload> _parsePayloads(dynamic raw) {
+    if (raw is Iterable) {
+      return raw
+          .map(_parsePayload)
+          .whereType<IncomingExternalImportPayload>()
+          .toList(growable: false);
+    }
+    final payload = _parsePayload(raw);
+    return payload == null
+        ? const <IncomingExternalImportPayload>[]
+        : [payload];
+  }
+
   IncomingExternalImportPayload? _parsePayload(dynamic raw) {
     if (raw is! Map<Object?, Object?>) {
+      if (raw != null) {
+        ExternalImportDiagnostics.logPayloadMalformed(raw);
+      }
       return null;
     }
 
@@ -195,18 +231,55 @@ class ExternalImportBridge {
         mimeType: mimeType,
       );
     }
-
-    final bytesRaw = raw['bytes'];
-    Uint8List? bytes;
-    if (bytesRaw is Uint8List) {
-      bytes = bytesRaw;
-    } else if (bytesRaw is List<int>) {
-      bytes = Uint8List.fromList(bytesRaw);
+    if (typeRaw == 'scriptsource') {
+      final uriRaw = raw['uri']?.toString().trim() ?? '';
+      if (uriRaw.isEmpty) {
+        return null;
+      }
+      final mimeTypeRaw = raw['mimeType'];
+      final mimeType =
+          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
+              ? mimeTypeRaw.trim()
+              : null;
+      return IncomingExternalImportPayload.scriptSource(
+        uri: uriRaw,
+        label: label,
+        mimeType: mimeType,
+      );
     }
-    if (bytes == null || bytes.isEmpty) {
-      return null;
+    if (typeRaw == 'advancedtheme') {
+      final uriRaw = raw['uri']?.toString().trim() ?? '';
+      if (uriRaw.isEmpty) {
+        return null;
+      }
+      final mimeTypeRaw = raw['mimeType'];
+      final mimeType =
+          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
+              ? mimeTypeRaw.trim()
+              : null;
+      return IncomingExternalImportPayload.advancedTheme(
+        uri: uriRaw,
+        label: label,
+        mimeType: mimeType,
+      );
     }
-
-    return IncomingExternalImportPayload.source(bytes: bytes, label: label);
+    if (typeRaw == 'font') {
+      final uriRaw = raw['uri']?.toString().trim() ?? '';
+      if (uriRaw.isEmpty) {
+        return null;
+      }
+      final mimeTypeRaw = raw['mimeType'];
+      final mimeType =
+          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
+              ? mimeTypeRaw.trim()
+              : null;
+      return IncomingExternalImportPayload.font(
+        uri: uriRaw,
+        label: label,
+        mimeType: mimeType,
+      );
+    }
+    ExternalImportDiagnostics.logPayloadMalformed(raw);
+    return null;
   }
 }

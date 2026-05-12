@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_health.dart';
 import 'source_switch_score_service.dart';
 
 typedef BuildBookScoreKey =
@@ -14,6 +15,7 @@ class SwitchSourceCandidate {
   const SwitchSourceCandidate({
     required this.book,
     required this.sourceName,
+    required this.healthLevel,
     required this.baseScore,
     required this.hitCount,
     required this.sourceScore,
@@ -26,6 +28,7 @@ class SwitchSourceCandidate {
 
   final Book book;
   final String sourceName;
+  final SourceHealthLevel? healthLevel;
   final int baseScore;
   final int hitCount;
   final int sourceScore;
@@ -39,10 +42,14 @@ class SwitchSourceCandidate {
     int? score,
     int? sourceScore,
     int? bookScore,
+    SourceHealthLevel? healthLevel,
+    bool keepHealthLevel = true,
   }) {
     return SwitchSourceCandidate(
       book: book,
       sourceName: sourceName,
+      healthLevel:
+          keepHealthLevel ? (healthLevel ?? this.healthLevel) : healthLevel,
       baseScore: baseScore,
       hitCount: hitCount,
       sourceScore: sourceScore ?? this.sourceScore,
@@ -217,6 +224,7 @@ int composeSwitchSourceCandidateScore({
   required int hitCount,
   required int sourceScore,
   required int bookScore,
+  required int healthScore,
   required bool scoreRankingEnabled,
   required int hitCountCap,
   required int hitCountWeight,
@@ -227,9 +235,9 @@ int composeSwitchSourceCandidateScore({
     hitCountWeight: hitCountWeight,
   );
   if (!scoreRankingEnabled) {
-    return baseScore + hitBonus;
+    return baseScore + hitBonus + healthScore;
   }
-  return baseScore + hitBonus + sourceScore + bookScore;
+  return baseScore + hitBonus + sourceScore + bookScore + healthScore;
 }
 
 List<SwitchSourceCandidate> sortSwitchSourceCandidates(
@@ -260,6 +268,8 @@ List<SwitchSourceCandidate> buildSwitchSourceCandidates({
   required String? targetAuthor,
   required Map<String, int> hitCountBySource,
   required SourceSwitchScoreStore scoreStore,
+  Map<String, SourceHealthSnapshot> sourceHealthBySourceId =
+      const <String, SourceHealthSnapshot>{},
   required bool scoreRankingEnabled,
   required BuildBookScoreKey buildBookScoreKey,
   required int lagTolerance,
@@ -297,11 +307,15 @@ List<SwitchSourceCandidate> buildSwitchSourceCandidates({
           author: book.author,
         )] ??
         0;
+    final healthScore = _switchSourceHealthScore(
+      sourceHealthBySourceId[book.sourceId],
+    );
     final score = composeSwitchSourceCandidateScore(
       baseScore: baseScore,
       hitCount: hitCount,
       sourceScore: sourceScore,
       bookScore: bookScore,
+      healthScore: healthScore,
       scoreRankingEnabled: scoreRankingEnabled,
       hitCountCap: hitCountCap,
       hitCountWeight: hitCountWeight,
@@ -320,6 +334,7 @@ List<SwitchSourceCandidate> buildSwitchSourceCandidates({
     final candidate = SwitchSourceCandidate(
       book: book,
       sourceName: sourceNames[book.sourceId] ?? book.sourceId,
+      healthLevel: sourceHealthBySourceId[book.sourceId]?.level,
       baseScore: baseScore,
       hitCount: hitCount,
       sourceScore: sourceScore,
@@ -348,6 +363,8 @@ List<SwitchSourceCandidate> buildSwitchSourceCandidates({
 SwitchSourceCandidate rebuildSwitchSourceCandidateScore(
   SwitchSourceCandidate candidate, {
   required SourceSwitchScoreStore scoreStore,
+  Map<String, SourceHealthSnapshot> sourceHealthBySourceId =
+      const <String, SourceHealthSnapshot>{},
   required bool scoreRankingEnabled,
   required BuildBookScoreKey buildBookScoreKey,
   required int hitCountCap,
@@ -361,7 +378,11 @@ SwitchSourceCandidate rebuildSwitchSourceCandidateScore(
         author: candidate.book.author,
       )] ??
       0;
+  final healthScore = _switchSourceHealthScore(
+    sourceHealthBySourceId[candidate.book.sourceId],
+  );
   return candidate.copyWith(
+    healthLevel: sourceHealthBySourceId[candidate.book.sourceId]?.level,
     sourceScore: sourceScore,
     bookScore: bookScore,
     score: composeSwitchSourceCandidateScore(
@@ -369,9 +390,23 @@ SwitchSourceCandidate rebuildSwitchSourceCandidateScore(
       hitCount: candidate.hitCount,
       sourceScore: sourceScore,
       bookScore: bookScore,
+      healthScore: healthScore,
       scoreRankingEnabled: scoreRankingEnabled,
       hitCountCap: hitCountCap,
       hitCountWeight: hitCountWeight,
     ),
   );
+}
+
+int _switchSourceHealthScore(SourceHealthSnapshot? snapshot) {
+  if (snapshot == null) {
+    return 0;
+  }
+  return switch (snapshot.level) {
+    SourceHealthLevel.unchecked => 0,
+    SourceHealthLevel.healthy => 18,
+    SourceHealthLevel.warning => 4,
+    SourceHealthLevel.risky => -18,
+    SourceHealthLevel.unavailable => -60,
+  };
 }

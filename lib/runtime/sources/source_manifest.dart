@@ -4,6 +4,7 @@ class SourceManifest {
     required this.group,
     required this.author,
     required this.description,
+    this.checkKeyword,
     this.domains = const <String>[],
     this.homepage,
     this.enabled = true,
@@ -15,6 +16,7 @@ class SourceManifest {
   final String group;
   final String author;
   final String description;
+  final String? checkKeyword;
   final List<String> domains;
   final String? homepage;
   final bool enabled;
@@ -23,21 +25,59 @@ class SourceManifest {
 
   factory SourceManifest.fromMap(Map<String, dynamic> map) {
     return SourceManifest(
-      name: map['name']?.toString() ?? '未命名书源',
+      name: map['name']?.toString() ?? '未命名书享源',
       group: map['group']?.toString() ?? '未分组',
       author: map['author']?.toString() ?? 'unknown',
       description: map['description']?.toString() ?? '',
+      checkKeyword: _optionalString(map['checkKeyword']),
       domains: (map['domains'] as List<dynamic>? ?? const <dynamic>[])
           .map((dynamic value) => value.toString())
           .toList(growable: false),
       homepage: map['homepage']?.toString(),
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
-      capabilities:
-          (map['capabilities'] as List<dynamic>? ?? const <dynamic>[])
-              .map((dynamic value) => value.toString())
-              .toSet(),
+      capabilities: _normalizeCapabilities(
+        map['capabilities'] as List<dynamic>? ?? const <dynamic>[],
+      ),
       rateLimits: SourceRateLimit.parseMap(map['rateLimits']),
     );
+  }
+
+  SourceManifest copyWith({
+    String? name,
+    String? group,
+    String? author,
+    String? description,
+    Object? checkKeyword = _sentinel,
+    List<String>? domains,
+    Object? homepage = _sentinel,
+    bool? enabled,
+    Set<String>? capabilities,
+    Map<String, SourceRateLimit>? rateLimits,
+  }) {
+    return SourceManifest(
+      name: name ?? this.name,
+      group: group ?? this.group,
+      author: author ?? this.author,
+      description: description ?? this.description,
+      checkKeyword:
+          identical(checkKeyword, _sentinel)
+              ? this.checkKeyword
+              : checkKeyword as String?,
+      domains: domains ?? this.domains,
+      homepage:
+          identical(homepage, _sentinel) ? this.homepage : homepage as String?,
+      enabled: enabled ?? this.enabled,
+      capabilities: capabilities ?? this.capabilities,
+      rateLimits: rateLimits ?? this.rateLimits,
+    );
+  }
+
+  bool supportsCapability(String capability) {
+    final normalized = capability.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return capabilities.contains(normalized);
   }
 
   SourceRateLimit? rateLimitForUri(Uri uri) {
@@ -48,6 +88,23 @@ class SourceManifest {
     return rateLimits[host];
   }
 }
+
+String? _optionalString(Object? value) {
+  final normalized = value?.toString().trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
+}
+
+Set<String> _normalizeCapabilities(Iterable<dynamic> rawValues) {
+  return rawValues
+      .map((dynamic value) => value.toString().trim().toLowerCase())
+      .where((String value) => value.isNotEmpty)
+      .toSet();
+}
+
+const Object _sentinel = Object();
 
 class SourceRateLimit {
   const SourceRateLimit({required this.minInterval});

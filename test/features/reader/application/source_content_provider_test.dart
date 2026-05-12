@@ -1,9 +1,9 @@
-import 'package:flutter_appread/domain/entities/book_detail.dart';
-import 'package:flutter_appread/domain/entities/chapter.dart';
-import 'package:flutter_appread/features/book/application/book_detail_service.dart';
-import 'package:flutter_appread/features/bookshelf/application/local_book_import_service.dart';
-import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
-import 'package:flutter_appread/features/reader/application/source_content_provider.dart';
+import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
+import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
+import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_import_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/chapter_content_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/source_content_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +11,7 @@ class _FakeBookDetailService extends BookDetailService {
   _FakeBookDetailService(this.result);
 
   final BookDetailLoadResult result;
+  BookDetailLoadResult? cachedResult;
 
   String? sourceId;
   String? bookId;
@@ -18,6 +19,7 @@ class _FakeBookDetailService extends BookDetailService {
   String? fallbackTitle;
   String? fallbackAuthor;
   bool? forceRefresh;
+  bool? includeCatalog;
 
   @override
   Future<BookDetailLoadResult> load({
@@ -27,6 +29,7 @@ class _FakeBookDetailService extends BookDetailService {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     this.sourceId = sourceId;
     this.bookId = bookId;
@@ -34,7 +37,16 @@ class _FakeBookDetailService extends BookDetailService {
     this.fallbackTitle = fallbackTitle;
     this.fallbackAuthor = fallbackAuthor;
     this.forceRefresh = forceRefresh;
+    this.includeCatalog = includeCatalog;
     return result;
+  }
+
+  @override
+  BookDetailLoadResult? peekCached({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    return cachedResult;
   }
 }
 
@@ -47,6 +59,7 @@ class _FakeChapterContentService extends ChapterContentService {
   String? chapterUrl;
   String? bookId;
   String? bookTitle;
+  String? detailUrl;
   int? chapterIndex;
   String? chapterTitle;
   String? nextChapterUrl;
@@ -57,6 +70,7 @@ class _FakeChapterContentService extends ChapterContentService {
     required String chapterUrl,
     String? bookId,
     String? bookTitle,
+    String? detailUrl,
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
@@ -65,6 +79,7 @@ class _FakeChapterContentService extends ChapterContentService {
     this.chapterUrl = chapterUrl;
     this.bookId = bookId;
     this.bookTitle = bookTitle;
+    this.detailUrl = detailUrl;
     this.chapterIndex = chapterIndex;
     this.chapterTitle = chapterTitle;
     this.nextChapterUrl = nextChapterUrl;
@@ -114,7 +129,7 @@ void main() {
       sourceName: '源A',
       tocFromCache: false,
     );
-    const contentResult = ChapterContentResult(
+    final contentResult = ChapterContentResult(
       content: '正文内容',
       fromCache: false,
     );
@@ -134,6 +149,7 @@ void main() {
       fallbackTitle: '兜底标题',
       fallbackAuthor: '兜底作者',
       forceRefresh: true,
+      includeCatalog: false,
     );
 
     expect(loadedDetail, same(detailResult));
@@ -143,12 +159,14 @@ void main() {
     expect(fakeDetailService.fallbackTitle, '兜底标题');
     expect(fakeDetailService.fallbackAuthor, '兜底作者');
     expect(fakeDetailService.forceRefresh, isTrue);
+    expect(fakeDetailService.includeCatalog, isFalse);
 
     final loadedContent = await provider.loadChapterContent(
       sourceId: 'source_a',
       bookId: 'book_1',
       chapterUrl: 'https://example.com/book/1/c1',
       bookTitle: '示例书籍',
+      detailUrl: 'https://example.com/book/1',
       chapterIndex: 0,
       chapterTitle: '第一章',
       nextChapterUrl: 'https://example.com/book/1/c2',
@@ -158,9 +176,36 @@ void main() {
     expect(fakeContentService.sourceId, 'source_a');
     expect(fakeContentService.bookId, 'book_1');
     expect(fakeContentService.bookTitle, '示例书籍');
+    expect(fakeContentService.detailUrl, 'https://example.com/book/1');
     expect(fakeContentService.chapterUrl, 'https://example.com/book/1/c1');
     expect(fakeContentService.chapterIndex, 0);
     expect(fakeContentService.chapterTitle, '第一章');
     expect(fakeContentService.nextChapterUrl, 'https://example.com/book/1/c2');
+  });
+
+  test('exposes cached detail peek for reader bootstrap reuse', () {
+    const detail = BookDetail(
+      id: 'book_1',
+      sourceId: 'source_a',
+      title: '示例书籍',
+      detailUrl: 'https://example.com/book/1',
+      author: '作者',
+    );
+    const detailResult = BookDetailLoadResult(
+      detail: detail,
+      chapters: <Chapter>[],
+      sourceName: '源A',
+      tocFromCache: true,
+    );
+    final fakeDetailService = _FakeBookDetailService(detailResult)
+      ..cachedResult = detailResult;
+    final provider = SourceContentProvider(detailService: fakeDetailService);
+
+    final cached = provider.peekCachedDetail(
+      sourceId: 'source_a',
+      detailUrl: 'https://example.com/book/1',
+    );
+
+    expect(cached, same(detailResult));
   });
 }

@@ -1,4 +1,11 @@
-enum CacheStep { search, detail, chapters, content }
+enum CacheStep {
+  discoverCategories,
+  discoverBooks,
+  search,
+  detail,
+  chapters,
+  content,
+}
 
 class CachePolicy {
   const CachePolicy({required this.ttl, this.persistent = false});
@@ -8,6 +15,10 @@ class CachePolicy {
 
   factory CachePolicy.forStep(CacheStep step) {
     switch (step) {
+      case CacheStep.discoverCategories:
+        return const CachePolicy(ttl: Duration(minutes: 10));
+      case CacheStep.discoverBooks:
+        return const CachePolicy(ttl: Duration(minutes: 2));
       case CacheStep.search:
         return const CachePolicy(ttl: Duration(minutes: 2));
       case CacheStep.detail:

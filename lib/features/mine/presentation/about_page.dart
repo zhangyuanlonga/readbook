@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/device/device_identity_service.dart';
+import '../application/advanced_theme_provider.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -12,17 +17,17 @@ class AboutPage extends StatefulWidget {
   @override
   State<AboutPage> createState() => _AboutPageState();
 
-  static const String _appVersion = '1.06';
+  static const String _appVersion = '1.1.0';
   static const List<String> _projectFocus = [
-    '聚焦个人阅读场景的稳定体验',
-    '强化本地文档导入、整理与阅读闭环',
+    '打造稳定顺手的跨平台阅读体验',
+    '强化文档导入、整理与沉浸式阅读闭环',
     '保持可维护、可扩展的工程架构与数据安全',
   ];
   static const List<String> _mvpScope = [
-    'TXT / EPUB 文档阅读',
-    '书架、书签、阅读记录',
-    '用户自备配置导入与基础校验',
-    '错误可定位与可观测',
+    'TXT / EPUB / PDF / Markdown / HTML 阅读',
+    '书架、灵感、阅读记录与进度管理',
+    '主题排版、自定义配置与基础校验',
+    '错误定位、诊断与可观测反馈',
   ];
   static const List<String> _techStack = [
     'Flutter 3',
@@ -33,6 +38,9 @@ class AboutPage extends StatefulWidget {
     'html / json_path',
   ];
   static final Uri _officialSiteUri = Uri.parse('https://www.sxyd.lltask.top');
+  static final Uri _updatesPageUri = Uri.parse(
+    'https://www.sxyd.lltask.top/updates.html',
+  );
 }
 
 class _AboutPageState extends State<AboutPage> {
@@ -63,102 +71,174 @@ class _AboutPageState extends State<AboutPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final metrics = AppAdaptiveMetrics.of(context);
+        final horizontal = metrics.pagePadding;
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(title: const Text('关于')),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(context);
-
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: contentMaxWidth),
-                child: LayoutBuilder(
-                  builder: (context, innerConstraints) {
-                    final width = innerConstraints.maxWidth;
-                    final isExpanded = AppLayout.isExpandedWidth(width);
-
-                    final leftColumn = <Widget>[
-                      _buildIntroCard(context),
-                      const SizedBox(height: 10),
-                      _buildSectionCard(
-                        context,
-                        title: '项目当前重点',
-                        subtitle: '当前版本以个人阅读和稳定体验为主。',
-                        icon: Icons.track_changes_outlined,
-                        items: AboutPage._projectFocus,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildSectionCard(
-                        context,
-                        title: '当前能力',
-                        subtitle: '优先覆盖本地文档与个人阅读管理。',
-                        icon: Icons.checklist_rounded,
-                        items: AboutPage._mvpScope,
-                      ),
-                    ];
-
-                    final rightColumn = <Widget>[
-                      _buildWebsiteCard(context),
-                      const SizedBox(height: 10),
-                      _buildTagCard(
-                        context,
-                        title: '技术栈',
-                        subtitle: '当前版本采用的核心方案。',
-                        icon: Icons.developer_mode_rounded,
-                        tags: AboutPage._techStack,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildComplianceCard(context),
-                    ];
-
-                    return ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        12,
-                        horizontal,
-                        12 + bottomSafe,
-                      ),
-                      children: [
-                        if (!isExpanded) ...leftColumn,
-                        if (!isExpanded) const SizedBox(height: 10),
-                        if (!isExpanded) ...rightColumn,
-                        if (isExpanded)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 12,
-                                child: Column(children: leftColumn),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 10,
-                                child: Column(children: rightColumn),
-                              ),
-                            ],
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            );
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
           },
-        ),
-      ),
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text('关于'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(
+                  context,
+                );
+
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                      child: LayoutBuilder(
+                        builder: (context, innerConstraints) {
+                          final innerMetrics =
+                              AppAdaptiveMetrics.resolveForConstraints(
+                                context,
+                                innerConstraints,
+                              );
+                          final isExpanded = innerMetrics.isExpandedWindow;
+                          final contentGap = innerMetrics.contentGap;
+                          final desktopCards = <Widget>[
+                            _buildIntroCard(context),
+                            _buildWebsiteCard(context),
+                            _buildSectionCard(
+                              context,
+                              title: '项目当前重点',
+                              subtitle: '当前版本以个人阅读和稳定体验为主。',
+                              icon: Icons.track_changes_outlined,
+                              items: AboutPage._projectFocus,
+                            ),
+                            _buildTagCard(
+                              context,
+                              title: '技术栈',
+                              subtitle: '当前版本采用的核心方案。',
+                              icon: Icons.developer_mode_rounded,
+                              tags: AboutPage._techStack,
+                            ),
+                            _buildSectionCard(
+                              context,
+                              title: '当前能力',
+                              subtitle: '优先覆盖本地文档与个人阅读管理。',
+                              icon: Icons.checklist_rounded,
+                              items: AboutPage._mvpScope,
+                            ),
+                            _buildComplianceCard(context),
+                          ];
+
+                          return AppFadeSlideTransition(
+                            child: ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                topInset + metrics.contentGap,
+                                horizontal,
+                                metrics.contentGap + bottomSafe,
+                              ),
+                              children: [
+                                if (!isExpanded)
+                                  ..._buildAboutLinearEntries(
+                                    desktopCards,
+                                    spacing: contentGap,
+                                  ),
+                                if (isExpanded)
+                                  ..._buildAboutDesktopColumns(
+                                    desktopCards,
+                                    spacing: contentGap,
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  List<Widget> _buildAboutLinearEntries(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    return [
+      for (var index = 0; index < cards.length; index++) ...[
+        cards[index],
+        if (index < cards.length - 1) SizedBox(height: spacing),
+      ],
+    ];
+  }
+
+  List<Widget> _buildAboutDesktopColumns(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    final leftCards = <Widget>[];
+    final rightCards = <Widget>[];
+    for (var index = 0; index < cards.length; index += 1) {
+      if (index.isEven) {
+        leftCards.add(cards[index]);
+      } else {
+        rightCards.add(cards[index]);
+      }
+    }
+
+    return [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              children: _buildAboutColumnEntries(leftCards, spacing: spacing),
+            ),
+          ),
+          SizedBox(width: spacing),
+          Expanded(
+            child: Column(
+              children: _buildAboutColumnEntries(rightCards, spacing: spacing),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _buildAboutColumnEntries(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    return [
+      for (var index = 0; index < cards.length; index++) ...[
+        cards[index],
+        if (index < cards.length - 1) SizedBox(height: spacing),
+      ],
+    ];
   }
 
   Widget _buildIntroCard(BuildContext context) {
@@ -203,7 +283,7 @@ class _AboutPageState extends State<AboutPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '书享阅读 · AppRead',
+                          'Selune',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
@@ -222,7 +302,7 @@ class _AboutPageState extends State<AboutPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                '一个基于 Flutter 的个人阅读应用，面向本地文档整理与日常阅读场景，支持 TXT / EPUB 导入、书架管理、阅读记录与基础内容配置扩展。当前版本不内置书库内容，也不提供内容分发服务。',
+                'Selune 是一款基于 Flutter 构建的跨平台阅读应用，面向日常阅读与个人文档整理场景，支持 TXT、EPUB、PDF、Markdown、HTML 等内容导入，提供书架管理、灵感、阅读记录、排版主题与多端一致的阅读体验。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   height: 1.4,
                   color: colorScheme.onSurfaceVariant,
@@ -233,9 +313,9 @@ class _AboutPageState extends State<AboutPage> {
                 builder: (context, constraints) {
                   final useRow = AppLayout.isMediumWidth(constraints.maxWidth);
                   final items = <Widget>[
-                    _buildMetricPill(context, '定位', '个人阅读'),
-                    _buildMetricPill(context, '文档', 'TXT / EPUB'),
-                    _buildMetricPill(context, '原则', '不内置内容'),
+                    _buildMetricPill(context, '定位', '跨平台阅读'),
+                    _buildMetricPill(context, '文档', 'TXT / EPUB / PDF'),
+                    _buildMetricPill(context, '体验', '书架与沉浸阅读'),
                   ];
 
                   if (useRow) {
@@ -285,7 +365,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '访问官网获取产品介绍、版本动态与使用说明。',
+              '访问官网获取产品介绍、版本动态、更新说明与下载入口。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -309,9 +389,19 @@ class _AboutPageState extends State<AboutPage> {
               ),
             ),
             const SizedBox(height: 10),
-            FilledButton(
-              onPressed: _openOfficialSite,
-              child: const Text('打开官网'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: _openOfficialSite,
+                  child: const Text('打开官网'),
+                ),
+                OutlinedButton(
+                  onPressed: _openUpdatesPage,
+                  child: const Text('更新日志'),
+                ),
+              ],
             ),
           ],
         ),
@@ -328,6 +418,17 @@ class _AboutPageState extends State<AboutPage> {
       return;
     }
     _showMessage('跳转失败，请稍后重试。');
+  }
+
+  Future<void> _openUpdatesPage() async {
+    final launched = await launchUrl(
+      AboutPage._updatesPageUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched || !mounted) {
+      return;
+    }
+    _showMessage('打开更新日志失败，请稍后重试。');
   }
 
   void _showMessage(String message) {
@@ -521,7 +622,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '本应用定位为个人阅读工具，默认用于阅读用户合法获取、拥有授权或自行整理的 TXT / EPUB 等内容。应用不内置书库，不提供内容分发或聚合服务；如需导入扩展配置，请确保内容来源、访问方式与使用目的符合目标站点规则及当地法律法规。',
+              '本应用定位为跨平台阅读工具，适用于阅读用户合法获取、拥有授权或自行整理的 TXT、EPUB、PDF、Markdown、HTML 等内容。使用过程中请确保内容来源、访问方式与使用目的符合相关规则及当地法律法规。',
               style: theme.textTheme.bodySmall?.copyWith(
                 height: 1.4,
                 color: colorScheme.onSurfaceVariant,

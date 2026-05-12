@@ -1,4 +1,4 @@
-name: flutter_appread
+name: shuxiang_reading_next
 description: Flutter reading app compatible with Legado source rules.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.6+1
+version: 1.1.0+26041801
 
 environment:
   sdk: ^3.7.2
@@ -36,6 +36,9 @@ dependencies:
   go_router: ^14.8.1
   dio: ^5.8.0+1
   html: ^0.15.5
+  markdown: ^7.3.1
+  pdf_text_extract: ^0.0.1
+  dart_mobi: ^1.0.2
   xml: ^6.5.0
   json_path: ^0.7.4
   drift: ^2.25.1
@@ -43,17 +46,22 @@ dependencies:
   logger: ^2.5.0
   uuid: ^4.5.1
   shared_preferences: ^2.3.3
+  flutter_secure_storage: ^9.2.4
   device_info_plus: ^10.1.0
   package_info_plus: ^8.3.1
   path_provider: ^2.1.5
+  path_provider_platform_interface: ^2.1.2
   sqlite3_flutter_libs: ^0.5.26
   file_selector: ^1.0.4
   charset: ^2.0.1
+  flutter_charset_detector: ^2.0.0
+  charset_converter: ^2.3.0
   url_launcher: ^6.3.1
+  share_plus: ^10.1.4
   crypto: ^3.0.6
   pointycastle: ^3.9.1
   basic_utils: ^5.7.0
-  archive: ^3.6.1
+  archive: ^4.0.9
   http: ^1.2.2
   flutter_js: ^0.8.7
   flutter_inappwebview: ^6.1.5
@@ -69,6 +77,7 @@ dependencies:
   flutter_code_editor: ^0.3.5
   flutter_highlight: ^0.7.0
   highlight: ^0.7.0
+  flutter_svg: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -86,6 +95,14 @@ dev_dependencies:
   drift_dev: ^2.25.2
   flutter_launcher_icons: ^0.14.4
 
+dependency_overrides:
+  flutter_charset_detector_android:
+    path: third_party/plugins/flutter_charset_detector_android
+  flutter_charset_detector_web:
+    path: third_party/plugins/flutter_charset_detector_web_stub
+  pdf_text_extract:
+    path: third_party/plugins/pdf_text_extract
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -101,8 +118,10 @@ flutter:
   assets:
     - read.json
     - test_read.json
+    - assets/logo/
     - assets/reader/backgrounds/
     - assets/mov/vx.png
+    - assets/branding/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -134,10 +153,23 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/logo/testlogo.png
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/logo/testlogo.png
+  image_path: assets/branding/app_icon.png
+  image_path_ios: assets/branding/app_icon.png
+  image_path_android: assets/branding/app_icon.png
+  adaptive_icon_background: "#17171C"
+  adaptive_icon_foreground: assets/branding/app_icon.png
   remove_alpha_ios: true
+  macos:
+    generate: true
+    image_path: assets/branding/app_icon.png
+  web:
+    generate: true
+    image_path: assets/branding/app_icon.png
+    background_color: "#17171C"
+    theme_color: "#17171C"
+  windows:
+    generate: true
+    image_path: assets/branding/app_icon.png
 
 hooks:
   user_defines:

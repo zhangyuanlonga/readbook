@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/data/repositories/bookmark_repository_impl.dart';
-import 'package:flutter_appread/domain/entities/bookmark.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/bookmark_repository_impl.dart';
+import 'package:shuxiang_reading_next/domain/entities/bookmark.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

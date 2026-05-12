@@ -3,21 +3,36 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
+import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
-import '../../../domain/entities/source_definition.dart';
-import '../../../domain/repositories/source_repository.dart';
+import '../../../domain/entities/book_metadata_override.dart';
+import '../../../domain/entities/source_health.dart';
+import '../../book/application/book_presentation_query_service.dart';
+import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
+import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/application/cover_gallery_provider.dart';
+import '../../source/application/source_health_service.dart';
+import '../../source/application/source_runtime_scheduler_service.dart';
+import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../providers.dart';
+
+part 'discover_page_pickers.dart';
 
 enum _SourceRuntimeStatus {
   unknown,
@@ -29,29 +44,25 @@ enum _SourceRuntimeStatus {
 
 enum _SourceTypeFilter { all, novel, manga, unknown }
 
-class DiscoverPage extends StatefulWidget {
+class DiscoverPage extends ConsumerStatefulWidget {
   const DiscoverPage({
     super.key,
     ExploreService? exploreService,
     DiscoverPreferencesService? discoverPreferencesService,
-    SourceRepository? sourceRepository,
   }) : _exploreService = exploreService,
-       _discoverPreferencesService = discoverPreferencesService,
-       _sourceRepository = sourceRepository;
+       _discoverPreferencesService = discoverPreferencesService;
 
   final ExploreService? _exploreService;
   final DiscoverPreferencesService? _discoverPreferencesService;
-  final SourceRepository? _sourceRepository;
 
   @override
-  State<DiscoverPage> createState() => _DiscoverPageState();
+  ConsumerState<DiscoverPage> createState() => _DiscoverPageState();
 }
 
-class _DiscoverPageState extends State<DiscoverPage>
+class _DiscoverPageState extends ConsumerState<DiscoverPage>
     with AutomaticKeepAliveClientMixin<DiscoverPage> {
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
-  static const int _backgroundProbeBatchLimit = 60;
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -63,9 +74,11 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
-  late final SourceRepository _sourceRepository;
+  late final SourceHealthService _sourceHealthService;
+  late final SourceRuntimeTaskConflictService _taskConflictService;
+  late final SourceRuntimeSchedulerService _taskScheduler;
+  late final BookPresentationQueryService _bookPresentationService;
   final ScrollController _booksScrollController = ScrollController();
-  StreamSubscription<List<SourceDefinition>>? _sourceChangesSubscription;
   Timer? _sourceRefreshDebounce;
 
   bool _isLoadingSources = false;
@@ -74,17 +87,16 @@ class _DiscoverPageState extends State<DiscoverPage>
   bool _isLoadingMore = false;
   int _enabledSourceCount = 0;
   int _discoverCapableCount = 0;
-  int _sourceProbeToken = 0;
 
-  List<SourceDefinition> _discoverSources = const <SourceDefinition>[];
-  SourceDefinition? _selectedSource;
+  List<DiscoverSource> _discoverSources = const <DiscoverSource>[];
+  DiscoverSource? _selectedSource;
   List<ExploreCategoryItem> _categories = const <ExploreCategoryItem>[];
   int _selectedCategoryIndex = -1;
   List<Book> _books = const <Book>[];
-  final Set<String> _probingSourceIds = <String>{};
-  final Set<String> _verifiedSourceIds = <String>{};
-  final Map<String, String> _sourceParseErrorById = <String, String>{};
-  final Map<String, String> _sourceBookErrorById = <String, String>{};
+  Map<String, BookDisplayState> _bookPresentationByTargetKey =
+      const <String, BookDisplayState>{};
+  Map<String, SourceHealthSnapshot> _sourceHealthById =
+      const <String, SourceHealthSnapshot>{};
 
   int _nextPage = 1;
   bool _hasMore = false;
@@ -97,6 +109,17 @@ class _DiscoverPageState extends State<DiscoverPage>
   int _bookRequestToken = 0;
   String? _rememberedSourceId;
   bool _isSwitchingSource = false;
+
+  bool get _isDiscoverLoading {
+    return _isLoadingSources ||
+        _isLoadingCategories ||
+        _isLoadingBooks ||
+        _isLoadingMore;
+  }
+
+  bool get _isDiscoverBusy {
+    return _isDiscoverLoading || _isSwitchingSource;
+  }
 
   ExploreCategoryItem? get _selectedCategory {
     if (_selectedCategoryIndex < 0 ||
@@ -117,15 +140,18 @@ class _DiscoverPageState extends State<DiscoverPage>
   @override
   void initState() {
     super.initState();
-    _exploreService = widget._exploreService ?? ExploreService();
+    _exploreService =
+        widget._exploreService ?? ref.read(discoverExploreServiceProvider);
     _discoverPreferencesService =
-        widget._discoverPreferencesService ?? DiscoverPreferencesService();
-    _sourceRepository =
-        widget._sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance);
+        widget._discoverPreferencesService ??
+        ref.read(discoverPreferencesServiceProvider);
+    _sourceHealthService = ref.read(discoverSourceHealthServiceProvider);
+    _taskConflictService = ref.read(discoverTaskConflictServiceProvider);
+    _taskScheduler = ref.read(discoverTaskSchedulerProvider);
+    _bookPresentationService = ref.read(
+      discoverBookPresentationQueryServiceProvider,
+    );
     _booksScrollController.addListener(_onBookListScroll);
-    _sourceChangesSubscription = _sourceRepository.watchAll().listen((_) {
-      _scheduleSourceRefresh();
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -137,7 +163,6 @@ class _DiscoverPageState extends State<DiscoverPage>
   @override
   void dispose() {
     _sourceRefreshDebounce?.cancel();
-    _sourceChangesSubscription?.cancel();
     _booksScrollController.removeListener(_onBookListScroll);
     _booksScrollController.dispose();
     super.dispose();
@@ -146,53 +171,129 @@ class _DiscoverPageState extends State<DiscoverPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final colorScheme = Theme.of(context).colorScheme;
-    final horizontal = AppSpacing.pageHorizontal(context);
+    ref.watch(activeAdvancedThemeProvider);
+    final backdrop = _resolvedBackdrop(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final platform = Theme.of(context).platform;
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      ref.watch(appNavigationStylePreferenceProvider),
+      isWeb: false,
+      platform: platform,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
+    final standardNavigationAppearance = ref.watch(
+      appStandardNavigationBarAppearanceProvider,
+    );
+    final contentBottomInset = mobileBottomNavigationBodyInset(
+      context,
+      style: effectiveNavigationStyle,
+      showNavigationLabels: showNavigationLabels,
+      standardAppearance: standardNavigationAppearance,
+    );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('发现')),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              colorScheme.surface,
-              colorScheme.surfaceContainerLow,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (AppLayout.isExpandedWidth(constraints.maxWidth)) {
-                  return _buildWideLayout(
-                    context,
-                    sidePanelWidth: AppLayout.discoverExpandedSidePanelWidth,
-                    maxContentWidth: AppLayout.discoverExpandedContentMaxWidth,
-                  );
-                }
-                if (constraints.maxWidth >= AppLayout.railBreakpointWidth) {
-                  return _buildWideLayout(
-                    context,
-                    sidePanelWidth: AppLayout.discoverMediumSidePanelWidth,
-                    maxContentWidth: AppLayout.discoverMediumContentMaxWidth,
-                  );
-                }
-                return _buildCompactLayout(context);
-              },
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('发现'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      body: LayoutBuilder(
+        builder: (context, _) {
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth:
+                AppLayout.discoverExpandedContentMaxWidth +
+                AppLayout.discoverExpandedSidePanelWidth +
+                12,
+          );
+
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (AppLayout.isExpandedWidth(constraints.maxWidth)) {
+                        return _buildWideLayout(
+                          context,
+                          sidePanelWidth:
+                              AppLayout.discoverExpandedSidePanelWidth,
+                          maxContentWidth:
+                              AppLayout.discoverExpandedContentMaxWidth,
+                          topContentPadding: topInset + metrics.contentGap,
+                          bottomContentPadding:
+                              metrics.contentGap + contentBottomInset,
+                        );
+                      }
+                      if (constraints.maxWidth >=
+                          AppLayout.railBreakpointWidth) {
+                        return _buildWideLayout(
+                          context,
+                          sidePanelWidth:
+                              AppLayout.discoverMediumSidePanelWidth,
+                          maxContentWidth:
+                              AppLayout.discoverMediumContentMaxWidth,
+                          topContentPadding: topInset + metrics.contentGap,
+                          bottomContentPadding:
+                              metrics.contentGap + contentBottomInset,
+                        );
+                      }
+                      return _buildCompactLayout(
+                        context,
+                        topContentPadding: topInset + metrics.contentGap,
+                        bottomContentPadding:
+                            metrics.contentGap + contentBottomInset,
+                      );
+                    },
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
   @override
   bool get wantKeepAlive => true;
+
+  ResolvedAdvancedThemePalette _resolvedPalette(BuildContext context) {
+    return resolveAdvancedThemePalette(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+  }
+
+  ResolvedAdvancedThemeBackdrop _resolvedBackdrop(BuildContext context) {
+    return resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+  }
+
+  RoundedRectangleBorder _cardShape(BuildContext context) {
+    final palette = _resolvedPalette(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
+      side: resolveAppBorderSide(
+        Theme.of(context).colorScheme,
+        baseColor: palette.cardBorderColor,
+        containerColor: palette.cardColor,
+      ),
+    );
+  }
 
   void _onBookListScroll() {
     if (!_booksScrollController.hasClients ||
@@ -207,33 +308,74 @@ class _DiscoverPageState extends State<DiscoverPage>
     }
   }
 
-  void _scheduleSourceRefresh() {
-    if (!mounted) {
-      return;
-    }
-    _sourceRefreshDebounce?.cancel();
-    _sourceRefreshDebounce = Timer(const Duration(milliseconds: 220), () {
-      if (!mounted) {
-        return;
-      }
-      unawaited(_loadSources());
-    });
-  }
-
   Future<void> _bootstrapDiscoverState() async {
+    List<DiscoverSource> cachedSources = const <DiscoverSource>[];
+    List<ExploreCategoryItem> cachedCategories = const <ExploreCategoryItem>[];
     try {
       _rememberedSourceId =
           await _discoverPreferencesService.loadSelectedSourceId();
     } catch (_) {
       _rememberedSourceId = null;
     }
+
+    try {
+      cachedSources = await _discoverPreferencesService.loadSourceSnapshot();
+    } catch (_) {
+      cachedSources = const <DiscoverSource>[];
+    }
+
+    if (cachedSources.isNotEmpty) {
+      cachedSources = List<DiscoverSource>.from(cachedSources, growable: false)
+        ..sort((left, right) {
+          final groupCompare = (left.group ?? '').compareTo(right.group ?? '');
+          if (groupCompare != 0) {
+            return groupCompare;
+          }
+          return left.name.compareTo(right.name);
+        });
+      final cachedSelected = _findSourceById(
+        cachedSources,
+        _rememberedSourceId,
+      );
+      if (cachedSelected != null) {
+        try {
+          cachedCategories = await _discoverPreferencesService
+              .loadCategorySnapshot(cachedSelected.id);
+        } catch (_) {
+          cachedCategories = const <ExploreCategoryItem>[];
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _discoverSources = cachedSources;
+        _sourceHealthById = _captureSourceHealth(cachedSources);
+        _selectedSource = cachedSelected;
+        _categories = cachedCategories;
+        _selectedCategoryIndex = _resolveCategorySelection(
+          categories: cachedCategories,
+          previousCategory: null,
+        );
+        _books = const <Book>[];
+        _nextPage = 1;
+        _hasMore = false;
+      });
+    }
+
     if (!mounted) {
       return;
     }
     await _loadSources();
   }
 
-  Widget _buildCompactLayout(BuildContext context) {
+  Widget _buildCompactLayout(
+    BuildContext context, {
+    required double topContentPadding,
+    required double bottomContentPadding,
+  }) {
     return ScrollConfiguration(
       behavior: const MaterialScrollBehavior().copyWith(
         dragDevices: _dragDevices,
@@ -244,11 +386,21 @@ class _DiscoverPageState extends State<DiscoverPage>
           controller: _booksScrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: <Widget>[
+            SliverToBoxAdapter(child: SizedBox(height: topContentPadding)),
             SliverToBoxAdapter(child: _buildSourceSelectorCard(context)),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: AppAdaptiveMetrics.of(context).contentGap,
+              ),
+            ),
             SliverToBoxAdapter(child: _buildCategoryStripCard(context)),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: AppAdaptiveMetrics.of(context).contentGap,
+              ),
+            ),
             ..._buildBooksPaneSlivers(context),
+            SliverToBoxAdapter(child: SizedBox(height: bottomContentPadding)),
           ],
         ),
       ),
@@ -259,44 +411,79 @@ class _DiscoverPageState extends State<DiscoverPage>
     BuildContext context, {
     required double sidePanelWidth,
     required double maxContentWidth,
+    required double topContentPadding,
+    required double bottomContentPadding,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        SizedBox(width: sidePanelWidth, child: _buildSidePanel(context)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxContentWidth),
-              child: ScrollConfiguration(
-                behavior: const MaterialScrollBehavior().copyWith(
-                  dragDevices: _dragDevices,
-                ),
-                child: RefreshIndicator(
-                  onRefresh: _refreshCurrentView,
-                  child: CustomScrollView(
-                    controller: _booksScrollController,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: _buildBooksPaneSlivers(context),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        0,
+        topContentPadding,
+        0,
+        bottomContentPadding,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(width: sidePanelWidth, child: _buildSidePanel(context)),
+          SizedBox(width: AppAdaptiveMetrics.of(context).contentGap),
+          Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxContentWidth),
+                child: ScrollConfiguration(
+                  behavior: const MaterialScrollBehavior().copyWith(
+                    dragDevices: _dragDevices,
+                  ),
+                  child: RefreshIndicator(
+                    onRefresh: _refreshCurrentView,
+                    child: CustomScrollView(
+                      controller: _booksScrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: <Widget>[
+                        ..._buildBooksPaneSlivers(context),
+                        SliverToBoxAdapter(
+                          child: SizedBox(height: bottomContentPadding),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildSidePanel(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        _buildSourceSelectorCard(context),
-        const SizedBox(height: 12),
-        Expanded(child: _buildCategoryPanelCard(context)),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxHeight < 420) {
+          final categoryHeight = math.max(220.0, constraints.maxHeight * 0.72);
+          return SingleChildScrollView(
+            child: Column(
+              children: <Widget>[
+                _buildSourceSelectorCard(context),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: categoryHeight,
+                  child: _buildCategoryPanelCard(context),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: <Widget>[
+            _buildSourceSelectorCard(context),
+            const SizedBox(height: 12),
+            Expanded(child: _buildCategoryPanelCard(context)),
+          ],
+        );
+      },
     );
   }
 
@@ -309,11 +496,13 @@ class _DiscoverPageState extends State<DiscoverPage>
     final categoryName = _selectedCategory?.title ?? '未选分类';
     final status = _resolveSourceStatus(source?.id);
     final statusDetail = _sourceStatusDetail(source?.id);
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final textTheme = Theme.of(context).textTheme;
     final hasMultipleSources = _discoverSources.length > 1;
 
     return Card(
+      color: palette.cardColor,
+      shape: _cardShape(context),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
@@ -329,14 +518,14 @@ class _DiscoverPageState extends State<DiscoverPage>
                     '当前书源',
                     style: textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurfaceVariant,
+                      color: palette.textSecondaryColor,
                     ),
                   ),
                 const Spacer(),
                 TextButton.icon(
                   key: const Key('discover_source_switch_button'),
                   onPressed:
-                      _isLoadingSources || _discoverSources.isEmpty
+                      _isDiscoverBusy || _discoverSources.isEmpty
                           ? null
                           : _showSourcePicker,
                   icon: const Icon(Icons.tune_rounded),
@@ -368,7 +557,7 @@ class _DiscoverPageState extends State<DiscoverPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.labelLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+                color: palette.textSecondaryColor,
               ),
             ),
 
@@ -404,7 +593,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
+                  color: palette.elevatedSurfaceColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -412,7 +601,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: palette.textSecondaryColor,
                     height: 1.3,
                   ),
                 ),
@@ -483,6 +672,8 @@ class _DiscoverPageState extends State<DiscoverPage>
       _compactCategoryPreviewCount,
     );
     return Card(
+      color: _resolvedPalette(context).cardColor,
+      shape: _cardShape(context),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
@@ -537,6 +728,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     ExploreCategoryItem item,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final isSelected = index == _selectedCategoryIndex;
     if (item.isActionable) {
       return Tooltip(
@@ -546,16 +738,12 @@ class _DiscoverPageState extends State<DiscoverPage>
           label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: isSelected,
           showCheckmark: false,
-          selectedColor: colorScheme.secondaryContainer,
+          selectedColor: palette.primaryContainerColor,
           side: BorderSide(
-            color:
-                isSelected ? colorScheme.secondary : colorScheme.outlineVariant,
+            color: isSelected ? palette.primaryColor : palette.cardBorderColor,
           ),
           labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color:
-                isSelected
-                    ? colorScheme.onSecondaryContainer
-                    : colorScheme.onSurface,
+            color: palette.textPrimaryColor,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
           ),
           visualDensity: VisualDensity.compact,
@@ -578,10 +766,10 @@ class _DiscoverPageState extends State<DiscoverPage>
         label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         labelStyle: Theme.of(
           context,
-        ).textTheme.labelLarge?.copyWith(color: colorScheme.onSurfaceVariant),
-        side: BorderSide(color: colorScheme.outlineVariant),
+        ).textTheme.labelLarge?.copyWith(color: palette.textSecondaryColor),
+        side: BorderSide(color: palette.cardBorderColor),
         visualDensity: VisualDensity.compact,
-        backgroundColor: colorScheme.surfaceContainerHighest,
+        backgroundColor: palette.elevatedSurfaceColor,
       ),
     );
   }
@@ -596,6 +784,8 @@ class _DiscoverPageState extends State<DiscoverPage>
     final actionableCount = _actionableCategoryEntries.length;
 
     return Card(
+      color: _resolvedPalette(context).cardColor,
+      shape: _cardShape(context),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[
@@ -648,13 +838,14 @@ class _DiscoverPageState extends State<DiscoverPage>
         final index = entry.key;
         final item = entry.value;
         final selected = index == _selectedCategoryIndex;
-        final textColor = Theme.of(context).colorScheme.onSurface;
+        final palette = _resolvedPalette(context);
+        final textColor =
+            selected
+                ? palette.textPrimaryColor
+                : Theme.of(context).colorScheme.onSurface;
 
         return Material(
-          color:
-              selected
-                  ? Theme.of(context).colorScheme.secondaryContainer
-                  : Colors.transparent,
+          color: selected ? palette.primaryContainerColor : Colors.transparent,
           child: InkWell(
             onTap: () => _selectCategory(index),
             child: Padding(
@@ -702,7 +893,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                     Icon(
                       Icons.check_rounded,
                       size: 18,
-                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      color: palette.textPrimaryColor,
                     ),
                   ],
                 ],
@@ -857,10 +1048,25 @@ class _DiscoverPageState extends State<DiscoverPage>
     Book book, {
     required int listIndex,
   }) {
-    final author = _normalizeSnippet(book.author);
+    final palette = _resolvedPalette(context);
     final latestChapter = _normalizeSnippet(book.latestChapter);
-    final intro = _normalizeSnippet(book.intro);
     final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
+    final targetKey = BookMetadataOverride.remoteTargetKey(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+    );
+    final presented = _bookPresentationByTargetKey[targetKey];
+    final displayTitle =
+        presented?.displayTitle.trim().isNotEmpty == true
+            ? presented!.displayTitle
+            : book.title;
+    final displayAuthor = _normalizeSnippet(
+      presented?.displayAuthor ?? book.author,
+    );
+    final displayIntro = _normalizeSnippet(
+      presented?.displayIntro ?? book.intro,
+    );
+    final displayCover = presented?.displayCover ?? book.coverUrl;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -876,18 +1082,16 @@ class _DiscoverPageState extends State<DiscoverPage>
         final compactPill = useCondensedPhoneDensity;
 
         return Card(
+          color: palette.cardColor,
+          shape: _cardShape(context),
           margin: EdgeInsets.only(bottom: cardBottomMargin),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () => _openBookDetail(book, heroTag: heroTag),
             borderRadius: BorderRadius.circular(12),
             mouseCursor: SystemMouseCursors.click,
-            hoverColor: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.06),
-            focusColor: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.1),
+            hoverColor: palette.primaryColor.withValues(alpha: 0.06),
+            focusColor: palette.primaryColor.withValues(alpha: 0.1),
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: cardHorizontalPadding,
@@ -897,9 +1101,12 @@ class _DiscoverPageState extends State<DiscoverPage>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
                   _buildCoverPreview(
-                    book.coverUrl,
-                    title: book.title,
-                    author: book.author,
+                    realCoverUrl: displayCover,
+                    title: displayTitle,
+                    author: displayAuthor,
+                    bookId: book.id,
+                    sourceId: book.sourceId,
+                    detailUrl: book.detailUrl,
                     heroTag: heroTag,
                     width: coverWidth,
                     height: coverHeight,
@@ -910,11 +1117,15 @@ class _DiscoverPageState extends State<DiscoverPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          book.title,
+                          displayTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.cardTextColor,
+                          ),
                         ),
                         SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
                         Wrap(
@@ -927,11 +1138,12 @@ class _DiscoverPageState extends State<DiscoverPage>
                               value: _selectedSource?.name ?? book.sourceId,
                               compact: compactPill,
                             ),
-                            if (author != null && author.isNotEmpty)
+                            if (displayAuthor != null &&
+                                displayAuthor.isNotEmpty)
                               _buildInfoPill(
                                 context,
                                 label: '作者',
-                                value: author,
+                                value: displayAuthor,
                                 compact: compactPill,
                               ),
                           ],
@@ -946,7 +1158,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
-                        if (intro != null && intro.isNotEmpty)
+                        if (displayIntro != null && displayIntro.isNotEmpty)
                           Padding(
                             padding: EdgeInsets.only(top: sectionGap),
                             child: Container(
@@ -956,23 +1168,17 @@ class _DiscoverPageState extends State<DiscoverPage>
                                 vertical: useCondensedPhoneDensity ? 5 : 6,
                               ),
                               decoration: BoxDecoration(
-                                color:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHigh,
+                                color: palette.elevatedSurfaceColor,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                intro,
+                                displayIntro,
                                 maxLines: introMaxLines,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
+                                  color: palette.textSecondaryColor,
                                   height: 1.35,
                                 ),
                               ),
@@ -984,7 +1190,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                   const SizedBox(width: 8),
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: palette.textSecondaryColor,
                   ),
                 ],
               ),
@@ -995,72 +1201,41 @@ class _DiscoverPageState extends State<DiscoverPage>
     );
   }
 
-  Widget _buildCoverPreview(
-    String? coverUrl, {
+  Widget _buildCoverPreview({
+    String? realCoverUrl,
     required String title,
     String? author,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
     required String heroTag,
     required double width,
     required double height,
   }) {
-    final trimmed = coverUrl?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return Hero(
-        tag: heroTag,
-        child: _buildCoverFallback(
-          title: title,
-          author: author,
-          width: width,
-          height: height,
-        ),
-      );
-    }
+    return Consumer(
+      builder: (context, ref, _) {
+        final resolvedCover = resolveBookCover(
+          realCoverUrl: realCoverUrl,
+          activeTheme: ref.watch(activeAdvancedThemeProvider).valueOrNull,
+          galleries: ref.watch(coverGalleriesProvider).valueOrNull ?? const [],
+          brightness: Theme.of(context).brightness,
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
 
-    final uri = Uri.tryParse(trimmed);
-    if (uri == null || !uri.hasScheme) {
-      return Hero(
-        tag: heroTag,
-        child: _buildCoverFallback(
-          title: title,
-          author: author,
-          width: width,
-          height: height,
-        ),
-      );
-    }
-
-    return Hero(
-      tag: heroTag,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: DiskCachedCoverImage(
-          imageUrl: trimmed,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          fallback: _buildCoverFallback(
+        return Hero(
+          tag: heroTag,
+          child: ResolvedBookCoverView(
+            cover: resolvedCover,
             title: title,
             author: author,
             width: width,
             height: height,
+            borderRadius: BorderRadius.circular(8),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCoverFallback({
-    required String title,
-    String? author,
-    required double width,
-    required double height,
-  }) {
-    return TextCoverPlaceholder(
-      title: title,
-      author: author,
-      width: width,
-      height: height,
-      borderRadius: BorderRadius.circular(8),
+        );
+      },
     );
   }
 
@@ -1070,11 +1245,11 @@ class _DiscoverPageState extends State<DiscoverPage>
     required String value,
     bool compact = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: colorScheme.secondaryContainer,
+        color: palette.noticeSurfaceColor,
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -1083,34 +1258,22 @@ class _DiscoverPageState extends State<DiscoverPage>
         ),
         child: Text(
           '$label: $value',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSecondaryContainer,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: palette.noticeAccentColor),
         ),
       ),
     );
   }
 
   Widget _buildLoadingCard(BuildContext context, {required String message}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: <Widget>[
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
+    return AppAnimatedSwitcher(
+      child: RuntimeFeedbackCard(
+        key: ValueKey<String>('discover_loading_$message'),
+        title: '正在加载',
+        message: message,
+        tone: RuntimeFeedbackTone.loading,
+        compact: true,
       ),
     );
   }
@@ -1121,52 +1284,41 @@ class _DiscoverPageState extends State<DiscoverPage>
     required VoidCallback onRetry,
     String actionLabel = '重试',
   }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(
-                  Icons.error_outline_rounded,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonalIcon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text(actionLabel),
-            ),
-          ],
-        ),
+    return AppAnimatedSwitcher(
+      child: RuntimeFeedbackCard(
+        key: ValueKey<String>('discover_error_$message'),
+        title: '加载失败',
+        message: message,
+        tone: RuntimeFeedbackTone.error,
+        compact: true,
+        actions: [
+          FilledButton.tonalIcon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(actionLabel),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildInfoCard(BuildContext context, {required String message}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+    return AppAnimatedSwitcher(
+      child: RuntimeFeedbackCard(
+        key: ValueKey<String>('discover_info_$message'),
+        title: '提示',
+        message: message,
+        tone: RuntimeFeedbackTone.info,
+        compact: true,
       ),
     );
   }
 
   Widget _buildNoSourceCard(BuildContext context) {
+    final palette = _resolvedPalette(context);
     return Card(
+      color: palette.cardColor,
+      shape: _cardShape(context),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1180,7 +1332,7 @@ class _DiscoverPageState extends State<DiscoverPage>
             ),
             const SizedBox(height: 8),
             Text(
-              '请先在书源页导入并启用带 `exploreUrl + ruleExplore` 的书源。',
+              '请先在书源页导入并启用声明了 `discover` 能力、且实现 `discoverCategories + discoverBooks` 的书源。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (_enabledSourceCount > 0) ...<Widget>[
@@ -1188,13 +1340,17 @@ class _DiscoverPageState extends State<DiscoverPage>
               Text(
                 '当前已启用：$_enabledSourceCount，支持发现：$_discoverCapableCount',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: palette.textSecondaryColor,
                 ),
               ),
             ],
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => context.push('/source'),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.primaryColor,
+                foregroundColor: palette.buttonTextColor,
+              ),
               icon: const Icon(Icons.storage_rounded),
               label: const Text('前往书源页'),
             ),
@@ -1225,7 +1381,7 @@ class _DiscoverPageState extends State<DiscoverPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: _resolvedPalette(context).textSecondaryColor,
               ),
             ),
           );
@@ -1237,16 +1393,13 @@ class _DiscoverPageState extends State<DiscoverPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                Icon(icon, color: _resolvedPalette(context).textSecondaryColor),
                 const SizedBox(height: 8),
                 Text(
                   message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: _resolvedPalette(context).textSecondaryColor,
                   ),
                 ),
               ],
@@ -1284,10 +1437,10 @@ class _DiscoverPageState extends State<DiscoverPage>
 
       final selected = _findSourceById(loadedSources, previousSourceId);
       setState(() {
-        _syncSourceRuntimeCache(loadedSources);
         _enabledSourceCount = summary.enabledSourceCount;
         _discoverCapableCount = summary.discoverCapableCount;
         _discoverSources = loadedSources;
+        _sourceHealthById = _captureSourceHealth(loadedSources);
         _selectedSource = selected;
         _isLoadingSources = false;
         _categories = const <ExploreCategoryItem>[];
@@ -1298,6 +1451,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       });
 
       unawaited(_persistSelectedSourceId(selected?.id));
+      unawaited(_discoverPreferencesService.saveSourceSnapshot(loadedSources));
 
       if (selected != null) {
         await _loadCategoriesForSource(
@@ -1305,114 +1459,39 @@ class _DiscoverPageState extends State<DiscoverPage>
           preserveCurrentCategory: false,
         );
       }
-
-      unawaited(
-        _probeSourceCompatibilityInBackground(
-          _buildInitialProbeSources(
-            sources: loadedSources,
-            selectedSourceId: selected?.id,
-          ),
-        ),
-      );
     } catch (error) {
       if (!mounted || requestToken != _sourceRequestToken) {
         return;
       }
       setState(() {
-        _probingSourceIds.clear();
-        _verifiedSourceIds.clear();
-        _sourceParseErrorById.clear();
-        _sourceBookErrorById.clear();
         _enabledSourceCount = 0;
         _discoverCapableCount = 0;
+        _sourceHealthById = const <String, SourceHealthSnapshot>{};
         _isLoadingSources = false;
         _sourceErrorText = _toReadableError(error, fallback: '加载发现书源失败');
       });
     }
   }
 
-  void _syncSourceRuntimeCache(List<SourceDefinition> sources) {
-    final sourceIdSet = sources.map((item) => item.id).toSet();
-    _probingSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
-    _verifiedSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
-    _sourceParseErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
-    _sourceBookErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
-  }
-
-  List<SourceDefinition> _buildInitialProbeSources({
-    required List<SourceDefinition> sources,
-    required String? selectedSourceId,
-  }) {
-    if (sources.isEmpty) {
-      return const <SourceDefinition>[];
-    }
-
-    final output = <SourceDefinition>[];
-    if (selectedSourceId != null && selectedSourceId.isNotEmpty) {
-      for (final source in sources) {
-        if (source.id == selectedSourceId) {
-          output.add(source);
-          break;
-        }
-      }
-    }
-
+  Map<String, SourceHealthSnapshot> _captureSourceHealth(
+    List<DiscoverSource> sources,
+  ) {
+    final snapshots = <String, SourceHealthSnapshot>{};
     for (final source in sources) {
-      if (output.length >= _backgroundProbeBatchLimit) {
-        break;
-      }
-      if (output.any((item) => item.id == source.id)) {
-        continue;
-      }
-      output.add(source);
+      snapshots[source.id] = _sourceHealthService.snapshotFor(source.id);
     }
-    return output;
+    return Map<String, SourceHealthSnapshot>.unmodifiable(snapshots);
   }
 
-  Future<void> _probeSourceCompatibilityInBackground(
-    List<SourceDefinition> sources,
-  ) async {
-    if (sources.isEmpty || !mounted) {
+  void _refreshSourceHealth(String sourceId) {
+    final normalized = sourceId.trim();
+    if (normalized.isEmpty) {
       return;
     }
-
-    final token = ++_sourceProbeToken;
-    setState(() {
-      _probingSourceIds.addAll(sources.map((item) => item.id));
-    });
-
-    for (final source in sources) {
-      if (!mounted || token != _sourceProbeToken) {
-        return;
-      }
-
-      String? parseError;
-      try {
-        final categories = await _exploreService.parseCategories(
-          source,
-          evaluateScript: false,
-        );
-        if (!categories.any((item) => item.isActionable)) {
-          parseError = '发现分类均不可点击。';
-        }
-      } catch (error) {
-        parseError = _toReadableError(error, fallback: '发现分类解析失败');
-      }
-
-      if (!mounted || token != _sourceProbeToken) {
-        return;
-      }
-
-      setState(() {
-        _probingSourceIds.remove(source.id);
-        _verifiedSourceIds.add(source.id);
-        if (parseError == null || parseError.isEmpty) {
-          _sourceParseErrorById.remove(source.id);
-        } else {
-          _sourceParseErrorById[source.id] = parseError;
-        }
-      });
-    }
+    _sourceHealthById = <String, SourceHealthSnapshot>{
+      ..._sourceHealthById,
+      normalized: _sourceHealthService.snapshotFor(normalized),
+    };
   }
 
   Future<void> _reloadCurrentSource() async {
@@ -1425,11 +1504,22 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _loadCategoriesForSource(
-    SourceDefinition source, {
+    DiscoverSource source, {
     required bool preserveCurrentCategory,
   }) async {
+    _cancelBackgroundRefreshConflictForSource(source.id);
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.discover,
+      conflictKeys: <String>[
+        _taskConflictService.conflictKeyForSource(source.id),
+      ],
+    );
+    if (lease == null) {
+      return;
+    }
     final requestToken = ++_categoryRequestToken;
     final previousCategory = preserveCurrentCategory ? _selectedCategory : null;
+    var shouldLoadBooks = false;
     unawaited(_persistSelectedSourceId(source.id));
 
     setState(() {
@@ -1461,16 +1551,21 @@ class _DiscoverPageState extends State<DiscoverPage>
 
       setState(() {
         _isLoadingCategories = false;
-        _verifiedSourceIds.add(source.id);
-        _sourceParseErrorById.remove(source.id);
+        _refreshSourceHealth(source.id);
         _categories = parsedCategories;
         _selectedCategoryIndex = nextCategoryIndex;
       });
+      unawaited(
+        _discoverPreferencesService.saveCategorySnapshot(
+          source.id,
+          parsedCategories,
+        ),
+      );
 
       if (nextCategoryIndex >= 0 &&
           nextCategoryIndex < parsedCategories.length &&
           parsedCategories[nextCategoryIndex].isActionable) {
-        await _loadBooks(reset: true);
+        shouldLoadBooks = true;
       }
     } catch (error) {
       if (!mounted || requestToken != _categoryRequestToken) {
@@ -1478,11 +1573,16 @@ class _DiscoverPageState extends State<DiscoverPage>
       }
       setState(() {
         _isLoadingCategories = false;
-        _verifiedSourceIds.add(source.id);
         final message = _toReadableError(error, fallback: '解析发现分类失败');
         _sourceErrorText = message;
-        _sourceParseErrorById[source.id] = message;
+        _refreshSourceHealth(source.id);
       });
+    } finally {
+      lease.release();
+    }
+
+    if (shouldLoadBooks) {
+      await _loadBooks(reset: true);
     }
   }
 
@@ -1492,7 +1592,18 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (source == null || category == null || !category.isActionable) {
       return;
     }
+    _cancelBackgroundRefreshConflictForSource(source.id);
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.discover,
+      conflictKeys: <String>[
+        _taskConflictService.conflictKeyForSource(source.id),
+      ],
+    );
+    if (lease == null) {
+      return;
+    }
     if (!reset && (_isLoadingMore || _isLoadingBooks || !_hasMore)) {
+      lease.release();
       return;
     }
 
@@ -1504,6 +1615,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       if (reset) {
         _isLoadingBooks = true;
         _books = const <Book>[];
+        _bookPresentationByTargetKey = const <String, BookDisplayState>{};
         _nextPage = 1;
         _hasMore = false;
       } else {
@@ -1533,8 +1645,14 @@ class _DiscoverPageState extends State<DiscoverPage>
         _hasMore = result.hasMore && result.books.isNotEmpty;
         _isLoadingBooks = false;
         _isLoadingMore = false;
-        _sourceBookErrorById.remove(source.id);
+        _refreshSourceHealth(source.id);
       });
+      unawaited(
+        _refreshBookPresentationMap(
+          books: deduplicatedBooks,
+          requestToken: requestToken,
+        ),
+      );
     } catch (error) {
       if (!mounted || requestToken != _bookRequestToken) {
         return;
@@ -1546,11 +1664,28 @@ class _DiscoverPageState extends State<DiscoverPage>
         _hasMore = !reset;
         if (reset) {
           _books = const <Book>[];
+          _bookPresentationByTargetKey = const <String, BookDisplayState>{};
         }
         _bookErrorText = message;
-        _sourceBookErrorById[source.id] = message;
+        _refreshSourceHealth(source.id);
       });
+    } finally {
+      lease.release();
     }
+  }
+
+  Future<void> _refreshBookPresentationMap({
+    required List<Book> books,
+    required int requestToken,
+  }) async {
+    final presentationMap = await _bookPresentationService
+        .loadRemotePresentationMap(books);
+    if (!mounted || requestToken != _bookRequestToken) {
+      return;
+    }
+    setState(() {
+      _bookPresentationByTargetKey = presentationMap;
+    });
   }
 
   Future<void> _refreshCurrentView() async {
@@ -1623,11 +1758,11 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _showSourcePicker() async {
-    if (_discoverSources.isEmpty) {
+    if (_discoverSources.isEmpty || _isDiscoverBusy) {
       return;
     }
 
-    final selected = await showModalBottomSheet<SourceDefinition>(
+    final selected = await showModalBottomSheet<DiscoverSource>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -1636,9 +1771,7 @@ class _DiscoverPageState extends State<DiscoverPage>
           (context) => _SourcePickerSheet(
             sources: _discoverSources,
             selectedSourceId: _selectedSource?.id,
-            checkingSourceIds: _probingSourceIds,
-            parseErrorBySourceId: _sourceParseErrorById,
-            bookErrorBySourceId: _sourceBookErrorById,
+            healthBySourceId: _sourceHealthById,
           ),
     );
     if (!mounted || selected == null || selected.id == _selectedSource?.id) {
@@ -1680,7 +1813,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     required Future<void> Function() action,
     required String fallback,
   }) async {
-    if (_isSwitchingSource || !mounted) {
+    if (_isSwitchingSource || _isDiscoverLoading || !mounted) {
       return;
     }
     _isSwitchingSource = true;
@@ -1700,14 +1833,11 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _switchSourceByOffset(int offset) async {
-    if (_isLoadingSources || _isLoadingCategories) {
+    if (_isDiscoverLoading) {
       return;
     }
 
-    final sources = List<SourceDefinition>.of(
-      _discoverSources,
-      growable: false,
-    );
+    final sources = List<DiscoverSource>.of(_discoverSources, growable: false);
     if (sources.length < 2) {
       return;
     }
@@ -1734,7 +1864,8 @@ class _DiscoverPageState extends State<DiscoverPage>
         continue;
       }
       final candidate = sources[candidateIndex];
-      if (_sourceParseErrorById.containsKey(candidate.id)) {
+      if (_resolveSourceStatus(candidate.id) ==
+          _SourceRuntimeStatus.parseFailed) {
         continue;
       }
       await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);
@@ -1764,14 +1895,11 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _switchToNextHealthySourceInternal() async {
-    if (_isLoadingSources || _isLoadingCategories) {
+    if (_isDiscoverLoading) {
       return;
     }
 
-    final sources = List<SourceDefinition>.of(
-      _discoverSources,
-      growable: false,
-    );
+    final sources = List<DiscoverSource>.of(_discoverSources, growable: false);
     if (sources.length < 2) {
       return;
     }
@@ -1787,7 +1915,8 @@ class _DiscoverPageState extends State<DiscoverPage>
         continue;
       }
       final candidate = sources[index];
-      if (_sourceParseErrorById.containsKey(candidate.id)) {
+      if (_resolveSourceStatus(candidate.id) ==
+          _SourceRuntimeStatus.parseFailed) {
         continue;
       }
       await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);
@@ -1809,39 +1938,48 @@ class _DiscoverPageState extends State<DiscoverPage>
     return mod < 0 ? mod + length : mod;
   }
 
+  void _cancelBackgroundRefreshConflictForSource(String sourceId) {
+    final conflictKey = _taskConflictService.conflictKeyForSource(sourceId);
+    if (conflictKey.isEmpty) {
+      return;
+    }
+    _taskConflictService.cancelBackgroundWorkFor(
+      conflictKey: conflictKey,
+      byScene: SourceRuntimeConflictScene.discover,
+    );
+  }
+
   _SourceRuntimeStatus _resolveSourceStatus(String? sourceId) {
     if (sourceId == null || sourceId.isEmpty) {
       return _SourceRuntimeStatus.unknown;
     }
-    if (_probingSourceIds.contains(sourceId)) {
+    if (sourceId == _selectedSource?.id &&
+        (_isLoadingCategories || _isLoadingBooks || _isLoadingMore)) {
       return _SourceRuntimeStatus.checking;
     }
-    if (_sourceParseErrorById.containsKey(sourceId)) {
-      return _SourceRuntimeStatus.parseFailed;
-    }
-    if (_sourceBookErrorById.containsKey(sourceId)) {
-      return _SourceRuntimeStatus.requestFailed;
-    }
-    if (!_verifiedSourceIds.contains(sourceId)) {
+    final snapshot = _sourceHealthById[sourceId];
+    if (snapshot == null) {
       return _SourceRuntimeStatus.unknown;
     }
-    return _SourceRuntimeStatus.ready;
+    return _sourceRuntimeStatusFromHealth(snapshot);
   }
 
   String? _sourceStatusDetail(String? sourceId) {
     if (sourceId == null || sourceId.isEmpty) {
       return null;
     }
-    final parseError = _sourceParseErrorById[sourceId];
-    if (parseError != null && parseError.isNotEmpty) {
-      return parseError;
+    final status = _resolveSourceStatus(sourceId);
+    if (status == _SourceRuntimeStatus.ready ||
+        status == _SourceRuntimeStatus.checking ||
+        status == _SourceRuntimeStatus.unknown) {
+      return null;
     }
-
-    final bookError = _sourceBookErrorById[sourceId];
-    if (bookError != null && bookError.isNotEmpty) {
-      return bookError;
+    final snapshot = _sourceHealthById[sourceId];
+    if (snapshot == null) {
+      return null;
     }
-    return null;
+    final detail = snapshot.lastFailureReason?.trim();
+    return detail == null || detail.isEmpty ? null : detail;
   }
 
   Widget _buildSourceStatusPill(
@@ -1932,7 +2070,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       case _SourceRuntimeStatus.checking:
         return '检查中';
       case _SourceRuntimeStatus.parseFailed:
-        return '规则异常';
+        return '书源异常';
       case _SourceRuntimeStatus.requestFailed:
         return '访问失败';
       case _SourceRuntimeStatus.unknown:
@@ -1956,8 +2094,8 @@ class _DiscoverPageState extends State<DiscoverPage>
     }
   }
 
-  SourceDefinition? _findSourceById(
-    List<SourceDefinition> sources,
+  DiscoverSource? _findSourceById(
+    List<DiscoverSource> sources,
     String? sourceId,
   ) {
     if (sourceId == null || sourceId.isEmpty) {
@@ -1988,6 +2126,8 @@ class _DiscoverPageState extends State<DiscoverPage>
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       title: book.title,
+      author: book.author,
+      coverUrl: book.coverUrl,
       heroTag: heroTag,
     );
     context.push(route);
@@ -1997,7 +2137,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     return 'discover_cover_${book.sourceId}_${book.id}_${book.detailUrl.hashCode}_$listIndex';
   }
 
-  String _buildSourceSummary(SourceDefinition source) {
+  String _buildSourceSummary(DiscoverSource source) {
     final group = source.group?.trim();
     final host = _extractHost(source.baseUrl);
     if (group == null || group.isEmpty) {
@@ -2041,406 +2181,33 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 }
 
-class _SourcePickerSheet extends StatefulWidget {
-  const _SourcePickerSheet({
-    required this.sources,
-    required this.selectedSourceId,
-    required this.checkingSourceIds,
-    required this.parseErrorBySourceId,
-    required this.bookErrorBySourceId,
-  });
-
-  final List<SourceDefinition> sources;
-  final String? selectedSourceId;
-  final Set<String> checkingSourceIds;
-  final Map<String, String> parseErrorBySourceId;
-  final Map<String, String> bookErrorBySourceId;
-
-  @override
-  State<_SourcePickerSheet> createState() => _SourcePickerSheetState();
-}
-
-class _SourcePickerSheetState extends State<_SourcePickerSheet> {
-  final TextEditingController _searchController = TextEditingController();
-  _SourceTypeFilter _sourceTypeFilter = _SourceTypeFilter.all;
-
-  List<SourceDefinition> get _filteredSources {
-    final keyword = _searchController.text.trim().toLowerCase();
-    final result = widget.sources
-        .where((source) {
-          if (!_matchesSourceTypeFilter(source)) {
-            return false;
-          }
-          if (keyword.isEmpty) {
-            return true;
-          }
-          final name = source.name.toLowerCase();
-          final baseUrl = source.baseUrl.toLowerCase();
-          final host = _extractHost(source.baseUrl).toLowerCase();
-          return name.contains(keyword) ||
-              baseUrl.contains(keyword) ||
-              host.contains(keyword);
-        })
-        .toList(growable: true);
-
-    result.sort((left, right) {
-      final leftStatus = _resolveSourceRuntimeStatus(
-        sourceId: left.id,
-        checkingSourceIds: widget.checkingSourceIds,
-        parseErrorBySourceId: widget.parseErrorBySourceId,
-        bookErrorBySourceId: widget.bookErrorBySourceId,
-      );
-      final rightStatus = _resolveSourceRuntimeStatus(
-        sourceId: right.id,
-        checkingSourceIds: widget.checkingSourceIds,
-        parseErrorBySourceId: widget.parseErrorBySourceId,
-        bookErrorBySourceId: widget.bookErrorBySourceId,
-      );
-      final statusCompare = _sourceStatusRank(
-        leftStatus,
-      ).compareTo(_sourceStatusRank(rightStatus));
-      if (statusCompare != 0) {
-        return statusCompare;
-      }
-      return left.name.compareTo(right.name);
-    });
-
-    return result;
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredSources = _filteredSources;
-    final allCount = widget.sources.length;
-    final novelCount = _countByType(_SourceTypeFilter.novel);
-    final mangaCount = _countByType(_SourceTypeFilter.manga);
-    final unknownCount = _countByType(_SourceTypeFilter.unknown);
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final heightFactor = AppLayout.sheetHeightFactor(
-      context,
-      compact: 0.92,
-      regular: 0.9,
-      large: 0.85,
-    );
-
-    return FractionallySizedBox(
-      heightFactor: heightFactor,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 16),
-        child: Column(
-          children: <Widget>[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '切换发现书源',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '共 ${widget.sources.length} 个发现书源',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '搜索规则名称或域名',
-                prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: <Widget>[
-                _buildTypeFilterChip(
-                  key: const Key('discover_source_filter_all'),
-                  filter: _SourceTypeFilter.all,
-                  label: '全部',
-                  count: allCount,
-                ),
-                _buildTypeFilterChip(
-                  key: const Key('discover_source_filter_novel'),
-                  filter: _SourceTypeFilter.novel,
-                  label: '小说',
-                  count: novelCount,
-                ),
-                _buildTypeFilterChip(
-                  key: const Key('discover_source_filter_manga'),
-                  filter: _SourceTypeFilter.manga,
-                  label: '漫画',
-                  count: mangaCount,
-                ),
-                _buildTypeFilterChip(
-                  key: const Key('discover_source_filter_unknown'),
-                  filter: _SourceTypeFilter.unknown,
-                  label: '未知',
-                  count: unknownCount,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child:
-                  filteredSources.isEmpty
-                      ? Center(
-                        child: Text(
-                          '没有匹配的书源',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      )
-                      : ListView.separated(
-                        itemCount: filteredSources.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final source = filteredSources[index];
-                          final selected = source.id == widget.selectedSourceId;
-                          final status = _resolveSourceRuntimeStatus(
-                            sourceId: source.id,
-                            checkingSourceIds: widget.checkingSourceIds,
-                            parseErrorBySourceId: widget.parseErrorBySourceId,
-                            bookErrorBySourceId: widget.bookErrorBySourceId,
-                          );
-                          final statusColor = _sourceStatusColor(
-                            context,
-                            status,
-                          );
-                          return ListTile(
-                            onTap: () => Navigator.of(context).pop(source),
-                            selected: selected,
-                            selectedTileColor: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer
-                                .withValues(alpha: 0.5),
-                            title: Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: Text(
-                                    source.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style:
-                                        selected
-                                            ? Theme.of(
-                                              context,
-                                            ).textTheme.bodyLarge?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            )
-                                            : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSourceTypePill(context, source),
-                                const SizedBox(width: 6),
-                                DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withValues(alpha: 0.14),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 3,
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        Icon(
-                                          _sourceStatusIcon(status),
-                                          size: 12,
-                                          color: statusColor,
-                                        ),
-                                        const SizedBox(width: 3),
-                                        Text(
-                                          _sourceStatusLabel(status),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(color: statusColor),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            subtitle: Text(
-                              _buildSourceSummary(source),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing:
-                                selected
-                                    ? Icon(
-                                      Icons.check_circle_rounded,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                    )
-                                    : null,
-                          );
-                        },
-                      ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTypeFilterChip({
-    required Key key,
-    required _SourceTypeFilter filter,
-    required String label,
-    required int count,
-  }) {
-    return ChoiceChip(
-      key: key,
-      label: Text('$label ($count)'),
-      selected: _sourceTypeFilter == filter,
-      onSelected: (_) {
-        setState(() {
-          _sourceTypeFilter = filter;
-        });
-      },
-    );
-  }
-
-  Widget _buildSourceTypePill(BuildContext context, SourceDefinition source) {
-    final typeColor = _sourceTypeColor(context, source);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: typeColor.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        child: Text(
-          _sourceTypeLabel(source),
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: typeColor),
-        ),
-      ),
-    );
-  }
-
-  bool _matchesSourceTypeFilter(SourceDefinition source) {
-    switch (_sourceTypeFilter) {
-      case _SourceTypeFilter.all:
-        return true;
-      case _SourceTypeFilter.novel:
-        return _isNovelSource(source);
-      case _SourceTypeFilter.manga:
-        return _isMangaSource(source);
-      case _SourceTypeFilter.unknown:
-        return _isUnknownSource(source);
-    }
-  }
-
-  int _countByType(_SourceTypeFilter filter) {
-    return widget.sources.where((source) {
-      switch (filter) {
-        case _SourceTypeFilter.all:
-          return true;
-        case _SourceTypeFilter.novel:
-          return _isNovelSource(source);
-        case _SourceTypeFilter.manga:
-          return _isMangaSource(source);
-        case _SourceTypeFilter.unknown:
-          return _isUnknownSource(source);
-      }
-    }).length;
-  }
-
-  bool _isNovelSource(SourceDefinition source) {
-    return source.sourceType == 0 && !source.isMangaSource;
-  }
-
-  bool _isMangaSource(SourceDefinition source) {
-    return source.isMangaSource;
-  }
-
-  bool _isUnknownSource(SourceDefinition source) {
-    return !_isNovelSource(source) && !_isMangaSource(source);
-  }
-
-  String _sourceTypeLabel(SourceDefinition source) {
-    if (_isMangaSource(source)) {
-      return '漫画';
-    }
-    if (_isNovelSource(source)) {
-      return '小说';
-    }
-    return '未知';
-  }
-
-  Color _sourceTypeColor(BuildContext context, SourceDefinition source) {
-    final scheme = Theme.of(context).colorScheme;
-    if (_isMangaSource(source)) {
-      return scheme.tertiary;
-    }
-    if (_isNovelSource(source)) {
-      return scheme.primary;
-    }
-    return scheme.onSurfaceVariant;
-  }
-
-  String _buildSourceSummary(SourceDefinition source) {
-    final host = _extractHost(source.baseUrl);
-    final group = source.group?.trim();
-    if (group == null || group.isEmpty) {
-      return host;
-    }
-    return '$group · $host';
-  }
-
-  String _extractHost(String url) {
-    final uri = Uri.tryParse(url);
-    final host = uri?.host ?? '';
-    return host.isEmpty ? url : host;
-  }
-}
-
 _SourceRuntimeStatus _resolveSourceRuntimeStatus({
-  required String sourceId,
-  required Set<String> checkingSourceIds,
-  required Map<String, String> parseErrorBySourceId,
-  required Map<String, String> bookErrorBySourceId,
+  SourceHealthSnapshot? snapshot,
 }) {
-  if (sourceId.isEmpty) {
+  if (snapshot == null) {
     return _SourceRuntimeStatus.unknown;
   }
-  if (checkingSourceIds.contains(sourceId)) {
-    return _SourceRuntimeStatus.checking;
+  return _sourceRuntimeStatusFromHealth(snapshot);
+}
+
+_SourceRuntimeStatus _sourceRuntimeStatusFromHealth(
+  SourceHealthSnapshot snapshot,
+) {
+  switch (snapshot.level) {
+    case SourceHealthLevel.healthy:
+      return _SourceRuntimeStatus.ready;
+    case SourceHealthLevel.unchecked:
+      return _SourceRuntimeStatus.unknown;
+    case SourceHealthLevel.warning:
+    case SourceHealthLevel.risky:
+    case SourceHealthLevel.unavailable:
+      final failureKind = snapshot.lastFailureKind;
+      if (failureKind == SourceHealthFailureKind.parser ||
+          failureKind == SourceHealthFailureKind.disabled) {
+        return _SourceRuntimeStatus.parseFailed;
+      }
+      return _SourceRuntimeStatus.requestFailed;
   }
-  if (parseErrorBySourceId.containsKey(sourceId)) {
-    return _SourceRuntimeStatus.parseFailed;
-  }
-  if (bookErrorBySourceId.containsKey(sourceId)) {
-    return _SourceRuntimeStatus.requestFailed;
-  }
-  return _SourceRuntimeStatus.ready;
 }
 
 int _sourceStatusRank(_SourceRuntimeStatus status) {
@@ -2480,7 +2247,7 @@ String _sourceStatusLabel(_SourceRuntimeStatus status) {
     case _SourceRuntimeStatus.checking:
       return '检查中';
     case _SourceRuntimeStatus.parseFailed:
-      return '规则异常';
+      return '书源异常';
     case _SourceRuntimeStatus.requestFailed:
       return '访问失败';
     case _SourceRuntimeStatus.unknown:
@@ -2531,149 +2298,4 @@ String? _buildCategoryStyleHintText(ExploreCategoryItem item) {
   }
 
   return null;
-}
-
-class _CategoryPickerSheet extends StatefulWidget {
-  const _CategoryPickerSheet({
-    required this.categories,
-    required this.selectedIndex,
-  });
-
-  final List<ExploreCategoryItem> categories;
-  final int selectedIndex;
-
-  @override
-  State<_CategoryPickerSheet> createState() => _CategoryPickerSheetState();
-}
-
-class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
-  final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final keyword = _searchController.text.trim();
-    final lowerKeyword = keyword.toLowerCase();
-    final indexed = widget.categories
-        .asMap()
-        .entries
-        .where((entry) {
-          if (!entry.value.isActionable) {
-            return false;
-          }
-          if (lowerKeyword.isEmpty) {
-            return true;
-          }
-          return entry.value.title.toLowerCase().contains(lowerKeyword);
-        })
-        .toList(growable: false);
-
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final heightFactor = AppLayout.sheetHeightFactor(
-      context,
-      compact: 0.92,
-      regular: 0.9,
-      large: 0.85,
-    );
-
-    return FractionallySizedBox(
-      heightFactor: heightFactor,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 16),
-        child: Column(
-          children: <Widget>[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '选择分类',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '共 ${indexed.length} 个可用分类',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '搜索分类',
-                prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child:
-                  indexed.isEmpty
-                      ? Center(
-                        child: Text(
-                          '没有匹配的分类',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      )
-                      : ListView.separated(
-                        itemCount: indexed.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, row) {
-                          final index = indexed[row].key;
-                          final item = indexed[row].value;
-                          final selected = index == widget.selectedIndex;
-
-                          return ListTile(
-                            onTap: () => Navigator.of(context).pop(index),
-                            selected: selected,
-                            selectedTileColor: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer
-                                .withValues(alpha: 0.5),
-                            title: Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  selected
-                                      ? Theme.of(
-                                        context,
-                                      ).textTheme.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      )
-                                      : null,
-                            ),
-                            trailing:
-                                selected
-                                    ? Icon(
-                                      Icons.check_circle_rounded,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                    )
-                                    : null,
-                          );
-                        },
-                      ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

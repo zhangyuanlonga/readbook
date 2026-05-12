@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/reader/application/content_text_cleaner.dart';
+import 'package:shuxiang_reading_next/features/reader/application/content_text_cleaner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

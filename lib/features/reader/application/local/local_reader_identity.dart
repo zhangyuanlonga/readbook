@@ -1,4 +1,4 @@
-import '../../../bookshelf/application/local_book_import_service.dart';
+import '../../../../domain/entities/book_identity.dart' as book_identity;
 
 /// Canonical local-reading identity codec.
 ///
@@ -7,31 +7,23 @@ import '../../../bookshelf/application/local_book_import_service.dart';
 class LocalReaderIdentity {
   const LocalReaderIdentity._();
 
-  static const String localSourceId = LocalBookImportService.localBookSourceId;
-  static const String _detailHost = 'book';
-  static const String _chapterHost = 'chapter';
+  static const String localSourceId =
+      book_identity.BookIdentityScheme.localSourceId;
 
   static bool isLocalSourceId(String? sourceId) {
-    return (sourceId ?? '').trim() == localSourceId;
+    return book_identity.isLocalBookSourceId(sourceId);
   }
 
   static bool isLocalSchemeUrl(String? value) {
-    final normalized = (value ?? '').trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final uri = Uri.tryParse(normalized);
-    return uri != null && uri.scheme == 'local';
+    return book_identity.isLocalSchemeUrl(value);
   }
 
   static String buildBookDetailUrl(String bookId) {
-    final normalized = bookId.trim();
-    return 'local://$_detailHost/$normalized';
+    return book_identity.buildLocalBookDetailUrl(bookId);
   }
 
   static String buildChapterUrl(String chapterId) {
-    final normalized = chapterId.trim();
-    return 'local://$_chapterHost/$normalized';
+    return book_identity.buildLocalChapterUrl(chapterId);
   }
 
   static String? resolveBookId({
@@ -65,32 +57,10 @@ class LocalReaderIdentity {
   }
 
   static String? parseBookIdFromDetailUrl(String? detailUrl) {
-    return _parseIdByHost(value: detailUrl, expectedHost: _detailHost);
+    return book_identity.parseLocalBookIdFromDetailUrl(detailUrl);
   }
 
   static String? parseChapterIdFromChapterUrl(String? chapterUrl) {
-    return _parseIdByHost(value: chapterUrl, expectedHost: _chapterHost);
-  }
-
-  static String? _parseIdByHost({
-    required String? value,
-    required String expectedHost,
-  }) {
-    final normalized = (value ?? '').trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    final uri = Uri.tryParse(normalized);
-    if (uri == null || uri.scheme != 'local' || uri.host != expectedHost) {
-      return null;
-    }
-    if (uri.pathSegments.isEmpty) {
-      return null;
-    }
-    final id = uri.pathSegments.last.trim();
-    if (id.isEmpty) {
-      return null;
-    }
-    return id;
+    return book_identity.parseLocalChapterIdFromChapterUrl(chapterUrl);
   }
 }

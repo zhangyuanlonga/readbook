@@ -1,3 +1,57 @@
+import 'dart:convert';
+
+class BookmarkSnippetContent {
+  const BookmarkSnippetContent({required this.quote, this.note});
+
+  static const String _payloadPrefix = 'selune:bookmark:v1:';
+
+  final String quote;
+  final String? note;
+
+  bool get hasNote => note?.trim().isNotEmpty == true;
+
+  static BookmarkSnippetContent decode(String rawSnippet) {
+    final normalized = rawSnippet.trim();
+    if (normalized.isEmpty) {
+      return const BookmarkSnippetContent(quote: '');
+    }
+    if (!normalized.startsWith(_payloadPrefix)) {
+      return BookmarkSnippetContent(quote: normalized);
+    }
+
+    try {
+      final rawPayload = normalized.substring(_payloadPrefix.length);
+      final decoded = jsonDecode(rawPayload);
+      if (decoded is! Map) {
+        return BookmarkSnippetContent(quote: normalized);
+      }
+      final payload = decoded.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      final quote = (payload['quote'] ?? '').toString().trim();
+      final note = (payload['note'] ?? '').toString().trim();
+      if (quote.isEmpty) {
+        return BookmarkSnippetContent(quote: normalized);
+      }
+      return BookmarkSnippetContent(
+        quote: quote,
+        note: note.isEmpty ? null : note,
+      );
+    } catch (_) {
+      return BookmarkSnippetContent(quote: normalized);
+    }
+  }
+
+  static String encode({required String quote, String? note}) {
+    final normalizedQuote = quote.trim();
+    final normalizedNote = note?.trim() ?? '';
+    if (normalizedNote.isEmpty) {
+      return normalizedQuote;
+    }
+    return '$_payloadPrefix${jsonEncode(<String, String>{'quote': normalizedQuote, 'note': normalizedNote})}';
+  }
+}
+
 class Bookmark {
   const Bookmark({
     required this.id,
@@ -13,7 +67,8 @@ class Bookmark {
     this.isUnderline = false,
     this.isWavy = false,
     this.color,
-  });
+    String? note,
+  }) : noteText = note;
 
   final String id;
   final String bookId;
@@ -28,6 +83,26 @@ class Bookmark {
   final bool isUnderline;
   final bool isWavy;
   final String? color;
+  final String? noteText;
+
+  BookmarkSnippetContent get content {
+    final decoded = BookmarkSnippetContent.decode(snippet);
+    final explicitNote = noteText?.trim();
+    return BookmarkSnippetContent(
+      quote: decoded.quote,
+      note: explicitNote?.isNotEmpty == true ? explicitNote : decoded.note,
+    );
+  }
+
+  String get displaySnippet => content.quote;
+
+  String? get note => content.note;
+
+  bool get hasNote => content.hasNote;
+
+  static String buildSnippetPayload({required String quote, String? note}) {
+    return BookmarkSnippetContent.encode(quote: quote, note: note);
+  }
 
   Bookmark copyWith({
     String? id,
@@ -43,7 +118,9 @@ class Bookmark {
     bool? isUnderline,
     bool? isWavy,
     String? color,
+    String? note,
     bool clearColor = false,
+    bool clearNote = false,
   }) {
     return Bookmark(
       id: id ?? this.id,
@@ -59,6 +136,7 @@ class Bookmark {
       isUnderline: isUnderline ?? this.isUnderline,
       isWavy: isWavy ?? this.isWavy,
       color: clearColor ? null : (color ?? this.color),
+      note: clearNote ? null : (note ?? this.note),
     );
   }
 
@@ -77,6 +155,7 @@ class Bookmark {
       'isUnderline': isUnderline,
       'isWavy': isWavy,
       'color': color,
+      'note': note,
     };
   }
 
@@ -95,6 +174,7 @@ class Bookmark {
       isUnderline: _optionalBool(json['isUnderline']) ?? false,
       isWavy: _optionalBool(json['isWavy']) ?? false,
       color: _optionalString(json['color']),
+      note: _optionalString(json['note']),
     );
   }
 

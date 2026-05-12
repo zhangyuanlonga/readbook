@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_appread/core/analytics/analytics_service.dart';
-import 'package:flutter_appread/core/auth/auth_session_store.dart';
-import 'package:flutter_appread/core/device/device_identity.dart';
-import 'package:flutter_appread/core/device/device_identity_service.dart';
+import 'package:shuxiang_reading_next/core/analytics/analytics_service.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
+import 'package:shuxiang_reading_next/core/device/device_identity.dart';
+import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -112,6 +112,7 @@ class _FakeDeviceIdentityService extends DeviceIdentityService {
     return const DeviceIdentity(
       installId: 'uuid-per-install',
       deviceUid: 'hashed-device-id',
+      deviceFingerprint: 'hashed-device-fingerprint',
       platform: 'android',
       deviceBrand: 'xiaomi',
       deviceModel: '2304FPN6DC',

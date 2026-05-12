@@ -9,14 +9,15 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
+import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
+import '../../reader/application/local/local_book_workflow_policy.dart';
+import '../../source/application/source_login_state_service.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -36,11 +37,13 @@ class LocalBookImportProgress {
     required this.stage,
     required this.bookId,
     required this.displayName,
+    this.detail,
   });
 
   final LocalBookImportStage stage;
   final String bookId;
   final String displayName;
+  final String? detail;
 }
 
 typedef LocalBookImportProgressCallback =
@@ -48,36 +51,33 @@ typedef LocalBookImportProgressCallback =
 
 class LocalBookImportService {
   LocalBookImportService({
-    LocalBookRepository? localBookRepository,
-    BookshelfService? bookshelfService,
-    ReaderSystemSettingsService? readerSystemSettingsService,
-    LocalBookIndexService? localBookIndexService,
-    LocalBookStorageService? localBookStorageService,
-    AppLogger? logger,
-    Future<Directory> Function()? supportDirectoryProvider,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _bookshelfService = bookshelfService ?? BookshelfService(),
-       _readerSystemSettingsService =
-           readerSystemSettingsService ?? ReaderSystemSettingsService(),
-       _localBookIndexService =
-           localBookIndexService ?? LocalBookIndexService(),
-       _logger = logger ?? AppLogger.instance,
-       _localBookStorageService =
-           localBookStorageService ??
-           LocalBookStorageService(
-             logger: logger ?? AppLogger.instance,
-             supportDirectoryProvider: supportDirectoryProvider,
-           );
+    required LocalBookRepository localBookRepository,
+    required BookshelfService bookshelfService,
+    required ReaderSystemSettingsService readerSystemSettingsService,
+    required LocalBookStorageService localBookStorageService,
+    required AppLogger logger,
+    required SourceLoginStateService sourceLoginStateService,
+    required LocalBookIndexService localBookIndexService,
+    Duration warmUpDelay = const Duration(milliseconds: 350),
+  }) : _localBookRepository = localBookRepository,
+       _bookshelfService = bookshelfService,
+       _readerSystemSettingsService = readerSystemSettingsService,
+       _localBookStorageService = localBookStorageService,
+       _localBookIndexService = localBookIndexService,
+       _sourceLoginStateService = sourceLoginStateService,
+       _logger = logger,
+       _warmUpDelay = warmUpDelay;
 
-  static const String localBookSourceId = '__local_book__';
+  static const String localBookSourceId = BookIdentityScheme.localSourceId;
 
   final LocalBookRepository _localBookRepository;
   final BookshelfService _bookshelfService;
   final ReaderSystemSettingsService _readerSystemSettingsService;
   final LocalBookIndexService _localBookIndexService;
+  final SourceLoginStateService _sourceLoginStateService;
   final AppLogger _logger;
   final LocalBookStorageService _localBookStorageService;
+  final Duration _warmUpDelay;
   final Uuid _uuid = const Uuid();
 
   Future<LocalBookImportResult> importFromFile({
@@ -109,7 +109,7 @@ class LocalBookImportService {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.detail,
-        briefMessage: '仅支持导入 txt 或 epub 文件。',
+        briefMessage: '仅支持导入 txt、epub、md、html、pdf、mobi、azw 或 azw3 文件。',
       );
     }
 
@@ -118,16 +118,24 @@ class LocalBookImportService {
     final splitLongChapterDefault =
         await _readerSystemSettingsService
             .loadLocalTxtSplitLongChapterEnabled();
-    final existingBook = await _findBySourcePath(normalizedPath);
-    final bookId = existingBook?.id ?? _buildBookId();
     final normalizedDisplayName = normalizeImportedDisplayName(
       displayName ?? p.basename(normalizedPath),
     );
+    final resolvedTitle = _resolveTitle(normalizedDisplayName);
+    final existingBook =
+        await _findBySourcePath(normalizedPath) ??
+        await _findByImportFingerprint(
+          format: format,
+          title: resolvedTitle,
+          sourceFileSize: sourceStat.size,
+        );
+    final bookId = existingBook?.id ?? _buildBookId();
     onProgress?.call(
       LocalBookImportProgress(
         stage: LocalBookImportStage.preparing,
         bookId: bookId,
         displayName: normalizedDisplayName,
+        detail: '正在校验文件并准备导入',
       ),
     );
     final storedStoragePath = _localBookStorageService.buildStoredStoragePath(
@@ -145,6 +153,7 @@ class LocalBookImportService {
       existingBook: existingBook,
       bookId: bookId,
       storedStoragePath: storedStoragePath,
+      title: resolvedTitle,
     );
     await _persistImportedBook(prepared.localBook);
     await _bookshelfService.upsert(prepared.bookshelfBook);
@@ -153,6 +162,7 @@ class LocalBookImportService {
         stage: LocalBookImportStage.persisted,
         bookId: bookId,
         displayName: normalizedDisplayName,
+        detail: '已写入书架，准备建立目录',
       ),
     );
 
@@ -161,6 +171,11 @@ class LocalBookImportService {
       context: {
         'bookId': bookId,
         'format': format.name,
+        'indexExecutionMode':
+            _resolveImportExecutionMode(
+              format: format,
+              waitForIndexingRequested: waitForIndexing,
+            ).name,
         'sourcePath': normalizedPath,
         if (prepared.storageResult.originalCharset != null)
           'sourceCharset': prepared.storageResult.originalCharset,
@@ -170,12 +185,17 @@ class LocalBookImportService {
       },
     );
 
-    if (waitForIndexing) {
+    final executionMode = _resolveImportExecutionMode(
+      format: format,
+      waitForIndexingRequested: waitForIndexing,
+    );
+    if (executionMode == LocalBookImportExecutionMode.immediateIndex) {
       onProgress?.call(
         LocalBookImportProgress(
           stage: LocalBookImportStage.indexing,
           bookId: bookId,
           displayName: normalizedDisplayName,
+          detail: _indexingDetailForFormat(format),
         ),
       );
       await _localBookIndexService.ensureIndexed(bookId: bookId);
@@ -184,6 +204,7 @@ class LocalBookImportService {
           stage: LocalBookImportStage.completed,
           bookId: bookId,
           displayName: normalizedDisplayName,
+          detail: '目录已建立，可直接阅读',
         ),
       );
     } else {
@@ -198,13 +219,57 @@ class LocalBookImportService {
 
   Future<void> _warmUpLocalBookIndex(String bookId) async {
     try {
+      if (_warmUpDelay > Duration.zero) {
+        await Future<void>.delayed(_warmUpDelay);
+      }
       await _localBookIndexService.ensureIndexed(bookId: bookId);
     } catch (error) {
+      if (_shouldIgnoreWarmUpError(error)) {
+        return;
+      }
       _logger.warn(
         'Warm up local book index failed',
         context: {'bookId': bookId, 'error': error.toString()},
       );
     }
+  }
+
+  LocalBookImportExecutionMode _resolveImportExecutionMode({
+    required LocalBookFormat format,
+    required bool waitForIndexingRequested,
+  }) {
+    return LocalBookWorkflowPolicy.resolveImportExecutionMode(
+      format: format,
+      waitForIndexingRequested: waitForIndexingRequested,
+    );
+  }
+
+  String _indexingDetailForFormat(LocalBookFormat format) {
+    return switch (format) {
+      LocalBookFormat.epub => '正在解析图文结构、提取资源并建立目录',
+      LocalBookFormat.html => '正在解析 HTML 结构、处理图片并建立目录',
+      LocalBookFormat.md => '正在解析 Markdown、转换图文结构并建立目录',
+      LocalBookFormat.pdf => '正在提取页面文本并建立目录',
+      LocalBookFormat.mobi ||
+      LocalBookFormat.azw ||
+      LocalBookFormat.azw3 => '正在解析电子书内容并建立目录',
+      LocalBookFormat.txt => '正在切分章节并建立目录',
+    };
+  }
+
+  bool _shouldIgnoreWarmUpError(Object error) {
+    if (error is AppException) {
+      final message = error.briefMessage.trim();
+      if (message.contains('本地书籍文件已失效') || message.contains('未找到本地书籍')) {
+        return true;
+      }
+    }
+
+    final text = error.toString();
+    if (text.contains("Can't re-open a database after closing it")) {
+      return true;
+    }
+    return false;
   }
 
   Future<_PreparedImportedBook> _prepareImportedBook({
@@ -218,6 +283,7 @@ class LocalBookImportService {
     required LocalBook? existingBook,
     required String bookId,
     required String storedStoragePath,
+    required String title,
   }) async {
     final resolvedStoragePath = await _localBookStorageService
         .resolveStoragePath(storedStoragePath);
@@ -239,7 +305,7 @@ class LocalBookImportService {
       sourceStat: sourceStat,
       storageStat: storageResult.storageStat,
       normalizedCharset: storageResult.normalizedCharset,
-      displayName: displayName,
+      title: title,
       splitLongChapterDefault: splitLongChapterDefault,
       now: now,
     );
@@ -260,13 +326,12 @@ class LocalBookImportService {
     required FileStat sourceStat,
     required FileStat storageStat,
     required String? normalizedCharset,
-    required String? displayName,
+    required String title,
     required bool splitLongChapterDefault,
     required DateTime now,
   }) {
     final recoverableSourcePath = _localBookStorageService
         .normalizeRecoverableSourcePath(sourcePath);
-    final title = _resolveTitle(displayName ?? p.basename(sourcePath));
     return existingBook?.copyWith(
           title: title,
           format: format,
@@ -330,7 +395,7 @@ class LocalBookImportService {
       bookId: localBook.id,
       sourceId: localBookSourceId,
       title: localBook.title,
-      detailUrl: 'local://book/${localBook.id}',
+      detailUrl: buildLocalBookDetailUrl(localBook.id),
       addedAt: now,
       author: localBook.author,
     );
@@ -352,6 +417,9 @@ class LocalBookImportService {
     }
 
     await _localBookRepository.deleteBook(normalizedBookId);
+    await _sourceLoginStateService.removeBookCustomStatesForBook(
+      normalizedBookId,
+    );
     await _bookshelfService.remove(
       sourceId: localBookSourceId,
       detailUrl: normalizedDetailUrl,
@@ -363,15 +431,19 @@ class LocalBookImportService {
     if (normalized.isEmpty) {
       return null;
     }
+    return _localBookRepository.getBookBySourcePath(normalized);
+  }
 
-    final books = await _localBookRepository.getAllBooks();
-    for (final book in books) {
-      if (book.sourcePath == normalized) {
-        return book;
-      }
-    }
-
-    return null;
+  Future<LocalBook?> _findByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) {
+    return _localBookRepository.findBookByImportFingerprint(
+      format: format,
+      title: title,
+      sourceFileSize: sourceFileSize,
+    );
   }
 
   String _buildBookId() {
@@ -384,6 +456,14 @@ class LocalBookImportService {
     return switch (ext) {
       '.txt' => LocalBookFormat.txt,
       '.epub' => LocalBookFormat.epub,
+      '.md' => LocalBookFormat.md,
+      '.markdown' => LocalBookFormat.md,
+      '.html' => LocalBookFormat.html,
+      '.htm' => LocalBookFormat.html,
+      '.pdf' => LocalBookFormat.pdf,
+      '.mobi' => LocalBookFormat.mobi,
+      '.azw' => LocalBookFormat.azw,
+      '.azw3' => LocalBookFormat.azw3,
       _ => null,
     };
   }

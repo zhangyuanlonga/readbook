@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/feedback/feedback_models.dart';
 import '../../../core/feedback/feedback_service.dart';
 import '../../../core/network/api_client.dart';
+import '../application/advanced_theme_provider.dart';
 
 enum _FeedbackStatusFilter { all, pending, resolved, rejected }
 
@@ -114,14 +121,29 @@ class _FeedbackPageState extends State<FeedbackPage>
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         title: const Text('问题反馈'),
         actions: [
+          IconButton(
+            onPressed: () {
+              context.push('/error-center');
+            },
+            tooltip: '诊断日志',
+            icon: const Icon(Icons.receipt_long_outlined),
+          ),
           FilledButton.tonalIcon(
             onPressed: () async {
               final changed = await context.push<bool>('/feedback/compose');
@@ -135,62 +157,81 @@ class _FeedbackPageState extends State<FeedbackPage>
           const SizedBox(width: 12),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.systemSettingsContentMaxWidth,
+      body: Consumer(
+        builder: (context, ref, _) {
+          final activeTheme =
+              ref.watch(activeAdvancedThemeProvider).valueOrNull;
+          final backdrop = resolveAdvancedThemeBackdrop(
+            Theme.of(context).colorScheme,
+            activeTheme,
           );
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.systemSettingsContentMaxWidth,
+                );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: RefreshIndicator(
-                onRefresh: () => _loadEntries(),
-                child: ListView(
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    20 + bottomSafe,
-                  ),
-                  children: [
-                    _buildTypeTabs(context),
-                    const SizedBox(height: 14),
-                    _buildSearchAndFilterRow(context),
-                    const SizedBox(height: 14),
-                    Container(
-                      height: 1,
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-                    ),
-                    if (_isLoading) _buildLoadingState(context),
-                    if (!_isLoading && _errorText != null)
-                      _buildErrorState(context, _errorText!),
-                    if (!_isLoading && _errorText == null && _entries.isEmpty)
-                      _buildEmptyState(context),
-                    if (!_isLoading &&
-                        _errorText == null &&
-                        _entries.isNotEmpty)
-                      ..._entries.map(
-                        (entry) => _buildEntryTile(context, entry),
-                      ),
-                    if (_isLoadingMore)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: RefreshIndicator(
+                      onRefresh: () => _loadEntries(),
+                      child: ListView(
+                        controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset + metrics.contentGap,
+                          horizontal,
+                          metrics.sectionGap + bottomSafe + keyboardInset,
                         ),
+                        children: [
+                          _buildTypeTabs(context),
+                          SizedBox(height: metrics.sectionGap),
+                          _buildSearchAndFilterRow(context),
+                          SizedBox(height: metrics.sectionGap),
+                          Container(
+                            height: 1,
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.55,
+                            ),
+                          ),
+                          if (_isLoading) _buildLoadingState(context),
+                          if (!_isLoading && _errorText != null)
+                            _buildErrorState(context, _errorText!),
+                          if (!_isLoading &&
+                              _errorText == null &&
+                              _entries.isEmpty)
+                            _buildEmptyState(context),
+                          if (!_isLoading &&
+                              _errorText == null &&
+                              _entries.isNotEmpty)
+                            ..._entries.map(
+                              (entry) => _buildEntryTile(context, entry),
+                            ),
+                          if (_isLoadingMore)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
+                    ),
+                  ),
+                );
+              },
             ),
           );
         },
@@ -277,21 +318,29 @@ class _FeedbackPageState extends State<FeedbackPage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final compact = AppLayout.isPhoneSmallWidthFor(width);
+        final metrics = AppAdaptiveMetrics.resolveForConstraints(
+          context,
+          constraints,
+        );
+        final compact = metrics.isCompactDensity;
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [searchField, const SizedBox(height: 8), statusDropdown],
+            children: [
+              searchField,
+              SizedBox(height: metrics.contentGap),
+              statusDropdown,
+            ],
           );
         }
 
+        final width = constraints.maxWidth;
         final filterWidth = (width * 0.32).clamp(108.0, 144.0).toDouble();
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: searchField),
-            const SizedBox(width: 10),
+            SizedBox(width: metrics.contentGap),
             SizedBox(width: filterWidth, child: statusDropdown),
           ],
         );
@@ -317,73 +366,26 @@ class _FeedbackPageState extends State<FeedbackPage>
   }
 
   Widget _buildErrorState(BuildContext context, String errorText) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colorScheme.errorContainer.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '加载失败',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              errorText,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-              ),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonal(
-              onPressed: () => _loadEntries(),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
+      child: AppStatusStateCard(
+        icon: Icons.error_outline_rounded,
+        title: '加载失败',
+        message: errorText,
+        tone: AppStatusStateTone.error,
+        actionLabel: '重试',
+        onAction: () => _loadEntries(),
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 26),
-      child: Column(
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 34,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '暂无匹配反馈',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '可以换个关键词试试，或点击右上角“提交”发起新的反馈。',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-        ],
+      child: const AppEmptyStateCard(
+        icon: Icons.inbox_outlined,
+        title: '暂无匹配反馈',
+        description: '可以换个关键词试试，或点击右上角“提交”发起新的反馈。',
       ),
     );
   }
@@ -391,75 +393,84 @@ class _FeedbackPageState extends State<FeedbackPage>
   Widget _buildEntryTile(BuildContext context, FeedbackListItem entry) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+    return InkWell(
+      onTap: () => context.push('/feedback/${entry.id}'),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+            ),
           ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _buildPill(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPill(
+              context,
+              label: entry.typeLabel,
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              entry.title,
+              style: Theme.of(
                 context,
-                label: entry.typeLabel,
-                backgroundColor: colorScheme.primaryContainer,
-                foregroundColor: colorScheme.onPrimaryContainer,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              entry.content,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.45,
               ),
-              const SizedBox(width: 8),
-              _buildPill(
-                context,
-                label: entry.statusLabel,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                foregroundColor: colorScheme.onSurfaceVariant,
-              ),
-              const Spacer(),
-              Text(
-                _formatTime(entry.createdAt),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildPill(
+                  context,
+                  label: entry.statusLabel,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  foregroundColor: colorScheme.onSurfaceVariant,
+                ),
+                if (entry.labels.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      entry.labels.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ] else
+                  const Spacer(),
+                const SizedBox(width: 8),
+                Text(
+                  _formatTime(entry.createdAt),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
                   color: colorScheme.onSurfaceVariant,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            entry.title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            entry.content,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-          if (entry.labels.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: entry.labels
-                  .map(
-                    (label) => Chip(
-                      label: Text(label),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  )
-                  .toList(growable: false),
+              ],
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -504,6 +515,337 @@ class FeedbackComposePage extends StatefulWidget {
   State<FeedbackComposePage> createState() => _FeedbackComposePageState();
 }
 
+class FeedbackDetailPage extends StatefulWidget {
+  const FeedbackDetailPage({super.key, required this.feedbackId});
+
+  final String feedbackId;
+
+  @override
+  State<FeedbackDetailPage> createState() => _FeedbackDetailPageState();
+}
+
+class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
+  final FeedbackService _feedbackService = FeedbackService();
+
+  bool _isLoading = true;
+  String? _errorText;
+  FeedbackListItem? _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+    try {
+      final entry = await _feedbackService.fetchFeedbackDetail(
+        widget.feedbackId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _entry = entry;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _errorText =
+            error is AppException ? error.briefMessage : '反馈详情加载失败，请稍后重试。';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+
+    return Scaffold(
+      resizeToAvoidBottomInset: false,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('反馈详情'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      body: Consumer(
+        builder: (context, ref, _) {
+          final activeTheme =
+              ref.watch(activeAdvancedThemeProvider).valueOrNull;
+          final backdrop = resolveAdvancedThemeBackdrop(
+            Theme.of(context).colorScheme,
+            activeTheme,
+          );
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.systemSettingsContentMaxWidth,
+                );
+
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: RefreshIndicator(
+                      onRefresh: _loadDetail,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset + metrics.contentGap,
+                          horizontal,
+                          metrics.sectionGap + bottomSafe + keyboardInset,
+                        ),
+                        children: [
+                          if (_isLoading)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 48),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                          if (!_isLoading && _errorText != null)
+                            _FeedbackStateCard(
+                              title: '加载失败',
+                              message: _errorText!,
+                              isError: true,
+                              actionLabel: '重试',
+                              onAction: _loadDetail,
+                            ),
+                          if (!_isLoading &&
+                              _errorText == null &&
+                              _entry != null)
+                            _FeedbackDetailCard(entry: _entry!),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FeedbackDetailCard extends StatelessWidget {
+  const _FeedbackDetailCard({required this.entry});
+
+  final FeedbackListItem entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Container(
+      padding: EdgeInsets.all(metrics.cardPadding),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _feedbackPill(
+                context,
+                label: entry.typeLabel,
+                backgroundColor: colorScheme.primaryContainer,
+                foregroundColor: colorScheme.onPrimaryContainer,
+              ),
+              const SizedBox(width: 8),
+              _feedbackPill(
+                context,
+                label: entry.statusLabel,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                foregroundColor: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            entry.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          _FeedbackDetailRow(
+            label: '提交时间',
+            value: _formatFeedbackTime(entry.createdAt),
+          ),
+          _FeedbackDetailRow(
+            label: '更新时间',
+            value: _formatFeedbackTime(entry.updatedAt),
+          ),
+          if (entry.labels.isNotEmpty)
+            _FeedbackDetailRow(label: '标签', value: entry.labels.join('、')),
+          const SizedBox(height: 14),
+          Text(
+            '反馈内容',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            entry.content,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeedbackDetailRow extends StatelessWidget {
+  const _FeedbackDetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeedbackStateCard extends StatelessWidget {
+  const _FeedbackStateCard({
+    required this.title,
+    required this.message,
+    required this.isError,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final bool isError;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final background =
+        isError
+            ? colorScheme.errorContainer.withValues(alpha: 0.7)
+            : colorScheme.surfaceContainerLow;
+    final foreground =
+        isError ? colorScheme.onErrorContainer : colorScheme.onSurface;
+
+    return Container(
+      padding: EdgeInsets.all(metrics.cardPadding),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: foreground),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 10),
+            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Widget _feedbackPill(
+  BuildContext context, {
+  required String label,
+  required Color backgroundColor,
+  required Color foregroundColor,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: foregroundColor,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+String _formatFeedbackTime(DateTime time) {
+  final local = time.toLocal();
+  final year = local.year.toString().padLeft(4, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$year-$month-$day $hour:$minute';
+}
+
 class _FeedbackComposePageState extends State<FeedbackComposePage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
@@ -521,128 +863,174 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('提交反馈')),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.systemSettingsContentMaxWidth,
+      resizeToAvoidBottomInset: false,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('提交反馈'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      body: Consumer(
+        builder: (context, ref, _) {
+          final activeTheme =
+              ref.watch(activeAdvancedThemeProvider).valueOrNull;
+          final backdrop = resolveAdvancedThemeBackdrop(
+            Theme.of(context).colorScheme,
+            activeTheme,
           );
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.systemSettingsContentMaxWidth,
+                );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  20 + bottomSafe,
-                ),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        topInset + metrics.contentGap,
+                        horizontal,
+                        metrics.sectionGap + bottomSafe + keyboardInset,
+                      ),
                       children: [
-                        Text(
-                          '轻量提交',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                        AppFadeSlideTransition(
+                          child: Container(
+                            padding: EdgeInsets.all(metrics.cardPadding),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(
+                                metrics.cardRadius + 4,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '轻量提交',
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '当前只支持问题和建议两类。提交前会自动查重，帮助你避免重复反馈。',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '当前只支持问题和建议两类。提交前会自动查重，帮助你避免重复反馈。',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.45,
+                        const SizedBox(height: 18),
+                        AppFadeSlideTransition(
+                          delay: const Duration(milliseconds: 48),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                '反馈类型',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              SegmentedButton<FeedbackType>(
+                                segments: [
+                                  ButtonSegment(
+                                    value: FeedbackType.issue,
+                                    label: Text(FeedbackType.issue.label),
+                                    icon: const Icon(Icons.bug_report_outlined),
+                                  ),
+                                  ButtonSegment(
+                                    value: FeedbackType.suggestion,
+                                    label: Text(FeedbackType.suggestion.label),
+                                    icon: const Icon(Icons.lightbulb_outline),
+                                  ),
+                                ],
+                                selected: {_type},
+                                onSelectionChanged:
+                                    _isSubmitting
+                                        ? null
+                                        : (value) {
+                                          setState(() {
+                                            _type = value.first;
+                                          });
+                                        },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        AppFadeSlideTransition(
+                          delay: const Duration(milliseconds: 72),
+                          child: Column(
+                            children: [
+                              TextField(
+                                controller: _titleController,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: '标题',
+                                  hintText: '用一句话描述问题或建议',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _contentController,
+                                minLines: 6,
+                                maxLines: 8,
+                                decoration: const InputDecoration(
+                                  labelText: '详细描述',
+                                  hintText: '请尽量写清楚场景、现象和复现步骤',
+                                  alignLabelWithHint: true,
+                                ),
+                                onSubmitted: (_) => _submit(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        FilledButton.icon(
+                          onPressed: _isSubmitting ? null : _submit,
+                          icon:
+                              _isSubmitting
+                                  ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                  : const Icon(Icons.send_rounded),
+                          label: AppAnimatedSwitcher(
+                            child: Text(
+                              _isSubmitting ? '提交中...' : '提交反馈',
+                              key: ValueKey<bool>(_isSubmitting),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Text(
-                    '反馈类型',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SegmentedButton<FeedbackType>(
-                    segments: [
-                      ButtonSegment(
-                        value: FeedbackType.issue,
-                        label: Text(FeedbackType.issue.label),
-                        icon: const Icon(Icons.bug_report_outlined),
-                      ),
-                      ButtonSegment(
-                        value: FeedbackType.suggestion,
-                        label: Text(FeedbackType.suggestion.label),
-                        icon: const Icon(Icons.lightbulb_outline),
-                      ),
-                    ],
-                    selected: {_type},
-                    onSelectionChanged:
-                        _isSubmitting
-                            ? null
-                            : (value) {
-                              setState(() {
-                                _type = value.first;
-                              });
-                            },
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: _titleController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: '标题',
-                      hintText: '用一句话描述问题或建议',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _contentController,
-                    minLines: 6,
-                    maxLines: 8,
-                    decoration: const InputDecoration(
-                      labelText: '详细描述',
-                      hintText: '请尽量写清楚场景、现象和复现步骤',
-                      alignLabelWithHint: true,
-                    ),
-                    onSubmitted: (_) => _submit(),
-                  ),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: _isSubmitting ? null : _submit,
-                    icon:
-                        _isSubmitting
-                            ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                            : const Icon(Icons.send_rounded),
-                    label: Text(_isSubmitting ? '提交中...' : '提交反馈'),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           );
         },

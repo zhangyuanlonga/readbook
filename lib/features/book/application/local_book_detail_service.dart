@@ -3,8 +3,6 @@ import 'dart:async';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -17,27 +15,30 @@ class LocalBookDetailResult {
   final List<LocalChapter> chapters;
 }
 
+enum LocalBookDetailLoadMode { bookOnly, directoryOnly, withContent }
+
 class LocalBookDetailService {
   LocalBookDetailService({
-    LocalBookRepository? localBookRepository,
-    LocalBookIndexService? indexService,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _indexService =
-           indexService ??
-           LocalBookIndexService(
-             localBookRepository:
-                 localBookRepository ??
-                 LocalBookRepositoryImpl(AppDatabase.instance),
-           );
+    required LocalBookRepository localBookRepository,
+    required LocalBookIndexService indexService,
+  }) : _localBookRepository = localBookRepository,
+       _indexService = indexService;
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
 
+  Future<LocalBook?> loadBookSnapshot({required String bookId}) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+    return _localBookRepository.getBookById(normalizedBookId);
+  }
+
   Future<LocalBookDetailResult> load({
     required String bookId,
+    LocalBookDetailLoadMode mode = LocalBookDetailLoadMode.withContent,
     bool forceReindex = false,
-    bool withContent = true,
     bool allowBackgroundIndex = false,
   }) async {
     final normalizedBookId = bookId.trim();
@@ -87,10 +88,13 @@ class LocalBookDetailService {
       }
     }
 
-    final chapters =
-        withContent
-            ? await _localBookRepository.getChapters(normalizedBookId)
-            : await _localBookRepository.getChapterMetas(normalizedBookId);
+    final chapters = switch (mode) {
+      LocalBookDetailLoadMode.bookOnly => const <LocalChapter>[],
+      LocalBookDetailLoadMode.directoryOnly => await _localBookRepository
+          .getChapterMetas(normalizedBookId),
+      LocalBookDetailLoadMode.withContent => await _localBookRepository
+          .getChapters(normalizedBookId),
+    };
 
     return LocalBookDetailResult(book: book, chapters: chapters);
   }

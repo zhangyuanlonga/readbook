@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/reader/application/reader_system_settings_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,7 +8,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('loads true by default and persists toggle value', () async {
+    test('always keeps auto switch source on failure enabled', () async {
       final service = ReaderSystemSettingsService();
 
       final defaultValue = await service.loadAutoSwitchSourceOnFailureEnabled();
@@ -21,10 +21,10 @@ void main() {
       await service.saveAutoSwitchSourceOnFailureEnabled(false);
       final disabledValue =
           await service.loadAutoSwitchSourceOnFailureEnabled();
-      expect(disabledValue, isFalse);
+      expect(disabledValue, isTrue);
     });
 
-    test('watches and persists read record toggle value', () async {
+    test('watchReadRecordEnabled always emits true', () async {
       final service = ReaderSystemSettingsService();
       final values = <bool>[];
       final subscription = service.watchReadRecordEnabled().listen(values.add);
@@ -36,8 +36,8 @@ void main() {
       await service.saveReadRecordEnabled(false);
       await Future<void>.delayed(Duration.zero);
 
-      expect(values, <bool>[true, false]);
-      expect(await service.loadReadRecordEnabled(), isFalse);
+      expect(values, <bool>[true]);
+      expect(await service.loadReadRecordEnabled(), isTrue);
     });
 
     test('allows multiple listeners on the same read record stream', () async {
@@ -57,23 +57,20 @@ void main() {
       await service.saveReadRecordEnabled(false);
       await Future<void>.delayed(Duration.zero);
 
-      expect(firstValues, <bool>[true, false]);
-      expect(secondValues, <bool>[true, false]);
+      expect(firstValues, <bool>[true]);
+      expect(secondValues, <bool>[true]);
     });
 
-    test(
-      'loads true by default and persists local txt split setting',
-      () async {
-        final service = ReaderSystemSettingsService();
+    test('persists local txt split setting', () async {
+      final service = ReaderSystemSettingsService();
 
-        expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
+      expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
 
-        await service.saveLocalTxtSplitLongChapterEnabled(false);
-        expect(await service.loadLocalTxtSplitLongChapterEnabled(), isFalse);
+      await service.saveLocalTxtSplitLongChapterEnabled(false);
+      expect(await service.loadLocalTxtSplitLongChapterEnabled(), isFalse);
 
-        await service.saveLocalTxtSplitLongChapterEnabled(true);
-        expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
-      },
-    );
+      await service.saveLocalTxtSplitLongChapterEnabled(true);
+      expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
+    });
   });
 }

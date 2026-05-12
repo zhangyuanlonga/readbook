@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/network/api_client.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/network/api_client.dart';
+import 'package:shuxiang_reading_next/core/network/auth_token_refresher.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -25,8 +26,9 @@ void main() {
       final result = await client.request<Map<String, dynamic>>(
         method: ApiMethod.get,
         path: 'http://${server.address.host}:${server.port}/ok',
-        decoder: (data) =>
-            (data as Map).map((key, value) => MapEntry('$key', value)),
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
       );
 
       expect(result['value'], 42);
@@ -89,8 +91,9 @@ void main() {
         method: ApiMethod.get,
         path: 'http://${server.address.host}:${server.port}/retry',
         maxRetries: 1,
-        decoder: (data) =>
-            (data as Map).map((key, value) => MapEntry('$key', value)),
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
       );
 
       expect(result['ok'], true);
@@ -120,15 +123,17 @@ void main() {
         method: ApiMethod.get,
         path: path,
         enableCache: true,
-        decoder: (data) =>
-            (data as Map).map((key, value) => MapEntry('$key', value)),
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
       );
       final second = await client.request<Map<String, dynamic>>(
         method: ApiMethod.get,
         path: path,
         enableCache: true,
-        decoder: (data) =>
-            (data as Map).map((key, value) => MapEntry('$key', value)),
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
       );
 
       expect(first['count'], 1);
@@ -136,5 +141,72 @@ void main() {
       expect(count, 1);
       await server.close(force: true);
     });
+
+    test('uses default token refresher lazily for 401 retry', () async {
+      ApiClient.defaultAuthTokenRefresher = null;
+      final client = ApiClient();
+      final refresher = _FakeAuthTokenRefresher();
+      ApiClient.defaultAuthTokenRefresher = refresher;
+
+      var count = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        count += 1;
+        final authorization = request.headers.value(
+          HttpHeaders.authorizationHeader,
+        );
+        if (count == 1) {
+          expect(authorization, 'Bearer expired-token');
+          request.response.statusCode = 401;
+          request.response.write(
+            jsonEncode({
+              'code': 'UNAUTHORIZED',
+              'message': 'expired',
+              'data': {},
+            }),
+          );
+        } else {
+          expect(authorization, 'Bearer refreshed-token');
+          request.response.statusCode = 200;
+          request.response.write(
+            jsonEncode({
+              'code': 'OK',
+              'message': 'success',
+              'data': {'ok': true},
+            }),
+          );
+        }
+        await request.response.close();
+      });
+
+      final result = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: 'http://${server.address.host}:${server.port}/refresh',
+        attachAccessToken: true,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+
+      expect(result['ok'], true);
+      expect(refresher.refreshCallCount, 1);
+      await server.close(force: true);
+      ApiClient.defaultAuthTokenRefresher = null;
+    });
   });
+}
+
+class _FakeAuthTokenRefresher implements AuthTokenRefresher {
+  String _token = 'expired-token';
+  int refreshCallCount = 0;
+
+  @override
+  Future<String?> getAccessToken() async => _token;
+
+  @override
+  Future<bool> refreshToken() async {
+    refreshCallCount += 1;
+    _token = 'refreshed-token';
+    return true;
+  }
 }

@@ -1,4 +1,4 @@
-import 'package:flutter_appread/core/device/device_identity_service.dart';
+import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

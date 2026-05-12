@@ -3,12 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
-import '../application/announcement_service.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../application/announcement_read_state_service.dart';
+import '../application/announcement_service.dart';
+import '../providers.dart';
 
 class AnnouncementDetailPage extends ConsumerStatefulWidget {
   const AnnouncementDetailPage({super.key, required this.announcementId});
@@ -22,9 +28,8 @@ class AnnouncementDetailPage extends ConsumerStatefulWidget {
 
 class _AnnouncementDetailPageState
     extends ConsumerState<AnnouncementDetailPage> {
-  final AnnouncementService _service = AnnouncementService();
-  final AnnouncementReadStateService _readStateService =
-      AnnouncementReadStateService();
+  late final AnnouncementService _service;
+  late final AnnouncementReadStateService _readStateService;
 
   bool _isLoading = true;
   String? _errorText;
@@ -33,6 +38,8 @@ class _AnnouncementDetailPageState
   @override
   void initState() {
     super.initState();
+    _service = ref.read(announcementServiceProvider);
+    _readStateService = ref.read(announcementReadStateServiceProvider);
     unawaited(_loadDetail());
   }
 
@@ -79,30 +86,47 @@ class _AnnouncementDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeTheme,
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('公告详情')),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.mineContentMaxWidth,
-          );
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('公告详情'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: _buildBody(
-                context,
-                horizontal: horizontal,
-                bottomSafe: bottomSafe,
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: _buildBody(
+                  context,
+                  horizontal: horizontal,
+                  bottomSafe: bottomSafe,
+                  topInset: topInset,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -111,12 +135,16 @@ class _AnnouncementDetailPageState
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
   }) {
     if (_isLoading) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomSafe),
-          child: const CircularProgressIndicator(),
+      return AppAnimatedSwitcher(
+        child: Center(
+          key: const ValueKey('announcement_detail_loading'),
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomSafe),
+            child: const CircularProgressIndicator(),
+          ),
         ),
       );
     }
@@ -127,6 +155,7 @@ class _AnnouncementDetailPageState
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '加载失败',
         message: errorText,
         actionLabel: '重试',
@@ -140,6 +169,7 @@ class _AnnouncementDetailPageState
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '暂无内容',
         message: '公告内容为空或已下线。',
         actionLabel: '刷新',
@@ -147,55 +177,58 @@ class _AnnouncementDetailPageState
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => _loadDetail(forceRefresh: true),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          16,
-          horizontal,
-          20 + bottomSafe,
-        ),
-        children: [
-          Text(
-            announcement.title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+    final metrics = AppAdaptiveMetrics.of(context);
+    return AppFadeSlideTransition(
+      child: RefreshIndicator(
+        onRefresh: () => _loadDetail(forceRefresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.sectionGap,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _buildLevelChip(context, announcement.level),
-              const SizedBox(width: 8),
+          children: [
+            Text(
+              announcement.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildLevelChip(context, announcement.level),
+                const SizedBox(width: 8),
+                Text(
+                  _formatTime(announcement.publishFrom),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            if (announcement.publishTo != null) ...[
+              const SizedBox(height: 6),
               Text(
-                _formatTime(announcement.publishFrom),
+                '有效期至 ${_formatTime(announcement.publishTo!)}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
-          ),
-          if (announcement.publishTo != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
             Text(
-              '有效期至 ${_formatTime(announcement.publishTo!)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              announcement.content.trim().isEmpty
+                  ? '暂无公告正文。'
+                  : announcement.content.trim(),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
-          const SizedBox(height: 14),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-          Text(
-            announcement.content.trim().isEmpty
-                ? '暂无公告正文。'
-                : announcement.content.trim(),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -204,46 +237,34 @@ class _AnnouncementDetailPageState
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
     required String title,
     required String message,
     required String actionLabel,
     required VoidCallback onAction,
   }) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
+    final metrics = AppAdaptiveMetrics.of(context);
     return RefreshIndicator(
       onRefresh: () => _loadDetail(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          48,
+          topInset + metrics.sectionGap * 2,
           horizontal,
-          24 + bottomSafe,
+          metrics.sectionGap + bottomSafe,
         ),
         children: [
-          Icon(Icons.notifications_none, size: 48, color: colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: FilledButton.tonal(
-              onPressed: onAction,
-              child: Text(actionLabel),
-            ),
+          AppStatusStateCard(
+            icon: Icons.notifications_none,
+            title: title,
+            message: message,
+            tone:
+                title == '加载失败'
+                    ? AppStatusStateTone.error
+                    : AppStatusStateTone.neutral,
+            actionLabel: actionLabel,
+            onAction: onAction,
           ),
         ],
       ),

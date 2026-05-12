@@ -1,98 +1,52 @@
 # 官方书源编写手册
 
-本手册面向“书源作者”。目标不是解释内部实现，而是帮助你从用户视角快速理解：
+更新时间：2026-04-23  
+适用范围：`flutterreadbook`
 
-- 书源文件应该怎么写
-- 哪些字段是必须返回的
-- 每个方法分别负责什么
-- `ctx` 提供了哪些可直接使用的能力
-- 出现验证码、登录、动态页面时应该怎么处理
+## 1. 文档说明
 
-如果你只想尽快写出一个可运行的书源，先看“快速开始”和“完整流程示例”两节即可。
+这份手册面向“书源作者”。
 
-相关文档：
+当前约定：
 
-- 速查入口：[js-rules-quick-reference.md](./js-rules-quick-reference.md)
-- 规范定义：[source-spec-v1.md](./source-spec-v1.md)
-- 运行时边界：[runtime-ctx-api.md](./runtime-ctx-api.md)
+- `flutterreadbook` 当前只支持脚本源
+- App 不再导入或执行旧规则 JSON
+- 一个书源就是一个 `export default { ... }` 的 JavaScript 文件
+
+这份手册是唯一保留的书源编写文档，主要解决这些问题：
+
+- 书源文件整体应该怎么写
+- `meta` 怎么写
+- `search / detail / chapters / content` 每个方法分别怎么写
+- `ctx.*` 都能做什么
+- 标准对象应该返回什么结构
+- 写完后怎么调试和检查
+
+相关模板：
+
 - 官方模板：[source_template_v1.js](../templates/source_template_v1.js)
-
----
-
-## 1. 先理解一件事
-
-一个书源，本质上是一个导出默认对象的 JavaScript 文件。这个对象描述了两类内容：
-
-- `meta`：这个书源是谁、来自哪里、支持什么能力
-- 方法：搜索、详情、目录、正文这几个步骤具体怎么跑
-
-平台当前正式支持的主流程是：
-
-1. `init`
-2. `search`
-3. `detail`
-4. `chapters`
-5. `content`
-
-其中：
-
-- `init` 是可选的
-- `search / detail / chapters / content` 是书源的核心方法
-- `ctx` 是书源运行时的顶层上下文对象
-
-推荐理解方式：
-
-- `search` 负责“找到书”
-- `detail` 负责“补全这本书的信息”
-- `chapters` 负责“拿到章节列表”
-- `content` 负责“拿到章节正文”
-
-`ctx` 本质上是所有宿主能力的总入口：
-
-```js
-ctx = {
-  source,
-  http,
-  html,
-  browser,
-  cookie,
-  cache,
-  session,
-  utils,
-  crypto,
-  log,
-}
-```
-
-官方推荐写法：
-
-- 方法和 helper 显式接收 `ctx`
-
-简化版写法：
-
-- 运行时同时提供全局 `ctx`
-- 所以你也可以在 helper 里直接写 `ctx.http.request(...)`
-
----
 
 ## 2. 快速开始
 
-### 2.1 最小模板
+一个最小可运行书源至少需要：
+
+- `meta`
+- `search(ctx, keyword)`
+- `detail(ctx, book)`
+- `chapters(ctx, book)`
+- `content(ctx, book, chapter)`
+
+最小示例：
 
 ```js
 export default {
   meta: {
     name: '示例书源',
-    group: '默认分组',
-    author: 'your_name',
-    description: '一个最小可用的示例书源',
-    domains: ['www.example.com'],
-    homepage: 'https://www.example.com',
-    enabled: true,
-    capabilities: ['search', 'detail', 'chapters', 'content'],
+    author: 'your-name',
+    description: '一个最小可运行示例',
+    group: '小说',
+    checkKeyword: '斗罗大陆',
   },
-
-  async init(ctx, task) {},
 
   async search(ctx, keyword) {
     return [];
@@ -110,85 +64,24 @@ export default {
     return {
       title: chapter.title,
       content: '',
-      sourceId: ctx.source.id,
     };
   },
 };
 ```
 
-模板参考：
+如果你是第一次写，建议按这个顺序完成：
 
-- [source_template_v1.js](../templates/source_template_v1.js)
+1. 先把 `meta` 写完整
+2. 先让 `search` 能返回正确的 `Book[]`
+3. 再写 `detail`
+4. 再写 `chapters`
+5. 最后写 `content`
 
-### 2.2 helper 怎么写
+不要一开始就在 `search()` 里顺手做详情、目录、正文。
 
-官方推荐写法：
+## 3. 书源文件整体结构
 
-```js
-function requestJson(ctx, url, options = {}) {
-  return ctx.http.request({
-    url,
-    method: 'GET',
-    responseType: 'json',
-    ...options,
-  });
-}
-```
-
-简化版写法：
-
-```js
-function requestJsonLite(url, options = {}) {
-  return ctx.http.request({
-    url,
-    method: 'GET',
-    responseType: 'json',
-    ...options,
-  });
-}
-```
-
-说明：
-
-- 官方主推荐仍然是显式传 `ctx`
-- 简化版依赖运行时注入的全局 `ctx`
-- 两种都支持，但建议在正式模板和长期维护的书源里优先使用显式写法
-
-### 2.3 一个书源最少要做什么
-
-最少需要保证下面四件事：
-
-1. `search` 能返回 `Book[]`
-2. `detail` 能返回单个 `Book`
-3. `chapters` 能返回 `Chapter[]`
-4. `content` 能返回 `Content`
-
-如果某一步暂时不支持，也建议显式返回空数组、原对象，或直接抛出明确错误，而不是静默失败。
-
-补充说明：
-
-- `ctx.source.id` 是源被用户添加到 App 后，由宿主自动生成并注入的源 ID
-- `Book.id` / `Chapter.id` 是结果对象自己的字段，不是源 ID
-- 如果站点有稳定书籍 / 章节主键，可以显式填写
-- 如果没有稳定主键，可以留空，把后续真正要用的参数放进 `extra`
-
-### 2.4 推荐开发顺序
-
-建议按这个顺序写：
-
-1. 先写 `search`
-2. 再写 `detail`
-3. 再写 `chapters`
-4. 最后写 `content`
-5. 如果有登录、验证码或公共 token，再补 `init`
-
-原因很简单：这是用户实际使用时最容易定位问题的顺序。
-
----
-
-## 3. 完整流程示例
-
-下面是一份更接近真实站点的示例：
+推荐把一个书源文件写成这样：
 
 ```js
 const SOURCE_HOST = 'https://www.example.com';
@@ -196,161 +89,96 @@ const SOURCE_HOST = 'https://www.example.com';
 export default {
   meta: {
     name: '示例书源',
-    group: '默认分组',
-    author: 'your_name',
-    description: '一个演示 HTML + Challenge 流程的模板书源',
-    domains: ['www.example.com'],
+    author: 'your-name',
+    description: '一个示例站点',
+    group: '小说',
     homepage: SOURCE_HOST,
-    enabled: true,
-    capabilities: ['search', 'detail', 'chapters', 'content'],
+    checkKeyword: '斗罗大陆',
   },
 
   async init(ctx, task) {
-    if (task.step !== 'search') {
-      return;
-    }
-
-    if (!ctx.session.get('bootstrapToken')) {
-      const bootstrap = await ctx.http.request({
-        url: `${SOURCE_HOST}/api/bootstrap`,
-        method: 'GET',
-        timeoutMs: 5000,
-      });
-
-      if (bootstrap.json?.token) {
-        ctx.session.set('bootstrapToken', bootstrap.json.token);
-      }
-    }
+    // 可选
   },
 
   async search(ctx, keyword) {
-    const response = await ctx.http.request({
-      url: `${SOURCE_HOST}/search`,
-      method: 'GET',
-      query: { q: keyword },
-      timeoutMs: 6000,
-    });
-
-    if (ctx.http.isChallenge(response)) {
-      await ctx.browser.challenge({
-        url: response.url,
-        reason: 'search_challenge',
-        timeoutMs: 120000,
-      });
-    }
-
-    const retryResponse = ctx.http.isChallenge(response)
-      ? await ctx.http.request({
-          url: `${SOURCE_HOST}/search`,
-          method: 'GET',
-          query: { q: keyword },
-          timeoutMs: 6000,
-        })
-      : response;
-
-    const doc = ctx.html.parse(retryResponse.text);
-    const items = doc.querySelectorAll('.book-item');
-
-    return ctx.html.collect(items, (item, index) => ({
-      title: ctx.html.text(item.querySelector('.title')),
-      author: ctx.html.text(item.querySelector('.author')),
-      detailUrl: ctx.utils.absoluteUrl(
-        SOURCE_HOST,
-        item.querySelector('a')?.getAttribute('href') || '',
-      ),
-      sourceId: ctx.source.id,
-      extra: {
-        searchIndex: index,
-      },
-    }));
+    // 必需
   },
 
   async detail(ctx, book) {
-    const response = await ctx.http.request({
-      url: book.detailUrl,
-      method: 'GET',
-      timeoutMs: 6000,
-    });
-
-    const doc = ctx.html.parse(response.text);
-
-    return {
-      ...book,
-      intro: ctx.html.text(doc.querySelector('.intro')),
-      status: ctx.html.text(doc.querySelector('.status')),
-      category: ctx.html.text(doc.querySelector('.category')),
-      latestChapter: ctx.html.text(doc.querySelector('.latest')),
-      sourceId: ctx.source.id,
-      extra: {
-        ...book.extra,
-        catalogUrl: ctx.utils.absoluteUrl(
-          book.detailUrl,
-          doc.querySelector('.catalog-link')?.getAttribute('href') || '',
-        ),
-      },
-    };
+    // 必需
   },
 
   async chapters(ctx, book) {
-    const response = await ctx.http.request({
-      url: book.extra.catalogUrl || book.detailUrl,
-      method: 'GET',
-      timeoutMs: 6000,
-    });
-
-    const doc = ctx.html.parse(response.text);
-    const nodes = doc.querySelectorAll('.chapter-list a');
-
-    return ctx.html.collect(nodes, (node, index) => ({
-      title: ctx.html.text(node),
-      url: ctx.utils.absoluteUrl(book.detailUrl, node.getAttribute('href') || ''),
-      index,
-      sourceId: ctx.source.id,
-    }));
+    // 必需
   },
 
   async content(ctx, book, chapter) {
-    const response = await ctx.http.request({
-      url: chapter.url,
-      method: 'GET',
-      timeoutMs: 6000,
-    });
-
-    const doc = ctx.html.parse(response.text);
-
-    return {
-      title: chapter.title,
-      content: ctx.html.text(doc.querySelector('.content')),
-      sourceId: ctx.source.id,
-    };
+    // 必需
   },
+
+  // async discoverCategories(ctx) {},
+  // async discoverBooks(ctx, category, page, pageSize) {},
 };
 ```
 
-这份示例展示了三个关键点：
+推荐组织方式：
 
-- 优先用 `ctx.http` 处理普通请求
-- 遇到挑战页时再升级到 `ctx.browser.challenge(...)`
-- 上一步需要带给下一步的数据，统一放到 `extra`
-
----
+- 顶部放站点常量
+- `meta` 放最前
+- 核心方法按执行顺序写
+- 可选能力放后面
 
 ## 4. `meta` 怎么写
 
-`meta` 是书源的展示信息，不承载具体业务逻辑。
+## 方法：`meta`
 
-推荐写法：
+### 功能
+
+描述这个书源是谁、做什么、默认检测词是什么、需要哪些宿主能力。
+
+### 签名
+
+```js
+meta: {
+  name: '...',
+  author: '...',
+  description: '...',
+  group: '...',
+  homepage: 'https://...',
+  checkKeyword: '...',
+  domains: ['example.com'],
+  capabilities: ['novel', 'discover'],
+  rateLimits: {
+    'www.example.com': {
+      minIntervalMs: 800,
+    },
+    'api.example.com': 300,
+  },
+}
+```
+
+### 参数
+
+`meta` 不是函数，没有运行时参数。  
+它是脚本源导出的静态元信息对象。
+
+### 返回值
+
+无返回值。  
+宿主会在编译和保存书源时读取这个对象。
+
+### 示例
 
 ```js
 meta: {
   name: '示例书源',
-  group: '默认分组',
-  author: 'your_name',
-  description: '一个示例源',
-  domains: ['www.example.com'],
+  author: 'your-name',
+  description: '一个演示 HTML + API 混合流程的书源',
+  group: '小说',
   homepage: 'https://www.example.com',
-  enabled: true,
-  capabilities: ['search', 'detail', 'chapters', 'content'],
+  checkKeyword: '凡人修仙传',
+  domains: ['www.example.com'],
+  capabilities: ['novel'],
   rateLimits: {
     'www.example.com': {
       minIntervalMs: 800,
@@ -359,215 +187,259 @@ meta: {
 }
 ```
 
-字段说明：
+### 注意事项
 
-- `name`：规则名称，建议对用户清晰可识别
-- `group`：来源分组，例如“自带”“社区”“自定义”
-- `author`：书源作者名称
-- `description`：简要说明这个源的特点或适用范围
-- `domains`：相关域名列表
-- `homepage`：站点首页
-- `enabled`：是否默认启用
-- `capabilities`：当前源支持的能力列表
-- `rateLimits`：按域名声明最小请求间隔
+- `name` 基本上应视为必填
+- `checkKeyword` 很重要，影响单源检测和调试默认关键词
+- `homepage` 与 `domains` 建议尽量填写，方便站点识别与归类
+- `capabilities` 会被宿主转成小写后使用，建议统一写小写
+- 如果实现了 `discoverCategories / discoverBooks`，再声明 `discover` 能力
+- 文本类书源常见能力标记：`novel / book / text`
+- 漫画类书源常见能力标记：`manga / comic / manhua / manhwa`
+- 依赖挑战页、浏览器流程或前端渲染较重时，可额外声明：`browser / webview / challenge / js-heavy / script-heavy`
+- `rateLimits` 用于声明域名级最小请求间隔；值既可以直接写毫秒数，也可以写 `{ minIntervalMs: ... }`
+- `enabled` 虽然会被宿主识别，但启用/停用状态通常由 App 管理，作者一般不需要在脚本里手写
+- 不要把运行时状态写进 `meta`
 
-补充说明：
+## 5. 核心方法
 
-- 不需要手动填写内部 `sourceId`
-- 运行时会自动生成 `ctx.source.id`
-- `meta` 里不要求作者维护内部版本号或 revision
-- `rateLimits` 由宿主在 `ctx.http.request(...)` 时自动执行
+这四个方法是最重要的部分。  
+后续所有“作者怎么写”的核心，都围绕这四个方法展开。
 
-`rateLimits` 推荐写法：
+### 5.1 方法：`search(ctx, keyword)`
+
+#### 功能
+
+根据关键词返回候选书籍列表。
+
+#### 参数
+
+- `ctx`：宿主上下文
+- `keyword`：搜索关键词
+
+#### 返回值
+
+- 返回 `Book[]`
+- 每一项至少应能让后续 `detail(ctx, book)` 继续工作
+- 最少建议保证：
+  - `title`
+  - `detailUrl`
+  - `author`（推荐）
+
+#### 示例
 
 ```js
-rateLimits: {
-  'www.example.com': {
-    minIntervalMs: 800,
-  },
-  'api.example.com': {
-    minIntervalMs: 300,
-  },
+async search(ctx, keyword) {
+  const response = await ctx.http.request({
+    url: 'https://example.com/search',
+    method: 'GET',
+    query: { q: keyword },
+    responseType: 'text',
+  });
+
+  const doc = ctx.html.parse(response.text);
+  const items = doc.querySelectorAll('.book-item');
+
+  return ctx.html.collect(items, (item) => ({
+    title: ctx.html.text(item.querySelector('.title')),
+    author: ctx.html.text(item.querySelector('.author')),
+    detailUrl: ctx.utils.absoluteUrl(
+      'https://example.com/search',
+      ctx.html.attr(item.querySelector('a'), 'href'),
+    ),
+  }));
 }
 ```
 
-含义：
+#### 注意事项
 
-- `minIntervalMs`：同一书源对同一域名连续发请求时的最小间隔，单位毫秒
+- `search` 的职责是“找书”，不是补齐详情
+- 搜索结果里不要顺手追加详情页、目录页、正文页请求
+- 如果返回的 `detailUrl` 为空，后续 `detail` 往往无法继续
+- 如果接口是 JSON，直接映射为标准 `Book[]`
+- 如果接口是 HTML，优先：
+  - `ctx.http.request(...)`
+  - `ctx.html.parse(...)`
+  - `ctx.html.collect(...)`
 
-适用场景：
+### 5.2 方法：`detail(ctx, book)`
 
-- 某些站点请求太快会触发风控
-- 某些接口要求明显放慢访问频率
+#### 功能
 
----
+根据搜索阶段返回的书对象，补齐详情字段。
 
-## 5. 标准对象
+#### 参数
 
-平台当前统一的标准对象只有三类：
+- `ctx`：宿主上下文
+- `book`：上一步 `search()` 返回的单本书
 
-- `Book`
-- `Chapter`
-- `Content`
+#### 返回值
 
-建议所有方法只围绕这三类对象进行数据传递。
+- 返回一个 `Book`
+- 推荐保留原有字段，再补：
+  - `intro`
+  - `cover`
+  - `status`
+  - `category`
+  - `wordCount`
+  - `updateTime`
+  - `latestChapter`
+  - `tocUrl`
 
-### 5.1 Book
+#### 示例
 
 ```js
-{
-  title: '书名',
-  author: '作者',
-  cover: 'https://...',
-  intro: '简介',
-  status: '连载中',
-  category: '玄幻',
-  score: '9.2',
-  wordCount: '235000',
-  updateTime: '2026-03-25 09:30:00',
-  tags: ['科幻', '群像'],
-  latestChapter: '第100章',
-  detailUrl: 'https://...',
-  sourceId: 'runtime-generated-id',
-  extra: {},
-  debug: {}
+async detail(ctx, book) {
+  const response = await ctx.http.request({
+    url: book.detailUrl,
+    method: 'GET',
+    responseType: 'text',
+  });
+
+  const doc = ctx.html.parse(response.text);
+
+  return {
+    ...book,
+    intro: ctx.html.text(doc.querySelector('.book-intro')),
+    cover: ctx.utils.absoluteUrl(
+      book.detailUrl,
+      ctx.html.attr(doc.querySelector('.book-cover img'), 'src'),
+    ),
+    status: ctx.html.text(doc.querySelector('.book-status')),
+    latestChapter: ctx.html.text(doc.querySelector('.book-latest')),
+    tocUrl: ctx.utils.absoluteUrl(
+      book.detailUrl,
+      ctx.html.attr(doc.querySelector('.catalog-link'), 'href'),
+    ),
+  };
 }
 ```
 
-字段建议：
+#### 注意事项
 
-- `id`：可选的源内唯一 ID；站点有稳定主键时填写，没有可留空
-- `title`：书名
-- `author`：作者
-- `cover`：封面 URL
-- `intro`：简介
-- `status`：连载状态
-- `category`：分类
-- `score`：评分
-- `wordCount`：字数
-- `updateTime`：最近更新时间
-- `tags`：标签列表
-- `latestChapter`：最新章节名
-- `detailUrl`：详情页 URL
-- `sourceId`：运行时生成的源 ID
-- `extra`：跨步骤透传数据
-- `debug`：仅用于调试
+- 推荐写法是：`return { ...book, ...补充字段 }`
+- 不要把 `search` 阶段的关键字段丢掉
+- `tocUrl` 很重要，目录通常依赖它
+- 如果详情页里没有单独目录地址，`tocUrl` 可以回退到 `detailUrl`
+- 如果详情字段本来就来自 API，可以直接映射，不一定要解析 HTML
 
-### 5.2 Chapter
+### 5.3 方法：`chapters(ctx, book)`
+
+#### 功能
+
+返回某本书的完整目录列表。
+
+#### 参数
+
+- `ctx`：宿主上下文
+- `book`：一般应使用 `detail()` 补充后的书对象
+
+#### 返回值
+
+- 返回 `Chapter[]`
+- 最少建议保证：
+  - `title`
+  - `url`
+  - `index`
+
+#### 示例
 
 ```js
-{
-  id: 'chapter-id',
-  title: '第一章',
-  url: 'https://...',
-  index: 1,
-  vip: false,
-  updateTime: '2026-03-25 09:30:00',
-  sourceId: 'runtime-generated-id',
-  extra: {},
-  debug: {}
+async chapters(ctx, book) {
+  const response = await ctx.http.request({
+    url: book.tocUrl || book.detailUrl,
+    method: 'GET',
+    responseType: 'text',
+  });
+
+  const doc = ctx.html.parse(response.text);
+  const nodes = doc.querySelectorAll('.chapter-list a');
+
+  return ctx.html.collect(nodes, (node, index) => ({
+    title: ctx.html.text(node),
+    url: ctx.utils.absoluteUrl(
+      book.tocUrl || book.detailUrl,
+      ctx.html.attr(node, 'href'),
+    ),
+    index,
+  }));
 }
 ```
 
-字段建议：
+#### 注意事项
 
-- `id`：可选的章节唯一 ID；站点有稳定主键时填写，没有可留空
-- `url`：章节页 URL 或正文接口地址
-- `extra`：继续透传章节请求真正需要的参数，例如 `chapterId`
+- `chapters` 的职责是“返回完整目录”
+- 如果目录分页，必须自己翻页拼全，不要只抓第一页
+- `index` 应该稳定，最好按最终顺序重新编号
+- 分卷标题节点如果不是正文页，不要误当作普通章节
+- 如果目录总是只有一部分，第一怀疑点通常就是“目录分页没处理”
 
-### 5.3 Content
+### 5.4 方法：`content(ctx, book, chapter)`
+
+#### 功能
+
+返回单章正文。
+
+#### 参数
+
+- `ctx`：宿主上下文
+- `book`：书籍对象
+- `chapter`：章节对象
+
+#### 返回值
+
+- 返回 `Content`
+- 最少建议保证：
+  - `title`
+  - `content`
+
+#### 示例
 
 ```js
-{
-  title: '第一章',
-  content: '正文内容...',
-  nextUrl: null,
-  images: [],
-  sourceId: 'runtime-generated-id',
-  extra: {},
-  debug: {}
+async content(ctx, book, chapter) {
+  const response = await ctx.http.request({
+    url: chapter.url,
+    method: 'GET',
+    responseType: 'text',
+  });
+
+  const doc = ctx.html.parse(response.text);
+
+  return {
+    title: ctx.html.text(doc.querySelector('.chapter-title')) || chapter.title,
+    content: ctx.html.text(doc.querySelector('.chapter-content')),
+  };
 }
 ```
 
-### 5.4 `extra` 应该放什么
+#### 注意事项
 
-`extra` 用于跨步骤传递站点内部上下文。
-它的原则是：只放后续步骤确实需要的关键参数。
+- `content` 返回的是对象，不是纯字符串
+- 如果正文分页，必须在这里自行合并
+- 如果正文是图片型内容，可以返回 `images`
+- 如果正文为空，优先检查：
+  - 章节 URL 是否正确
+  - 页面是否被挑战页替换
+  - 选择器是否选到了广告容器或空节点
 
-适合放：
+## 6. 可选方法
 
-- `bookId`
-- `rawId`
-- `catalogUrl`
-- `ajaxUrl`
-- `token`
-- `csrf`
-- `referer`
-- 上一步解析出来、下一步还要继续使用的参数
+### 6.1 方法：`init(ctx, task)`
 
-不建议放：
+#### 功能
 
-- 整份 HTML
-- 整份 JSON
-- 大块二进制数据
-- 明显只用于临时调试的垃圾数据
+在正式步骤执行前做准备工作。
 
-### 5.5 `debug` 应该怎么用
+#### 参数
 
-`debug` 只用于调试，不应被业务流程依赖。
+- `ctx`
+- `task`
 
-适合放：
+#### 返回值
 
-- 选择器命中信息
-- 原始响应片段
-- 诊断提示
-- 调试阶段希望在 Debug 页观察的数据
+- 一般无返回值
 
----
-
-## 6. 每个方法该负责什么
-
-这一节是整份手册最重要的部分。
-你可以把它理解成“书源作者的职责边界”。
-
-### 6.1 `init(ctx, task)`：初始化，可选
-
-作用：
-
-- 在正式步骤执行前做准备工作
-
-适合做：
-
-- 获取公共 token
-- 初始化公共请求头
-- 初始化 session 状态
-- 做一次预热请求
-- 在需要时引导用户完成登录或挑战验证
-
-不适合做：
-
-- 把整个搜索逻辑塞进 `init`
-- 在这里提前跑完整个业务链路
-- 把只服务单一步骤的复杂解析都放进来
-
-`task` 推荐理解为：
-
-```js
-{
-  step: 'search' | 'detail' | 'chapters' | 'content',
-  keyword: '关键词',
-  book: null,
-  chapter: null,
-}
-```
-
-建议理解：
-
-- `task.step` 一定存在
-- `task.keyword / task.book / task.chapter` 按步骤出现
-- 不要假设这几个字段会在所有步骤里同时有值
-
-示例：
+#### 示例
 
 ```js
 async init(ctx, task) {
@@ -582,406 +454,261 @@ async init(ctx, task) {
 }
 ```
 
-### 6.2 `search(ctx, keyword)`：搜索书籍
+#### 注意事项
 
-作用：
+- 适合做 token 初始化、session 准备、预热请求
+- 不要把整条搜索/详情逻辑塞进 `init`
 
-- 根据关键词返回候选书籍列表
+### 6.2 方法：`discoverCategories(ctx)`
 
-输入：
+#### 功能
 
-- `keyword`
+返回发现页分类列表。
 
-输出：
+#### 参数
 
-- `Promise<Book[]>`
+- `ctx`
 
-最低要求：
+#### 返回值
 
-- 返回数组
-- 每项至少能让后续 `detail` 找到这本书
+- 返回 `DiscoverCategory[]`
 
-最少字段建议：
-
-- `id`
-- `title`
-- `author`
-- `detailUrl`
-- `sourceId`
-
-推荐补齐：
-
-- `cover`
-- `intro`
-- `status`
-- `category`
-- `score`
-- `wordCount`
-- `updateTime`
-- `tags`
-- `latestChapter`
-- `extra`
-- `debug`
-
-最小示例：
+#### 示例
 
 ```js
-return [
-  {
-    id: 'book-1',
-    title: '凡人修仙传',
-    author: '忘语',
-    detailUrl: 'https://example.com/book/1',
-    sourceId: ctx.source.id,
-  },
-];
-```
-
-### 6.3 `detail(ctx, book)`：补齐详情
-
-作用：
-
-- 根据已找到的书，补齐详情信息
-
-输入：
-
-- `Book`
-
-输出：
-
-- `Promise<Book>`
-
-最低要求：
-
-- 返回一个单独的 `Book`
-- 保留已有关键字段
-- 尽量补齐 `intro / status / category / score / wordCount / updateTime / tags / latestChapter`
-
-最少字段建议：
-
-- `id`
-- `title`
-- `author`
-- `detailUrl`
-- `sourceId`
-
-最小示例：
-
-```js
-return {
-  ...book,
-  intro: '一个普通山村小子的修仙故事。',
-  status: '已完结',
-  category: '仙侠',
-  sourceId: ctx.source.id,
-};
-```
-
-### 6.4 `chapters(ctx, book)`：获取目录
-
-作用：
-
-- 返回某本书的章节列表
-
-输入：
-
-- `Book`
-
-输出：
-
-- `Promise<Chapter[]>`
-
-最少字段建议：
-
-- `id`
-- `title`
-- `url`
-- `index`
-- `sourceId`
-
-推荐补齐：
-
-- `vip`
-- `extra`
-- `debug`
-
-最小示例：
-
-```js
-return [
-  {
-    id: 'chapter-1',
-    title: '第一章 山边小村',
-    url: 'https://example.com/book/1/chapter/1',
-    index: 1,
-    sourceId: ctx.source.id,
-  },
-];
-```
-
-### 6.5 `content(ctx, book, chapter)`：获取正文
-
-作用：
-
-- 返回单章正文内容
-
-输入：
-
-- `Book`
-- `Chapter`
-
-输出：
-
-- `Promise<Content>`
-
-最少字段建议：
-
-- `title`
-- `content`
-- `sourceId`
-
-推荐补齐：
-
-- `nextUrl`
-- `images`
-- `extra`
-- `debug`
-
-最小示例：
-
-```js
-return {
-  title: chapter.title,
-  content: '这里是正文内容……',
-  sourceId: ctx.source.id,
-};
-```
-
----
-
-## 7. 推荐的链式写法
-
-书源流程不是孤立的，而是链式的。
-
-推荐模式：
-
-1. `search` 返回基础 `Book`
-2. `detail` 在原有 `Book` 上补字段
-3. `chapters` 使用 `detail` 阶段传下来的 `extra`
-4. `content` 同时消费 `book + chapter`
-
-一个很常见的正确写法是：
-
-```js
-async detail(ctx, book) {
-  return {
-    ...book,
-    sourceId: ctx.source.id,
-    extra: {
-      ...book.extra,
-      catalogUrl: 'https://example.com/catalog/123',
+async discoverCategories(ctx) {
+  return [
+    {
+      title: '玄幻',
+      url: 'https://example.com/discover/xuanhuan',
     },
-  };
+  ];
 }
 ```
 
-重点是：
+#### 注意事项
 
-- 标准字段逐步补齐
-- 源特有字段统一放到 `extra`
-- 不要把站点私有字段直接污染到 `Book / Chapter / Content` 顶层
+- 只负责“给分类”
+- 每项至少要能让后续 `discoverBooks` 识别
 
----
+### 6.3 方法：`discoverBooks(ctx, category, page, pageSize)`
 
-## 8. `ctx` 能做什么
+#### 功能
 
-当前运行时提供的 `ctx` 结构如下：
+根据分类返回书籍列表。
+
+#### 参数
+
+- `ctx`
+- `category`
+- `page`
+- `pageSize`
+
+#### 返回值
+
+- 返回 `Book[]`
+
+#### 示例
 
 ```js
-ctx = {
-  source,
-  http,
-  html,
-  browser,
-  cookie,
-  cache,
-  session,
-  utils,
-  crypto,
-  log,
+async discoverBooks(ctx, category, page, pageSize) {
+  const response = await ctx.http.request({
+    url: category.url,
+    method: 'GET',
+    query: { page, pageSize },
+    responseType: 'text',
+  });
+
+  const doc = ctx.html.parse(response.text);
+  return ctx.html.collect(doc.querySelectorAll('.book-item'), (item) => ({
+    title: ctx.html.text(item.querySelector('.title')),
+    author: ctx.html.text(item.querySelector('.author')),
+    detailUrl: ctx.utils.absoluteUrl(
+      category.url,
+      ctx.html.attr(item.querySelector('a'), 'href'),
+    ),
+  }));
 }
 ```
 
-你可以把这些能力分成三类来理解：
+#### 注意事项
 
-- 基础执行：`source`、`http`、`html`、`utils`、`log`
-- 状态管理：`cookie`、`cache`、`session`
-- 浏览器兜底：`browser`
-- 加解密与签名：`crypto`
+- 和 `search` 很像，但输入是分类而不是关键词
+- 如果声明了发现能力，建议 `discoverCategories` 和 `discoverBooks` 成对实现
 
-### 8.1 `ctx.source`
+## 7. `ctx` 能做什么
 
-用途：
+书源里常用的宿主能力主要是：
 
-- 获取当前运行中的书源信息
+- `ctx.source`
+- `ctx.http`
+- `ctx.html`
+- `ctx.browser`
+- `ctx.cookie`
+- `ctx.cache`
+- `ctx.session`
+- `ctx.utils`
+- `ctx.crypto`
+- `ctx.log`
 
-当前可用字段：
+下面按命名空间整理。
 
-- `ctx.source.id`
-- `ctx.source.name`
-- `ctx.source.group`
-- `ctx.source.revision`
+## 8. `ctx.source`
 
-示例：
+### 方法：`ctx.source.id`
+
+#### 功能
+
+获取当前书源的运行时 ID。
+
+#### 签名
+
+```js
+ctx.source.id
+```
+
+#### 参数
+
+- 无
+
+#### 返回值
+
+- 返回字符串
+
+#### 示例
+
+```js
+const sourceId = ctx.source.id;
+```
+
+#### 注意事项
+
+- 这是宿主生成的 ID，不要求作者手写
+
+### 方法：`ctx.source.name`
+
+#### 功能
+
+获取当前书源名称。
+
+#### 签名
+
+```js
+ctx.source.name
+```
+
+#### 参数
+
+- 无
+
+#### 返回值
+
+- 返回字符串
+
+#### 示例
 
 ```js
 ctx.log(`当前源: ${ctx.source.name}`);
-const sourceId = ctx.source.id;
 ```
 
-#### 8.1.1 `ctx.source.id`
+#### 注意事项
 
-作用：
+- 更适合调试和日志
 
-- 获取当前书源的运行时唯一标识
+### 方法：`ctx.source.group`
 
-参数：
+#### 功能
+
+获取当前书源分组。
+
+#### 签名
+
+```js
+ctx.source.group
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-string
-```
+- 返回字符串或空值
 
-适用场景：
-
-- 给 `Book / Chapter / Content` 填充 `sourceId`
-- 调试时标识当前正在执行哪个源
-
-示例：
-
-```js
-const sourceId = ctx.source.id;
-```
-
-注意：
-
-- 这是运行时生成的值，不需要作者手动在 `meta` 中填写
-
-#### 8.1.2 `ctx.source.name`
-
-作用：
-
-- 获取当前规则名称
-
-参数：
-
-- 无
-
-返回值：
-
-```js
-string
-```
-
-适用场景：
-
-- 日志输出
-- 调试界面展示
-
-示例：
-
-```js
-ctx.log(`当前源名称: ${ctx.source.name}`);
-```
-
-#### 8.1.3 `ctx.source.group`
-
-作用：
-
-- 获取当前书源所属分组
-
-参数：
-
-- 无
-
-返回值：
-
-```js
-string
-```
-
-适用场景：
-
-- 调试时确认来源分组
-- 日志输出
-
-示例：
+#### 示例
 
 ```js
 const group = ctx.source.group;
 ```
 
-#### 8.1.4 `ctx.source.revision`
+#### 注意事项
 
-作用：
+- 不建议把分组当成强业务依赖
 
-- 获取当前书源运行时 revision
+### 方法：`ctx.source.revision`
 
-参数：
+#### 功能
+
+获取当前运行中的修订标识。
+
+#### 签名
+
+```js
+ctx.source.revision
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-number
-```
+- 返回字符串
 
-适用场景：
-
-- 调试时确认当前加载的是哪一版源
-- 记录诊断信息
-
-示例：
+#### 示例
 
 ```js
 ctx.log(`revision=${ctx.source.revision}`);
 ```
 
-### 8.2 `ctx.http`
+#### 注意事项
 
-用途：
+- 主要用于调试
 
-- 发起普通 HTTP 请求
-- 判断响应类型或是否出现挑战页
+## 9. `ctx.http`
 
-当前可用方法：
+### 方法：`ctx.http.request(options)`
 
-- `ctx.http.request(options)`
-- `ctx.http.isHtml(response)`
-- `ctx.http.isJson(response)`
-- `ctx.http.isRedirect(response)`
-- `ctx.http.isChallenge(response)`
+#### 功能
 
-`request` 示例：
+发起一次宿主 HTTP 请求。
+
+#### 签名
 
 ```js
-const response = await ctx.http.request({
-  url: 'https://example.com/search',
-  method: 'GET',
-  query: { q: keyword },
-  headers: {
-    Referer: 'https://example.com',
-  },
-  timeoutMs: 10000,
-  responseType: 'text',
-});
+await ctx.http.request(options)
 ```
 
-返回结构：
+#### 参数
+
+- `options.url`
+- `options.method`
+- `options.headers`
+- `options.query`
+- `options.body`
+- `options.bodyType`
+- `options.timeoutMs`
+- `options.responseType`
+- `options.charset`
+- `options.referer`
+- `options.followRedirects`
+- `options.execution`
+- `options.webView`
+- `options.proxy`
+
+#### 返回值
+
+返回宿主统一响应对象：
 
 ```js
 {
@@ -996,158 +723,48 @@ const response = await ctx.http.request({
 }
 ```
 
-推荐使用习惯：
-
-- 普通页面优先走 `ctx.http.request(...)`
-- 如果命中挑战页，再用 `ctx.browser.challenge(...)`
-- 先判断 `isJson` / `isHtml`，再决定如何解析
-- 需要控速时优先写 `meta.rateLimits`，不要在规则里到处手写 `sleep`
-
-#### 8.2.1 `ctx.http.request(options)`
-
-作用：
-
-- 发起普通 HTTP 请求
-
-参数：
-
-```js
-{
-  url: 'https://example.com/api',
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD',
-  headers: {
-    Referer: 'https://example.com',
-  },
-  query: {
-    q: '凡人',
-    page: '1',
-  },
-  body: '...',
-  bodyType: 'auto' | 'json' | 'form' | 'text' | 'bytes',
-  timeoutMs: 10000,
-  responseType: 'text' | 'json' | 'bytes',
-  charset: 'utf8' | 'gbk' | 'gb2312' | 'big5',
-  referer: 'https://example.com',
-  execution: 'http' | 'browser',
-  webView: true | false,
-}
-```
-
-参数说明：
-
-- `url`：请求地址
-- `method`：请求方法
-- `headers`：自定义请求头
-- `query`：查询参数
-- `body`：请求体，可为字符串、对象或其他宿主支持的格式
-- `bodyType`：请求体编码方式，默认 `auto`
-- `timeoutMs`：超时时间，单位毫秒
-- `responseType`：期望的响应类型
-- `charset`：响应文本解码字符集，默认 `utf8`
-- `referer`：快捷传入的来源页地址
-- `execution`：请求执行方式，默认 `http`
-- `webView`：`execution: 'browser'` 的轻量别名
-
-返回值：
-
-```js
-Promise<{
-  ok: boolean,
-  status: number,
-  url: string,
-  headers: Record<string, string>,
-  text: string | null,
-  json: any,
-  bytesLength: number | null,
-  redirected: boolean,
-}>
-```
-
-适用场景：
-
-- 搜索接口请求
-- 详情页、目录页、正文页抓取
-- API 接口调用
-
-示例：
+#### 示例
 
 ```js
 const response = await ctx.http.request({
   url: 'https://example.com/search',
   method: 'GET',
   query: { q: keyword },
-  headers: {
-    Referer: 'https://example.com',
-  },
-  timeoutMs: 10000,
   responseType: 'text',
 });
 ```
 
-指定字符集：
+#### 注意事项
+
+- 普通请求优先走 `ctx.http.request(...)`
+- `bodyType` 常用值：`auto / json / form / text / bytes`
+- `responseType` 常用值：`text / json / bytes`
+- `execution` 常用值：`http / browser`
+- `webView: true` 可以视为 `execution: 'browser'` 的兼容写法
+- 需要观察 302、登录跳转或风控跳转时，可显式传 `followRedirects: false`
+- 命中挑战页后再考虑浏览器流程
+
+### 方法：`ctx.http.isHtml(response)`
+
+#### 功能
+
+判断响应是否适合按 HTML 处理。
+
+#### 签名
 
 ```js
-const response = await ctx.http.request({
-  url: 'https://example.com/search',
-  method: 'GET',
-  charset: 'gbk',
-});
+ctx.http.isHtml(response)
 ```
 
-提交表单：
+#### 参数
 
-```js
-const response = await ctx.http.request({
-  url: 'https://example.com/login',
-  method: 'POST',
-  bodyType: 'form',
-  body: {
-    username: 'demo',
-    password: '123456',
-  },
-});
-```
+- `response`
 
-按浏览器环境请求页面：
+#### 返回值
 
-```js
-const response = await ctx.http.request({
-  url: 'https://example.com/protected',
-  execution: 'browser',
-});
-```
+- `boolean`
 
-注意：
-
-- 普通站点优先使用 `request(...)`
-- 命中挑战页后，再决定是否升级到 `ctx.browser.challenge(...)`
-- 如果 `meta.rateLimits` 为当前域名声明了 `minIntervalMs`，宿主会在请求前自动等待
-- `execution: 'browser'` 当前更适合 HTML 页面抓取，不应理解为完整浏览器网络栈替代
-
-#### 8.2.2 `ctx.http.isHtml(response)`
-
-作用：
-
-- 判断响应是否适合按 HTML 处理
-
-参数：
-
-```js
-response
-```
-
-返回值：
-
-```js
-boolean
-```
-
-适用场景：
-
-- 响应类型不固定时做分支判断
-- 解析前先确认是不是 HTML 页面
-
-示例：
+#### 示例
 
 ```js
 if (ctx.http.isHtml(response)) {
@@ -1155,30 +772,31 @@ if (ctx.http.isHtml(response)) {
 }
 ```
 
-#### 8.2.3 `ctx.http.isJson(response)`
+#### 注意事项
 
-作用：
+- 响应类型不固定时再用它判断
 
-- 判断响应是否适合按 JSON 处理
+### 方法：`ctx.http.isJson(response)`
 
-参数：
+#### 功能
 
-```js
-response
-```
+判断响应是否适合按 JSON 处理。
 
-返回值：
+#### 签名
 
 ```js
-boolean
+ctx.http.isJson(response)
 ```
 
-适用场景：
+#### 参数
 
-- 搜索接口可能返回 JSON 时
-- 同一站点既有 HTML 页也有 JSON API 时
+- `response`
 
-示例：
+#### 返回值
+
+- `boolean`
+
+#### 示例
 
 ```js
 if (ctx.http.isJson(response)) {
@@ -1186,30 +804,31 @@ if (ctx.http.isJson(response)) {
 }
 ```
 
-#### 8.2.4 `ctx.http.isRedirect(response)`
+#### 注意事项
 
-作用：
+- 适合 API / HTML 混合场景
 
-- 判断响应是否发生了跳转
+### 方法：`ctx.http.isRedirect(response)`
 
-参数：
+#### 功能
 
-```js
-response
-```
+判断响应是否发生了跳转。
 
-返回值：
+#### 签名
 
 ```js
-boolean
+ctx.http.isRedirect(response)
 ```
 
-适用场景：
+#### 参数
 
-- 判断是否被站点重定向到登录页
-- 调试请求链路
+- `response`
 
-示例：
+#### 返回值
+
+- `boolean`
+
+#### 示例
 
 ```js
 if (ctx.http.isRedirect(response)) {
@@ -1217,30 +836,31 @@ if (ctx.http.isRedirect(response)) {
 }
 ```
 
-#### 8.2.5 `ctx.http.isChallenge(response)`
+#### 注意事项
 
-作用：
+- 适合排查登录页、风控页跳转
 
-- 判断响应是否命中了验证码、风控页或其他挑战页
+### 方法：`ctx.http.isChallenge(response)`
 
-参数：
+#### 功能
 
-```js
-response
-```
+判断响应是否命中了挑战页。
 
-返回值：
+#### 签名
 
 ```js
-boolean
+ctx.http.isChallenge(response)
 ```
 
-适用场景：
+#### 参数
 
-- 普通请求被拦截后切换到浏览器流程
-- 登录或验证前置判断
+- `response`
 
-示例：
+#### 返回值
+
+- `boolean`
+
+#### 示例
 
 ```js
 if (ctx.http.isChallenge(response)) {
@@ -1251,220 +871,203 @@ if (ctx.http.isChallenge(response)) {
 }
 ```
 
-### 8.3 `ctx.html`
+#### 注意事项
 
-用途：
+- 不要把浏览器流程当默认主路
 
-- 解析 HTML 并提取内容
+## 10. `ctx.html`
 
-当前可用方法：
+### 方法：`ctx.html.parse(html)`
 
-- `ctx.html.parse(html)`
-- `ctx.html.text(node)`
-- `ctx.html.attr(node, name)`
-- `ctx.html.collect(nodes, mapper)`
+#### 功能
 
-示例：
+把 HTML 字符串解析成可查询文档对象。
+
+#### 签名
+
+```js
+ctx.html.parse(html)
+```
+
+#### 参数
+
+- `html`
+
+#### 返回值
+
+- 返回文档对象
+
+#### 示例
 
 ```js
 const doc = ctx.html.parse(response.text);
-const items = doc.querySelectorAll('.book-item');
-
-return ctx.html.collect(items, (node, index) => ({
-  id: node.getAttribute('data-id') || String(index),
-  title: ctx.html.text(node.querySelector('.title')),
-  author: ctx.html.text(node.querySelector('.author')),
-  sourceId: ctx.source.id,
-}));
 ```
 
-#### 8.3.1 `ctx.html.parse(html)`
+#### 注意事项
 
-作用：
+- 输入应是 HTML 字符串
+- `parse(...)` 返回的是宿主包装过的文档/节点对象，可直接继续调用：
+  - `querySelector(selector)`
+  - `querySelectorAll(selector)`
+  - `getAttribute(name)`
+  - `textContent`
+  - `innerText`
+  - `innerHtml`
+- 作者更推荐优先使用本文档里的 `ctx.html.text / attr / innerHtml / collect`
 
-- 把 HTML 字符串解析成可查询的文档对象
+### 方法：`ctx.html.text(node)`
 
-参数：
+#### 功能
+
+获取节点文本内容。
+
+#### 签名
 
 ```js
-html
+ctx.html.text(node)
 ```
 
-返回值：
+#### 参数
 
-```js
-DocumentLike
-```
+- `node`
 
-适用场景：
+#### 返回值
 
-- 解析搜索结果页
-- 解析详情页、目录页、正文页
+- 返回字符串
 
-示例：
-
-```js
-const doc = ctx.html.parse(response.text);
-const titleNode = doc.querySelector('.book-title');
-```
-
-#### 8.3.2 `ctx.html.text(node)`
-
-作用：
-
-- 获取节点的文本内容，并做基础文本提取
-
-参数：
-
-```js
-node
-```
-
-返回值：
-
-```js
-string
-```
-
-适用场景：
-
-- 提取书名、作者、简介、章节名
-
-示例：
+#### 示例
 
 ```js
 const title = ctx.html.text(doc.querySelector('.book-title'));
 ```
 
-注意：
+#### 注意事项
 
-- 节点为空时，建议结合上游判空逻辑一起使用
+- 适合书名、作者、简介、章节名
 
-#### 8.3.3 `ctx.html.attr(node, name)`
+### 方法：`ctx.html.innerHtml(node)`
 
-作用：
+#### 功能
 
-- 获取节点指定属性值
+获取元素内部 HTML 片段。
 
-参数：
-
-```js
-node, name
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.html.innerHtml(node)
 ```
 
-适用场景：
+#### 参数
 
-- 读取链接 `href`
-- 读取图片 `src`
-- 读取元素自定义属性
+- `node`
 
-示例：
+#### 返回值
+
+- 返回 HTML 字符串
+
+#### 示例
+
+```js
+const html = ctx.html.innerHtml(doc.querySelector('.content'));
+```
+
+#### 注意事项
+
+- 如果你要保留正文中的图片或标签，用它比 `text(...)` 更合适
+
+### 方法：`ctx.html.attr(node, name)`
+
+#### 功能
+
+读取节点属性值。
+
+#### 签名
+
+```js
+ctx.html.attr(node, name)
+```
+
+#### 参数
+
+- `node`
+- `name`
+
+#### 返回值
+
+- 返回字符串
+
+#### 示例
 
 ```js
 const href = ctx.html.attr(doc.querySelector('a'), 'href');
 ```
 
-#### 8.3.4 `ctx.html.collect(nodes, mapper)`
+#### 注意事项
 
-作用：
+- 常用于 `href / src`
+- 相对地址通常还要配合 `ctx.utils.absoluteUrl(...)`
 
-- 遍历节点集合并映射成结构化数组
+### 方法：`ctx.html.collect(nodes, mapper)`
 
-参数：
+#### 功能
+
+遍历节点集合并映射成结构化数组。
+
+#### 签名
 
 ```js
-nodes, mapper
+ctx.html.collect(nodes, mapper)
 ```
 
-返回值：
+#### 参数
 
-```js
-Array<any>
-```
+- `nodes`
+- `mapper`
 
-适用场景：
+#### 返回值
 
-- 搜索结果列表提取
-- 章节列表提取
+- 返回数组
 
-示例：
+#### 示例
 
 ```js
 const books = ctx.html.collect(
   doc.querySelectorAll('.book-item'),
-  (node, index) => ({
-    id: node.getAttribute('data-id') || String(index),
+  (node) => ({
     title: ctx.html.text(node.querySelector('.title')),
     author: ctx.html.text(node.querySelector('.author')),
-    sourceId: ctx.source.id,
   }),
 );
 ```
 
-### 8.4 `ctx.browser`
+#### 注意事项
 
-用途：
+- 搜索结果、目录列表最适合用它统一收集
 
-- 当普通请求不够时，进入真实浏览器上下文
+## 11. `ctx.browser`
 
-当前可用方法：
+### 方法：`ctx.browser.open(options)`
 
-- `ctx.browser.open(...)`
-- `ctx.browser.challenge(...)`
-- `ctx.browser.eval(...)`
-- `ctx.browser.waitForUrl(...)`
-- `ctx.browser.waitForText(...)`
-- `ctx.browser.getCookies()`
-- `ctx.browser.getCurrentUrl()`
-- `ctx.browser.getHtml()`
-- `ctx.browser.getStorage()`
+#### 功能
 
-推荐理解：
+打开一个真实浏览器页面。
 
-- `browser` 不是“登录模块”
-- `challenge` 的核心目标是“让流程继续”
-- 如果你需要某个明确值，优先用 `eval(...)` 去拿
-
-#### 8.4.1 `ctx.browser.open(options)`
-
-作用：
-
-- 打开一个真实浏览器页面
-- 适合需要先进入某个页面、再执行后续交互的场景
-
-参数：
+#### 签名
 
 ```js
-{
-  url: 'https://example.com/login',
-  timeoutMs: 120000,
-}
+await ctx.browser.open(options)
 ```
 
-参数说明：
+#### 参数
 
-- `url`：要打开的页面地址
-- `timeoutMs`：等待打开完成的超时时间，单位毫秒
+- `options.url`
+- `options.timeoutMs`
 
-返回值：
+#### 返回值
 
-```js
-Promise<void>
-```
+- `Promise<void>`
 
-适用场景：
-
-- 先打开登录页
-- 先进入详情页，再配合 `eval(...)` 读取页面数据
-- 明确知道接下来要在同一页面继续等待或执行脚本
-
-示例：
+#### 示例
 
 ```js
 await ctx.browser.open({
@@ -1473,55 +1076,34 @@ await ctx.browser.open({
 });
 ```
 
-注意：
+#### 注意事项
 
-- `open(...)` 只是打开页面，不等于已经完成登录或验证
-- 如果你需要等待某个结果出现，继续配合 `waitForUrl(...)`、`waitForText(...)` 或 `eval(...)`
+- `open(...)` 只是打开页面，不代表完成登录或验证
 
-#### 8.4.2 `ctx.browser.challenge(options)`
+### 方法：`ctx.browser.challenge(options)`
 
-作用：
+#### 功能
 
-- 在浏览器中承接验证码、人工登录或其他需要页面继续完成的流程
+进入浏览器挑战流程，让验证码、登录或风控通过后继续执行。
 
-参数：
-
-```js
-{
-  url: 'https://example.com/login',
-  reason: 'manual_login',
-  waitFor: {
-    urlIncludes: '/home',
-    textIncludes: '登录成功',
-    cookie: 'SESSIONID',
-  },
-  timeoutMs: 120000,
-}
-```
-
-参数说明：
-
-- `url`：需要进入的挑战页或登录页
-- `reason`：触发原因，建议写清楚，例如 `captcha`、`manual_login`
-- `waitFor`：等待条件，可按需指定
-- `waitFor.urlIncludes`：当 URL 包含某段文本时视为成功
-- `waitFor.textIncludes`：当页面出现某段文本时视为成功
-- `waitFor.cookie`：当出现某个 cookie 时视为成功
-- `timeoutMs`：最大等待时间，单位毫秒
-
-返回值：
+#### 签名
 
 ```js
-Promise<void>
+await ctx.browser.challenge(options)
 ```
 
-适用场景：
+#### 参数
 
-- 普通 HTTP 请求被验证码拦截
-- 站点要求用户先登录
-- 某一步必须通过页面交互后才能继续
+- `options.url`
+- `options.reason`
+- `options.waitFor`
+- `options.timeoutMs`
 
-示例：
+#### 返回值
+
+- `Promise<void>`
+
+#### 示例
 
 ```js
 await ctx.browser.challenge({
@@ -1532,1216 +1114,1542 @@ await ctx.browser.challenge({
     textIncludes: '登录成功',
     cookie: 'SESSIONID',
   },
-  timeoutMs: 120000,
 });
 ```
 
-注意：
+#### 注意事项
 
-- `challenge(...)` 的目标是“让规则继续”，不是自动帮你完成所有状态同步
-- 如果后续还需要 token、HTML、storage，请显式调用对应方法获取
+- 目标是“让流程继续”，不是单纯打开页面给用户看
 
-#### 8.4.3 `ctx.browser.eval(options)`
+### 方法：`ctx.browser.eval(options)`
 
-作用：
+#### 功能
 
-- 在当前浏览器页面上下文中执行脚本，并返回结果
+在目标浏览器页面环境执行脚本并返回结果。
 
-参数：
-
-```js
-{
-  script: "localStorage.getItem('token')",
-}
-```
-
-参数说明：
-
-- `script`：要在页面环境执行的脚本字符串
-
-返回值：
+#### 签名
 
 ```js
-Promise<any>
+await ctx.browser.eval(options)
 ```
 
-适用场景：
+#### 参数
 
-- 读取 `localStorage` / `sessionStorage`
-- 获取页面里的某个全局变量
-- 读取页面已经渲染出的动态数据
+- `options.url`
+- `options.script`
+- `options.timeoutMs`
+- `options.webViewDelay`
 
-示例：
+#### 返回值
+
+- `Promise<any>`
+
+#### 示例
 
 ```js
 const token = await ctx.browser.eval({
+  url: 'https://example.com/profile',
   script: "localStorage.getItem('token')",
+  webViewDelay: 1200,
 });
 ```
 
-注意：
+#### 注意事项
 
-- 如果你只需要一个明确值，优先用 `eval(...)`
-- 比起先 `getStorage()` 再自己翻字段，`eval(...)` 通常更直接
+- `eval(...)` 通常应显式传 `url`
+- 如果只取一个明确值，优先用 `eval(...)`
+- 遇到前端异步渲染页时，可增加 `webViewDelay` 等待页面脚本完成挂载
 
-#### 8.4.4 `ctx.browser.waitForUrl(options)`
+### 方法：`ctx.browser.waitForUrl(options)`
 
-作用：
+#### 功能
 
-- 等待浏览器当前 URL 满足指定条件
+等待 URL 满足条件。
 
-参数：
-
-```js
-{
-  includes: '/home',
-  timeoutMs: 120000,
-}
-```
-
-参数说明：
-
-- `includes`：URL 中应包含的关键片段
-- `timeoutMs`：最大等待时间，单位毫秒
-
-返回值：
+#### 签名
 
 ```js
-Promise<void>
+await ctx.browser.waitForUrl(options)
 ```
 
-适用场景：
+#### 参数
 
-- 登录完成后页面跳转
-- 验证码通过后进入目标页
-- 单页应用发生路由变化
+- `options.urlIncludes`
+- `options.url`
+- `options.reason`
+- `options.timeoutMs`
 
-示例：
+#### 返回值
+
+- `Promise<void>`
+
+#### 示例
 
 ```js
 await ctx.browser.waitForUrl({
-  includes: '/bookshelf',
+  urlIncludes: '/bookshelf',
   timeoutMs: 120000,
 });
 ```
 
-注意：
+#### 注意事项
 
-- 适合监听“地址变化”
-- 如果页面地址不变、只是 DOM 变化，优先用 `waitForText(...)`
+- `url` 可选；不传时默认基于当前浏览器页面继续等待
+- 更适合监听跳转
 
-#### 8.4.5 `ctx.browser.waitForText(options)`
+### 方法：`ctx.browser.waitForText(options)`
 
-作用：
+#### 功能
 
-- 等待页面中出现指定文本
+等待页面出现文本。
 
-参数：
-
-```js
-{
-  text: '登录成功',
-  timeoutMs: 120000,
-}
-```
-
-参数说明：
-
-- `text`：页面中应出现的文本
-- `timeoutMs`：最大等待时间，单位毫秒
-
-返回值：
+#### 签名
 
 ```js
-Promise<void>
+await ctx.browser.waitForText(options)
 ```
 
-适用场景：
+#### 参数
 
-- 等待“登录成功”“验证通过”这类页面提示
-- 页面没有跳转，但内容已经变化
-- 等待 SPA 页面渲染出目标区域
+- `options.textIncludes`
+- `options.url`
+- `options.reason`
+- `options.timeoutMs`
 
-示例：
+#### 返回值
+
+- `Promise<void>`
+
+#### 示例
 
 ```js
 await ctx.browser.waitForText({
-  text: '欢迎回来',
+  textIncludes: '欢迎回来',
   timeoutMs: 120000,
 });
 ```
 
-注意：
+#### 注意事项
 
-- 文本判断适合用户可见提示
-- 如果你要拿的不是文本而是结构化值，后续仍建议配合 `eval(...)`
+- `url` 可选；不传时默认基于当前浏览器页面继续等待
+- 适合监听用户可见提示
 
-#### 8.4.6 `ctx.browser.getCookies()`
+### 方法：`ctx.browser.getCookies()`
 
-作用：
+#### 功能
 
-- 获取当前浏览器上下文中的 cookie 集合
+读取当前浏览器上下文的 cookie 集合。
 
-参数：
+#### 签名
+
+```js
+await ctx.browser.getCookies()
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-Promise<Array<any>>
-```
+- 返回 cookie 集合
 
-适用场景：
-
-- 登录完成后读取浏览器侧 cookie
-- 调试 challenge 后站点到底写入了哪些 cookie
-
-示例：
+#### 示例
 
 ```js
 const cookies = await ctx.browser.getCookies();
 ```
 
-注意：
+#### 注意事项
 
-- 这适合在你明确需要查看浏览器侧 cookie 时使用
-- 如果只是规则内部读取 cookie，也可以优先尝试 `ctx.cookie.*`
+- 更适合 challenge / 登录后的浏览器调试
 
-#### 8.4.7 `ctx.browser.getCurrentUrl()`
+### 方法：`ctx.browser.getCurrentUrl()`
 
-作用：
+#### 功能
 
-- 获取当前浏览器页面的实际 URL
+读取当前浏览器页面的实际 URL。
 
-参数：
+#### 签名
+
+```js
+await ctx.browser.getCurrentUrl()
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
+
+- 返回字符串
+
+#### 示例
 
 ```js
-Promise<string>
+const url = await ctx.browser.getCurrentUrl();
 ```
 
-适用场景：
+#### 注意事项
 
-- 判断 challenge 完成后跳到了哪里
-- 记录调试信息
-- 验证当前页面是否已经进入目标路径
+- 适合调试跳转后页面位置
 
-示例：
+### 方法：`ctx.browser.getHtml()`
+
+#### 功能
+
+读取当前浏览器页面 HTML 快照。
+
+#### 签名
 
 ```js
-const currentUrl = await ctx.browser.getCurrentUrl();
-ctx.log(`browser url=${currentUrl}`);
+await ctx.browser.getHtml()
 ```
 
-#### 8.4.8 `ctx.browser.getHtml()`
-
-作用：
-
-- 获取当前浏览器页面的 HTML 快照
-
-参数：
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-Promise<string>
-```
+- 返回 HTML 字符串
 
-适用场景：
-
-- 页面依赖前端渲染，HTTP 拿不到最终 DOM
-- 调试浏览器页当前到底渲染成了什么
-
-示例：
+#### 示例
 
 ```js
 const html = await ctx.browser.getHtml();
 const doc = ctx.html.parse(html);
 ```
 
-注意：
+#### 注意事项
 
-- 如果你只想拿某个明确字段，优先用 `eval(...)`
-- `getHtml()` 更适合你确实需要整页 DOM 快照时使用
+- 如果只取单值，优先用 `eval(...)`
 
-#### 8.4.9 `ctx.browser.getStorage()`
+### 方法：`ctx.browser.getStorage()`
 
-作用：
+#### 功能
 
-- 获取当前浏览器页面可访问的存储快照
+读取当前浏览器页面可见的存储快照。
 
-参数：
+#### 签名
+
+```js
+await ctx.browser.getStorage()
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-Promise<{
-  localStorage?: Record<string, string>,
-  sessionStorage?: Record<string, string>,
-}>
-```
+- 返回 `localStorage / sessionStorage` 快照
 
-适用场景：
-
-- 调试登录后页面写入了哪些存储项
-- 需要一次性查看多个 storage 字段
-
-示例：
+#### 示例
 
 ```js
 const storage = await ctx.browser.getStorage();
 const token = storage.localStorage?.token;
 ```
 
-注意：
+#### 注意事项
 
-- 当前更推荐“按需使用”
-- 如果只是拿一个 token，通常 `eval(...)` 比 `getStorage()` 更直接
+- 如果只取单个字段，通常 `eval(...)` 更直接
 
-### 8.5 `ctx.cookie`
+## 12. `ctx.cookie`
 
-用途：
+### 方法：`ctx.cookie.get(name)`
 
-- 管理当前书源上下文里的 cookie
+#### 功能
 
-当前可用方法：
+读取当前源上下文中的指定 cookie。
 
-- `ctx.cookie.get(name)`
-- `ctx.cookie.getAll()`
-- `ctx.cookie.getForUrl(url, name?)`
-- `ctx.cookie.set(name, value)`
-- `ctx.cookie.remove(name)`
-- `ctx.cookie.clearDomain(domain)`
-
-示例：
+#### 签名
 
 ```js
-const sessionId = ctx.cookie.get('SESSIONID');
-ctx.cookie.set('custom_token', 'abc');
+ctx.cookie.get(name)
 ```
 
-说明：
+#### 参数
 
-- `clearDomain(domain)` 当前更适合理解为“清理当前源持有的 cookie 集合”
-- 不要把它理解成完整的浏览器级域名精确清理器
+- `name`
 
-#### 8.5.1 `ctx.cookie.get(name)`
+#### 返回值
 
-作用：
+- 返回 cookie 值
 
-- 获取指定名称的 cookie 值
-
-参数：
-
-```js
-name
-```
-
-返回值：
-
-```js
-string | null
-```
-
-适用场景：
-
-- 读取登录态 cookie
-- 拼接后续请求头
-
-示例：
+#### 示例
 
 ```js
 const sessionId = ctx.cookie.get('SESSIONID');
 ```
 
-#### 8.5.2 `ctx.cookie.getAll()`
+#### 注意事项
 
-作用：
+- 这是当前源上下文视角
 
-- 获取当前规则上下文中的全部 cookie
+### 方法：`ctx.cookie.getAll()`
 
-参数：
+#### 功能
+
+读取当前源上下文里的全部 cookie。
+
+#### 签名
+
+```js
+ctx.cookie.getAll()
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-Record<string, string>
-```
+- 返回 cookie 集合
 
-适用场景：
-
-- 调试 cookie 状态
-- 一次性检查当前 cookie 集合
-
-示例：
+#### 示例
 
 ```js
 const cookies = ctx.cookie.getAll();
 ```
 
-#### 8.5.3 `ctx.cookie.getForUrl(url, name?)`
+### 方法：`ctx.cookie.getForUrl(url, name?)`
 
-作用：
+#### 功能
 
-- 以 URL 视角读取当前源上下文里的 cookie
+以目标 URL 视角读取可匹配 cookie。
 
-参数：
-
-```js
-url, name?
-```
-
-返回值：
+#### 签名
 
 ```js
-string | Record<string, string> | null
+ctx.cookie.getForUrl(url, name?)
 ```
 
-适用场景：
+#### 参数
 
-- 从旧规则迁移 `getCookie(url, key)` 这类写法
-- 调试某个站点请求前可用的 cookie
+- `url`
+- `name`
 
-示例：
+#### 返回值
+
+- 返回单个 cookie 值或 cookie 集合
+
+#### 示例
 
 ```js
 const sessionId = ctx.cookie.getForUrl('https://example.com', 'SESSIONID');
-const allCookies = ctx.cookie.getForUrl('https://example.com');
 ```
 
-注意：
+#### 注意事项
 
-- 当前仍然基于当前源 cookie 集合，不是完整浏览器 cookie 容器
+- 这个视角更贴近真实请求携带结果
 
-#### 8.5.4 `ctx.cookie.set(name, value)`
+### 方法：`ctx.cookie.set(name, value)`
 
-作用：
+#### 功能
 
-- 写入或更新一个 cookie
+写入或更新 cookie。
 
-参数：
+#### 签名
 
 ```js
-name, value
+ctx.cookie.set(name, value)
 ```
 
-返回值：
+#### 参数
 
-```js
-void
-```
+- `name`
+- `value`
 
-适用场景：
+#### 返回值
 
-- 写入站点要求的临时 cookie
-- 在规则内同步某些已知 cookie 值
+- 无
 
-示例：
+#### 示例
 
 ```js
 ctx.cookie.set('custom_token', 'abc');
 ```
 
-#### 8.5.5 `ctx.cookie.remove(name)`
+### 方法：`ctx.cookie.remove(name)`
 
-作用：
+#### 功能
 
-- 删除指定名称的 cookie
+删除指定 cookie。
 
-参数：
-
-```js
-name
-```
-
-返回值：
+#### 签名
 
 ```js
-void
+ctx.cookie.remove(name)
 ```
 
-适用场景：
+#### 参数
 
-- 清理失效登录态
-- 重新发起登录前清理旧 cookie
+- `name`
 
-示例：
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.cookie.remove('SESSIONID');
 ```
 
-#### 8.5.6 `ctx.cookie.clearDomain(domain)`
+### 方法：`ctx.cookie.clearDomain(domain)`
 
-作用：
+#### 功能
 
-- 清理当前源上下文里与某个域名相关的 cookie 集合
+清理当前源上下文里与某个域名相关的 cookie 集合。
 
-参数：
-
-```js
-domain
-```
-
-返回值：
+#### 签名
 
 ```js
-void
+ctx.cookie.clearDomain(domain)
 ```
 
-适用场景：
+#### 参数
 
-- 某站点 cookie 污染导致规则异常
-- 重新初始化站点状态前做清理
+- `domain`
 
-示例：
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.cookie.clearDomain('example.com');
 ```
 
-注意：
+#### 注意事项
 
-- 当前更适合理解为“按当前源 cookie 集合清理”
-- 不要把它理解成完整浏览器级精细删除器
+- 当前是当前源 session 视角，不是浏览器级完整删除器
 
-### 8.6 `ctx.cache`
+## 13. `ctx.cache`
 
-用途：
+### 方法：`ctx.cache.get(key)`
 
-- 存储可重复利用、但不一定必须跨整个流程存在的数据
+#### 功能
 
-当前可用方法：
+读取缓存。
 
-- `ctx.cache.get(key)`
-- `ctx.cache.set(key, value)`
-- `ctx.cache.remove(key)`
-- `ctx.cache.clearPrefix(prefix)`
-
-示例：
+#### 签名
 
 ```js
-const cached = ctx.cache.get(`search:${keyword}`);
-if (cached) {
-  return cached;
-}
+ctx.cache.get(key)
 ```
 
-#### 8.6.1 `ctx.cache.get(key)`
+#### 参数
 
-作用：
+- `key`
 
-- 读取缓存值
+#### 返回值
 
-参数：
+- 返回缓存值
 
-```js
-key
-```
-
-返回值：
-
-```js
-any
-```
-
-适用场景：
-
-- 读取搜索缓存
-- 读取预热阶段写入的公共数据
-
-示例：
+#### 示例
 
 ```js
 const cached = ctx.cache.get(`search:${keyword}`);
 ```
 
-#### 8.6.2 `ctx.cache.set(key, value)`
+### 方法：`ctx.cache.set(key, value)`
 
-作用：
+#### 功能
 
-- 写入缓存值
+写入缓存。
 
-参数：
-
-```js
-key, value
-```
-
-返回值：
+#### 签名
 
 ```js
-void
+ctx.cache.set(key, value)
 ```
 
-适用场景：
+#### 参数
 
-- 缓存搜索结果
-- 缓存短期复用的 token 或接口结果
+- `key`
+- `value`
 
-示例：
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.cache.set(`search:${keyword}`, books);
 ```
 
-#### 8.6.3 `ctx.cache.remove(key)`
+#### 注意事项
 
-作用：
+- 当前脚本层只开放 `set(key, value)` 这一种写法
+- 宿主内部虽然支持更细的缓存策略参数，但目前没有暴露给书源脚本
 
-- 删除指定缓存项
+### 方法：`ctx.cache.remove(key)`
 
-参数：
+#### 功能
+
+删除缓存项。
+
+#### 签名
 
 ```js
-key
+ctx.cache.remove(key)
 ```
 
-返回值：
+#### 参数
 
-```js
-void
-```
+- `key`
 
-适用场景：
+#### 返回值
 
-- 某条缓存失效时主动清除
+- 无
 
-示例：
+#### 示例
 
 ```js
 ctx.cache.remove(`search:${keyword}`);
 ```
 
-#### 8.6.4 `ctx.cache.clearPrefix(prefix)`
+### 方法：`ctx.cache.clearPrefix(prefix)`
 
-作用：
+#### 功能
 
-- 清理指定前缀下的缓存项
+按前缀清理缓存。
 
-参数：
-
-```js
-prefix
-```
-
-返回值：
+#### 签名
 
 ```js
-void
+ctx.cache.clearPrefix(prefix)
 ```
 
-适用场景：
+#### 参数
 
-- 批量清理某类缓存
-- 站点规则升级后清空旧缓存
+- `prefix`
 
-示例：
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.cache.clearPrefix('search:');
 ```
 
-### 8.7 `ctx.session`
+## 14. `ctx.session`
 
-用途：
+### 方法：`ctx.session.get(key)`
 
-- 保存源内临时状态
-- 适合跨步骤共享信息
+#### 功能
 
-当前可用方法：
+读取当前源 session 值。
 
-- `ctx.session.get(key)`
-- `ctx.session.set(key, value)`
-- `ctx.session.clear(key?)`
-- `ctx.session.cookies()`
-
-示例：
+#### 签名
 
 ```js
-if (!ctx.session.get('initialized')) {
-  ctx.session.set('initialized', true);
-}
+ctx.session.get(key)
 ```
 
-推荐场景：
+#### 参数
 
-- 初始化标记
-- 登录状态
-- 预热 token
-- 当前流程确实需要跨步骤透传的上下文
+- `key`
 
-#### 8.7.1 `ctx.session.get(key)`
+#### 返回值
 
-作用：
+- 返回 session 值
 
-- 获取 session 中的值
-
-参数：
-
-```js
-key
-```
-
-返回值：
-
-```js
-any
-```
-
-适用场景：
-
-- 读取初始化标记
-- 读取登录态或 token
-
-示例：
+#### 示例
 
 ```js
 const initialized = ctx.session.get('initialized');
 ```
 
-#### 8.7.2 `ctx.session.set(key, value)`
+### 方法：`ctx.session.set(key, value)`
 
-作用：
+#### 功能
 
-- 写入 session 值
+写入当前源 session 值。
 
-参数：
-
-```js
-key, value
-```
-
-返回值：
+#### 签名
 
 ```js
-void
+ctx.session.set(key, value)
 ```
 
-适用场景：
+#### 参数
 
-- 存初始化标记
-- 存跨步骤复用的 token 或状态
+- `key`
+- `value`
 
-示例：
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.session.set('initialized', true);
 ```
 
-#### 8.7.3 `ctx.session.clear(key?)`
+### 方法：`ctx.session.clear(key?)`
 
-作用：
+#### 功能
 
-- 清空某个 session 键，或清空整个 session
+清空某个 session 键，或清空整个 session。
 
-参数：
-
-```js
-key?
-```
-
-返回值：
+#### 签名
 
 ```js
-void
+ctx.session.clear(key?)
 ```
 
-适用场景：
+#### 参数
 
-- 某个状态失效后删除
-- 重置整个源内流程状态
+- `key`：可选
 
-示例：
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.session.clear('initialized');
 ctx.session.clear();
 ```
 
-#### 8.7.4 `ctx.session.cookies()`
+### 方法：`ctx.session.cookies()`
 
-作用：
+#### 功能
 
-- 获取与当前 session 关联的 cookie 视图
+查看当前 session 的 cookie 视图。
 
-参数：
+#### 签名
+
+```js
+ctx.session.cookies()
+```
+
+#### 参数
 
 - 无
 
-返回值：
+#### 返回值
 
-```js
-any
-```
+- 返回 cookie 视图
 
-适用场景：
-
-- 调试当前 session 里的 cookie 状态
-- 在 session 视角检查 cookie 是否同步
-
-示例：
+#### 示例
 
 ```js
 const cookies = ctx.session.cookies();
 ```
 
-#### 8.7.5 `ctx.session` 与 `ctx.cache` 怎么选
+#### 注意事项
 
-这是书源作者最容易混淆的一组能力。
+- `session` 更适合放“当前源是否还能继续执行”的状态
+- 减少重复请求的数据优先放 `cache`
 
-推荐理解：
+## 15. `ctx.sourceLogin`
 
-- `ctx.session`
+`ctx.sourceLogin` 用于读写书源登录态。它适合保存：
 
-  - 偏“当前源的运行时会话状态”
-  - 更适合放：
-    - 初始化标记
-    - 登录态
-    - token
-    - 浏览器 challenge 后继承的状态
-- `ctx.cache`
+- 登录头，例如 `token / authorization / cookie`
+- 登录表单信息
+- 书源级变量配置
 
-  - 偏“可重复利用的业务结果”
-  - 更适合放：
-    - 搜索结果
-    - 详情结果
-    - 目录结果
-    - 某些短期可复用的接口结果
+底层数据会按书源持久化，不依赖当前一次执行。
 
-简单判断：
+### 15.1 原始读写方法
 
-- 如果这个值丢了会影响“当前源是否还能继续执行”，优先放 `session`
-- 如果这个值主要是为了减少重复请求，优先放 `cache`
+支持：
 
-### 8.8 `ctx.utils`
-
-用途：
-
-- 提供一些通用工具函数
-
-当前可用方法：
-
-- `ctx.utils.absoluteUrl(base, relative)`
-- `ctx.utils.sleep(duration)`
-- `ctx.utils.pick(value, fallback)`
-- `ctx.utils.normalizeText(text)`
-- `ctx.utils.timeFormat(value, pattern?)`
-- `ctx.utils.htmlFormat(value)`
-- `ctx.utils.base64Encode(value)`
-- `ctx.utils.base64Decode(value)`
-- `ctx.utils.hexEncode(value)`
-- `ctx.utils.hexDecode(value)`
-- `ctx.utils.encodeUri(value)`
-- `ctx.utils.decodeUri(value)`
-- `ctx.utils.encodeUriComponent(value)`
-- `ctx.utils.decodeUriComponent(value)`
+- `await ctx.sourceLogin.getHeader()`
+- `await ctx.sourceLogin.getHeaderMap()`
+- `await ctx.sourceLogin.putHeader(value)`
+- `await ctx.sourceLogin.removeHeader()`
+- `await ctx.sourceLogin.getInfo()`
+- `await ctx.sourceLogin.getInfoMap()`
+- `await ctx.sourceLogin.putInfo(value)`
+- `await ctx.sourceLogin.removeInfo()`
+- `await ctx.sourceLogin.getVariable()`
+- `await ctx.sourceLogin.getVariableMap(fallback?)`
+- `await ctx.sourceLogin.setVariable(value)`
+- `await ctx.sourceLogin.removeVariable()`
 
 示例：
 
 ```js
-const detailUrl = ctx.utils.absoluteUrl(
-  'https://example.com',
-  '/book/123',
-);
+await ctx.sourceLogin.putHeader(JSON.stringify({
+  authorization: 'Bearer abc',
+}));
+
+await ctx.sourceLogin.putInfo(JSON.stringify({
+  '账号': 'demo@example.com',
+}));
+
+await ctx.sourceLogin.setVariable(JSON.stringify({
+  tab: '小说',
+}));
+
+const headerMap = await ctx.sourceLogin.getHeaderMap();
+const infoMap = await ctx.sourceLogin.getInfoMap();
+const variableMap = await ctx.sourceLogin.getVariableMap({});
 ```
 
-#### 8.8.1 `ctx.utils.absoluteUrl(base, relative)`
+### 15.2 便捷查询方法
 
-作用：
+支持：
 
-- 把相对路径转换成绝对 URL
+- `await ctx.sourceLogin.getField(name, options?)`
+- `await ctx.sourceLogin.getFirstField(names, options?)`
+- `await ctx.sourceLogin.getToken(options?)`
+- `await ctx.sourceLogin.patchInfo(patch)`
+- `await ctx.sourceLogin.putVariable(key, value?)`
+- `await ctx.sourceLogin.getVariableValue(key, fallback?)`
+- `await ctx.sourceLogin.patchVariable(patch)`
+
+#### 方法：`ctx.sourceLogin.getField(name, options?)`
+
+从指定登录态来源里取单个字段。
+
+```js
+await ctx.sourceLogin.getField(name, options?)
+```
 
 参数：
 
-```js
-base, relative
-```
-
-返回值：
-
-```js
-string
-```
-
-适用场景：
-
-- 把详情链接、章节链接、封面链接补成完整地址
+- `name`：字段名
+- `options.source`：默认 `info`，支持 `info / header / variable`
+- `options.fallback`：未命中时返回值，默认空字符串
+- `options.trim`：默认 `true`
 
 示例：
 
 ```js
-const detailUrl = ctx.utils.absoluteUrl(
-  'https://example.com',
-  '/book/123',
-);
+const account = await ctx.sourceLogin.getField('账号');
+const token = await ctx.sourceLogin.getField('authorization', {
+  source: 'header',
+});
 ```
 
-#### 8.8.2 `ctx.utils.sleep(duration)`
+#### 方法：`ctx.sourceLogin.getFirstField(names, options?)`
 
-作用：
+按顺序查找多个字段名，适合兼容旧源/新源不同命名。
 
-- 暂停指定时长
+```js
+await ctx.sourceLogin.getFirstField(names, options?)
+```
 
 参数：
 
-```js
-duration
-```
-
-返回值：
-
-```js
-Promise<void>
-```
-
-适用场景：
-
-- 某些站点需要短暂等待
-- 调试或兼容节流场景
+- `names`：字符串数组
+- `options.sources`：默认 `['info']`，可传 `['header', 'info', 'variable']`
+- `options.fallback`
+- `options.trim`
 
 示例：
+
+```js
+const category = await ctx.sourceLogin.getFirstField(
+  ['分类', 'tab', 'channel'],
+  { sources: ['variable', 'info'] },
+);
+```
+
+#### 方法：`ctx.sourceLogin.getToken(options?)`
+
+按常见 token 字段优先级自动读取并做标准化。
+
+```js
+await ctx.sourceLogin.getToken(options?)
+```
+
+默认行为：
+
+- 先查 header：`token / Token / authorization / Authorization`
+- 再查 info：`token / Token`
+- 去掉 `Bearer ` 前缀
+- 去掉 `token=` 前缀
+- 命中形如 `12345_xxx` 的 token 时优先返回匹配值
+
+参数：
+
+- `options.headerKeys`
+- `options.infoKeys`
+- `options.variableKeys`
+- `options.sources`
+- `options.normalize`：默认 `true`
+- `options.pattern`：自定义 token 正则
+- `options.fallback`
+
+示例：
+
+```js
+const token = await ctx.sourceLogin.getToken();
+
+const customToken = await ctx.sourceLogin.getToken({
+  headerKeys: ['x-access-token'],
+  infoKeys: ['登录Token'],
+  variableKeys: ['token'],
+});
+```
+
+#### 注意事项
+
+- `putHeader/putInfo/setVariable` 建议统一写 JSON 字符串
+- `getVariableMap()` 内部会自动 JSON 解析；解析失败时返回 fallback
+- `getToken()` 适合读 token，不适合直接读 cookie 全串
+- `patchInfo/patchVariable` 适合控制台源做增量更新
+- `putVariable(key, value)` 适合兼容阅读 MD3 风格的源变量写法
+
+### 15.3 增量更新与变量快捷方法
+
+#### 方法：`ctx.sourceLogin.patchInfo(patch)`
+
+合并更新登录表单信息。
+
+```js
+await ctx.sourceLogin.patchInfo({
+  '账号': 'demo@example.com',
+  '验证码': '1234',
+});
+```
+
+#### 方法：`ctx.sourceLogin.putVariable(key, value?)`
+
+按 key/value 写入单个源变量。
+
+```js
+await ctx.sourceLogin.putVariable('tab', '小说');
+await ctx.sourceLogin.putVariable('source_type', '男频');
+```
+
+当 `value` 为空字符串、`null` 或 `undefined` 时，会删除该键。
+
+#### 方法：`ctx.sourceLogin.getVariableValue(key, fallback?)`
+
+读取单个源变量。
+
+```js
+const tab = await ctx.sourceLogin.getVariableValue('tab', '小说');
+```
+
+#### 方法：`ctx.sourceLogin.patchVariable(patch)`
+
+合并更新源变量。
+
+```js
+await ctx.sourceLogin.patchVariable({
+  tab: '小说',
+  source_type: '男频',
+});
+```
+
+### 15.4 登录控制台常用字段类型
+
+当前登录面板支持：
+
+- `text`
+- `password`
+- `select`
+- `button`
+- `toggle`
+- `textarea`
+- `note`
+- `divider`
+
+说明：
+
+- `toggle` 适合开关类配置
+- `textarea` 适合多行说明、自定义规则输入
+- `note` 适合说明文字
+- `divider` 适合在复杂控制台里做分区标题
+
+字段还支持：
+
+- `action`
+- `viewName`
+- `style.layout_flexGrow`
+- `style.layout_flexBasisPercent`
+- `style.layout_justifySelf`
+
+### 15.5 `ctx.bookState`
+
+`ctx.bookState` 用于保存书级自定义状态，典型场景：
+
+- 章节正文模式
+- 购买开关
+- 段评参数
+- 某本书独有的用户配置
+
+支持：
+
+- `await ctx.bookState.getCustom(target?)`
+- `await ctx.bookState.getCustomMap(target?, fallback?)`
+- `await ctx.bookState.setCustom(value, target?)`
+- `await ctx.bookState.putCustom(key, value?, target?)`
+- `await ctx.bookState.getCustomValue(key, target?, fallback?)`
+- `await ctx.bookState.patchCustom(patch, target?)`
+- `await ctx.bookState.clearCustom(target?)`
+
+示例：
+
+```js
+await ctx.bookState.patchCustom(
+  { mode: 'vip', para: 'on' },
+  book,
+);
+
+const mode = await ctx.bookState.getCustomValue('mode', book, 'normal');
+```
+
+说明：
+
+- `target` 默认是当前 `book`
+- `putCustom(key, value)` 和 `patchCustom(...)` 更适合兼容阅读 MD3 中 `book.getVariable("custom")` 一类写法
+- 如果你本来就维护整串 JSON，也可以继续使用 `setCustom(...)`
+
+## 16. `ctx.utils`
+
+### 方法：`ctx.utils.absoluteUrl(base, relative)`
+
+#### 功能
+
+把相对路径补成绝对地址。
+
+#### 签名
+
+```js
+ctx.utils.absoluteUrl(base, relative)
+```
+
+#### 参数
+
+- `base`
+- `relative`
+
+#### 返回值
+
+- 返回绝对地址字符串
+
+#### 示例
+
+```js
+const detailUrl = ctx.utils.absoluteUrl('https://example.com/search', '/book/123');
+```
+
+### 方法：`ctx.utils.sleep(duration)`
+
+#### 功能
+
+等待一段时间。
+
+#### 签名
+
+```js
+await ctx.utils.sleep(duration)
+```
+
+#### 参数
+
+- `duration`
+
+#### 返回值
+
+- `Promise<void>`
+
+#### 示例
 
 ```js
 await ctx.utils.sleep(500);
 ```
 
-#### 8.8.3 `ctx.utils.pick(value, fallback)`
+### 方法：`ctx.utils.pick(value, fallback)`
 
-作用：
+#### 功能
 
-- 当主值为空或不可用时，回退到备用值
+主值不可用时回退到备用值。
+
+#### 签名
+
+```js
+ctx.utils.pick(value, fallback)
+```
+
+#### 参数
+
+- `value`
+- `fallback`
+
+#### 返回值
+
+- 返回最终值
+
+#### 示例
+
+```js
+const title = ctx.utils.pick(ctx.html.text(doc.querySelector('.title')), '未知书名');
+```
+
+### 方法：`ctx.utils.firstNonEmpty(values, options?)`
+
+从数组里取第一个非空值。
+
+```js
+ctx.utils.firstNonEmpty(values, options?)
+```
 
 参数：
 
-```js
-value, fallback
-```
-
-返回值：
-
-```js
-any
-```
-
-适用场景：
-
-- 同一字段有多个备选来源
-- 某些站点字段并不稳定时做回退
+- `values`：任意值数组
+- `options.trim`：默认 `true`
+- `options.fallback`：默认空字符串
 
 示例：
 
 ```js
-const title = ctx.utils.pick(
-  ctx.html.text(doc.querySelector('.title')),
+const title = ctx.utils.firstNonEmpty([
+  item.title,
+  item.bookName,
+  item.name,
   '未知书名',
-);
+]);
 ```
 
-#### 8.8.4 `ctx.utils.normalizeText(text)`
+### 方法：`ctx.utils.safeJsonParse(value, fallback?)`
 
-作用：
-
-- 对文本做基础规范化处理
-
-参数：
+安全解析 JSON，解析失败时返回 fallback。
 
 ```js
-text
-```
-
-返回值：
-
-```js
-string
-```
-
-适用场景：
-
-- 清理多余空白
-- 统一正文、简介、标题文本
-
-示例：
-
-```js
-const intro = ctx.utils.normalizeText(
-  ctx.html.text(doc.querySelector('.intro')),
-);
-```
-
-#### 8.8.5 `ctx.utils.timeFormat(value, pattern?)`
-
-作用：
-
-- 把时间值格式化成指定字符串
-
-参数：
-
-```js
-value, pattern?
-```
-
-返回值：
-
-```js
-string
+ctx.utils.safeJsonParse(value, fallback?)
 ```
 
 示例：
 
 ```js
-const text = ctx.utils.timeFormat(
-  '2026-03-25T08:09:10Z',
-  'yyyy-MM-dd HH:mm:ss',
-);
+const payload = ctx.utils.safeJsonParse(response.text, {});
+const config = ctx.utils.safeJsonParse(await ctx.sourceLogin.getVariable(), {
+  tab: '默认',
+});
 ```
 
-#### 8.8.6 `ctx.utils.htmlFormat(value)`
+### 方法：`ctx.utils.pickField(value, keys, fallback?)`
 
-作用：
-
-- 把常见 HTML 片段清洗成更适合阅读的纯文本
-
-参数：
+从对象或 JSON 字符串中按顺序取第一个非空字段。
 
 ```js
-value
-```
-
-返回值：
-
-```js
-string
+ctx.utils.pickField(value, keys, fallback?)
 ```
 
 示例：
+
+```js
+const cover = ctx.utils.pickField(item, [
+  'cover',
+  'coverUrl',
+  'pic',
+], '');
+```
+
+### 方法：`ctx.utils.normalizeToken(value, options?)`
+
+规范化 token 字符串，适合清洗表单输入或响应头值。
+
+```js
+ctx.utils.normalizeToken(value, options?)
+```
+
+默认行为：
+
+- 去掉 `Bearer `
+- 去掉 `token=`
+- 优先提取形如 `12345_xxx` 的 token
+
+示例：
+
+```js
+const token = ctx.utils.normalizeToken(
+  'Bearer token=39470278_53e7dd36e624ed3cda64ff5fe095a3da&foo=1',
+);
+```
+
+### 方法：`ctx.utils.normalizeText(text)`
+
+#### 功能
+
+对文本做基础规范化处理。
+
+#### 签名
+
+```js
+ctx.utils.normalizeText(text)
+```
+
+#### 参数
+
+- `text`
+
+#### 返回值
+
+- 返回规范化后的字符串
+
+#### 示例
+
+```js
+const intro = ctx.utils.normalizeText(ctx.html.text(doc.querySelector('.intro')));
+```
+
+### 方法：`ctx.utils.timeFormat(value, pattern?)`
+
+#### 功能
+
+把时间值格式化成指定字符串。
+
+#### 签名
+
+```js
+ctx.utils.timeFormat(value, pattern?)
+```
+
+#### 参数
+
+- `value`
+- `pattern`
+
+#### 返回值
+
+- 返回格式化后的字符串
+
+#### 示例
+
+```js
+const text = ctx.utils.timeFormat('2026-03-25T08:09:10Z', 'yyyy-MM-dd HH:mm:ss');
+```
+
+### 方法：`ctx.utils.htmlFormat(value)`
+
+#### 功能
+
+把常见 HTML 片段清洗成纯文本。
+
+#### 签名
+
+```js
+ctx.utils.htmlFormat(value)
+```
+
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回文本
+
+#### 示例
 
 ```js
 const text = ctx.utils.htmlFormat('<p>hello<br>world</p>');
 ```
 
-#### 8.8.7 `ctx.utils.base64Encode(value)`
+### 方法：`ctx.utils.base64Encode(value)`
 
-作用：
+#### 功能
 
-- 把字符串编码成 Base64
+把字符串编码成 Base64。
 
-参数：
-
-```js
-value
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.utils.base64Encode(value)
 ```
 
-示例：
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回编码后的字符串
+
+#### 示例
 
 ```js
 const encoded = ctx.utils.base64Encode('hello');
 ```
 
-#### 8.8.8 `ctx.utils.base64Decode(value)`
+### 方法：`ctx.utils.base64Decode(value)`
 
-作用：
+#### 功能
 
-- 把 Base64 字符串解码成普通文本
+把 Base64 字符串解码成普通文本。
 
-参数：
-
-```js
-value
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.utils.base64Decode(value)
 ```
 
-示例：
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回解码后的字符串
+
+#### 示例
 
 ```js
 const decoded = ctx.utils.base64Decode('aGVsbG8=');
 ```
 
-#### 8.8.9 `ctx.utils.hexEncode(value)`
+### 方法：`ctx.utils.hexEncode(value)`
 
-作用：
+#### 功能
 
-- 把字符串编码成十六进制文本
+把字符串编码成十六进制文本。
 
-参数：
-
-```js
-value
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.utils.hexEncode(value)
 ```
 
-示例：
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回十六进制字符串
+
+#### 示例
 
 ```js
 const encoded = ctx.utils.hexEncode('abc');
 ```
 
-#### 8.8.10 `ctx.utils.hexDecode(value)`
+### 方法：`ctx.utils.hexDecode(value)`
 
-作用：
+#### 功能
 
-- 把十六进制文本解码成普通文本
+把十六进制文本解码成普通字符串。
 
-参数：
-
-```js
-value
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.utils.hexDecode(value)
 ```
 
-示例：
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回解码后的字符串
+
+#### 示例
 
 ```js
 const decoded = ctx.utils.hexDecode('616263');
 ```
 
-#### 8.8.11 `ctx.utils.encodeUri(value)`
+### 方法：`ctx.utils.encodeUri(value)`
 
-作用：
+#### 功能
 
-- 对整段 URI / URL 字符串做编码
+对完整 URI / URL 做编码。
 
-参数：
-
-```js
-value
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.utils.encodeUri(value)
 ```
 
-示例：
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回编码后的字符串
+
+#### 示例
 
 ```js
 const encoded = ctx.utils.encodeUri('https://example.com/书?q=hello world');
 ```
 
-#### 8.8.12 `ctx.utils.decodeUri(value)`
+### 方法：`ctx.utils.decodeUri(value)`
 
-作用：
+#### 功能
 
-- 对整段 URI / URL 字符串做解码
+对完整 URI / URL 做解码。
 
-参数：
-
-```js
-value
-```
-
-返回值：
+#### 签名
 
 ```js
-string
+ctx.utils.decodeUri(value)
 ```
 
-示例：
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回解码后的字符串
+
+#### 示例
 
 ```js
-const decoded = ctx.utils.decodeUri(
-  'https://example.com/%E4%B9%A6?q=hello%20world',
-);
+const decoded = ctx.utils.decodeUri('https://example.com/%E4%B9%A6?q=hello%20world');
 ```
 
-#### 8.8.13 `ctx.utils.encodeUriComponent(value)`
+### 方法：`ctx.utils.encodeUriComponent(value)`
 
-作用：
+#### 功能
 
-- 对 URL 参数值做编码
+对 URL 参数值做编码。
 
-参数：
+#### 签名
 
 ```js
-value
+ctx.utils.encodeUriComponent(value)
 ```
 
-返回值：
+#### 参数
 
-```js
-string
-```
+- `value`
 
-示例：
+#### 返回值
+
+- 返回编码后的字符串
+
+#### 示例
 
 ```js
 const q = ctx.utils.encodeUriComponent('凡人修仙传 & 忘语');
 ```
 
-#### 8.8.14 `ctx.utils.decodeUriComponent(value)`
+### 方法：`ctx.utils.decodeUriComponent(value)`
 
-作用：
+#### 功能
 
-- 对 URL 参数值做解码
+对 URL 参数值做解码。
+
+#### 签名
+
+```js
+ctx.utils.decodeUriComponent(value)
+```
+
+#### 参数
+
+- `value`
+
+#### 返回值
+
+- 返回解码后的字符串
+
+#### 示例
+
+```js
+const q = ctx.utils.decodeUriComponent('%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0');
+```
+
+### 方法：`ctx.utils.getDeviceInfo()`
+
+#### 功能
+
+获取当前宿主设备与安装实例的运行时信息。
+
+#### 签名
+
+```js
+await ctx.utils.getDeviceInfo()
+```
+
+#### 参数
+
+- 无
+
+#### 返回值
+
+- 返回设备信息对象
+
+#### 示例
+
+```js
+const device = await ctx.utils.getDeviceInfo();
+ctx.log(`device=${device.platform}:${device.installId}`);
+```
+
+### 方法：`ctx.utils.getUserId()`
+
+#### 功能
+
+获取当前 App 登录用户 ID。
+
+#### 签名
+
+```js
+await ctx.utils.getUserId()
+```
+
+#### 参数
+
+- 无
+
+#### 返回值
+
+- 返回用户 ID 或 `null`
+
+#### 示例
+
+```js
+const userId = await ctx.utils.getUserId();
+const cacheKey = userId ? `feed:${userId}` : 'feed:guest';
+```
+
+#### 注意事项
+
+- 这是宿主用户 ID，不是目标站点用户 ID
+
+## 17. `ctx.crypto`
+
+`ctx.crypto` 用于摘要、HMAC、加解密、签名验签、随机数、时间戳，以及签名常用的字节编码转换。
+
+### 17.1 编码与字节工具
+
+这组能力里有两类来源：
+
+- 一类直接走宿主桥接，例如 `md5 / sha256 / aesEncrypt`
+- 一类由脚本运行时 bootstrap 直接提供 helper，例如 `hexToBytes / bytesToHex / base64ToBytes / bytesToBase64`
+
+对书源作者来说，这两类都属于当前可直接使用的官方 API。
+
+支持：
+
+- `ctx.crypto.hexEncode(value, options?)`
+- `ctx.crypto.hexDecode(value, options?)`
+- `ctx.crypto.hexToBytes(value)`
+- `ctx.crypto.bytesToHex(value)`
+- `ctx.crypto.base64Encode(value, options?)`
+- `ctx.crypto.base64Decode(value, options?)`
+- `ctx.crypto.base64ToBytes(value)`
+- `ctx.crypto.bytesToBase64(value)`
+
+#### 方法：`ctx.crypto.hexDecode(value, options?)`
+
+把十六进制字符串解码为字节数组或 UTF-8 字符串。
+
+```js
+const hmacHex = ctx.crypto.hmacSha256('hello', 'secret');
+const hmacBytes = ctx.crypto.hexDecode(hmacHex);
+const text = ctx.crypto.hexDecode('616263', { output: 'string' });
+```
 
 参数：
 
-```js
-value
-```
+- `value`：十六进制字符串
+- `options.output`：默认 `bytes`；可选 `string / utf8 / utf-8 / array`
+- `options.outputEncoding`：`options.output` 的兼容别名
 
 返回值：
 
+- 默认返回 `Uint8Array`
+- `output: 'string'` 时返回 UTF-8 字符串
+- `output: 'array'` 时返回普通数字数组
+
+注意事项：
+
+- 签名、异或、二进制拼接等场景优先使用 `ctx.crypto.hexDecode(...)`
+- `ctx.utils.hexDecode(...)` 保持旧行为：返回 UTF-8 字符串，不适合当字节数组使用
+
+#### 方法：`ctx.crypto.hexEncode(value, options?)`
+
+把字符串、普通数组或 `Uint8Array` 编码成十六进制字符串。
+
 ```js
-string
+const hex = ctx.crypto.hexEncode(new Uint8Array([0x61, 0x62, 0x63]));
 ```
 
-示例：
+参数：
+
+- `value`：字符串、普通数字数组或 `Uint8Array`
+- `options.inputEncoding`：可选，支持 `hex / base64`
+
+#### 方法：`ctx.crypto.base64Decode(value, options?)`
+
+把 Base64 字符串解码为字节数组或 UTF-8 字符串。
 
 ```js
-const q = ctx.utils.decodeUriComponent(
-  '%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%20%26%20%E5%BF%98%E8%AF%AD',
-);
+const bytes = ctx.crypto.base64Decode('YWJj');
+const text = ctx.crypto.base64Decode('YWJj', { output: 'string' });
 ```
 
-### 8.9 `ctx.crypto`
+#### 方法：`ctx.crypto.base64Encode(value, options?)`
 
-用途：
+把字符串、普通数组或 `Uint8Array` 编码成 Base64 字符串。
 
-- 提供摘要、HMAC、对称加解密、RSA 和常用随机辅助能力
+```js
+const b64 = ctx.crypto.base64Encode(new Uint8Array([0x61, 0x62, 0x63]));
+```
 
-当前可用方法：
+### 17.2 摘要方法
+
+支持：
 
 - `ctx.crypto.md5(value, options?)`
 - `ctx.crypto.sha1(value, options?)`
 - `ctx.crypto.sha256(value, options?)`
 - `ctx.crypto.sha512(value, options?)`
 - `ctx.crypto.sm3(value, options?)`
+
+示例：
+
+```js
+const digest = ctx.crypto.sha256('hello');
+const digestBase64 = ctx.crypto.sha256('hello', { outputEncoding: 'base64' });
+```
+
+常用参数：
+
+- `options.inputEncoding`：默认 `utf8`，也支持 `base64 / hex`
+- `options.outputEncoding`：默认 `hex`，也支持 `base64 / utf8`
+
+### 17.3 HMAC 方法
+
+支持：
+
 - `ctx.crypto.hmacSha1(value, key, options?)`
 - `ctx.crypto.hmacSha256(value, key, options?)`
 - `ctx.crypto.hmacSha512(value, key, options?)`
+
+示例：
+
+```js
+const sign = ctx.crypto.hmacSha256('hello', 'secret');
+const signBytes = ctx.crypto.hexDecode(sign);
+```
+
+常用参数：
+
+- `options.inputEncoding`
+- `options.keyEncoding`
+- `options.outputEncoding`
+
+### 17.4 对称加解密
+
+支持：
+
 - `ctx.crypto.aesEncrypt(options)`
 - `ctx.crypto.aesDecrypt(options)`
 - `ctx.crypto.desEncrypt(options)`
@@ -2752,653 +2660,551 @@ const q = ctx.utils.decodeUriComponent(
 - `ctx.crypto.rc4Decrypt(options)`
 - `ctx.crypto.symmetricEncrypt(options)`
 - `ctx.crypto.symmetricDecrypt(options)`
+- `ctx.crypto.symmetricCrypto(key, iv, algorithm, data)`
+
+AES 示例：
+
+```js
+const encrypted = ctx.crypto.aesEncrypt({
+  data: 'hello',
+  key: '1234567890123456',
+  iv: '1234567890123456',
+  mode: 'cbc',
+  outputEncoding: 'base64',
+});
+
+const plain = ctx.crypto.aesDecrypt({
+  data: encrypted,
+  key: '1234567890123456',
+  iv: '1234567890123456',
+  mode: 'cbc',
+  inputEncoding: 'base64',
+  outputEncoding: 'utf8',
+});
+```
+
+### 17.5 组合式解密流水线
+
+支持：
+
+- `ctx.crypto.decryptPipeline(initialValue, steps)`
+
+适合处理“多段解密/转码”的正文链路，例如：
+
+- Base64 -> DES
+- 响应头派生 key/iv -> DES -> 再解 `content`
+
+#### 签名
+
+```js
+ctx.crypto.decryptPipeline(initialValue, steps)
+```
+
+#### 步骤格式
+
+每个步骤使用：
+
+```js
+{ method: 'desDecrypt', ...options }
+```
+
+当前支持的 `method`：
+
+- `hexEncode`
+- `hexDecode`
+- `base64Encode`
+- `base64Decode`
+- `md5`
+- `sha1`
+- `sha256`
+- `sha512`
+- `sm3`
+- `aesEncrypt`
+- `aesDecrypt`
+- `desEncrypt`
+- `desDecrypt`
+- `tripleDesEncrypt`
+- `tripleDesDecrypt`
+- `rc4Encrypt`
+- `rc4Decrypt`
+- `symmetricEncrypt`
+- `symmetricDecrypt`
+
+说明：
+
+- 对于 `md5 / base64Decode` 这类方法，当前值会作为第一个参数传入
+- 对于 `desDecrypt / aesDecrypt` 这类方法，如果步骤里没写 `data`，会自动把当前值填入 `data`
+
+#### 示例
+
+```js
+const plain = ctx.crypto.decryptPipeline('YWJj', [
+  { method: 'base64Decode', output: 'string' },
+]);
+```
+
+```js
+const envelope = ctx.crypto.decryptPipeline(rawBody, [
+  {
+    method: 'desDecrypt',
+    key,
+    iv,
+    mode: 'cbc',
+    inputEncoding: 'base64',
+    outputEncoding: 'utf8',
+  },
+]);
+```
+
+通用算法示例：
+
+```js
+const encrypted = ctx.crypto.symmetricEncrypt({
+  algorithm: 'AES-CBC-PKCS5Padding',
+  data: 'hello',
+  key: '1234567890123456',
+  iv: '1234567890123456',
+  outputEncoding: 'base64',
+});
+```
+
+链式写法示例：
+
+```js
+const encrypted = ctx.crypto
+  .symmetricCrypto('1234567890123456', '1234567890123456', 'AES-CBC-PKCS5Padding', 'hello')
+  .encrypt()
+  .base64();
+```
+
+### 17.6 非对称加解密与签名
+
+支持：
+
 - `ctx.crypto.rsaEncrypt(options)`
 - `ctx.crypto.rsaDecrypt(options)`
 - `ctx.crypto.rsaSign(options)`
 - `ctx.crypto.rsaVerify(options)`
 - `ctx.crypto.asymmetricEncrypt(options)`
 - `ctx.crypto.asymmetricDecrypt(options)`
-- `ctx.crypto.symmetricCrypto(key, iv, algorithm, data)`
 - `ctx.crypto.asymmetricCrypto(algorithm, data)`
-- `ctx.crypto.randomBytes(length, options?)`
-- `ctx.crypto.randomString(length, options?)`
-- `ctx.crypto.timestamp(options?)`
 
-推荐理解：
-
-- 编码转换优先放在 `ctx.utils`
-- 真正的加解密、摘要、HMAC 放在 `ctx.crypto`
-- `SM3` 属于摘要算法，不是对称或非对称加解密算法
-
-链式写法示例：
-
-```js
-const encrypted = ctx.crypto
-  .symmetricCrypto(
-    '1234567890abcdef',
-    'fedcba0987654321',
-    'AES-CBC-PKCS5Padding',
-    'hello world',
-  )
-  .encode()
-  .base64();
-
-const plain = ctx.crypto
-  .symmetricCrypto(
-    '1234567890abcdef',
-    'fedcba0987654321',
-    'AES-CBC-PKCS5Padding',
-    encrypted,
-  )
-  .decode()
-  .string();
-
-const rsaEncrypted = ctx.crypto
-  .AsymmetricCrypto('RSA/ECB/PKCS1Padding', 'hello world')
-  .setPublicKey(publicKeyPem)
-  .encode()
-  .base64();
-```
-
-推荐理解：
-
-- 函数式 API 适合明确参数和稳定调用
-- 链式 API 适合兼容旧书源或更接近习惯写法
-
-#### 8.9.1 `ctx.crypto.md5(value, options?)`
-
-作用：
-
-- 计算 MD5 摘要
-
-示例：
-
-```js
-const sign = ctx.crypto.md5('hello');
-```
-
-#### 8.9.2 `ctx.crypto.sha256(value, options?)`
-
-作用：
-
-- 计算 SHA-256 摘要
-
-示例：
-
-```js
-const digest = ctx.crypto.sha256('hello');
-```
-
-#### 8.9.3 `ctx.crypto.hmacSha256(value, key, options?)`
-
-作用：
-
-- 计算 HMAC-SHA256
-
-示例：
-
-```js
-const sign = ctx.crypto.hmacSha256('hello', 'secret');
-```
-
-#### 8.9.4 `ctx.crypto.sm3(value, options?)`
-
-作用：
-
-- 计算 SM3 摘要
-
-示例：
-
-```js
-const digest = ctx.crypto.sm3('abc');
-```
-
-#### 8.9.5 `ctx.crypto.aesEncrypt(options)`
-
-作用：
-
-- 使用 AES 对文本加密
-
-参数示例：
-
-```js
-{
-  data: 'hello world',
-  key: '1234567890abcdef',
-  iv: 'fedcba0987654321',
-  mode: 'cbc',
-  inputEncoding: 'utf8',
-  keyEncoding: 'utf8',
-  ivEncoding: 'utf8',
-  outputEncoding: 'base64',
-}
-```
-
-示例：
-
-```js
-const encrypted = ctx.crypto.aesEncrypt({
-  data: 'hello world',
-  key: '1234567890abcdef',
-  iv: 'fedcba0987654321',
-});
-```
-
-#### 8.9.6 `ctx.crypto.aesDecrypt(options)`
-
-作用：
-
-- 使用 AES 解密文本
-
-示例：
-
-```js
-const plain = ctx.crypto.aesDecrypt({
-  data: encrypted,
-  key: '1234567890abcdef',
-  iv: 'fedcba0987654321',
-});
-```
-
-#### 8.9.7 `ctx.crypto.desEncrypt(options)`
-
-作用：
-
-- 使用 DES 加密文本
-
-示例：
-
-```js
-const encrypted = ctx.crypto.desEncrypt({
-  data: 'hello world',
-  key: '12345678',
-  iv: '87654321',
-});
-```
-
-#### 8.9.8 `ctx.crypto.desDecrypt(options)`
-
-作用：
-
-- 使用 DES 解密文本
-
-#### 8.9.9 `ctx.crypto.tripleDesEncrypt(options)`
-
-作用：
-
-- 使用 3DES 加密文本
-
-示例：
-
-```js
-const encrypted = ctx.crypto.tripleDesEncrypt({
-  data: 'hello world',
-  key: '1234567890abcdef12345678',
-  iv: '87654321',
-});
-```
-
-#### 8.9.10 `ctx.crypto.tripleDesDecrypt(options)`
-
-作用：
-
-- 使用 3DES 解密文本
-
-#### 8.9.11 `ctx.crypto.rc4Encrypt(options)`
-
-作用：
-
-- 使用 RC4 对文本加密
-
-示例：
-
-```js
-const encrypted = ctx.crypto.rc4Encrypt({
-  data: 'hello world',
-  key: 'secret-key',
-});
-```
-
-#### 8.9.12 `ctx.crypto.rc4Decrypt(options)`
-
-作用：
-
-- 使用 RC4 对文本解密
-
-#### 8.9.13 `ctx.crypto.symmetricEncrypt(options)`
-
-作用：
-
-- 使用算法字符串执行对称加密
-
-示例：
-
-```js
-const encrypted = ctx.crypto.symmetricEncrypt({
-  algorithm: 'AES-CBC-PKCS5Padding',
-  data: 'hello world',
-  key: '1234567890abcdef',
-  iv: 'fedcba0987654321',
-});
-```
-
-#### 8.9.14 `ctx.crypto.symmetricDecrypt(options)`
-
-作用：
-
-- 使用算法字符串执行对称解密
-
-常见算法字符串：
-
-- `AES-CBC-PKCS5Padding`
-- `AES-ECB-PKCS5Padding`
-- `DES-CBC-PKCS5Padding`
-- `DES-ECB-PKCS5Padding`
-- `DESede-CBC-PKCS5Padding`
-- `DESede-ECB-PKCS5Padding`
-- `RC4`
-
-#### 8.9.15 `ctx.crypto.rsaEncrypt(options)`
-
-作用：
-
-- 使用 RSA 公钥加密文本
-
-参数示例：
-
-```js
-{
-  data: 'hello world',
-  publicKey: '-----BEGIN PUBLIC KEY-----...',
-  inputEncoding: 'utf8',
-  outputEncoding: 'base64',
-  padding: 'pkcs1',
-}
-```
-
-#### 8.9.16 `ctx.crypto.rsaDecrypt(options)`
-
-作用：
-
-- 使用 RSA 私钥解密文本
-
-#### 8.9.17 `ctx.crypto.asymmetricEncrypt(options)`
-
-作用：
-
-- 使用算法字符串执行非对称加密
-
-常见算法字符串：
-
-- `RSA/ECB/PKCS1Padding`
-- `RSA/ECB/OAEPWithSHA-1AndMGF1Padding`
-- `RSA/ECB/OAEPWithSHA-256AndMGF1Padding`
-- `RSA/ECB/OAEPWithSHA-512AndMGF1Padding`
-
-#### 8.9.18 `ctx.crypto.asymmetricDecrypt(options)`
-
-作用：
-
-- 使用算法字符串执行非对称解密
-
-#### 8.9.19 `ctx.crypto.rsaSign(options)`
-
-作用：
-
-- 使用 RSA 私钥对数据签名
-
-示例：
+签名示例：
 
 ```js
 const signature = ctx.crypto.rsaSign({
-  data: 'hello world',
-  privateKey: privateKeyPem,
-  algorithm: 'SHA256withRSA',
+  data: 'hello',
+  privateKey: '-----BEGIN PRIVATE KEY-----...',
+  algorithm: 'SHA-256/RSA',
   outputEncoding: 'base64',
 });
 ```
 
-#### 8.9.20 `ctx.crypto.rsaVerify(options)`
-
-作用：
-
-- 使用 RSA 公钥验证签名
-
-示例：
+验签示例：
 
 ```js
 const ok = ctx.crypto.rsaVerify({
-  data: 'hello world',
-  publicKey: publicKeyPem,
+  data: 'hello',
+  publicKey: '-----BEGIN PUBLIC KEY-----...',
   signature,
   algorithm: 'SHA-256/RSA',
   signatureEncoding: 'base64',
 });
 ```
 
-#### 8.9.21 `ctx.crypto.symmetricCrypto(key, iv, algorithm, data)`
+### 17.7 随机数与时间
 
-作用：
+支持：
 
-- 创建对称加解密的链式包装器
-
-示例：
-
-```js
-const encrypted = ctx.crypto
-  .symmetricCrypto(key, iv, 'DES-ECB-PKCS5Padding', data)
-  .encode()
-  .base64();
-```
-
-#### 8.9.22 `ctx.crypto.asymmetricCrypto(algorithm, data)`
-
-作用：
-
-- 创建非对称加解密的链式包装器
-
-兼容说明：
-
-- `ctx.crypto.AsymmetricCrypto(...)` 当前仍可作为兼容别名使用
-- 但正式文档和新模板建议统一使用 `asymmetricCrypto(...)`
-
-#### 8.9.23 `ctx.crypto.randomBytes(length, options?)`
-
-作用：
-
-- 生成随机字节序列
+- `ctx.crypto.randomBytes(length, options?)`
+- `ctx.crypto.randomString(length, options?)`
+- `ctx.crypto.timestamp(options?)`
 
 示例：
 
 ```js
-const nonce = ctx.crypto.randomBytes(16, { outputEncoding: 'hex' });
+const nonce = ctx.crypto.randomString(16);
+const randomHex = ctx.crypto.randomBytes(16, { outputEncoding: 'hex' });
+const timestampMs = ctx.crypto.timestamp();
+const timestampSeconds = ctx.crypto.timestamp({ unit: 's' });
 ```
 
-#### 8.9.24 `ctx.crypto.randomString(length, options?)`
+### 17.8 使用建议
 
-作用：
+- 字符串级编码转换可以用 `ctx.utils`
+- 涉及签名、异或、字节数组时优先用 `ctx.crypto.hexDecode/base64Decode`
+- 简单摘要和 HMAC 优先用直接方法
+- 算法由站点动态下发时，再考虑 `symmetricEncrypt/asymmetricEncrypt` 或链式 API
+- `symmetricCrypto / asymmetricCrypto` 属于链式 helper，也属于当前可直接使用的作者 API
 
-- 生成随机字符串
+## 18. `ctx.ui`
 
-示例：
+`ctx.ui` 用于登录控制台和需要用户交互的脚本场景。
+
+支持：
+
+- `await ctx.ui.toast(message)`
+- `await ctx.ui.longToast(message)`
+- `await ctx.ui.openUrl(url, title?)`
+- `await ctx.ui.confirm(options)`
+- `await ctx.ui.prompt(options)`
+- `await ctx.ui.openBrowserAwait(options)`
+- `await ctx.ui.getVerificationCode(imageUrl)`
+
+### 18.1 方法：`ctx.ui.openUrl(url, title?)`
+
+打开页面，但不等待结果返回。
 
 ```js
-const nonce = ctx.crypto.randomString(12);
+await ctx.ui.openUrl('https://example.com/help', '帮助');
 ```
 
-#### 8.9.25 `ctx.crypto.timestamp(options?)`
+### 18.2 方法：`ctx.ui.confirm(options)`
 
-作用：
-
-- 获取当前时间戳
-
-示例：
+弹出确认框，返回 `true / false`。
 
 ```js
-const ms = ctx.crypto.timestamp();
-const s = ctx.crypto.timestamp({ unit: 's' });
-```
-
-补充说明：
-
-- 摘要和 HMAC 默认返回 `hex`
-- `aes / des / 3des` 默认输出 `base64`
-- `rc4` 默认输出 `base64`
-- 对称加密当前支持 `cbc / ecb`
-- RSA 当前支持 `PKCS1Padding / OAEP-SHA1 / OAEP-SHA256 / OAEP-SHA512`
-- RSA 签名当前支持常见 `MD5 / SHA1 / SHA256 / SHA512` 的 `RSA / PSS` 变体
-
-#### 8.9.26 常见配方
-
-AES-CBC 加密后转 Base64：
-
-```js
-const encrypted = ctx.crypto
-  .symmetricCrypto(key, iv, 'AES-CBC-PKCS5Padding', data)
-  .encode()
-  .base64();
-```
-
-AES-CBC 解密后转字符串：
-
-```js
-const plain = ctx.crypto
-  .symmetricCrypto(key, iv, 'AES-CBC-PKCS5Padding', encrypted)
-  .decode()
-  .string();
-```
-
-DES-ECB 加密后转 Base64：
-
-```js
-const encrypted = ctx.crypto
-  .symmetricCrypto(key, null, 'DES-ECB-PKCS5Padding', data)
-  .encode()
-  .base64();
-```
-
-RSA 公钥加密后转 Base64：
-
-```js
-const encrypted = ctx.crypto
-  .AsymmetricCrypto('RSA/ECB/PKCS1Padding', data)
-  .setPublicKey(publicKeyPem)
-  .encode()
-  .base64();
-```
-
-RSA 私钥签名：
-
-```js
-const signature = ctx.crypto.rsaSign({
-  data,
-  privateKey: privateKeyPem,
-  algorithm: 'SHA256withRSA',
-  outputEncoding: 'base64',
+const ok = await ctx.ui.confirm({
+  title: '确认操作',
+  message: '确定清空当前设置吗？',
+  confirmText: '确认',
+  cancelText: '取消',
 });
 ```
 
-HMAC-SHA256 签名：
+### 18.3 方法：`ctx.ui.prompt(options)`
+
+弹出输入框，返回用户输入结果或 `null`。
 
 ```js
-const sign = ctx.crypto.hmacSha256(data, secret);
+const token = await ctx.ui.prompt({
+  title: '输入 Token',
+  message: '请粘贴抓包 token',
+  initialValue: '',
+  confirmText: '确定',
+  cancelText: '返回',
+  obscureText: false,
+});
 ```
 
-### 8.10 `ctx.log`
+### 18.4 方法：`ctx.ui.openBrowserAwait(options)`
 
-用途：
+使用宿主浏览器打开页面，并等待结果返回。
 
-- 输出调试日志
+```js
+const response = await ctx.ui.openBrowserAwait({
+  url: 'https://example.com/login',
+  title: '登录',
+  refetchAfterSuccess: true,
+});
+```
 
-示例：
+### 18.5 方法：`ctx.ui.getVerificationCode(imageUrl)`
+
+打开验证码输入对话框并返回用户输入内容。
+
+```js
+const code = await ctx.ui.getVerificationCode('https://example.com/code.png');
+```
+
+#### 注意事项
+
+- `openUrl` 适合帮助页、注册页、充值页、后台页
+- `openBrowserAwait` 适合扫码登录、网页登录、验证页面
+- `confirm / prompt` 很适合登录控制台按钮动作
+
+## 19. `ctx.log`
+
+### 方法：`ctx.log(message)`
+
+#### 功能
+
+向调试面板写入一条日志。
+
+#### 签名
+
+```js
+ctx.log(message)
+```
+
+#### 参数
+
+- `message`
+
+#### 返回值
+
+- 无
+
+#### 示例
 
 ```js
 ctx.log(`search keyword=${keyword}`);
 ```
 
-#### 8.10.1 `ctx.log(message)`
+#### 注意事项
 
-作用：
+- 适合记录关键阶段信息
+- 不要在高频循环里无节制打印大量日志
 
-- 输出调试日志，帮助定位当前规则执行状态
+## 20. 标准对象
 
-参数：
+书源方法返回值必须尽量靠近标准对象结构。宿主会做一定兼容和归一化，但不要依赖宿主猜测字段。
 
-```js
-message
-```
+### 20.1 `DiscoverCategory`
 
-返回值：
+用于发现页分类，由 `discoverCategories(ctx)` 返回。
 
-```js
-void
-```
-
-适用场景：
-
-- 记录当前执行步骤
-- 输出关键参数和中间状态
-- 调试解析失败或分支判断
-
-示例：
+最小示例：
 
 ```js
-ctx.log(`search keyword=${keyword}`);
-ctx.log(`detail url=${book.detailUrl}`);
-```
-
-注意：
-
-- 建议输出对定位问题有帮助的关键信息
-- 不建议无节制打印大量噪声日志
-
----
-
-## 9. 什么时候用 HTTP，什么时候用 Browser
-
-这是书源作者最容易写乱的一点。
-
-建议遵循下面这条简单规则：
-
-1. 能用 `ctx.http` 完成，就不要先上浏览器
-2. 命中挑战页、依赖前端执行、必须人工登录时，再进入 `ctx.browser`
-3. 浏览器完成关键动作后，优先回到普通请求链路
-
-推荐流程：
-
-```js
-const response = await ctx.http.request({ ... });
-
-if (ctx.http.isChallenge(response)) {
-  await ctx.browser.challenge({
-    url: response.url,
-    reason: 'challenge_detected',
-  });
+{
+  title: '推荐',
+  url: 'https://example.com/discover/recommend',
 }
 ```
 
-不推荐一上来就把所有请求都放到浏览器里跑。原因是：
+常用字段：
 
-- 调试更慢
-- 失败定位更难
-- 书源维护成本更高
+- `title`：分类标题
+- `url`：分类请求地址或站点分类标识
+- `style`：展示辅助信息
+- `extra`：后续请求要用的扩展字段
+- `debug`：调试辅助字段
 
----
+注意事项：
 
-## 10. 错误处理建议
+- `title` 建议非空
+- `url` 可以是 URL，也可以是你自己定义的分类 key
+- 宿主会兼容读取 `name / label` 作为标题、`href / link` 作为地址，但新书源仍建议统一写 `title / url`
+- 不要把大量列表数据塞进分类对象
 
-源内部遇到问题时，建议用下面几种方式处理：
+### 20.2 `Book`
 
-- 请求失败：直接抛错
-- 解析失败：直接抛错，并在 `debug` 或 `ctx.log` 里补充线索
-- 验证码或登录要求：调用 `ctx.browser.challenge(...)`
-- 需要等待页面变化：使用 `waitForUrl(...)` 或 `waitForText(...)`
+用于搜索、发现和详情阶段。
 
-推荐写法：
+最小示例：
+
+```js
+{
+  title: '示例小说',
+  author: '作者名',
+  detailUrl: 'https://example.com/book/1',
+}
+```
+
+常用字段：
+
+- `title`：书名
+- `author`：作者
+- `type`：内容类型，如 `novel / manga`
+- `cover`：封面 URL
+- `intro`：简介
+- `status`：连载状态
+- `category`：分类
+- `score`：评分
+- `wordCount`：字数
+- `updateTime`：更新时间
+- `tags`：标签数组
+- `latestChapter`：最新章节
+- `detailUrl`：详情页地址或详情标识
+- `tocUrl`：目录页地址或目录标识
+- `sourceId`：通常不用手写，宿主会补齐
+- `extra`：跨阶段传递的自定义数据
+- `debug`：调试辅助字段
+
+注意事项：
+
+- `title` 和 `detailUrl` 是最关键字段
+- `tocUrl` 可以在 `detail` 阶段补齐
+- 宿主会兼容读取 `catalogUrl` 作为 `tocUrl`，但新书源建议统一返回 `tocUrl`
+- 搜索阶段不要为了补全所有字段而做大量额外请求
+
+### 20.3 `Chapter`
+
+用于目录阶段，由 `chapters(ctx, book)` 返回。
+
+最小示例：
+
+```js
+{
+  title: '第 1 章',
+  url: 'https://example.com/book/1/chapter/1',
+}
+```
+
+常用字段：
+
+- `title`：章节标题
+- `url`：正文请求地址或章节标识
+- `index`：章节序号；可不写，宿主按数组顺序归一化
+- `isVolume`：是否为卷标题
+- `vip` / `isVip`：是否会员章节
+- `isPay`：是否付费章节
+- `updateTime`：更新时间
+- `extra`：正文阶段要用的扩展字段
+- `debug`：调试辅助字段
+
+注意事项：
+
+- 可读章节必须有 `url`
+- 卷标题可以 `isVolume: true` 且 `url` 为空
+- `vip` 和 `isVip` 都能被宿主识别，但新书源建议统一写 `isVip`
+- 建议按站点目录顺序返回完整数组
+
+### 20.4 `Content`
+
+用于正文阶段，由 `content(ctx, book, chapter)` 返回。
+
+最小示例：
+
+```js
+{
+  title: chapter.title,
+  content: '正文内容',
+}
+```
+
+常用字段：
+
+- `title`：章节标题
+- `content`：正文文本
+- `nextUrl`：下一章地址，通常可不写
+- `images`：图片章节的图片 URL 数组
+- `extra`：扩展字段
+- `debug`：调试辅助字段
+
+注意事项：
+
+- 小说正文优先返回 `content`
+- 正文里如果本来就有少量插图，优先保留在 `content` 的可读文本流程里；只有纯图片章节再返回 `images`
+- 不要把 HTML 原文直接当正文返回，建议清洗成可读文本
+
+### 20.5 `extra`
+
+`extra` 用于跨阶段传递业务字段，例如接口需要的 `bookId`、`chapterId`、签名参数、分页 key。
+
+示例：
+
+```js
+return {
+  title: item.name,
+  detailUrl: item.id,
+  extra: {
+    bookId: item.id,
+    sourceType: item.type,
+  },
+};
+```
+
+注意事项：
+
+- `extra` 应保持可 JSON 序列化
+- 不要放函数、DOM 节点、循环引用或过大的响应原文
+
+### 20.6 `debug`
+
+`debug` 用于调试辅助，不建议业务强依赖。
+
+示例：
+
+```js
+return {
+  title: item.name,
+  detailUrl: item.id,
+  debug: {
+    rawTitle: item.title,
+    matchedSelector: '.book-item',
+  },
+};
+```
+
+注意事项：
+
+- `debug` 可以帮助网页调试台定位问题
+- 发布前可以保留少量有价值信息
+- 不要放敏感 Cookie、Token 或完整加密密钥
+
+## 21. 运行时边界与维护原则
+
+### 21.1 当前只支持脚本源
+
+当前 App 只执行 JavaScript 脚本源，不再导入或执行旧规则 JSON。旧规则可以作为迁移参考，但不能直接作为运行时格式。
+
+### 21.2 执行链路
+
+标准链路是：
+
+```text
+search -> detail -> chapters -> content
+```
+
+发现页链路是：
+
+```text
+discoverCategories -> discoverBooks -> detail -> chapters -> content
+```
+
+### 21.3 阶段职责
+
+- `search`：只负责找书，返回候选 `Book[]`
+- `detail`：补齐书籍详情、目录地址或跨阶段字段
+- `chapters`：返回完整目录
+- `content`：返回单章正文或图片
+- `discoverCategories`：返回发现页分类
+- `discoverBooks`：返回分类分页书籍
+
+### 21.4 运行时隔离
+
+宿主会根据场景选择普通容器或隔离容器执行脚本。书源作者不应该依赖全局变量长期保活；需要跨阶段传递的数据应放在 `book.extra`、`chapter.extra`、`ctx.cache` 或 `ctx.session`。
+
+### 21.5 返回值序列化
+
+返回值必须可 JSON 序列化。
+
+不要返回：
+
+- 函数
+- DOM 节点
+- `Map / Set`
+- 循环引用对象
+- 超大原始响应体
+
+### 21.6 错误处理
+
+脚本里可以抛出普通 `Error`，宿主会归一化为阶段错误。建议错误信息包含关键上下文，但不要包含敏感信息。
+
+示例：
 
 ```js
 if (!response.ok) {
-  throw new Error(`request failed: ${response.status}`);
+  throw new Error(`章节请求失败 status=${response.status}`);
 }
 ```
 
-如果你要补调试信息，建议补“能帮助定位问题的最少信息”，例如：
+### 21.7 当前未开放给脚本作者的宿主内部能力
 
-- 当前 URL
-- 命中的选择器
-- 响应状态码
-- 页面标题或关键片段
+下面这些能力存在于宿主实现里，但当前不属于书源作者 API：
 
----
+- `ctx.cache.set(..., { policy })` 这类缓存策略控制参数
+- 调试产物内部读写函数，例如运行时调试日志、调试轨迹的宿主内部读取与清理
+- `SourceManifest`、调度器、限流器等宿主内部对象上的辅助方法
 
-## 11. 调试建议
+这类能力如果未来决定开放，应先补桥接，再更新本文档；在那之前不要把它们当成可用脚本 API。
 
-平台当前提供两类很有价值的调试视角：
+## 22. 发布前检查
 
-- `Debug` 页：看原始数据、日志和链路问题
-- `Preview` 页：看最终渲染效果
+发布前至少检查：
 
-建议排查顺序：
+1. 能编译
+2. 搜索有结果
+3. 详情完整
+4. 目录尽量全量
+5. 正文可读
+6. `checkKeyword` 合理
+7. Challenge 场景可继续
 
-1. 先确认请求是否真的成功
-2. 再确认返回的是 HTML 还是 JSON
-3. 再确认选择器是否命中
-4. 再确认标准对象字段是否填对
-5. 最后再看渲染问题是不是由空字段导致
+## 24. 维护说明
 
-常见定位手段：
+本目录只保留这一份书源编写文档。需要新增书源规范、运行时 API、调试台行为、对象字段说明时，都直接更新本文档。
 
-- 用 `ctx.log(...)` 打出关键阶段信息
-- 在 `debug` 里临时存选择器命中结果
-- 把站点私有参数放入 `extra`，确认链路传递是否正确
-
-当前 Debug 页已经更适合按步骤排查：
-
-- `init / search / detail / chapters / content / aggregate` 每一步都会保留结果快照
-- 每一步还会附带当前 `session / cookie / cache` 的运行时快照
-- 关键 HTTP / browser 动作现在会附带 `trace`，便于看原始请求与响应材料
-- 这更适合排查“为什么上一步有值、下一步没值”这类链路问题
-
-调试页当前还支持自动保存：
-
-- 关键词会自动保存
-- 编辑中的书源源码会自动保存
-- 切换页面后再次回来，通常可以继续上次的调试上下文
-
----
-
-## 12. 常见误区
-
-### 12.1 把 `meta` 当成业务配置中心
-
-不建议。
-`meta` 主要是展示信息，不应塞入一堆流程控制字段。
-
-### 12.2 把站点私有字段直接挂在顶层
-
-不建议。
-站点私有字段统一放 `extra`，这样标准对象更稳定。
-
-### 12.3 在 `init` 里做所有事情
-
-不建议。
-`init` 是初始化，不是把整个业务链路提前执行一遍。
-
-### 12.4 所有站点都默认需要浏览器
-
-不建议。
-优先尝试 `ctx.http`，只有确实需要时再升级到 `ctx.browser`。
-
-### 12.5 在 `extra` 里存整页 HTML
-
-不建议。
-这会让对象过重，也会增加调试和维护成本。
-
----
-
-## 13. 书源作者的最简检查清单
-
-在提交或交付一个书源前，建议至少确认下面这些项：
-
-- `meta` 字段完整且对用户可读
-- `search / detail / chapters / content` 均有返回值
-- `sourceId` 已正确填写为 `ctx.source.id`
-- URL 已做绝对路径处理
-- 站点私有参数已统一放入 `extra`
-- 正文页能稳定拿到 `content`
-- 需要验证码或登录时，流程能通过 `ctx.browser.challenge(...)` 继续
-- 没有把大量调试垃圾数据混入正式字段
-
----
-
-## 14. 一句话总结
-
-写书源时，优先记住这套思路：
-
-1. 用标准对象表达结果
-2. 用 `extra` 传递站点私有上下文
-3. 普通请求优先走 `ctx.http`
-4. 遇到挑战、登录、动态执行，再升级到 `ctx.browser`
-5. 让每个方法只负责自己那一步
-
-如果你已经掌握这五点，就能写出结构稳定、对用户更友好、也更容易维护的书源。
+历史计划、阶段任务、API 草稿不再单独保留，避免作者阅读入口分散。

@@ -1,4 +1,4 @@
-import 'package:flutter_appread/domain/entities/search_request_context.dart';
+import 'package:shuxiang_reading_next/domain/entities/search_request_context.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

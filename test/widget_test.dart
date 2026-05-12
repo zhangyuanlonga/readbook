@@ -1,11 +1,13 @@
-import 'package:flutter_appread/app/app.dart';
+import 'package:shuxiang_reading_next/app/app.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('app opens bookshelf first with expected tabs', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'app.shell.navigation.discover': true,
+    });
 
     await tester.pumpWidget(const ProviderScope(child: App()));
     await tester.pump();

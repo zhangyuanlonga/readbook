@@ -1,6 +1,6 @@
 import '../../domain/entities/script_source.dart';
 import '../../domain/repositories/script_source_repository.dart';
-import '../datasources/local/app_database.dart';
+import '../../data/datasources/local/app_database.dart';
 
 class ScriptSourceRepositoryImpl implements ScriptSourceRepository {
   ScriptSourceRepositoryImpl(this._database);

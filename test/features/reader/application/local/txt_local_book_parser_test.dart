@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:charset/charset.dart';
-import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/txt_chapter_rule_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -105,6 +106,46 @@ Second chapter content.
       },
     );
 
+    test('detects chapter headings from stored rule list', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final ruleService = TxtChapterRuleService(preferences: prefs);
+      await ruleService.saveRules([
+        const TxtChapterRule(
+          id: 'custom_rule_1',
+          name: '自定义节标题',
+          pattern: r'^自定义第\d+节.*$',
+          enabled: true,
+        ),
+      ]);
+
+      final file = File('${tempDir.path}/custom_rule.txt');
+      final longContent = List.filled(1200, '自定义内容').join();
+      await file.writeAsString('''
+自定义第1节 开始
+$longContent
+
+自定义第2节 继续
+$longContent
+''');
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_custom_1',
+          title: '自定义规则书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '自定义第1节 开始');
+      expect(result.chapters.last.title, '自定义第2节 继续');
+    });
+
     test(
       'creates a preface chapter when content exists before first heading',
       () async {
@@ -163,6 +204,88 @@ $longContent
       expect(result.chapters.first.title, '第1章 长章节(1)');
     });
 
+    test('indexes large utf-8 text without preset charset', () async {
+      final file = File('${tempDir.path}/large_utf8_book.txt');
+      final chapter1 = List.filled(350000, '内容一').join();
+      final chapter2 = List.filled(350000, '内容二').join();
+      await file.writeAsString('''
+第1章 开始
+$chapter1
+
+第2章 继续
+$chapter2
+''');
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_large_utf8',
+          title: '大文件 UTF8 测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          splitLongChapter: false,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'utf-8');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.startOffset, isNotNull);
+      expect(result.chapters.first.endOffset, isNotNull);
+      expect(result.chapters.first.content, contains('内容一'));
+      expect(result.chapters.last.startOffset, isNotNull);
+      expect(result.chapters.last.endOffset, isNotNull);
+      expect(result.chapters.last.content, contains('内容二'));
+    });
+
+    test(
+      'indexes large utf-16le text through unified streaming path',
+      () async {
+        final file = File('${tempDir.path}/large_utf16le_book.txt');
+        final chapter1 = List.filled(180000, '内容一').join();
+        final chapter2 = List.filled(180000, '内容二').join();
+        final rawBytes = _encodeUtf16(
+          '''
+第1章 开始
+$chapter1
+
+第2章 继续
+$chapter2
+''',
+          littleEndian: true,
+          withBom: true,
+        );
+        expect(rawBytes.length, greaterThan(1024 * 1024));
+        await file.writeAsBytes(rawBytes, flush: true);
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_large_utf16le',
+            title: '大文件 UTF16LE 测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            splitLongChapter: false,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.charset, 'utf-16le');
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '第1章 开始');
+        expect(result.chapters.first.startOffset, isNotNull);
+        expect(result.chapters.first.endOffset, isNotNull);
+        expect(result.chapters.first.content, contains('内容一'));
+        expect(result.chapters.last.startOffset, isNotNull);
+        expect(result.chapters.last.endOffset, isNotNull);
+        expect(result.chapters.last.content, contains('内容二'));
+      },
+    );
+
     test('detects gbk text without rewriting original bytes', () async {
       final file = File('${tempDir.path}/gbk_book.txt');
       final gbk = Charset.getByName('gbk');
@@ -213,6 +336,32 @@ $longContent
       expect(result.chapters, hasLength(2));
       expect(result.chapters.first.title, '第1章 开始');
       expect(await file.readAsBytes(), rawBytes);
+    });
+
+    test('uses frozen charset for utf-16le txt parsing', () async {
+      final file = File('${tempDir.path}/frozen_utf16le_book.txt');
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      final rawBytes = _encodeUtf16(content, littleEndian: true, withBom: true);
+      await file.writeAsBytes(rawBytes, flush: true);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_frozen_utf16le',
+          title: '冻结编码测试书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          charset: 'utf-16le',
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'utf-16le');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第1章 开始');
+      expect(result.chapters.last.content, contains('第二章内容'));
     });
 
     test(
@@ -308,10 +457,48 @@ $longContent
       expect(result.charset, 'utf-8');
       expect(result.chapters.length, greaterThan(50));
       expect(result.chapters.first.title, '第1章 流式章节');
-      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.content, contains('这是第1章的正文内容'));
       expect(result.chapters.first.startOffset, isNotNull);
       expect(result.chapters.first.endOffset, isNotNull);
     });
+
+    test(
+      'detects gbk correctly in streaming path when file head is ascii',
+      () async {
+        final file = File('${tempDir.path}/large_ascii_head_gbk.txt');
+        final gbk = Charset.getByName('gbk');
+        expect(gbk, isNotNull);
+
+        final header = List<int>.filled(24000, 'A'.codeUnitAt(0));
+        final bodyText = List<String>.generate(
+          50000,
+          (index) => '第${index + 1}章 正文内容测试。',
+        ).join('\n');
+        final bodyBytes = gbk!.encode(bodyText);
+        await file.writeAsBytes(<int>[...header, ...bodyBytes], flush: true);
+        expect(await file.length(), greaterThan(1024 * 1024));
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_streaming_gbk',
+            title: '流式 GBK 测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            splitLongChapter: false,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.charset, anyOf('gbk', 'gb18030'));
+        expect(result.chapters, isNotEmpty);
+        expect(result.chapters.first.startOffset, isNotNull);
+        expect(result.chapters.first.endOffset, isNotNull);
+        expect(result.chapters.first.content, isNotEmpty);
+      },
+    );
   });
 }
 

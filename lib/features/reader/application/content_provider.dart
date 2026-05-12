@@ -16,6 +16,22 @@ class ContentCapabilities {
   final bool canRefreshToc;
   final bool canSearchInSource;
   final bool canReindexLocal;
+
+  ContentCapabilities copyWith({
+    bool? canSwitchSource,
+    bool? canCacheChapter,
+    bool? canRefreshToc,
+    bool? canSearchInSource,
+    bool? canReindexLocal,
+  }) {
+    return ContentCapabilities(
+      canSwitchSource: canSwitchSource ?? this.canSwitchSource,
+      canCacheChapter: canCacheChapter ?? this.canCacheChapter,
+      canRefreshToc: canRefreshToc ?? this.canRefreshToc,
+      canSearchInSource: canSearchInSource ?? this.canSearchInSource,
+      canReindexLocal: canReindexLocal ?? this.canReindexLocal,
+    );
+  }
 }
 
 abstract class ContentProvider {
@@ -36,6 +52,7 @@ abstract class ContentProvider {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   });
 
   Future<ChapterContentResult> loadChapterContent({
@@ -43,6 +60,7 @@ abstract class ContentProvider {
     required String bookId,
     required String chapterUrl,
     String? bookTitle,
+    String? detailUrl,
     String? chapterId,
     int? chapterIndex,
     String? chapterTitle,

@@ -32,6 +32,11 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/android/.gradle/
+/android/build/
+/ios/build/
+/macos/Pods/
+/ios/Pods/
 
 # Symbolication related
 app.*.symbols

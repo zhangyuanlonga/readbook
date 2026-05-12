@@ -119,6 +119,18 @@ class ReadingRecordService {
 
   Stream<int> watchTotalReadMillis() => _database.watchTotalReadingMillis();
 
+  Future<List<ReadingRecord>> listLatestRecords({String query = ''}) {
+    return _database.listLatestReadingRecords(query: query);
+  }
+
+  Future<List<ReadingRecordDay>> listAllDays() {
+    return _database.listAllReadingRecordDays();
+  }
+
+  Future<List<ReadingRecordSession>> listAllSessions() {
+    return _database.listAllReadingRecordSessions();
+  }
+
   Future<ReadingRecordMergeCandidatesResult> getMergeCandidates(
     ReadingRecord target,
   ) async {
@@ -347,6 +359,100 @@ class ReadingRecordService {
     return DeletedReadingRecordSessionSnapshot(session: session);
   }
 
+  Future<void> reassignBookIdentity({
+    required String previousBookId,
+    required String nextBookId,
+    required String nextSourceId,
+    required String nextDetailUrl,
+    required String nextBookTitle,
+    String? nextBookAuthor,
+    String? nextCoverUrl,
+  }) async {
+    final normalizedPreviousBookId = previousBookId.trim();
+    final normalizedNextBookId = nextBookId.trim();
+    final normalizedNextSourceId = nextSourceId.trim();
+    final normalizedNextDetailUrl = nextDetailUrl.trim();
+    final normalizedNextTitle = nextBookTitle.trim();
+    if (normalizedPreviousBookId.isEmpty ||
+        normalizedNextBookId.isEmpty ||
+        normalizedNextSourceId.isEmpty ||
+        normalizedNextDetailUrl.isEmpty ||
+        normalizedNextTitle.isEmpty ||
+        normalizedPreviousBookId == normalizedNextBookId) {
+      return;
+    }
+
+    final sourceSessions = await _database.listReadingRecordSessionsByBookId(
+      normalizedPreviousBookId,
+    );
+    final sourceRecord = await _database.getReadingRecordByBookId(
+      normalizedPreviousBookId,
+    );
+    final sourceDays = await _database.listReadingRecordDaysByBookId(
+      normalizedPreviousBookId,
+    );
+    if (sourceSessions.isEmpty && sourceRecord == null && sourceDays.isEmpty) {
+      return;
+    }
+
+    final normalizedNextAuthor = _normalizeOptionalText(nextBookAuthor);
+    final normalizedNextCoverUrl = _normalizeOptionalText(nextCoverUrl);
+    final firstSession = sourceSessions.isEmpty ? null : sourceSessions.first;
+    final lastSession = sourceSessions.isEmpty ? null : sourceSessions.last;
+
+    await _database.transaction(() async {
+      for (final session in sourceSessions) {
+        await _database.updateReadingRecordSession(
+          ReadingRecordSession(
+            id: session.id,
+            bookId: normalizedNextBookId,
+            sourceId: normalizedNextSourceId,
+            detailUrl: normalizedNextDetailUrl,
+            bookTitle: normalizedNextTitle,
+            bookAuthor: normalizedNextAuthor ?? session.bookAuthor,
+            coverUrl: normalizedNextCoverUrl ?? session.coverUrl,
+            chapterId: session.chapterId,
+            chapterTitle: session.chapterTitle,
+            chapterIndex: session.chapterIndex,
+            chapterUrl: session.chapterUrl,
+            startAt: session.startAt,
+            endAt: session.endAt,
+            durationMillis: session.durationMillis,
+            readChars: session.readChars,
+            startPositionRatio: session.startPositionRatio,
+            endPositionRatio: session.endPositionRatio,
+          ),
+        );
+      }
+
+      await _database.deleteReadingRecordByBookId(normalizedPreviousBookId);
+      await _database.deleteReadingRecordDaysByBookId(normalizedPreviousBookId);
+
+      final targetIdentity = ReadingRecord(
+        bookId: normalizedNextBookId,
+        sourceId: normalizedNextSourceId,
+        detailUrl: normalizedNextDetailUrl,
+        bookTitle: normalizedNextTitle,
+        bookAuthor:
+            normalizedNextAuthor ??
+            sourceRecord?.bookAuthor ??
+            firstSession?.bookAuthor,
+        coverUrl:
+            normalizedNextCoverUrl ??
+            sourceRecord?.coverUrl ??
+            firstSession?.coverUrl,
+        lastReadAt:
+            sourceRecord?.lastReadAt ?? lastSession?.endAt ?? DateTime.now(),
+      );
+
+      await _rebuildAggregatesForBook(
+        normalizedNextBookId,
+        identityRecord: targetIdentity,
+        fallbackLocationRecord: sourceRecord,
+      );
+    });
+  }
+
   Future<void> restoreDeletedSession(
     DeletedReadingRecordSessionSnapshot snapshot,
   ) async {
@@ -456,6 +562,168 @@ class ReadingRecordService {
     });
   }
 
+  Future<void> syncBookPresentation({
+    required String bookId,
+    required String bookTitle,
+    String? bookAuthor,
+    String? coverUrl,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    final normalizedTitle = bookTitle.trim();
+    final normalizedAuthor = _normalizeOptionalText(bookAuthor);
+    final normalizedCoverUrl = _normalizeOptionalText(coverUrl);
+    if (normalizedBookId.isEmpty || normalizedTitle.isEmpty) {
+      return;
+    }
+
+    final existingRecord = await _database.getReadingRecordByBookId(
+      normalizedBookId,
+    );
+    final existingDays = await _database.listReadingRecordDaysByBookId(
+      normalizedBookId,
+    );
+    final existingSessions = await _database.listReadingRecordSessionsByBookId(
+      normalizedBookId,
+    );
+    if (existingRecord == null &&
+        existingDays.isEmpty &&
+        existingSessions.isEmpty) {
+      return;
+    }
+
+    await _database.transaction(() async {
+      if (existingRecord != null) {
+        await _database.upsertReadingRecord(
+          ReadingRecord(
+            bookId: existingRecord.bookId,
+            sourceId: existingRecord.sourceId,
+            detailUrl: existingRecord.detailUrl,
+            bookTitle: normalizedTitle,
+            bookAuthor: normalizedAuthor,
+            coverUrl: normalizedCoverUrl,
+            lastChapterId: existingRecord.lastChapterId,
+            lastChapterTitle: existingRecord.lastChapterTitle,
+            lastChapterIndex: existingRecord.lastChapterIndex,
+            lastChapterUrl: existingRecord.lastChapterUrl,
+            lastPositionRatio: existingRecord.lastPositionRatio,
+            totalReadMillis: existingRecord.totalReadMillis,
+            totalReadChars: existingRecord.totalReadChars,
+            lastReadAt: existingRecord.lastReadAt,
+          ),
+        );
+      }
+
+      for (final day in existingDays) {
+        await _database.upsertReadingRecordDay(
+          ReadingRecordDay(
+            bookId: day.bookId,
+            dateKey: day.dateKey,
+            bookTitle: normalizedTitle,
+            bookAuthor: normalizedAuthor,
+            coverUrl: normalizedCoverUrl,
+            readMillis: day.readMillis,
+            readChars: day.readChars,
+            firstReadAt: day.firstReadAt,
+            lastReadAt: day.lastReadAt,
+          ),
+        );
+      }
+
+      for (final session in existingSessions) {
+        await _database.updateReadingRecordSession(
+          ReadingRecordSession(
+            id: session.id,
+            bookId: session.bookId,
+            sourceId: session.sourceId,
+            detailUrl: session.detailUrl,
+            bookTitle: normalizedTitle,
+            bookAuthor: normalizedAuthor,
+            coverUrl: normalizedCoverUrl,
+            chapterId: session.chapterId,
+            chapterTitle: session.chapterTitle,
+            chapterIndex: session.chapterIndex,
+            chapterUrl: session.chapterUrl,
+            startAt: session.startAt,
+            endAt: session.endAt,
+            durationMillis: session.durationMillis,
+            readChars: session.readChars,
+            startPositionRatio: session.startPositionRatio,
+            endPositionRatio: session.endPositionRatio,
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> replaceRemoteScopedHistoryFromSync(
+    List<ReadingRecordSession> syncedSessions,
+  ) async {
+    final existingSessions = await _database.listAllReadingRecordSessions();
+    final existingRemoteBookIds =
+        existingSessions
+            .where((item) => item.sourceId.trim() != '__local_book__')
+            .map((item) => item.bookId.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    final nextRemoteBookIds =
+        syncedSessions
+            .where((item) => item.sourceId.trim() != '__local_book__')
+            .map((item) => item.bookId.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    final affectedBookIds = <String>{
+      ...existingRemoteBookIds,
+      ...nextRemoteBookIds,
+    };
+    if (affectedBookIds.isEmpty) {
+      return;
+    }
+
+    final sessionsByBookId = <String, List<ReadingRecordSession>>{};
+    for (final session in syncedSessions) {
+      final normalizedBookId = session.bookId.trim();
+      if (normalizedBookId.isEmpty ||
+          session.sourceId.trim() == '__local_book__') {
+        continue;
+      }
+      sessionsByBookId
+          .putIfAbsent(normalizedBookId, () => <ReadingRecordSession>[])
+          .add(session);
+    }
+
+    await _database.transaction(() async {
+      for (final bookId in affectedBookIds) {
+        await _database.deleteReadingRecordsByBookId(bookId);
+      }
+      for (final entry in sessionsByBookId.entries) {
+        for (final session in entry.value) {
+          await _database.insertReadingRecordSession(
+            ReadingRecordSession(
+              id: 0,
+              bookId: session.bookId,
+              sourceId: session.sourceId,
+              detailUrl: session.detailUrl,
+              bookTitle: session.bookTitle,
+              bookAuthor: session.bookAuthor,
+              coverUrl: session.coverUrl,
+              chapterId: session.chapterId,
+              chapterTitle: session.chapterTitle,
+              chapterIndex: session.chapterIndex,
+              chapterUrl: session.chapterUrl,
+              startAt: session.startAt,
+              endAt: session.endAt,
+              durationMillis: session.durationMillis,
+              readChars: session.readChars,
+              startPositionRatio: session.startPositionRatio,
+              endPositionRatio: session.endPositionRatio,
+            ),
+          );
+        }
+        await _rebuildAggregatesForBook(entry.key);
+      }
+    });
+  }
+
   double _readingProgressDelta(ReadingRecordCommitInput input) {
     final start = input.startPositionRatio.clamp(0.0, 1.0).toDouble();
     final end = input.endPositionRatio.clamp(0.0, 1.0).toDouble();
@@ -465,6 +733,38 @@ class ReadingRecordService {
   DateTime _earlier(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
 
   DateTime _later(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
+
+  ReadingRecordSession? _latestSessionWithCover(
+    List<ReadingRecordSession> sessions,
+  ) {
+    ReadingRecordSession? latest;
+    for (final session in sessions) {
+      final coverUrl = session.coverUrl?.trim() ?? '';
+      if (coverUrl.isEmpty) {
+        continue;
+      }
+      if (latest == null || session.endAt.isAfter(latest.endAt)) {
+        latest = session;
+      }
+    }
+    return latest;
+  }
+
+  ReadingRecordSession? _latestSessionWithAuthor(
+    List<ReadingRecordSession> sessions,
+  ) {
+    ReadingRecordSession? latest;
+    for (final session in sessions) {
+      final author = session.bookAuthor?.trim() ?? '';
+      if (author.isEmpty) {
+        continue;
+      }
+      if (latest == null || session.endAt.isAfter(latest.endAt)) {
+        latest = session;
+      }
+    }
+    return latest;
+  }
 
   String _normalizeMergeText(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
@@ -567,6 +867,8 @@ class ReadingRecordService {
     final latestSession = sessions.reduce(
       (current, next) => current.endAt.isAfter(next.endAt) ? current : next,
     );
+    final latestSessionWithCover = _latestSessionWithCover(sessions);
+    final latestSessionWithAuthor = _latestSessionWithAuthor(sessions);
     final totalReadMillis = sessions.fold<int>(
       0,
       (sum, item) => sum + (item.durationMillis < 0 ? 0 : item.durationMillis),
@@ -581,8 +883,12 @@ class ReadingRecordService {
       sourceId: latestSession.sourceId.trim(),
       detailUrl: latestSession.detailUrl.trim(),
       bookTitle: latestSession.bookTitle.trim(),
-      bookAuthor: latestSession.bookAuthor?.trim(),
-      coverUrl: latestSession.coverUrl?.trim(),
+      bookAuthor:
+          latestSessionWithAuthor?.bookAuthor?.trim() ??
+          latestSession.bookAuthor?.trim(),
+      coverUrl:
+          latestSessionWithCover?.coverUrl?.trim() ??
+          latestSession.coverUrl?.trim(),
       lastChapterId: latestSession.chapterId?.trim(),
       lastChapterTitle: latestSession.chapterTitle?.trim(),
       lastChapterIndex: latestSession.chapterIndex,
@@ -703,5 +1009,10 @@ class ReadingRecordService {
       score += 1;
     }
     return score;
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final normalized = (value ?? '').trim();
+    return normalized.isEmpty ? null : normalized;
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/app_empty_state_card.dart';
+
 class SearchEmptyState extends StatelessWidget {
   const SearchEmptyState({
     super.key,
@@ -67,19 +69,18 @@ class SearchEmptyState extends StatelessWidget {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children:
-                  history
-                      .map(
-                        (keyword) => _HistoryChip(
-                          keyword: keyword,
-                          onTap: () => onHistoryTap(keyword),
-                          onRemove:
-                              onRemoveHistoryItem != null
-                                  ? () => onRemoveHistoryItem!(keyword)
-                                  : null,
-                        ),
-                      )
-                      .toList(growable: false),
+              children: history
+                  .map(
+                    (keyword) => _HistoryChip(
+                      keyword: keyword,
+                      onTap: () => onHistoryTap(keyword),
+                      onRemove:
+                          onRemoveHistoryItem != null
+                              ? () => onRemoveHistoryItem!(keyword)
+                              : null,
+                    ),
+                  )
+                  .toList(growable: false),
             ),
           ),
         ],
@@ -87,28 +88,15 @@ class SearchEmptyState extends StatelessWidget {
         // ── Guide section (de-emphasized when history exists) ──
         Padding(
           padding: EdgeInsets.symmetric(vertical: hasHistory ? 16 : 24),
-          child: Column(
-            children: [
-              Icon(
-                Icons.manage_search_rounded,
-                color: colorScheme.onSurfaceVariant.withValues(
-                  alpha: hasHistory ? 0.3 : 0.5,
-                ),
-                size: hasHistory ? 28 : 40,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '输入关键词开始搜索',
-                style: (hasHistory
-                        ? theme.textTheme.bodySmall
-                        : theme.textTheme.bodyMedium)
-                    ?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(
-                    alpha: hasHistory ? 0.5 : 1.0,
-                  ),
-                ),
-              ),
-            ],
+          child: Opacity(
+            opacity: hasHistory ? 0.78 : 1.0,
+            child: AppEmptyStateCard(
+              icon: Icons.manage_search_rounded,
+              title: '输入关键词开始搜索',
+              description:
+                  hasHistory ? '也可以直接点上面的搜索历史继续搜索。' : '可以按书名、作者、分类或标签进行搜索。',
+              compact: hasHistory,
+            ),
           ),
         ),
       ],
@@ -140,12 +128,7 @@ class _HistoryChip extends StatelessWidget {
         onTap: onTap,
         onLongPress: onRemove,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            6,
-            onRemove != null ? 4 : 12,
-            6,
-          ),
+          padding: EdgeInsets.fromLTRB(12, 6, onRemove != null ? 4 : 12, 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

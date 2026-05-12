@@ -1,53 +1,47 @@
-import 'dart:io';
-
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/domain/entities/book.dart';
-import 'package:flutter_appread/domain/entities/source_definition.dart';
-import 'package:flutter_appread/domain/repositories/source_repository.dart';
-import 'package:flutter_appread/features/search/application/search_hit_cache_service.dart';
-import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
+import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_hit_cache_service.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
+    as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    SourceHealthService.instance.clear();
+    await SourceHealthService.instance.persistNow();
   });
 
   group('SearchService hit cache', () {
     test('persists source hits after search completed', () async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((request) async {
-        request.response
-          ..statusCode = 200
-          ..write('''
-            <div class="item">
-              <a class="title" href="/book/1">凡人修仙传</a>
-              <span class="author">忘语</span>
-            </div>
-          ''');
-        await request.response.close();
-      });
-
-      final baseUrl = 'http://${server.address.host}:${server.port}';
       final database = AppDatabase(executor: NativeDatabase.memory());
       final hitCacheService = SearchHitCacheService(database: database);
       final service = SearchService(
-        sourceRepository: _FakeSourceRepository([
-          SourceDefinition(
-            id: 's1',
-            name: '源1',
-            baseUrl: baseUrl,
-            rules: const SourceRuleSet(
-              searchRule: '/search?key={{key}}',
-              searchListRule: '.item@html',
-              searchTitleRule: '.title@text',
-              searchAuthorRule: '.author@text',
-              searchDetailUrlRule: '.title@href',
-            ),
-          ),
-        ]),
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(id: 's1', name: '源1'),
+          ],
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            's1': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '凡人修仙传',
+                author: '忘语',
+                detailUrl: 'https://example.com/book/1',
+              ),
+            ],
+          },
+        ),
         searchHitCacheService: hitCacheService,
       );
 
@@ -61,109 +55,116 @@ void main() {
       expect(counts['s1'], 1);
 
       await database.close();
-      await server.close(force: true);
     });
 
     test('does not fail search when hit cache persistence throws', () async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((request) async {
-        request.response
-          ..statusCode = 200
-          ..write(
-            '<div class="item"><a class="title" href="/book/1">测试书</a></div>',
-          );
-        await request.response.close();
-      });
-
-      final baseUrl = 'http://${server.address.host}:${server.port}';
       final service = SearchService(
-        sourceRepository: _FakeSourceRepository([
-          SourceDefinition(
-            id: 's1',
-            name: '源1',
-            baseUrl: baseUrl,
-            rules: const SourceRuleSet(
-              searchRule: '/search?key={{key}}',
-              searchListRule: '.item@html',
-              searchTitleRule: '.title@text',
-              searchDetailUrlRule: '.title@href',
-            ),
-          ),
-        ]),
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(id: 's1', name: '源1'),
+          ],
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            's1': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '测试书',
+                author: '',
+                detailUrl: 'https://example.com/book/1',
+              ),
+            ],
+          },
+        ),
         searchHitCacheService: _ThrowingSearchHitCacheService(),
       );
 
       final report = await service.search(keyword: '测试书');
       expect(report.books, hasLength(1));
-
-      await server.close(force: true);
     });
   });
 }
 
-class _FakeSourceRepository implements SourceRepository {
-  _FakeSourceRepository(this.sources);
+RegisteredSource _buildRegisteredSource({
+  required String id,
+  required String name,
+}) {
+  return RegisteredSource(
+    runtime: SourceRuntimeInfo(
+      id: id,
+      name: name,
+      group: '测试',
+      revision: 'test',
+    ),
+    definition: RuntimeSourceDefinition(
+      manifest: SourceManifest(
+        name: name,
+        group: '测试',
+        author: 'tester',
+        description: '',
+      ),
+      search: (_, __) async => const <runtime_models.Book>[],
+      detail: (_, book) async => book,
+      chapters: (_, __) async => const <runtime_models.Chapter>[],
+      content:
+          (_, __, ___) async =>
+              const runtime_models.Content(title: '', content: ''),
+    ),
+  );
+}
 
-  final List<SourceDefinition> sources;
+class _FakeRuntimeFacade extends SourceRuntimeFacade {
+  _FakeRuntimeFacade({
+    required this.sources,
+    this.booksBySourceId = const <String, List<runtime_models.Book>>{},
+  }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
+
+  final List<RegisteredSource> sources;
+  final Map<String, List<runtime_models.Book>> booksBySourceId;
 
   @override
-  Future<void> clear() async {
-    sources.clear();
+  List<RegisteredSource> registeredScriptSources({bool enabledOnly = true}) {
+    return sources;
   }
 
   @override
-  Future<void> deleteById(String sourceId) async {
-    sources.removeWhere((source) => source.id == sourceId);
+  Future<ScriptSourceReloadReport> reloadScriptSources({bool enabledOnly = true}) async {
+    return ScriptSourceReloadReport(
+      loaded: sources,
+      failures: const <ScriptSourceReloadFailure>[],
+    );
   }
 
   @override
-  Future<void> deleteByIds(List<String> sourceIds) async {
-    final idSet = sourceIds.toSet();
-    sources.removeWhere((source) => idSet.contains(source.id));
-  }
-
-  @override
-  Future<List<SourceDefinition>> getAll() async {
-    return List.unmodifiable(sources);
-  }
-
-  @override
-  Future<void> setEnabled({
+  Future<List<runtime_models.Book>> search({
     required String sourceId,
-    required bool enabled,
+    required String keyword,
+    bool allowInteractiveChallenge = true,
+    SessionCancellationHandle? cancellationHandle,
   }) async {
-    final index = sources.indexWhere((source) => source.id == sourceId);
-    if (index == -1) {
-      return;
-    }
-    sources[index] = sources[index].copyWith(enabled: enabled);
+    return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
   }
+}
+
+class _FakeScriptSourceRepository implements ScriptSourceRepository {
+  @override
+  Future<void> clear() async {}
 
   @override
-  Future<void> setGroup({required String sourceId, String? group}) async {
-    final index = sources.indexWhere((source) => source.id == sourceId);
-    if (index == -1) {
-      return;
-    }
-    sources[index] = sources[index].copyWith(group: group);
-  }
+  Future<void> deleteById(String id) async {}
 
   @override
-  Future<void> upsertAll(List<SourceDefinition> items) async {
-    for (final item in items) {
-      final index = sources.indexWhere((source) => source.id == item.id);
-      if (index >= 0) {
-        sources[index] = item;
-      } else {
-        sources.add(item);
-      }
-    }
-  }
+  Future<List<ScriptSource>> getAll() async => const <ScriptSource>[];
 
   @override
-  Stream<List<SourceDefinition>> watchAll() {
-    return Stream.value(List.unmodifiable(sources));
-  }
+  Future<ScriptSource?> getById(String id) async => null;
+
+  @override
+  Future<void> setEnabled({required String id, required bool enabled}) async {}
+
+  @override
+  Future<void> upsert(ScriptSource source) async {}
+
+  @override
+  Stream<List<ScriptSource>> watchAll() =>
+      const Stream<List<ScriptSource>>.empty();
 }
 
 class _ThrowingSearchHitCacheService extends SearchHitCacheService {

@@ -99,6 +99,8 @@ class ApiClient {
     ErrorStage stage = ErrorStage.unknown,
     T Function(Object? data)? decoder,
   }) async {
+    final authTokenRefresher =
+        _authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher;
     final url = _resolveUrl(path);
     final attempts =
         _isIdempotent(method) && enableRetry
@@ -120,8 +122,8 @@ class ApiClient {
     final resolvedHeaders = <String, String>{..._defaultHeaders, ...headers};
     if (attachAccessToken &&
         !resolvedHeaders.containsKey('Authorization') &&
-        _authTokenRefresher != null) {
-      final token = await _authTokenRefresher.getAccessToken();
+        authTokenRefresher != null) {
+      final token = await authTokenRefresher.getAccessToken();
       if (token != null && token.isNotEmpty) {
         resolvedHeaders['Authorization'] = 'Bearer $token';
       }
@@ -152,11 +154,11 @@ class ApiClient {
         if (statusCode == 401 &&
             enableAuthRefresh &&
             !didRefresh &&
-            _authTokenRefresher != null) {
+            authTokenRefresher != null) {
           didRefresh = true;
-          final refreshed = await _authTokenRefresher.refreshToken();
+          final refreshed = await authTokenRefresher.refreshToken();
           if (refreshed) {
-            final token = await _authTokenRefresher.getAccessToken();
+            final token = await authTokenRefresher.getAccessToken();
             if (token != null && token.isNotEmpty) {
               resolvedHeaders['Authorization'] = 'Bearer $token';
               response = await _dio.request<String>(
@@ -226,11 +228,7 @@ class ApiClient {
         );
 
         if (enableCache && _isIdempotent(method)) {
-          _cacheStore.set(
-            cacheKey,
-            data,
-            cacheTtl ?? _defaultCacheTtl,
-          );
+          _cacheStore.set(cacheKey, data, cacheTtl ?? _defaultCacheTtl);
         }
 
         return data;
@@ -295,7 +293,9 @@ class ApiClient {
       final basePath = baseUri.path.trim();
       if (basePath.isNotEmpty && basePath != '/') {
         final normalizedBasePath =
-            basePath.endsWith('/') ? basePath.substring(0, basePath.length - 1) : basePath;
+            basePath.endsWith('/')
+                ? basePath.substring(0, basePath.length - 1)
+                : basePath;
         return baseUri
             .replace(path: '$normalizedBasePath$normalized')
             .toString();
@@ -344,9 +344,7 @@ class ApiClient {
       throw const FormatException('Invalid response shape');
     }
 
-    final map = decoded.map(
-      (key, value) => MapEntry(key.toString(), value),
-    );
+    final map = decoded.map((key, value) => MapEntry(key.toString(), value));
     final code = (map['code']?.toString() ?? '').trim();
     final message = (map['message']?.toString() ?? '').trim();
     if (code.isEmpty) {

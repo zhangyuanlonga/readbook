@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter_appread/core/webview/webview_executor.dart';
+import 'package:shuxiang_reading_next/core/webview/webview_executor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

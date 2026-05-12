@@ -4,23 +4,35 @@ import MediaPlayer
 import UIKit
 import UniformTypeIdentifiers
 
+private struct ExternalImportSpec {
+  let type: String
+  let extensions: Set<String>
+  let mimeTypeToExtension: [String: String]
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private let sourceImportChannelName = "com.jiangyan.shuxiangread/source_import_intent"
+  private let sourceImportChannelName = "com.jiangyan.selune/source_import_intent"
   private let methodGetInitialImportPayload = "getInitialImportPayload"
   private let methodOnImportPayload = "onImportPayload"
   private let methodCacheExternalFileFromUri = "cacheExternalFileFromUri"
-  private let readerVolumeKeyChannelName = "com.jiangyan.shuxiangread/reader_volume_keys"
-  private let readerVolumeKeyEventChannelName = "com.jiangyan.shuxiangread/reader_volume_keys/events"
+  private let readerVolumeKeyChannelName = "com.jiangyan.selune/reader_volume_keys"
+  private let readerVolumeKeyEventChannelName = "com.jiangyan.selune/reader_volume_keys/events"
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
-  private let defaultPayloadLabel = "外部书源"
-  private let payloadTypeSource = "source"
+  private let readerScreenBrightnessChannelName = "com.jiangyan.selune/reader_screen_brightness"
+  private let methodSetReaderBrightness = "setReaderBrightness"
+  private let methodResetReaderBrightness = "resetReaderBrightness"
+  private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
+  private let payloadTypeScriptSource = "scriptSource"
+  private let payloadTypeAdvancedTheme = "advancedTheme"
+  private let payloadTypeFont = "font"
   private let readerVolumeBaseline: Float = 0.5
 
   private var sourceImportMethodChannel: FlutterMethodChannel?
   private var readerVolumeKeyMethodChannel: FlutterMethodChannel?
   private var readerVolumeKeyEventChannel: FlutterEventChannel?
+  private var readerScreenBrightnessMethodChannel: FlutterMethodChannel?
   private let readerVolumeKeyStreamHandler = ReaderVolumeKeyStreamHandler()
   private var pendingInitialPayload: [String: Any]?
   private var interceptReaderVolumeKeys = false
@@ -29,6 +41,67 @@ import UniformTypeIdentifiers
   private weak var hiddenVolumeSlider: UISlider?
   private var suppressObservedVolumeChange = false
   private var lastObservedOutputVolume = AVAudioSession.sharedInstance().outputVolume
+  private var previousReaderBrightness: CGFloat?
+
+  private lazy var scriptSourceImportSpec = ExternalImportSpec(
+    type: payloadTypeScriptSource,
+    extensions: ["js", "mjs"],
+    mimeTypeToExtension: [
+      "application/javascript": "js",
+      "text/javascript": "js",
+      "application/x-javascript": "js",
+    ]
+  )
+
+  private lazy var localBookImportSpec = ExternalImportSpec(
+    type: payloadTypeLocalBook,
+    extensions: ["txt", "epub", "md", "markdown", "html", "htm", "pdf", "mobi", "azw", "azw3"],
+    mimeTypeToExtension: [
+      "application/epub+zip": "epub",
+      "text/markdown": "md",
+      "text/x-markdown": "md",
+      "text/html": "html",
+      "application/pdf": "pdf",
+      "application/x-mobipocket-ebook": "mobi",
+      "application/vnd.amazon.ebook": "azw",
+      "application/vnd.amazon.mobi8-ebook": "azw3",
+      "text/plain": "txt",
+      "application/octet-stream": "txt",
+    ]
+  )
+
+  private lazy var advancedThemeImportSpec = ExternalImportSpec(
+    type: payloadTypeAdvancedTheme,
+    extensions: ["json", "zip", "red", "rgshare"],
+    mimeTypeToExtension: [
+      "application/json": "json",
+      "application/zip": "zip",
+      "application/x-zip-compressed": "zip",
+    ]
+  )
+
+  private lazy var fontImportSpec = ExternalImportSpec(
+    type: payloadTypeFont,
+    extensions: ["ttf", "otf"],
+    mimeTypeToExtension: [
+      "font/ttf": "ttf",
+      "font/otf": "otf",
+      "application/font-sfnt": "otf",
+      "application/x-font-ttf": "ttf",
+      "application/x-font-opentype": "otf",
+    ]
+  )
+
+  private lazy var externalImportSpecs = [
+    fontImportSpec,
+    advancedThemeImportSpec,
+    localBookImportSpec,
+    scriptSourceImportSpec,
+  ]
+
+  private func logSourceImport(_ message: String) {
+    NSLog("[SourceImport] %@", message)
+  }
 
   override func application(
     _ application: UIApplication,
@@ -41,6 +114,7 @@ import UniformTypeIdentifiers
     GeneratedPluginRegistrant.register(with: self)
     setupSourceImportMethodChannel()
     setupReaderVolumeKeyBridge()
+    setupReaderScreenBrightnessBridge()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -120,6 +194,51 @@ import UniformTypeIdentifiers
       binaryMessenger: registrar.messenger())
     eventChannel.setStreamHandler(readerVolumeKeyStreamHandler)
     readerVolumeKeyEventChannel = eventChannel
+  }
+
+  private func setupReaderScreenBrightnessBridge() {
+    guard let registrar = self.registrar(forPlugin: "ReaderScreenBrightnessBridge") else {
+      return
+    }
+
+    let methodChannel = FlutterMethodChannel(
+      name: readerScreenBrightnessChannelName,
+      binaryMessenger: registrar.messenger())
+    methodChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(nil)
+        return
+      }
+
+      switch call.method {
+      case self.methodSetReaderBrightness:
+        if let value = call.arguments as? Double {
+          self.applyReaderBrightness(CGFloat(max(0, min(1, value))))
+        }
+        result(nil)
+      case self.methodResetReaderBrightness:
+        self.resetReaderBrightness()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    readerScreenBrightnessMethodChannel = methodChannel
+  }
+
+  private func applyReaderBrightness(_ brightness: CGFloat) {
+    if previousReaderBrightness == nil {
+      previousReaderBrightness = UIScreen.main.brightness
+    }
+    UIScreen.main.brightness = brightness
+  }
+
+  private func resetReaderBrightness() {
+    guard let previousReaderBrightness else {
+      return
+    }
+    UIScreen.main.brightness = previousReaderBrightness
+    self.previousReaderBrightness = nil
   }
 
   private func updateReaderVolumeKeyInterception() {
@@ -255,6 +374,7 @@ import UniformTypeIdentifiers
 
   private func payloadFromURL(_ url: URL) -> [String: Any]? {
     guard url.isFileURL else {
+      logSourceImport("Ignored non-file url: \(url.absoluteString)")
       return nil
     }
 
@@ -272,6 +392,10 @@ import UniformTypeIdentifiers
       mimeType: mimeType
     )
 
+    logSourceImport(
+      "Resolved external file url=\(url.absoluteString) label=\(label) mime=\(mimeType ?? "nil") payloadType=\(payloadType ?? "nil")"
+    )
+
     switch payloadType {
     case payloadTypeLocalBook:
       return [
@@ -280,16 +404,29 @@ import UniformTypeIdentifiers
         "label": label,
         "mimeType": mimeType ?? "",
       ]
-    case payloadTypeSource:
-      guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-        return nil
-      }
+    case payloadTypeAdvancedTheme:
       return [
-        "type": payloadTypeSource,
-        "bytes": FlutterStandardTypedData(bytes: data),
+        "type": payloadTypeAdvancedTheme,
+        "uri": url.absoluteString,
         "label": label,
+        "mimeType": mimeType ?? "",
+      ]
+    case payloadTypeScriptSource:
+      return [
+        "type": payloadTypeScriptSource,
+        "uri": url.absoluteString,
+        "label": label,
+        "mimeType": mimeType ?? "",
+      ]
+    case payloadTypeFont:
+      return [
+        "type": payloadTypeFont,
+        "uri": url.absoluteString,
+        "label": label,
+        "mimeType": mimeType ?? "",
       ]
     default:
+      logSourceImport("Unsupported external file type for url=\(url.absoluteString)")
       return nil
     }
   }
@@ -299,68 +436,21 @@ import UniformTypeIdentifiers
     url: URL,
     mimeType: String?
   ) -> String? {
-    let extensionName = url.pathExtension.lowercased()
+    let extensionCandidates = Set([
+      normalizedExtension(from: url.pathExtension),
+      normalizedExtension(from: url.lastPathComponent),
+    ].filter { !$0.isEmpty })
     let normalizedMimeType = mimeType?.lowercased()
 
-    if extensionName == "epub" || normalizedMimeType == "application/epub+zip" {
-      return payloadTypeLocalBook
-    }
-    if extensionName == "json" || normalizedMimeType == "application/json" {
-      return payloadTypeSource
-    }
-    if extensionName == "txt" ||
-      normalizedMimeType == "text/plain" ||
-      normalizedMimeType == "application/octet-stream" {
-      let preview = readPreviewText(url)
-      return looksLikeSourceText(preview) ? payloadTypeSource : payloadTypeLocalBook
+    for spec in externalImportSpecs {
+      if extensionCandidates.contains(where: { spec.extensions.contains($0) }) {
+        return spec.type
+      }
+      if let normalizedMimeType, spec.mimeTypeToExtension[normalizedMimeType] != nil {
+        return spec.type
+      }
     }
     return nil
-  }
-
-  private func readPreviewText(_ url: URL) -> String {
-    guard let handle = try? FileHandle(forReadingFrom: url) else {
-      return ""
-    }
-    defer {
-      try? handle.close()
-    }
-
-    let data: Data
-    if #available(iOS 13.4, *) {
-      data = (try? handle.read(upToCount: 4096)) ?? Data()
-    } else {
-      data = handle.readData(ofLength: 4096)
-    }
-
-    if data.isEmpty {
-      return ""
-    }
-    if let utf8 = String(data: data, encoding: .utf8) {
-      return utf8
-    }
-    if let utf16LE = String(data: data, encoding: .utf16LittleEndian) {
-      return utf16LE
-    }
-    if let utf16BE = String(data: data, encoding: .utf16BigEndian) {
-      return utf16BE
-    }
-    return ""
-  }
-
-  private func looksLikeSourceText(_ content: String) -> Bool {
-    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.isEmpty {
-      return false
-    }
-    if !trimmed.hasPrefix("{") && !trimmed.hasPrefix("[") {
-      return false
-    }
-    return trimmed.contains("\"bookSourceName\"") ||
-      trimmed.contains("\"bookSourceUrl\"") ||
-      trimmed.contains("\"ruleSearch\"") ||
-      trimmed.contains("\"ruleBookInfo\"") ||
-      trimmed.contains("\"ruleToc\"") ||
-      trimmed.contains("\"sourceType\"")
   }
 
   private func resolveMimeType(from url: URL) -> String? {
@@ -384,16 +474,25 @@ import UniformTypeIdentifiers
       let uri = URL(string: rawUri),
       uri.isFileURL
     else {
+      logSourceImport("cacheExternalFileFromUri rejected invalid uri payload=\(arguments)")
       return nil
     }
 
     let rawLabel = (arguments["label"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let label = (rawLabel?.isEmpty == false) ? rawLabel! : resolvePayloadLabel(from: uri)
+    let type = (arguments["type"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     let rawMimeType = (arguments["mimeType"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let mimeType = (rawMimeType?.isEmpty == false) ? rawMimeType! : (resolveMimeType(from: uri) ?? "")
-    guard let extensionName = resolveLocalBookExtension(label: label, mimeType: mimeType) else {
+    guard let extensionName = resolveExternalImportExtension(
+      type: type,
+      url: uri,
+      label: label,
+      mimeType: mimeType
+    ) else {
+      logSourceImport("Unable to resolve extension for uri=\(uri.absoluteString) label=\(label) mime=\(mimeType)")
       return nil
     }
 
@@ -406,6 +505,7 @@ import UniformTypeIdentifiers
 
     let fileManager = FileManager.default
     guard fileManager.fileExists(atPath: uri.path) else {
+      logSourceImport("External file does not exist at path=\(uri.path)")
       return nil
     }
 
@@ -421,6 +521,7 @@ import UniformTypeIdentifiers
         attributes: nil
       )
     } catch {
+      logSourceImport("Failed to create external import cache directory error=\(error.localizedDescription)")
       return nil
     }
 
@@ -436,11 +537,21 @@ import UniformTypeIdentifiers
         try fileManager.removeItem(at: outputUrl)
       }
       try fileManager.copyItem(at: uri, to: outputUrl)
+      logSourceImport("Copied external import file to cache path=\(outputUrl.path)")
     } catch {
-      return nil
+      logSourceImport("copyItem failed for uri=\(uri.absoluteString), fallback to Data write, error=\(error.localizedDescription)")
+      do {
+        let data = try Data(contentsOf: uri)
+        try data.write(to: outputUrl, options: .atomic)
+        logSourceImport("Wrote external import file via Data fallback path=\(outputUrl.path) bytes=\(data.count)")
+      } catch {
+        logSourceImport("Failed to cache external file uri=\(uri.absoluteString) error=\(error.localizedDescription)")
+        return nil
+      }
     }
 
     let normalizedLabel = label.lowercased().hasSuffix(extensionName) ? label : "\(label)\(extensionName)"
+    logSourceImport("Prepared cached external import label=\(normalizedLabel) path=\(outputUrl.path) mime=\(mimeType)")
     return [
       "path": outputUrl.path,
       "label": normalizedLabel,
@@ -448,22 +559,72 @@ import UniformTypeIdentifiers
     ]
   }
 
-  private func resolveLocalBookExtension(label: String, mimeType: String?) -> String? {
-    let lowerLabel = label.lowercased()
-    let normalizedMimeType = mimeType?.lowercased() ?? ""
-    if lowerLabel.hasSuffix(".txt") {
-      return ".txt"
+  private func resolveExternalImportExtension(
+    type: String?,
+    url: URL,
+    label: String,
+    mimeType: String?
+  ) -> String? {
+    let specs: [ExternalImportSpec]
+    switch type?.trimmingCharacters(in: .whitespacesAndNewlines) {
+    case payloadTypeScriptSource:
+      specs = [scriptSourceImportSpec]
+    case payloadTypeLocalBook:
+      specs = [localBookImportSpec]
+    case payloadTypeAdvancedTheme:
+      specs = [advancedThemeImportSpec]
+    case payloadTypeFont:
+      specs = [fontImportSpec]
+    default:
+      specs = externalImportSpecs
     }
-    if lowerLabel.hasSuffix(".epub") {
-      return ".epub"
+    return resolveImportExtension(
+      specs: specs,
+      url: url,
+      label: label,
+      mimeType: mimeType
+    )
+  }
+
+  private func resolveImportExtension(
+    specs: [ExternalImportSpec],
+    url: URL,
+    label: String,
+    mimeType: String?
+  ) -> String? {
+    let extensionCandidates = [
+      normalizedExtension(from: url.pathExtension),
+      normalizedExtension(from: url.lastPathComponent),
+      normalizedExtension(from: label),
+    ].filter { !$0.isEmpty }
+
+    for candidate in extensionCandidates {
+      for spec in specs where spec.extensions.contains(candidate) {
+        return ".\(candidate)"
+      }
     }
-    if normalizedMimeType == "application/epub+zip" {
-      return ".epub"
-    }
-    if normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream" {
-      return ".txt"
+
+    if let normalizedMimeType = mimeType?.lowercased() {
+      for spec in specs {
+        if let resolved = spec.mimeTypeToExtension[normalizedMimeType] {
+          return ".\(resolved)"
+        }
+      }
     }
     return nil
+  }
+
+  private func normalizedExtension(from raw: String) -> String {
+    let normalized = raw
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+    if normalized.isEmpty {
+      return ""
+    }
+    if normalized.contains(".") {
+      return normalized.components(separatedBy: ".").last ?? ""
+    }
+    return normalized
   }
 
   private func sanitizeFileToken(_ value: String) -> String {

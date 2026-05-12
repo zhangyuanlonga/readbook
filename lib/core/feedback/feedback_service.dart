@@ -33,11 +33,14 @@ class FeedbackService {
     int pageSize = 20,
   }) async {
     _ensureBaseUrl();
+    final identity = await _identityService.loadIdentity();
+    final accessToken = (await _sessionStore.getAccessToken())?.trim();
 
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.get,
       path: '/v1/feedback',
       queryParameters: {
+        'install_id': identity.installId,
         if (keyword != null && keyword.trim().isNotEmpty)
           'keyword': keyword.trim(),
         if (type != null && type.trim().isNotEmpty) 'type': type.trim(),
@@ -45,6 +48,11 @@ class FeedbackService {
         'page': page < 1 ? 1 : page,
         'page_size': pageSize < 1 ? 20 : pageSize,
       },
+      headers: {
+        if (accessToken != null && accessToken.isNotEmpty)
+          'Authorization': 'Bearer $accessToken',
+      },
+      enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
@@ -96,6 +104,34 @@ class FeedbackService {
       decoder: _decodeMap,
     );
 
+    return FeedbackListItem.fromJson(data);
+  }
+
+  Future<FeedbackListItem> fetchFeedbackDetail(String id) async {
+    _ensureBaseUrl();
+    final normalizedId = id.trim();
+    if (normalizedId.isEmpty) {
+      throw const AppException(
+        code: ErrorCode.validation,
+        briefMessage: '缺少反馈标识。',
+        stage: ErrorStage.unknown,
+      );
+    }
+    final identity = await _identityService.loadIdentity();
+    final accessToken = (await _sessionStore.getAccessToken())?.trim();
+
+    final data = await _client.request<Map<String, dynamic>>(
+      method: ApiMethod.get,
+      path: '/v1/feedback/$normalizedId',
+      queryParameters: <String, dynamic>{'install_id': identity.installId},
+      headers: {
+        if (accessToken != null && accessToken.isNotEmpty)
+          'Authorization': 'Bearer $accessToken',
+      },
+      enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
+      stage: ErrorStage.unknown,
+      decoder: _decodeMap,
+    );
     return FeedbackListItem.fromJson(data);
   }
 

@@ -1,6 +1,33 @@
-enum LocalBookFormat { txt, epub }
+enum LocalBookFormat { txt, epub, md, html, pdf, mobi, azw, azw3 }
 
 enum LocalBookIndexStatus { pending, indexing, ready, stale, failed }
+
+extension LocalBookFormatSemantics on LocalBookFormat {
+  String get displayLabel => switch (this) {
+    LocalBookFormat.txt => 'TXT',
+    LocalBookFormat.epub => 'EPUB',
+    LocalBookFormat.md => 'Markdown',
+    LocalBookFormat.html => 'HTML',
+    LocalBookFormat.pdf => 'PDF',
+    LocalBookFormat.mobi => 'MOBI',
+    LocalBookFormat.azw => 'AZW',
+    LocalBookFormat.azw3 => 'AZW3',
+  };
+
+  bool get supportsBootstrapPreview => this == LocalBookFormat.txt;
+
+  bool get requiresManagedAssetDirectory => switch (this) {
+    LocalBookFormat.epub ||
+    LocalBookFormat.md ||
+    LocalBookFormat.html ||
+    LocalBookFormat.mobi ||
+    LocalBookFormat.azw ||
+    LocalBookFormat.azw3 => true,
+    LocalBookFormat.txt || LocalBookFormat.pdf => false,
+  };
+
+  bool get supportsBackgroundIndexOnImport => true;
+}
 
 class LocalBook {
   const LocalBook({
@@ -14,6 +41,7 @@ class LocalBook {
     this.sourcePath,
     this.charset,
     this.author,
+    this.description,
     this.coverPath,
     this.sourceFileSize,
     this.sourceFileLastModifiedMs,
@@ -34,6 +62,7 @@ class LocalBook {
   final String? sourcePath;
   final String? charset;
   final String? author;
+  final String? description;
   final String? coverPath;
   final int? sourceFileSize;
   final int? sourceFileLastModifiedMs;
@@ -42,6 +71,16 @@ class LocalBook {
   final int chapterCount;
   final String? lastError;
   final bool splitLongChapter;
+
+  bool get isReadableReady =>
+      indexStatus == LocalBookIndexStatus.ready && chapterCount > 0;
+
+  bool get needsIndex => !isReadableReady;
+
+  bool get supportsBootstrapPreview => format.supportsBootstrapPreview;
+
+  bool get requiresManagedAssetDirectory =>
+      format.requiresManagedAssetDirectory;
 
   LocalBook copyWith({
     String? id,
@@ -57,6 +96,8 @@ class LocalBook {
     bool clearCharset = false,
     String? author,
     bool clearAuthor = false,
+    String? description,
+    bool clearDescription = false,
     String? coverPath,
     bool clearCoverPath = false,
     int? sourceFileSize,
@@ -82,6 +123,7 @@ class LocalBook {
       sourcePath: clearSourcePath ? null : (sourcePath ?? this.sourcePath),
       charset: clearCharset ? null : (charset ?? this.charset),
       author: clearAuthor ? null : (author ?? this.author),
+      description: clearDescription ? null : (description ?? this.description),
       coverPath: clearCoverPath ? null : (coverPath ?? this.coverPath),
       sourceFileSize:
           clearSourceFileSize ? null : (sourceFileSize ?? this.sourceFileSize),
@@ -112,6 +154,7 @@ class LocalBook {
       'sourcePath': sourcePath,
       'charset': charset,
       'author': author,
+      'description': description,
       'coverPath': coverPath,
       'sourceFileSize': sourceFileSize,
       'sourceFileLastModifiedMs': sourceFileLastModifiedMs,
@@ -135,6 +178,7 @@ class LocalBook {
       sourcePath: _optionalString(json['sourcePath']),
       charset: _optionalString(json['charset']),
       author: _optionalString(json['author']),
+      description: _optionalString(json['description']),
       coverPath: _optionalString(json['coverPath']),
       sourceFileSize: _optionalInt(json['sourceFileSize']),
       sourceFileLastModifiedMs: _optionalInt(json['sourceFileLastModifiedMs']),

@@ -5,42 +5,55 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../core/logging/app_logger.dart';
-import '../../../../data/datasources/local/app_database.dart';
-import '../../../../data/repositories/local_book_repository_impl.dart';
+import '../../../../domain/entities/bookshelf_book.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
+import '../../../bookshelf/application/bookshelf_service.dart';
+import '../reading_record_service.dart';
 import '../reader_system_settings_service.dart';
 import 'epub_local_book_parser.dart';
+import 'html_local_book_parser.dart';
+import 'kindle_local_book_parser.dart';
 import 'local_book_parser.dart';
+import 'local_reader_identity.dart';
 import 'local_book_storage_service.dart';
+import 'markdown_local_book_parser.dart';
+import 'pdf_local_book_parser.dart';
 import 'txt_local_book_parser.dart';
 
 class LocalBookIndexService {
   LocalBookIndexService({
-    LocalBookRepository? localBookRepository,
+    required LocalBookRepository localBookRepository,
     List<LocalBookParser>? parsers,
     AppLogger? logger,
-    ReaderSystemSettingsService? readerSystemSettingsService,
-    LocalBookStorageService? storageService,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
+    required ReaderSystemSettingsService readerSystemSettingsService,
+    required LocalBookStorageService storageService,
+    required BookshelfService bookshelfService,
+    required ReadingRecordService readingRecordService,
+  }) : _localBookRepository = localBookRepository,
        _parsers =
            parsers ??
            <LocalBookParser>[
              const TxtLocalBookParser(),
              const EpubLocalBookParser(),
+             const MarkdownLocalBookParser(),
+             const HtmlLocalBookParser(),
+             const PdfLocalBookParser(),
+             const KindleLocalBookParser(),
            ],
-       _readerSystemSettingsService =
-           readerSystemSettingsService ?? ReaderSystemSettingsService(),
-       _storageService =
-           storageService ?? LocalBookStorageService(logger: logger),
+       _readerSystemSettingsService = readerSystemSettingsService,
+       _storageService = storageService,
+       _bookshelfService = bookshelfService,
+       _readingRecordService = readingRecordService,
        _logger = logger ?? AppLogger.instance;
 
   final LocalBookRepository _localBookRepository;
   final List<LocalBookParser> _parsers;
   final ReaderSystemSettingsService _readerSystemSettingsService;
   final LocalBookStorageService _storageService;
+  final BookshelfService _bookshelfService;
+  final ReadingRecordService _readingRecordService;
   final AppLogger _logger;
   static final Map<String, Future<List<LocalChapter>>> _activeIndexTasks =
       <String, Future<List<LocalChapter>>>{};
@@ -243,16 +256,13 @@ class LocalBookIndexService {
     prepared = refreshedFile.book;
     shouldReindex = shouldReindex || refreshedFile.shouldReindex;
 
-    if (prepared.format == LocalBookFormat.epub &&
-        prepared.indexStatus == LocalBookIndexStatus.ready &&
+    if (prepared.indexStatus == LocalBookIndexStatus.ready &&
         prepared.chapterCount > 0) {
-      final chapterMetas = await _localBookRepository.getChapterMetas(
-        prepared.id,
+      final chapters = await _localBookRepository.getChapters(prepared.id);
+      final hasUnreadablePayload = chapters.any(
+        (chapter) => !chapter.hasReadablePayload,
       );
-      final hasLegacyChaptersWithoutSourceRef = chapterMetas.any(
-        (chapter) => (chapter.sourceRef?.trim().isEmpty ?? true),
-      );
-      if (hasLegacyChaptersWithoutSourceRef) {
+      if (hasUnreadablePayload) {
         prepared = prepared.copyWith(
           indexStatus: LocalBookIndexStatus.stale,
           updatedAt: DateTime.now(),
@@ -375,6 +385,10 @@ class LocalBookIndexService {
       parsedBook.charset,
       fallback: null,
     );
+    final parsedDescription = _normalizeOptional(
+      parsedBook.description,
+      fallback: book.description,
+    );
     final parsedCoverPath = _normalizeOptional(
       parsedBook.coverPath,
       fallback: book.coverPath,
@@ -383,6 +397,8 @@ class LocalBookIndexService {
     final updatedBook = book.copyWith(
       title: _normalizeRequired(parsedBook.title, fallback: book.title),
       author: _normalizeOptional(parsedBook.author, fallback: book.author),
+      description: parsedDescription,
+      clearDescription: parsedDescription == null,
       coverPath: parsedCoverPath,
       clearCoverPath: parsedCoverPath == null,
       charset: parsedCharset,
@@ -416,19 +432,14 @@ class LocalBookIndexService {
               chapter.title,
               fallback: '第 ${index + 1} 章',
             ),
-            content:
-                book.format == LocalBookFormat.txt &&
-                        chapter.startOffset != null &&
-                        chapter.endOffset != null &&
-                        chapter.endOffset! > chapter.startOffset!
-                    ? ''
-                    : chapter.content,
+            content: chapter.content,
             imageUrls: chapter.imageUrls,
             sourceRef: chapter.sourceRef,
             createdAt: now,
             updatedAt: now,
             startOffset: chapter.startOffset,
             endOffset: chapter.endOffset,
+            document: chapter.document,
           );
         })
         .toList(growable: false);
@@ -444,7 +455,76 @@ class LocalBookIndexService {
       chapterCount: chapters.length,
       clearLastError: true,
     );
+    await _syncBookPresentation(previous: book, next: updatedBook);
     return chapters;
+  }
+
+  Future<void> _syncBookPresentation({
+    required LocalBook previous,
+    required LocalBook next,
+  }) async {
+    final previousTitle = previous.title.trim();
+    final nextTitle = next.title.trim();
+    final previousAuthor = (previous.author ?? '').trim();
+    final nextAuthor = (next.author ?? '').trim();
+    final previousCoverPath = (previous.coverPath ?? '').trim();
+    final nextCoverPath = (next.coverPath ?? '').trim();
+    final changed =
+        previousTitle != nextTitle ||
+        previousAuthor != nextAuthor ||
+        previousCoverPath != nextCoverPath;
+    if (!changed) {
+      return;
+    }
+
+    final nextCoverUrl =
+        nextCoverPath.isEmpty ? null : Uri.file(nextCoverPath).toString();
+
+    await _syncBookshelfBookCover(nextBook: next, nextCoverUrl: nextCoverUrl);
+    await _readingRecordService.syncBookPresentation(
+      bookId: next.id,
+      bookTitle: next.title,
+      bookAuthor: next.author,
+      coverUrl: nextCoverUrl,
+    );
+  }
+
+  Future<void> _syncBookshelfBookCover({
+    required LocalBook nextBook,
+    required String? nextCoverUrl,
+  }) async {
+    final allBooks = await _bookshelfService.getAll();
+    BookshelfBook? matched;
+    final expectedDetailUrl = LocalReaderIdentity.buildBookDetailUrl(
+      nextBook.id,
+    );
+    for (final book in allBooks) {
+      if (book.bookId == nextBook.id &&
+          book.sourceId == LocalReaderIdentity.localSourceId &&
+          book.detailUrl.trim() == expectedDetailUrl) {
+        matched = book;
+        break;
+      }
+    }
+    if (matched == null) {
+      return;
+    }
+
+    final currentCoverUrl = matched.coverUrl?.trim();
+    final normalizedNextCoverUrl = nextCoverUrl?.trim();
+    if (currentCoverUrl == normalizedNextCoverUrl) {
+      return;
+    }
+
+    await _bookshelfService.upsert(
+      matched.copyWith(
+        title: nextBook.title,
+        author: nextBook.author,
+        coverUrl: normalizedNextCoverUrl,
+        clearCoverUrl:
+            normalizedNextCoverUrl == null || normalizedNextCoverUrl.isEmpty,
+      ),
+    );
   }
 
   void _emitIndexEvent({

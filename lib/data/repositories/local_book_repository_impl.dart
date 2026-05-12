@@ -1,7 +1,8 @@
 import '../../domain/entities/local_book.dart';
 import '../../domain/entities/local_chapter.dart';
+import '../../domain/entities/reader_document.dart';
 import '../../domain/repositories/local_book_repository.dart';
-import '../datasources/local/app_database.dart';
+import '../../data/datasources/local/app_database.dart';
 
 class LocalBookRepositoryImpl implements LocalBookRepository {
   LocalBookRepositoryImpl(this._database);
@@ -15,12 +16,34 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
   Future<List<LocalBook>> getAllBooks() => _database.getAllLocalBooks();
 
   @override
+  Stream<List<LocalBook>> watchAllBooks() => _database.watchAllLocalBooks();
+
+  @override
   Future<LocalBook?> getBookById(String bookId) =>
       _database.getLocalBookById(bookId);
 
   @override
+  Future<LocalBook?> getBookBySourcePath(String sourcePath) =>
+      _database.getLocalBookBySourcePath(sourcePath);
+
+  @override
+  Future<LocalBook?> findBookByImportFingerprint({
+    required LocalBookFormat format,
+    required String title,
+    required int sourceFileSize,
+  }) => _database.findLocalBookByImportFingerprint(
+    format: format,
+    title: title,
+    sourceFileSize: sourceFileSize,
+  );
+
+  @override
   Future<LocalChapter?> getChapterById(String chapterId) =>
       _database.getLocalChapterById(chapterId);
+
+  @override
+  Future<LocalChapter?> getChapterContentById(String chapterId) =>
+      _database.getLocalChapterContentById(chapterId);
 
   @override
   Future<List<LocalChapter>> getChapters(String bookId) =>
@@ -38,14 +61,34 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
       );
 
   @override
+  Future<LocalChapter?> getChapterContentByIndex(
+    String bookId,
+    int chapterIndex,
+  ) => _database.getLocalChapterContentByIndex(
+    bookId: bookId,
+    chapterIndex: chapterIndex,
+  );
+
+  @override
+  Future<LocalChapter?> getChapterMetaByIndex(
+    String bookId,
+    int chapterIndex,
+  ) => _database.getLocalChapterMetaByIndex(
+    bookId: bookId,
+    chapterIndex: chapterIndex,
+  );
+
+  @override
   Future<void> updateChapterContent({
     required String chapterId,
     required String content,
     List<String> imageUrls = const <String>[],
+    ReaderDocument? document,
   }) => _database.updateLocalChapterContent(
     chapterId: chapterId,
     content: content,
     imageUrls: imageUrls,
+    document: document,
   );
 
   @override

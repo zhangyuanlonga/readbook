@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../preferences/app_preferences_service.dart';
+
 final appSeedColorProvider = NotifierProvider<AppSeedColorNotifier, Color>(
   AppSeedColorNotifier.new,
 );
 
 class AppSeedColorNotifier extends Notifier<Color> {
-  static const String _seedColorKey = 'app.seedColor';
+  static const Color _defaultSeedColor = Color(0xFFFFFFFF);
   static Color? _primedSeedColor;
 
   bool _loadTriggered = false;
   bool _hasExplicitSet = false;
 
   static void prime(SharedPreferences prefs) {
-    final stored = prefs.getInt(_seedColorKey);
+    final stored = prefs.getInt(appSeedColorPreferenceKey);
     _primedSeedColor = stored == null ? null : Color(stored);
   }
 
@@ -29,12 +31,12 @@ class AppSeedColorNotifier extends Notifier<Color> {
       _load();
     }
 
-    return const Color(0xFF6750A4);
+    return _defaultSeedColor;
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getInt(_seedColorKey);
+    final stored =
+        await ref.read(appThemePreferencesServiceProvider).loadSeedColorValue();
     if (stored == null) {
       return;
     }
@@ -56,7 +58,8 @@ class AppSeedColorNotifier extends Notifier<Color> {
       state = color;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_seedColorKey, color.toARGB32());
+    await ref
+        .read(appThemePreferencesServiceProvider)
+        .saveSeedColorValue(color.toARGB32());
   }
 }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/domain/entities/book.dart';
-import 'package:flutter_appread/domain/entities/book_detail.dart';
-import 'package:flutter_appread/domain/entities/chapter.dart';
-import 'package:flutter_appread/domain/entities/source_definition.dart';
-import 'package:flutter_appread/domain/repositories/source_repository.dart';
-import 'package:flutter_appread/features/book/application/book_detail_service.dart';
-import 'package:flutter_appread/features/book/presentation/book_detail_page.dart';
-import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shuxiang_reading_next/app/platform/app_platform_capabilities.dart';
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
+import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
+import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
+import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
+import 'package:shuxiang_reading_next/features/book/presentation/book_detail_page.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,21 +106,39 @@ void main() {
                 title: '凡人修仙传',
                 bookDetailService: detailService,
                 switchSourceSearchService: searchService,
-                cachedChapterCountStreamBuilder: (_) => Stream<int>.value(0),
               ),
         ),
       ],
     );
     addTearDown(router.dispose);
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appPlatformCapabilitiesProvider.overrideWith(
+            (ref) =>
+                AppPlatformCapabilities.current(sourceRuntimeEnabled: true),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: ThemeData(splashFactory: NoSplash.splashFactory),
+          routerConfig: router,
+        ),
+      ),
+    );
     await tester.pumpAndSettle(const Duration(milliseconds: 120));
 
     expect(find.text('凡人修仙传-A'), findsWidgets);
-    final switchButtonFinder = find.text('去换源');
+    final switchButtonFinder = find.text('书源');
     expect(switchButtonFinder, findsOneWidget);
 
-    await tester.tap(switchButtonFinder);
+    final switchInkWell = tester.widget<InkWell>(
+      find
+          .ancestor(of: switchButtonFinder, matching: find.byType(InkWell))
+          .first,
+    );
+    switchInkWell.onTap?.call();
+    await tester.pump();
     for (
       var i = 0;
       i < 24 && find.textContaining('切换书源（').evaluate().isEmpty;
@@ -130,7 +148,11 @@ void main() {
     }
 
     expect(find.textContaining('切换书源（'), findsOneWidget);
-    for (var i = 0; i < 24 && find.textContaining('源B').evaluate().isEmpty; i++) {
+    for (
+      var i = 0;
+      i < 24 && find.textContaining('源B').evaluate().isEmpty;
+      i++
+    ) {
       await tester.pump(const Duration(milliseconds: 120));
     }
     expect(find.textContaining('源B'), findsWidgets);
@@ -140,9 +162,86 @@ void main() {
     await tester.pump(const Duration(milliseconds: 360));
 
     expect(find.text('凡人修仙传-B'), findsWidgets);
-    expect(find.text('已切换到 源B。'), findsOneWidget);
     expect(detailService.loadedSourceIds, <String>['source_a', 'source_b']);
     expect(searchService.callCount, 1);
+  });
+
+  testWidgets('disables source switch when source runtime is disabled', (
+    tester,
+  ) async {
+    final result = BookDetailLoadResult(
+      detail: const BookDetail(
+        id: 'book_a',
+        sourceId: 'source_a',
+        title: '凡人修仙传-A',
+        detailUrl: 'https://a.example.com/detail',
+        author: '忘语',
+      ),
+      chapters: const <Chapter>[
+        Chapter(
+          id: 'a_1',
+          bookId: 'book_a',
+          title: '第1章 入门',
+          chapterUrl: 'https://a.example.com/c1',
+          index: 0,
+        ),
+      ],
+      sourceName: '源A',
+      tocFromCache: false,
+    );
+    final detailService = _FakeBookDetailService(
+      bySourceId: <String, BookDetailLoadResult>{'source_a': result},
+    );
+    final searchService = _FakeSearchService(
+      const SearchExecutionReport(
+        keyword: '凡人修仙传',
+        sourceCount: 0,
+        successSourceCount: 0,
+        books: <Book>[],
+        failures: <SourceSearchFailure>[],
+        sourceNames: <String, String>{},
+      ),
+    );
+
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder:
+              (context, state) => BookDetailPage(
+                bookId: 'book_a',
+                sourceId: 'source_a',
+                detailUrl: 'https://a.example.com/detail',
+                title: '凡人修仙传',
+                bookDetailService: detailService,
+                switchSourceSearchService: searchService,
+              ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(
+          theme: ThemeData(splashFactory: NoSplash.splashFactory),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 120));
+
+    expect(find.text('凡人修仙传-A'), findsWidgets);
+    final switchButtonFinder = find.text('书源');
+    expect(switchButtonFinder, findsOneWidget);
+    final switchInkWell = tester.widget<InkWell>(
+      find
+          .ancestor(of: switchButtonFinder, matching: find.byType(InkWell))
+          .first,
+    );
+    expect(switchInkWell.onTap, isNull);
+    expect(detailService.loadedSourceIds, <String>['source_a']);
+    expect(searchService.callCount, 0);
   });
 }
 
@@ -150,7 +249,7 @@ class _FakeBookDetailService extends BookDetailService {
   _FakeBookDetailService({
     required Map<String, BookDetailLoadResult> bySourceId,
   }) : _bySourceId = bySourceId,
-       super(sourceRepository: _NoopSourceRepository());
+       super();
 
   final Map<String, BookDetailLoadResult> _bySourceId;
   final List<String> loadedSourceIds = <String>[];
@@ -163,6 +262,7 @@ class _FakeBookDetailService extends BookDetailService {
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
+    bool includeCatalog = true,
   }) async {
     loadedSourceIds.add(sourceId);
     final result = _bySourceId[sourceId];
@@ -174,8 +274,7 @@ class _FakeBookDetailService extends BookDetailService {
 }
 
 class _FakeSearchService extends SearchService {
-  _FakeSearchService(this._report)
-    : super(sourceRepository: _NoopSourceRepository());
+  _FakeSearchService(this._report) : super();
 
   final SearchExecutionReport _report;
   int callCount = 0;
@@ -188,40 +287,11 @@ class _FakeSearchService extends SearchService {
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
     SearchContentMode contentMode = SearchContentMode.novel,
+    SearchPlanScenario scenario = SearchPlanScenario.globalSearch,
     List<String>? sourceIds,
     bool aggregateByTitleAuthor = false,
   }) async {
     callCount += 1;
     return _report;
   }
-}
-
-class _NoopSourceRepository implements SourceRepository {
-  @override
-  Future<void> clear() async {}
-
-  @override
-  Future<void> deleteById(String sourceId) async {}
-
-  @override
-  Future<void> deleteByIds(List<String> sourceIds) async {}
-
-  @override
-  Future<List<SourceDefinition>> getAll() async => const <SourceDefinition>[];
-
-  @override
-  Future<void> setEnabled({
-    required String sourceId,
-    required bool enabled,
-  }) async {}
-
-  @override
-  Future<void> setGroup({required String sourceId, String? group}) async {}
-
-  @override
-  Future<void> upsertAll(List<SourceDefinition> sources) async {}
-
-  @override
-  Stream<List<SourceDefinition>> watchAll() =>
-      const Stream<List<SourceDefinition>>.empty();
 }

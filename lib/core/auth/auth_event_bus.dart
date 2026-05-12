@@ -1,6 +1,6 @@
 import 'dart:async';
 
-enum AuthEventType { sessionExpired, loggedOut }
+enum AuthEventType { loggedIn, sessionExpired, loggedOut }
 
 class AuthEvent {
   const AuthEvent({required this.type, required this.message});
@@ -22,6 +22,10 @@ class AuthEventBus {
 
   void emit(AuthEvent event) {
     _controller.add(event);
+  }
+
+  void emitLoggedIn([String message = '登录成功。']) {
+    emit(AuthEvent(type: AuthEventType.loggedIn, message: message));
   }
 
   void emitSessionExpired([String message = '登录已过期，请重新登录。']) {

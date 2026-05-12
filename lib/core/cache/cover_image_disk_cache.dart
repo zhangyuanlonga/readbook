@@ -96,6 +96,83 @@ class CoverImageDiskCache {
     return deletedCount;
   }
 
+  Future<int> countAll() async {
+    final directory = await _ensureCacheDir();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    var count = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  Future<int> compact({
+    Duration stalePeriod = _stalePeriod,
+    int maxEntries = 300,
+    int maxBytes = -1,
+  }) async {
+    final directory = await _ensureCacheDir();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    final files = <File>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File) {
+        files.add(entity);
+      }
+    }
+
+    var deletedCount = 0;
+    var totalBytes = 0;
+    final retainedFiles = <File>[];
+    final now = DateTime.now();
+    for (final file in files) {
+      try {
+        final stat = await file.stat();
+        if (now.difference(stat.modified) > stalePeriod) {
+          await file.delete();
+          deletedCount++;
+          continue;
+        }
+        totalBytes += stat.size;
+        retainedFiles.add(file);
+      } catch (_) {
+        // Ignore single-file cleanup failure and continue.
+      }
+    }
+
+    retainedFiles.sort(
+      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
+    );
+    var overflowCount = retainedFiles.length - maxEntries.clamp(0, 1 << 30);
+    final normalizedMaxBytes = maxBytes < 0 ? -1 : maxBytes;
+    for (final file in retainedFiles) {
+      if (overflowCount <= 0 &&
+          (normalizedMaxBytes < 0 || totalBytes <= normalizedMaxBytes)) {
+        break;
+      }
+      try {
+        if (await file.exists()) {
+          final length = await file.length();
+          await file.delete();
+          deletedCount++;
+          overflowCount--;
+          totalBytes -= length;
+        }
+      } catch (_) {
+        // Ignore single-file cleanup failure and continue.
+      }
+    }
+
+    return deletedCount;
+  }
+
   Future<bool> clearByUrl(String imageUrl) async {
     final file = await _cacheFileForUrl(imageUrl);
     if (file == null) {
@@ -171,7 +248,7 @@ class CoverImageDiskCache {
 
     final baseDir = await _resolveBaseDir();
     final directory = Directory(
-      p.join(baseDir.path, 'flutter_appread', 'covers'),
+      p.join(baseDir.path, 'shuxiang_reading_next', 'covers'),
     );
     if (!await directory.exists()) {
       await directory.create(recursive: true);

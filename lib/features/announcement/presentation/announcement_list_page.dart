@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
-import '../application/announcement_service.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../application/announcement_read_state_service.dart';
+import '../application/announcement_service.dart';
+import '../providers.dart';
 
 class AnnouncementListPage extends ConsumerStatefulWidget {
   const AnnouncementListPage({super.key});
@@ -20,9 +26,8 @@ class AnnouncementListPage extends ConsumerStatefulWidget {
 }
 
 class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
-  final AnnouncementService _service = AnnouncementService();
-  final AnnouncementReadStateService _readStateService =
-      AnnouncementReadStateService();
+  late final AnnouncementService _service;
+  late final AnnouncementReadStateService _readStateService;
   final ScrollController _scrollController = ScrollController();
 
   bool _isLoading = true;
@@ -39,6 +44,8 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(announcementServiceProvider);
+    _readStateService = ref.read(announcementReadStateServiceProvider);
     _scrollController.addListener(_handleScroll);
     unawaited(_loadInitial());
   }
@@ -80,22 +87,27 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       _service.clearCache();
     }
 
-    Announcement? latest;
     try {
-      latest = await _service.fetchLatestAnnouncement(
-        useCache: !forceRefresh,
-      );
-    } catch (error) {
-      _showMessage(_resolveErrorText(error));
-    }
-
-    try {
-      final page = await _service.fetchAnnouncements(
+      final pageFuture = _service.fetchAnnouncements(
         page: 1,
         pageSize: _pageSize,
         useCache: !forceRefresh,
       );
-      final readIds = await _readStateService.getReadIds();
+      final latestFuture = _service
+          .fetchLatestAnnouncement(useCache: !forceRefresh)
+          .catchError((error) {
+            _showMessage(_resolveErrorText(error));
+            return null;
+          });
+      final readIdsFuture = _readStateService.getReadIds();
+      final results = await Future.wait<Object?>([
+        pageFuture,
+        latestFuture,
+        readIdsFuture,
+      ]);
+      final page = results[0]! as AnnouncementPage;
+      final latest = results[1] as Announcement?;
+      final readIds = results[2]! as Set<String>;
       if (!mounted) {
         return;
       }
@@ -160,11 +172,22 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeTheme,
+    );
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         title: const Text('公告'),
         actions: [
           IconButton(
@@ -174,24 +197,28 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.mineContentMaxWidth,
-          );
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: _buildBody(
-                context,
-                horizontal: horizontal,
-                bottomSafe: bottomSafe,
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: _buildBody(
+                  context,
+                  horizontal: horizontal,
+                  bottomSafe: bottomSafe,
+                  topInset: topInset,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -200,6 +227,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
   }) {
     if (_isLoading) {
       return Center(
@@ -216,6 +244,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '加载失败',
         message: errorText,
         actionLabel: '重试',
@@ -235,6 +264,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
+        topInset: topInset,
         title: '暂无公告',
         message: '当前没有可用的公告内容。',
         actionLabel: '刷新',
@@ -243,13 +273,14 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     }
 
     final children = <Widget>[];
+    final metrics = AppAdaptiveMetrics.of(context);
     if (latest != null) {
       children.add(_buildLatestCard(context, latest));
-      children.add(const SizedBox(height: 12));
+      children.add(SizedBox(height: metrics.contentGap));
     }
     for (final item in listItems) {
       children.add(_buildAnnouncementCard(context, item));
-      children.add(const SizedBox(height: 10));
+      children.add(SizedBox(height: metrics.contentGap));
     }
     if (_isLoadingMore) {
       children.add(
@@ -271,9 +302,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
           child: Text(
             '已加载全部公告',
             textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
@@ -281,18 +310,20 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => _loadInitial(forceRefresh: true),
-      child: ListView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          12,
-          horizontal,
-          12 + bottomSafe,
+    return AppFadeSlideTransition(
+      child: RefreshIndicator(
+        onRefresh: () => _loadInitial(forceRefresh: true),
+        child: ListView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.contentGap,
+            horizontal,
+            metrics.contentGap + bottomSafe,
+          ),
+          children: children,
         ),
-        children: children,
       ),
     );
   }
@@ -301,48 +332,38 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     BuildContext context, {
     required double horizontal,
     required double bottomSafe,
+    required double topInset,
     required String title,
     required String message,
     required String actionLabel,
     required VoidCallback onAction,
   }) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return RefreshIndicator(
-      onRefresh: () => _loadInitial(forceRefresh: true),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          48,
-          horizontal,
-          24 + bottomSafe,
+    final metrics = AppAdaptiveMetrics.of(context);
+    return AppFadeSlideTransition(
+      child: RefreshIndicator(
+        onRefresh: () => _loadInitial(forceRefresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.sectionGap * 2,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
+          ),
+          children: [
+            AppStatusStateCard(
+              icon: Icons.notifications_none,
+              title: title,
+              message: message,
+              tone:
+                  title == '加载失败'
+                      ? AppStatusStateTone.error
+                      : AppStatusStateTone.neutral,
+              actionLabel: actionLabel,
+              onAction: onAction,
+            ),
+          ],
         ),
-        children: [
-          Icon(Icons.notifications_none, size: 48, color: colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: FilledButton.tonal(
-              onPressed: onAction,
-              child: Text(actionLabel),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -357,7 +378,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       child: InkWell(
         onTap: () => _openAnnouncement(announcement),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -421,7 +442,7 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       child: InkWell(
         onTap: () => _openAnnouncement(announcement),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

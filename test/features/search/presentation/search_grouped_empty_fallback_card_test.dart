@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/features/search/presentation/widgets/search_grouped_empty_fallback_card.dart';
+import 'package:shuxiang_reading_next/features/search/presentation/widgets/search_grouped_empty_fallback_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -72,7 +72,7 @@ void main() {
       ),
     );
 
-    expect(find.text('暂无可展示结果，请检查书源规则或更换关键词。'), findsOneWidget);
+    expect(find.text('暂无可展示结果，请检查脚本源配置或更换关键词。'), findsOneWidget);
     expect(find.text('关闭精准匹配'), findsNothing);
     expect(find.text('切换全部书源'), findsNothing);
   });

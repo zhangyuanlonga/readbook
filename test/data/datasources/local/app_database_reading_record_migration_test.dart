@@ -3,7 +3,7 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
@@ -313,6 +313,10 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'description'),
+        isTrue,
+      );
 
       final localChapterColumns =
           await database
@@ -407,6 +411,7 @@ void main() {
       expect(migrated.chapterCount, 12);
       expect(migrated.splitLongChapter, isTrue);
       expect(migrated.charset, 'utf-8');
+      expect(migrated.description, isNull);
     });
   });
 }

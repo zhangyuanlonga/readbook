@@ -1,7 +1,8 @@
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -35,6 +36,7 @@ void main() {
       expect(loaded, isNotNull);
       expect(loaded!.title, '本地测试书');
       expect(loaded.charset, isNull);
+      expect(loaded.description, isNull);
       expect(loaded.indexStatus, LocalBookIndexStatus.pending);
 
       await database.updateLocalBookIndexState(
@@ -49,7 +51,7 @@ void main() {
       expect(updated.chapterCount, 18);
     });
 
-    test('persists charset and file metadata fields', () async {
+    test('persists charset, description and file metadata fields', () async {
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       await database.upsertLocalBook(
         LocalBook(
@@ -59,6 +61,7 @@ void main() {
           storagePath: '/tmp/local_meta_1.txt',
           sourcePath: '/input/meta.txt',
           charset: 'gbk',
+          description: '这是一段本地图书简介。',
           fileSize: 2048,
           sourceFileSize: 4096,
           sourceFileLastModifiedMs: 123456789,
@@ -71,6 +74,7 @@ void main() {
       final loaded = await database.getLocalBookById('local_meta_1');
       expect(loaded, isNotNull);
       expect(loaded!.charset, 'gbk');
+      expect(loaded.description, '这是一段本地图书简介。');
       expect(loaded.sourceFileSize, 4096);
       expect(loaded.sourceFileLastModifiedMs, 123456789);
       expect(loaded.storageFileLastModifiedMs, 987654321);
@@ -116,6 +120,12 @@ void main() {
             updatedAt: now,
             startOffset: 101,
             endOffset: 200,
+            document: ReaderDocument(
+              blocks: const <ReaderBlock>[
+                ReaderTextBlock(text: '第二章内容'),
+                ReaderImageBlock(imageUrl: 'file:///tmp/image_2.png'),
+              ],
+            ),
           ),
         ],
       );
@@ -129,6 +139,18 @@ void main() {
       expect(chapter!.chapterIndex, 1);
       expect(chapter.imageUrls, contains('file:///tmp/image_2.png'));
       expect(chapter.sourceRef, 'OPS/chapter2.xhtml');
+      expect(chapter.document, isNotNull);
+      expect(chapter.document!.blocks.last, isA<ReaderImageBlock>());
+
+      final chapterMeta = await database.getLocalChapterMetaByIndex(
+        bookId: 'local_2',
+        chapterIndex: 1,
+      );
+      expect(chapterMeta, isNotNull);
+      expect(chapterMeta!.title, '第二章');
+      expect(chapterMeta.content, isEmpty);
+      expect(chapterMeta.document, isNull);
+      expect(chapterMeta.sourceRef, 'OPS/chapter2.xhtml');
 
       final book = await database.getLocalBookById('local_2');
       expect(book, isNotNull);

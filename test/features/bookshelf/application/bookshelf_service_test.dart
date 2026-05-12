@@ -1,5 +1,5 @@
-import 'package:flutter_appread/domain/entities/bookshelf_book.dart';
-import 'package:flutter_appread/features/bookshelf/application/bookshelf_service.dart';
+import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -77,6 +77,106 @@ void main() {
       expect(all, isEmpty);
     });
 
+    test('emits collection changes for add and remove operations', () async {
+      final service = BookshelfService();
+      final book = BookshelfBook(
+        bookId: 'book_1',
+        sourceId: 'src_1',
+        title: '凡人修仙传',
+        detailUrl: 'https://example.com/detail/1',
+        addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+      );
+
+      final addFuture = BookshelfService.watchCollectionChanges.first;
+      await service.upsert(book);
+      final addChange = await addFuture;
+      expect(addChange.action, BookshelfCollectionAction.upsert);
+      expect(addChange.sourceId, 'src_1');
+      expect(addChange.detailUrl, 'https://example.com/detail/1');
+
+      final removeFuture = BookshelfService.watchCollectionChanges.first;
+      await service.remove(
+        sourceId: 'src_1',
+        detailUrl: 'https://example.com/detail/1',
+      );
+      final removeChange = await removeFuture;
+      expect(removeChange.action, BookshelfCollectionAction.remove);
+      expect(removeChange.sourceId, 'src_1');
+      expect(removeChange.detailUrl, 'https://example.com/detail/1');
+    });
+
+    test('persists bookshelf sort mode', () async {
+      final service = BookshelfService();
+
+      expect(await service.loadSortMode(), BookshelfService.defaultSortMode);
+
+      await service.saveSortMode(BookshelfService.readingProgressSortMode);
+
+      expect(
+        await service.loadSortMode(),
+        BookshelfService.readingProgressSortMode,
+      );
+
+      await service.saveSortMode(BookshelfService.authorSortMode);
+
+      expect(await service.loadSortMode(), BookshelfService.authorSortMode);
+    });
+
+    test('persists bookshelf grid preferences', () async {
+      final service = BookshelfService();
+
+      expect(
+        await service.loadGridAdaptiveColumns(),
+        BookshelfService.defaultGridAdaptiveColumns,
+      );
+      expect(
+        await service.loadGridColumnCount(),
+        BookshelfService.defaultGridColumnCount,
+      );
+      expect(
+        await service.loadGridCrossSpacing(),
+        BookshelfService.defaultGridCrossSpacing,
+      );
+      expect(
+        await service.loadGridMainSpacing(),
+        BookshelfService.defaultGridMainSpacing,
+      );
+      expect(await service.loadGridShowTitle(), isTrue);
+      expect(await service.loadGridShowAuthor(), isTrue);
+      expect(await service.loadGridShowLatestChapter(), isTrue);
+      expect(await service.loadGridShowProgressBar(), isTrue);
+      expect(await service.loadListShowTitle(), isTrue);
+      expect(await service.loadListShowAuthor(), isTrue);
+      expect(await service.loadListShowLatestChapter(), isTrue);
+      expect(await service.loadListShowProgressBar(), isTrue);
+
+      await service.saveGridAdaptiveColumns(false);
+      await service.saveGridColumnCount(5);
+      await service.saveGridCrossSpacing(16);
+      await service.saveGridMainSpacing(20);
+      await service.saveGridShowTitle(false);
+      await service.saveGridShowAuthor(false);
+      await service.saveGridShowLatestChapter(false);
+      await service.saveGridShowProgressBar(false);
+      await service.saveListShowTitle(false);
+      await service.saveListShowAuthor(false);
+      await service.saveListShowLatestChapter(false);
+      await service.saveListShowProgressBar(false);
+
+      expect(await service.loadGridAdaptiveColumns(), isFalse);
+      expect(await service.loadGridColumnCount(), 5);
+      expect(await service.loadGridCrossSpacing(), 16);
+      expect(await service.loadGridMainSpacing(), 20);
+      expect(await service.loadGridShowTitle(), isFalse);
+      expect(await service.loadGridShowAuthor(), isFalse);
+      expect(await service.loadGridShowLatestChapter(), isFalse);
+      expect(await service.loadGridShowProgressBar(), isFalse);
+      expect(await service.loadListShowTitle(), isFalse);
+      expect(await service.loadListShowAuthor(), isFalse);
+      expect(await service.loadListShowLatestChapter(), isFalse);
+      expect(await service.loadListShowProgressBar(), isFalse);
+    });
+
     test('renameTag renames across books and deduplicates tags', () async {
       final service = BookshelfService();
       await service.setBookTags(
@@ -124,6 +224,151 @@ void main() {
       expect(map.containsKey('src_1::detail_1'), isFalse);
       expect(map['src_2::detail_2'], orderedEquals(const ['收藏']));
     });
+
+    test('setBookTags preserves multiple book entries', () async {
+      final service = BookshelfService();
+      await service.setBookTags(
+        sourceId: 'src_1',
+        detailUrl: 'detail_1',
+        tags: const ['在读', '收藏'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_2',
+        detailUrl: 'detail_2',
+        tags: const ['在读', '已读'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_3',
+        detailUrl: 'detail_3',
+        tags: const ['追更', '在读'],
+      );
+
+      final map = await service.getTagMap();
+      expect(
+        map.keys,
+        containsAll(const [
+          'src_1::detail_1',
+          'src_2::detail_2',
+          'src_3::detail_3',
+        ]),
+      );
+    });
+
+    test('renameCategory returns affected book count', () async {
+      final service = BookshelfService();
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_1',
+          sourceId: 'src_1',
+          title: 'A',
+          detailUrl: 'detail_1',
+          addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_2',
+          sourceId: 'src_2',
+          title: 'B',
+          detailUrl: 'detail_2',
+          addedAt: DateTime.parse('2026-02-12T12:00:01.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_3',
+          sourceId: 'src_3',
+          title: 'C',
+          detailUrl: 'detail_3',
+          addedAt: DateTime.parse('2026-02-12T12:00:02.000Z'),
+          category: '科幻',
+        ),
+      );
+
+      final affectedCount = await service.renameCategory(
+        fromCategory: '玄幻',
+        toCategory: '仙侠',
+      );
+
+      expect(affectedCount, 2);
+      final categoryMap = await service.getCategoryMap();
+      expect(categoryMap['src_1::detail_1'], '仙侠');
+      expect(categoryMap['src_2::detail_2'], '仙侠');
+      expect(categoryMap['src_3::detail_3'], '科幻');
+    });
+
+    test('deleteCategory returns affected book count', () async {
+      final service = BookshelfService();
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_1',
+          sourceId: 'src_1',
+          title: 'A',
+          detailUrl: 'detail_1',
+          addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_2',
+          sourceId: 'src_2',
+          title: 'B',
+          detailUrl: 'detail_2',
+          addedAt: DateTime.parse('2026-02-12T12:00:01.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_3',
+          sourceId: 'src_3',
+          title: 'C',
+          detailUrl: 'detail_3',
+          addedAt: DateTime.parse('2026-02-12T12:00:02.000Z'),
+          category: '科幻',
+        ),
+      );
+
+      final affectedCount = await service.deleteCategory('玄幻');
+
+      expect(affectedCount, 2);
+      final categoryMap = await service.getCategoryMap();
+      expect(categoryMap.containsKey('src_1::detail_1'), isFalse);
+      expect(categoryMap.containsKey('src_2::detail_2'), isFalse);
+      expect(categoryMap['src_3::detail_3'], '科幻');
+    });
+
+    test(
+      'renameTag returns success when only tag order contains target',
+      () async {
+        final service = BookshelfService();
+        await service.saveTagOrder(const ['在读']);
+
+        final affectedCount = await service.renameTag(
+          fromTag: '在读',
+          toTag: '追更',
+        );
+
+        expect(affectedCount, 1);
+        expect(await service.getTagOrder(), orderedEquals(const ['追更']));
+      },
+    );
+
+    test(
+      'deleteCategory returns success when only category order contains target',
+      () async {
+        final service = BookshelfService();
+        await service.saveCategoryOrder(const ['玄幻']);
+
+        final affectedCount = await service.deleteCategory('玄幻');
+
+        expect(affectedCount, 1);
+        expect(await service.getCategoryOrder(), isEmpty);
+      },
+    );
 
     test(
       'replace swaps old entry and migrates tags to new source entry',
