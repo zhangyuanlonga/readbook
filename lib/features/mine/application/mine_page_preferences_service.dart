@@ -50,6 +50,7 @@ class MinePageItemDefinition {
     required this.sectionTitle,
     this.subtitle,
     this.configurable = true,
+    this.displayable = true,
   });
 
   final MinePageItemId id;
@@ -57,6 +58,7 @@ class MinePageItemDefinition {
   final String sectionTitle;
   final String? subtitle;
   final bool configurable;
+  final bool displayable;
 }
 
 const List<MinePageItemDefinition> minePageItemDefinitions = [
@@ -138,6 +140,7 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
     id: MinePageItemId.systemSettings,
     title: '系统',
     sectionTitle: '数据',
+    displayable: false,
   ),
   MinePageItemDefinition(
     id: MinePageItemId.sourceManagement,
@@ -181,7 +184,13 @@ MinePageItemDefinition minePageItemDefinitionFor(MinePageItemId id) {
 
 List<MinePageItemDefinition> get configurableMinePageItemDefinitions {
   return minePageItemDefinitions
-      .where((definition) => definition.configurable)
+      .where((definition) => definition.displayable && definition.configurable)
+      .toList(growable: false);
+}
+
+List<MinePageItemDefinition> get displayableMinePageItemDefinitions {
+  return minePageItemDefinitions
+      .where((definition) => definition.displayable)
       .toList(growable: false);
 }
 
@@ -201,6 +210,9 @@ class MinePageVisibilityState {
 
   bool isVisible(MinePageItemId itemId) {
     final definition = minePageItemDefinitionFor(itemId);
+    if (!definition.displayable) {
+      return false;
+    }
     if (!definition.configurable) {
       return true;
     }
@@ -212,6 +224,9 @@ class MinePageVisibilityState {
     bool visible,
   ) {
     final definition = minePageItemDefinitionFor(itemId);
+    if (!definition.displayable) {
+      return this;
+    }
     if (!definition.configurable) {
       return this;
     }
@@ -254,7 +269,10 @@ class MinePagePreferencesService {
   Future<void> saveVisibilityState(MinePageVisibilityState state) async {
     final prefs = await _preferencesFuture;
     final hiddenIds = state.hiddenItemIds
-        .where((itemId) => minePageItemDefinitionFor(itemId).configurable)
+        .where((itemId) {
+          final definition = minePageItemDefinitionFor(itemId);
+          return definition.displayable && definition.configurable;
+        })
         .map((itemId) => itemId.name)
         .toList(growable: false);
     await prefs.setStringList(_hiddenItemIdsKey, hiddenIds);
@@ -277,7 +295,10 @@ class MinePagePreferencesService {
     final hiddenIds = rawIds
         .map(_itemIdFromRaw)
         .whereType<MinePageItemId>()
-        .where((itemId) => minePageItemDefinitionFor(itemId).configurable)
+        .where((itemId) {
+          final definition = minePageItemDefinitionFor(itemId);
+          return definition.displayable && definition.configurable;
+        })
         .toList(growable: false);
     return MinePageVisibilityState(hiddenItemIds: hiddenIds);
   }

@@ -212,7 +212,7 @@ class _AppearanceOtherSettingsCardState
               builder: (context, ref, _) {
                 final visibilityState = ref.watch(minePageVisibilityProvider);
                 final grouped = <String, List<MinePageItemDefinition>>{};
-                for (final definition in minePageItemDefinitions) {
+                for (final definition in displayableMinePageItemDefinitions) {
                   grouped
                       .putIfAbsent(definition.sectionTitle, () => [])
                       .add(definition);

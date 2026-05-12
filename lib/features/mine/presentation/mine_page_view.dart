@@ -513,15 +513,6 @@ extension on _MinePageState {
         ),
       );
     }
-    if (visibilityState.isVisible(MinePageItemId.systemSettings)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.tune_rounded,
-          label: '系统',
-          onTap: _pushMineRouteAction('/system-settings'),
-        ),
-      );
-    }
     if (_showSourceEntry &&
         visibilityState.isVisible(MinePageItemId.sourceManagement)) {
       actions.add(

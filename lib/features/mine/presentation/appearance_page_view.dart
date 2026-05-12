@@ -218,13 +218,9 @@ extension on _AppearancePageState {
     required double bottomInset,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
-    final leftSections = <Widget>[
-      for (final index in <int>[0, 1, 2])
-        if (index < sections.length) sections[index],
-    ];
-    final rightSections = <Widget>[
-      for (var index = 3; index < sections.length; index++) sections[index],
-    ];
+    final cards = sections
+        .where((widget) => widget is! SizedBox)
+        .toList(growable: false);
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         horizontal,
@@ -232,37 +228,27 @@ extension on _AppearancePageState {
         horizontal,
         metrics.sectionGap + bottomInset,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Column(children: _buildDesktopColumnEntries(leftSections)),
-          ),
-          SizedBox(width: metrics.contentGap),
-          Expanded(
-            flex: 6,
-            child: Column(children: _buildDesktopColumnEntries(rightSections)),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const crossAxisGap = 14.0;
+          final cardWidth = (constraints.maxWidth - crossAxisGap) / 2;
+          return Wrap(
+            spacing: crossAxisGap,
+            runSpacing: metrics.contentGap,
+            children: [
+              for (var index = 0; index < cards.length; index++)
+                SizedBox(
+                  width: cardWidth,
+                  child: AppFadeSlideTransition(
+                    delay: Duration(milliseconds: (index * 28).clamp(0, 140)),
+                    child: cards[index],
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
-  }
-
-  List<Widget> _buildDesktopColumnEntries(List<Widget> children) {
-    final entries = <Widget>[];
-    for (var index = 0; index < children.length; index++) {
-      if (index > 0) {
-        entries.add(const SizedBox(height: 14));
-      }
-      entries.add(
-        AppFadeSlideTransition(
-          delay: Duration(milliseconds: (index * 28).clamp(0, 140)),
-          child: children[index],
-        ),
-      );
-    }
-    return entries;
   }
 
   Widget _buildNavIconGalleryEntry(BuildContext context) {

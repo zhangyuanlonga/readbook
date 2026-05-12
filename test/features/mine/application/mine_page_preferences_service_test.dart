@@ -40,6 +40,22 @@ void main() {
     });
   });
 
+  test('system settings entry is not displayable on mine page', () {
+    final state = MinePageVisibilityState(
+      hiddenItemIds: const [MinePageItemId.systemSettings],
+    );
+
+    expect(state.isVisible(MinePageItemId.systemSettings), isFalse);
+    expect(
+      displayableMinePageItemDefinitions.map((definition) => definition.id),
+      isNot(contains(MinePageItemId.systemSettings)),
+    );
+    expect(
+      configurableMinePageItemDefinitions.map((definition) => definition.id),
+      isNot(contains(MinePageItemId.systemSettings)),
+    );
+  });
+
   test('startup destination defaults to home and persists bookshelf', () async {
     final service = MinePagePreferencesService();
 
