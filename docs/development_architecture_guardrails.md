@@ -343,6 +343,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 5. 空、加载、错误、禁用：优先使用 `AppEmptyStateCard`、`AppStatusStateCard`、`FeatureDisabledPage`。
 6. 弹层与操作面板：优先使用 `AdaptiveActionSurface`、`AdaptiveBottomSheet`、`AdaptiveDialogSurface`，移动端 bottom sheet，桌面/Web dialog、popover 或 side panel。
 7. 书籍封面：优先使用 `ResolvedBookCoverView` 和统一封面叠层规则。
+8. 任务态展示：导入、导出、重索引、缓存清理等耗时任务必须先映射到 `AppTaskStatusData`，再选择移动端或桌面/Web 展示形态。
 
 旧页面迁移顺序：
 
@@ -372,6 +373,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - 是否在 `LayoutBuilder` 中做了状态写入、异步请求或重计算。
 - 是否覆盖 `390x844`、`600x960`、`1280x800` 和 `1.3x` 文字缩放。
 - 如果保留裸 `Scaffold`，SafeArea、max width、键盘 inset、导航遮挡由谁负责。
+- 耗时任务是否复用统一任务态，而不是在页面局部新增一套进度、结果和失败 UI。
 
 ### 6.7 UI 变更验收矩阵
 
@@ -571,6 +573,14 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - `startup coordinator provider`：启动任务
 - `lifecycle coordinator provider`：前后台生命周期
 - `bridge listener provider`：外部导入、音量键等桥接事件
+
+### 10.4 资源与启动懒加载
+
+- 启动阶段不得无版本门控地扫描图集、字体、缓存目录或大型资源 metadata。
+- 受管资源迁移必须带迁移版本；完成后同版本不得在每次启动重复执行。
+- 缓存清理、图库索引、字体校验这类资源任务应在进入对应页面、展开卡片或用户主动刷新时触发。
+- 启动期只允许恢复必要的轻量偏好、能力矩阵、路由和首屏所需状态。
+- 大目录扫描、重索引、批量导入必须接入统一任务态，避免静默阻塞 UI。
 
 ---
 
@@ -800,6 +810,8 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - `docs/all_platform_compatibility_plan_2026-05-11.md`：全平台兼容总计划
 - `docs/page_function_multiplatform_methods_2026-05-12.md`：逐页面功能多端兼容方法
 - `docs/page_ui_multiplatform_display_plan_2026-05-12.md`：逐页面 UI 多端兼容展示计划
+- `docs/app_task_status_unification_plan_2026-05-12.md`：导入与重索引任务态统一计划
+- `docs/resource_page_lazy_loading_audit_2026-05-12.md`：资源页面懒加载审计
 - `docs/cross_platform_boundary_refactor_plan.md`：跨端与原生边界
 - `docs/flutter_adaptive_baseline_matrix.md`：自适应基线矩阵
 - `docs/adaptive_visual_regression_checklist.md`：自适应视觉回归清单

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../motion/app_motion_widgets.dart';
+import 'app_task_status.dart';
 
 enum ImportExportTaskPresentation { overlay, inlineCompact, queuePanel }
 
@@ -24,6 +25,18 @@ class ImportExportTaskStatus {
   final String? detail;
   final ImportExportTaskPresentation presentation;
   final ImportExportTaskResult result;
+
+  factory ImportExportTaskStatus.fromAppTaskStatus(AppTaskStatusData status) {
+    return ImportExportTaskStatus(
+      title: status.title,
+      message: status.message,
+      progress: status.progress,
+      progressLabel: status.progressLabel,
+      detail: status.detail,
+      presentation: _importExportPresentationFrom(status.presentation),
+      result: _importExportResultFrom(status.result),
+    );
+  }
 
   bool get isFinished =>
       result == ImportExportTaskResult.success ||
@@ -53,9 +66,68 @@ class ImportExportTaskStatus {
       result: result ?? this.result,
     );
   }
+
+  AppTaskStatusData toAppTaskStatusData({
+    AppTaskStatusKind kind = AppTaskStatusKind.other,
+  }) {
+    return AppTaskStatusData(
+      title: title,
+      message: message,
+      kind: kind,
+      progress: progress,
+      progressLabel: progressLabel,
+      detail: detail,
+      presentation: _appTaskPresentationFrom(presentation),
+      result: _appTaskResultFrom(result),
+    );
+  }
 }
 
 const Object _sentinel = Object();
+
+ImportExportTaskPresentation _importExportPresentationFrom(
+  AppTaskStatusPresentation presentation,
+) {
+  return switch (presentation) {
+    AppTaskStatusPresentation.overlay => ImportExportTaskPresentation.overlay,
+    AppTaskStatusPresentation.inlineCompact =>
+      ImportExportTaskPresentation.inlineCompact,
+    AppTaskStatusPresentation.queuePanel =>
+      ImportExportTaskPresentation.queuePanel,
+  };
+}
+
+ImportExportTaskResult _importExportResultFrom(AppTaskStatusResult result) {
+  return switch (result) {
+    AppTaskStatusResult.idle => ImportExportTaskResult.idle,
+    AppTaskStatusResult.running => ImportExportTaskResult.running,
+    AppTaskStatusResult.success => ImportExportTaskResult.success,
+    AppTaskStatusResult.failure => ImportExportTaskResult.failure,
+    AppTaskStatusResult.cancelled => ImportExportTaskResult.cancelled,
+  };
+}
+
+AppTaskStatusPresentation _appTaskPresentationFrom(
+  ImportExportTaskPresentation presentation,
+) {
+  return switch (presentation) {
+    ImportExportTaskPresentation.overlay => AppTaskStatusPresentation.overlay,
+    ImportExportTaskPresentation.inlineCompact =>
+      AppTaskStatusPresentation.inlineCompact,
+    ImportExportTaskPresentation.queuePanel =>
+      AppTaskStatusPresentation.queuePanel,
+  };
+}
+
+AppTaskStatusResult _appTaskResultFrom(ImportExportTaskResult result) {
+  return switch (result) {
+    ImportExportTaskResult.idle => AppTaskStatusResult.idle,
+    ImportExportTaskResult.running => AppTaskStatusResult.running,
+    ImportExportTaskResult.success => AppTaskStatusResult.success,
+    ImportExportTaskResult.failure => AppTaskStatusResult.failure,
+    ImportExportTaskResult.cancelled => AppTaskStatusResult.cancelled,
+  };
+}
 
 class ImportExportTaskOverlay extends StatelessWidget {
   const ImportExportTaskOverlay({super.key, required this.child, this.status});

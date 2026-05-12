@@ -26,27 +26,57 @@ class ManagedAssetPathMigrationService {
   final AppLogger _logger;
   final ManagedFilePathResolver _pathResolver;
 
-  Future<void> migrate() async {
-    await _runSafely('advanced themes', () async {
-      await AdvancedThemeService(preferences: _preferences).loadThemes();
-    });
-    await _runSafely('cover galleries', () async {
-      await CoverGalleryService(preferences: _preferences).loadGalleries();
-    });
-    await _runSafely('launch image galleries', () async {
-      await LaunchImageGalleryService(
-        preferences: _preferences,
-      ).loadGalleries();
-    });
-    await _runSafely('bottom nav galleries', () async {
-      await BottomNavIconGalleryService(
-        preferences: _preferences,
-      ).loadGalleries();
-    });
-    await _runSafely('font registry', () async {
-      await ReaderFontRegistryService().listRegisteredFonts();
-    });
-    await _runSafely('book cover paths', _migrateBookCoverPaths);
+  static const String _completedVersionKey =
+      'startup.managedAssetPathMigration.completedVersion';
+  static const int _currentMigrationVersion = 1;
+
+  Future<void> migrate({bool force = false}) async {
+    final preferences = _preferences ?? await SharedPreferences.getInstance();
+    final completedVersion = preferences.getInt(_completedVersionKey) ?? 0;
+    if (!force && completedVersion >= _currentMigrationVersion) {
+      return;
+    }
+
+    var allStepsSucceeded = true;
+
+    allStepsSucceeded =
+        await _runSafely('advanced themes', () async {
+          await AdvancedThemeService(preferences: preferences).loadThemes();
+        }) &&
+        allStepsSucceeded;
+    allStepsSucceeded =
+        await _runSafely('cover galleries', () async {
+          await CoverGalleryService(preferences: preferences).loadGalleries();
+        }) &&
+        allStepsSucceeded;
+    allStepsSucceeded =
+        await _runSafely('launch image galleries', () async {
+          await LaunchImageGalleryService(
+            preferences: preferences,
+          ).loadGalleries();
+        }) &&
+        allStepsSucceeded;
+    allStepsSucceeded =
+        await _runSafely('bottom nav galleries', () async {
+          await BottomNavIconGalleryService(
+            preferences: preferences,
+          ).loadGalleries();
+        }) &&
+        allStepsSucceeded;
+    allStepsSucceeded =
+        await _runSafely('font registry', () async {
+          await ReaderFontRegistryService().listRegisteredFonts();
+        }) &&
+        allStepsSucceeded;
+    allStepsSucceeded =
+        await _runSafely('book cover paths', _migrateBookCoverPaths) &&
+        allStepsSucceeded;
+
+    if (!allStepsSucceeded) {
+      return;
+    }
+
+    await preferences.setInt(_completedVersionKey, _currentMigrationVersion);
   }
 
   Future<void> _migrateBookCoverPaths() async {
@@ -107,12 +137,13 @@ class ManagedAssetPathMigrationService {
     );
   }
 
-  Future<void> _runSafely(
+  Future<bool> _runSafely(
     String label,
     Future<void> Function() operation,
   ) async {
     try {
       await operation();
+      return true;
     } catch (error, stackTrace) {
       _logger.warn(
         'Managed asset migration step failed',
@@ -122,6 +153,7 @@ class ManagedAssetPathMigrationService {
           'stackTrace': stackTrace.toString(),
         },
       );
+      return false;
     }
   }
 }

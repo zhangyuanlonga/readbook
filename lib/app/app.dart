@@ -781,10 +781,13 @@ class _StartupAnnouncementBanner extends StatelessWidget {
                       ),
                     ),
                     TextButton(onPressed: onOpen, child: const Text('查看')),
-                    IconButton(
-                      tooltip: '关闭',
-                      onPressed: onClose,
-                      icon: const Icon(Icons.close_rounded),
+                    Semantics(
+                      button: true,
+                      label: '关闭',
+                      child: IconButton(
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                     ),
                   ],
                 ),

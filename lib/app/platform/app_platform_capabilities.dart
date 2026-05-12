@@ -18,7 +18,7 @@ class AppPlatformCapabilities {
   });
 
   factory AppPlatformCapabilities.current({
-    bool sourceRuntimeEnabled = _sourceRuntimeEnabledByDefine,
+    bool? sourceRuntimeEnabled,
     bool webDavSyncEnabled = _webDavSyncEnabledByDefine,
   }) {
     final platform = defaultTargetPlatform;
@@ -29,7 +29,13 @@ class AppPlatformCapabilities {
         platform == TargetPlatform.windows ||
         platform == TargetPlatform.linux;
     final supportsNativeFileSystem = !kIsWeb;
-    final sourceRuntimeSupportedPlatform = !kIsWeb;
+    final resolvedSourceRuntimeEnabled =
+        sourceRuntimeEnabled ??
+        (_hasSourceRuntimeEnabledDefine
+            ? _sourceRuntimeEnabledByDefine
+            : isMobile);
+    final sourceRuntimeSupportedPlatform =
+        !kIsWeb && (isMobile || resolvedSourceRuntimeEnabled);
 
     return AppPlatformCapabilities(
       platform: platform,
@@ -42,9 +48,9 @@ class AppPlatformCapabilities {
       supportsReaderBrightnessBridge: !kIsWeb && isMobile,
       supportsReaderVolumeKeyBridge: !kIsWeb && isMobile,
       supportsSourceRuntime:
-          sourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
+          resolvedSourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
       supportsInteractiveWebView:
-          sourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
+          resolvedSourceRuntimeEnabled && sourceRuntimeSupportedPlatform,
       supportsWebDavSync: webDavSyncEnabled && supportsNativeFileSystem,
     );
   }
@@ -71,6 +77,10 @@ class AppPlatformCapabilities {
 const bool _sourceRuntimeEnabledByDefine = bool.fromEnvironment(
   'APP_ENABLE_SOURCE_RUNTIME',
   defaultValue: false,
+);
+
+const bool _hasSourceRuntimeEnabledDefine = bool.hasEnvironment(
+  'APP_ENABLE_SOURCE_RUNTIME',
 );
 
 const bool _webDavSyncEnabledByDefine = bool.fromEnvironment(
