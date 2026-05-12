@@ -330,73 +330,12 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
                                   key: ValueKey('bottom_nav_gallery_loading'),
                                   child: CircularProgressIndicator(),
                                 )
-                                : ListView.builder(
-                                  key: const ValueKey(
-                                    'bottom_nav_gallery_content',
-                                  ),
-                                  padding: EdgeInsets.fromLTRB(
-                                    horizontal,
-                                    topInset + metrics.contentGap,
-                                    horizontal,
-                                    metrics.sectionGap + bottomSafe,
-                                  ),
-                                  itemCount:
-                                      _visibleGalleries.isEmpty
-                                          ? 2
-                                          : _visibleGalleries.length + 1,
-                                  itemBuilder: (context, index) {
-                                    if (index == 0) {
-                                      return Padding(
-                                        padding: EdgeInsets.only(
-                                          bottom: metrics.contentGap,
-                                        ),
-                                        child: AppFadeSlideTransition(
-                                          child: CompactCollectionSearchField(
-                                            controller: _searchController,
-                                            hintText: '搜索底栏图集',
-                                            query: _searchQuery,
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _searchQuery = value;
-                                              });
-                                            },
-                                            onClear: () {
-                                              _searchController.clear();
-                                              setState(() {
-                                                _searchQuery = '';
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    if (_visibleGalleries.isEmpty) {
-                                      return const AppAnimatedSwitcher(
-                                        child: ImageResourceEmptyStateCard(
-                                          key: ValueKey(
-                                            'bottom_nav_gallery_empty',
-                                          ),
-                                          icon: Icons.dock_outlined,
-                                          title: '没有匹配的底栏图集',
-                                          description: '换个关键词，或点击右上角新增自定义图集。',
-                                        ),
-                                      );
-                                    }
-                                    final gallery =
-                                        _visibleGalleries[index - 1];
-                                    return Padding(
-                                      padding: EdgeInsets.only(
-                                        bottom:
-                                            index == _visibleGalleries.length
-                                                ? 0
-                                                : metrics.contentGap,
-                                      ),
-                                      child: _buildGalleryCard(
-                                        context,
-                                        gallery: gallery,
-                                      ),
-                                    );
-                                  },
+                                : _buildGalleryContent(
+                                  context,
+                                  metrics: metrics,
+                                  horizontal: horizontal,
+                                  topInset: topInset,
+                                  bottomSafe: bottomSafe,
                                 ),
                       ),
                     ),
@@ -563,6 +502,115 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGalleryContent(
+    BuildContext context, {
+    required AppAdaptiveMetrics metrics,
+    required double horizontal,
+    required double topInset,
+    required double bottomSafe,
+  }) {
+    final visible = _visibleGalleries;
+    final search = AppFadeSlideTransition(
+      child: CompactCollectionSearchField(
+        controller: _searchController,
+        hintText: '搜索底栏图集',
+        query: _searchQuery,
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+        onClear: () {
+          _searchController.clear();
+          setState(() {
+            _searchQuery = '';
+          });
+        },
+      ),
+    );
+    if (visible.isEmpty) {
+      return ListView(
+        key: const ValueKey('bottom_nav_gallery_content_empty'),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          topInset + metrics.contentGap,
+          horizontal,
+          metrics.sectionGap + bottomSafe,
+        ),
+        children: const [
+          AppAnimatedSwitcher(
+            child: ImageResourceEmptyStateCard(
+              key: ValueKey('bottom_nav_gallery_empty'),
+              icon: Icons.dock_outlined,
+              title: '没有匹配的底栏图集',
+              description: '换个关键词，或点击右上角新增自定义图集。',
+            ),
+          ),
+        ],
+      );
+    }
+    if (!metrics.isMediumUpWindow) {
+      return ListView.builder(
+        key: const ValueKey('bottom_nav_gallery_content'),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          topInset + metrics.contentGap,
+          horizontal,
+          metrics.sectionGap + bottomSafe,
+        ),
+        itemCount: visible.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: metrics.contentGap),
+              child: search,
+            );
+          }
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: index == visible.length ? 0 : metrics.contentGap,
+            ),
+            child: _buildGalleryCard(context, gallery: visible[index - 1]),
+          );
+        },
+      );
+    }
+    return CustomScrollView(
+      key: const ValueKey('bottom_nav_gallery_desktop_grid'),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.contentGap,
+            horizontal,
+            metrics.contentGap,
+          ),
+          sliver: SliverToBoxAdapter(child: search),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            0,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
+          ),
+          sliver: SliverGrid.builder(
+            itemCount: visible.length,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: metrics.isExpandedWindow ? 320 : 280,
+              mainAxisExtent: 150,
+              mainAxisSpacing: metrics.contentGap,
+              crossAxisSpacing: metrics.contentGap,
+            ),
+            itemBuilder:
+                (context, index) =>
+                    _buildGalleryCard(context, gallery: visible[index]),
+          ),
+        ),
+      ],
     );
   }
 

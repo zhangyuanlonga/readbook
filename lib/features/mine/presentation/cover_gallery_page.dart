@@ -287,62 +287,12 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                               key: ValueKey('cover_gallery_loading'),
                               child: CircularProgressIndicator(),
                             )
-                            : ListView.builder(
-                              key: const ValueKey('cover_gallery_content'),
-                              padding: EdgeInsets.fromLTRB(
-                                horizontal,
-                                topInset + metrics.contentGap,
-                                horizontal,
-                                metrics.sectionGap + bottomSafe,
-                              ),
-                              itemCount:
-                                  _visibleGalleries.isEmpty
-                                      ? 2
-                                      : _visibleGalleries.length + 1,
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: metrics.contentGap,
-                                    ),
-                                    child: AppFadeSlideTransition(
-                                      child: CompactCollectionSearchField(
-                                        controller: _searchController,
-                                        hintText: '搜索封面图集',
-                                        query: _searchQuery,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _searchQuery = value;
-                                          });
-                                        },
-                                        onClear: () {
-                                          _searchController.clear();
-                                          setState(() {
-                                            _searchQuery = '';
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  );
-                                }
-                                if (_visibleGalleries.isEmpty) {
-                                  return AppAnimatedSwitcher(
-                                    child: KeyedSubtree(
-                                      key: const ValueKey(
-                                        'cover_gallery_empty',
-                                      ),
-                                      child: _buildEmptyState(context),
-                                    ),
-                                  );
-                                }
-                                final gallery = _visibleGalleries[index - 1];
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: metrics.contentGap,
-                                  ),
-                                  child: _buildGalleryCard(context, gallery),
-                                );
-                              },
+                            : _buildGalleryContent(
+                              context,
+                              metrics: metrics,
+                              horizontal: horizontal,
+                              topInset: topInset,
+                              bottomSafe: bottomSafe,
                             ),
                   ),
                 ),
@@ -359,6 +309,107 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
       icon: Icons.photo_library_outlined,
       title: '还没有封面图集',
       description: '点击右上角新增，准备书架和主题可复用的封面素材。',
+    );
+  }
+
+  Widget _buildGalleryContent(
+    BuildContext context, {
+    required AppAdaptiveMetrics metrics,
+    required double horizontal,
+    required double topInset,
+    required double bottomSafe,
+  }) {
+    final visible = _visibleGalleries;
+    final search = AppFadeSlideTransition(
+      child: CompactCollectionSearchField(
+        controller: _searchController,
+        hintText: '搜索封面图集',
+        query: _searchQuery,
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+        onClear: () {
+          _searchController.clear();
+          setState(() {
+            _searchQuery = '';
+          });
+        },
+      ),
+    );
+    if (visible.isEmpty) {
+      return ListView(
+        key: const ValueKey('cover_gallery_content_empty'),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          topInset + metrics.contentGap,
+          horizontal,
+          metrics.sectionGap + bottomSafe,
+        ),
+        children: [
+          search,
+          SizedBox(height: metrics.contentGap),
+          _buildEmptyState(context),
+        ],
+      );
+    }
+    if (!metrics.isMediumUpWindow) {
+      return ListView.builder(
+        key: const ValueKey('cover_gallery_content'),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          topInset + metrics.contentGap,
+          horizontal,
+          metrics.sectionGap + bottomSafe,
+        ),
+        itemCount: visible.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: metrics.contentGap),
+              child: search,
+            );
+          }
+          return Padding(
+            padding: EdgeInsets.only(bottom: metrics.contentGap),
+            child: _buildGalleryCard(context, visible[index - 1]),
+          );
+        },
+      );
+    }
+    return CustomScrollView(
+      key: const ValueKey('cover_gallery_desktop_grid'),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.contentGap,
+            horizontal,
+            metrics.contentGap,
+          ),
+          sliver: SliverToBoxAdapter(child: search),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            0,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
+          ),
+          sliver: SliverGrid.builder(
+            itemCount: visible.length,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: metrics.isExpandedWindow ? 320 : 280,
+              mainAxisExtent: 176,
+              mainAxisSpacing: metrics.contentGap,
+              crossAxisSpacing: metrics.contentGap,
+            ),
+            itemBuilder:
+                (context, index) => _buildGalleryCard(context, visible[index]),
+          ),
+        ),
+      ],
     );
   }
 

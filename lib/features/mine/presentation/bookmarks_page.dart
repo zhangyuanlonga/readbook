@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -34,6 +35,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       const ReaderEntryRouteResolver();
 
   String? _errorText;
+  int _selectedGroupIndex = 0;
   List<Bookmark> _bookmarks = const [];
   Map<String, BookshelfBook> _bookshelfIndex = const <String, BookshelfBook>{};
   List<BookmarkBookGroupData> _groups = const <BookmarkBookGroupData>[];
@@ -86,6 +88,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       activeAdvancedTheme,
     );
     final horizontal = AppSpacing.pageHorizontal(context);
+    final metrics = AppAdaptiveMetrics.of(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final canPopRoute = context.canPop();
@@ -124,12 +127,20 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: _buildBody(
-                    context,
-                    horizontal: horizontal,
-                    topInset: topInset,
-                    bottomSafe: bottomSafe,
-                  ),
+                  child:
+                      metrics.isMediumUpWindow
+                          ? _buildDesktopBody(
+                            context,
+                            horizontal: horizontal,
+                            topInset: topInset,
+                            bottomSafe: bottomSafe,
+                          )
+                          : _buildBody(
+                            context,
+                            horizontal: horizontal,
+                            topInset: topInset,
+                            bottomSafe: bottomSafe,
+                          ),
                 ),
               ),
             );
@@ -199,6 +210,93 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
           }
           return _buildBookGroupCard(context, groups[index - 1]);
         },
+      ),
+    );
+  }
+
+  Widget _buildDesktopBody(
+    BuildContext context, {
+    required double horizontal,
+    required double topInset,
+    required double bottomSafe,
+  }) {
+    final errorText = _errorText;
+    if (errorText != null && errorText.isNotEmpty) {
+      return _buildStatusBody(
+        context,
+        horizontal: horizontal,
+        topInset: topInset,
+        bottomSafe: bottomSafe,
+        title: '加载失败',
+        message: errorText,
+        actionLabel: '重试',
+        onAction: () => unawaited(_reload()),
+      );
+    }
+
+    final groups = _groups;
+    if (groups.isEmpty) {
+      return _buildStatusBody(
+        context,
+        horizontal: horizontal,
+        topInset: topInset,
+        bottomSafe: bottomSafe,
+        title: '还没有灵感',
+        message: '在阅读页选中文本后点击“保存灵感”即可添加。',
+        actionLabel: '刷新',
+        onAction: () => unawaited(_reload()),
+      );
+    }
+
+    if (_selectedGroupIndex >= groups.length) {
+      _selectedGroupIndex = groups.length - 1;
+    }
+    final selectedGroup = groups[_selectedGroupIndex];
+    final metrics = AppAdaptiveMetrics.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        topInset + 12,
+        horizontal,
+        12 + bottomSafe,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 360,
+            child: Column(
+              children: [
+                _buildOverviewCard(context, groups),
+                SizedBox(height: metrics.contentGap),
+                Expanded(
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: ListView.separated(
+                      itemCount: groups.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final group = groups[index];
+                        return _buildBookGroupCard(
+                          context,
+                          group,
+                          selected: index == _selectedGroupIndex,
+                          onTap:
+                              () => setState(() {
+                                _selectedGroupIndex = index;
+                              }),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: metrics.contentGap),
+          Expanded(child: _buildDesktopGroupDetail(context, selectedGroup)),
+        ],
       ),
     );
   }
@@ -301,8 +399,10 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
 
   Widget _buildBookGroupCard(
     BuildContext context,
-    BookmarkBookGroupData group,
-  ) {
+    BookmarkBookGroupData group, {
+    bool selected = false,
+    VoidCallback? onTap,
+  }) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final book = group.book;
@@ -312,9 +412,10 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     final noteCount = group.bookmarks.where((item) => item.hasNote).length;
 
     return Card(
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _openBookGroup(group),
+        onTap: onTap ?? () => _openBookGroup(group),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
           child: Row(
@@ -367,12 +468,104 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
               ),
               const SizedBox(width: 8),
               Icon(
-                Icons.chevron_right_rounded,
-                color: colorScheme.onSurfaceVariant,
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.chevron_right_rounded,
+                color:
+                    selected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopGroupDetail(
+    BuildContext context,
+    BookmarkBookGroupData group,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final book = group.book;
+    final chapters = _groupBookmarksByChapter(group.bookmarks);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCover(
+                realCoverUrl:
+                    group.displayState?.displayCover ?? book?.coverUrl,
+                title: group.displayTitle,
+                author: group.displayAuthor,
+                bookId: book?.bookId,
+                sourceId: book?.sourceId,
+                detailUrl: book?.detailUrl,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.displayTitle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      group.displayAuthor,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _DetailTag(text: '${group.bookmarks.length} 条灵感'),
+                        _DetailTag(
+                          text:
+                              '${group.bookmarks.where((item) => item.hasNote).length} 条笔记',
+                        ),
+                        _DetailTag(text: _formatTime(group.latestTime)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final chapter in chapters) ...[
+            Text(
+              chapter.title,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final bookmark in chapter.bookmarks)
+              _BookmarkDetailItem(
+                bookmark: bookmark,
+                subtitle:
+                    _canOpenBookmark(book)
+                        ? _formatTime(bookmark.updatedAt)
+                        : '${_formatTime(bookmark.updatedAt)} · 书籍已移除，无法定位',
+                onTap: () => _openBookmark(bookmark, book),
+                onDelete: () => unawaited(_deleteBookmark(bookmark)),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ],
       ),
     );
   }
@@ -500,6 +693,43 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  List<_BookmarkChapterGroup> _groupBookmarksByChapter(
+    List<Bookmark> bookmarks,
+  ) {
+    if (bookmarks.isEmpty) {
+      return const <_BookmarkChapterGroup>[];
+    }
+    final sorted = [...bookmarks]..sort((a, b) {
+      final indexCompare = a.chapterIndex.compareTo(b.chapterIndex);
+      if (indexCompare != 0) {
+        return indexCompare;
+      }
+      return a.startOffset.compareTo(b.startOffset);
+    });
+
+    final groups = <_BookmarkChapterGroup>[];
+    for (final bookmark in sorted) {
+      final key =
+          bookmark.chapterIndex >= 0
+              ? 'index:${bookmark.chapterIndex}'
+              : 'id:${bookmark.chapterId}';
+      final title =
+          bookmark.chapterIndex >= 0
+              ? '第 ${bookmark.chapterIndex + 1} 章'
+              : '章节 ${bookmark.chapterId}';
+      final current =
+          groups.isNotEmpty && groups.last.key == key ? groups.last : null;
+      if (current != null) {
+        current.bookmarks.add(bookmark);
+      } else {
+        groups.add(
+          _BookmarkChapterGroup(key: key, title: title, bookmarks: [bookmark]),
+        );
+      }
+    }
+    return groups;
   }
 }
 

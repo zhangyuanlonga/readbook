@@ -890,75 +890,44 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     if (!mounted) {
       return;
     }
+    final metrics = AppAdaptiveMetrics.of(context);
+    final content = _StorageDetailsContent(
+      title: title,
+      entries: entries,
+      emptyText: emptyText,
+      formatBytes: _formatBytes,
+    );
+    if (metrics.isMediumUpWindow) {
+      await showDialog<void>(
+        context: context,
+        builder:
+            (context) => Dialog(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 680,
+                  maxHeight: 620,
+                ),
+                child: content,
+              ),
+            ),
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: SizedBox(
-            height:
-                MediaQuery.sizeOf(context).height *
-                (AppAdaptiveMetrics.of(context).isCompactDensity ? 0.82 : 0.72),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child:
-                      entries.isEmpty
-                          ? Center(child: Text(emptyText))
-                          : ListView.separated(
-                            itemCount: entries.length,
-                            separatorBuilder:
-                                (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final entry = entries[index];
-                              return ListTile(
-                                title: Text(
-                                  entry.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle:
-                                    entry.subtitle == null
-                                        ? null
-                                        : Text(
-                                          entry.subtitle!,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                trailing: Text(
-                                  [
-                                    if (entry.trailingLabel != null)
-                                      entry.trailingLabel!,
-                                    _formatBytes(entry.bytes),
-                                  ].join(' · '),
-                                  style: Theme.of(context).textTheme.labelMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              );
-                            },
-                          ),
-                ),
-              ],
+      builder:
+          (context) => SafeArea(
+            child: SizedBox(
+              height:
+                  MediaQuery.sizeOf(context).height *
+                  (AppAdaptiveMetrics.of(context).isCompactDensity
+                      ? 0.82
+                      : 0.72),
+              child: content,
             ),
           ),
-        );
-      },
     );
   }
 
@@ -1008,6 +977,85 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       SnackBar(
         content: Text(clearedCover ? '已清理《$title》的缓存与封面。' : '已清理《$title》的缓存。'),
       ),
+    );
+  }
+}
+
+class _StorageDetailsContent extends StatelessWidget {
+  const _StorageDetailsContent({
+    required this.title,
+    required this.entries,
+    required this.emptyText,
+    required this.formatBytes,
+  });
+
+  final String title;
+  final List<StorageDetailEntry> entries;
+  final String emptyText;
+  final String Function(int bytes) formatBytes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child:
+              entries.isEmpty
+                  ? Center(child: Text(emptyText))
+                  : ListView.separated(
+                    itemCount: entries.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      return ListTile(
+                        title: Text(
+                          entry.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle:
+                            entry.subtitle == null
+                                ? null
+                                : Text(
+                                  entry.subtitle!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                        trailing: Text(
+                          [
+                            if (entry.trailingLabel != null)
+                              entry.trailingLabel!,
+                            formatBytes(entry.bytes),
+                          ].join(' · '),
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      );
+                    },
+                  ),
+        ),
+      ],
     );
   }
 }

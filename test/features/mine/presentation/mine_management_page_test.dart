@@ -25,7 +25,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('还没有标签，点击右上角新增即可。'), findsOneWidget);
+    expect(find.text('还没有标签'), findsOneWidget);
+    expect(find.text('点击右上角新增即可。'), findsOneWidget);
   });
 
   testWidgets('标签管理页在加载超时时显示重试提示', (tester) async {

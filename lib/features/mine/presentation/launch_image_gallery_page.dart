@@ -344,49 +344,12 @@ class _LaunchImageGalleryPageState
                               key: ValueKey('launch_gallery_loading'),
                               child: CircularProgressIndicator(),
                             )
-                            : ListView.builder(
-                              key: const ValueKey('launch_gallery_content'),
-                              padding: EdgeInsets.fromLTRB(
-                                horizontal,
-                                topInset + metrics.contentGap,
-                                horizontal,
-                                metrics.sectionGap + bottomSafe,
-                              ),
-                              itemCount:
-                                  _visibleGalleries.isEmpty
-                                      ? 2
-                                      : _visibleGalleries.length + 1,
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: metrics.contentGap,
-                                    ),
-                                    child: AppFadeSlideTransition(
-                                      child: _buildSearchAndStartupSwitch(
-                                        context,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                if (_visibleGalleries.isEmpty) {
-                                  return AppAnimatedSwitcher(
-                                    child: KeyedSubtree(
-                                      key: const ValueKey(
-                                        'launch_gallery_empty',
-                                      ),
-                                      child: _buildEmptyState(context),
-                                    ),
-                                  );
-                                }
-                                final gallery = _visibleGalleries[index - 1];
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: metrics.contentGap,
-                                  ),
-                                  child: _buildGalleryCard(context, gallery),
-                                );
-                              },
+                            : _buildGalleryContent(
+                              context,
+                              metrics: metrics,
+                              horizontal: horizontal,
+                              topInset: topInset,
+                              bottomSafe: bottomSafe,
                             ),
                   ),
                 ),
@@ -403,6 +366,92 @@ class _LaunchImageGalleryPageState
       icon: Icons.rocket_launch_outlined,
       title: '还没有启动图集',
       description: '点击右上角新增，准备启动页和主题可复用的启动素材。',
+    );
+  }
+
+  Widget _buildGalleryContent(
+    BuildContext context, {
+    required AppAdaptiveMetrics metrics,
+    required double horizontal,
+    required double topInset,
+    required double bottomSafe,
+  }) {
+    final visible = _visibleGalleries;
+    final toolbar = AppFadeSlideTransition(
+      child: _buildSearchAndStartupSwitch(context),
+    );
+    if (visible.isEmpty) {
+      return ListView(
+        key: const ValueKey('launch_gallery_content_empty'),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          topInset + metrics.contentGap,
+          horizontal,
+          metrics.sectionGap + bottomSafe,
+        ),
+        children: [
+          toolbar,
+          SizedBox(height: metrics.contentGap),
+          _buildEmptyState(context),
+        ],
+      );
+    }
+    if (!metrics.isMediumUpWindow) {
+      return ListView.builder(
+        key: const ValueKey('launch_gallery_content'),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          topInset + metrics.contentGap,
+          horizontal,
+          metrics.sectionGap + bottomSafe,
+        ),
+        itemCount: visible.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: metrics.contentGap),
+              child: toolbar,
+            );
+          }
+          return Padding(
+            padding: EdgeInsets.only(bottom: metrics.contentGap),
+            child: _buildGalleryCard(context, visible[index - 1]),
+          );
+        },
+      );
+    }
+    return CustomScrollView(
+      key: const ValueKey('launch_gallery_desktop_grid'),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            topInset + metrics.contentGap,
+            horizontal,
+            metrics.contentGap,
+          ),
+          sliver: SliverToBoxAdapter(child: toolbar),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            0,
+            horizontal,
+            metrics.sectionGap + bottomSafe,
+          ),
+          sliver: SliverGrid.builder(
+            itemCount: visible.length,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: metrics.isExpandedWindow ? 320 : 280,
+              mainAxisExtent: 176,
+              mainAxisSpacing: metrics.contentGap,
+              crossAxisSpacing: metrics.contentGap,
+            ),
+            itemBuilder:
+                (context, index) => _buildGalleryCard(context, visible[index]),
+          ),
+        ),
+      ],
     );
   }
 

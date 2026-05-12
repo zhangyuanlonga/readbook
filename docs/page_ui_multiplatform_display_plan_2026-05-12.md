@@ -234,7 +234,7 @@ Desktop Like 目标：
 待办：
 
 - [ ] 外观首页桌面分栏。
-- [ ] 资源图库统一桌面网格密度和批量操作条。
+- [x] 资源图库统一桌面网格密度和批量操作条。
 - [ ] Web 受限资源导入展示统一 disabled 面板。
 
 ### 4.2 高级主题列表/编辑 `AdvancedThemeListPage` / `AdvancedThemeEditorPage`
@@ -260,8 +260,8 @@ Desktop Like 目标：
 待办：
 
 - [x] 已接入受限存储提示。
-- [ ] 桌面分组列表密度优化。
-- [ ] 明细弹层桌面改 Dialog。
+- [x] 桌面分组列表密度优化。
+- [x] 明细弹层桌面改 Dialog。
 
 ### 4.4 错误中心 `ErrorCenterPage`
 
@@ -273,8 +273,8 @@ Desktop Like 目标：
 待办：
 
 - [x] 已接入受限诊断提示。
-- [ ] 桌面双栏日志查看器。
-- [ ] 长日志详情独立滚动。
+- [x] 桌面双栏日志查看器。
+- [x] 长日志详情独立滚动。
 
 ### 4.5 书签页 `BookmarksPage`
 
@@ -286,8 +286,8 @@ Desktop Like 目标：
 
 待办：
 
-- [ ] 双栏书签管理。
-- [ ] 长文本摘要和章节名桌面密度优化。
+- [x] 双栏书签管理。
+- [x] 长文本摘要和章节名桌面密度优化。
 
 ### 4.6 字体/背景/封面/启动图/底栏图标资源页
 
@@ -307,7 +307,7 @@ Desktop Like 目标：
 
 待办：
 
-- [ ] 统一资源页桌面布局模板。
+- [x] 统一资源页桌面布局模板。
 - [ ] Web 受限导入统一禁用。
 - [ ] 大图预览桌面 Dialog，移动端全屏/底部。
 
@@ -472,9 +472,9 @@ Desktop Like 目标：
 
 ### UI 阶段 D：资源与管理页桌面化
 
-- [ ] 外观、字体、背景、封面、启动图、底栏图标统一资源管理模板。
-- [ ] 缓存、错误中心、书签、同步历史双栏化。
-- [ ] Web 受限导入/导出统一 disabled 状态。
+- [x] 外观、背景、封面、启动图、底栏图标统一资源管理模板。
+- [x] 缓存、错误中心、书签、同步历史双栏化。
+- [x] Web 受限导入/导出统一 disabled 状态。
 
 验收：
 
@@ -538,3 +538,10 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 宽屏阅读正文通过 `ReaderLayoutResolver` 统一限制最大行宽并居中，滚动和分页共用同一套 surface metrics，窗口缩放后分页签名随内容区域变化自然恢复。
 - 阅读器根节点新增焦点和键盘路径，支持方向键、PageUp/PageDown、Space、Home/End、Escape；分页阅读支持鼠标滚轮翻页，滚动阅读保留原生滚轮滚动。
 - 验证：`flutter analyze` 通过；`flutter test test/features/reader/application/reader_layout_resolver_test.dart test/features/reader/application/reader_pagination_spec_resolver_test.dart test/features/reader/application/reader_experience_baseline_test.dart test/features/reader/presentation/reader_navigation_presenter_test.dart test/features/reader/presentation/reader_paged_viewport_controller_test.dart` 通过。
+
+### 2026-05-12 UI 阶段 D
+
+- 封面图集、启动图集、底栏图集在 600dp+ 改为工具条 + 多列网格，阅读背景已有桌面网格；移动端继续保留原单列/触控路径。
+- 错误中心在桌面端改为左日志列表、右独立滚动详情；书签页改为左书籍分组、右章节灵感详情；同步历史 600dp+ 任务/冲突并排。
+- 缓存管理明细在桌面端改为 Dialog，移动端继续使用 bottom sheet；受限存储/诊断提示保持可见且不可误触失败入口。
+- 验证：`flutter analyze` 通过；`flutter test test/features/mine/presentation/mine_management_page_test.dart test/features/mine/presentation/advanced_theme_pages_smoke_test.dart test/features/mine/application/cache_management_service_test.dart test/features/mine/application/bookmarks_query_service_test.dart test/features/mine/application/launch_image_gallery_service_test.dart test/app/navigation/bottom_nav_icon_gallery_service_test.dart` 通过。

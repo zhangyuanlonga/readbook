@@ -16,66 +16,110 @@ class SyncHistoryPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final jobsAsync = ref.watch(syncJobsProvider);
     final conflictsAsync = ref.watch(syncConflictsProvider);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(title: const Text('同步历史')),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: AppLayout.pageContentMaxWidth(context, maxWidth: 760),
-          ),
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              AppAdaptiveMetrics.of(context).pagePadding,
-              AppAdaptiveMetrics.of(context).contentGap,
-              AppAdaptiveMetrics.of(context).pagePadding,
-              AppAdaptiveMetrics.of(context).sectionGap +
-                  MediaQuery.viewPaddingOf(context).bottom,
+            maxWidth: AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: metrics.isMediumUpWindow ? 1120 : 760,
             ),
-            children: [
-              AppFadeSlideTransition(
-                child: _Section(
-                  title: '最近任务',
-                  child: jobsAsync.when(
-                    data: (jobs) {
-                      if (jobs.isEmpty) {
-                        return const Text('当前没有同步任务。');
-                      }
-                      return Column(
-                        children: [
-                          for (final job in jobs.take(20)) _JobTile(job: job),
-                        ],
-                      );
-                    },
-                    error: (error, _) => Text('加载任务失败：$error'),
-                    loading: () => const _LoadingLine('正在加载任务…'),
-                  ),
-                ),
-              ),
-              SizedBox(height: AppAdaptiveMetrics.of(context).contentGap),
-              AppFadeSlideTransition(
-                delay: const Duration(milliseconds: 48),
-                child: _Section(
-                  title: '最近冲突',
-                  child: conflictsAsync.when(
-                    data: (conflicts) {
-                      if (conflicts.isEmpty) {
-                        return const Text('当前没有冲突记录。');
-                      }
-                      return Column(
-                        children: [
-                          for (final conflict in conflicts.take(20))
-                            _ConflictTile(conflict: conflict),
-                        ],
-                      );
-                    },
-                    error: (error, _) => Text('加载冲突失败：$error'),
-                    loading: () => const _LoadingLine('正在加载冲突…'),
-                  ),
-                ),
-              ),
-            ],
           ),
+          child:
+              metrics.isMediumUpWindow
+                  ? Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      metrics.contentGap,
+                      horizontal,
+                      metrics.sectionGap + bottomSafe,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: _buildJobsSection(jobsAsync, scrollBody: true),
+                        ),
+                        SizedBox(width: metrics.contentGap),
+                        Expanded(
+                          child: _buildConflictsSection(
+                            conflictsAsync,
+                            scrollBody: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                  : ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      metrics.contentGap,
+                      horizontal,
+                      metrics.sectionGap + bottomSafe,
+                    ),
+                    children: [
+                      _buildJobsSection(jobsAsync),
+                      SizedBox(height: metrics.contentGap),
+                      _buildConflictsSection(conflictsAsync),
+                    ],
+                  ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJobsSection(
+    AsyncValue<List<SyncJob>> jobsAsync, {
+    bool scrollBody = false,
+  }) {
+    return AppFadeSlideTransition(
+      child: _Section(
+        title: '最近任务',
+        scrollBody: scrollBody,
+        child: jobsAsync.when(
+          data: (jobs) {
+            if (jobs.isEmpty) {
+              return const Text('当前没有同步任务。');
+            }
+            return Column(
+              children: [for (final job in jobs.take(20)) _JobTile(job: job)],
+            );
+          },
+          error: (error, _) => Text('加载任务失败：$error'),
+          loading: () => const _LoadingLine('正在加载任务…'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConflictsSection(
+    AsyncValue<List<SyncConflict>> conflictsAsync, {
+    bool scrollBody = false,
+  }) {
+    return AppFadeSlideTransition(
+      delay: const Duration(milliseconds: 48),
+      child: _Section(
+        title: '最近冲突',
+        scrollBody: scrollBody,
+        child: conflictsAsync.when(
+          data: (conflicts) {
+            if (conflicts.isEmpty) {
+              return const Text('当前没有冲突记录。');
+            }
+            return Column(
+              children: [
+                for (final conflict in conflicts.take(20))
+                  _ConflictTile(conflict: conflict),
+              ],
+            );
+          },
+          error: (error, _) => Text('加载冲突失败：$error'),
+          loading: () => const _LoadingLine('正在加载冲突…'),
         ),
       ),
     );
@@ -83,10 +127,15 @@ class SyncHistoryPage extends ConsumerWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
+  const _Section({
+    required this.title,
+    required this.child,
+    this.scrollBody = false,
+  });
 
   final String title;
   final Widget child;
+  final bool scrollBody;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +153,10 @@ class _Section extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             SizedBox(height: metrics.contentGap),
-            child,
+            if (scrollBody)
+              Expanded(child: SingleChildScrollView(child: child))
+            else
+              child,
           ],
         ),
       ),

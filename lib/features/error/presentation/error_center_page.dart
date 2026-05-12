@@ -26,6 +26,7 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
   bool _includeInfoLogs = false;
   bool _isExporting = false;
   ImportExportTaskStatus? _taskStatus;
+  int _selectedEntryIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -88,61 +89,32 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
                         )
                         .toList(growable: false);
 
+                    if (_selectedEntryIndex >= entries.length) {
+                      _selectedEntryIndex =
+                          entries.isEmpty ? 0 : entries.length - 1;
+                    }
+
                     return AppFadeSlideTransition(
-                      child: ListView(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          metrics.sectionGap,
-                          horizontal,
-                          metrics.sectionGap + bottomSafe,
-                        ),
-                        children: [
-                          Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(metrics.cardPadding),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  SwitchListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('包含 INFO 日志'),
-                                    value: _includeInfoLogs,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _includeInfoLogs = value;
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    '日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。',
-                                  ),
-                                ],
+                      child:
+                          metrics.isMediumUpWindow
+                              ? _buildDesktopLogViewer(
+                                context,
+                                allEntries: allEntries,
+                                entries: entries,
+                                supportsManagedFileStorage:
+                                    capabilities.supportsManagedFileStorage,
+                                horizontal: horizontal,
+                                bottomSafe: bottomSafe,
+                              )
+                              : _buildMobileLogList(
+                                context,
+                                allEntries: allEntries,
+                                entries: entries,
+                                supportsManagedFileStorage:
+                                    capabilities.supportsManagedFileStorage,
+                                horizontal: horizontal,
+                                bottomSafe: bottomSafe,
                               ),
-                            ),
-                          ),
-                          SizedBox(height: metrics.contentGap),
-                          if (!capabilities.supportsManagedFileStorage) ...[
-                            _buildDiagnosticCapabilityNotice(),
-                            SizedBox(height: metrics.contentGap),
-                          ],
-                          if (entries.isEmpty)
-                            const AppEmptyStateCard(
-                              icon: Icons.event_note_outlined,
-                              title: '暂无错误日志',
-                              description: '当前没有可展示的错误日志记录。',
-                              compact: true,
-                            )
-                          else
-                            ...entries.map(_buildLogCard),
-                        ],
-                      ),
                     );
                   },
                 ),
@@ -180,6 +152,253 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLogList(
+    BuildContext context, {
+    required List<AppLogEntry> allEntries,
+    required List<AppLogEntry> entries,
+    required bool supportsManagedFileStorage,
+    required double horizontal,
+    required double bottomSafe,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        metrics.sectionGap,
+        horizontal,
+        metrics.sectionGap + bottomSafe,
+      ),
+      children: [
+        _buildLogSummaryCard(context, allEntries: allEntries, entries: entries),
+        SizedBox(height: metrics.contentGap),
+        if (!supportsManagedFileStorage) ...[
+          _buildDiagnosticCapabilityNotice(),
+          SizedBox(height: metrics.contentGap),
+        ],
+        if (entries.isEmpty)
+          const AppEmptyStateCard(
+            icon: Icons.event_note_outlined,
+            title: '暂无错误日志',
+            description: '当前没有可展示的错误日志记录。',
+            compact: true,
+          )
+        else
+          ...entries.map(_buildLogCard),
+      ],
+    );
+  }
+
+  Widget _buildDesktopLogViewer(
+    BuildContext context, {
+    required List<AppLogEntry> allEntries,
+    required List<AppLogEntry> entries,
+    required bool supportsManagedFileStorage,
+    required double horizontal,
+    required double bottomSafe,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final selected =
+        entries.isEmpty
+            ? null
+            : entries[_selectedEntryIndex.clamp(0, entries.length - 1)];
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        metrics.sectionGap,
+        horizontal,
+        metrics.sectionGap + bottomSafe,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 340,
+            child: Column(
+              children: [
+                _buildLogSummaryCard(
+                  context,
+                  allEntries: allEntries,
+                  entries: entries,
+                  compact: true,
+                ),
+                if (!supportsManagedFileStorage) ...[
+                  SizedBox(height: metrics.contentGap),
+                  _buildDiagnosticCapabilityNotice(),
+                ],
+                SizedBox(height: metrics.contentGap),
+                Expanded(
+                  child:
+                      entries.isEmpty
+                          ? const AppEmptyStateCard(
+                            icon: Icons.event_note_outlined,
+                            title: '暂无错误日志',
+                            description: '当前没有可展示的错误日志记录。',
+                            compact: true,
+                          )
+                          : Card(
+                            clipBehavior: Clip.antiAlias,
+                            child: ListView.separated(
+                              itemCount: entries.length,
+                              separatorBuilder:
+                                  (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final entry = entries[index];
+                                return _buildLogListTile(
+                                  context,
+                                  entry: entry,
+                                  selected: index == _selectedEntryIndex,
+                                  onTap:
+                                      () => setState(() {
+                                        _selectedEntryIndex = index;
+                                      }),
+                                );
+                              },
+                            ),
+                          ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child:
+                selected == null
+                    ? const AppEmptyStateCard(
+                      icon: Icons.article_outlined,
+                      title: '选择一条日志',
+                      description: '左侧列表会展示可诊断的日志记录。',
+                      compact: true,
+                    )
+                    : _buildLogDetailPanel(context, selected),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogSummaryCard(
+    BuildContext context, {
+    required List<AppLogEntry> allEntries,
+    required List<AppLogEntry> entries,
+    bool compact = false,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(metrics.cardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            SizedBox(height: compact ? 6 : 10),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: compact,
+              title: const Text('包含 INFO 日志'),
+              value: _includeInfoLogs,
+              onChanged: (value) {
+                setState(() {
+                  _includeInfoLogs = value;
+                  _selectedEntryIndex = 0;
+                });
+              },
+            ),
+            if (!compact) ...[
+              const SizedBox(height: 8),
+              const Text('日志会保存在本地，可导出为文本并通过微信、QQ、邮件发送给开发者。'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogListTile(
+    BuildContext context, {
+    required AppLogEntry entry,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final levelColor = _levelColor(context, entry.level);
+    return ListTile(
+      selected: selected,
+      selectedTileColor: colorScheme.primaryContainer.withValues(alpha: 0.35),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      leading: Icon(Icons.circle, size: 10, color: levelColor),
+      title: Text(entry.message, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        '${entry.level.name.toUpperCase()} · ${entry.timestamp.toLocal()}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildLogDetailPanel(BuildContext context, AppLogEntry entry) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final levelColor = _levelColor(context, entry.level);
+    final details = entry.details.entries.toList(growable: false)
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListView(
+        padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding),
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: levelColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  entry.level.name.toUpperCase(),
+                  style: TextStyle(
+                    color: levelColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  entry.timestamp.toLocal().toString(),
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SelectableText(
+            entry.message,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 14),
+          if (details.isEmpty)
+            Text('无附加上下文', style: Theme.of(context).textTheme.bodySmall)
+          else
+            for (final item in details)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SelectableText('${item.key}: ${item.value}'),
+              ),
         ],
       ),
     );
