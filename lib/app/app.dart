@@ -42,29 +42,30 @@ class App extends ConsumerWidget {
     final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
     final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
     final interfaceFontWeight = ref.watch(appInterfaceFontWeightProvider);
-    final activeAdvancedTheme =
-        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final activeThemeAppearanceSnapshot = ref.watch(
+      activeThemeAppearanceSnapshotProvider,
+    );
 
     final lightScheme = buildAppLightColorScheme(seedColor);
     final darkScheme = buildAppDarkColorScheme(seedColor);
     final lightAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
       lightScheme,
-      activeAdvancedTheme?.lightConfig,
+      activeThemeAppearanceSnapshot?.lightConfig,
     );
     final darkAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
       darkScheme,
-      activeAdvancedTheme?.darkConfig,
+      activeThemeAppearanceSnapshot?.darkConfig,
     );
     final lightAdvancedBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
       lightScheme,
-      activeAdvancedTheme?.lightConfig,
+      activeThemeAppearanceSnapshot?.lightConfig,
     );
     final darkAdvancedBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
       darkScheme,
-      activeAdvancedTheme?.darkConfig,
+      activeThemeAppearanceSnapshot?.darkConfig,
     );
     final themeBoundAppFontFamily =
-        activeAdvancedTheme?.appInterfaceFontFamilyKey?.trim();
+        activeThemeAppearanceSnapshot?.appInterfaceFontFamilyKey?.trim();
     final fontFamily =
         themeBoundAppFontFamily != null && themeBoundAppFontFamily.isNotEmpty
             ? themeBoundAppFontFamily

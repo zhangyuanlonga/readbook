@@ -15,6 +15,7 @@ import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/managed_asset.dart';
+import 'active_theme_appearance_snapshot.dart';
 import 'advanced_theme_resource_reference_service.dart';
 import 'cover_gallery_service.dart';
 import 'launch_image_gallery_service.dart';
@@ -23,6 +24,8 @@ import 'reader_background_service.dart';
 
 class AdvancedThemeService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
+  static const String _activeThemeAppearanceSnapshotKey =
+      'app.advancedThemes.activeAppearanceSnapshot';
   static const String _colorExportType = 'advanced_theme_colors';
   static const int _legacyColorExportVersion = 1;
   static const int _colorExportVersion = 2;
@@ -56,6 +59,24 @@ class AdvancedThemeService {
       return null;
     }
     return raw;
+  }
+
+  static ActiveThemeAppearanceSnapshot? readActiveThemeAppearanceSnapshot(
+    SharedPreferences prefs,
+  ) {
+    final raw = prefs.getString(_activeThemeAppearanceSnapshotKey)?.trim();
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      return ActiveThemeAppearanceSnapshot.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<List<AppAdvancedTheme>> loadThemes() async {
@@ -272,9 +293,22 @@ class AdvancedThemeService {
     final normalized = themeId?.trim();
     if (normalized == null || normalized.isEmpty) {
       await prefs.remove(_activeThemeIdKey);
+      await saveActiveThemeAppearanceSnapshot(null);
+      await LaunchImageGalleryService(
+        preferences: prefs,
+        assetStore: _assetStore,
+      ).syncStartupSnapshotFromCurrentConfig();
       return;
     }
     await prefs.setString(_activeThemeIdKey, normalized);
+    final theme = await loadThemeById(normalized);
+    await saveActiveThemeAppearanceSnapshot(
+      theme == null ? null : ActiveThemeAppearanceSnapshot.fromTheme(theme),
+    );
+    await LaunchImageGalleryService(
+      preferences: prefs,
+      assetStore: _assetStore,
+    ).syncStartupSnapshotFromCurrentConfig();
   }
 
   Future<AppAdvancedTheme?> loadActiveTheme() async {
@@ -297,6 +331,26 @@ class AdvancedThemeService {
       }
     }
     return null;
+  }
+
+  Future<ActiveThemeAppearanceSnapshot?>
+  loadActiveThemeAppearanceSnapshot() async {
+    final prefs = await _preferencesFuture;
+    return readActiveThemeAppearanceSnapshot(prefs);
+  }
+
+  Future<void> saveActiveThemeAppearanceSnapshot(
+    ActiveThemeAppearanceSnapshot? snapshot,
+  ) async {
+    final prefs = await _preferencesFuture;
+    if (snapshot == null) {
+      await prefs.remove(_activeThemeAppearanceSnapshotKey);
+      return;
+    }
+    await prefs.setString(
+      _activeThemeAppearanceSnapshotKey,
+      jsonEncode(snapshot.toJson()),
+    );
   }
 
   Future<List<AdvancedThemeSummary>> hydrateThemeSummaryPreviewPaths(
@@ -359,6 +413,16 @@ class AdvancedThemeService {
       updated.add(normalized.copyWith(createdAt: now));
     }
     await saveThemes(updated);
+    final activeThemeId = await loadActiveThemeId();
+    if (activeThemeId == normalized.id) {
+      await saveActiveThemeAppearanceSnapshot(
+        ActiveThemeAppearanceSnapshot.fromTheme(normalized),
+      );
+      await LaunchImageGalleryService(
+        preferences: await _preferencesFuture,
+        assetStore: _assetStore,
+      ).syncStartupSnapshotFromCurrentConfig();
+    }
     return normalized;
   }
 

@@ -9,8 +9,10 @@ import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_ser
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
+import 'package:shuxiang_reading_next/domain/entities/launch_image_gallery.dart';
 import 'package:shuxiang_reading_next/features/mine/application/cover_gallery_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_service.dart';
+import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -215,6 +217,146 @@ void main() {
     expect(themes, hasLength(1));
     expect(themes.first.launchImageGalleryId, 'launch_gallery_a');
   });
+
+  test(
+    'persists active theme appearance snapshot when theme is applied',
+    () async {
+      final assetStore = await _createAssetStore();
+      final prefs = await SharedPreferences.getInstance();
+      final service = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final theme = AppAdvancedTheme(
+        id: 'theme_appearance_snapshot',
+        name: '外观快照主题',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(
+          colors: AppAdvancedThemeColors(primaryColorValue: 0xFF336699),
+        ),
+        darkConfig: AppAdvancedThemeModeConfig(
+          colors: AppAdvancedThemeColors(primaryColorValue: 0xFF112233),
+        ),
+        appInterfaceFontFamilyKey: 'font_ui_snapshot',
+      );
+
+      await service.saveTheme(theme);
+      await service.saveActiveThemeId(theme.id);
+
+      final snapshot = await service.loadActiveThemeAppearanceSnapshot();
+      expect(snapshot, isNotNull);
+      expect(snapshot!.appInterfaceFontFamilyKey, 'font_ui_snapshot');
+      expect(snapshot.lightConfig?.colors.primaryColorValue, 0xFF336699);
+      expect(snapshot.darkConfig?.colors.primaryColorValue, 0xFF112233);
+    },
+  );
+
+  test('updates startup snapshot when active theme is applied', () async {
+    final assetStore = await _createAssetStore();
+    final prefs = await SharedPreferences.getInstance();
+    final service = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    final launchService = LaunchImageGalleryService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    final tempDir = await Directory.systemTemp.createTemp(
+      'active_theme_launch_snapshot_',
+    );
+    addTearDown(() => tempDir.delete(recursive: true));
+    final existingFile = File('${tempDir.path}/launch_theme.png');
+    await existingFile.writeAsBytes(const <int>[1, 3, 5], flush: true);
+    final gallery = LaunchImageGallery(
+      id: 'launch_gallery_theme_apply',
+      name: '主题应用图集',
+      createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+      imagePaths: <String>[existingFile.path],
+    );
+    await launchService.saveGalleries(<LaunchImageGallery>[gallery]);
+    final theme = AppAdvancedTheme(
+      id: 'theme_apply_snapshot',
+      name: '应用快照主题',
+      createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
+      launchImageGalleryId: gallery.id,
+    );
+
+    await service.saveTheme(theme);
+    await service.saveActiveThemeId(theme.id);
+
+    final snapshot = await launchService.loadStartupSnapshot();
+    expect(snapshot.themeId, theme.id);
+    expect(snapshot.galleryId, gallery.id);
+    expect(snapshot.resolvedImagePath, existingFile.path);
+  });
+
+  test(
+    'updates startup snapshot when active theme launch gallery changes',
+    () async {
+      final assetStore = await _createAssetStore();
+      final prefs = await SharedPreferences.getInstance();
+      final service = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final launchService = LaunchImageGalleryService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final tempDir = await Directory.systemTemp.createTemp(
+        'active_theme_launch_snapshot_update_',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+      final firstFile = File('${tempDir.path}/launch_first.png');
+      final secondFile = File('${tempDir.path}/launch_second.png');
+      await firstFile.writeAsBytes(const <int>[1, 1, 1], flush: true);
+      await secondFile.writeAsBytes(const <int>[2, 2, 2], flush: true);
+      final firstGallery = LaunchImageGallery(
+        id: 'launch_gallery_first',
+        name: '图集一',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        imagePaths: <String>[firstFile.path],
+      );
+      final secondGallery = LaunchImageGallery(
+        id: 'launch_gallery_second',
+        name: '图集二',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        imagePaths: <String>[secondFile.path],
+      );
+      await launchService.saveGalleries(<LaunchImageGallery>[
+        firstGallery,
+        secondGallery,
+      ]);
+      final theme = AppAdvancedTheme(
+        id: 'theme_update_snapshot',
+        name: '更新快照主题',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+        launchImageGalleryId: firstGallery.id,
+      );
+
+      await service.saveTheme(theme);
+      await service.saveActiveThemeId(theme.id);
+      await service.saveTheme(
+        theme.copyWith(launchImageGalleryId: secondGallery.id),
+      );
+
+      final snapshot = await launchService.loadStartupSnapshot();
+      expect(snapshot.themeId, theme.id);
+      expect(snapshot.galleryId, secondGallery.id);
+      expect(snapshot.resolvedImagePath, secondFile.path);
+    },
+  );
 
   test(
     'loads theme by id without requiring full theme scan by caller',

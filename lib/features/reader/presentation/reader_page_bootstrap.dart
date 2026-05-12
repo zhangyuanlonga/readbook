@@ -345,7 +345,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         appThemeMode: appThemeMode,
         platformBrightness: platformBrightness,
       ).copyWith(autoReadEnabled: false);
-      _debugLogReaderBackground('bootstrap', bootSettings);
       if (mounted) {
         setState(() {
           _persistedReaderSettings = normalizedSettings;

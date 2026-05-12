@@ -256,6 +256,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   Future<void> _loadMembershipData() async {
     try {
       final entitlement = await _membershipService.fetchEntitlement();
+      final userId = _session?.userId?.trim() ?? '';
+      if (userId.isNotEmpty) {
+        await ref
+            .read(remoteAccessSnapshotServiceProvider)
+            .saveMergedMembership(userId: userId, entitlement: entitlement);
+      }
       MembershipSeatSyncResult? seatSyncResult;
       String? transientError;
       var seats = const <MembershipDeviceSeat>[];

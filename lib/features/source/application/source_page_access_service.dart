@@ -1,47 +1,60 @@
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
+import '../../mine/application/remote_access_snapshot_service.dart';
 
 class SourcePageFeatureAccess {
   const SourcePageFeatureAccess({
     required this.canAccessSourcePage,
     required this.sourceImportLimit,
+    required this.shouldRefreshRemoteAccess,
   });
 
   final bool canAccessSourcePage;
   final int sourceImportLimit;
+  final bool shouldRefreshRemoteAccess;
 }
 
 class SourcePageAccessService {
   SourcePageAccessService({
     required AuthSessionStore authSessionStore,
     required MobileFeatureService mobileFeatureService,
+    required RemoteAccessSnapshotService remoteAccessSnapshotService,
   }) : _authSessionStore = authSessionStore,
-       _mobileFeatureService = mobileFeatureService;
+       _mobileFeatureService = mobileFeatureService,
+       _remoteAccessSnapshotService = remoteAccessSnapshotService;
 
   final AuthSessionStore _authSessionStore;
   final MobileFeatureService _mobileFeatureService;
-  SourcePageFeatureAccess? _cachedAccess;
+  final RemoteAccessSnapshotService _remoteAccessSnapshotService;
 
   Future<SourcePageFeatureAccess> loadFeatureAccess({
     bool refreshRemote = true,
   }) async {
-    if (!refreshRemote) {
-      return _cachedAccess ?? _defaultAccess;
-    }
     final session = await _authSessionStore.getSession();
+    if (!refreshRemote) {
+      final snapshot = await _loadSnapshot(session?.userId);
+      return _snapshotToAccess(snapshot);
+    }
     final modules = await (session == null
             ? _mobileFeatureService.fetchPublicModules()
             : _mobileFeatureService.fetchMyModules())
         .timeout(const Duration(seconds: 5));
     final sourceEntry = _findFeatureModule(modules, 'source_entry');
     final sourceImport = _findFeatureModule(modules, 'source_import');
-    final access = SourcePageFeatureAccess(
+    if (session?.userId?.trim().isNotEmpty ?? false) {
+      await _remoteAccessSnapshotService.saveMergedModules(
+        userId: session!.userId!.trim(),
+        modules: modules,
+      );
+      final snapshot = await _loadSnapshot(session.userId);
+      return _snapshotToAccess(snapshot);
+    }
+    return SourcePageFeatureAccess(
       canAccessSourcePage: _isSourceEntryAccessible(sourceEntry),
       sourceImportLimit: sourceImport?.quotaLimit ?? 10,
+      shouldRefreshRemoteAccess: false,
     );
-    _cachedAccess = access;
-    return access;
   }
 
   bool canAddSource({
@@ -92,6 +105,26 @@ class SourcePageAccessService {
     return const SourcePageFeatureAccess(
       canAccessSourcePage: true,
       sourceImportLimit: 10,
+      shouldRefreshRemoteAccess: true,
+    );
+  }
+
+  Future<RemoteAccessSnapshot?> _loadSnapshot(String? userId) async {
+    final normalizedUserId = userId?.trim() ?? '';
+    if (normalizedUserId.isEmpty) {
+      return null;
+    }
+    return _remoteAccessSnapshotService.load(normalizedUserId);
+  }
+
+  SourcePageFeatureAccess _snapshotToAccess(RemoteAccessSnapshot? snapshot) {
+    if (snapshot == null) {
+      return _defaultAccess;
+    }
+    return SourcePageFeatureAccess(
+      canAccessSourcePage: snapshot.showSourceEntry,
+      sourceImportLimit: snapshot.sourceImportLimit,
+      shouldRefreshRemoteAccess: !snapshot.isFresh(),
     );
   }
 }

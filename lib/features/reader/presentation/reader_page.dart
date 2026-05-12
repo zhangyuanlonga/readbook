@@ -400,7 +400,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _readerBatteryReadFailed = false;
   bool _isSystemBrightnessOverrideActive = false;
   Future<bool>? _iosSimulatorCheck;
-  bool _hasTriggeredDebugSimulatorCurlDemo = false;
   int _autoReadTaskToken = 0;
   int get _chapterContentRequestToken =>
       _readerSessionController.chapterContentGeneration;
@@ -527,7 +526,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     milliseconds: 2600,
   );
   static const Duration _kReaderSnackDedupWindow = Duration(milliseconds: 900);
-  static const bool _kDebugEnableSimulatorCurlDemo = false;
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
   static const int _kSwitchSourceScoreStep = 6;
@@ -1406,22 +1404,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return alpha * 0.18;
   }
 
-  void _debugLogReaderBackground(String tag, ReaderSettings settings) {
-    final raw = settings.backgroundImageBase64?.trim();
-    final hasBackgroundImage = raw != null && raw.isNotEmpty;
-    final isManaged = _isManagedBackgroundPath(raw);
-    debugPrint(
-      '[reader-bg][$tag] image=$raw '
-      'hasImage=$hasBackgroundImage '
-      'isManaged=$isManaged '
-      'style=${settings.backgroundStyle.name} '
-      'tone=${settings.backgroundTone.name} '
-      'mode=${settings.themeMode.name} '
-      'brightness=${settings.brightness.toStringAsFixed(3)} '
-      'overlayAlpha=${_readerBrightnessOverlayAlpha().toStringAsFixed(3)}',
-    );
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) =>
       _handleReaderAppLifecycleState(state);
@@ -1441,9 +1423,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Decoration _buildReaderBackgroundDecoration(_ReaderThemeColors colors) =>
       _buildReaderBackgroundDecorationImpl(colors);
-
-  bool _isManagedBackgroundPath(String? value) =>
-      _isManagedBackgroundPathImpl(value);
 
   bool _isPresetBackgroundValue(String? value) =>
       _isPresetBackgroundValueImpl(value);
@@ -2522,39 +2501,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scheduleProgressSave();
   }
 
-  Future<void> _debugMaybeTriggerSimulatorCurlDemo() async {
-    if (!_kDebugEnableSimulatorCurlDemo || !kDebugMode) {
-      return;
-    }
-    if (_hasTriggeredDebugSimulatorCurlDemo) {
-      return;
-    }
-    if (defaultTargetPlatform != TargetPlatform.iOS || kIsWeb) {
-      return;
-    }
-    _iosSimulatorCheck ??= _loadIsIosSimulator();
-    final isSimulator = await _iosSimulatorCheck!;
-    if (!mounted || !isSimulator) {
-      return;
-    }
-    if (_currentViewportKind != ReaderModeViewportKind.textPaged) {
-      return;
-    }
-    if (_currentPagedAnimationStyle() != ReaderPageAnimationStyle.curl) {
-      return;
-    }
-    if (_currentPagedPageCount < 2) {
-      return;
-    }
-    _hasTriggeredDebugSimulatorCurlDemo = true;
-    Future<void>.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted) {
-        return;
-      }
-      unawaited(_autoTurnCurlPage(1));
-    });
-  }
-
   void _ensurePagination({required ReaderPaginationSpec spec}) {
     if (!mounted || !_isTextPagedViewport) {
       return;
@@ -2615,7 +2561,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _resetPagedTransitionState();
           _resetCurlAnimationState();
         });
-        unawaited(_debugMaybeTriggerSimulatorCurlDemo());
         return;
       }
     }
@@ -2819,7 +2764,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ),
           );
         }
-        unawaited(_debugMaybeTriggerSimulatorCurlDemo());
       }
     }
     return;

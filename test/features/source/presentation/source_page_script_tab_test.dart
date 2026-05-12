@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
+import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
 import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
 import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
@@ -212,7 +213,6 @@ export default {
       expect(find.text('单独站点源'), findsNothing);
       await tester.pump(const Duration(milliseconds: 350));
     });
-
   });
 }
 
@@ -245,7 +245,10 @@ class _FakeSourcePageAccessService extends SourcePageAccessService {
   _FakeSourcePageAccessService()
     : super(
         authSessionStore: AuthSessionStore(),
-        mobileFeatureService: MobileFeatureService(baseUrl: 'https://example.com'),
+        mobileFeatureService: MobileFeatureService(
+          baseUrl: 'https://example.com',
+        ),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(),
       );
 
   @override
@@ -255,6 +258,7 @@ class _FakeSourcePageAccessService extends SourcePageAccessService {
     return const SourcePageFeatureAccess(
       canAccessSourcePage: true,
       sourceImportLimit: 10,
+      shouldRefreshRemoteAccess: false,
     );
   }
 }
@@ -272,7 +276,9 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     }
 
     List<String> extractDomains() {
-      final match = RegExp(r"domains\s*:\s*\[([^\]]*)\]").firstMatch(sourceCode);
+      final match = RegExp(
+        r"domains\s*:\s*\[([^\]]*)\]",
+      ).firstMatch(sourceCode);
       final block = match?.group(1) ?? '';
       return RegExp("['\"]([^'\"]+)['\"]")
           .allMatches(block)

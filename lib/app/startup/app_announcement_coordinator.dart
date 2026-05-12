@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../../domain/entities/announcement.dart';
 import '../../features/announcement/application/announcement_read_state_service.dart';
 import '../../features/announcement/application/announcement_service.dart';
+import 'startup_task_gate_service.dart';
 
 typedef StartupAnnouncementPresenter = void Function(Announcement announcement);
 
@@ -12,12 +13,15 @@ class AppAnnouncementCoordinator {
   AppAnnouncementCoordinator({
     AnnouncementService? announcementService,
     AnnouncementReadStateService? announcementReadStateService,
+    StartupTaskGateService? taskGateService,
   }) : _announcementService = announcementService ?? AnnouncementService(),
        _announcementReadStateService =
-           announcementReadStateService ?? AnnouncementReadStateService();
+           announcementReadStateService ?? AnnouncementReadStateService(),
+       _taskGateService = taskGateService ?? StartupTaskGateService();
 
   final AnnouncementService _announcementService;
   final AnnouncementReadStateService _announcementReadStateService;
+  final StartupTaskGateService _taskGateService;
 
   bool _hasShownStartupAnnouncement = false;
   bool _startupAnnouncementScheduled = false;
@@ -76,6 +80,12 @@ class AppAnnouncementCoordinator {
     required BuildContext? Function() currentNavigatorContext,
     required StartupAnnouncementPresenter presentAnnouncement,
   }) async {
+    final shouldRun = await _taskGateService.claimDailyRun(
+      'startup_announcement',
+    );
+    if (!shouldRun) {
+      return;
+    }
     Announcement? latest;
     try {
       latest = await _announcementService.fetchLatestAnnouncement();

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/composition/app_providers.dart' as app_providers;
 import '../../core/auth/auth_session_store.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
+import '../mine/application/remote_access_snapshot_service.dart';
 import 'application/source_check_service.dart';
 import 'application/source_health_service.dart';
 import 'application/source_login_browser_service.dart';
@@ -72,6 +73,7 @@ final sourcePageAccessServiceProvider = Provider<SourcePageAccessService>((
   return SourcePageAccessService(
     authSessionStore: ref.watch(sourceAuthSessionStoreProvider),
     mobileFeatureService: ref.watch(sourceMobileFeatureServiceProvider),
+    remoteAccessSnapshotService: RemoteAccessSnapshotService(),
   );
 });
 

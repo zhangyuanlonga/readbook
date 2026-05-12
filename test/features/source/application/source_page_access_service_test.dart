@@ -4,6 +4,7 @@ import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
+import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_page_access_service.dart';
 
 void main() {
@@ -22,11 +23,15 @@ void main() {
     final service = SourcePageAccessService(
       authSessionStore: sessionStore,
       mobileFeatureService: featureService,
+      remoteAccessSnapshotService: RemoteAccessSnapshotService(
+        preferences: prefs,
+      ),
     );
 
     final access = await service.loadFeatureAccess(refreshRemote: true);
     expect(access.canAccessSourcePage, isTrue);
     expect(access.sourceImportLimit, 12);
+    expect(access.shouldRefreshRemoteAccess, isFalse);
     expect(
       service.remainingSourceImportSlots(
         sourceImportLimit: access.sourceImportLimit,
@@ -56,12 +61,16 @@ void main() {
     final service = SourcePageAccessService(
       authSessionStore: sessionStore,
       mobileFeatureService: featureService,
+      remoteAccessSnapshotService: RemoteAccessSnapshotService(
+        preferences: prefs,
+      ),
     );
 
     final access = await service.loadFeatureAccess(refreshRemote: false);
 
     expect(access.canAccessSourcePage, isTrue);
     expect(access.sourceImportLimit, 10);
+    expect(access.shouldRefreshRemoteAccess, isTrue);
     expect(featureService.fetchMyModulesCount, 0);
   });
 }

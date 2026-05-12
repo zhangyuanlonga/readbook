@@ -274,6 +274,9 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (snapshot.session == null) {
       return;
     }
+    if (!refreshRemote && snapshot.shouldRefreshRemoteAccess) {
+      unawaited(_reloadSession(showLoading: false, refreshRemote: true));
+    }
   }
 
   Future<void> _handleAvatarTap(BuildContext context) async {

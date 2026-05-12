@@ -1,6 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../features/mine/application/advanced_theme_service.dart';
 import '../features/mine/application/launch_image_gallery_service.dart';
 
 class StartupArtworkStore {
@@ -25,21 +24,16 @@ class StartupArtworkStore {
     _isPriming = true;
     _revision += 1;
     try {
-      final launchImageGalleryService = LaunchImageGalleryService(
-        preferences: preferences,
-      );
-      if (!await launchImageGalleryService.loadStartupEnabled()) {
-        _primedDisabled = true;
+      if (_primedDisabled) {
         _primedImagePath = null;
         return;
       }
+      final launchImageGalleryService = LaunchImageGalleryService(
+        preferences: preferences,
+      );
       _primedDisabled = false;
-      final activeTheme =
-          await AdvancedThemeService(
-            preferences: preferences,
-          ).loadActiveTheme();
-      final resolved = await launchImageGalleryService
-          .loadLaunchImagePathForGallery(activeTheme?.launchImageGalleryId);
+      final resolved =
+          await launchImageGalleryService.loadStartupSnapshotPath();
       final normalized = resolved?.trim() ?? '';
       _primedImagePath = normalized.isEmpty ? null : normalized;
     } catch (_) {

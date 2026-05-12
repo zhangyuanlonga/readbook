@@ -7,6 +7,7 @@ import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
+import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 
 void main() {
   setUp(() {
@@ -30,6 +31,9 @@ void main() {
         authSessionStore: store,
         mobileFeatureService: _FakeMobileFeatureService(),
         membershipService: _FakeMembershipService(),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(
+          preferences: prefs,
+        ),
       );
 
       final snapshot = await service.loadSession(refreshRemote: true);
@@ -39,6 +43,7 @@ void main() {
       expect(snapshot.hasThemeCustom, isTrue);
       expect(snapshot.sourceImportLimit, 88);
       expect(snapshot.isRemoteAccessResolved, isTrue);
+      expect(snapshot.shouldRefreshRemoteAccess, isFalse);
     },
   );
 
@@ -47,6 +52,7 @@ void main() {
       authSessionStore: AuthSessionStore(),
       mobileFeatureService: _FakeMobileFeatureService(),
       membershipService: _FakeMembershipService(),
+      remoteAccessSnapshotService: RemoteAccessSnapshotService(),
     );
 
     await service.persistLayoutMode(storageKey: 'layout', value: 'grid');
@@ -70,6 +76,9 @@ void main() {
       authSessionStore: store,
       mobileFeatureService: featureService,
       membershipService: membershipService,
+      remoteAccessSnapshotService: RemoteAccessSnapshotService(
+        preferences: prefs,
+      ),
     );
 
     final refreshed = await service.loadSession(refreshRemote: true);
@@ -80,6 +89,7 @@ void main() {
     expect(cached.showSourceEntry, isTrue);
     expect(cached.sourceImportLimit, 88);
     expect(cached.isRemoteAccessResolved, isTrue);
+    expect(cached.shouldRefreshRemoteAccess, isFalse);
     expect(featureService.fetchCount, 1);
     expect(membershipService.fetchCount, 1);
   });

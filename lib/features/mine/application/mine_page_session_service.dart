@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -7,10 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
-import '../../../core/mobile_features/mobile_feature_module.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
+import 'remote_access_snapshot_service.dart';
 
 class MinePageSessionSnapshot {
   const MinePageSessionSnapshot({
@@ -21,6 +19,7 @@ class MinePageSessionSnapshot {
     required this.hasThemeCustom,
     required this.sourceImportLimit,
     required this.isRemoteAccessResolved,
+    required this.shouldRefreshRemoteAccess,
   });
 
   final AuthSession? session;
@@ -30,6 +29,7 @@ class MinePageSessionSnapshot {
   final bool hasThemeCustom;
   final int sourceImportLimit;
   final bool isRemoteAccessResolved;
+  final bool shouldRefreshRemoteAccess;
 }
 
 class MinePageSessionPriming {
@@ -51,13 +51,16 @@ class MinePageSessionService {
     required AuthSessionStore authSessionStore,
     required MobileFeatureService mobileFeatureService,
     required MembershipService membershipService,
+    required RemoteAccessSnapshotService remoteAccessSnapshotService,
   }) : _authSessionStore = authSessionStore,
        _mobileFeatureService = mobileFeatureService,
-       _membershipService = membershipService;
+       _membershipService = membershipService,
+       _remoteAccessSnapshotService = remoteAccessSnapshotService;
 
   final AuthSessionStore _authSessionStore;
   final MobileFeatureService _mobileFeatureService;
   final MembershipService _membershipService;
+  final RemoteAccessSnapshotService _remoteAccessSnapshotService;
 
   Future<MinePageSessionSnapshot> loadSession({
     bool refreshRemote = true,
@@ -72,6 +75,7 @@ class MinePageSessionService {
         hasThemeCustom: false,
         sourceImportLimit: 10,
         isRemoteAccessResolved: true,
+        shouldRefreshRemoteAccess: false,
       );
     }
 
@@ -80,7 +84,7 @@ class MinePageSessionService {
     final cachedRemoteSnapshot =
         normalizedUserId.isEmpty
             ? null
-            : await _readRemoteSnapshotCache(normalizedUserId);
+            : await _remoteAccessSnapshotService.load(normalizedUserId);
     if (!refreshRemote) {
       return _buildSnapshot(
         session: session,
@@ -92,26 +96,16 @@ class MinePageSessionService {
     try {
       final modules = await _mobileFeatureService.fetchMyModules();
       final entitlement = await _membershipService.fetchEntitlement();
-      MobileFeatureModule? sourceEntry;
-      MobileFeatureModule? sourceImport;
-      for (final item in modules) {
-        if (item.code == 'source_entry') {
-          sourceEntry = item;
-        } else if (item.code == 'source_import') {
-          sourceImport = item;
-        }
-      }
-      final remoteSnapshot = _MinePageRemoteSnapshot(
-        showSourceEntry: sourceEntry?.visible == true,
-        hasMembership: entitlement.isActive,
-        hasThemeCustom: MembershipFeatures.hasFeature(
-          entitlement,
-          MembershipFeatures.themeCustom,
-        ),
-        sourceImportLimit: sourceImport?.quotaLimit ?? 10,
-      );
+      final remoteSnapshot = _remoteAccessSnapshotService
+          .buildFromModulesAndEntitlement(
+            modules: modules,
+            entitlement: entitlement,
+          );
       if (normalizedUserId.isNotEmpty) {
-        await _writeRemoteSnapshotCache(normalizedUserId, remoteSnapshot);
+        await _remoteAccessSnapshotService.save(
+          normalizedUserId,
+          remoteSnapshot,
+        );
       }
       return _buildSnapshot(
         session: session,
@@ -220,49 +214,10 @@ class MinePageSessionService {
   String _profileAvatarStorageKey(String userId) =>
       'mine.profile.avatar.path.$userId';
 
-  Future<_MinePageRemoteSnapshot?> _readRemoteSnapshotCache(
-    String userId,
-  ) async {
-    final normalizedUserId = userId.trim();
-    if (normalizedUserId.isEmpty) {
-      return null;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_remoteSnapshotStorageKey(normalizedUserId));
-    if (raw == null || raw.trim().isEmpty) {
-      return null;
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return null;
-      }
-      return _MinePageRemoteSnapshot.fromJson(decoded);
-    } catch (_) {
-      await prefs.remove(_remoteSnapshotStorageKey(normalizedUserId));
-      return null;
-    }
-  }
-
-  Future<void> _writeRemoteSnapshotCache(
-    String userId,
-    _MinePageRemoteSnapshot snapshot,
-  ) async {
-    final normalizedUserId = userId.trim();
-    if (normalizedUserId.isEmpty) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _remoteSnapshotStorageKey(normalizedUserId),
-      jsonEncode(snapshot.toJson()),
-    );
-  }
-
   MinePageSessionSnapshot _buildSnapshot({
     required AuthSession session,
     required String? localAvatarPath,
-    required _MinePageRemoteSnapshot? remoteSnapshot,
+    required RemoteAccessSnapshot? remoteSnapshot,
   }) {
     return MinePageSessionSnapshot(
       session: session,
@@ -272,45 +227,8 @@ class MinePageSessionService {
       hasThemeCustom: remoteSnapshot?.hasThemeCustom ?? false,
       sourceImportLimit: remoteSnapshot?.sourceImportLimit ?? 10,
       isRemoteAccessResolved: remoteSnapshot != null,
+      shouldRefreshRemoteAccess:
+          remoteSnapshot == null || !remoteSnapshot.isFresh(),
     );
-  }
-
-  String _remoteSnapshotStorageKey(String userId) =>
-      'mine.session.remoteSnapshot.v1.$userId';
-}
-
-class _MinePageRemoteSnapshot {
-  const _MinePageRemoteSnapshot({
-    required this.showSourceEntry,
-    required this.hasMembership,
-    required this.hasThemeCustom,
-    required this.sourceImportLimit,
-  });
-
-  final bool showSourceEntry;
-  final bool hasMembership;
-  final bool hasThemeCustom;
-  final int sourceImportLimit;
-
-  factory _MinePageRemoteSnapshot.fromJson(Map<String, dynamic> json) {
-    return _MinePageRemoteSnapshot(
-      showSourceEntry: json['showSourceEntry'] == true,
-      hasMembership: json['hasMembership'] == true,
-      hasThemeCustom: json['hasThemeCustom'] == true,
-      sourceImportLimit:
-          json['sourceImportLimit'] is int
-              ? json['sourceImportLimit'] as int
-              : 10,
-    );
-  }
-
-  Map<String, Object> toJson() {
-    return <String, Object>{
-      'showSourceEntry': showSourceEntry,
-      'hasMembership': hasMembership,
-      'hasThemeCustom': hasThemeCustom,
-      'sourceImportLimit': sourceImportLimit,
-      'cachedAt': DateTime.now().toUtc().toIso8601String(),
-    };
   }
 }

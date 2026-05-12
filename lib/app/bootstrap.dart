@@ -41,6 +41,7 @@ Future<void> bootstrap() async {
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   ActiveAdvancedThemeIdNotifier.prime(prefs);
+  ActiveThemeAppearanceSnapshotNotifier.prime(prefs);
   MinePageSessionPriming.prime(prefs);
   AppInterfaceFontSettingsNotifier.prime(prefs);
   AppInterfaceTextScaleNotifier.prime(prefs);

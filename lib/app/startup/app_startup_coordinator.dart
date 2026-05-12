@@ -7,6 +7,7 @@ import '../../core/app_update/app_update_release.dart';
 import '../../core/app_update/app_update_service.dart';
 import '../../core/logging/app_logger.dart';
 import '../../features/source/application/source_runtime_facade.dart';
+import 'startup_task_gate_service.dart';
 
 typedef StartupUpdateDialogPresenter =
     Future<void> Function(BuildContext context, AppUpdateRelease release);
@@ -21,6 +22,11 @@ class AppStartupCoordinator {
     AppLogger? logger,
     AppUpdateService? appUpdateService,
     SourceRuntimeFacade? sourceRuntimeFacade,
+    Future<void> Function()? warmupLocalDatabase,
+    StartupTaskGateService? taskGateService,
+    Duration? startupMinDuration,
+    Duration? startupDeferredTasksDelay,
+    Duration? startupWarmupDelay,
   }) : _sendHeartbeat = sendHeartbeat,
        _sendVisitEvent = sendVisitEvent,
        _showStartupAnnouncementIfNeeded = showStartupAnnouncementIfNeeded,
@@ -28,11 +34,22 @@ class AppStartupCoordinator {
        _showUpdateDialog = showUpdateDialog,
        _logger = logger ?? AppLogger.instance,
        _appUpdateService = appUpdateService ?? AppUpdateService(),
-       _sourceRuntimeFacade = sourceRuntimeFacade;
+       _sourceRuntimeFacade = sourceRuntimeFacade,
+       _warmupLocalDatabaseOverride = warmupLocalDatabase,
+       _taskGateService = taskGateService ?? StartupTaskGateService(),
+       _startupMinDuration = startupMinDuration ?? _defaultStartupMinDuration,
+       _startupDeferredTasksDelay =
+           startupDeferredTasksDelay ?? _defaultStartupDeferredTasksDelay,
+       _startupWarmupDelay = startupWarmupDelay ?? _defaultStartupWarmupDelay;
 
-  static const Duration _startupMinDuration = Duration(milliseconds: 250);
-  static const Duration _startupDeferredTasksDelay = Duration(
+  static const Duration _defaultStartupMinDuration = Duration(
+    milliseconds: 250,
+  );
+  static const Duration _defaultStartupDeferredTasksDelay = Duration(
     milliseconds: 1800,
+  );
+  static const Duration _defaultStartupWarmupDelay = Duration(
+    milliseconds: 3200,
   );
   static const Duration _startupTaskGap = Duration(milliseconds: 320);
   static const Duration _startupAnnouncementDelay = Duration(milliseconds: 480);
@@ -45,12 +62,18 @@ class AppStartupCoordinator {
   final AppLogger _logger;
   final AppUpdateService _appUpdateService;
   final SourceRuntimeFacade? _sourceRuntimeFacade;
+  final Future<void> Function()? _warmupLocalDatabaseOverride;
+  final StartupTaskGateService _taskGateService;
+  final Duration _startupMinDuration;
+  final Duration _startupDeferredTasksDelay;
+  final Duration _startupWarmupDelay;
 
   final Stopwatch _startupStopwatch = Stopwatch()..start();
   final Completer<void> _startupFirstFrameCompleter = Completer<void>();
 
   Timer? _startupDelayTimer;
   Timer? _startupDeferredTasksTimer;
+  Timer? _startupWarmupTimer;
   bool _startupDeferredTasksScheduled = false;
   bool _isStartupUpdateInFlight = false;
   bool _hasCheckedStartupUpdate = false;
@@ -106,7 +129,7 @@ class AppStartupCoordinator {
       context: <String, Object?>{'elapsedMs': elapsedMilliseconds},
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_warmupLocalDatabase());
+      _scheduleWarmupLocalDatabase(isMounted: isMounted);
       scheduleDeferredTasks(isMounted: isMounted);
     });
   }
@@ -125,9 +148,25 @@ class AppStartupCoordinator {
   void dispose() {
     _startupDelayTimer?.cancel();
     _startupDeferredTasksTimer?.cancel();
+    _startupWarmupTimer?.cancel();
+  }
+
+  void _scheduleWarmupLocalDatabase({required bool Function() isMounted}) {
+    _startupWarmupTimer?.cancel();
+    _startupWarmupTimer = Timer(_startupWarmupDelay, () {
+      if (!isMounted()) {
+        return;
+      }
+      unawaited(_warmupLocalDatabase());
+    });
   }
 
   Future<void> _warmupLocalDatabase() async {
+    final warmupLocalDatabase = _warmupLocalDatabaseOverride;
+    if (warmupLocalDatabase != null) {
+      await warmupLocalDatabase();
+      return;
+    }
     final sourceRuntimeFacade = _sourceRuntimeFacade;
     if (sourceRuntimeFacade == null) {
       _logger.info(
@@ -160,6 +199,13 @@ class AppStartupCoordinator {
     required bool Function() isMounted,
   }) async {
     if (_hasCheckedStartupUpdate || _isStartupUpdateInFlight) {
+      return;
+    }
+    final shouldRun = await _taskGateService.claimDailyRun(
+      'startup_update_check',
+    );
+    if (!shouldRun) {
+      _hasCheckedStartupUpdate = true;
       return;
     }
     _isStartupUpdateInFlight = true;

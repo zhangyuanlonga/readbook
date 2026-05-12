@@ -9,6 +9,7 @@ import '../../../app/images/file_image_cache.dart';
 import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../../../domain/entities/managed_asset.dart';
+import 'advanced_theme_service.dart';
 
 const String defaultLaunchImageGalleryId = 'system_default';
 
@@ -22,6 +23,20 @@ final LaunchImageGallery defaultLaunchImageGallery = LaunchImageGallery(
   isEditable: false,
   isDeletable: false,
 );
+
+class LaunchImageStartupSnapshot {
+  const LaunchImageStartupSnapshot({
+    this.resolvedImagePath,
+    this.galleryId,
+    this.themeId,
+    this.updatedAt,
+  });
+
+  final String? resolvedImagePath;
+  final String? galleryId;
+  final String? themeId;
+  final DateTime? updatedAt;
+}
 
 class LaunchImageGalleryService {
   LaunchImageGalleryService({
@@ -40,6 +55,14 @@ class LaunchImageGalleryService {
   static const String _galleriesKey = 'launchImageGallery.galleries';
   static const String _activeGalleryIdKey = 'launchImageGallery.activeId';
   static const String _startupEnabledKey = 'launchImageGallery.startupEnabled';
+  static const String _startupSnapshotPathKey =
+      'launchImageGallery.startupSnapshot.path';
+  static const String _startupSnapshotGalleryIdKey =
+      'launchImageGallery.startupSnapshot.galleryId';
+  static const String _startupSnapshotThemeIdKey =
+      'launchImageGallery.startupSnapshot.themeId';
+  static const String _startupSnapshotUpdatedAtKey =
+      'launchImageGallery.startupSnapshot.updatedAt';
 
   static bool readStartupEnabled(SharedPreferences prefs) {
     return prefs.getBool(_startupEnabledKey) ?? true;
@@ -151,9 +174,11 @@ class LaunchImageGalleryService {
     final normalized = galleryId?.trim();
     if (normalized == null || normalized.isEmpty) {
       await prefs.remove(_activeGalleryIdKey);
+      await syncStartupSnapshotFromCurrentConfig();
       return;
     }
     await prefs.setString(_activeGalleryIdKey, normalized);
+    await syncStartupSnapshotFromCurrentConfig();
   }
 
   Future<bool> loadStartupEnabled() async {
@@ -164,6 +189,7 @@ class LaunchImageGalleryService {
   Future<void> saveStartupEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_startupEnabledKey, enabled);
+    await syncStartupSnapshotFromCurrentConfig();
   }
 
   Future<LaunchImageGallery?> loadActiveGallery() async {
@@ -192,6 +218,123 @@ class LaunchImageGalleryService {
     }
     final gallery = await loadGallery(normalized);
     return resolveGalleryPreviewPath(gallery);
+  }
+
+  Future<LaunchImageStartupSnapshot> loadStartupSnapshot() async {
+    final prefs = await _preferencesFuture;
+    final resolvedImagePath = prefs.getString(_startupSnapshotPathKey)?.trim();
+    final galleryId = prefs.getString(_startupSnapshotGalleryIdKey)?.trim();
+    final themeId = prefs.getString(_startupSnapshotThemeIdKey)?.trim();
+    final updatedAtRaw = prefs.getString(_startupSnapshotUpdatedAtKey)?.trim();
+    return LaunchImageStartupSnapshot(
+      resolvedImagePath:
+          resolvedImagePath == null || resolvedImagePath.isEmpty
+              ? null
+              : resolvedImagePath,
+      galleryId: galleryId == null || galleryId.isEmpty ? null : galleryId,
+      themeId: themeId == null || themeId.isEmpty ? null : themeId,
+      updatedAt:
+          updatedAtRaw == null || updatedAtRaw.isEmpty
+              ? null
+              : DateTime.tryParse(updatedAtRaw),
+    );
+  }
+
+  Future<String?> loadStartupSnapshotPath() async {
+    if (!await loadStartupEnabled()) {
+      return null;
+    }
+    final snapshot = await loadStartupSnapshot();
+    final normalized = snapshot.resolvedImagePath?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  Future<void> saveStartupSnapshot({
+    required String? resolvedImagePath,
+    required String? galleryId,
+    required String? themeId,
+  }) async {
+    final prefs = await _preferencesFuture;
+    final normalizedPath = resolvedImagePath?.trim() ?? '';
+    final normalizedGalleryId = galleryId?.trim() ?? '';
+    final normalizedThemeId = themeId?.trim() ?? '';
+    if (normalizedPath.isEmpty) {
+      await prefs.remove(_startupSnapshotPathKey);
+    } else {
+      await prefs.setString(_startupSnapshotPathKey, normalizedPath);
+    }
+    if (normalizedGalleryId.isEmpty) {
+      await prefs.remove(_startupSnapshotGalleryIdKey);
+    } else {
+      await prefs.setString(_startupSnapshotGalleryIdKey, normalizedGalleryId);
+    }
+    if (normalizedThemeId.isEmpty) {
+      await prefs.remove(_startupSnapshotThemeIdKey);
+    } else {
+      await prefs.setString(_startupSnapshotThemeIdKey, normalizedThemeId);
+    }
+    await prefs.setString(
+      _startupSnapshotUpdatedAtKey,
+      DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
+  Future<void> clearStartupSnapshot() async {
+    final prefs = await _preferencesFuture;
+    await prefs.remove(_startupSnapshotPathKey);
+    await prefs.remove(_startupSnapshotGalleryIdKey);
+    await prefs.remove(_startupSnapshotThemeIdKey);
+    await prefs.remove(_startupSnapshotUpdatedAtKey);
+  }
+
+  Future<void> updateStartupSnapshot({
+    String? themeId,
+    String? galleryId,
+  }) async {
+    if (!await loadStartupEnabled()) {
+      await clearStartupSnapshot();
+      return;
+    }
+    final normalizedThemeId = themeId?.trim();
+    var resolvedGalleryId = galleryId?.trim() ?? '';
+    if (resolvedGalleryId.isEmpty) {
+      resolvedGalleryId = (await loadActiveGalleryId())?.trim() ?? '';
+    }
+    final gallery =
+        resolvedGalleryId.isEmpty ? null : await loadGallery(resolvedGalleryId);
+    await saveStartupSnapshot(
+      resolvedImagePath: resolveGalleryPreviewPath(gallery),
+      galleryId: resolvedGalleryId.isEmpty ? null : resolvedGalleryId,
+      themeId:
+          normalizedThemeId == null || normalizedThemeId.isEmpty
+              ? null
+              : normalizedThemeId,
+    );
+  }
+
+  Future<void> syncStartupSnapshotFromCurrentConfig() async {
+    final prefs = await _preferencesFuture;
+    if (!readStartupEnabled(prefs)) {
+      await clearStartupSnapshot();
+      return;
+    }
+    final activeThemeId = AdvancedThemeService.readActiveThemeId(prefs);
+    final normalizedThemeId = activeThemeId?.trim();
+    String? galleryId;
+    if (normalizedThemeId != null && normalizedThemeId.isNotEmpty) {
+      final theme = await AdvancedThemeService(
+        preferences: prefs,
+        assetStore: _assetStore,
+      ).loadThemeById(normalizedThemeId);
+      final normalizedGalleryId = theme?.launchImageGalleryId?.trim() ?? '';
+      if (normalizedGalleryId.isNotEmpty) {
+        galleryId = normalizedGalleryId;
+      }
+    }
+    await updateStartupSnapshot(
+      themeId: normalizedThemeId,
+      galleryId: galleryId,
+    );
   }
 
   Future<LaunchImageGallery> createGallery({String name = '未命名图集'}) async {
@@ -232,6 +375,7 @@ class LaunchImageGalleryService {
         updatedGallery,
     ];
     await saveGalleries(updated);
+    await syncStartupSnapshotFromCurrentConfig();
     return updatedGallery;
   }
 
@@ -296,6 +440,7 @@ class LaunchImageGalleryService {
     if (await directory.exists()) {
       await directory.delete(recursive: true);
     }
+    await syncStartupSnapshotFromCurrentConfig();
   }
 
   Future<LaunchImageGallery> importImage({

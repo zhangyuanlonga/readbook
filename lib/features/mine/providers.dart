@@ -27,6 +27,7 @@ import 'application/mine_page_flow_coordinator.dart';
 import 'application/mine_page_preferences_service.dart';
 import 'application/launch_image_gallery_provider.dart';
 import 'application/mine_page_session_service.dart';
+import 'application/remote_access_snapshot_service.dart';
 import 'application/reader_background_service.dart';
 import '../reader/application/reader_font_registry_service.dart';
 
@@ -85,6 +86,11 @@ final mineMembershipServiceProvider = Provider<MembershipService>((ref) {
   return MembershipService();
 });
 
+final remoteAccessSnapshotServiceProvider =
+    Provider<RemoteAccessSnapshotService>((ref) {
+      return RemoteAccessSnapshotService();
+    });
+
 final mineImageSelectionServiceProvider = Provider<ImageSelectionService>((
   ref,
 ) {
@@ -140,6 +146,7 @@ final minePageSessionServiceProvider = Provider<MinePageSessionService>((ref) {
     authSessionStore: ref.watch(mineAuthSessionStoreProvider),
     mobileFeatureService: ref.watch(mineMobileFeatureServiceProvider),
     membershipService: ref.watch(mineMembershipServiceProvider),
+    remoteAccessSnapshotService: ref.watch(remoteAccessSnapshotServiceProvider),
   );
 });
 

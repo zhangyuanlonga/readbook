@@ -3918,36 +3918,27 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
 
   Future<String?> _pickBackgroundImagePath() async {
     try {
-      debugPrint('[reader-bg][pick] start');
       final picked = await _imageSelectionService.pickImage(
         confirmButtonText: '选择背景',
       );
       if (picked == null) {
-        debugPrint('[reader-bg][pick] cancelled');
         return null;
       }
 
       final Uint8List bytes = picked.bytes;
       if (bytes.isEmpty) {
-        debugPrint('[reader-bg][pick] empty-bytes');
         _showMessage('背景图片读取失败。');
         return null;
       }
       final storedPath = await _storeCustomBackgroundImage(bytes);
-      debugPrint('[reader-bg][pick] stored=$storedPath');
       return storedPath;
     } on ImageSelectionException catch (error) {
-      debugPrint('[reader-bg][pick] image-selection-error=${error.message}');
       _showMessage(error.message);
       return null;
     } on PlatformException catch (error) {
-      debugPrint(
-        '[reader-bg][pick] platform-error=${error.message ?? error.code}',
-      );
       _showMessage('选择背景失败：${error.message ?? error.code}');
       return null;
     } catch (error) {
-      debugPrint('[reader-bg][pick] error=$error');
       _showMessage('选择背景失败：$error');
       return null;
     }

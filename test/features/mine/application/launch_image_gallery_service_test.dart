@@ -113,6 +113,63 @@ void main() {
         );
       },
     );
+
+    test('updates startup snapshot when active gallery changes', () async {
+      final service = LaunchImageGalleryService(
+        assetStore: await _createAssetStore(),
+      );
+      final tempDir = await Directory.systemTemp.createTemp(
+        'launch_image_snapshot_test_',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final existingFile = File('${tempDir.path}/launch_snapshot.png');
+      await existingFile.writeAsBytes(const <int>[5, 6, 7], flush: true);
+
+      final gallery = LaunchImageGallery(
+        id: 'launch_gallery_snapshot',
+        name: '快照图集',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        imagePaths: <String>[existingFile.path],
+      );
+
+      await service.saveGalleries(<LaunchImageGallery>[gallery]);
+      await service.saveActiveGalleryId(gallery.id);
+
+      final snapshot = await service.loadStartupSnapshot();
+      expect(snapshot.galleryId, gallery.id);
+      expect(snapshot.resolvedImagePath, existingFile.path);
+    });
+
+    test('clears startup snapshot when startup artwork is disabled', () async {
+      final service = LaunchImageGalleryService(
+        assetStore: await _createAssetStore(),
+      );
+      final tempDir = await Directory.systemTemp.createTemp(
+        'launch_image_snapshot_disable_test_',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final existingFile = File('${tempDir.path}/launch_disable.png');
+      await existingFile.writeAsBytes(const <int>[9, 8, 7], flush: true);
+
+      final gallery = LaunchImageGallery(
+        id: 'launch_gallery_disable',
+        name: '禁用图集',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        imagePaths: <String>[existingFile.path],
+      );
+
+      await service.saveGalleries(<LaunchImageGallery>[gallery]);
+      await service.saveActiveGalleryId(gallery.id);
+      await service.saveStartupEnabled(false);
+
+      final snapshot = await service.loadStartupSnapshot();
+      expect(snapshot.galleryId, isNull);
+      expect(snapshot.resolvedImagePath, isNull);
+    });
   });
 }
 

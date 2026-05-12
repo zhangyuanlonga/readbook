@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'active_theme_appearance_snapshot.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import 'advanced_theme_service.dart';
 
@@ -17,6 +20,11 @@ final advancedThemeRevisionProvider =
     NotifierProvider<AdvancedThemeRevisionNotifier, int>(
       AdvancedThemeRevisionNotifier.new,
     );
+
+final activeThemeAppearanceSnapshotProvider = NotifierProvider<
+  ActiveThemeAppearanceSnapshotNotifier,
+  ActiveThemeAppearanceSnapshot?
+>(ActiveThemeAppearanceSnapshotNotifier.new);
 
 final activeAdvancedThemeProvider = FutureProvider<AppAdvancedTheme?>((
   ref,
@@ -80,6 +88,50 @@ class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {
   }
 
   Future<void> disable() => setActiveThemeId(null);
+}
+
+class ActiveThemeAppearanceSnapshotNotifier
+    extends Notifier<ActiveThemeAppearanceSnapshot?> {
+  static ActiveThemeAppearanceSnapshot? _primedSnapshot;
+  static bool _hasPrimedValue = false;
+
+  bool _loadTriggered = false;
+
+  static void prime(SharedPreferences prefs) {
+    _primedSnapshot = AdvancedThemeService.readActiveThemeAppearanceSnapshot(
+      prefs,
+    );
+    _hasPrimedValue = true;
+  }
+
+  @override
+  ActiveThemeAppearanceSnapshot? build() {
+    ref.listen<int>(advancedThemeRevisionProvider, (_, __) {
+      unawaited(_load());
+    });
+    ref.listen<String?>(activeAdvancedThemeIdProvider, (_, __) {
+      unawaited(_load());
+    });
+    if (_hasPrimedValue) {
+      return _primedSnapshot;
+    }
+    if (!_loadTriggered) {
+      _loadTriggered = true;
+      unawaited(_load());
+    }
+    return null;
+  }
+
+  Future<void> _load() async {
+    final snapshot =
+        await ref
+            .read(advancedThemeServiceProvider)
+            .loadActiveThemeAppearanceSnapshot();
+    if (snapshot == state) {
+      return;
+    }
+    state = snapshot;
+  }
 }
 
 class AdvancedThemeRevisionNotifier extends Notifier<int> {

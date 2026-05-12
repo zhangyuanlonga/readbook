@@ -36,6 +36,9 @@ extension on _SourcePageState {
         _sourceImportLimit = access.sourceImportLimit;
         _isFeatureAccessLoading = false;
       });
+      if (!refreshRemote && access.shouldRefreshRemoteAccess) {
+        unawaited(_loadFeatureAccess(refreshRemote: true));
+      }
     } catch (e) {
       if (!mounted) {
         return;
