@@ -442,3 +442,31 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - Codex 当前无 Chrome 屏幕读取权限，本次 Web 通过 Flutter run 日志和本地 CanvasKit build 验证首屏启动链路；后续仍需要补真实截图。
 - 阶段 4 UI 双轨已经补进阶段计划，但 Android/iOS/Windows/Linux 的真实端截图和窗口缩放记录尚未完成。
 - 阶段编号已从此处起后移：原“本地阅读优先闭环”为阶段 5，原“书源功能延期隔离”为阶段 6，原“构建、测试与发布矩阵”为阶段 7。
+
+## 13. 页面功能阶段 A 执行记录（2026-05-12）
+
+### 已完成：页面能力盘点与平台文件边界收口
+
+- [x] 新增 `docs/page_function_multiplatform_methods_2026-05-12.md`，逐页面定义功能、端状态、capability / service / bridge 边界、降级方法和后续阶段。
+- [x] 新增 `local_file_image` 条件导入 adapter：原生端支持本地文件图片，Web 端统一回落占位，页面不直接创建 `FileImage`。
+- [x] 新增 `local_file_stat` 条件导入 adapter：原生端支持文件存在性、stat、bytes/text 读取，Web 端统一返回不可用结果。
+- [x] `BookDetailPage` 本地封面背景和本地图书诊断文件状态改走 adapter。
+- [x] `ReaderPage` presentation 链的本地正文图片、SVG 文件读取、阅读器背景、诊断文件状态改走 adapter。
+- [x] `MinePage` 头像、`ResolvedBookCoverView`、高级主题背景装饰的本地文件图片显示改走 adapter。
+
+### 平台影响
+
+- 影响平台：Android、iOS、macOS、Windows、Linux、Web 的本地图片显示、阅读器背景、详情诊断和头像占位降级路径。
+- 不影响平台：未新增原生插件，未改变数据库 schema，未重开书源运行时、WebDAV 或在线搜索。
+- 隔离策略：presentation 层不再直接依赖 `dart:io` / `FileImage` / `FileStat`，Web 通过 adapter 返回空 provider、空 bytes 或不可用 stat。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter test test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/features/reader/application/reader_layout_resolver_test.dart`：通过。
+- [x] `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`：通过，产物位于 `build/web`。
+
+### 遗留说明
+
+- 资源管理、高级主题导入导出、字体管理仍有 service / application 层文件读写，本轮不迁移业务实现，归入功能阶段 C。
+- 书架 flow、底部导航图标、阅读器底层图片 pipeline 仍有历史文件处理路径，后续按页面功能阶段继续收口，不能在页面层新增类似依赖。

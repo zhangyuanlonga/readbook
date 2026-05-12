@@ -1041,17 +1041,16 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
   }) {
     if (_localAvatarPath != null) {
-      return Image.file(
-        File(_localAvatarPath!),
+      return buildLocalFileImage(
+        imagePath: _localAvatarPath,
         width: double.infinity,
         height: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder:
-            (_, __, ___) => _buildProfileAvatarFallback(
-              context,
-              avatarLabel: avatarLabel,
-              palette: palette,
-            ),
+        fallback: _buildProfileAvatarFallback(
+          context,
+          avatarLabel: avatarLabel,
+          palette: palette,
+        ),
       );
     }
     return _buildProfileAvatarFallback(

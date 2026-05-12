@@ -462,16 +462,14 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       );
     }
     if (uri != null && uri.scheme == 'file') {
-      return Image.file(
-        File.fromUri(uri),
+      return buildLocalFileImage(
+        imagePath: localFilePathFromUri(uri),
         fit: BoxFit.fitWidth,
+        fallback: _buildMangaImageError(colors, sourceUrl, retryNonce),
         gaplessPlayback: true,
         filterQuality: _resolveReaderImageFilterQuality(),
         cacheWidth: decodeBudget.cacheWidth,
         cacheHeight: decodeBudget.cacheHeight,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildMangaImageError(colors, sourceUrl, retryNonce);
-        },
       );
     }
 
@@ -550,9 +548,11 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           errorBuilder: errorBuilder,
         );
       }
-      if (!kIsWeb && uri != null && uri.scheme == 'file') {
+      if (uri != null && uri.scheme == 'file') {
         return FutureBuilder<String>(
-          future: File.fromUri(uri).readAsString(),
+          future: readLocalFileText(
+            localFilePathFromUri(uri),
+          ).then((value) => value ?? ''),
           builder: (context, snapshot) {
             final svgText = snapshot.data;
             if (svgText == null || svgText.trim().isEmpty) {

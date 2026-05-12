@@ -57,12 +57,8 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
             : await _localBookStorageService.resolveStoragePath(
               localBook.storagePath,
             );
-    final sourceExists =
-        sourcePath.isNotEmpty ? await File(sourcePath).exists() : false;
-    final storageExists =
-        resolvedStoragePath.isNotEmpty
-            ? await File(resolvedStoragePath).exists()
-            : false;
+    final sourceExists = await localFileExists(sourcePath);
+    final storageExists = await localFileExists(resolvedStoragePath);
     final content = [
       '本地图书正文诊断',
       'bookId: $_currentBookId',
@@ -158,7 +154,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
   }
 
   Future<bool> _shouldSkipBatteryRead() async {
-    if (kIsWeb || !Platform.isIOS) {
+    if (defaultTargetPlatform != TargetPlatform.iOS || kIsWeb) {
       return false;
     }
     _iosSimulatorCheck ??= _loadIsIosSimulator();

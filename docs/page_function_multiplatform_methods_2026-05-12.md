@@ -169,6 +169,7 @@
 待办：
 
 - [x] 切换书源已按 capability 禁用并补测试。
+- [x] 详情页封面背景和本地图书诊断文件状态已通过条件导入 adapter 收口，页面不再直接使用 `dart:io` / `FileImage` / `FileStat`。
 - [ ] 封面编辑在 Web 和不支持图片选择的平台显示统一禁用态。
 - [ ] 删除本地图书时区分“只删记录”和“删除托管文件”的能力文案。
 
@@ -200,6 +201,7 @@
 
 待办：
 
+- [x] 阅读器本地图片、背景图、SVG 正文图片和本地图书诊断文件状态已通过条件导入 adapter 收口，presentation 链不再直接依赖 `dart:io`。
 - [ ] 桌面键盘翻页和鼠标滚轮作为 P0 输入能力补验收。
 - [ ] 窗口尺寸变化后分页恢复进入 reader service 测试。
 - [ ] Web 存储未 ready 时阅读器展示可恢复错误，不白屏。
@@ -280,6 +282,7 @@
 待办：
 
 - [x] 同步、缓存、错误中心已接能力开关或受限提示。
+- [x] 我的页头像本地图片显示已通过条件导入 adapter 收口，Web 回落到头像占位。
 - [ ] 我的页入口统一展示“可用/受限/后续支持”状态。
 
 ### 4.9 系统设置页 `SystemSettingsPage`
@@ -333,6 +336,7 @@
 待办：
 
 - [x] 启动图文件渲染已通过条件导入避免 Web `dart:io`。
+- [x] 书籍封面、我的头像、高级主题背景和阅读器背景的本地文件显示已进入统一 `local_file_image` adapter。
 - [ ] 所有资源页面统一处理“资源文件不存在/平台不支持”占位。
 
 ### 4.11 缓存管理页
@@ -410,14 +414,24 @@
 目标：每个页面都能回答“哪些功能可用、靠哪个 capability、不可用怎么降级”。
 
 - [x] 建立本文作为逐页面功能方法索引。
-- [ ] 为每个页面补齐 capability / service / bridge 归属。
-- [ ] 找出页面内残留的平台判断、文件路径操作、直接数据库访问。
-- [ ] 标记延期功能入口和恢复条件。
+- [x] 为 P0 页面补齐 capability / service / bridge 归属，并标出 Web 受限状态。
+- [x] 本轮找出并收口详情、阅读器、我的页、封面/背景共享 widget 中的页面层本地文件图片和文件状态访问。
+- [x] 标记延期功能入口和恢复条件。
+- [ ] 资源管理、高级主题导入导出、字体管理中的文件读写继续归入功能阶段 C，不在页面层继续扩散。
 
 验收：
 
 - 每个 P0 页面都有移动端、桌面端、Web 三列功能状态。
 - 新增或修改页面时能直接查到该走哪个能力边界。
+
+本轮执行记录（2026-05-12）：
+
+- 新增 `local_file_image` 条件导入 adapter：native 端显示本地文件图片，Web 端返回占位。
+- 新增 `local_file_stat` 条件导入 adapter：native 端读取文件存在性、stat、bytes/text，Web 端返回不可用结果。
+- `BookDetailPage` 的封面背景和本地图书诊断 stat 已改走 adapter。
+- `ReaderPage` presentation 链的本地正文图片、SVG 文件读取、阅读器背景、诊断文件存在性已改走 adapter。
+- `MinePage` 头像和 `ResolvedBookCoverView` / `advanced_theme_backdrop_decoration` 本地图片显示已改走 adapter。
+- 验证：`flutter analyze` 通过；`flutter test test/features/book/presentation/book_detail_switch_source_test.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/presentation/page_adaptive_smoke_test.dart test/features/reader/application/reader_layout_resolver_test.dart` 通过。
 
 ### 功能阶段 B：本地阅读主链路
 

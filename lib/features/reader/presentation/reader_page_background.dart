@@ -47,7 +47,7 @@ class _ReaderBackgroundAssetStore {
   String? cachedBackgroundImageKey;
   MemoryImage? cachedBackgroundImage;
   String? cachedManagedBackgroundPath;
-  FileImage? cachedManagedBackgroundImage;
+  ImageProvider? cachedManagedBackgroundImage;
   bool? cachedManagedBackgroundExists;
   final Map<String, Future<bool>> managedBackgroundExistsFutures =
       <String, Future<bool>>{};
@@ -87,10 +87,10 @@ extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
     _backgroundAssets.cachedManagedBackgroundPath = value;
   }
 
-  FileImage? get _cachedManagedBackgroundImage =>
+  ImageProvider? get _cachedManagedBackgroundImage =>
       _backgroundAssets.cachedManagedBackgroundImage;
 
-  set _cachedManagedBackgroundImage(FileImage? value) {
+  set _cachedManagedBackgroundImage(ImageProvider? value) {
     _backgroundAssets.cachedManagedBackgroundImage = value;
   }
 
@@ -171,17 +171,18 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
 
     if (_isManagedBackgroundPathImpl(raw)) {
       if (_cachedManagedBackgroundPath != raw) {
-        final file =
-            raw.startsWith('file://')
-                ? File(Uri.parse(raw).toFilePath())
-                : File(raw);
+        final localPath = normalizeLocalFileImagePath(raw);
         _cachedManagedBackgroundPath = raw;
         _cachedManagedBackgroundExists = null;
         _cachedManagedBackgroundImage = null;
-        _managedBackgroundExistsFutures[raw] = file.exists().then((exists) {
+        _managedBackgroundExistsFutures[raw] = statLocalFile(localPath).then((
+          stat,
+        ) {
+          final exists = stat != null;
           if (_cachedManagedBackgroundPath == raw) {
             _cachedManagedBackgroundExists = exists;
-            _cachedManagedBackgroundImage = exists ? FileImage(file) : null;
+            _cachedManagedBackgroundImage =
+                exists ? resolveLocalFileImageProvider(localPath) : null;
             if (mounted) {
               _updateReaderState(() {});
             }
@@ -314,14 +315,12 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
     }
     if (_isManagedBackgroundPathImpl(normalized)) {
       try {
-        final file =
-            normalized.startsWith('file://')
-                ? File(Uri.parse(normalized).toFilePath())
-                : File(normalized);
-        if (!await file.exists()) {
+        final bytes = await readLocalFileBytes(
+          normalizeLocalFileImagePath(normalized),
+        );
+        if (bytes == null || bytes.isEmpty) {
           return null;
         }
-        final bytes = await file.readAsBytes();
         return await _resizeImageBytesImpl(
           bytes,
           maxDimension: _ReaderPageState._kCustomBackgroundPreviewMaxDimension,

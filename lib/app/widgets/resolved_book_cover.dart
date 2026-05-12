@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
+import '../images/local_file_image.dart';
 import '../../core/storage/managed_file_path_resolver.dart';
 import '../../domain/entities/app_advanced_theme.dart';
 import '../../domain/entities/cover_gallery.dart';
@@ -125,13 +124,13 @@ class ResolvedBookCoverView extends StatelessWidget {
       ResolvedBookCoverSource.custom ||
       ResolvedBookCoverSource.gallery => ClipRRect(
         borderRadius: borderRadius,
-        child: Image.file(
-          File(cover.filePath!),
+        child: buildLocalFileImage(
+          imagePath: cover.filePath,
           key: ValueKey<String>(cover.cacheKey),
           width: width,
           height: height,
           fit: fit,
-          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+          fallback: _buildPlaceholder(),
         ),
       ),
       ResolvedBookCoverSource.placeholder => _buildPlaceholder(),
@@ -159,7 +158,8 @@ ResolvedBookCover? _resolveRealCover(String? realCoverUrl) {
     return null;
   }
   if (uri.scheme == 'file') {
-    final resolvedPath = _resolveManagedFilePathSync(File.fromUri(uri).path);
+    final filePath = localFilePathFromUri(uri);
+    final resolvedPath = _resolveManagedFilePathSync(filePath);
     if (resolvedPath == null) {
       return null;
     }

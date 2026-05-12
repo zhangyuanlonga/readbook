@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
@@ -21,6 +20,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
@@ -34,6 +34,7 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/storage/local_file_stat.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
@@ -755,10 +756,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     final uri = Uri.tryParse(imageUrl);
     if (uri != null && uri.scheme == 'file') {
+      final fileProvider = resolveLocalFileImageProvider(
+        localFilePathFromUri(uri),
+      );
+      if (fileProvider == null) {
+        return null;
+      }
       return ResizeImage.resizeIfNeeded(
         decodeBudget.cacheWidth,
         decodeBudget.cacheHeight,
-        FileImage(File.fromUri(uri)),
+        fileProvider,
       );
     }
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
@@ -2515,7 +2522,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_hasTriggeredDebugSimulatorCurlDemo) {
       return;
     }
-    if (kIsWeb || !Platform.isIOS) {
+    if (defaultTargetPlatform != TargetPlatform.iOS || kIsWeb) {
       return;
     }
     _iosSimulatorCheck ??= _loadIsIosSimulator();

@@ -1,13 +1,13 @@
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/app_advanced_theme.dart';
+import '../images/local_file_image.dart';
 import '../theme/app_advanced_theme_tokens.dart';
 
-final Map<String, FileImage?> _advancedThemeBackdropFileImageCache =
-    <String, FileImage?>{};
+final Map<String, ImageProvider?> _advancedThemeBackdropFileImageCache =
+    <String, ImageProvider?>{};
 
 Decoration buildAdvancedThemeBackdropDecoration(
   ResolvedAdvancedThemeBackdrop backdrop, {
@@ -197,14 +197,14 @@ BoxFit _toBoxFit(AppAdvancedThemeWallpaperFit fit) {
   };
 }
 
-FileImage? _resolveBackdropFileImage(String wallpaperPath) {
+ImageProvider? _resolveBackdropFileImage(String wallpaperPath) {
   if (wallpaperPath.isEmpty) {
     return null;
   }
   if (_advancedThemeBackdropFileImageCache.containsKey(wallpaperPath)) {
     return _advancedThemeBackdropFileImageCache[wallpaperPath];
   }
-  final resolved = FileImage(File(wallpaperPath));
+  final resolved = resolveLocalFileImageProvider(wallpaperPath);
   _advancedThemeBackdropFileImageCache[wallpaperPath] = resolved;
   return resolved;
 }

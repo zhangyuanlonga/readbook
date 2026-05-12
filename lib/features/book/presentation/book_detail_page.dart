@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -25,6 +25,7 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/storage/local_file_stat.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/bookmark.dart';
@@ -569,8 +570,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
 
     final filePath = resolvedCover.filePath?.trim() ?? '';
-    if (filePath.isNotEmpty && File(filePath).existsSync()) {
-      return ResizeImage(FileImage(File(filePath)), width: 720);
+    final fileProvider = resolveLocalFileImageProvider(filePath);
+    if (fileProvider != null) {
+      return ResizeImage(fileProvider, width: 720);
     }
 
     final coverUrl = resolvedCover.imageUrl?.trim() ?? '';
@@ -582,9 +584,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return null;
     }
     if (uri.scheme == 'file') {
-      final file = File.fromUri(uri);
-      if (file.existsSync()) {
-        return ResizeImage(FileImage(file), width: 720);
+      final uriFileProvider = resolveLocalFileImageProvider(
+        localFilePathFromUri(uri),
+      );
+      if (uriFileProvider != null) {
+        return ResizeImage(uriFileProvider, width: 720);
       }
       return null;
     }
@@ -2384,8 +2388,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final storagePath = book.storagePath.trim();
     final resolvedStoragePath = await _localBookStorageService
         .resolveStoragePath(book.storagePath);
-    final sourceStat = await _tryStatFile(sourcePath);
-    final storageStat = await _tryStatFile(resolvedStoragePath);
+    final sourceStat = await statLocalFile(sourcePath);
+    final storageStat = await statLocalFile(resolvedStoragePath);
 
     final sourceFileExists = sourceStat != null;
     final storageFileExists = storageStat != null;
@@ -2409,22 +2413,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       splitSettingNeedsReindex:
           book.splitLongChapter != globalSplitLongChapterEnabled,
     );
-  }
-
-  Future<FileStat?> _tryStatFile(String path) async {
-    final normalized = path.trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    try {
-      final file = File(normalized);
-      if (!await file.exists()) {
-        return null;
-      }
-      return file.stat();
-    } catch (_) {
-      return null;
-    }
   }
 
   Future<void> _copyLocalDiagnostics(
