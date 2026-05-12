@@ -21,6 +21,7 @@ import '../core/logging/app_logger.dart';
 import '../core/logging/source_log_store.dart';
 import '../core/storage/managed_file_path_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
+import 'platform/app_platform_capabilities.dart';
 import 'startup/managed_asset_path_migration_service.dart';
 import 'startup/startup_storage_maintenance_service.dart';
 import 'theme/app_interface_typography_provider.dart';
@@ -55,6 +56,8 @@ Future<void> bootstrap() async {
 }
 
 Future<void> _runDeferredBootstrapTasks(SharedPreferences prefs) async {
+  final capabilities = AppPlatformCapabilities.current();
+
   try {
     await ManagedFilePathResolver.primeCurrentRoots();
   } catch (_) {
@@ -67,25 +70,30 @@ Future<void> _runDeferredBootstrapTasks(SharedPreferences prefs) async {
     // Ignore startup log restoration failures.
   }
 
-  try {
-    await ReaderFontRegistryService().restoreRegisteredFonts();
-  } catch (_) {
-    // Ignore broken font restoration during startup.
+  if (capabilities.supportsManagedFileStorage) {
+    try {
+      await ReaderFontRegistryService().restoreRegisteredFonts();
+    } catch (_) {
+      // Ignore broken font restoration during startup.
+    }
   }
 
-  try {
-    await ManagedAssetPathMigrationService(
-      preferences: prefs,
-      logger: AppLogger.instance,
-    ).migrate();
-  } catch (error, stackTrace) {
-    AppLogger.instance.warn(
-      'Deferred managed asset migration failed',
-      context: <String, Object?>{
-        'error': error.toString(),
-        'stackTrace': stackTrace.toString(),
-      },
-    );
+  if (capabilities.supportsManagedFileStorage &&
+      capabilities.supportsNativeSqlite) {
+    try {
+      await ManagedAssetPathMigrationService(
+        preferences: prefs,
+        logger: AppLogger.instance,
+      ).migrate();
+    } catch (error, stackTrace) {
+      AppLogger.instance.warn(
+        'Deferred managed asset migration failed',
+        context: <String, Object?>{
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
   }
 
   try {
@@ -114,18 +122,21 @@ Future<void> _runDeferredBootstrapTasks(SharedPreferences prefs) async {
     );
   }
 
-  try {
-    await StartupStorageMaintenanceService(
-      logger: AppLogger.instance,
-    ).runIfNeeded();
-  } catch (error, stackTrace) {
-    AppLogger.instance.warn(
-      'Deferred storage maintenance failed',
-      context: <String, Object?>{
-        'error': error.toString(),
-        'stackTrace': stackTrace.toString(),
-      },
-    );
+  if (capabilities.supportsManagedFileStorage &&
+      capabilities.supportsNativeSqlite) {
+    try {
+      await StartupStorageMaintenanceService(
+        logger: AppLogger.instance,
+      ).runIfNeeded();
+    } catch (error, stackTrace) {
+      AppLogger.instance.warn(
+        'Deferred storage maintenance failed',
+        context: <String, Object?>{
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
   }
 }
 

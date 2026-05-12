@@ -22,7 +22,7 @@
 ### 1.1 已具备的基础
 
 - 项目已经存在 `android/`、`ios/`、`macos/`、`windows/`、`linux/`、`web/` 平台目录。
-- `scripts/build_unified_artifacts.sh` 已覆盖 Android、iOS、macOS、Windows、Linux 的统一产物收集；Web 尚未纳入统一打包脚本。
+- `scripts/build_unified_artifacts.sh` 已覆盖 Android、iOS、macOS、Windows、Linux、Web 的统一产物收集；Web 产物默认使用本地 CanvasKit 资源，不依赖 `gstatic`。
 - UI 层已经有自适应基础：
   - `ShellScaffold` 已在中大屏切换 `NavigationRail`。
   - `docs/flutter_adaptive_baseline_matrix.md` 已定义手机、横屏、中屏、平板视口和文字缩放矩阵。
@@ -192,7 +192,28 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - 不登录、不配置书源，也能完整使用核心本地阅读业务。
 - 常用业务没有隐性触发 `SourceRuntimeFacade`、`SearchService` 在线执行或 WebView。
 
-### 阶段 4：本地阅读优先闭环
+### 阶段 4：UI 可见性与多端首屏验收
+
+目标：补齐“功能可用”之外的 UI 首屏、弹窗、资产、导航和端差异验收，避免 Web 空白、桌面 overflow、移动端误挡这类问题漏出。
+
+- [x] Web 首屏不依赖外网 Flutter Web 资源，构建和运行默认使用本地 CanvasKit。
+- [x] Web 首屏不因 `dart:io` / `FileImage` 出现在 app 壳、启动图或共享 UI import 链而空白。
+- [x] Web 插件注册链不因 native/mobile 优先插件的 Web 实现异常而阻断首屏。
+- [x] macOS 桌面首屏和启动公告弹窗无 RenderFlex overflow。
+- [ ] Android / iOS / macOS / Windows / Linux / Web 均建立首屏截图或日志验收记录。
+- [ ] 主导航在手机、平板、桌面、Web 下分别验证：可见、可点击、选中态正确、受限入口有占位。
+- [ ] 全局弹窗、公告、更新、导入导出进度、错误提示覆盖小窗口、桌面默认窗口和大字体。
+- [ ] 主题背景、启动图、封面、底部导航图标等 UI 资产在 Web/桌面受限路径下不崩溃并有占位。
+- [ ] 桌面端 hover、滚轮、窗口缩放、键盘焦点不破坏书架/本地书库/详情/设置。
+- [ ] Web 受限能力页面不能是空白页；必须是统一占位、禁用态或可浏览内容。
+
+验收：
+
+- `flutter run -d chrome --no-web-resources-cdn` 不出现 CanvasKit / Roboto 外网加载失败导致的白屏。
+- `flutter run -d macos` 首屏与启动弹窗无 overflow/error 级 UI 日志。
+- 自适应 smoke 只算基础门槛，真实端 run/screenshot/log 至少覆盖 Web 与一个桌面端。
+
+### 阶段 5：本地阅读优先闭环
 
 目标：本地阅读是首版全平台的主价值。
 
@@ -210,7 +231,7 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - `ready` 状态表示目录和正文都可读。
 - 断网状态下本地图书可完整阅读。
 
-### 阶段 5：书源功能延期隔离
+### 阶段 6：书源功能延期隔离
 
 目标：不是删书源，而是让首版不被书源拖住。
 
@@ -227,7 +248,7 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - 首版用户路径中不会出现“书源执行失败”类错误。
 - 书源代码仍可在后续通过能力开关重新接入。
 
-### 阶段 6：构建、测试与发布矩阵
+### 阶段 7：构建、测试与发布矩阵
 
 目标：用固定矩阵保护全平台。
 
@@ -239,7 +260,7 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
   - macOS 主机：Android、iOS、macOS、Web
   - Linux 主机：Android、Linux、Web
   - Windows 主机：Android、Windows、Web
-- [ ] 统一构建脚本补齐 Web 产物收集。
+- [x] 统一构建脚本补齐 Web 产物收集。
 - [ ] 发布说明明确首版不包含在线书源能力。
 
 验收：
@@ -383,3 +404,30 @@ P0 要求完整本地阅读闭环。P1 Web 先要求可启动、可浏览 UI、�
 - 阶段 3 只保证非书源常用业务闭环和受限平台降级；在线书源入口隐藏、发现/搜索本地化和启动书源健康恢复继续归入阶段 5。
 - WebDAV 同步保留为 P1+ 能力，需要后续通过 `--dart-define=APP_ENABLE_WEBDAV_SYNC=true` 单独打开并补同步矩阵验证。
 - 本地阅读格式、桌面键盘/鼠标阅读输入、`txt/epub` 解析一致性继续进入阶段 4。
+
+## 12. 阶段 4 UI 首屏执行记录（2026-05-12）
+
+### 已完成：Web 空白与 macOS UI 报错修复
+
+- [x] 复现 Web 空白：默认 `flutter run -d chrome` 会从 `https://www.gstatic.com/flutter-canvaskit/...` 与 `fonts.gstatic.com` 拉取 Flutter Web 资源；网络失败时 Flutter 引擎未启动，页面白屏。
+- [x] 验证 Web 解决路径：`flutter run -d chrome --no-web-resources-cdn` 不再触发 gstatic CanvasKit 加载失败；`flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run` 通过。
+- [x] `scripts/build_unified_artifacts.sh` 增加 `web` 平台，默认执行 `flutter build web --no-web-resources-cdn --no-wasm-dry-run` 并输出 `Selune-web-<mode>.tar.gz`。
+- [x] `lib/app/app.dart` 首屏键盘 inset 分支移除直接 `Platform.isAndroid/isIOS`，改用 `kIsWeb + defaultTargetPlatform`。
+- [x] 启动图文件渲染拆成条件导入：原生端使用 `FileImage`，Web 端回落到内置启动图，避免 app 壳共享 import 链带入 `dart:io`。
+- [x] `flutter_charset_detector_web` 改为项目本地 stub override，避免 Web 插件注册阶段访问缺失的 JS `enableDebug` 导致首屏中断；Web TXT 编码检测按 P1 受限能力后续补齐。
+- [x] Web deferred 启动任务按 capability 跳过原生文件/SQLite 维护，避免 `path_provider`、Drift Web sql.js 在首屏后输出受限平台错误。
+- [x] 复现并修复 macOS UI 报错：启动公告弹窗在桌面窗口高度下 `RenderFlex overflowed by 3.4 pixels`，现改为高度受限时正文卡片整体可滚动。
+
+### 验证结果
+
+- [x] `flutter analyze`：通过。
+- [x] `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`：通过，产物包含本地 `build/web/canvaskit/*`。
+- [x] `SKIP_CLEAN=1 SKIP_PUB_GET=1 VERSION_PROMPT=0 ./scripts/build_unified_artifacts.sh web debug`：通过，产物位于 `build/unified_artifacts/20260512-060906-debug/Selune-web-debug.tar.gz`。
+- [x] `flutter run -d chrome --web-port=53117 --no-web-resources-cdn`：启动后未再出现 CanvasKit 外网加载失败、`flutter_charset_detector_web` 注册异常、`path_provider` 缺失或 Drift sql.js 启动维护错误。
+- [x] `flutter run -d macos`：复现公告弹窗 overflow；修复后 hot reload 未再输出该 overflow。
+
+### 遗留说明
+
+- Codex 当前无 Chrome 屏幕读取权限，本次 Web 通过 Flutter run 日志和本地 CanvasKit build 验证首屏启动链路；后续仍需要补真实截图。
+- 阶段 4 UI 双轨已经补进阶段计划，但 Android/iOS/Windows/Linux 的真实端截图和窗口缩放记录尚未完成。
+- 阶段编号已从此处起后移：原“本地阅读优先闭环”为阶段 5，原“书源功能延期隔离”为阶段 6，原“构建、测试与发布矩阵”为阶段 7。

@@ -592,8 +592,11 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - 纯 Dart 业务：`flutter analyze` + 对应 service/provider test。
 - 共享 UI：`flutter analyze` + 相关 widget/smoke test + 目标视口矩阵。
 - 平台能力：`flutter analyze` + 至少一个支持端和一个不支持端的能力验证。
-- Web 编译边界：`flutter analyze` + `flutter build web --debug`。
+- Web 编译边界：`flutter analyze` + `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
 - 数据库/条件导入：`flutter analyze` + 当前端测试 + Web 或 native build 基线。
+- Web 首屏验证必须使用本地 Flutter Web 资源；`flutter run -d chrome` 和 Web 产物构建默认带 `--no-web-resources-cdn`，避免 CanvasKit / Roboto 依赖外网导致白屏。
+- Web 首屏还必须检查插件注册日志；native/mobile 优先插件如编码检测、PDF、WebView、JS runtime 不得在 Web 注册阶段抛错，必要时用 Web stub 或条件依赖把能力降级到 application 层。
+- 桌面 UI 改动至少验证一个真实桌面端 run 日志，RenderFlex overflow 视为失败，不能只依赖 widget smoke。
 
 必须在 PR 或执行记录中写清：
 

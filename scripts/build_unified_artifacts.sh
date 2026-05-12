@@ -39,7 +39,7 @@ Usage:
   ./scripts/build_unified_artifacts.sh [platforms] [build_mode]
 
 Arguments:
-  platforms   auto | android,ios,macos,linux,windows (default: auto)
+  platforms   auto | android,ios,macos,linux,windows,web (default: auto)
   build_mode  debug | profile | release (default: release)
 
 Environment variables:
@@ -62,7 +62,7 @@ Environment variables:
 
 Examples:
   ./scripts/build_unified_artifacts.sh
-  ./scripts/build_unified_artifacts.sh android,ios,macos release
+  ./scripts/build_unified_artifacts.sh android,ios,macos,web release
   ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
   ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
   FULL_VERSION=1.1.0+26041802 ./scripts/build_unified_artifacts.sh android,ios release
@@ -95,9 +95,9 @@ host_os() {
 
 default_platforms_for_host() {
   case "$(host_os)" in
-    darwin) echo "android ios macos" ;;
-    linux) echo "android linux" ;;
-    windows) echo "android windows" ;;
+    darwin) echo "android ios macos web" ;;
+    linux) echo "android linux web" ;;
+    windows) echo "android windows web" ;;
     *) echo "android" ;;
   esac
 }
@@ -110,6 +110,7 @@ is_platform_supported_on_host() {
     ios|macos) [[ "$(host_os)" == "darwin" ]] ;;
     linux) [[ "$(host_os)" == "linux" ]] ;;
     windows) [[ "$(host_os)" == "windows" ]] ;;
+    web) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -226,7 +227,7 @@ normalize_platforms() {
 
   for token in "${tokens[@]}"; do
     case "${token}" in
-      android|ios|macos|linux|windows) ;;
+      android|ios|macos|linux|windows|web) ;;
       *)
         echo "Error: unsupported platform '${token}'." >&2
         usage >&2
@@ -477,6 +478,36 @@ for platform in "${PLATFORMS[@]-}"; do
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
         APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_windows_artifact.sh" "${BUILD_MODE}"
+      ;;
+    web)
+      run_platform_build "web" env \
+        FLUTTER_CMD="${FLUTTER_CMD}" \
+        BUILD_NAME="${BUILD_NAME}" \
+        BUILD_NUMBER="${BUILD_NUMBER}" \
+        APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
+        ARTIFACT_NAME="${ARTIFACT_NAME}" \
+        bash -c '
+        set -euo pipefail
+        build_mode="$1"
+        output_dir="$2"
+        flutter_args=(build web "--${build_mode}" --no-web-resources-cdn --no-wasm-dry-run)
+        if [[ -n "${BUILD_NAME}" ]]; then
+          flutter_args+=(--build-name "${BUILD_NAME}")
+        fi
+        if [[ -n "${BUILD_NUMBER}" ]]; then
+          flutter_args+=(--build-number "${BUILD_NUMBER}")
+        fi
+        if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
+          flutter_args+=(--dart-define "APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}")
+        fi
+        if [[ -n "${APPREAD_APP_NAME}" ]]; then
+          flutter_args+=(--dart-define "APPREAD_APP_NAME=${APPREAD_APP_NAME}")
+        fi
+        "${FLUTTER_CMD}" "${flutter_args[@]}"
+        mkdir -p "${output_dir}"
+        tar -czf "${output_dir}/${ARTIFACT_NAME}-web-${build_mode}.tar.gz" -C build/web .
+      ' _ "${BUILD_MODE}" "${STAGING_ROOT}/web"
       ;;
   esac
 done

@@ -97,6 +97,8 @@ dev_dependencies:
 dependency_overrides:
   flutter_charset_detector_android:
     path: third_party/plugins/flutter_charset_detector_android
+  flutter_charset_detector_web:
+    path: third_party/plugins/flutter_charset_detector_web_stub
   pdf_text_extract:
     path: third_party/plugins/pdf_text_extract
 

@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +26,7 @@ import 'router.dart';
 import 'startup/app_announcement_coordinator.dart';
 import 'startup/app_startup_coordinator.dart';
 import 'startup_artwork_store.dart';
+import 'startup_artwork_image_provider.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_interface_typography_provider.dart';
@@ -139,9 +140,11 @@ class _MobileKeyboardInsetStabilizerState
   double _pendingBottomInset = 0;
   bool _didSeedStableInset = false;
 
-  bool get _useAndroidPanInsetsStrategy => Platform.isAndroid;
+  bool get _useAndroidPanInsetsStrategy =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  bool get _useIosStabilizedInsetsStrategy => Platform.isIOS;
+  bool get _useIosStabilizedInsetsStrategy =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   void didChangeDependencies() {
@@ -527,7 +530,7 @@ class _SystemUiOverlayWrapperState
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisSize: MainAxisSize.max,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
@@ -583,52 +586,59 @@ class _SystemUiOverlayWrapperState
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surface.withValues(alpha: 0.88),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.22,
+                        Flexible(
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface.withValues(
+                                alpha: 0.88,
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.22,
+                                ),
                               ),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.7),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
+                            child: ScrollConfiguration(
+                              behavior: const MaterialScrollBehavior().copyWith(
+                                overscroll: false,
                               ),
-                              const SizedBox(height: 10),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: 0,
-                                  maxHeight: contentMaxHeight,
-                                ),
-                                child: ScrollConfiguration(
-                                  behavior: const MaterialScrollBehavior()
-                                      .copyWith(overscroll: false),
-                                  child: SingleChildScrollView(
-                                    child: Text(
-                                      contentText,
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            height: 1.5,
-                                            fontFamilyFallback:
-                                                _dialogFontFallback,
-                                          ),
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 34,
+                                      height: 3,
+                                      decoration: BoxDecoration(
+                                        color: accent.withValues(alpha: 0.7),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 10),
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: 0,
+                                        maxHeight: contentMaxHeight,
+                                      ),
+                                      child: Text(
+                                        contentText,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              height: 1.5,
+                                              fontFamilyFallback:
+                                                  _dialogFontFallback,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -878,18 +888,13 @@ class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
     }
     _seenRevision = revision;
     final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
-    final useFile =
-        resolvedPath != null &&
-        resolvedPath.isNotEmpty &&
-        File(resolvedPath).existsSync();
-    final ImageProvider? nextProvider =
-        useFile
-            ? FileImage(File(resolvedPath))
-            : const AssetImage(_fallbackStartupArtwork);
+    final fileProvider = resolveStartupArtworkFileProvider(resolvedPath);
+    final ImageProvider nextProvider =
+        fileProvider ?? const AssetImage(_fallbackStartupArtwork);
     final nextKey = resolvedPath ?? _fallbackStartupArtwork;
     _imageProvider = nextProvider;
     _imageKey = nextKey;
-    if (precache && nextProvider != null) {
+    if (precache) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           precacheImage(nextProvider, context);
