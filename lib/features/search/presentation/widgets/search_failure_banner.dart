@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../application/search_service.dart';
 
 class SearchFailureBanner extends StatelessWidget {
@@ -56,10 +57,10 @@ class SearchFailureBanner extends StatelessWidget {
   Future<void> _showFailureDetails(BuildContext context) async {
     final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.5;
 
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 560,
+      maxHeightFactor: 0.58,
       builder: (context) {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;

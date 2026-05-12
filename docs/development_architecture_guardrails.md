@@ -330,7 +330,50 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - 为了 Web 编译把 native 端能力直接删掉。
 - 为了移动端手势修改阅读器桌面键盘/鼠标路径。
 
-### 6.4 UI 变更验收矩阵
+### 6.4 UI 基线组件优先级
+
+新增页面和大改页面必须优先复用现有基线组件，而不是从 `Scaffold`、`Row`、`Column`、`showModalBottomSheet` 重新手写一套页面体验。
+
+优先级：
+
+1. 页面骨架：默认使用 `AdaptivePageScaffold`，需要控制正文宽度时配合 `AdaptiveContentContainer`。
+2. 搜索与过滤：优先使用 `AdaptiveSearchBar`、`AdaptiveFilterBar`。
+3. 网格与列表：复杂列表优先 `CustomScrollView + Sliver*`，简单长列表必须使用 builder；网格优先 `AdaptiveGridSliver`。
+4. 设置与列表项：优先使用 `AdaptiveSettingTile`、`AdaptiveListTile` 或 feature 专用 tile。
+5. 空、加载、错误、禁用：优先使用 `AppEmptyStateCard`、`AppStatusStateCard`、`FeatureDisabledPage`。
+6. 弹层与操作面板：优先使用 `AdaptiveActionSurface`、`AdaptiveBottomSheet`、`AdaptiveDialogSurface`，移动端 bottom sheet，桌面/Web dialog、popover 或 side panel。
+7. 书籍封面：优先使用 `ResolvedBookCoverView` 和统一封面叠层规则。
+
+旧页面迁移顺序：
+
+1. 高频核心页：书架、阅读器、首页、我的、搜索。
+2. 管理页：缓存、书签、反馈、图集、字体、标签/分类。
+3. 能力页：书源、同步、发现等 capability-gated 页面在能力开启后治理。
+4. 低频静态页：关于、公告、资料等按改动机会迁移。
+
+禁止把统计数字当成机械替换指标。`ListView`、`Scaffold`、`LayoutBuilder` 只有在存在体验、性能或维护收益时才迁移。
+
+### 6.5 Scaffold 与安全区规则
+
+- 新页面默认不得直接裸写 `Scaffold`，除非属于主壳、阅读器、沉浸式页面、内嵌验证页或明确需要专用骨架。
+- 保留裸 `Scaffold` 的页面必须能说明 SafeArea、键盘 inset、桌面最大宽度、导航遮挡由谁负责。
+- `SafeArea` 不按数量机械匹配 `Scaffold`；以遮挡风险为准。
+- 页面宽度 `840dp+` 时必须有最大宽度、双栏/多栏、工具栏或明确的桌面展示策略，不能只是手机单列拉宽。
+- 阅读器、启动页、WebView/验证页可以保留专用 scaffold，但仍要满足大字体、横屏、键盘和遮挡底线。
+
+### 6.6 UI 基线 review checklist
+
+新增或大改页面时，review 必须回答：
+
+- 是否使用了 `AdaptivePageScaffold` 或说明了不使用原因。
+- 是否使用现有空、加载、错误、禁用组件。
+- 是否在 Web/桌面端避免了移动端 bottom sheet 原样放大。
+- 是否存在 `ListView(children: [...])` 承载长列表。
+- 是否在 `LayoutBuilder` 中做了状态写入、异步请求或重计算。
+- 是否覆盖 `390x844`、`600x960`、`1280x800` 和 `1.3x` 文字缩放。
+- 如果保留裸 `Scaffold`，SafeArea、max width、键盘 inset、导航遮挡由谁负责。
+
+### 6.7 UI 变更验收矩阵
 
 涉及页面布局、导航、设置面板、阅读器、书架卡片、详情页、主题外观时，至少覆盖：
 
@@ -345,7 +388,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 
 如果只改一个平台，也必须说明其他平台为什么不会受影响；无法说明时，按全矩阵验收。
 
-### 6.5 UI 回归底线
+### 6.8 UI 回归底线
 
 以下任一情况视为 UI 回归：
 

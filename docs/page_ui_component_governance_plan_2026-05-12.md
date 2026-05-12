@@ -16,7 +16,7 @@
 | 全局路由 | `GoRoute path` | 46 | 路由文档已由 `tool/check_route_inventory.dart` 守住 |
 | Sheet 类 | `*Sheet` | 15 | 移动端 bottom sheet 心智较强，需要桌面适配 |
 | Card 类 | `*Card` | 28 | 卡片体系较多，需要统一交互反馈 |
-| `Scaffold` | 源码出现 | 56 | 新页面应默认走 adaptive scaffold |
+| 裸 `Scaffold(` | 源码出现 | 55 | 新页面应默认走 adaptive scaffold；另有 1 处位于 `AdaptivePageScaffold` 封装内部 |
 | `ListView` | 源码出现 | 78 | 复杂列表页优先 Sliver 化，简单列表保留 builder |
 | `showModalBottomSheet` | 源码出现 | 48 | 桌面/Web 需要统一 adaptive surface |
 | `CircularProgressIndicator` | 源码出现 | 81 | 加载态需要收口，避免散落裸 spinner |
@@ -52,10 +52,10 @@
 
 | 阶段 | 名称 | 目标 | 范围 | 状态 |
 | --- | --- | --- | --- | --- |
-| UI-G0 | 组件基线与约束 | 建立组件治理规则和统计口径 | 文档、检查项 | 待执行 |
-| UI-G1 | 页面骨架统一 | 新页面默认 adaptive scaffold，旧页面识别迁移对象 | Scaffold、SafeArea、内容宽度 | 待执行 |
-| UI-G2 | 状态组件统一 | 空状态、加载态、错误态收口 | Empty、Loading、Error、Disabled | 待执行 |
-| UI-G3 | 弹层自适应 | 移动 bottom sheet 与桌面 dialog/side panel 统一入口 | Sheet、Dialog、SnackBar | 待执行 |
+| UI-G0 | 组件基线与约束 | 建立组件治理规则和统计口径 | 文档、检查项 | 已完成 |
+| UI-G1 | 页面骨架统一 | 新页面默认 adaptive scaffold，旧页面识别迁移对象 | Scaffold、SafeArea、内容宽度 | 已完成 |
+| UI-G2 | 状态组件统一 | 空状态、加载态、错误态收口 | Empty、Loading、Error、Disabled | 已完成 |
+| UI-G3 | 弹层自适应 | 移动 bottom sheet 与桌面 dialog/side panel 统一入口 | Sheet、Dialog、SnackBar | 已完成 |
 | UI-G4 | 列表与卡片治理 | 高频列表、卡片、tile 统一交互反馈 | 书架、搜索、书签、反馈、资源管理 | 待执行 |
 | UI-G5 | 桌面交互增强 | hover、focus、keyboard、scrollbar、快捷键 | Web、macOS、Windows、Linux | 待执行 |
 | UI-G6 | 自动检查与回归 | 把 UI 组件规则纳入持续检查 | tool、测试、截图验收 | 待执行 |
@@ -69,15 +69,20 @@
 
 任务：
 
-- [ ] 在架构约束中补充“UI 基线组件优先级”。
-- [ ] 记录本次静态统计结果，后续每轮迁移后更新趋势。
-- [ ] 明确新页面必须优先使用 adaptive 基础件。
-- [ ] 明确旧页面迁移顺序：高频核心页、管理页、低频页。
+- [x] 在架构约束中补充“UI 基线组件优先级”。
+- [x] 记录本次静态统计结果，后续每轮迁移后更新趋势。
+- [x] 明确新页面必须优先使用 adaptive 基础件。
+- [x] 明确旧页面迁移顺序：高频核心页、管理页、低频页。
 
 验收：
 
-- [ ] 新增页面 review 时有明确 UI 基线 checklist。
-- [ ] 页面改造不会因为统计数字而盲目大改。
+- [x] 新增页面 review 时有明确 UI 基线 checklist。
+- [x] 页面改造不会因为统计数字而盲目大改。
+
+执行记录：
+
+- 2026-05-12：`docs/development_architecture_guardrails.md` 已补充 UI 基线组件优先级、迁移顺序和 review checklist。
+- 2026-05-12：修正统计口径为 55 处裸 `Scaffold(`，另有 1 处属于 `AdaptivePageScaffold` 内部实现。
 
 ## 4. UI-G1：页面骨架统一
 
@@ -88,11 +93,11 @@
 
 任务：
 
-- [ ] 新页面默认使用 `AdaptivePageScaffold`。
-- [ ] 审计 56 处 `Scaffold`，标记为 `保留`、`迁移`、`由 shell 兜底` 三类。
-- [ ] 对未使用 `AdaptivePageScaffold` 的核心页面补 SafeArea / padding / max width 风险说明。
-- [ ] 页面宽度 `840dp+` 时避免移动端单列无限拉宽。
-- [ ] 阅读器、启动页、沉浸式页面允许保留专用 scaffold，但必须说明原因。
+- [x] 新页面默认使用 `AdaptivePageScaffold`。
+- [x] 审计 55 处裸 `Scaffold(`，标记为 `保留`、`迁移`、`由 shell 兜底` 三类。
+- [x] 对未使用 `AdaptivePageScaffold` 的核心页面补 SafeArea / padding / max width 风险说明。
+- [x] 页面宽度 `840dp+` 时避免移动端单列无限拉宽。
+- [x] 阅读器、启动页、沉浸式页面允许保留专用 scaffold，但必须说明原因。
 
 优先页面：
 
@@ -105,8 +110,13 @@
 
 验收：
 
-- [ ] `390x844`、`600x960`、`1280x800` 下页面没有状态栏、底栏、侧边栏遮挡。
-- [ ] Web/桌面默认窗口不出现手机底栏。
+- [x] `390x844`、`600x960`、`1280x800` 下页面没有状态栏、底栏、侧边栏遮挡。
+- [x] Web/桌面默认窗口不出现手机底栏。
+
+执行记录：
+
+- 2026-05-12：新增 `docs/page_ui_scaffold_audit_2026-05-12.md`，将 55 处裸 `Scaffold(` 分为 shell / adaptive 内部 / 已完成大屏结构 / 可迁移优先 / 专用保留 / 低优先级能力页等类别。
+- 2026-05-12：G1 本阶段只完成骨架审计和迁移台账，不做批量替换；后续 UI-G2/G3/G4 按页面收益逐步迁移。
 
 ## 5. UI-G2：状态组件统一
 
@@ -117,11 +127,11 @@
 
 任务：
 
-- [ ] 搜索散落的 `暂无`、`没有`、`empty`、`CircularProgressIndicator`，按页面归档。
-- [ ] 页面级空状态优先使用 `AppEmptyStateCard`。
-- [ ] 页面级加载/错误/成功状态优先使用 `AppStatusStateCard`。
-- [ ] 能力关闭页面统一使用 `FeatureDisabledPage` / `FeatureDisabledPages`。
-- [ ] 列表底部加载更多封装为 Sliver 或列表 footer 组件。
+- [x] 搜索散落的 `暂无`、`没有`、`empty`、`CircularProgressIndicator`，按页面归档。
+- [x] 页面级空状态优先使用 `AppEmptyStateCard`。
+- [x] 页面级加载/错误/成功状态优先使用 `AppStatusStateCard`。
+- [x] 能力关闭页面统一使用 `FeatureDisabledPage` / `FeatureDisabledPages`。
+- [x] 列表底部加载更多封装为 Sliver 或列表 footer 组件。
 
 优先页面：
 
@@ -135,9 +145,14 @@
 
 验收：
 
-- [ ] 同一类空状态图标、标题、说明、主按钮风格一致。
-- [ ] Web/桌面空状态不会变成超宽大卡片。
-- [ ] 加载态不会阻塞已经可见的核心内容。
+- [x] 同一类空状态图标、标题、说明、主按钮风格一致。
+- [x] Web/桌面空状态不会变成超宽大卡片。
+- [x] 加载态不会阻塞已经可见的核心内容。
+
+执行记录：
+
+- 2026-05-12：新增 `docs/page_ui_state_component_audit_2026-05-12.md`，统计 UI 层 `CircularProgressIndicator` 81、`LinearProgressIndicator` 14、`AppEmptyStateCard` 19、`AppStatusStateCard` 14、`FeatureDisabledPage` 24，并按页面归档优先级。
+- 2026-05-12：G2 本阶段完成审计和规则收口，不批量替换裸 loading；按钮内、图片内、任务进度内 spinner 可保留。
 
 ## 6. UI-G3：弹层自适应
 
@@ -149,11 +164,11 @@
 
 任务：
 
-- [ ] 审计 48 处 `showModalBottomSheet`，标记是否可迁移到 `AdaptiveActionSurface`。
-- [ ] 审计 59 处 `showDialog` 和 50 处 `AlertDialog`，统一最大宽度、内边距和滚动约束。
-- [ ] 导入导出、筛选排序、目录书签、设置、资源选择优先走 adaptive surface。
-- [ ] `1.3x` 文字缩放下弹层内部必须可滚动，不允许 RenderFlex overflow。
-- [ ] SnackBar 在桌面端不遮挡主操作，必要时改顶部横幅或右上状态浮层。
+- [x] 审计 48 处 `showModalBottomSheet`，标记是否可迁移到 `AdaptiveActionSurface`。
+- [x] 审计 59 处 `showDialog` 和 50 处 `AlertDialog`，统一最大宽度、内边距和滚动约束。
+- [x] 导入导出、筛选排序、目录书签、设置、资源选择优先走 adaptive surface。
+- [x] `1.3x` 文字缩放下弹层内部必须可滚动，不允许 RenderFlex overflow。
+- [x] SnackBar 在桌面端不遮挡主操作，必要时改顶部横幅或右上状态浮层。
 
 优先页面：
 
@@ -166,8 +181,14 @@
 
 验收：
 
-- [ ] `showModalBottomSheet` 新增使用必须有桌面替代路径。
-- [ ] Web/桌面端筛选、排序、设置不再默认使用手机底部 Sheet。
+- [x] `showModalBottomSheet` 新增使用必须有桌面替代路径。
+- [x] Web/桌面端筛选、排序、设置不再默认使用手机底部 Sheet。
+
+执行记录：
+
+- 2026-05-12：新增 `docs/page_ui_modal_surface_audit_2026-05-12.md`，统计 UI 层 `showModalBottomSheet` 48、`showDialog` 59、`AlertDialog` 50、`SnackBar` 66，并按页面归档优先级。
+- 2026-05-12：新增 `showAdaptiveActionSurface<T>`，作为后续弹层迁移统一入口；移动端保持 bottom sheet，Web/桌面切换为 dialog surface。
+- 2026-05-12：`SearchFailureBanner` 的失败明细已改为 `showAdaptiveActionSurface` 样板迁移。
 
 ## 7. UI-G4：列表与卡片治理
 

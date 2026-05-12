@@ -567,6 +567,9 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 功能范围：`docs/all_platform_compatibility_plan_2026-05-11.md`
 - 架构约束：`docs/development_architecture_guardrails.md`
 - 组件治理：`docs/page_ui_component_governance_plan_2026-05-12.md`
+- Scaffold 审计：`docs/page_ui_scaffold_audit_2026-05-12.md`
+- 状态组件审计：`docs/page_ui_state_component_audit_2026-05-12.md`
+- 弹层审计：`docs/page_ui_modal_surface_audit_2026-05-12.md`
 - 视口矩阵：`docs/flutter_adaptive_baseline_matrix.md`
 - 人工回归清单：`docs/adaptive_visual_regression_checklist.md`
 
@@ -607,3 +610,15 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 外观页在 840dp+ 改为两列工作台：左侧基础外观（模式、颜色、高级主题状态），右侧导航、底部菜单、字体和其他设置；移动端继续单列。
 - 高级主题列表在 840dp+ 改为左侧搜索/主题列表、右侧主题预览与操作面板；移动端继续保留单列主题卡。
 - 验证：`flutter analyze` 通过；`flutter test test/features/mine/presentation/advanced_theme_pages_smoke_test.dart` 通过。
+
+### 2026-05-12 UI-G0/G1 组件治理
+
+- 新增 `docs/page_ui_component_governance_plan_2026-05-12.md` 的 G0/G1 执行状态，明确新页面默认使用 adaptive 基线组件，旧页面按高频核心页、管理页、能力页、低频静态页顺序迁移。
+- 新增 `docs/page_ui_scaffold_audit_2026-05-12.md`，将 55 处裸 `Scaffold(` 分为 shell、adaptive 内部、已完成大屏结构、可迁移优先、专用保留、低优先级能力页。
+- G1 不做批量替换页面代码，后续跟随状态组件、弹层、列表卡片和桌面交互阶段逐步迁移。
+
+### 2026-05-12 UI-G2/G3 组件治理
+
+- 新增 `docs/page_ui_state_component_audit_2026-05-12.md`，完成状态组件静态审计和页面优先级归档。
+- 新增 `docs/page_ui_modal_surface_audit_2026-05-12.md`，完成弹层/反馈静态审计和页面优先级归档。
+- 新增 `showAdaptiveActionSurface<T>` 作为统一弹层入口，并将搜索失败明细迁移为样板；移动端继续 bottom sheet，Web/桌面端使用 dialog surface。

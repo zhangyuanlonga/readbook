@@ -89,4 +89,7 @@ Android 低内存设备或模拟器上确认：
 - `docs/page_function_multiplatform_methods_2026-05-12.md`：功能兼容状态。
 - `docs/page_ui_multiplatform_display_plan_2026-05-12.md`：多端展示状态。
 - `docs/page_ui_component_governance_plan_2026-05-12.md`：如果改动涉及通用 UI 组件、弹层、状态组件、列表/卡片或桌面交互。
+- `docs/page_ui_scaffold_audit_2026-05-12.md`：如果新增或迁移页面 scaffold / 页面骨架。
+- `docs/page_ui_state_component_audit_2026-05-12.md`：如果新增或迁移空、加载、错误、禁用状态。
+- `docs/page_ui_modal_surface_audit_2026-05-12.md`：如果新增或迁移 bottom sheet、dialog、popover、snackbar。
 - `docs/startup_init_cleanup_execution_plan_2026-05-12.md`：如果页面进入启动链或主 Tab 初始化链。

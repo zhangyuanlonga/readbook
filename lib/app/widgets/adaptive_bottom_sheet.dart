@@ -6,6 +6,65 @@ import '../motion/app_motion_widgets.dart';
 
 enum AdaptiveActionSurfaceMode { mobileSheet, desktopDialog }
 
+Future<T?> showAdaptiveActionSurface<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool useRootNavigator = false,
+  bool barrierDismissible = true,
+  double? maxWidth,
+  double maxHeightFactor = 0.82,
+  EdgeInsetsGeometry? padding,
+  AdaptiveActionSurfaceMode? mode,
+}) {
+  final platform = Theme.of(context).platform;
+  final effectiveMode =
+      mode ??
+      (AppLayout.isDesktopLike(context, platform: platform)
+          ? AdaptiveActionSurfaceMode.desktopDialog
+          : AdaptiveActionSurfaceMode.mobileSheet);
+
+  return switch (effectiveMode) {
+    AdaptiveActionSurfaceMode.mobileSheet => showModalBottomSheet<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      isDismissible: barrierDismissible,
+      enableDrag: barrierDismissible,
+      builder:
+          (surfaceContext) => AdaptiveActionSurface(
+            mode: AdaptiveActionSurfaceMode.mobileSheet,
+            maxWidth: maxWidth,
+            maxHeightFactor: maxHeightFactor,
+            padding: padding,
+            child: builder(surfaceContext),
+          ),
+    ),
+    AdaptiveActionSurfaceMode.desktopDialog => showDialog<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      barrierDismissible: barrierDismissible,
+      builder:
+          (surfaceContext) => Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 24,
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: AdaptiveActionSurface(
+              mode: AdaptiveActionSurfaceMode.desktopDialog,
+              maxWidth: maxWidth,
+              maxHeightFactor: maxHeightFactor,
+              padding: padding,
+              child: builder(surfaceContext),
+            ),
+          ),
+    ),
+  };
+}
+
 class AdaptiveActionSurface extends StatelessWidget {
   const AdaptiveActionSurface({
     super.key,
