@@ -196,6 +196,38 @@ extension on _MinePageState {
     required List<_MineActionItem> otherActions,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
+    final sectionCards = <Widget>[
+      if (appearanceActions.isNotEmpty)
+        _buildPageEntrance(
+          index: 1,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: '外观',
+            actions: appearanceActions,
+          ),
+        ),
+      if (dataActions.isNotEmpty)
+        _buildPageEntrance(
+          index: 2,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: '数据',
+            actions: dataActions,
+          ),
+        ),
+      if (otherActions.isNotEmpty)
+        _buildPageEntrance(
+          index: 3,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: '其他',
+            actions: otherActions,
+          ),
+        ),
+    ];
     return [
       _buildPageEntrance(
         index: 0,
@@ -219,104 +251,61 @@ extension on _MinePageState {
         ),
       ),
       SizedBox(height: metrics.sectionGap),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          if (metrics.isExpandedWindow && constraints.maxWidth >= 900) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (appearanceActions.isNotEmpty)
-                  Expanded(
-                    flex: 6,
-                    child: _buildPageEntrance(
-                      index: 1,
-                      child: _buildActionSection(
-                        context,
-                        palette: palette,
-                        title: '外观',
-                        actions: appearanceActions,
-                      ),
-                    ),
-                  ),
-                if (appearanceActions.isNotEmpty &&
-                    (dataActions.isNotEmpty || otherActions.isNotEmpty))
-                  SizedBox(width: metrics.contentGap),
-                if (dataActions.isNotEmpty || otherActions.isNotEmpty)
-                  Expanded(
-                    flex: 5,
-                    child: Column(
-                      children: [
-                        if (dataActions.isNotEmpty)
-                          _buildPageEntrance(
-                            index: 2,
-                            child: _buildActionSection(
-                              context,
-                              palette: palette,
-                              title: '数据',
-                              actions: dataActions,
-                            ),
-                          ),
-                        if (otherActions.isNotEmpty) ...[
-                          if (dataActions.isNotEmpty)
-                            SizedBox(height: metrics.contentGap),
-                          _buildPageEntrance(
-                            index: 3,
-                            child: _buildActionSection(
-                              context,
-                              palette: palette,
-                              title: '其他',
-                              actions: otherActions,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-              ],
-            );
-          }
+      if (metrics.isExpandedWindow && sectionCards.length > 1)
+        _buildMineDesktopColumns(sectionCards, spacing: metrics.contentGap)
+      else
+        Column(
+          children: [
+            for (var index = 0; index < sectionCards.length; index++) ...[
+              sectionCards[index],
+              if (index < sectionCards.length - 1)
+                SizedBox(height: metrics.contentGap),
+            ],
+          ],
+        ),
+    ];
+  }
 
-          return Column(
+  Widget _buildMineDesktopColumns(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    final leftCards = <Widget>[];
+    final rightCards = <Widget>[];
+    for (var index = 0; index < cards.length; index += 1) {
+      if (index.isEven) {
+        leftCards.add(cards[index]);
+      } else {
+        rightCards.add(cards[index]);
+      }
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
             children: [
-              if (appearanceActions.isNotEmpty)
-                _buildPageEntrance(
-                  index: 1,
-                  child: _buildActionSection(
-                    context,
-                    palette: palette,
-                    title: '外观',
-                    actions: appearanceActions,
-                  ),
-                ),
-              if (dataActions.isNotEmpty) ...[
-                SizedBox(height: metrics.contentGap),
-                _buildPageEntrance(
-                  index: 2,
-                  child: _buildActionSection(
-                    context,
-                    palette: palette,
-                    title: '数据',
-                    actions: dataActions,
-                  ),
-                ),
-              ],
-              if (otherActions.isNotEmpty) ...[
-                SizedBox(height: metrics.contentGap),
-                _buildPageEntrance(
-                  index: 3,
-                  child: _buildActionSection(
-                    context,
-                    palette: palette,
-                    title: '其他',
-                    actions: otherActions,
-                  ),
-                ),
+              for (var index = 0; index < leftCards.length; index++) ...[
+                leftCards[index],
+                if (index < leftCards.length - 1) SizedBox(height: spacing),
               ],
             ],
-          );
-        },
-      ),
-    ];
+          ),
+        ),
+        SizedBox(width: spacing),
+        Expanded(
+          child: Column(
+            children: [
+              for (var index = 0; index < rightCards.length; index++) ...[
+                rightCards[index],
+                if (index < rightCards.length - 1) SizedBox(height: spacing),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildQuickAccessCards(

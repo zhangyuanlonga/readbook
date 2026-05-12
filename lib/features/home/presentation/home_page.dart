@@ -104,6 +104,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     return Scaffold(
       extendBodyBehindAppBar: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('首页'),
         backgroundColor: Colors.transparent,
@@ -112,56 +113,64 @@ class _HomePageState extends ConsumerState<HomePage>
       ),
       body: DecoratedBox(
         decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: AppLayout.pageContentMaxWidth(context, maxWidth: 980),
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  metrics.pagePadding,
-                  topInset + metrics.contentGap,
-                  metrics.pagePadding,
-                  bottomInset + metrics.sectionGap,
+        child: SizedBox.expand(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: AppLayout.pageContentMaxWidth(
+                    context,
+                    maxWidth: 980,
+                  ),
                 ),
-                child:
-                    desktopLike
-                        ? _buildDesktopDashboard(context)
-                        : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AppFadeSlideTransition(
-                              child: _buildReadingSummarySection(),
-                            ),
-                            SizedBox(height: metrics.sectionGap),
-                            AppFadeSlideTransition(
-                              delay: const Duration(milliseconds: 56),
-                              child: _buildSectionHeader(
-                                context,
-                                title: '继续阅读',
-                                actionLabel: '查看统计',
-                                onAction: () => context.push('/stats'),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    metrics.pagePadding,
+                    topInset + metrics.contentGap,
+                    metrics.pagePadding,
+                    bottomInset + metrics.sectionGap,
+                  ),
+                  child:
+                      desktopLike
+                          ? _buildDesktopDashboard(context)
+                          : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppFadeSlideTransition(
+                                child: _buildReadingSummarySection(),
                               ),
-                            ),
-                            SizedBox(height: metrics.contentGap),
-                            AppFadeSlideTransition(
-                              delay: const Duration(milliseconds: 84),
-                              child: _buildContinueReadingSectionBlock(),
-                            ),
-                            SizedBox(height: metrics.sectionGap),
-                            AppFadeSlideTransition(
-                              delay: const Duration(milliseconds: 112),
-                              child: _buildSectionHeader(context, title: '排行'),
-                            ),
-                            SizedBox(height: metrics.contentGap),
-                            AppFadeSlideTransition(
-                              delay: const Duration(milliseconds: 140),
-                              child: _buildRankingPreviewSection(context),
-                            ),
-                          ],
-                        ),
+                              SizedBox(height: metrics.sectionGap),
+                              AppFadeSlideTransition(
+                                delay: const Duration(milliseconds: 56),
+                                child: _buildSectionHeader(
+                                  context,
+                                  title: '继续阅读',
+                                  actionLabel: '查看统计',
+                                  onAction: () => context.push('/stats'),
+                                ),
+                              ),
+                              SizedBox(height: metrics.contentGap),
+                              AppFadeSlideTransition(
+                                delay: const Duration(milliseconds: 84),
+                                child: _buildContinueReadingSectionBlock(),
+                              ),
+                              SizedBox(height: metrics.sectionGap),
+                              AppFadeSlideTransition(
+                                delay: const Duration(milliseconds: 112),
+                                child: _buildSectionHeader(
+                                  context,
+                                  title: '排行',
+                                ),
+                              ),
+                              SizedBox(height: metrics.contentGap),
+                              AppFadeSlideTransition(
+                                delay: const Duration(milliseconds: 140),
+                                child: _buildRankingPreviewSection(context),
+                              ),
+                            ],
+                          ),
+                ),
               ),
             ),
           ),

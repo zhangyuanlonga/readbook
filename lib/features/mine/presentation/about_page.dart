@@ -121,10 +121,9 @@ class _AboutPageState extends State<AboutPage> {
                               );
                           final isExpanded = innerMetrics.isExpandedWindow;
                           final contentGap = innerMetrics.contentGap;
-
-                          final leftColumn = <Widget>[
+                          final desktopCards = <Widget>[
                             _buildIntroCard(context),
-                            SizedBox(height: contentGap),
+                            _buildWebsiteCard(context),
                             _buildSectionCard(
                               context,
                               title: '项目当前重点',
@@ -132,19 +131,6 @@ class _AboutPageState extends State<AboutPage> {
                               icon: Icons.track_changes_outlined,
                               items: AboutPage._projectFocus,
                             ),
-                            SizedBox(height: contentGap),
-                            _buildSectionCard(
-                              context,
-                              title: '当前能力',
-                              subtitle: '优先覆盖本地文档与个人阅读管理。',
-                              icon: Icons.checklist_rounded,
-                              items: AboutPage._mvpScope,
-                            ),
-                          ];
-
-                          final rightColumn = <Widget>[
-                            _buildWebsiteCard(context),
-                            SizedBox(height: contentGap),
                             _buildTagCard(
                               context,
                               title: '技术栈',
@@ -152,7 +138,13 @@ class _AboutPageState extends State<AboutPage> {
                               icon: Icons.developer_mode_rounded,
                               tags: AboutPage._techStack,
                             ),
-                            SizedBox(height: contentGap),
+                            _buildSectionCard(
+                              context,
+                              title: '当前能力',
+                              subtitle: '优先覆盖本地文档与个人阅读管理。',
+                              icon: Icons.checklist_rounded,
+                              items: AboutPage._mvpScope,
+                            ),
                             _buildComplianceCard(context),
                           ];
 
@@ -165,24 +157,15 @@ class _AboutPageState extends State<AboutPage> {
                                 metrics.contentGap + bottomSafe,
                               ),
                               children: [
-                                if (!isExpanded) ...leftColumn,
-                                if (!isExpanded) SizedBox(height: contentGap),
-                                if (!isExpanded) ...rightColumn,
+                                if (!isExpanded)
+                                  ..._buildAboutLinearEntries(
+                                    desktopCards,
+                                    spacing: contentGap,
+                                  ),
                                 if (isExpanded)
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        flex: 12,
-                                        child: Column(children: leftColumn),
-                                      ),
-                                      SizedBox(width: contentGap),
-                                      Expanded(
-                                        flex: 10,
-                                        child: Column(children: rightColumn),
-                                      ),
-                                    ],
+                                  ..._buildAboutDesktopColumns(
+                                    desktopCards,
+                                    spacing: contentGap,
                                   ),
                               ],
                             ),
@@ -198,6 +181,64 @@ class _AboutPageState extends State<AboutPage> {
         );
       },
     );
+  }
+
+  List<Widget> _buildAboutLinearEntries(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    return [
+      for (var index = 0; index < cards.length; index++) ...[
+        cards[index],
+        if (index < cards.length - 1) SizedBox(height: spacing),
+      ],
+    ];
+  }
+
+  List<Widget> _buildAboutDesktopColumns(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    final leftCards = <Widget>[];
+    final rightCards = <Widget>[];
+    for (var index = 0; index < cards.length; index += 1) {
+      if (index.isEven) {
+        leftCards.add(cards[index]);
+      } else {
+        rightCards.add(cards[index]);
+      }
+    }
+
+    return [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              children: _buildAboutColumnEntries(leftCards, spacing: spacing),
+            ),
+          ),
+          SizedBox(width: spacing),
+          Expanded(
+            child: Column(
+              children: _buildAboutColumnEntries(rightCards, spacing: spacing),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _buildAboutColumnEntries(
+    List<Widget> cards, {
+    required double spacing,
+  }) {
+    return [
+      for (var index = 0; index < cards.length; index++) ...[
+        cards[index],
+        if (index < cards.length - 1) SizedBox(height: spacing),
+      ],
+    ];
   }
 
   Widget _buildIntroCard(BuildContext context) {

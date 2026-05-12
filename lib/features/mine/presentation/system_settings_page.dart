@@ -90,23 +90,13 @@ class SystemSettingsPage extends StatelessWidget {
                                 );
                               }
 
-                              return const Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        _BookshelfAutoRefreshSettingPanel(),
-                                        SizedBox(height: 12),
-                                        _ReaderSettingsResetPanel(),
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: _SearchConcurrencySettingPanel(),
-                                  ),
+                              return _buildDesktopSystemSettingsColumns(
+                                const <Widget>[
+                                  _BookshelfAutoRefreshSettingPanel(),
+                                  _SearchConcurrencySettingPanel(),
+                                  _ReaderSettingsResetPanel(),
                                 ],
+                                spacing: 12,
                               );
                             },
                           ),
@@ -212,6 +202,56 @@ class SystemSettingsPage extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildDesktopSystemSettingsColumns(
+  List<Widget> cards, {
+  required double spacing,
+}) {
+  final leftCards = <Widget>[];
+  final rightCards = <Widget>[];
+  for (var index = 0; index < cards.length; index += 1) {
+    if (index.isEven) {
+      leftCards.add(cards[index]);
+    } else {
+      rightCards.add(cards[index]);
+    }
+  }
+
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(
+        child: Column(
+          children: _buildSystemSettingsColumnEntries(
+            leftCards,
+            spacing: spacing,
+          ),
+        ),
+      ),
+      SizedBox(width: spacing),
+      Expanded(
+        child: Column(
+          children: _buildSystemSettingsColumnEntries(
+            rightCards,
+            spacing: spacing,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+List<Widget> _buildSystemSettingsColumnEntries(
+  List<Widget> cards, {
+  required double spacing,
+}) {
+  return [
+    for (var index = 0; index < cards.length; index++) ...[
+      cards[index],
+      if (index < cards.length - 1) SizedBox(height: spacing),
+    ],
+  ];
 }
 
 Widget _buildMetaChip(
