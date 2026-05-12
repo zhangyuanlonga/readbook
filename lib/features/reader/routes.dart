@@ -107,10 +107,7 @@ final List<RouteBase> readerRoutes = <RouteBase>[
           transitionDuration: const Duration(milliseconds: 180),
           reverseTransitionDuration: const Duration(milliseconds: 140),
           beginOpacity: 0.88,
-          child: const FeatureDisabledPage(
-            title: '在线章节暂未启用',
-            message: '当前全平台首版只保证本地阅读。在线章节读取、换源和章节缓存会随书源专题恢复。',
-          ),
+          child: FeatureDisabledPages.onlineChapter(),
         );
       }
 

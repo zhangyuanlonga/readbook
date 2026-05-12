@@ -19,7 +19,7 @@ on:
       flutter_version:
         description: "Flutter version used by CI"
         required: true
-        default: "3.29.3"
+        default: "3.41.5"
       android_target:
         description: "Android artifact type"
         required: true
@@ -101,6 +101,7 @@ jobs:
             echo "$1" | tr '[:upper:]' '[:lower:]' | tr ',' ' '
           }
 
+          allowed=(all android ios macos linux windows web)
           contains_platform() {
             local needle="$1"
             shift
@@ -117,7 +118,14 @@ jobs:
           read -r -a requested <<<"$(normalize "${REQUESTED_PLATFORMS}")"
 
           selected=()
-          if [[ "${REQUESTED_PLATFORMS,,}" == "all" ]]; then
+          for platform in "${requested[@]}"; do
+            if ! contains_platform "${platform}" "${allowed[@]}"; then
+              echo "::error::Unsupported platform '${platform}'. Use all, android, ios, macos, linux, windows, web."
+              exit 1
+            fi
+          done
+
+          if [[ "${#requested[@]}" -eq 1 && "${requested[0]}" == "all" ]]; then
             selected=("${supported[@]}")
           else
             for platform in "${requested[@]}"; do
@@ -176,6 +184,30 @@ jobs:
           flutter config --enable-linux-desktop
           flutter config --enable-macos-desktop
           flutter config --enable-windows-desktop
+
+      - name: Restore Android release signing files
+        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true' && contains(steps.platforms.outputs.selected, 'android') && inputs.build_mode == 'release'
+        shell: bash
+        env:
+          ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -f android/key.properties && -f android/app/appread-release.jks ]]; then
+            echo "Android release signing files already exist in the workspace."
+            exit 0
+          fi
+
+          if [[ -z "${ANDROID_KEY_PROPERTIES}" || -z "${ANDROID_KEYSTORE_BASE64}" ]]; then
+            echo "::error::Android release build requires secrets ANDROID_KEY_PROPERTIES and ANDROID_KEYSTORE_BASE64."
+            echo "::error::ANDROID_KEY_PROPERTIES should match android/key.properties.example; ANDROID_KEYSTORE_BASE64 should be the base64 of android/app/appread-release.jks."
+            exit 1
+          fi
+
+          mkdir -p android/app
+          printf '%s\n' "${ANDROID_KEY_PROPERTIES}" > android/key.properties
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/appread-release.jks
 
       - name: Build selected platforms
         if: steps.platforms.outputs.should_build == 'true'

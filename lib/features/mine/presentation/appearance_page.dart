@@ -55,7 +55,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   ];
 
   List<String> _backgroundPaths = [];
-  bool _isLoadingBackgrounds = true;
+  bool _isLoadingBackgrounds = false;
   final ReaderFontRegistryService _fontRegistryService =
       ReaderFontRegistryService();
   late final ImageSelectionService _imageSelectionService;
@@ -70,11 +70,17 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     super.initState();
     _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _resourceService = ref.read(appearancePageResourceServiceProvider);
-    _loadBackgrounds();
-    unawaited(_loadAvailableFonts());
+    if (widget.section == AppearanceSection.background) {
+      unawaited(_loadBackgrounds());
+    }
   }
 
   Future<void> _loadBackgrounds() async {
+    if (mounted && !_isLoadingBackgrounds) {
+      setState(() {
+        _isLoadingBackgrounds = true;
+      });
+    }
     final resources = await _resourceService.loadResources();
     if (!mounted) {
       return;

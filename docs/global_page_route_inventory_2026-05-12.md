@@ -158,6 +158,7 @@
 
 - 2026-05-12：Phase 0、Phase 1 已完成，页面加载分级进入架构约束，Core Shell 首屏只加载基础快照。
 - 2026-05-12：Phase 2、Phase 3 已完成，书架链路分成基础列表、首屏后补齐、低优先级后台刷新；阅读器重资源 warmup 改为正文可见后触发。
+- 2026-05-12：Phase 4、Phase 5 已完成，我的页不预加载管理页数据，`/appearance` 资源改为按 section / 用户动作加载；受限功能页统一使用 `FeatureDisabledPages` 预设。
 
 ### 4.1 Core Shell
 

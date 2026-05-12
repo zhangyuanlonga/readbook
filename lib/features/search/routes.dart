@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,11 +21,7 @@ final List<RouteBase> searchRoutes = <RouteBase>[
         child:
             supportsSourceRuntime
                 ? const SearchPage()
-                : const FeatureDisabledPage(
-                  title: '在线搜索暂未启用',
-                  message: '全平台首版先聚焦本地书库和本地阅读。在线搜索依赖书源运行时，后续会随书源专题恢复。',
-                  icon: Icons.search_off_rounded,
-                ),
+                : FeatureDisabledPages.onlineSearch(),
       );
     },
   ),

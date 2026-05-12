@@ -786,6 +786,10 @@ extension on _AppearancePageState {
   }
 
   Future<void> _showFontFamilyBottomSheet(BuildContext context) async {
+    await _loadAvailableFonts();
+    if (!context.mounted) {
+      return;
+    }
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,

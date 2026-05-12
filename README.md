@@ -29,9 +29,9 @@ flutter run
 交互式终端下，脚本会在打包前提示确认本次版本号，并通过 `--build-name / --build-number` 覆盖 Flutter 默认版本，无需每次手改 `pubspec.yaml`。
 
 默认（`auto`）会根据当前主机自动选择可构建平台：
-- macOS: `android ios macos`
-- Linux: `android linux`
-- Windows: `android windows`
+- macOS: `android ios macos web`
+- Linux: `android linux web`
+- Windows: `android windows web`
 
 ```bash
 # 默认：auto + release
@@ -56,6 +56,13 @@ BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 \
 
 产物默认目录：`build/unified_artifacts/<timestamp>-<mode>/`
 同目录下会生成 `manifest.txt`，方便查看每个平台对应的文件名。
+
+GitHub Actions 也提供了手动打包入口：`Actions -> Multiplatform Build -> Run workflow`。
+默认 `platforms=all` 会并行打 Android / Linux / Web、iOS / macOS、Windows，并上传为 Actions artifacts。
+如果要在 GitHub 上打 Android release 包，需要先配置仓库 Secrets：
+
+- `ANDROID_KEY_PROPERTIES`：内容格式参考 `android/key.properties.example`
+- `ANDROID_KEYSTORE_BASE64`：`android/app/appread-release.jks` 的 base64 内容
 
 版本规则建议：
 - `BUILD_NAME` / `version_name`：给用户看的展示版本，例如 `1.1.0`

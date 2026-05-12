@@ -75,3 +75,67 @@ class FeatureDisabledPage extends StatelessWidget {
     );
   }
 }
+
+class FeatureDisabledPages {
+  const FeatureDisabledPages._();
+
+  static FeatureDisabledPage discover() => const FeatureDisabledPage(
+    title: '发现暂未启用',
+    message: '发现页依赖在线书源和脚本运行时，已移出全平台首版范围。当前版本优先打磨本地阅读体验。',
+    icon: Icons.explore_off_outlined,
+  );
+
+  static FeatureDisabledPage onlineSearch() => const FeatureDisabledPage(
+    title: '在线搜索暂未启用',
+    message: '全平台首版先聚焦本地书库和本地阅读。在线搜索依赖书源运行时，后续会随书源专题恢复。',
+    icon: Icons.search_off_rounded,
+  );
+
+  static FeatureDisabledPage sourceRuntime() => const FeatureDisabledPage(
+    title: '书源功能暂未启用',
+    message: '当前全平台首版先交付本地阅读、书架、阅读记录和外观设置。在线书源、脚本编辑、登录和调试会在后续版本作为独立专题回归。',
+  );
+
+  static FeatureDisabledPage sourceLogin() => const FeatureDisabledPage(
+    title: '书源登录暂未启用',
+    message: '在线书源登录依赖脚本源运行时和 WebView 验证，已移出全平台首版范围。',
+  );
+
+  static FeatureDisabledPage sourceWebLogin() => const FeatureDisabledPage(
+    title: '网页登录暂未启用',
+    message: '交互式网页登录会随书源运行时一起在后续版本恢复。',
+  );
+
+  static FeatureDisabledPage sourceEditor() => const FeatureDisabledPage(
+    title: '脚本源编辑暂未启用',
+    message: '脚本源编辑器已从全平台首版中延期，首版优先保证本地阅读闭环稳定。',
+  );
+
+  static FeatureDisabledPage sourceImport() => const FeatureDisabledPage(
+    title: '书源导入暂未启用',
+    message: '首版全平台暂不导入在线书源，后续会以独立能力开关恢复。',
+  );
+
+  static FeatureDisabledPage webDavSync() => const FeatureDisabledPage(
+    title: '同步功能暂未启用',
+    message:
+        '首版全平台先保证本地阅读和常用业务闭环。WebDAV 同步已放入 P1+，默认不参与首版验收；可继续使用本地书架、书签、阅读记录和外观设置。',
+    icon: Icons.sync_disabled_rounded,
+  );
+
+  static FeatureDisabledPage syncHistory() => const FeatureDisabledPage(
+    title: '同步历史暂不可用',
+    message: '当前平台未开放 WebDAV 同步能力，因此不会产生同步历史。首版可继续使用本地阅读记录和书签。',
+    icon: Icons.history_toggle_off_rounded,
+  );
+
+  static FeatureDisabledPage onlineBookDetail() => const FeatureDisabledPage(
+    title: '在线详情暂未启用',
+    message: '全平台首版先交付本地阅读闭环。在线详情、目录刷新和章节读取会随书源专题恢复。',
+  );
+
+  static FeatureDisabledPage onlineChapter() => const FeatureDisabledPage(
+    title: '在线章节暂未启用',
+    message: '当前全平台首版只保证本地阅读。在线章节读取、换源和章节缓存会随书源专题恢复。',
+  );
+}

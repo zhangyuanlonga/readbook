@@ -34,10 +34,7 @@ final List<RouteBase> bookRoutes = <RouteBase>[
           state: state,
           transitionDuration: const Duration(milliseconds: 260),
           reverseTransitionDuration: const Duration(milliseconds: 200),
-          child: const FeatureDisabledPage(
-            title: '在线详情暂未启用',
-            message: '全平台首版先交付本地阅读闭环。在线详情、目录刷新和章节读取会随书源专题恢复。',
-          ),
+          child: FeatureDisabledPages.onlineBookDetail(),
         );
       }
 

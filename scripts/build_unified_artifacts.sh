@@ -410,6 +410,7 @@ for platform in "${PLATFORMS[@]-}"; do
         SKIP_PUB_GET=1 \
         APK_PROFILE="${ANDROID_APK_PROFILE}" \
         SPLIT_PER_ABI="${SPLIT_PER_ABI}" \
+        ARTIFACT_NAME="${ARTIFACT_NAME}" \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
@@ -431,6 +432,7 @@ for platform in "${PLATFORMS[@]-}"; do
           OUTPUT_DIR="${STAGING_ROOT}/ios" \
           APP_NAME="${APP_NAME}" \
           BUILD_MODE="${BUILD_MODE}" \
+          ARTIFACT_NAME="${ARTIFACT_NAME}" \
           SKIP_CLEAN=1 \
           SKIP_PUB_GET=1 \
           SKIP_POD_INSTALL="${SKIP_POD_INSTALL}" \
@@ -446,6 +448,7 @@ for platform in "${PLATFORMS[@]-}"; do
         FLUTTER_CMD="${FLUTTER_CMD}" \
         OUTPUT_DIR="${STAGING_ROOT}/macos" \
         APP_NAME="${MACOS_APP_NAME}" \
+        ARTIFACT_NAME="${ARTIFACT_NAME}" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
         SKIP_POD_INSTALL="${SKIP_POD_INSTALL}" \
@@ -459,6 +462,7 @@ for platform in "${PLATFORMS[@]-}"; do
       run_platform_build "linux" env \
         FLUTTER_CMD="${FLUTTER_CMD}" \
         OUTPUT_DIR="${STAGING_ROOT}/linux" \
+        ARTIFACT_NAME="${ARTIFACT_NAME}" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
         BUILD_NAME="${BUILD_NAME}" \
@@ -471,6 +475,7 @@ for platform in "${PLATFORMS[@]-}"; do
       run_platform_build "windows" env \
         FLUTTER_CMD="${FLUTTER_CMD}" \
         OUTPUT_DIR="${STAGING_ROOT}/windows" \
+        ARTIFACT_NAME="${ARTIFACT_NAME}" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
         BUILD_NAME="${BUILD_NAME}" \
