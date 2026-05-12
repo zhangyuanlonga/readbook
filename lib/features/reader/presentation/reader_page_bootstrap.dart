@@ -37,6 +37,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     BookDetailLoadResult? detailResult,
     bool refreshBookshelf = true,
   }) {
+    _scheduleDeferredBootstrapWarmup();
     unawaited(() async {
       if (detailResult != null) {
         await _persistTocSnapshot(detailResult);
@@ -44,6 +45,20 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       if (refreshBookshelf) {
         await _refreshBookshelfState();
       }
+    }());
+  }
+
+  void _scheduleDeferredBootstrapWarmup() {
+    if (_deferredBootstrapWarmupStarted) {
+      return;
+    }
+    _deferredBootstrapWarmupStarted = true;
+    unawaited(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 48));
+      if (!mounted) {
+        return;
+      }
+      await _runDeferredBootstrapWarmup();
     }());
   }
 
@@ -361,7 +376,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _customBackgroundImages = const <String>[];
         unawaited(_applySystemReaderBrightness(bootSettings.brightness));
       }
-      unawaited(_runDeferredBootstrapWarmup());
       final tocSnapshotStopwatch = Stopwatch()..start();
       final hydratedTocSnapshot = await _tryHydrateTocSnapshot();
       tocSnapshotLoadMs = tocSnapshotStopwatch.elapsedMilliseconds;

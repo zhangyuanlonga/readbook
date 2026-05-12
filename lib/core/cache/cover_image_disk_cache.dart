@@ -34,6 +34,7 @@ class CoverImageDiskCache {
 
   final Dio _dio;
   final Map<String, Future<File?>> _inflight = <String, Future<File?>>{};
+  final _AsyncSemaphore _downloadGate = _AsyncSemaphore(4);
   Directory? _cacheDir;
 
   static const Duration _stalePeriod = Duration(days: 30);
@@ -205,23 +206,33 @@ class CoverImageDiskCache {
       // Ignore cache read failures and retry network download.
     }
 
-    try {
-      final response = await _dio.get<List<int>>(imageUrl);
-      final bytes = response.data ?? const <int>[];
-      if (bytes.isEmpty) {
-        return await _hasReadableBytes(file) ? file : null;
+    return _downloadGate.run(() async {
+      try {
+        if (await _isUsable(file)) {
+          return file;
+        }
+      } catch (_) {
+        // Ignore cache read failures and retry network download.
       }
 
-      final tempFile = File('${file.path}.tmp');
-      await tempFile.writeAsBytes(bytes, flush: true);
-      if (await file.exists()) {
-        await file.delete();
+      try {
+        final response = await _dio.get<List<int>>(imageUrl);
+        final bytes = response.data ?? const <int>[];
+        if (bytes.isEmpty) {
+          return await _hasReadableBytes(file) ? file : null;
+        }
+
+        final tempFile = File('${file.path}.tmp');
+        await tempFile.writeAsBytes(bytes, flush: true);
+        if (await file.exists()) {
+          await file.delete();
+        }
+        await tempFile.rename(file.path);
+        return file;
+      } catch (_) {
+        return await _hasReadableBytes(file) ? file : null;
       }
-      await tempFile.rename(file.path);
-      return file;
-    } catch (_) {
-      return await _hasReadableBytes(file) ? file : null;
-    }
+    });
   }
 
   Future<File?> _cacheFileForUrl(String imageUrl) async {
@@ -288,5 +299,41 @@ class CoverImageDiskCache {
       return false;
     }
     return await file.length() > 0;
+  }
+}
+
+class _AsyncSemaphore {
+  _AsyncSemaphore(this._maxConcurrent);
+
+  final int _maxConcurrent;
+  final List<Completer<void>> _waiters = <Completer<void>>[];
+  int _running = 0;
+
+  Future<T> run<T>(Future<T> Function() task) async {
+    await _acquire();
+    try {
+      return await task();
+    } finally {
+      _release();
+    }
+  }
+
+  Future<void> _acquire() {
+    if (_running < _maxConcurrent) {
+      _running += 1;
+      return Future<void>.value();
+    }
+    final completer = Completer<void>();
+    _waiters.add(completer);
+    return completer.future;
+  }
+
+  void _release() {
+    if (_waiters.isEmpty) {
+      _running -= 1;
+      return;
+    }
+    final next = _waiters.removeAt(0);
+    next.complete();
   }
 }

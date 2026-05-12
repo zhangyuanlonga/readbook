@@ -466,6 +466,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   List<_ContinuousTextChapter> _continuousTextChapters =
       const <_ContinuousTextChapter>[];
   DateTime? _lastInlineImagePrecacheAt;
+  bool _deferredBootstrapWarmupStarted = false;
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',

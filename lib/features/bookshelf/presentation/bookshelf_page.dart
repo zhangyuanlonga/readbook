@@ -450,6 +450,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const Duration _kDeferredBookshelfWarmupDelay = Duration(
     milliseconds: 16,
   );
+  static const Duration _kPostFirstPaintBookshelfMetadataDelay = Duration(
+    milliseconds: 48,
+  );
   static const Set<String> _kMangaCapabilityKeywords = <String>{
     'manga',
     'comic',
@@ -2702,6 +2705,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           sourceId: sourceId,
           detailUrl: detailUrl,
         );
+        final coverDecodeSize = _resolveBookshelfCoverDecodeSize(
+          context,
+          width: width,
+          height: height,
+        );
         return ResolvedBookCoverView(
           cover: resolvedCover,
           title: resolvedPresentation.displayTitle,
@@ -2709,6 +2717,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           width: width,
           height: height,
           borderRadius: BorderRadius.circular(12),
+          cacheWidth: coverDecodeSize.$1,
+          cacheHeight: coverDecodeSize.$2,
         );
       },
     );
@@ -2716,6 +2726,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return coverView;
     }
     return Hero(tag: heroTag.trim(), child: coverView);
+  }
+
+  (int?, int?) _resolveBookshelfCoverDecodeSize(
+    BuildContext context, {
+    required double width,
+    required double height,
+  }) {
+    if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
+      return (null, null);
+    }
+    final ratio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+    final cacheWidth = math.min((width * ratio).round(), 512);
+    final cacheHeight = math.min((height * ratio).round(), 768);
+    return (cacheWidth, cacheHeight);
   }
 
   String _bookKeyByParams({
@@ -3069,13 +3093,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _syncSelectionWithBooks();
       unawaited(_maybeShowContinueReadingPrompt(ticket: ticket));
 
-      await _loadBookshelfImmediateMetadata(books, ticket: ticket);
-
-      if (books.isEmpty) {
-        return;
-      }
-
-      unawaited(_runDeferredBookshelfWarmup(books, ticket: ticket));
+      _scheduleBookshelfPostFirstPaintWork(books, ticket: ticket);
     } on TimeoutException {
       if (!mounted || ticket != _loadTicket) {
         return;
@@ -3093,6 +3111,23 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _loadErrorText = '加载书架失败：$error';
       });
     }
+  }
+
+  void _scheduleBookshelfPostFirstPaintWork(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) {
+    unawaited(() async {
+      await Future<void>.delayed(_kPostFirstPaintBookshelfMetadataDelay);
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+      await _loadBookshelfImmediateMetadata(books, ticket: ticket);
+      if (!mounted || ticket != _loadTicket || books.isEmpty) {
+        return;
+      }
+      await _runDeferredBookshelfWarmup(books, ticket: ticket);
+    }());
   }
 
   void _recordBookshelfFirstVisible({required int booksCount}) {
@@ -3224,7 +3259,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     await _loadProgressMapInBatches(books, ticket: ticket);
     if (_skipNextBackgroundLatestInfoRefresh) {
       _skipNextBackgroundLatestInfoRefresh = false;
-    } else {
+    } else if (ref
+        .read(appPlatformCapabilitiesProvider)
+        .supportsSourceRuntime) {
       final refreshEpoch = ++_latestInfoRefreshEpoch;
       unawaited(
         _refreshOnlineBookshelfLatestInfo(
@@ -3876,6 +3913,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
+    if (!ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime) {
+      return const <String, int>{};
+    }
     return _bookshelfPresentationQueryService.loadSourceTypeMap(
       timeout: _kSourceMapLoadTimeout,
       inferRuntimeSourceType: _inferScriptSourceType,
