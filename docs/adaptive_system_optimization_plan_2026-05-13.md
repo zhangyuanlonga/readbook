@@ -289,6 +289,7 @@ unsupported：当前平台或构建配置不支持
 - 2026-05-13：A8-B4 按“两项一组”迁移公告列表和公告详情；公告列表从一次性拼装 `ListView(children)` 改为 `CustomScrollView + SliverList.builder`，公告详情正文最大宽度收窄到设置页内容宽度，避免桌面长文行宽过长。
 - 2026-05-13：A8 继续按两项一组迁移关于页与同步历史；`AboutPage` 收口为 `ConsumerStatefulWidget`，`SyncHistoryPage` 任务详情从裸 `showModalBottomSheet` 迁到 `showAdaptiveActionSurface`。
 - 2026-05-13：A8 按三个功能模块批量推进：标签/分类管理模块收口到 `ConsumerStatefulWidget` 且重命名/删除走 adaptive surface；书签模块内部详情页增加宽屏内容约束；缓存/字体资源模块将清理确认、明细弹层、字体导入说明和重命名统一迁到 `showAdaptiveActionSurface`。
+- 2026-05-13：A8 下一组三模块继续推进：反馈模块将 `FeedbackPage` 收口为 `ConsumerStatefulWidget` 并将相似反馈确认迁到 adaptive surface；错误中心移动日志列表改为 Sliver builder，且低高度横屏降级为移动列表避免 640x360 + 1.3 字体溢出；系统设置恢复默认确认迁到 adaptive surface。会员中心复杂兑换/设备席位面板暂留后续单独迁移。
 
 ## 11. 排期建议
 

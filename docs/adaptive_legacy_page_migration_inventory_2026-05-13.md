@@ -204,3 +204,18 @@
 
 - `MineManagementPage`、`BookmarksPage`、`CacheManagementPage`、`FontManagementPage` 暂保留直接 `Scaffold`。原因：这些页面已有透明 AppBar、主题 backdrop 或专用任务 overlay；回收条件同前，待 `AdaptivePageScaffold` 支持透明 AppBar/backdrop/overlay slot 后统一迁移骨架。
 - 缓存清理和字体导入的业务流程不在本批重写，只迁 UI surface 和状态来源，避免影响实际数据删除、导入和任务态。
+
+### 2026-05-13：A8 三个功能模块第二组迁移
+
+选择范围：
+
+| 功能模块 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 反馈 | `/feedback`、`/feedback/compose` | `FeedbackPage` 从 `StatefulWidget + Consumer` 收口为 `ConsumerStatefulWidget`；提交前相似反馈确认迁到 `showAdaptiveActionSurface` | 列表筛选、提交反馈、相似反馈确认、移动/桌面弹层 | 已完成 |
+| 错误中心 | `/error-center` | 移动端日志列表从 `ListView(children)` 改为 `CustomScrollView + SliverList.builder`；低高度横屏降级为移动列表 | 日志很多时滚动、空状态、复制/导出入口、640x360 + 1.3 字体 | 已完成 |
+| 系统设置 | `/system-settings` | 恢复界面/阅读设置默认确认迁到 `showAdaptiveActionSurface` | 入口可达、确认恢复、移动/桌面弹层 | 已完成 |
+
+本批例外：
+
+- `MembershipCenterPage` 中兑换码、设备席位、客服说明面板暂不纳入本组三模块。原因：该页包含登录态、会员权益、席位同步和底部表单，适合单独作为账号/会员模块做完整迁移。
+- `FeedbackComposePage` 页面骨架暂保留直接 `Scaffold`，本批只迁提交前的普通确认弹层；回收条件：反馈模块统一表单骨架和附件/键盘 inset 后再迁移。

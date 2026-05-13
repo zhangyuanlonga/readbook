@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_setting_tile.dart';
 import '../../../domain/entities/reader_settings.dart';
@@ -526,23 +527,46 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
             ? '将重置阅读器的界面相关设置（主题、触发、信息栏等）。'
             : '将重置阅读器的阅读相关设置（字号、排版、边距、字体等）。';
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(title),
-            content: Text('$content\n\n该操作不会影响书架和阅读记录。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
+      maxWidth: 440,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '$content\n\n该操作不会影响书架和阅读记录。',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('确认恢复'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('确认恢复'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true) {

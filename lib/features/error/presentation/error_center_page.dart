@@ -81,6 +81,9 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
                   initialData: _store.entries,
                   builder: (context, snapshot) {
                     final allEntries = snapshot.data ?? const <AppLogEntry>[];
+                    final viewportHeight = MediaQuery.sizeOf(context).height;
+                    final useWideLogLayout =
+                        metrics.isMediumUpWindow && viewportHeight >= 560;
                     final entries = allEntries
                         .where(
                           (entry) =>
@@ -96,7 +99,7 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
 
                     return AppFadeSlideTransition(
                       child:
-                          metrics.isMediumUpWindow
+                          useWideLogLayout
                               ? _buildDesktopLogViewer(
                                 context,
                                 allEntries: allEntries,
@@ -166,29 +169,56 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
     required double bottomSafe,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        horizontal,
-        metrics.sectionGap,
-        horizontal,
-        metrics.sectionGap + bottomSafe,
-      ),
-      children: [
-        _buildLogSummaryCard(context, allEntries: allEntries, entries: entries),
-        SizedBox(height: metrics.contentGap),
-        if (!supportsManagedFileStorage) ...[
-          _buildDiagnosticCapabilityNotice(),
-          SizedBox(height: metrics.contentGap),
-        ],
-        if (entries.isEmpty)
-          const AppEmptyStateCard(
-            icon: Icons.event_note_outlined,
-            title: '暂无错误日志',
-            description: '当前没有可展示的错误日志记录。',
-            compact: true,
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            metrics.sectionGap,
+            horizontal,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _buildLogSummaryCard(
+                  context,
+                  allEntries: allEntries,
+                  entries: entries,
+                ),
+                SizedBox(height: metrics.contentGap),
+                if (!supportsManagedFileStorage) ...[
+                  _buildDiagnosticCapabilityNotice(),
+                  SizedBox(height: metrics.contentGap),
+                ],
+                if (entries.isEmpty)
+                  const AppEmptyStateCard(
+                    icon: Icons.event_note_outlined,
+                    title: '暂无错误日志',
+                    description: '当前没有可展示的错误日志记录。',
+                    compact: true,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (entries.isNotEmpty)
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              0,
+              horizontal,
+              metrics.sectionGap + bottomSafe,
+            ),
+            sliver: SliverList.builder(
+              itemCount: entries.length,
+              itemBuilder: (context, index) => _buildLogCard(entries[index]),
+            ),
           )
         else
-          ...entries.map(_buildLogCard),
+          SliverPadding(
+            padding: EdgeInsets.only(bottom: metrics.sectionGap + bottomSafe),
+          ),
       ],
     );
   }

@@ -69,6 +69,7 @@ void main() {
     await runAdaptivePageSmokeMatrix(
       tester,
       pageBuilder: () => const ErrorCenterPage(),
+      useProviderScope: true,
       pageName: 'ErrorCenterPage',
     );
   });

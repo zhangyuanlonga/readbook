@@ -622,6 +622,7 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - A8-B4 开始按两项一组执行：公告列表改为 Sliver builder 承载分页列表，公告详情桌面正文宽度收窄，避免大屏长文横向过长。
 - 关于页与同步历史作为下一组两项迁移：关于页收口状态读取方式，同步历史任务详情弹层在桌面/Web 改为 dialog surface，移动端保留底部面板。
 - A8 按三个功能模块批量推进：标签/分类管理、书签/灵感、缓存/字体资源已完成第一轮 UI surface 和内容宽度收口；缓存/字体弹层在桌面/Web 统一为 dialog surface，移动端保留底部面板。
+- A8 三模块第二组完成：反馈相似确认、系统设置恢复确认迁到 adaptive surface，错误中心移动日志列表改为 Sliver builder；会员中心保留为后续独立账号/会员模块。
 
 ### 2026-05-12 UI-G0/G1 组件治理
 

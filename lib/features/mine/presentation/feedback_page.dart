@@ -6,6 +6,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -17,14 +18,14 @@ import '../application/advanced_theme_provider.dart';
 
 enum _FeedbackStatusFilter { all, pending, resolved, rejected }
 
-class FeedbackPage extends StatefulWidget {
+class FeedbackPage extends ConsumerStatefulWidget {
   const FeedbackPage({super.key});
 
   @override
-  State<FeedbackPage> createState() => _FeedbackPageState();
+  ConsumerState<FeedbackPage> createState() => _FeedbackPageState();
 }
 
-class _FeedbackPageState extends State<FeedbackPage>
+class _FeedbackPageState extends ConsumerState<FeedbackPage>
     with SingleTickerProviderStateMixin {
   final FeedbackService _feedbackService = FeedbackService();
   final TextEditingController _keywordController = TextEditingController();
@@ -157,84 +158,75 @@ class _FeedbackPageState extends State<FeedbackPage>
           const SizedBox(width: 12),
         ],
       ),
-      body: Consumer(
-        builder: (context, ref, _) {
-          final activeTheme =
-              ref.watch(activeAdvancedThemeProvider).valueOrNull;
-          final backdrop = resolveAdvancedThemeBackdrop(
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(
+          resolveAdvancedThemeBackdrop(
             Theme.of(context).colorScheme,
-            activeTheme,
-          );
-          return DecoratedBox(
-            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-            child: LayoutBuilder(
-              builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.systemSettingsContentMaxWidth,
-                );
+            ref.watch(activeAdvancedThemeProvider).valueOrNull,
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.systemSettingsContentMaxWidth,
+            );
 
-                return Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxWidth),
-                    child: RefreshIndicator(
-                      onRefresh: () => _loadEntries(),
-                      child: ListView(
-                        controller: _scrollController,
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          topInset + metrics.contentGap,
-                          horizontal,
-                          metrics.sectionGap + bottomSafe + keyboardInset,
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: RefreshIndicator(
+                  onRefresh: () => _loadEntries(),
+                  child: ListView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      topInset + metrics.contentGap,
+                      horizontal,
+                      metrics.sectionGap + bottomSafe + keyboardInset,
+                    ),
+                    children: [
+                      _buildTypeTabs(context),
+                      SizedBox(height: metrics.sectionGap),
+                      _buildSearchAndFilterRow(context),
+                      SizedBox(height: metrics.sectionGap),
+                      Container(
+                        height: 1,
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.55,
                         ),
-                        children: [
-                          _buildTypeTabs(context),
-                          SizedBox(height: metrics.sectionGap),
-                          _buildSearchAndFilterRow(context),
-                          SizedBox(height: metrics.sectionGap),
-                          Container(
-                            height: 1,
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.55,
+                      ),
+                      if (_isLoading) _buildLoadingState(context),
+                      if (!_isLoading && _errorText != null)
+                        _buildErrorState(context, _errorText!),
+                      if (!_isLoading && _errorText == null && _entries.isEmpty)
+                        _buildEmptyState(context),
+                      if (!_isLoading &&
+                          _errorText == null &&
+                          _entries.isNotEmpty)
+                        ..._entries.map(
+                          (entry) => _buildEntryTile(context, entry),
+                        ),
+                      if (_isLoadingMore)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
-                          if (_isLoading) _buildLoadingState(context),
-                          if (!_isLoading && _errorText != null)
-                            _buildErrorState(context, _errorText!),
-                          if (!_isLoading &&
-                              _errorText == null &&
-                              _entries.isEmpty)
-                            _buildEmptyState(context),
-                          if (!_isLoading &&
-                              _errorText == null &&
-                              _entries.isNotEmpty)
-                            ..._entries.map(
-                              (entry) => _buildEntryTile(context, entry),
-                            ),
-                          if (_isLoadingMore)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                        ),
+                    ],
                   ),
-                );
-              },
-            ),
-          );
-        },
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1100,66 +1092,70 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
       return true;
     }
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
+      maxWidth: 460,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
 
-        return AlertDialog(
-          title: const Text('发现相似反馈'),
-          content: SizedBox(
-            width: AppLayout.dialogMaxWidth(context, maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '建议先看看是否已有相同问题，避免重复提交。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.4,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '发现相似反馈',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '建议先看看是否已有相同问题，避免重复提交。',
+              style: Theme.of(surfaceContext).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...result.items
+                .take(3)
+                .map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          entry.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(surfaceContext).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          entry.statusLabel,
+                          style: Theme.of(surfaceContext).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                ...result.items
-                    .take(3)
-                    .map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              entry.statusLabel,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('仍然提交'),
+                ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('仍然提交'),
             ),
           ],
         );
