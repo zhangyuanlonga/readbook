@@ -12,6 +12,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -333,20 +334,42 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   }
 
   Future<bool> _releaseSeat(MembershipDeviceSeat seat) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('释放设备席位'),
-          content: Text('确认释放设备 ${_seatDisplayLabel(seat)} 的会员席位吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
+      maxWidth: 440,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '释放设备席位',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('释放'),
+            const SizedBox(height: 10),
+            Text(
+              '确认释放设备 ${_seatDisplayLabel(seat)} 的会员席位吗？',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('释放'),
+                ),
+              ],
             ),
           ],
         );
@@ -411,20 +434,42 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('领取试用会员'),
-          content: const Text('将为当前账号领取 7 天 Pro 试用会员，每个账号限领一次。确认立即领取吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
+      maxWidth: 440,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '领取试用会员',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('立即领取'),
+            const SizedBox(height: 10),
+            Text(
+              '将为当前账号领取 7 天 Pro 试用会员，每个账号限领一次。确认立即领取吗？',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('立即领取'),
+                ),
+              ],
             ),
           ],
         );

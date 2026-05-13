@@ -290,6 +290,7 @@ unsupported：当前平台或构建配置不支持
 - 2026-05-13：A8 继续按两项一组迁移关于页与同步历史；`AboutPage` 收口为 `ConsumerStatefulWidget`，`SyncHistoryPage` 任务详情从裸 `showModalBottomSheet` 迁到 `showAdaptiveActionSurface`。
 - 2026-05-13：A8 按三个功能模块批量推进：标签/分类管理模块收口到 `ConsumerStatefulWidget` 且重命名/删除走 adaptive surface；书签模块内部详情页增加宽屏内容约束；缓存/字体资源模块将清理确认、明细弹层、字体导入说明和重命名统一迁到 `showAdaptiveActionSurface`。
 - 2026-05-13：A8 下一组三模块继续推进：反馈模块将 `FeedbackPage` 收口为 `ConsumerStatefulWidget` 并将相似反馈确认迁到 adaptive surface；错误中心移动日志列表改为 Sliver builder，且低高度横屏降级为移动列表避免 640x360 + 1.3 字体溢出；系统设置恢复默认确认迁到 adaptive surface。会员中心复杂兑换/设备席位面板暂留后续单独迁移。
+- 2026-05-13：A8 下一阶段迁移账号资料、会员中心和外观基础设置：退出登录、释放设备席位、领取试用会员、删除应用背景的普通确认弹层迁到 `showAdaptiveActionSurface`；会员兑换/设备管理表单和背景全屏预览作为复杂面板/沉浸预览例外保留。
 
 ## 11. 排期建议
 

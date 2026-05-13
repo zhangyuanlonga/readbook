@@ -219,3 +219,18 @@
 
 - `MembershipCenterPage` 中兑换码、设备席位、客服说明面板暂不纳入本组三模块。原因：该页包含登录态、会员权益、席位同步和底部表单，适合单独作为账号/会员模块做完整迁移。
 - `FeedbackComposePage` 页面骨架暂保留直接 `Scaffold`，本批只迁提交前的普通确认弹层；回收条件：反馈模块统一表单骨架和附件/键盘 inset 后再迁移。
+
+### 2026-05-13：A8 下一阶段：账号资料、会员中心、外观基础设置
+
+选择范围：
+
+| 功能模块 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 账号资料 | `/profile` | 退出登录确认迁到 `showAdaptiveActionSurface` | 已登录资料、退出确认、退出后返回我的页 | 已完成 |
+| 会员中心 | `/membership` | 释放设备席位、领取试用会员确认迁到 `showAdaptiveActionSurface` | 设备席位释放、试用领取、移动/桌面弹层 | 已完成 |
+| 外观基础设置 | `/appearance` | 删除应用背景确认迁到 `showAdaptiveActionSurface` | 背景删除、移动/桌面弹层、主题 backdrop | 已完成 |
+
+本批例外：
+
+- `MembershipCenterPage` 的兑换码、设备管理和客服说明仍保留现有 bottom sheet。原因：这些是带输入、外链、席位同步状态的复杂表单/说明面板；回收条件：下一批会员专题统一迁移为 adaptive task/form surface。
+- `AppearancePage` 的全屏背景预览仍保留 `showDialog`。原因：该弹层是沉浸式黑底图片预览，包含 `InteractiveViewer` 缩放；回收条件同资源图集预览，待全屏预览基线组件落地后迁移。

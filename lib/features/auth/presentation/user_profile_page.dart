@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -638,23 +639,46 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     if (_session == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('退出登录'),
-            content: const Text('确定要退出当前账号吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '退出登录',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '确定要退出当前账号吗？',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('退出'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('退出'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true) {
