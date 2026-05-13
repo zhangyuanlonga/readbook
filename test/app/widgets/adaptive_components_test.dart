@@ -1,5 +1,6 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/app/widgets/adaptive_content_container.dart';
@@ -191,8 +192,8 @@ void main() {
 
     expect(tapped, isFalse);
     final semantics = tester.getSemantics(find.byType(AdaptiveListTile));
-    expect(semantics.hasFlag(SemanticsFlag.isSelected), isTrue);
-    expect(semantics.hasFlag(SemanticsFlag.isEnabled), isFalse);
+    expect(semantics.flagsCollection.isSelected, Tristate.isTrue);
+    expect(semantics.flagsCollection.isEnabled, Tristate.isFalse);
   });
 
   testWidgets('AdaptiveSettingTile exposes tap path when enabled', (

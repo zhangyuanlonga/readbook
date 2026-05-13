@@ -467,7 +467,7 @@ class _HomePageState extends ConsumerState<HomePage>
         padding: EdgeInsets.all(metrics.cardPadding + 2),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final contentWidth = math.min(constraints.maxWidth - 8, 320.0);
+            final contentWidth = (constraints.maxWidth - 8).clamp(0.0, 320.0);
             return Column(
               children: [
                 SizedBox(
