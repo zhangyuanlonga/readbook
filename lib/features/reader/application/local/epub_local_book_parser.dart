@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -65,7 +66,39 @@ class EpubLocalBookParser implements LocalBookParser {
   }
 
   @override
-  Future<LocalParsedBook> parse(LocalBook book) async {
+  Future<LocalParsedBook> parse(LocalBook book) {
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.local.epub.index',
+          arguments: <String, Object?>{
+            'bookId': book.id,
+            'path': book.storagePath,
+          },
+        );
+    return _parseInternal(book).then(
+      (parsed) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'ready',
+            'chapterCount': parsed.chapters.length,
+            'hasCover': (parsed.coverPath ?? '').trim().isNotEmpty,
+          },
+        );
+        return parsed;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'failed',
+            'error': error.toString(),
+          },
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
+
+  Future<LocalParsedBook> _parseInternal(LocalBook book) async {
     final loadedArchive = await _loadArchive(book);
     final chapterCandidates = _resolveChapterCandidates(
       archive: loadedArchive.archive,

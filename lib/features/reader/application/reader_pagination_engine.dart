@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
@@ -223,6 +224,40 @@ class ReaderPaginationEngine {
   }
 
   Future<ReaderPaginationResult?> paginateParagraphs(
+    ReaderPaginationRequest request,
+  ) {
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.pagination.paragraphs',
+          arguments: <String, Object?>{
+            'paragraphCount': request.paragraphs.length,
+            'contentWidth': request.spec.contentWidth,
+            'contentHeight': request.spec.contentHeight,
+          },
+        );
+    return _paginateParagraphsInternal(request).then(
+      (result) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': result == null ? 'aborted' : 'ready',
+            'pageCount': result?.pages.length ?? 0,
+          },
+        );
+        return result;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'failed',
+            'error': error.toString(),
+          },
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
+
+  Future<ReaderPaginationResult?> _paginateParagraphsInternal(
     ReaderPaginationRequest request,
   ) async {
     final paragraphModels = _resolveParagraphModels(request);
@@ -468,6 +503,41 @@ class ReaderPaginationEngine {
 
   Future<ReaderBlockPaginationResult?> paginateBlocks(
     ReaderBlockPaginationRequest request,
+  ) {
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.pagination.blocks',
+          arguments: <String, Object?>{
+            'blockCount': request.renderItems.length,
+            'paragraphCount': request.paragraphs.length,
+            'contentWidth': request.spec.contentWidth,
+            'contentHeight': request.spec.contentHeight,
+          },
+        );
+    return _paginateBlocksInternal(request).then(
+      (result) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': result == null ? 'aborted' : 'ready',
+            'pageCount': result?.pages.length ?? 0,
+          },
+        );
+        return result;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'failed',
+            'error': error.toString(),
+          },
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
+
+  Future<ReaderBlockPaginationResult?> _paginateBlocksInternal(
+    ReaderBlockPaginationRequest request,
   ) async {
     if (request.renderItems.isEmpty) {
       return const ReaderBlockPaginationResult(
@@ -546,7 +616,7 @@ class ReaderPaginationEngine {
         continue;
       }
       final paragraph = paragraphModels[paragraphIndex];
-      final paragraphResult = await paginateParagraphs(
+      final paragraphResult = await _paginateParagraphsInternal(
         ReaderPaginationRequest(
           paragraphs: <String>[paragraph.text],
           spec: request.spec,

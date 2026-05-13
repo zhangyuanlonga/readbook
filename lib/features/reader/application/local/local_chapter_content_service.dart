@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../../../../core/errors/app_exception.dart';
@@ -27,6 +28,48 @@ class LocalChapterContentService {
       const LocalTextEncodingDetector();
 
   Future<LocalChapter> load({
+    required String bookId,
+    String? chapterId,
+    int? chapterIndex,
+  }) {
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.local.chapter.load',
+          arguments: <String, Object?>{
+            'bookId': bookId,
+            'chapterId': chapterId,
+            'chapterIndex': chapterIndex,
+          },
+        );
+    return _loadInternal(
+      bookId: bookId,
+      chapterId: chapterId,
+      chapterIndex: chapterIndex,
+    ).then(
+      (chapter) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'ready',
+            'chapterIndex': chapter.chapterIndex,
+            'contentLength': chapter.content.length,
+            'hasOffsetRange': chapter.hasOffsetRange,
+          },
+        );
+        return chapter;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'failed',
+            'error': error.toString(),
+          },
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
+
+  Future<LocalChapter> _loadInternal({
     required String bookId,
     String? chapterId,
     int? chapterIndex,
@@ -97,6 +140,15 @@ class LocalChapterContentService {
 
     if (_canUseStoredChapterContent(chapter: chapter)) {
       return chapter;
+    }
+
+    if (_canLoadTxtChapterContentByOffsets(book: book, chapter: chapter)) {
+      final readableBook = await _hydrateReadableBook(book);
+      final hydratedContent = await _loadTxtChapterContentByOffsets(
+        chapter: chapter,
+        book: readableBook,
+      );
+      return chapter.copyWith(content: hydratedContent);
     }
 
     throw AppException(
@@ -243,6 +295,13 @@ class LocalChapterContentService {
 
   bool _canUseStoredChapterContent({required LocalChapter chapter}) {
     return chapter.hasReadablePayload;
+  }
+
+  bool _canLoadTxtChapterContentByOffsets({
+    required LocalBook book,
+    required LocalChapter chapter,
+  }) {
+    return book.format == LocalBookFormat.txt && chapter.hasOffsetRange;
   }
 
   bool _canUseLegacyTxtOffsetFallback({

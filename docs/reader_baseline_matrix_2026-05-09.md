@@ -60,3 +60,18 @@
 - 每次架构阶段完成后，至少运行对应 application/presentation 测试。
 - 性能结论必须区分“自动化渲染可用”和“真机低端流畅”。
 - 真机表没有回填前，不能宣称能耗、峰值内存或低端机流畅性已最终达标。
+
+## 6. 2026-05-13 阶段 0 执行记录
+
+本次先落地代码级观测点，为阶段 1 和后续逐页分页优化提供 DevTools Timeline 依据。
+
+| 链路 | Timeline 名称 | 当前覆盖 | 待补 |
+| --- | --- | --- | --- |
+| 本地索引总链路 | `reader.local.index` | format、force、chapterCount、costMs、失败原因 | 按缓存/存储写入拆更细事件 |
+| TXT 索引 | `reader.local.txt.index` | charset、chapterCount、是否 index-only | 目录 ready 到首章 ready 的分段耗时 |
+| EPUB 索引 | `reader.local.epub.index` | chapterCount、cover 状态 | Stage 2 拆分 parseIndex/parseChapter 后补章节按需解析耗时 |
+| 本地章节读取 | `reader.local.chapter.load` | chapterIndex、contentLength、是否 offset range | 在线章节读取统一事件 |
+| 纯文本分页 | `reader.pagination.paragraphs` | paragraphCount、viewport、pageCount、aborted/ready/failed | 当前页 ready、缓存命中、缓存写入 |
+| 图文分页 | `reader.pagination.blocks` | blockCount、paragraphCount、viewport、pageCount | 图片尺寸稳定后的重分页原因 |
+
+本次没有回填真机数值。低端 Android、中端 Android、iPhone、小屏模拟器仍需按第 4 节表格实测。

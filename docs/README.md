@@ -1,6 +1,6 @@
 # 项目文档入口
 
-更新时间：2026-04-29
+更新时间：2026-05-13
 用途：当前项目文档总入口。
 
 当前文档按“主线文档 + 历史归档”两组维护。
@@ -48,6 +48,10 @@
   阅读器低资源占用改造执行方案，参考 Legado 的低能耗和低内存阅读器设计，按依赖收口、三章窗口、流式分页、资源预算、缓存字节预算、图片治理和定时器低频化拆分阶段任务。
 - `docs/reader_architecture_gap_refactor_plan_2026-05-09.md`
   阅读器整体架构差距与吸收改造计划，对照 Legado/MD3 梳理阅读会话、三章窗口、图文分页、漫画资源治理、预加载缓存和低唤醒阶段任务。
+- `docs/reader_scroll_paged_smoothness_refactor_plan_2026-05-13.md`
+  阅读器滚动/分页丝滑体验改造计划，基于当前代码对账，聚焦本地 TXT/EPUB 懒加载、分页可观测、图文分页缓存、后台任务降噪和真机验收。
+- `docs/reader_current_implementation_summary_2026-05-13.md`
+  阅读器当前整体实现摘要，用于对外评审，概括内容来源、文档模型、阅读模式、分页、缓存、记录、书签、主题和交互实现。
 - `docs/local_multi_format_reading_plan.md`
   本地多格式阅读开发方案，覆盖 `txt`、`epub`、`md`、`html`、`pdf`、`mobi`、`azw`、`azw3` 的架构原则、阶段计划与风险边界。
 - `docs/cross_platform_boundary_refactor_plan.md`

@@ -230,7 +230,7 @@ $chapter2
           'local_offset_streamed_utf16be_1',
         );
         expect(metas.length, greaterThan(1));
-        expect(metas.first.content, isNotEmpty);
+        expect(metas.first.content, isEmpty);
         expect(metas.first.startOffset, isNotNull);
         expect(metas.first.endOffset, isNotNull);
 
@@ -248,9 +248,13 @@ $chapter2
       },
     );
 
-    test('marks offset-only ready txt as stale before reading', () async {
+    test('loads offset-only ready txt by byte range', () async {
       final file = File('${tempDir.path}/offset_only_book.txt');
-      await file.writeAsString('第1章 开始\n仅偏移正文');
+      const content = '第1章 开始\n仅偏移正文';
+      await file.writeAsString(content);
+      final fileStat = await file.stat();
+      final startOffset = utf8.encode('第1章 开始\n').length;
+      final endOffset = utf8.encode(content).length;
 
       final now = DateTime.parse('2026-03-21T12:00:00.000Z');
       await repository.upsertBook(
@@ -259,7 +263,8 @@ $chapter2
           title: '仅偏移旧数据测试',
           format: LocalBookFormat.txt,
           storagePath: file.path,
-          fileSize: await file.length(),
+          fileSize: fileStat.size,
+          storageFileLastModifiedMs: fileStat.modified.millisecondsSinceEpoch,
           indexStatus: LocalBookIndexStatus.ready,
           chapterCount: 1,
           createdAt: now,
@@ -275,25 +280,23 @@ $chapter2
             chapterIndex: 0,
             title: '第1章 开始',
             content: '',
-            startOffset: 4,
-            endOffset: 18,
+            startOffset: startOffset,
+            endOffset: endOffset,
             createdAt: now,
             updatedAt: now,
           ),
         ],
       );
 
-      await expectLater(
-        () =>
-            contentService.load(bookId: 'local_offset_only_1', chapterIndex: 0),
-        throwsA(
-          isA<AppException>().having(
-            (error) => error.briefMessage,
-            'briefMessage',
-            contains('目录已过期'),
-          ),
-        ),
+      final chapter = await contentService.load(
+        bookId: 'local_offset_only_1',
+        chapterIndex: 0,
       );
+      expect(chapter.content, contains('仅偏移正文'));
+
+      final refreshedBook = await repository.getBookById('local_offset_only_1');
+      expect(refreshedBook, isNotNull);
+      expect(refreshedBook!.indexStatus, LocalBookIndexStatus.ready);
     });
 
     test('returns epub chapter content directly from indexed storage', () async {

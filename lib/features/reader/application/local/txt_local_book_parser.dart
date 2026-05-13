@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -35,7 +36,46 @@ class TxtLocalBookParser implements LocalBookParser {
   }
 
   @override
-  Future<LocalParsedBook> parse(LocalBook book) async {
+  Future<LocalParsedBook> parse(LocalBook book) {
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.local.txt.index',
+          arguments: <String, Object?>{
+            'bookId': book.id,
+            'path': book.storagePath,
+            'splitLongChapter': book.splitLongChapter,
+          },
+        );
+    return _parseInternal(book).then(
+      (parsed) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'ready',
+            'chapterCount': parsed.chapters.length,
+            'charset': parsed.charset,
+            'indexOnly': parsed.chapters.any(
+              (chapter) =>
+                  chapter.content.trim().isEmpty &&
+                  chapter.startOffset != null &&
+                  chapter.endOffset != null,
+            ),
+          },
+        );
+        return parsed;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'failed',
+            'error': error.toString(),
+          },
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
+
+  Future<LocalParsedBook> _parseInternal(LocalBook book) async {
     final file = File(book.storagePath);
     if (!await file.exists()) {
       throw AppException(
@@ -176,13 +216,7 @@ class TxtLocalBookParser implements LocalBookParser {
     if (chapters.isEmpty) {
       return null;
     }
-    final hydratedChapters = await _hydrateChapterContentsFromOffsets(
-      file,
-      chapters,
-      charsetName: charsetName,
-      yieldGate: yieldGate,
-    );
-    return LocalParsedBook(chapters: hydratedChapters, charset: charsetName);
+    return LocalParsedBook(chapters: chapters, charset: charsetName);
   }
 
   Future<List<_StreamingSampleChunk>> _readStreamingSampleChunks(
@@ -592,50 +626,6 @@ class TxtLocalBookParser implements LocalBookParser {
       }
     }
     return output;
-  }
-
-  Future<List<LocalParsedChapter>> _hydrateChapterContentsFromOffsets(
-    File file,
-    List<LocalParsedChapter> chapters, {
-    required String charsetName,
-    required _CooperativeYieldGate yieldGate,
-  }) async {
-    if (chapters.isEmpty) {
-      return const <LocalParsedChapter>[];
-    }
-
-    final normalizedCharset = _normalizeCharsetName(charsetName) ?? charsetName;
-    final hydrated = <LocalParsedChapter>[];
-    final handle = await file.open(mode: FileMode.read);
-    try {
-      for (final chapter in chapters) {
-        final startOffset = chapter.startOffset;
-        final endOffset = chapter.endOffset;
-        if (startOffset == null ||
-            endOffset == null ||
-            endOffset <= startOffset) {
-          hydrated.add(chapter);
-          continue;
-        }
-
-        await handle.setPosition(startOffset);
-        final bytes = await handle.read(endOffset - startOffset);
-        final content =
-            _decodeStoredBytes(bytes, charsetName: normalizedCharset).trim();
-        hydrated.add(
-          LocalParsedChapter(
-            title: chapter.title,
-            content: content,
-            startOffset: chapter.startOffset,
-            endOffset: chapter.endOffset,
-          ),
-        );
-        await yieldGate.maybeYield(processedBytes: bytes.length);
-      }
-    } finally {
-      await handle.close();
-    }
-    return hydrated;
   }
 
   Future<int> _findChunkEndByMaxBytesInFile(
@@ -1484,14 +1474,6 @@ class TxtLocalBookParser implements LocalBookParser {
 
   String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
     return LocalTextEncodingDetector.tryDecodeByCharset(bytes, charsetName);
-  }
-
-  String _decodeStoredBytes(List<int> bytes, {required String charsetName}) {
-    if (bytes.isEmpty) {
-      return '';
-    }
-    return _tryDecodeByCharset(bytes, charsetName) ??
-        utf8.decode(bytes, allowMalformed: true);
   }
 
   int _encodedLength(String text, String charsetName) {

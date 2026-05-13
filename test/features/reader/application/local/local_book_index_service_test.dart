@@ -281,7 +281,7 @@ void main() {
     );
 
     test(
-      'marks ready txt with empty content and valid offsets as stale',
+      'keeps ready txt with empty content and valid offsets readable',
       () async {
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');
         final file = File('${tempDir.path}/streamed_txt.txt');
@@ -326,7 +326,7 @@ void main() {
         );
 
         expect(refreshed, isNotNull);
-        expect(refreshed!.indexStatus, LocalBookIndexStatus.stale);
+        expect(refreshed!.indexStatus, LocalBookIndexStatus.ready);
       },
     );
 

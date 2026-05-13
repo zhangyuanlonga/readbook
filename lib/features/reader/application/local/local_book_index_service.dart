@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../../../../core/errors/app_exception.dart';
@@ -163,6 +164,15 @@ class LocalBookIndexService {
     );
 
     final parser = _resolveParser(preparedBook.format);
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.local.index',
+          arguments: <String, Object?>{
+            'bookId': normalizedBookId,
+            'format': preparedBook.format.name,
+            'force': force,
+          },
+        );
     try {
       final bookForParsing = await _hydrateReadableBook(preparedBook);
       final parsedBook = await parser.parse(bookForParsing);
@@ -193,6 +203,13 @@ class LocalBookIndexService {
         status: LocalBookIndexStatus.ready,
         chapterCount: persisted.length,
       );
+      timelineTask.finish(
+        arguments: <String, Object?>{
+          'status': 'ready',
+          'chapterCount': persisted.length,
+          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
       return persisted;
     } on AppException catch (error) {
       await _localBookRepository.updateBookIndexState(
@@ -205,6 +222,13 @@ class LocalBookIndexService {
         bookId: normalizedBookId,
         status: LocalBookIndexStatus.failed,
         chapterCount: 0,
+      );
+      timelineTask.finish(
+        arguments: <String, Object?>{
+          'status': 'failed',
+          'error': error.briefMessage,
+          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
       );
       rethrow;
     } catch (error) {
@@ -239,6 +263,13 @@ class LocalBookIndexService {
           cause: error,
         ),
       );
+      timelineTask.finish(
+        arguments: <String, Object?>{
+          'status': 'failed',
+          'error': message,
+          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
       throw AppException(
         code: ErrorCode.unknown,
         stage: ErrorStage.content,
@@ -260,7 +291,7 @@ class LocalBookIndexService {
         prepared.chapterCount > 0) {
       final chapters = await _localBookRepository.getChapters(prepared.id);
       final hasUnreadablePayload = chapters.any(
-        (chapter) => !chapter.hasReadablePayload,
+        (chapter) => !_hasReadableIndexedPayload(prepared, chapter),
       );
       if (hasUnreadablePayload) {
         prepared = prepared.copyWith(
@@ -293,6 +324,11 @@ class LocalBookIndexService {
     }
 
     return _PreparedBookResult(book: prepared, shouldReindex: shouldReindex);
+  }
+
+  bool _hasReadableIndexedPayload(LocalBook book, LocalChapter chapter) {
+    return chapter.hasReadablePayload ||
+        (book.format == LocalBookFormat.txt && chapter.hasOffsetRange);
   }
 
   Future<_PreparedBookResult> _refreshStorageFromSourceIfChanged(
