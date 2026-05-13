@@ -6,11 +6,11 @@ import '../layout/app_layout.dart';
 import '../widgets/cupertino_dock_navigation_bar.dart';
 import 'app_navigation_style_provider.dart';
 
-const double _kStandardNavigationBarHeightWithLabels = 80;
-const double _kStandardNavigationBarHeightIconOnly = 64;
-const double _kStandardNavigationContentComfortInset = 8;
-const double _kStandardFloatingNavigationBottomMinimum = 10;
-const double _kCupertinoDockContentComfortInset = 8;
+const double _kStandardNavigationBarHeightWithLabels = 72;
+const double _kStandardNavigationBarHeightIconOnly = 58;
+const double _kStandardNavigationContentComfortInset = 6;
+const double _kStandardFloatingNavigationBottomMinimum = 8;
+const double _kCupertinoDockContentComfortInset = 6;
 
 double mobileBottomNavigationContentInset(
   BuildContext context, {

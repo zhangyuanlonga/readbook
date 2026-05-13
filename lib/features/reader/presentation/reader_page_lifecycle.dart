@@ -43,6 +43,9 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     const _ReaderPageDependencyBinder().bind(this, dependenciesFactory());
     _supportsSourceRuntime =
         ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
+    _appThemeMode = ref.read(appThemeModeProvider);
+    _activeAdvancedTheme = ref.read(activeAdvancedThemeProvider).valueOrNull;
+    _coverGalleries = ref.read(coverGalleriesProvider).valueOrNull ?? const [];
   }
 
   void _initializeReaderPage() {
@@ -57,6 +60,16 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
           activeAdvancedThemeProvider,
           (_, next) => _handleActiveAdvancedThemeChanged(next),
         );
+    _coverGalleriesSubscription = ref
+        .listenManual<AsyncValue<List<CoverGallery>>>(coverGalleriesProvider, (
+          _,
+          next,
+        ) {
+          if (!mounted || next.isLoading) {
+            return;
+          }
+          _coverGalleries = next.valueOrNull ?? const [];
+        });
     _chapterId = widget.chapterId;
     _chapterUrl = widget.chapterUrl?.trim();
     _chapterTitle = widget.chapterTitle?.trim();
@@ -138,7 +151,9 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
         title: _bookTitle.trim(),
       );
     }
-    _commitReadingRecordSession();
+    _commitReadingRecordSession(
+      endRatio: _activeReadingRecordSession?.furthestPositionRatio,
+    );
     _syncSystemUiVisibility(force: true, visible: true);
     unawaited(_restoreSystemReaderBrightness());
     _overlayControlsController.stop();
@@ -157,6 +172,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _volumeKeyEventSubscription?.cancel();
     _appThemeModeSubscription?.close();
     _activeAdvancedThemeSubscription?.close();
+    _coverGalleriesSubscription?.close();
     _volumeKeyEventSubscription = null;
     _scrollController.removeListener(_onScrollChanged);
     _selectionNotifier.removeListener(_handleSelectionNotifierChanged);

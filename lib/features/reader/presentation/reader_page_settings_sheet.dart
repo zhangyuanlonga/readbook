@@ -3671,9 +3671,9 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                   : textSheetMaxWidth,
                           heightFactor: _adaptiveReaderSheetHeightFactor(
                             context,
-                            compact: 0.84,
-                            regular: 0.76,
-                            large: 0.84,
+                            compact: 0.80,
+                            regular: 0.72,
+                            large: 0.80,
                           ),
                           backgroundColor: sheetSurfaceColor,
                           child: Material(

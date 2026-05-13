@@ -33,7 +33,7 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
         useSidePanel
             ? min(maxWidth, readerLayoutContext.sidePanelMaxWidth)
             : min(maxWidth, metrics.bottomSheetMaxWidth);
-    final sidePanelHeightFactor = heightFactor.clamp(0.76, 0.9).toDouble();
+    final sidePanelHeightFactor = heightFactor.clamp(0.72, 0.9).toDouble();
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,

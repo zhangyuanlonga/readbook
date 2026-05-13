@@ -278,8 +278,8 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     final resolvedCover = resolveBookCover(
       realCoverUrl: _bookCoverUrl,
       customCoverPath: customCoverPath,
-      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
-      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      activeTheme: _currentActiveAdvancedTheme(),
+      galleries: _coverGalleries,
       brightness: Theme.of(context).brightness,
       bookId: _currentBookId,
       sourceId: _sourceId,
@@ -299,16 +299,38 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
           _readerModeCapabilities.supportsCatalogContentSearch,
       bookmarkRepository: _bookmarkRepository,
       currentBookId: _currentBookId,
-      peekCatalogSearchEntries: _peekCatalogSearchEntries,
-      lookupCatalogSearchEntries: _lookupCatalogSearchEntries,
-      resolveCatalogSearchEntryTargetIndex:
-          _resolveCatalogSearchEntryTargetIndex,
-      refreshChapterBookmarks: _refreshChapterBookmarks,
-      showMessage: _showMessage,
+      peekCatalogSearchEntries: (keyword) {
+        if (!mounted) {
+          return null;
+        }
+        return _peekCatalogSearchEntries(keyword);
+      },
+      lookupCatalogSearchEntries: (keyword) {
+        if (!mounted) {
+          return const <ReaderCatalogSearchEntry>[];
+        }
+        return _lookupCatalogSearchEntries(keyword);
+      },
+      resolveCatalogSearchEntryTargetIndex: (entry) {
+        if (!mounted) {
+          return null;
+        }
+        return _resolveCatalogSearchEntryTargetIndex(entry);
+      },
+      refreshChapterBookmarks: () async {
+        if (!mounted) {
+          return;
+        }
+        await _refreshChapterBookmarks();
+      },
+      showMessage: (message) {
+        if (!mounted) {
+          return;
+        }
+        _showMessage(message);
+      },
     );
-
     if (!mounted) {
-      _scheduleAutoReadResume();
       return;
     }
 

@@ -93,8 +93,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     if (_visualOverrides.hasBackgroundImageOverride) {
       return null;
     }
-    final activeThemeAsync = ref.read(activeAdvancedThemeProvider);
-    final activeTheme = activeThemeAsync.valueOrNull;
+    final activeTheme = _currentActiveAdvancedTheme();
     if (activeTheme != null) {
       final colorScheme = Theme.of(context).colorScheme;
       final modeConfig = activeTheme.configFor(

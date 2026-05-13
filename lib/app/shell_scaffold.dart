@@ -322,6 +322,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           child: IconTheme(
             data: IconThemeData(color: advancedPalette.textSecondaryColor),
             child: NavigationBar(
+              height: showNavigationLabels ? 72 : 58,
               labelBehavior:
                   showNavigationLabels
                       ? NavigationDestinationLabelBehavior.alwaysShow
@@ -400,7 +401,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         if (floating) {
           return SafeArea(
             top: false,
-            minimum: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            minimum: const EdgeInsets.fromLTRB(14, 6, 14, 8),
             child: surface,
           );
         }

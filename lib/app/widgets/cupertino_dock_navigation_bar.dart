@@ -29,10 +29,10 @@ class DockThemePalette {
 }
 
 class CupertinoDockNavigationBar extends StatelessWidget {
-  static const double _kDockHeightWithLabels = 74;
-  static const double _kDockHeightIconOnly = 64;
-  static const double _kDockGap = 10;
-  static const double _kDockBottomMinimum = 10;
+  static const double _kDockHeightWithLabels = 68;
+  static const double _kDockHeightIconOnly = 58;
+  static const double _kDockGap = 8;
+  static const double _kDockBottomMinimum = 8;
 
   const CupertinoDockNavigationBar({
     super.key,
@@ -76,15 +76,15 @@ class CupertinoDockNavigationBar extends StatelessWidget {
 
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(12, 8, 16, 10),
+      minimum: const EdgeInsets.fromLTRB(14, 6, 14, 8),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final searchWidth = showLabels ? 68.0 : dockHeight;
-          final searchHeight = showLabels ? 68.0 : dockHeight;
+          final searchHeight = dockHeight;
           final preferredDockWidth =
               showLabels
-                  ? (destinations.length * 78.0) + 30
-                  : (destinations.length * 66.0) + 24;
+                  ? (destinations.length * 74.0) + 24
+                  : (destinations.length * 62.0) + 20;
           final reservedSearchWidth =
               showSearchButton ? searchWidth + _kDockGap : 0.0;
           final maxDockWidth = constraints.maxWidth - reservedSearchWidth;
@@ -107,10 +107,10 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                     height: dockHeight,
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        9,
-                        showLabels ? 5 : 5,
-                        9,
-                        showLabels ? 4 : 5,
+                        8,
+                        showLabels ? 4 : 4,
+                        8,
+                        showLabels ? 3 : 4,
                       ),
                       child: Row(
                         children: [
@@ -241,8 +241,8 @@ class _DockItem extends StatelessWidget {
             onTap: onTap,
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: showLabel ? 3 : 2,
-                vertical: showLabel ? 2 : 2,
+                horizontal: showLabel ? 2 : 2,
+                vertical: 1,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -250,8 +250,8 @@ class _DockItem extends StatelessWidget {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    width: showLabel ? 46 : 44,
-                    height: showLabel ? 30 : 34,
+                    width: showLabel ? 42 : 40,
+                    height: showLabel ? 27 : 31,
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
@@ -263,14 +263,14 @@ class _DockItem extends StatelessWidget {
                         scale: selected ? 1 : 0.96,
                         child: BottomNavIconView(
                           icon: resolvedIcon,
-                          size: showLabel ? 20 : 21,
+                          size: showLabel ? 19 : 20,
                           fallbackColor: iconColor,
                         ),
                       ),
                     ),
                   ),
                   if (showLabel) ...[
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
@@ -279,16 +279,16 @@ class _DockItem extends StatelessWidget {
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
                             fontSize: 10.5,
-                            height: 1.02,
-                            letterSpacing: -0.06,
+                            height: 1.0,
+                            letterSpacing: 0,
                             color: labelColor,
                           ) ??
                           TextStyle(
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
                             fontSize: 10.5,
-                            height: 1.02,
-                            letterSpacing: -0.06,
+                            height: 1.0,
+                            letterSpacing: 0,
                             color: labelColor,
                           ),
                       child: Text(

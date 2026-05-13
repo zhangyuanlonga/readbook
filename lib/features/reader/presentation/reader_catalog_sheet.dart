@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
@@ -84,9 +82,11 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   );
   final scrollThumbVisible = ValueNotifier<bool>(false);
   final searchController = TextEditingController();
+  final bookmarkSearchController = TextEditingController();
   final catalogSearchNotifier = ValueNotifier<_ReaderCatalogSearchState>(
     const _ReaderCatalogSearchState(),
   );
+  final bookmarkSearchNotifier = ValueNotifier<String>('');
   Timer? catalogSearchDebounceTimer;
   var catalogSearchToken = 0;
   var bookmarks = <Bookmark>[];
@@ -184,6 +184,67 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
     scheduleCatalogSearch(searchController.text);
   });
 
+  bookmarkSearchController.addListener(() {
+    bookmarkSearchNotifier.value = bookmarkSearchController.text.trim();
+  });
+
+  Widget buildSearchBar(
+    BuildContext context, {
+    required TextEditingController controller,
+    required String hintText,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: SizedBox(
+        height: 48,
+        child: TextField(
+          controller: controller,
+          style: textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.2),
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
+            hintText: hintText,
+            hintStyle: textTheme.bodyMedium?.copyWith(
+              fontSize: 14,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 42,
+              minHeight: 48,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 13,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                color: colorScheme.primary.withValues(alpha: 0.9),
+                width: 1.1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget buildCatalogSurface(
     BuildContext context,
     StateSetter setModalState, {
@@ -191,14 +252,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final safeBottom = _bottomSafeInset(context);
-    final sheetHeightFactor = AppLayout.sheetHeightFactor(
-      context,
-      compact: 0.80,
-      regular: 0.80,
-      large: 0.80,
-    );
     final sheetHorizontal = AppSpacing.pageHorizontal(context);
 
     if (!hasBookmarkRequested) {
@@ -221,12 +274,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (currentChapterIndex != null)
-                  ListTile(
-                    leading: const Icon(Icons.my_location_rounded),
-                    title: const Text('定位当前章节'),
-                    onTap: () => Navigator.of(actionContext).pop('locate'),
-                  ),
                 ListTile(
                   leading: Icon(
                     catalogDescending
@@ -264,6 +311,11 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       if (action == 'sort') {
         setModalState(() {
           catalogDescending = !catalogDescending;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (scrollController.hasClients) {
+            scrollController.jumpTo(0);
+          }
         });
       }
     }
@@ -412,14 +464,18 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       if (!hasBookmarkRequested) {
         unawaited(ensureBookmarksLoaded(setModalState, context));
       }
-      final bookmarkGroups = _groupBookmarksForSheet(bookmarks, chapters);
       final title = isBookmarkLoading ? '灵感' : '灵感（${bookmarks.length}）';
 
       return Padding(
-        padding: EdgeInsets.fromLTRB(sheetHorizontal, 10, sheetHorizontal, 12),
+        padding: EdgeInsets.fromLTRB(sheetHorizontal, 0, sheetHorizontal, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            buildSearchBar(
+              context,
+              controller: bookmarkSearchController,
+              hintText: '搜索灵感',
+            ),
             Text(
               title,
               style: textTheme.titleMedium?.copyWith(
@@ -427,82 +483,111 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               ),
             ),
             const SizedBox(height: 8),
-            if (isBookmarkLoading)
-              Row(
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '正在加载灵感...',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              )
-            else if (bookmarkErrorText.isNotEmpty)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      bookmarkErrorText,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.error,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed:
-                        () => unawaited(loadBookmarks(setModalState, context)),
-                    child: const Text('重试'),
-                  ),
-                ],
-              )
-            else if (bookmarkGroups.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Text(
-                  '当前书籍还没有灵感。',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.separated(
-                  itemCount: bookmarkGroups.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final group = bookmarkGroups[index];
-                    return _BookmarkGroupSection(
-                      title: group.title,
-                      items: group.bookmarks,
-                      timeLabel: _formatBookmarkTime,
-                      onTap:
-                          (bookmark) => Navigator.of(
-                            context,
-                          ).pop(ReaderCatalogSheetResult.bookmark(bookmark)),
-                      onDelete: (bookmark) async {
-                        final modalContext = context;
-                        await bookmarkRepository.removeBookmark(bookmark.id);
-                        if (!modalContext.mounted) {
-                          return;
-                        }
-                        await loadBookmarks(setModalState, modalContext);
-                        if (!modalContext.mounted) {
-                          return;
-                        }
-                        await refreshChapterBookmarks();
-                      },
+            Expanded(
+              child: ValueListenableBuilder<String>(
+                valueListenable: bookmarkSearchNotifier,
+                builder: (context, keyword, _) {
+                  final filteredBookmarks = _filterBookmarksForKeyword(
+                    bookmarks: bookmarks,
+                    chapters: chapters,
+                    keyword: keyword,
+                  );
+                  final bookmarkGroups = _groupBookmarksForSheet(
+                    filteredBookmarks,
+                    chapters,
+                  );
+                  if (isBookmarkLoading) {
+                    return Row(
+                      children: [
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '正在加载灵感...',
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     );
-                  },
-                ),
+                  }
+                  if (bookmarkErrorText.isNotEmpty) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            bookmarkErrorText,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.error,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed:
+                              () => unawaited(
+                                loadBookmarks(setModalState, context),
+                              ),
+                          child: const Text('重试'),
+                        ),
+                      ],
+                    );
+                  }
+                  if (bookmarks.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Text(
+                        '当前书籍还没有灵感。',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
+                  if (bookmarkGroups.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Text(
+                        '未找到匹配灵感。',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: bookmarkGroups.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final group = bookmarkGroups[index];
+                      return _BookmarkGroupSection(
+                        title: group.title,
+                        items: group.bookmarks,
+                        timeLabel: _formatBookmarkTime,
+                        onTap:
+                            (bookmark) => Navigator.of(
+                              context,
+                            ).pop(ReaderCatalogSheetResult.bookmark(bookmark)),
+                        onDelete: (bookmark) async {
+                          final modalContext = context;
+                          await bookmarkRepository.removeBookmark(bookmark.id);
+                          if (!modalContext.mounted) {
+                            return;
+                          }
+                          await loadBookmarks(setModalState, modalContext);
+                          if (!modalContext.mounted) {
+                            return;
+                          }
+                          await refreshChapterBookmarks();
+                        },
+                      );
+                    },
+                  );
+                },
               ),
+            ),
           ],
         ),
       );
@@ -608,6 +693,157 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       ),
     );
 
+    final mobileContent = Material(
+      color: readerModalTheme.colorScheme.surface,
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Material(
+                color: readerModalTheme.colorScheme.surface,
+                child: SizedBox(
+                  height: 56,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: '返回',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.28,
+                                ),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: TabBar(
+                                isScrollable: true,
+                                labelColor: colorScheme.primary,
+                                unselectedLabelColor:
+                                    colorScheme.onSurfaceVariant,
+                                dividerColor: Colors.transparent,
+                                indicatorSize: TabBarIndicatorSize.tab,
+                                indicator: BoxDecoration(
+                                  color: colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                splashBorderRadius: BorderRadius.circular(12),
+                                labelStyle: textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                                unselectedLabelStyle: textTheme.labelLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                onTap: (index) {
+                                  if (activeTabIndex == index) {
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    activeTabIndex = index;
+                                  });
+                                  if (index == 1) {
+                                    unawaited(
+                                      ensureBookmarksLoaded(
+                                        setModalState,
+                                        context,
+                                      ),
+                                    );
+                                  }
+                                },
+                                tabs: [
+                                  _buildCountTab(
+                                    context,
+                                    label: '目录',
+                                    countText: chapters.length.toString(),
+                                  ),
+                                  _buildCountTab(
+                                    context,
+                                    label: '灵感',
+                                    countText: bookmarkCountLabel,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: '更多',
+                        onSelected: (value) {
+                          if (value != 'sort') {
+                            return;
+                          }
+                          setModalState(() {
+                            catalogDescending = !catalogDescending;
+                          });
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (scrollController.hasClients) {
+                              scrollController.jumpTo(0);
+                            }
+                          });
+                        },
+                        itemBuilder:
+                            (context) => [
+                              PopupMenuItem<String>(
+                                value: 'sort',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      catalogDescending
+                                          ? Icons.arrow_upward_rounded
+                                          : Icons.arrow_downward_rounded,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(catalogDescending ? '正序显示' : '倒序显示'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  Column(
+                    children: [
+                      buildSearchBar(
+                        context,
+                        controller: searchController,
+                        hintText: '搜索目录',
+                      ),
+                      Expanded(child: buildCatalogTab()),
+                    ],
+                  ),
+                  buildBookmarkTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
     if (isDesktopSurface) {
       final metrics = AppAdaptiveMetrics.of(context);
       return Theme(
@@ -649,15 +885,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
 
     return Theme(
       data: readerModalTheme,
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
-        child: FractionallySizedBox(
-          heightFactor: sheetHeightFactor,
-          child: content,
-        ),
-      ),
+      child: SizedBox.expand(child: mobileContent),
     );
   }
 
@@ -772,12 +1000,6 @@ Tab _buildCountTab(
   );
 }
 
-double _bottomSafeInset(BuildContext context) {
-  final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
-  final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
-  return max(viewPadding, gestureInsets);
-}
-
 bool _isReadableChapter(Chapter chapter) {
   return !chapter.isVolume && chapter.chapterUrl.trim().isNotEmpty;
 }
@@ -822,6 +1044,29 @@ List<_BookmarkGroup> _groupBookmarksForSheet(
     }
   }
   return groups;
+}
+
+List<Bookmark> _filterBookmarksForKeyword({
+  required List<Bookmark> bookmarks,
+  required List<Chapter> chapters,
+  required String keyword,
+}) {
+  final normalizedKeyword = keyword.trim().toLowerCase();
+  if (normalizedKeyword.isEmpty) {
+    return bookmarks;
+  }
+  return bookmarks
+      .where((bookmark) {
+        final chapterTitle = _resolveBookmarkChapterTitle(bookmark, chapters);
+        final haystack =
+            [
+              chapterTitle,
+              bookmark.displaySnippet,
+              bookmark.note ?? '',
+            ].join('\n').toLowerCase();
+        return haystack.contains(normalizedKeyword);
+      })
+      .toList(growable: false);
 }
 
 String _resolveBookmarkChapterTitle(Bookmark bookmark, List<Chapter> chapters) {

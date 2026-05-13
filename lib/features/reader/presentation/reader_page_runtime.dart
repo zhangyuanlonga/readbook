@@ -55,12 +55,14 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         if (!mounted || !_isReaderRuntimeVisible) {
           return;
         }
-        unawaited(_refreshReaderInfoSnapshot().then((_) {
-          if (!mounted) {
-            return;
-          }
-          _scheduleReaderInfoMinuteTick();
-        }));
+        unawaited(
+          _refreshReaderInfoSnapshot().then((_) {
+            if (!mounted) {
+              return;
+            }
+            _scheduleReaderInfoMinuteTick();
+          }),
+        );
       },
     );
   }
@@ -675,22 +677,31 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
     _readingRecordAutoCommitTimer = Timer(interval, () {
+      if (!mounted) {
+        return;
+      }
       final restartRatio = _currentScrollRatio();
       _commitReadingRecordSession();
       _maybeStartReadingRecordSession(initialRatio: restartRatio);
     });
   }
 
-  void _commitReadingRecordSession() {
+  void _commitReadingRecordSession({double? endRatio}) {
     _readingRecordAutoCommitTimer?.cancel();
     _readingRecordAutoCommitTimer = null;
     final session = _activeReadingRecordSession;
     _activeReadingRecordSession = null;
+    if (session == null) {
+      return;
+    }
+    final resolvedEndRatio =
+        endRatio ??
+        (mounted ? _currentScrollRatio() : session.furthestPositionRatio);
     final commitInput = _readingRecordCoordinator.buildCommitInput(
       readingRecordEnabled: _readingRecordEnabled,
       session: session,
       endAt: DateTime.now(),
-      endRatio: _currentScrollRatio(),
+      endRatio: resolvedEndRatio,
       chapterLength: _chapterTextLength(),
       isMangaChapter: _isMangaChapter,
     );

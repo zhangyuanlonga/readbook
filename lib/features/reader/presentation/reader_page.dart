@@ -43,6 +43,7 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
@@ -353,6 +354,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ReaderSettings _settings = const ReaderSettings();
   ReaderSettings _persistedReaderSettings = const ReaderSettings();
   ReaderVisualOverrides _visualOverrides = ReaderVisualOverrides.empty;
+  ThemeMode _appThemeMode = ThemeMode.system;
+  AppAdvancedTheme? _activeAdvancedTheme;
+  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
   List<Chapter> _chapters = const [];
   int? _currentIndex;
 
@@ -400,6 +404,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ProviderSubscription<ThemeMode>? _appThemeModeSubscription;
   ProviderSubscription<AsyncValue<AppAdvancedTheme?>>?
   _activeAdvancedThemeSubscription;
+  ProviderSubscription<AsyncValue<List<CoverGallery>>>?
+  _coverGalleriesSubscription;
   late final Battery _battery;
   late final DeviceInfoPlugin _deviceInfo;
   DateTime _readerInfoNow = DateTime.now();
@@ -650,10 +656,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               contentCapabilities: _contentCapabilities,
               hasInlineImageParagraphs:
                   _currentChapterHasInlineImageParagraphs(),
-              supportsSourceRuntime:
-                  ref
-                      .read(appPlatformCapabilitiesProvider)
-                      .supportsSourceRuntime,
+              supportsSourceRuntime: _supportsSourceRuntime,
             )
             .canUsePagedText;
     return _readerModeResolver.resolve(
@@ -2068,14 +2071,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ThemeMode _currentAppThemeMode() {
-    return ref.read(appThemeModeProvider);
+    return _appThemeMode;
   }
 
   AppAdvancedTheme? _currentActiveAdvancedTheme() {
-    return ref.read(activeAdvancedThemeProvider).valueOrNull;
+    return _activeAdvancedTheme;
   }
 
   Future<void> _syncAppThemeModeWithReaderTheme(ReaderThemeMode mode) async {
+    if (!mounted) {
+      return;
+    }
     final nextAppThemeMode = switch (mode) {
       ReaderThemeMode.dark => ThemeMode.dark,
       ReaderThemeMode.light => ThemeMode.light,
@@ -2097,6 +2103,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!mounted) {
       return;
     }
+    _appThemeMode = nextMode;
     _syncReaderThemeDependencies(appThemeMode: nextMode);
   }
 
@@ -2106,6 +2113,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!mounted || nextTheme.isLoading) {
       return;
     }
+    _activeAdvancedTheme = nextTheme.valueOrNull;
     _syncReaderThemeDependencies(activeTheme: nextTheme.valueOrNull);
   }
 
@@ -3605,17 +3613,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     child: SafeArea(
                       top: false,
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildBottomProgressStrip(colors),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 3),
                             Container(
                               height: 1,
                               color: colors.divider.withValues(alpha: 0.18),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 3),
                             Row(
                               children: [
                                 Expanded(
@@ -3686,13 +3694,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         IconButton(
           visualDensity: VisualDensity.compact,
           splashRadius: 20,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 34),
           tooltip: '上一章',
           onPressed:
               canNavigateChapters
                   ? () =>
                       unawaited(_jumpToAdjacentReadableChapter(forward: false))
                   : null,
-          icon: Icon(Icons.skip_previous_rounded, color: colors.text, size: 22),
+          icon: Icon(Icons.skip_previous_rounded, color: colors.text, size: 21),
         ),
         Expanded(
           child: SliderTheme(
@@ -3738,13 +3748,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         IconButton(
           visualDensity: VisualDensity.compact,
           splashRadius: 20,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 34),
           tooltip: '下一章',
           onPressed:
               canNavigateChapters
                   ? () =>
                       unawaited(_jumpToAdjacentReadableChapter(forward: true))
                   : null,
-          icon: Icon(Icons.skip_next_rounded, color: colors.text, size: 22),
+          icon: Icon(Icons.skip_next_rounded, color: colors.text, size: 21),
         ),
       ],
     );
@@ -3832,17 +3844,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     : Colors.transparent,
             borderRadius: BorderRadius.circular(22),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 7),
+          padding: const EdgeInsets.symmetric(vertical: 5),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 20, color: colors.text),
-              const SizedBox(height: 3),
+              Icon(icon, size: 19, color: colors.text),
+              const SizedBox(height: 2),
               Text(
                 label,
                 style: TextStyle(
                   color: colors.text,
-                  fontSize: 12,
+                  fontSize: 11.5,
+                  height: 1.05,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 ),
               ),
