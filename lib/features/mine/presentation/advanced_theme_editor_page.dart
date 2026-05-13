@@ -15,6 +15,8 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -210,11 +212,11 @@ class _AdvancedThemeEditorPageState
     String? selectedPath =
         draft == null ? null : _selectedWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_backgroundLibraryPaths);
-    final confirmedPath = await showModalBottomSheet<String>(
+    final confirmedPath = await showAdaptiveActionSurface<String>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 720,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
+      padding: EdgeInsets.zero,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -296,11 +298,11 @@ class _AdvancedThemeEditorPageState
     String? selectedPath =
         draft == null ? null : _selectedReaderWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_readerBackgroundLibraryPaths);
-    final confirmedPath = await showModalBottomSheet<String>(
+    final confirmedPath = await showAdaptiveActionSurface<String>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 720,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
+      padding: EdgeInsets.zero,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -404,11 +406,11 @@ class _AdvancedThemeEditorPageState
       return;
     }
     String? selectedId = _draft?.bottomNavGalleryId ?? _activeGalleryId;
-    final nextId = await showModalBottomSheet<String>(
+    final nextId = await showAdaptiveActionSurface<String>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 720,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
+      padding: EdgeInsets.zero,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
@@ -492,11 +494,13 @@ class _AdvancedThemeEditorPageState
     }
 
     String? selectedId = _draft?.coverGalleryIdFor(_selectedMode)?.trim();
-    final result = await showModalBottomSheet<_CoverGallerySelectionResult>(
+    final result = await showAdaptiveActionSurface<
+      _CoverGallerySelectionResult
+    >(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 720,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
+      padding: EdgeInsets.zero,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
@@ -651,11 +655,11 @@ class _AdvancedThemeEditorPageState
 
     String? selectedId = _draft?.launchImageGalleryId?.trim();
     final result =
-        await showModalBottomSheet<_LaunchImageGallerySelectionResult>(
+        await showAdaptiveActionSurface<_LaunchImageGallerySelectionResult>(
           context: context,
-          isScrollControlled: true,
-          showDragHandle: true,
-          useSafeArea: true,
+          maxWidth: 720,
+          maxHeightFactor: _resourcePickerSheetHeightFactor,
+          padding: EdgeInsets.zero,
           builder: (context) {
             return StatefulBuilder(
               builder: (context, setSheetState) {
@@ -961,11 +965,11 @@ class _AdvancedThemeEditorPageState
                 ? _draft?.readerFontFamilyKey
                 : _draft?.appInterfaceFontFamilyKey)
             ?.trim();
-    final result = await showModalBottomSheet<_ThemeFontSelectionResult>(
+    final result = await showAdaptiveActionSurface<_ThemeFontSelectionResult>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 640,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
+      padding: EdgeInsets.zero,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
@@ -1158,80 +1162,15 @@ class _AdvancedThemeEditorPageState
     if (resolvedPath == null) {
       return;
     }
-    await showDialog<void>(
+    await showAdaptiveFullscreenPreview<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.88),
+      title: title,
+      helperText: '双指缩放，拖动查看细节',
       builder: (dialogContext) {
-        final colorScheme = Theme.of(dialogContext).colorScheme;
-        return Dialog(
-          insetPadding: const EdgeInsets.all(14),
-          backgroundColor: Colors.transparent,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              color: const Color(0xFF111317),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                dialogContext,
-                              ).textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: '关闭',
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: InteractiveViewer(
-                        minScale: 1,
-                        maxScale: 4,
-                        child: Center(
-                          child: _buildResolvedImage(
-                            resolvedPath,
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Text(
-                        '双指缩放，拖动查看细节',
-                        style: Theme.of(
-                          dialogContext,
-                        ).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.92,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        return _buildResolvedImage(
+          resolvedPath,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
         );
       },
     );
@@ -1246,8 +1185,9 @@ class _AdvancedThemeEditorPageState
   }) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    return FractionallySizedBox(
-      heightFactor: _resourcePickerSheetHeightFactor,
+    return SizedBox(
+      height:
+          MediaQuery.sizeOf(context).height * _resourcePickerSheetHeightFactor,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
         child: Column(
@@ -1852,141 +1792,135 @@ class _AdvancedThemeEditorPageState
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final result = await showDialog<int>(
+    final result = await showAdaptiveActionSurface<int>(
       context: context,
+      maxWidth: 430,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return Dialog(
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 24,
-              ),
-              backgroundColor: colorScheme.surfaceContainerHigh,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '选择$title',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
+            return Material(
+              color: colorScheme.surfaceContainerHigh,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '选择$title',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            _showMessage('吸管取色需要系统截图权限，后续接入。');
+                          },
+                          tooltip: '吸管取色',
+                          icon: const Icon(Icons.colorize_rounded),
+                        ),
+                        FilledButton.tonal(
+                          onPressed:
+                              () => Navigator.of(
+                                dialogContext,
+                              ).pop(draftColor.toARGB32()),
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: hexController,
+                      keyboardType: TextInputType.text,
+                      textCapitalization: TextCapitalization.characters,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[#0-9a-fA-F]'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        final parsed = _parseHexColor(value);
+                        if (parsed == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          draftColor = Color(parsed);
+                        });
+                      },
+                      decoration: InputDecoration(
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                        hintText: '#RRGGBB / #AARRGGBB',
+                        filled: true,
+                        fillColor: colorScheme.surface.withValues(alpha: 0.72),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ColorPicker(
+                      pickerColor: draftColor,
+                      onColorChanged: (color) {
+                        setDialogState(() {
+                          draftColor = color;
+                        });
+                      },
+                      enableAlpha: true,
+                      displayThumbColor: true,
+                      portraitOnly: true,
+                      paletteType: PaletteType.hsvWithHue,
+                      colorPickerWidth: 360,
+                      pickerAreaHeightPercent: 0.62,
+                      pickerAreaBorderRadius: const BorderRadius.all(
+                        Radius.circular(12),
+                      ),
+                      labelTypes: const [],
+                      hexInputController: hexController,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: draftColor,
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                              color: colorScheme.outline.withValues(
+                                alpha: 0.38,
                               ),
                             ),
                           ),
-                          IconButton(
-                            onPressed: () {
-                              _showMessage('吸管取色需要系统截图权限，后续接入。');
-                            },
-                            tooltip: '吸管取色',
-                            icon: const Icon(Icons.colorize_rounded),
-                          ),
-                          FilledButton.tonal(
-                            onPressed:
-                                () => Navigator.of(
-                                  dialogContext,
-                                ).pop(draftColor.toARGB32()),
-                            child: const Text('保存'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      TextField(
-                        controller: hexController,
-                        keyboardType: TextInputType.text,
-                        textCapitalization: TextCapitalization.characters,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'[#0-9a-fA-F]'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          final parsed = _parseHexColor(value);
-                          if (parsed == null) {
-                            return;
-                          }
-                          setDialogState(() {
-                            draftColor = Color(parsed);
-                          });
-                        },
-                        decoration: InputDecoration(
-                          isDense: true,
-                          prefixIcon: const Icon(Icons.tag_rounded, size: 18),
-                          hintText: '#RRGGBB / #AARRGGBB',
-                          filled: true,
-                          fillColor: colorScheme.surface.withValues(
-                            alpha: 0.72,
-                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      ColorPicker(
-                        pickerColor: draftColor,
-                        onColorChanged: (color) {
-                          setDialogState(() {
-                            draftColor = color;
-                          });
-                        },
-                        enableAlpha: true,
-                        displayThumbColor: true,
-                        portraitOnly: true,
-                        paletteType: PaletteType.hsvWithHue,
-                        colorPickerWidth: 360,
-                        pickerAreaHeightPercent: 0.62,
-                        pickerAreaBorderRadius: const BorderRadius.all(
-                          Radius.circular(12),
-                        ),
-                        labelTypes: const [],
-                        hexInputController: hexController,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: draftColor,
-                              borderRadius: BorderRadius.circular(9),
-                              border: Border.all(
-                                color: colorScheme.outline.withValues(
-                                  alpha: 0.38,
-                                ),
-                              ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _formatHex(draftColor.toARGB32()),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _formatHex(draftColor.toARGB32()),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: const Text('取消'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
                         ),
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('取消'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );

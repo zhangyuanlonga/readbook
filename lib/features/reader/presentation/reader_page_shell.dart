@@ -692,20 +692,39 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       if (!mounted || _isSwitchSourceLoading) {
         return;
       }
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAdaptiveActionSurface<bool>(
         context: context,
+        maxWidth: 460,
         builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('当前书源不可用'),
-            content: const Text('该书源可能已被删除或停用，是否现在切换到其他书源？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('稍后'),
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '当前书源不可用',
+                style: Theme.of(
+                  dialogContext,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('立即换源'),
+              const SizedBox(height: 12),
+              Text(
+                '该书源可能已被删除或停用，是否现在切换到其他书源？',
+                style: Theme.of(dialogContext).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('稍后'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('立即换源'),
+                  ),
+                ],
               ),
             ],
           );

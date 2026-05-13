@@ -1133,6 +1133,7 @@ extension on _BookshelfPageState {
     }
     await _showBookshelfBottomSheet<void>(
       isScrollControlled: true,
+      useAdaptiveSurface: false,
       builder: (sheetContext) {
         return _BookshelfImportLocalBooksSheet(
           flowCoordinator: _flowCoordinator,
@@ -1188,6 +1189,7 @@ extension on _BookshelfPageState {
     }
     await _showBookshelfBottomSheet<void>(
       isScrollControlled: true,
+      useAdaptiveSurface: false,
       builder: (sheetContext) {
         return _BookshelfExternalImportSheet(
           payload: payload,
@@ -1204,13 +1206,14 @@ extension on _BookshelfPageState {
   Future<T?> _showBookshelfBottomSheet<T>({
     required WidgetBuilder builder,
     bool isScrollControlled = false,
+    bool useAdaptiveSurface = true,
   }) {
-    return showModalBottomSheet<T>(
+    return showAdaptiveActionSurface<T>(
       context: context,
       useRootNavigator: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: isScrollControlled,
+      maxWidth: 720,
+      maxHeightFactor: isScrollControlled ? 0.88 : 0.72,
+      padding: EdgeInsets.zero,
       builder: builder,
     );
   }
@@ -1678,8 +1681,11 @@ extension on _BookshelfPageState {
         existingItem?.colorValue ??
         BookshelfTaxonomyItem.defaultColorForName(isTag ? '新标签' : '新分类');
 
-    final result = await showDialog<_BookshelfTaxonomyEditorResult>(
+    final result = await showAdaptiveActionSurface<_BookshelfTaxonomyEditorResult>(
       context: context,
+      maxWidth: 430,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
       builder:
           (dialogContext) => _BookshelfTaxonomyEditorDialog(
             kind: kind,
@@ -1817,17 +1823,14 @@ class _BookshelfTaxonomyEditorDialogState
     final title =
         widget.isNew ? (_isTag ? '新增标签' : '新增分类') : '编辑${_isTag ? '标签' : '分类'}';
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      backgroundColor: colorScheme.surfaceContainerHigh,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 430),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+    return Material(
+      color: colorScheme.surfaceContainerHigh,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               Row(
                 children: [
                   Expanded(
@@ -1951,8 +1954,7 @@ class _BookshelfTaxonomyEditorDialogState
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -2426,18 +2428,33 @@ class _BookshelfImportLocalBooksSheetState
       trailing: IconButton(
         tooltip: '导入说明',
         onPressed: () {
-          showDialog<void>(
+          showAdaptiveActionSurface<void>(
             context: context,
+            maxWidth: 460,
             builder: (context) {
-              return AlertDialog(
-                title: const Text('导入说明'),
-                content: const Text(
-                  '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。\n\n图文内容较多时，系统会继续解析结构和图片资源。\n\n导入阶段：添加文件 -> 解析导入 -> 完成。',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('知道了'),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '导入说明',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '支持 TXT、EPUB、Markdown、HTML、PDF、MOBI、AZW、AZW3。\n\n'
+                    '图文内容较多时，系统会继续解析结构和图片资源。\n\n'
+                    '导入阶段：添加文件 -> 解析导入 -> 完成。',
+                  ),
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('知道了'),
+                    ),
                   ),
                 ],
               );

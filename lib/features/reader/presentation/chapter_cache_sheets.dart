@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../domain/entities/chapter.dart';
@@ -39,11 +40,10 @@ Future<void> showChapterCacheFlow({
   final start = initialStartIndex.clamp(0, total - 1);
   final end = initialEndIndex.clamp(0, total - 1);
 
-  final range = await showModalBottomSheet<_ChapterCacheRange>(
+  final range = await showAdaptiveActionSurface<_ChapterCacheRange>(
     context: context,
-    useSafeArea: true,
-    isScrollControlled: true,
-    showDragHandle: true,
+    maxWidth: 620,
+    maxHeightFactor: 0.86,
     builder: (sheetContext) {
       return _ChapterCacheRangeSheet(
         totalChapters: total,
@@ -63,12 +63,11 @@ Future<void> showChapterCacheFlow({
     return;
   }
 
-  await showModalBottomSheet<void>(
+  await showAdaptiveActionSurface<void>(
     context: context,
-    useSafeArea: true,
-    isDismissible: false,
-    enableDrag: false,
-    isScrollControlled: true,
+    barrierDismissible: false,
+    maxWidth: 620,
+    maxHeightFactor: 0.72,
     builder: (sheetContext) {
       return _ChapterCacheProgressSheet(
         bookId: bookId,

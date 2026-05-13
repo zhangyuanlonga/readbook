@@ -11,6 +11,7 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -231,10 +232,10 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
       showNavigationLabels: ref.read(appNavigationLabelVisibilityProvider),
       standardAppearance: ref.read(appStandardNavigationBarAppearanceProvider),
     );
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 680,
+      maxHeightFactor: 0.82,
       builder: (sheetContext) {
         final metrics = AppAdaptiveMetrics.of(sheetContext);
         return Padding(

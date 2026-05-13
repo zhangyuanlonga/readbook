@@ -921,19 +921,17 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
 
   Future<String?> _showBookmarkNoteEditor({String? initialNote}) {
     final controller = TextEditingController(text: initialNote ?? '');
-    return showModalBottomSheet<String>(
+    return showAdaptiveActionSurface<String>(
       context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 520,
+      maxHeightFactor: 0.72,
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            8,
-            16,
-            MediaQuery.viewInsetsOf(sheetContext).bottom + 16,
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

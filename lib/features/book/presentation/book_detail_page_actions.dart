@@ -55,58 +55,56 @@ extension on _BookDetailPageState {
     final detailResult = _result;
     final latestChapter =
         detailResult == null ? null : _resolveLatestChapter(detailResult);
-    final action = await showModalBottomSheet<String>(
+    final action = await showAdaptiveActionSurface<String>(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 460,
+      padding: EdgeInsets.zero,
       builder: (context) {
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              if (detailResult != null &&
-                  _canOpenCatalogForResult(detailResult))
-                ListTile(
-                  leading: const Icon(Icons.menu_book_rounded),
-                  title: const Text('查看目录'),
-                  onTap: () => Navigator.of(context).pop('catalog'),
-                ),
-              if (detailResult != null &&
-                  _buildOpenCacheAction(detailResult) != null)
-                ListTile(
-                  leading: const Icon(Icons.cloud_download_outlined),
-                  title: const Text('缓存章节'),
-                  onTap: () => Navigator.of(context).pop('cache'),
-                ),
-              if (detailResult != null && _auxiliaryState.isInBookshelf)
-                ListTile(
-                  leading: const Icon(Icons.image_outlined),
-                  title: const Text('自定义封面'),
-                  onTap: () => Navigator.of(context).pop('custom_cover'),
-                ),
-              if (latestChapter != null)
-                ListTile(
-                  leading: const Icon(Icons.new_releases_outlined),
-                  title: const Text('最新章节'),
-                  onTap: () => Navigator.of(context).pop('latest'),
-                ),
+        return ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            if (detailResult != null && _canOpenCatalogForResult(detailResult))
               ListTile(
-                leading: const Icon(Icons.refresh_rounded),
-                title: const Text('刷新详情'),
-                onTap: () => Navigator.of(context).pop('refresh'),
+                leading: const Icon(Icons.menu_book_rounded),
+                title: const Text('查看目录'),
+                onTap: () => Navigator.of(context).pop('catalog'),
               ),
-              if (detailResult != null)
-                ListTile(
-                  leading: Icon(
-                    _manualTocReversed
-                        ? Icons.arrow_downward_rounded
-                        : Icons.arrow_upward_rounded,
-                  ),
-                  title: Text(_manualTocReversed ? '目录正序' : '目录倒序'),
-                  onTap: () => Navigator.of(context).pop('reverse'),
+            if (detailResult != null &&
+                _buildOpenCacheAction(detailResult) != null)
+              ListTile(
+                leading: const Icon(Icons.cloud_download_outlined),
+                title: const Text('缓存章节'),
+                onTap: () => Navigator.of(context).pop('cache'),
+              ),
+            if (detailResult != null && _auxiliaryState.isInBookshelf)
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('自定义封面'),
+                onTap: () => Navigator.of(context).pop('custom_cover'),
+              ),
+            if (latestChapter != null)
+              ListTile(
+                leading: const Icon(Icons.new_releases_outlined),
+                title: const Text('最新章节'),
+                onTap: () => Navigator.of(context).pop('latest'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded),
+              title: const Text('刷新详情'),
+              onTap: () => Navigator.of(context).pop('refresh'),
+            ),
+            if (detailResult != null)
+              ListTile(
+                leading: Icon(
+                  _manualTocReversed
+                      ? Icons.arrow_downward_rounded
+                      : Icons.arrow_upward_rounded,
                 ),
-            ],
-          ),
+                title: Text(_manualTocReversed ? '目录正序' : '目录倒序'),
+                onTap: () => Navigator.of(context).pop('reverse'),
+              ),
+          ],
         );
       },
     );
@@ -214,9 +212,9 @@ extension on _BookDetailPageState {
     required String title,
     String? author,
   }) async {
-    await showDialog<void>(
+    await showAdaptiveFullscreenPreview<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.88),
+      helperText: '双指缩放，拖动查看细节',
       builder: (dialogContext) {
         final size = MediaQuery.sizeOf(dialogContext);
         final previewMaxWidth = math.max(120.0, size.width - 32);
@@ -224,48 +222,14 @@ extension on _BookDetailPageState {
         final coverWidth = math.min(previewMaxWidth, previewMaxHeight / 1.42);
         final coverHeight = coverWidth * 1.42;
 
-        return GestureDetector(
-          onTap: () => Navigator.of(dialogContext).pop(),
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: SafeArea(
-              child: Stack(
-                children: [
-                  Center(
-                    child: InteractiveViewer(
-                      minScale: 0.8,
-                      maxScale: 4,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => Navigator.of(dialogContext).pop(),
-                        child: ResolvedBookCoverView(
-                          cover: cover,
-                          title: title,
-                          author: author,
-                          width: coverWidth,
-                          height: coverHeight,
-                          borderRadius: BorderRadius.circular(18),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      tooltip: '关闭',
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        return ResolvedBookCoverView(
+          cover: cover,
+          title: title,
+          author: author,
+          width: coverWidth,
+          height: coverHeight,
+          borderRadius: BorderRadius.circular(18),
+          fit: BoxFit.contain,
         );
       },
     );
@@ -417,13 +381,12 @@ extension on _BookDetailPageState {
       return;
     }
 
-    final result = await showModalBottomSheet<bool>(
+    final result = await showAdaptiveActionSurface<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 720,
+      maxHeightFactor: 0.88,
+      padding: EdgeInsets.zero,
       builder: (context) {
-        final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final theme = Theme.of(context);
@@ -548,7 +511,12 @@ extension on _BookDetailPageState {
             }
 
             return Padding(
-              padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + bottomInset),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

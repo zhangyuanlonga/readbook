@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../application/mine_page_preferences_service.dart';
 import '../../providers.dart';
 
@@ -199,83 +200,78 @@ class _AppearanceOtherSettingsCardState
   }
 
   Future<void> _openMinePageDisplaySheet() async {
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
+      maxWidth: 680,
+      maxHeightFactor: 0.84,
+      padding: EdgeInsets.zero,
       builder: (context) {
-        return SafeArea(
-          child: FractionallySizedBox(
-            heightFactor: 0.84,
-            child: Consumer(
-              builder: (context, ref, _) {
-                final visibilityState = ref.watch(minePageVisibilityProvider);
-                final grouped = <String, List<MinePageItemDefinition>>{};
-                for (final definition in displayableMinePageItemDefinitions) {
-                  grouped
-                      .putIfAbsent(definition.sectionTitle, () => [])
-                      .add(definition);
-                }
+        return SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.74,
+          child: Consumer(
+            builder: (context, ref, _) {
+              final visibilityState = ref.watch(minePageVisibilityProvider);
+              final grouped = <String, List<MinePageItemDefinition>>{};
+              for (final definition in displayableMinePageItemDefinitions) {
+                grouped
+                    .putIfAbsent(definition.sectionTitle, () => [])
+                    .add(definition);
+              }
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  children: [
-                    Text(
-                      '我的页面显示内容',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                children: [
+                  Text(
+                    '我的页面显示内容',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '高级会员和顶部用户卡片暂不支持隐藏，其余项目可单独控制显示状态。',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.45,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '高级会员和顶部用户卡片暂不支持隐藏，其余项目可单独控制显示状态。',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.45,
                     ),
-                    const SizedBox(height: 16),
-                    for (final entry in grouped.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 8),
-                        child: Text(
-                          entry.key,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 16),
+                  for (final entry in grouped.entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text(
+                        entry.key,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      _buildGroupCard(
-                        context,
-                        children: [
-                          for (
-                            var index = 0;
-                            index < entry.value.length;
-                            index++
-                          )
-                            _buildVisibilityTile(
-                              context,
-                              definition: entry.value[index],
-                              visible: visibilityState.isVisible(
-                                entry.value[index].id,
-                              ),
-                              onChanged:
-                                  entry.value[index].configurable
-                                      ? (value) => _setMinePageItemVisible(
-                                        entry.value[index].id,
-                                        value,
-                                      )
-                                      : null,
-                              showDivider: index != entry.value.length - 1,
+                    ),
+                    _buildGroupCard(
+                      context,
+                      children: [
+                        for (var index = 0; index < entry.value.length; index++)
+                          _buildVisibilityTile(
+                            context,
+                            definition: entry.value[index],
+                            visible: visibilityState.isVisible(
+                              entry.value[index].id,
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                            onChanged:
+                                entry.value[index].configurable
+                                    ? (value) => _setMinePageItemVisible(
+                                      entry.value[index].id,
+                                      value,
+                                    )
+                                    : null,
+                            showDivider: index != entry.value.length - 1,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                   ],
-                );
-              },
-            ),
+                ],
+              );
+            },
           ),
         );
       },

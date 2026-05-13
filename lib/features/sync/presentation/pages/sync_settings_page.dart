@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/layout/app_layout.dart';
 import '../../../../app/motion/app_motion_widgets.dart';
+import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
 import '../../../../app/widgets/app_status_state_card.dart';
 import '../../application/sync_scope_catalog_service.dart';
@@ -582,20 +583,39 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
   }
 
   Future<void> _handleDeleteProfile(String profileId) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 420,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('删除配置'),
-          content: const Text('删除后需要重新填写连接信息，是否继续？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '删除配置',
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
+            const SizedBox(height: 12),
+            Text(
+              '删除后需要重新填写连接信息，是否继续？',
+              style: Theme.of(dialogContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('删除'),
+                ),
+              ],
             ),
           ],
         );

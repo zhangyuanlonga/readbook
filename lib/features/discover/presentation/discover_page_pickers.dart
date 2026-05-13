@@ -79,8 +79,8 @@ class _SourcePickerSheetState extends ConsumerState<_SourcePickerSheet> {
       large: 0.85,
     );
 
-    return FractionallySizedBox(
-      heightFactor: heightFactor,
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * heightFactor,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           horizontal,
@@ -554,8 +554,8 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
       large: 0.85,
     );
 
-    return FractionallySizedBox(
-      heightFactor: heightFactor,
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * heightFactor,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           horizontal,

@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/tasks/app_task_manager.dart';
+import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/app_task_status.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
@@ -317,48 +318,11 @@ class _LaunchImageGalleryEditorPageState
   }
 
   Future<void> _openPreview(String path) async {
-    await showDialog<void>(
+    await showAdaptiveFullscreenPreview<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.88),
+      helperText: '双指缩放，拖动查看细节',
       builder: (context) {
-        return GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: SafeArea(
-              child: Stack(
-                children: [
-                  Center(
-                    child: InteractiveViewer(
-                      minScale: 0.8,
-                      maxScale: 4,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => Navigator.of(context).pop(),
-                        child: LazyFileImage(
-                          path: path,
-                          fit: BoxFit.contain,
-                          cacheWidth: 1080,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+        return LazyFileImage(path: path, fit: BoxFit.contain, cacheWidth: 1080);
       },
     );
   }

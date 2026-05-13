@@ -16,6 +16,8 @@ import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';

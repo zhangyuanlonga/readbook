@@ -790,18 +790,15 @@ extension on _AppearancePageState {
     if (!context.mounted) {
       return;
     }
-    await showModalBottomSheet(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      isScrollControlled: true,
+      maxWidth: 560,
+      maxHeightFactor: 0.76,
+      padding: EdgeInsets.zero,
       builder: (context) {
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: _FontFamilyPickerDialog(
-              fontRegistryService: _fontRegistryService,
-              initialFonts: _availableCustomFonts,
-            ),
-          ),
+        return _FontFamilyPickerDialog(
+          fontRegistryService: _fontRegistryService,
+          initialFonts: _availableCustomFonts,
         );
       },
     );
@@ -809,171 +806,160 @@ extension on _AppearancePageState {
   }
 
   Future<void> _showFontScaleBottomSheet(BuildContext context) async {
-    await showModalBottomSheet(
+    await showAdaptiveActionSurface<void>(
       context: context,
+      maxWidth: 420,
       builder: (context) {
         var draftValue = ref.read(appInterfaceTextScaleProvider);
-        return SafeArea(
-          child: StatefulBuilder(
-            builder: (context, setSheetState) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '界面缩放',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '界面缩放',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(draftValue * 100).round()}%',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '范围 60% - 150%，基于系统字体大小微调外部页面',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Slider(
+                    min: 0.6,
+                    max: 1.5,
+                    divisions: 18,
+                    label: '${(draftValue * 100).round()}%',
+                    value: draftValue,
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftValue = value;
+                      });
+                      unawaited(
+                        ref
+                            .read(appInterfaceTextScaleProvider.notifier)
+                            .setScale(value),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text('60%', style: Theme.of(context).textTheme.bodySmall),
+                      const Spacer(),
+                      Text(
+                        '150%',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${(draftValue * 100).round()}%',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '范围 60% - 150%，基于系统字体大小微调外部页面',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Slider(
-                      min: 0.6,
-                      max: 1.5,
-                      divisions: 18,
-                      label: '${(draftValue * 100).round()}%',
-                      value: draftValue,
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftValue = value;
-                        });
-                        unawaited(
-                          ref
-                              .read(appInterfaceTextScaleProvider.notifier)
-                              .setScale(value),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          '60%',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const Spacer(),
-                        Text(
-                          '150%',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
   }
 
   Future<void> _showFontWeightBottomSheet(BuildContext context) async {
-    await showModalBottomSheet(
+    await showAdaptiveActionSurface<void>(
       context: context,
+      maxWidth: 420,
       builder: (context) {
         var draftValue = ref.read(appInterfaceFontWeightProvider).toDouble();
-        return SafeArea(
-          child: StatefulBuilder(
-            builder: (context, setSheetState) {
-              final displayWeight = draftValue.round();
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '界面字重',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final displayWeight = draftValue.round();
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '界面字重',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$displayWeight',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: appInterfaceFontWeightValue(displayWeight),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '$displayWeight',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: appInterfaceFontWeightValue(displayWeight),
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '范围 100 - 900，数值越大文字越粗',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '范围 100 - 900，数值越大文字越粗',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Slider(
-                      min: 100,
-                      max: 900,
-                      divisions: 8,
-                      label: '$displayWeight',
-                      value: draftValue,
-                      onChanged: (value) {
-                        final normalized =
-                            ((value / 100).round() * 100)
-                                .clamp(100, 900)
-                                .toDouble();
-                        setSheetState(() {
-                          draftValue = normalized;
-                        });
-                        unawaited(
-                          ref
-                              .read(appInterfaceFontWeightProvider.notifier)
-                              .setWeight(normalized.toInt()),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: const [
-                            100,
-                            200,
-                            300,
-                            400,
-                            500,
-                            600,
-                            700,
-                            800,
-                            900,
-                          ]
-                          .map(
-                            (weight) => Chip(
-                              label: Text('$weight'),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+                  ),
+                  const SizedBox(height: 14),
+                  Slider(
+                    min: 100,
+                    max: 900,
+                    divisions: 8,
+                    label: '$displayWeight',
+                    value: draftValue,
+                    onChanged: (value) {
+                      final normalized =
+                          ((value / 100).round() * 100)
+                              .clamp(100, 900)
+                              .toDouble();
+                      setSheetState(() {
+                        draftValue = normalized;
+                      });
+                      unawaited(
+                        ref
+                            .read(appInterfaceFontWeightProvider.notifier)
+                            .setWeight(normalized.toInt()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: const [
+                          100,
+                          200,
+                          300,
+                          400,
+                          500,
+                          600,
+                          700,
+                          800,
+                          900,
+                        ]
+                        .map(
+                          (weight) => Chip(
+                            label: Text('$weight'),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );

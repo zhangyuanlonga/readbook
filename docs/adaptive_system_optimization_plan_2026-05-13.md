@@ -289,8 +289,13 @@ unsupported：当前平台或构建配置不支持
 - 2026-05-13：A8-B4 按“两项一组”迁移公告列表和公告详情；公告列表从一次性拼装 `ListView(children)` 改为 `CustomScrollView + SliverList.builder`，公告详情正文最大宽度收窄到设置页内容宽度，避免桌面长文行宽过长。
 - 2026-05-13：A8 继续按两项一组迁移关于页与同步历史；`AboutPage` 收口为 `ConsumerStatefulWidget`，`SyncHistoryPage` 任务详情从裸 `showModalBottomSheet` 迁到 `showAdaptiveActionSurface`。
 - 2026-05-13：A8 按三个功能模块批量推进：标签/分类管理模块收口到 `ConsumerStatefulWidget` 且重命名/删除走 adaptive surface；书签模块内部详情页增加宽屏内容约束；缓存/字体资源模块将清理确认、明细弹层、字体导入说明和重命名统一迁到 `showAdaptiveActionSurface`。
-- 2026-05-13：A8 下一组三模块继续推进：反馈模块将 `FeedbackPage` 收口为 `ConsumerStatefulWidget` 并将相似反馈确认迁到 adaptive surface；错误中心移动日志列表改为 Sliver builder，且低高度横屏降级为移动列表避免 640x360 + 1.3 字体溢出；系统设置恢复默认确认迁到 adaptive surface。会员中心复杂兑换/设备席位面板暂留后续单独迁移。
-- 2026-05-13：A8 下一阶段迁移账号资料、会员中心和外观基础设置：退出登录、释放设备席位、领取试用会员、删除应用背景的普通确认弹层迁到 `showAdaptiveActionSurface`；会员兑换/设备管理表单和背景全屏预览作为复杂面板/沉浸预览例外保留。
+- 2026-05-13：A8 下一组三模块继续推进：反馈模块将 `FeedbackPage` 收口为 `ConsumerStatefulWidget` 并将相似反馈确认迁到 adaptive surface；错误中心移动日志列表改为 Sliver builder，且低高度横屏降级为移动列表避免 640x360 + 1.3 字体溢出；系统设置恢复默认确认迁到 adaptive surface。会员中心复杂兑换/设备席位面板当时暂留后续单独迁移，已在后续五点批量中回收。
+- 2026-05-13：A8 下一阶段迁移账号资料、会员中心和外观基础设置：退出登录、释放设备席位、领取试用会员、删除应用背景的普通确认弹层迁到 `showAdaptiveActionSurface`；会员兑换/设备管理表单先作为复杂面板例外保留，后续已在五点批量迁移中回收，背景全屏预览继续作为沉浸预览例外保留。
+- 2026-05-13：A8 改为五点一组推进后，完成会员客服说明、会员兑换码、会员设备管理、外观字体设置 3 个面板，以及高级主题编辑确认/排序/批量删除普通操作迁移；上述入口统一走 `showAdaptiveActionSurface`，移动端保留 bottom sheet，桌面/Web 使用居中 dialog surface。高级主题批量导入、删除策略、重命名分类和沉浸预览仍作为复杂业务弹层例外，后续按高级主题模块单独回收。
+- 2026-05-13：A8 第二个五点批量迁移完成我的页和同步设置常用入口：头像操作、头像来源选择、会员提示、同步配置删除、我的页显示内容面板统一走 `showAdaptiveActionSurface`；不改头像文件选择、同步执行和 Mine 工作台骨架业务。
+- 2026-05-13：按“两批压下去”口径完成 Batch 1 普通业务入口压降：首页目标设置、搜索书源筛选/来源选择、发现书源/分类选择、书籍详情更多操作/归类/重索引确认、书架排序/设置/筛选 helper 和普通确认迁到 `showAdaptiveActionSurface`。保留书籍封面沉浸预览、书架导入任务态和标签/分类自定义编辑器作为专项例外。
+- 2026-05-13：完成 Batch 2 高频高级主题/阅读器面板压降：高级主题批量分类、兼容导入说明、导出说明，阅读器书源不可用提示、章节差异确认、漫画长图定位、章节缓存范围/进度、阅读记录热力日历详情迁到 `showAdaptiveActionSurface`。阅读器目录/设置/选择菜单保留阅读器专属策略，后续按 `ReaderLayoutContext` 侧栏/浮层专项处理。
+- 2026-05-13：A8 非 Source 收尾完成。新增 `showAdaptiveFullscreenPreview` 回收沉浸图片预览；高级主题编辑/列表、书架导入与分类编辑、阅读器设置/目录/字体面板完成统一 adaptive surface 或阅读器自绘 route 收口。当前 `lib/features` 下除书源/Source 专项外，已无直接 `showDialog` / `showModalBottomSheet` 调用。
 
 ## 11. 排期建议
 

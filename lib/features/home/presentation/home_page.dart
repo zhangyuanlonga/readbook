@@ -11,6 +11,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/reading_record.dart';
@@ -979,89 +980,84 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Future<void> _showGoalSettingsSheet() async {
     var draftMinutes = _engagementState.dailyGoalMinutes;
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      showDragHandle: true,
+      maxWidth: 460,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '每日阅读目标',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '设置你每天想完成的阅读时长，首页半圆会按分钟/天实时更新进度。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '$draftMinutes 分钟/天',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Slider(
+                  value: draftMinutes.toDouble(),
+                  min: 5,
+                  max: 120,
+                  divisions: 23,
+                  label: '$draftMinutes 分钟/天',
+                  onChanged: (value) {
+                    setSheetState(() {
+                      draftMinutes = value.round();
+                    });
+                  },
+                ),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
-                    Text(
-                      '每日阅读目标',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '设置你每天想完成的阅读时长，首页半圆会按分钟/天实时更新进度。',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.45,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      '$draftMinutes 分钟/天',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    Slider(
-                      value: draftMinutes.toDouble(),
-                      min: 5,
-                      max: 120,
-                      divisions: 23,
-                      label: '$draftMinutes 分钟/天',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftMinutes = value.round();
-                        });
-                      },
-                    ),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        for (final preset in [5, 10, 15, 30, 45, 60])
-                          ChoiceChip(
-                            label: Text('$preset 分钟/天'),
-                            selected: draftMinutes == preset,
-                            onSelected: (_) {
-                              setSheetState(() {
-                                draftMinutes = preset;
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () async {
-                          final updated = await _engagementService
-                              .saveDailyGoalMinutes(draftMinutes);
-                          if (!mounted || !sheetContext.mounted) {
-                            return;
-                          }
-                          setState(() {
-                            _engagementState = updated;
+                    for (final preset in [5, 10, 15, 30, 45, 60])
+                      ChoiceChip(
+                        label: Text('$preset 分钟/天'),
+                        selected: draftMinutes == preset,
+                        onSelected: (_) {
+                          setSheetState(() {
+                            draftMinutes = preset;
                           });
-                          Navigator.of(sheetContext).pop();
                         },
-                        child: const Text('保存目标'),
                       ),
-                    ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () async {
+                      final updated = await _engagementService
+                          .saveDailyGoalMinutes(draftMinutes);
+                      if (!mounted || !sheetContext.mounted) {
+                        return;
+                      }
+                      setState(() {
+                        _engagementState = updated;
+                      });
+                      Navigator.of(sheetContext).pop();
+                    },
+                    child: const Text('保存目标'),
+                  ),
+                ),
+              ],
             );
           },
         );

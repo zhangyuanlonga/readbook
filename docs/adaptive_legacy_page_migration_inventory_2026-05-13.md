@@ -232,5 +232,91 @@
 
 本批例外：
 
-- `MembershipCenterPage` 的兑换码、设备管理和客服说明仍保留现有 bottom sheet。原因：这些是带输入、外链、席位同步状态的复杂表单/说明面板；回收条件：下一批会员专题统一迁移为 adaptive task/form surface。
+- `MembershipCenterPage` 的兑换码、设备管理和客服说明曾作为上一批复杂面板例外保留，已在后续五点批量迁移中回收。
 - `AppearancePage` 的全屏背景预览仍保留 `showDialog`。原因：该弹层是沉浸式黑底图片预览，包含 `InteractiveViewer` 缩放；回收条件同资源图集预览，待全屏预览基线组件落地后迁移。
+
+### 2026-05-13：A8 五点批量迁移：会员表单、外观字体、高级主题普通操作
+
+选择范围：
+
+| 功能点 | 页面/入口 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 会员客服说明 | `/membership` | 客服说明从手写 `showModalBottomSheet` 迁到 `showAdaptiveActionSurface` | 移动底部面板、桌面居中说明、QQ/群入口 | 已完成 |
+| 会员兑换码 | `/membership` | 兑换码输入表单迁到 `showAdaptiveActionSurface`，保留键盘 inset 处理 | 输入框、兑换成功关闭、错误提示、移动键盘遮挡 | 已完成 |
+| 会员设备管理 | `/membership` | 设备席位管理面板迁到 `showAdaptiveActionSurface` | 席位列表、释放席位后局部刷新、桌面宽度约束 | 已完成 |
+| 外观字体设置 | `/appearance` | 字体选择、界面缩放、界面字重 3 个面板迁到 `showAdaptiveActionSurface` | 字体导入入口、Slider 更新、移动/桌面弹层 | 已完成 |
+| 高级主题普通操作 | `/appearance/advanced-themes` | 编辑确认、主题排序、批量删除确认迁到 `showAdaptiveActionSurface` | 列表操作菜单、排序生效、批量选择删除 | 已完成 |
+
+本批例外：
+
+- `AdvancedThemeListPage` 的批量导入、重命名分类、主题删除策略和沉浸式图片/资源相关弹层仍保留现状。原因：这些弹层承载文件选择、任务态、删除策略或专用资源预览，不属于普通确认/选择面板；回收条件：后续高级主题模块单独迁移，先抽出 `AdaptiveTaskImportSurface`、`AdaptiveNameInputSurface` 或全屏预览基线组件。
+- `AppearancePage` 的背景全屏预览继续作为沉浸式预览例外，不纳入本批普通操作面板迁移。
+
+### 2026-05-13：A8 五点批量迁移：我的页与同步设置
+
+选择范围：
+
+| 功能点 | 页面/入口 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 头像操作 | `/mine` 用户头像 | 更换/移除头像操作面板迁到 `showAdaptiveActionSurface` | 登录态头像、移除头像、移动/桌面弹层 | 已完成 |
+| 头像来源选择 | `/mine` 更换头像 | 相册/文件来源选择迁到 `showAdaptiveActionSurface` | 移动端相册/文件选择，桌面/Web 直走文件路径 | 已完成 |
+| 会员提示 | `/mine` 会员受限入口 | 会员提示确认迁到 `showAdaptiveActionSurface` | 高级主题/同步入口、前往会员页、取消 | 已完成 |
+| 同步配置删除 | `/sync` | 删除同步配置确认迁到 `showAdaptiveActionSurface` | 删除确认、取消、删除后 Snackbar | 已完成 |
+| 我的页显示内容 | `/appearance` 其他设置 | 我的页显示内容面板迁到 `showAdaptiveActionSurface` | 长列表滚动、开关状态、桌面宽度约束 | 已完成 |
+
+本批例外：
+
+- `MinePage` 页面骨架继续保留当前桌面工作台布局，不在本批迁移到 `AdaptivePageScaffold`。原因：该页已包含宽屏账号区、入口分组和主题 backdrop；回收条件：统一骨架支持 Mine 工作台 slot 后再收口。
+- 同步设置页只迁普通删除确认，连接测试、同步执行等业务状态不在本批调整。
+
+### 2026-05-13：A8 两批压降：普通业务入口
+
+选择范围：
+
+| 功能模块 | 页面/入口 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 首页 | `/home` | 每日阅读目标设置迁到 `showAdaptiveActionSurface` | Slider、预设目标、保存后首页状态刷新 | 已完成 |
+| 搜索 | `/search` | 指定书源筛选、同书多来源选择迁到 `showAdaptiveActionSurface` | 书源筛选、搜索结果来源选择、桌面宽度约束 | 已完成 |
+| 发现 | `/discover` | 发现书源选择、分类选择迁到 `showAdaptiveActionSurface` | 搜索/筛选书源、分类列表、切换后加载 | 已完成 |
+| 书籍详情 | `/book/:id` | 更多操作、归类面板、重索引确认迁到 `showAdaptiveActionSurface` | 更多菜单、标签/分类新增、重索引确认 | 已完成 |
+| 书架 | `/bookshelf` | 排序/设置/筛选类书架 helper 默认迁到 `showAdaptiveActionSurface`；普通确认迁到 adaptive surface | 排序、书架显示设置、批量删除确认、导入任务不回归 | 已完成 |
+
+本批例外：
+
+- 书籍封面预览仍保留沉浸式黑底 `showDialog`，原因是其包含 `InteractiveViewer` 缩放预览。
+- 书架本地图书导入和外部导入任务仍保留原任务态 bottom sheet 路线，原因是内部已使用 `AppTaskBottomSheet` 管控导入步骤和不可关闭任务状态；后续可在统一任务 surface 中回收。
+- 书架标签/分类编辑器当前是自定义 `Dialog`，桌面表现已经不是手机底部 sheet，本批先不重写内部颜色编辑表单。
+
+### 2026-05-13：A8 两批压降：高级主题与阅读器高频面板
+
+选择范围：
+
+| 功能模块 | 页面/入口 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 高级主题 | `/appearance/advanced-themes` | 批量分类、兼容导入说明、导出说明迁到 `showAdaptiveActionSurface` | 分类输入、清空分类、导入说明、导出任务说明 | 已完成 |
+| 阅读器换源 | `/reader` | 书源不可用提示、章节差异确认迁到 `showAdaptiveActionSurface` | 换源确认、取消、继续切换 | 已完成 |
+| 阅读器漫画定位 | `/reader` 漫画模式 | 长图定位面板迁到 `showAdaptiveActionSurface` | Slider 定位、取消、跳转 | 已完成 |
+| 章节缓存 | 书籍详情/阅读器 | 缓存范围选择、缓存进度面板迁到 `showAdaptiveActionSurface` | 范围滑块、缓存进度、不可误关闭 | 已完成 |
+| 阅读记录 | `/reading-records` | 阅读热力日历分布面板迁到 `showAdaptiveActionSurface` | 日历详情、滚动内容、桌面宽度约束 | 已完成 |
+
+本批例外：
+
+- 阅读器目录、设置主面板、选择菜单仍保留阅读器专属交互路径。原因：这些面板承担沉浸阅读中的非阻断式操作，后续应按 `ReaderLayoutContext` 统一侧栏/浮层策略，而不是直接套普通 dialog。
+- 高级主题批量导入、删除策略和编辑器资源选择仍作为复杂资源/任务流保留，后续按高级主题专项继续迁移。
+
+### 2026-05-13：A8 非 Source 弹层收尾
+
+选择范围：
+
+| 功能模块 | 页面/入口 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 全屏图片预览 | 外观背景、阅读背景、封面图集、启动图集、书籍封面、高级主题图片预览 | 新增 `showAdaptiveFullscreenPreview`，沉浸式图片预览从手写黑底 `showDialog` 迁到统一全屏预览基线 | 缩放、拖动、关闭按钮、移动/桌面黑底预览 | 已完成 |
+| 高级主题编辑 | `/appearance/advanced-themes/:id` | 资源选择、字体选择、图集选择、颜色选择统一迁到 adaptive surface / fullscreen preview | 资源列表、颜色保存、键盘输入、桌面宽度约束 | 已完成 |
+| 高级主题列表 | `/appearance/advanced-themes` | 批量导入任务、单任务状态、删除策略迁到 `showAdaptiveActionSurface` | 导入进度、删除策略、不可误关闭任务态 | 已完成 |
+| 书架 | `/bookshelf` | 导入任务、标签/分类编辑、导入说明等剩余弹层统一走 adaptive surface | 本地导入、外部导入、标签/分类新增编辑、任务态 | 已完成 |
+| 阅读器 | `/reader` | 设置主面板改为阅读器自绘 `showGeneralDialog` 浮层，字体选择、目录更多操作、移动目录面板完成 adaptive/自绘 route 收口 | 设置预览、字体导入、目录搜索/定位、移动/桌面沉浸阅读 | 已完成 |
+
+收尾口径：
+
+- `lib/features` 下除 `lib/features/source/` 和书源脚本编辑器外，已无直接 `showDialog` / `showModalBottomSheet` 调用。
+- Source/书源模块保留到书源专项阶段处理，避免本轮跨模块改动影响书源编辑、调试和脚本运行链路。

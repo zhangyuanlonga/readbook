@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
@@ -210,13 +211,13 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
     }
 
     Future<void> openCatalogMoreActions() async {
-      final action = await showModalBottomSheet<String>(
+      final action = await showAdaptiveActionSurface<String>(
         context: context,
-        useSafeArea: true,
-        showDragHandle: true,
+        maxWidth: 420,
+        padding: EdgeInsets.zero,
         builder: (actionContext) {
           return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -696,16 +697,13 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       },
     );
   } else {
-    routeResult = showModalBottomSheet<ReaderCatalogSheetResult>(
+    routeResult = showGeneralDialog<ReaderCatalogSheetResult>(
       context: routeContext,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      backgroundColor: readerModalTheme.colorScheme.surface,
-      builder: (context) {
+      barrierDismissible: true,
+      barrierLabel: barrierLabel,
+      barrierColor: Colors.black.withValues(alpha: 0.18),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (context, animation, secondaryAnimation) {
         return StatefulBuilder(
           builder:
               (context, setModalState) => buildCatalogSurface(
@@ -713,6 +711,22 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                 setModalState,
                 isDesktopSurface: false,
               ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.06),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
         );
       },
     );

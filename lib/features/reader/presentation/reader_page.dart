@@ -27,6 +27,7 @@ import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -3117,121 +3118,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     BuildContext context, {
     int? initialColorValue,
   }) async {
-    Color draftColor = Color(
-      initialColorValue ??
+    return _showReaderColorPickerSurface(
+      context,
+      title: '自定义正文字色',
+      initialColorValue:
+          initialColorValue ??
           _resolveThemeColors(_settings.themeMode, _settings).text.toARGB32(),
-    );
-
-    return showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final preview = draftColor;
-
-            return AlertDialog(
-              title: const Text('自定义正文字色'),
-              content: SizedBox(
-                width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '正文预览：山高月小，水落石出。',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: preview,
-                          height: 1.6,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ColorPicker(
-                      pickerColor: draftColor,
-                      onColorChanged: (color) {
-                        setDialogState(() {
-                          draftColor = color;
-                        });
-                      },
-                      enableAlpha: false,
-                      displayThumbColor: true,
-                      portraitOnly: true,
-                      paletteType: PaletteType.hueWheel,
-                      pickerAreaHeightPercent: 0.72,
-                      labelTypes: const [],
-                      hexInputBar: true,
-                    ),
-                    if (_recentBodyTextColors.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        '最近使用',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _recentBodyTextColors
-                            .map((value) {
-                              final color = Color(value);
-                              final selected = draftColor.toARGB32() == value;
-                              return GestureDetector(
-                                onTap: () {
-                                  setDialogState(() {
-                                    draftColor = color;
-                                  });
-                                },
-                                child: Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color:
-                                          selected
-                                              ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
-                                              : Theme.of(
-                                                context,
-                                              ).colorScheme.outlineVariant,
-                                      width: selected ? 2 : 1,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            })
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed:
-                      () => Navigator.of(dialogContext).pop(preview.toARGB32()),
-                  child: const Text('使用颜色'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      previewBuilder:
+          (context, preview) => Text(
+            '正文预览：山高月小，水落石出。',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: preview, height: 1.6),
+          ),
+      recentColors: _recentBodyTextColors,
     );
   }
 
@@ -3239,83 +3139,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     BuildContext context, {
     int? initialColorValue,
   }) async {
-    Color draftColor = Color(
-      initialColorValue ??
+    return _showReaderColorPickerSurface(
+      context,
+      title: '正文阴影颜色',
+      initialColorValue:
+          initialColorValue ??
           _resolveThemeColors(_settings.themeMode, _settings).text.toARGB32(),
-    );
-
-    return showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final preview = draftColor;
-
-            return AlertDialog(
-              title: const Text('正文阴影颜色'),
-              content: SizedBox(
-                width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '阴影预览：山高月小，水落石出。',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.black,
-                          shadows: [
-                            Shadow(
-                              color: preview,
-                              blurRadius: 8,
-                              offset: const Offset(1, 1),
-                            ),
-                          ],
-                          height: 1.6,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ColorPicker(
-                      pickerColor: draftColor,
-                      onColorChanged: (color) {
-                        setDialogState(() {
-                          draftColor = color;
-                        });
-                      },
-                      enableAlpha: false,
-                      displayThumbColor: true,
-                      portraitOnly: true,
-                      paletteType: PaletteType.hueWheel,
-                      pickerAreaHeightPercent: 0.72,
-                      labelTypes: const [],
-                      hexInputBar: true,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed:
-                      () => Navigator.of(dialogContext).pop(preview.toARGB32()),
-                  child: const Text('使用颜色'),
+      previewBuilder:
+          (context, preview) => Text(
+            '阴影预览：山高月小，水落石出。',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.black,
+              shadows: [
+                Shadow(
+                  color: preview,
+                  blurRadius: 8,
+                  offset: const Offset(1, 1),
                 ),
               ],
-            );
-          },
-        );
-      },
+              height: 1.6,
+            ),
+          ),
     );
   }
 
@@ -3323,73 +3167,143 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     BuildContext context, {
     int? initialColorValue,
   }) async {
-    Color draftColor = Color(
-      initialColorValue ??
+    return _showReaderColorPickerSurface(
+      context,
+      title: '正文下划线颜色',
+      initialColorValue:
+          initialColorValue ??
           _resolveThemeColors(_settings.themeMode, _settings).text.toARGB32(),
+      previewBuilder:
+          (context, preview) => Text(
+            '下划线预览：山高月小，水落石出。',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.black,
+              decoration: TextDecoration.underline,
+              decorationColor: preview,
+              decorationThickness: 3,
+              height: 1.6,
+            ),
+          ),
     );
+  }
 
-    return showDialog<int>(
+  Future<int?> _showReaderColorPickerSurface(
+    BuildContext context, {
+    required String title,
+    required int initialColorValue,
+    required Widget Function(BuildContext context, Color preview)
+    previewBuilder,
+    List<int> recentColors = const <int>[],
+  }) async {
+    Color draftColor = Color(initialColorValue);
+    return showAdaptiveActionSurface<int>(
       context: context,
+      maxWidth: 460,
+      maxHeightFactor: 0.86,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final preview = draftColor;
 
-            return AlertDialog(
-              title: const Text('正文下划线颜色'),
-              content: SizedBox(
-                width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '下划线预览：山高月小，水落石出。',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.black,
-                          decoration: TextDecoration.underline,
-                          decorationColor: preview,
-                          decorationThickness: 3,
-                          height: 1.6,
-                        ),
-                      ),
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: previewBuilder(context, preview),
+                ),
+                const SizedBox(height: 12),
+                ColorPicker(
+                  pickerColor: draftColor,
+                  onColorChanged: (color) {
+                    setDialogState(() {
+                      draftColor = color;
+                    });
+                  },
+                  enableAlpha: false,
+                  displayThumbColor: true,
+                  portraitOnly: true,
+                  paletteType: PaletteType.hueWheel,
+                  pickerAreaHeightPercent: 0.72,
+                  labelTypes: const [],
+                  hexInputBar: true,
+                ),
+                if (recentColors.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    '最近使用',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 12),
-                    ColorPicker(
-                      pickerColor: draftColor,
-                      onColorChanged: (color) {
-                        setDialogState(() {
-                          draftColor = color;
-                        });
-                      },
-                      enableAlpha: false,
-                      displayThumbColor: true,
-                      portraitOnly: true,
-                      paletteType: PaletteType.hueWheel,
-                      pickerAreaHeightPercent: 0.72,
-                      labelTypes: const [],
-                      hexInputBar: true,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: recentColors
+                        .map((value) {
+                          final color = Color(value);
+                          final selected = draftColor.toARGB32() == value;
+                          return GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                draftColor = color;
+                              });
+                            },
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color:
+                                      selected
+                                          ? Theme.of(
+                                            context,
+                                          ).colorScheme.primary
+                                          : Theme.of(
+                                            context,
+                                          ).colorScheme.outlineVariant,
+                                  width: selected ? 2 : 1,
+                                ),
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed:
+                          () => Navigator.of(
+                            dialogContext,
+                          ).pop(preview.toARGB32()),
+                      child: const Text('使用颜色'),
                     ),
                   ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed:
-                      () => Navigator.of(dialogContext).pop(preview.toARGB32()),
-                  child: const Text('使用颜色'),
                 ),
               ],
             );

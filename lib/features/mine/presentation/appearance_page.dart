@@ -16,6 +16,7 @@ import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -212,38 +213,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Future<void> _previewBackground(String path) async {
-    await showDialog<void>(
+    await showAdaptiveFullscreenPreview<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.88),
+      helperText: '双指缩放，拖动查看细节',
       builder: (context) {
-        return Dialog.fullscreen(
-          backgroundColor: Colors.transparent,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4,
-                  child: Center(
-                    child: LazyFileImage(
-                      path: path,
-                      fit: BoxFit.contain,
-                      cacheWidth: 1080,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: MediaQuery.paddingOf(context).top + 8,
-                right: 12,
-                child: IconButton.filledTonal(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ),
-            ],
-          ),
-        );
+        return LazyFileImage(path: path, fit: BoxFit.contain, cacheWidth: 1080);
       },
     );
   }

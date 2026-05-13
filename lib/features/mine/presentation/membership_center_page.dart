@@ -505,32 +505,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (!mounted) {
       return;
     }
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: false,
-      builder: (context) {
-        final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-        final metrics = AppAdaptiveMetrics.of(context);
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(metrics.contentGap),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: metrics.bottomSheetMaxWidth,
-                ),
-                child: _buildSupportSheet(context),
-              ),
-            ),
-          ),
-        );
-      },
+      maxWidth: 520,
+      builder:
+          (surfaceContext) =>
+              SingleChildScrollView(child: _buildSupportSheet(surfaceContext)),
     );
   }
 
@@ -1395,14 +1375,10 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
   Future<void> _showRedeemSheet() async {
     _codeController.clear();
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: false,
-      builder: (context) {
-        final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-        final metrics = AppAdaptiveMetrics.of(context);
+      maxWidth: 520,
+      builder: (surfaceContext) {
         var isRedeeming = false;
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -1425,21 +1401,14 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             return AnimatedPadding(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(bottom: bottomInset),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
+              ),
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(metrics.contentGap),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: metrics.bottomSheetMaxWidth,
-                    ),
-                    child: _buildRedeemCard(
-                      context,
-                      isRedeeming: isRedeeming,
-                      onRedeemPressed: handleRedeem,
-                    ),
-                  ),
+                child: _buildRedeemCard(
+                  surfaceContext,
+                  isRedeeming: isRedeeming,
+                  onRedeemPressed: handleRedeem,
                 ),
               ),
             );
@@ -1450,14 +1419,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   }
 
   Future<void> _showManageSheet() async {
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: false,
-      builder: (context) {
-        final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-        final metrics = AppAdaptiveMetrics.of(context);
+      maxWidth: 680,
+      maxHeightFactor: 0.86,
+      builder: (surfaceContext) {
         var deviceSeats = List<MembershipDeviceSeat>.of(_deviceSeats);
         var seatSyncResult = _seatSyncResult;
         var entitlement = _entitlement;
@@ -1478,23 +1444,16 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             return AnimatedPadding(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(bottom: bottomInset),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
+              ),
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(metrics.contentGap),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: metrics.bottomSheetMaxWidth,
-                    ),
-                    child: _buildSeatCard(
-                      context,
-                      seatSyncResult: seatSyncResult,
-                      entitlement: entitlement,
-                      deviceSeats: deviceSeats,
-                      onReleaseSeat: handleRelease,
-                    ),
-                  ),
+                child: _buildSeatCard(
+                  surfaceContext,
+                  seatSyncResult: seatSyncResult,
+                  entitlement: entitlement,
+                  deviceSeats: deviceSeats,
+                  onReleaseSeat: handleRelease,
                 ),
               ),
             );

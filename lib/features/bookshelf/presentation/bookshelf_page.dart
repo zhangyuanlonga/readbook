@@ -19,6 +19,7 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
@@ -4753,20 +4754,36 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required String content,
     String confirmText = '确认',
   }) {
-    return showDialog<bool>(
+    return showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 460,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(content),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(confirmText),
+            const SizedBox(height: 12),
+            Text(content, style: Theme.of(dialogContext).textTheme.bodyMedium),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(confirmText),
+                ),
+              ],
             ),
           ],
         );

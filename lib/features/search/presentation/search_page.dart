@@ -14,6 +14,7 @@ import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/import_export_copy.dart';
@@ -742,11 +743,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           ),
         )
         .toList(growable: false);
-    final selected = await showModalBottomSheet<Set<String>>(
+    final selected = await showAdaptiveActionSurface<Set<String>>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 680,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
       builder:
           (context) => _ScriptSourceFilterSheet(
             items: filterItems,
@@ -929,16 +930,18 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return primaryBook;
     }
 
-    return showModalBottomSheet<Book>(
+    return showAdaptiveActionSurface<Book>(
       context: context,
-      showDragHandle: true,
+      maxWidth: 560,
+      maxHeightFactor: 0.78,
+      padding: EdgeInsets.zero,
       builder: (context) {
-        return SafeArea(
+        return SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.58,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Row(
                   children: [
                     Expanded(

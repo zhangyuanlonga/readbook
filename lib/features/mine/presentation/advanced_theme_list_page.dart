@@ -23,6 +23,7 @@ import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_copy.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
@@ -483,23 +484,42 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _openEditorDialog(String themeId) async {
-    await showDialog<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
+      maxWidth: 420,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('编辑主题'),
-          content: const Text('将打开主题编辑器。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '编辑主题',
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                unawaited(_openEditor(themeId));
-              },
-              child: const Text('编辑'),
+            const SizedBox(height: 12),
+            Text(
+              '将打开主题编辑器。',
+              style: Theme.of(dialogContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    unawaited(_openEditor(themeId));
+                  },
+                  child: const Text('编辑'),
+                ),
+              ],
             ),
           ],
         );
@@ -508,32 +528,43 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _showThemeSortDialog() async {
-    final selected = await showDialog<_AdvancedThemeSortMode>(
+    final selected = await showAdaptiveActionSurface<_AdvancedThemeSortMode>(
       context: context,
+      maxWidth: 420,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('排序主题'),
-          content: RadioGroup<_AdvancedThemeSortMode>(
-            groupValue: _themeSortMode,
-            onChanged: (value) => Navigator.of(dialogContext).pop(value),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                RadioListTile<_AdvancedThemeSortMode>(
-                  value: _AdvancedThemeSortMode.updatedDesc,
-                  title: Text('最近更新'),
-                ),
-                RadioListTile<_AdvancedThemeSortMode>(
-                  value: _AdvancedThemeSortMode.nameAsc,
-                  title: Text('名称 A-Z'),
-                ),
-                RadioListTile<_AdvancedThemeSortMode>(
-                  value: _AdvancedThemeSortMode.categoryAsc,
-                  title: Text('分类优先'),
-                ),
-              ],
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '排序主题',
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-          ),
+            const SizedBox(height: 8),
+            RadioGroup<_AdvancedThemeSortMode>(
+              groupValue: _themeSortMode,
+              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  RadioListTile<_AdvancedThemeSortMode>(
+                    value: _AdvancedThemeSortMode.updatedDesc,
+                    title: Text('最近更新'),
+                  ),
+                  RadioListTile<_AdvancedThemeSortMode>(
+                    value: _AdvancedThemeSortMode.nameAsc,
+                    title: Text('名称 A-Z'),
+                  ),
+                  RadioListTile<_AdvancedThemeSortMode>(
+                    value: _AdvancedThemeSortMode.categoryAsc,
+                    title: Text('分类优先'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -675,12 +706,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required String processingDetail,
     required Future<bool> Function(ValueChanged<String> onProgress) runTask,
   }) async {
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
       useRootNavigator: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
+      maxWidth: 520,
+      maxHeightFactor: 0.42,
+      padding: EdgeInsets.zero,
       builder: (sheetContext) {
         return _AdvancedThemeSingleTaskSheet(
           title: title,
@@ -1138,12 +1169,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     final summary =
-        await showModalBottomSheet<_AdvancedThemeBatchImportSummary>(
+        await showAdaptiveActionSurface<_AdvancedThemeBatchImportSummary>(
           context: context,
-          isScrollControlled: true,
-          isDismissible: true,
-          enableDrag: true,
-          useSafeArea: true,
+          maxWidth: 560,
+          maxHeightFactor: 0.72,
+          padding: EdgeInsets.zero,
           builder: (sheetContext) {
             return _AdvancedThemeBatchImportSheet(
               importFile: _importThemeBatchFile,
@@ -1594,22 +1624,41 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<bool?> _showBatchDeleteDialog(int count) {
-    return showDialog<bool>(
+    return showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 460,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('批量删除主题'),
-          content: Text(
-            '确定删除已选 $count 个主题吗？\n\n会按默认策略一并处理主题绑定的壁纸、图集等资源；仍被其他主题引用的共享资源会自动保留。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '批量删除主题',
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
+            const SizedBox(height: 12),
+            Text(
+              '确定删除已选 $count 个主题吗？\n\n'
+              '会按默认策略一并处理主题绑定的壁纸、图集等资源；'
+              '仍被其他主题引用的共享资源会自动保留。',
+              style: Theme.of(dialogContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('删除'),
+                ),
+              ],
             ),
           ],
         );
@@ -1673,8 +1722,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<String?> _showBatchCategoryDialog(int count) {
     final controller = TextEditingController();
     String? errorText;
-    return showDialog<String>(
+    return showAdaptiveActionSurface<String>(
       context: context,
+      maxWidth: 460,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -1689,44 +1739,60 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               Navigator.of(dialogContext).pop(value);
             }
 
-            return AlertDialog(
-              title: const Text('批量分类'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('已选 $count 个主题'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: '主题分类',
-                      hintText: '例如：护眼 / 极简 / 漫画',
-                      errorText: errorText,
-                    ),
-                    onChanged: (_) {
-                      if (errorText == null) {
-                        return;
-                      }
-                      setDialogState(() {
-                        errorText = null;
-                      });
-                    },
-                    onSubmitted: (_) => submit(),
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '批量分类',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(''),
-                  child: const Text('清空分类'),
+                const SizedBox(height: 12),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('已选 $count 个主题'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: '主题分类',
+                        hintText: '例如：护眼 / 极简 / 漫画',
+                        errorText: errorText,
+                      ),
+                      onChanged: (_) {
+                        if (errorText == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          errorText = null;
+                        });
+                      },
+                      onSubmitted: (_) => submit(),
+                    ),
+                  ],
                 ),
-                FilledButton(onPressed: submit, child: const Text('确定')),
+                const SizedBox(height: 20),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(''),
+                      child: const Text('清空分类'),
+                    ),
+                    FilledButton(onPressed: submit, child: const Text('确定')),
+                  ],
+                ),
               ],
             );
           },
@@ -1750,30 +1816,43 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _showThemeImportSupportHelp(BuildContext context) {
-    return showDialog<void>(
+    return showAdaptiveActionSurface<void>(
       context: context,
+      maxWidth: 560,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('兼容导入说明'),
-          content: const Text(
-            '当前 Red 兼容导入支持：\n'
-            '1. 主题名称\n'
-            '2. 浅色 / 深色颜色\n'
-            '3. 页面壁纸\n'
-            '4. 封面图集\n'
-            '5. 底栏图标包\n'
-            '6. 阅读器背景图\n'
-            '7. 阅读器背景不透明度与图片适配\n\n'
-            '当前 RGShare 兼容导入支持：\n'
-            '1. 主题名称\n'
-            '2. 浅色 / 深色壁纸\n'
-            '3. 部分颜色映射\n\n'
-            '两种兼容导入都不支持完整还原原应用的阅读器排版、字体、页眉页脚模板和交互行为。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('知道了'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '兼容导入说明',
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '当前 Red 兼容导入支持：\n'
+              '1. 主题名称\n'
+              '2. 浅色 / 深色颜色\n'
+              '3. 页面壁纸\n'
+              '4. 封面图集\n'
+              '5. 底栏图标包\n'
+              '6. 阅读器背景图\n'
+              '7. 阅读器背景不透明度与图片适配\n\n'
+              '当前 RGShare 兼容导入支持：\n'
+              '1. 主题名称\n'
+              '2. 浅色 / 深色壁纸\n'
+              '3. 部分颜色映射\n\n'
+              '两种兼容导入都不支持完整还原原应用的阅读器排版、字体、页眉页脚模板和交互行为。',
+            ),
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('知道了'),
+              ),
             ),
           ],
         );
@@ -1979,11 +2058,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required AppAdvancedTheme theme,
     required AdvancedThemeDeletePreview preview,
   }) {
-    return showModalBottomSheet<_AdvancedThemeDeleteDecision>(
+    return showAdaptiveActionSurface<_AdvancedThemeDeleteDecision>(
       context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 640,
+      maxHeightFactor: 0.86,
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
         final selections = <AdvancedThemeDeleteOptionKind, bool>{
@@ -1992,129 +2070,125 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         };
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  0,
-                  16,
-                  16 + MediaQuery.viewPaddingOf(context).bottom,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '删除高级主题',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                0,
+                0,
+                0,
+                MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '删除高级主题',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '即将删除「${theme.name}」。',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (preview.sections.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        for (final section in preview.sections) ...[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.45,
-                                ),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              child: CheckboxListTile(
-                                value: selections[section.kind] ?? false,
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                title: Text(
-                                  section.title,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                onChanged: (value) {
-                                  setSheetState(() {
-                                    selections[section.kind] = value ?? false;
-                                  });
-                                },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '即将删除「${theme.name}」。',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (preview.sections.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      for (final section in preview.sections) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.45,
                               ),
                             ),
                           ),
-                        ],
-                      ],
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed:
-                                  () => Navigator.of(sheetContext).pop(
-                                    const _AdvancedThemeDeleteDecision(
-                                      confirmed: false,
-                                      deleteOptions:
-                                          AdvancedThemeDeleteOptions.none(),
-                                    ),
-                                  ),
-                              child: const Text('取消'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop(
-                                  _AdvancedThemeDeleteDecision(
-                                    confirmed: true,
-                                    deleteOptions: AdvancedThemeDeleteOptions(
-                                      deleteAppearanceWallpapers:
-                                          selections[AdvancedThemeDeleteOptionKind
-                                              .appearanceWallpapers] ??
-                                          false,
-                                      deleteReaderWallpapers:
-                                          selections[AdvancedThemeDeleteOptionKind
-                                              .readerWallpapers] ??
-                                          false,
-                                      deleteCoverGalleries:
-                                          selections[AdvancedThemeDeleteOptionKind
-                                              .coverGalleries] ??
-                                          false,
-                                      deleteLaunchImageGallery:
-                                          selections[AdvancedThemeDeleteOptionKind
-                                              .launchImageGallery] ??
-                                          false,
-                                      deleteBottomNavGallery:
-                                          selections[AdvancedThemeDeleteOptionKind
-                                              .bottomNavGallery] ??
-                                          false,
-                                      deleteFonts:
-                                          selections[AdvancedThemeDeleteOptionKind
-                                              .fonts] ??
-                                          false,
-                                    ),
-                                  ),
-                                );
+                            child: CheckboxListTile(
+                              value: selections[section.kind] ?? false,
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                section.title,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              onChanged: (value) {
+                                setSheetState(() {
+                                  selections[section.kind] = value ?? false;
+                                });
                               },
-                              child: const Text('删除'),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ],
-                  ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed:
+                                () => Navigator.of(sheetContext).pop(
+                                  const _AdvancedThemeDeleteDecision(
+                                    confirmed: false,
+                                    deleteOptions:
+                                        AdvancedThemeDeleteOptions.none(),
+                                  ),
+                                ),
+                            child: const Text('取消'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop(
+                                _AdvancedThemeDeleteDecision(
+                                  confirmed: true,
+                                  deleteOptions: AdvancedThemeDeleteOptions(
+                                    deleteAppearanceWallpapers:
+                                        selections[AdvancedThemeDeleteOptionKind
+                                            .appearanceWallpapers] ??
+                                        false,
+                                    deleteReaderWallpapers:
+                                        selections[AdvancedThemeDeleteOptionKind
+                                            .readerWallpapers] ??
+                                        false,
+                                    deleteCoverGalleries:
+                                        selections[AdvancedThemeDeleteOptionKind
+                                            .coverGalleries] ??
+                                        false,
+                                    deleteLaunchImageGallery:
+                                        selections[AdvancedThemeDeleteOptionKind
+                                            .launchImageGallery] ??
+                                        false,
+                                    deleteBottomNavGallery:
+                                        selections[AdvancedThemeDeleteOptionKind
+                                            .bottomNavGallery] ??
+                                        false,
+                                    deleteFonts:
+                                        selections[AdvancedThemeDeleteOptionKind
+                                            .fonts] ??
+                                        false,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('删除'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             );
@@ -3966,16 +4040,29 @@ class _AdvancedThemeSingleTaskSheetState
       trailing: IconButton(
         tooltip: '导出说明',
         onPressed: () {
-          showDialog<void>(
+          showAdaptiveActionSurface<void>(
             context: context,
+            maxWidth: 420,
             builder: (context) {
-              return AlertDialog(
-                title: const Text('导出说明'),
-                content: const Text('导出统一分为：准备导出 -> 处理中 -> 完成。'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('知道了'),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '导出说明',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('导出统一分为：准备导出 -> 处理中 -> 完成。'),
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('知道了'),
+                    ),
                   ),
                 ],
               );

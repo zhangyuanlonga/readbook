@@ -184,11 +184,9 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     double draftRatio = _currentScrollRatio();
     final readerModalTheme = _readerModalTheme();
 
-    final selectedRatio = await showModalBottomSheet<double>(
+    final selectedRatio = await showAdaptiveActionSurface<double>(
       context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: readerModalTheme.colorScheme.surface,
+      maxWidth: 460,
       builder: (context) {
         return Theme(
           data: readerModalTheme,
@@ -201,12 +199,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
                       : '长图进度定位';
 
               return Padding(
-                padding: EdgeInsets.fromLTRB(
-                  18,
-                  8,
-                  18,
-                  18 + _bottomSafeInset(context),
-                ),
+                padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,

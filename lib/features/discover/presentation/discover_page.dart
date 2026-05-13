@@ -13,6 +13,7 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
@@ -1762,11 +1763,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       return;
     }
 
-    final selected = await showModalBottomSheet<DiscoverSource>(
+    final selected = await showAdaptiveActionSurface<DiscoverSource>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 720,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
       builder:
           (context) => _SourcePickerSheet(
             sources: _discoverSources,
@@ -1785,11 +1786,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       return;
     }
 
-    final selectedIndex = await showModalBottomSheet<int>(
+    final selectedIndex = await showAdaptiveActionSurface<int>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 560,
+      maxHeightFactor: 0.82,
+      padding: EdgeInsets.zero,
       builder:
           (context) => _CategoryPickerSheet(
             categories: _categories,

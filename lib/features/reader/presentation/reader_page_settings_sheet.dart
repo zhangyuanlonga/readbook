@@ -78,20 +78,13 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     }
     final readerModalTheme = _readerModalTheme();
 
-    await showModalBottomSheet<void>(
+    await showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      isDismissible: true,
-      enableDrag: true,
+      barrierDismissible: true,
+      barrierLabel: 'reader-settings',
       barrierColor: Colors.transparent,
-      showDragHandle: false,
-      useSafeArea: false,
-      backgroundColor: Colors.transparent,
-      clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (context, animation, secondaryAnimation) {
         return AppFadeSlideTransition(
           child: Stack(
             children: [
@@ -444,11 +437,11 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         return;
                       }
 
-                      await showModalBottomSheet<void>(
+                      await showAdaptiveActionSurface<void>(
                         context: context,
-                        showDragHandle: true,
-                        useSafeArea: true,
-                        backgroundColor: readerModalTheme.colorScheme.surface,
+                        maxWidth: 560,
+                        maxHeightFactor: 0.72,
+                        padding: EdgeInsets.zero,
                         builder: (sheetContext) {
                           bool isImporting = false;
                           ImportExportTaskStatus? inlineImportStatus;

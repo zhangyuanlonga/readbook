@@ -889,20 +889,39 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
           ..writeln('当前阅读：第 $currentReadingChapterNo 章')
           ..writeln('目标书源：$targetChapterCount 章');
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 500,
       builder: (context) {
-        return AlertDialog(
-          title: Text('切换到 $sourceName ?'),
-          content: Text('$reasonText\n\n$detailText\n继续切换可能回退到较早章节。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '切换到 $sourceName ?',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('继续切换'),
+            const SizedBox(height: 12),
+            Text(
+              '$reasonText\n\n$detailText\n继续切换可能回退到较早章节。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('继续切换'),
+                ),
+              ],
             ),
           ],
         );

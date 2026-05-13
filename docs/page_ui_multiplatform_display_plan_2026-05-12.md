@@ -624,6 +624,10 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - A8 按三个功能模块批量推进：标签/分类管理、书签/灵感、缓存/字体资源已完成第一轮 UI surface 和内容宽度收口；缓存/字体弹层在桌面/Web 统一为 dialog surface，移动端保留底部面板。
 - A8 三模块第二组完成：反馈相似确认、系统设置恢复确认迁到 adaptive surface，错误中心移动日志列表改为 Sliver builder；会员中心保留为后续独立账号/会员模块。
 - A8 下一阶段完成账号资料、会员中心和外观基础设置的普通确认弹层收口；会员复杂表单面板和外观全屏预览暂按例外保留。
+- A8 五点批量迁移完成：会员客服说明、兑换码、设备管理、外观字体设置和高级主题普通操作面板统一走 adaptive surface；复杂导入/删除策略/沉浸预览继续按模块例外追踪。
+- A8 第二个五点批量迁移完成：我的页头像操作、头像来源、会员提示、同步配置删除、我的页显示内容面板统一走 adaptive surface，桌面/Web 不再沿用手机式底部小面板。
+- A8 两批压降完成：普通业务入口（首页、搜索、发现、书籍详情、书架）和高频高级主题/阅读器面板统一迁到 adaptive surface；书源、沉浸式预览、复杂导入/删除策略和阅读器目录/设置主面板继续作为专项例外追踪。
+- A8 非 Source 收尾完成：沉浸式图片预览抽为 `showAdaptiveFullscreenPreview`，高级主题、书架、阅读器剩余弹层完成 adaptive surface / 阅读器自绘 route 迁移；除 Source/书源专项外，功能页不再直接调用 `showDialog` / `showModalBottomSheet`。
 
 ### 2026-05-12 UI-G0/G1 组件治理
 

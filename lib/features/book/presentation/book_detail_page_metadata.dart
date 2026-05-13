@@ -210,20 +210,39 @@ extension on _BookDetailPageState {
     _showMessage(flowResult.successMessage);
 
     if (flowResult.needsReindex && mounted) {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAdaptiveActionSurface<bool>(
         context: context,
+        maxWidth: 460,
         builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('需要重新索引'),
-            content: const Text('编码或长章节拆分已修改，是否立即重新索引以使正文生效？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('稍后'),
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '需要重新索引',
+                style: Theme.of(
+                  dialogContext,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('立即重建'),
+              const SizedBox(height: 12),
+              Text(
+                '编码或长章节拆分已修改，是否立即重新索引以使正文生效？',
+                style: Theme.of(dialogContext).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('稍后'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('立即重建'),
+                  ),
+                ],
               ),
             ],
           );

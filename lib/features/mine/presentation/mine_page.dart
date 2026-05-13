@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +20,7 @@ import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
@@ -282,50 +282,38 @@ class _MinePageState extends ConsumerState<MinePage> {
       await _loadSession();
       return;
     }
-    final action = await showModalBottomSheet<_ProfileAvatarAction>(
+    final action = await showAdaptiveActionSurface<_ProfileAvatarAction>(
       context: context,
       useRootNavigator: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 420,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-        final bottomInset = _mineBottomSafeInset(context);
-        return SafeArea(
-          top: false,
-          bottom: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    Icons.photo_camera_back_outlined,
-                    color: colorScheme.primary,
-                  ),
-                  title: const Text('更换头像'),
-                  subtitle: const Text('从本地相册或文件中选择头像'),
-                  onTap:
-                      () => Navigator.of(
-                        context,
-                      ).pop(_ProfileAvatarAction.change),
-                ),
-                if (_localAvatarPath != null)
-                  ListTile(
-                    leading: Icon(
-                      Icons.delete_outline_rounded,
-                      color: colorScheme.error,
-                    ),
-                    title: const Text('移除头像'),
-                    subtitle: const Text('恢复默认头像样式'),
-                    onTap:
-                        () => Navigator.of(
-                          context,
-                        ).pop(_ProfileAvatarAction.remove),
-                  ),
-              ],
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                Icons.photo_camera_back_outlined,
+                color: colorScheme.primary,
+              ),
+              title: const Text('更换头像'),
+              subtitle: const Text('从本地相册或文件中选择头像'),
+              onTap:
+                  () => Navigator.of(context).pop(_ProfileAvatarAction.change),
             ),
-          ),
+            if (_localAvatarPath != null)
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline_rounded,
+                  color: colorScheme.error,
+                ),
+                title: const Text('移除头像'),
+                subtitle: const Text('恢复默认头像样式'),
+                onTap:
+                    () =>
+                        Navigator.of(context).pop(_ProfileAvatarAction.remove),
+              ),
+          ],
         );
       },
     );
@@ -407,57 +395,39 @@ class _MinePageState extends ConsumerState<MinePage> {
         defaultTargetPlatform == TargetPlatform.linux) {
       return ImageSelectionSource.files;
     }
-    return showModalBottomSheet<ImageSelectionSource>(
+    return showAdaptiveActionSurface<ImageSelectionSource>(
       context: context,
       useRootNavigator: true,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 420,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-        final bottomInset = _mineBottomSafeInset(context);
-        return SafeArea(
-          top: false,
-          bottom: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    Icons.photo_library_outlined,
-                    color: colorScheme.primary,
-                  ),
-                  title: const Text('相册'),
-                  subtitle: const Text('从系统照片库选择头像'),
-                  onTap:
-                      () => Navigator.of(
-                        context,
-                      ).pop(ImageSelectionSource.gallery),
-                ),
-                ListTile(
-                  leading: Icon(
-                    Icons.folder_open_outlined,
-                    color: colorScheme.primary,
-                  ),
-                  title: const Text('文件'),
-                  subtitle: const Text('从文件目录选择头像'),
-                  onTap:
-                      () =>
-                          Navigator.of(context).pop(ImageSelectionSource.files),
-                ),
-              ],
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                Icons.photo_library_outlined,
+                color: colorScheme.primary,
+              ),
+              title: const Text('相册'),
+              subtitle: const Text('从系统照片库选择头像'),
+              onTap:
+                  () => Navigator.of(context).pop(ImageSelectionSource.gallery),
             ),
-          ),
+            ListTile(
+              leading: Icon(
+                Icons.folder_open_outlined,
+                color: colorScheme.primary,
+              ),
+              title: const Text('文件'),
+              subtitle: const Text('从文件目录选择头像'),
+              onTap:
+                  () => Navigator.of(context).pop(ImageSelectionSource.files),
+            ),
+          ],
         );
       },
     );
-  }
-
-  double _mineBottomSafeInset(BuildContext context) {
-    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
-    final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
-    return math.max(viewPadding, gestureInsets);
   }
 
   String _buildSourceSubtitle() {
@@ -506,20 +476,36 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _showMembershipPrompt(String message) async {
-    final goMembership = await showDialog<bool>(
+    final goMembership = await showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 420,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('开通会员可用'),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('稍后再说'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '开通会员可用',
+              style: Theme.of(
+                dialogContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('前往会员页'),
+            const SizedBox(height: 12),
+            Text(message, style: Theme.of(dialogContext).textTheme.bodyMedium),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('稍后再说'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('前往会员页'),
+                ),
+              ],
             ),
           ],
         );
