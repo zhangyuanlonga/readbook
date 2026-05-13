@@ -141,6 +141,7 @@ void main() {
     expect(metrics840.pagePadding, 24);
     expect(metrics1200.pagePadding, 24);
     expect(metrics360.controlHeight, 36);
+    expect(metrics360.minTouchTargetSize, 44);
     expect(metrics390.controlHeight, 40);
     expect(metrics840.controlHeight, 44);
     expect(metrics840.dialogMaxWidth, 560);

@@ -75,3 +75,10 @@
 | 图文分页 | `reader.pagination.blocks` | blockCount、paragraphCount、viewport、pageCount | 图片尺寸稳定后的重分页原因 |
 
 本次没有回填真机数值。低端 Android、中端 Android、iPhone、小屏模拟器仍需按第 4 节表格实测。
+
+## 7. 2026-05-13 阶段 2/3 执行记录
+
+- EPUB 索引已改为 index-only：目录阶段保存 `sourceRef`，不再预解析每章正文、图片和 `ReaderDocument`。
+- EPUB 当前章读取时按 `sourceRef` 调用 `parseChapter`，解析完成后通过 `updateChapterContent` 回填正文、图片和结构化文档。
+- 分页控制器已从“整章完成后切 prefix”改为“分页引擎每产出一页即回调”，到达目标段落后先发送 current page 事件，附近页随后发送，完整页表最后发送 complete。
+- 当前仍未完成真机表回填，也未引入真正的 lazy snapshot 三态 UI；阶段 3 这部分需要后续在阅读页视图层继续做。

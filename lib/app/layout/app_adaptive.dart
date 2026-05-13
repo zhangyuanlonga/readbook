@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import 'app_size_tokens.dart';
 import 'app_layout.dart';
 
 enum AppWindowClass { compact, medium, expanded }
@@ -23,6 +24,7 @@ class AppAdaptiveMetrics {
     required this.listTileMinHeight,
     required this.controlHeight,
     required this.iconButtonSize,
+    required this.minTouchTargetSize,
     required this.chipHeight,
     required this.bottomSheetMaxWidth,
     required this.dialogMaxWidth,
@@ -41,6 +43,7 @@ class AppAdaptiveMetrics {
   final double listTileMinHeight;
   final double controlHeight;
   final double iconButtonSize;
+  final double minTouchTargetSize;
   final double chipHeight;
   final double bottomSheetMaxWidth;
   final double dialogMaxWidth;
@@ -141,6 +144,7 @@ class AppAdaptiveMetrics {
       listTileMinHeight: base.listTileMinHeight,
       controlHeight: base.controlHeight,
       iconButtonSize: base.iconButtonSize,
+      minTouchTargetSize: AppSizeTokens.minTouchTarget,
       chipHeight: base.chipHeight,
       bottomSheetMaxWidth:
           expanded
@@ -274,7 +278,7 @@ class _MetricSet {
         cardRadius: 12,
         listTileMinHeight: 52,
         controlHeight: 36,
-        iconButtonSize: 36,
+        iconButtonSize: AppSizeTokens.compactControlHeight,
         chipHeight: 32,
       ),
       AppDensity.regular => const _MetricSet(
@@ -285,7 +289,7 @@ class _MetricSet {
         cardRadius: 14,
         listTileMinHeight: 58,
         controlHeight: 40,
-        iconButtonSize: 40,
+        iconButtonSize: AppSizeTokens.regularControlHeight,
         chipHeight: 36,
       ),
       AppDensity.comfortable => const _MetricSet(
@@ -296,7 +300,7 @@ class _MetricSet {
         cardRadius: 16,
         listTileMinHeight: 64,
         controlHeight: 44,
-        iconButtonSize: 44,
+        iconButtonSize: AppSizeTokens.comfortableControlHeight,
         chipHeight: 38,
       ),
     };

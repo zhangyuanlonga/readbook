@@ -68,6 +68,7 @@ void main() {
     expect(phone.pagePadding, 16);
     expect(phone.cardPadding, 14);
     expect(phone.controlHeight, 40);
+    expect(phone.minTouchTargetSize, 44);
     expect(medium.pagePadding, 20);
     expect(expanded.pagePadding, 24);
     expect(expanded.dialogMaxWidth, 560);

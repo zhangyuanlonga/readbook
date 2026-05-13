@@ -810,6 +810,11 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - `docs/all_platform_compatibility_plan_2026-05-11.md`：全平台兼容总计划
 - `docs/page_function_multiplatform_methods_2026-05-12.md`：逐页面功能多端兼容方法
 - `docs/page_ui_multiplatform_display_plan_2026-05-12.md`：逐页面 UI 多端兼容展示计划
+- `docs/adaptive_system_optimization_plan_2026-05-13.md`：自适应体系优化计划
+- `docs/adaptive_legacy_page_migration_inventory_2026-05-13.md`：A8 老页面分批迁移清单
+- `docs/adaptive_component_coverage_matrix_2026-05-13.md`：A0 自适应基线组件覆盖矩阵
+- `docs/adaptive_ui_antipatterns_2026-05-13.md`：A0 自适应 UI 反模式清单
+- `docs/adaptive_size_typography_tokens_2026-05-13.md`：A1 尺寸与 Typography Token
 - `docs/app_task_status_unification_plan_2026-05-12.md`：导入与重索引任务态统一计划
 - `docs/resource_page_lazy_loading_audit_2026-05-12.md`：资源页面懒加载审计
 - `docs/cross_platform_boundary_refactor_plan.md`：跨端与原生边界

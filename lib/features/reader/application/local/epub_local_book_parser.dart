@@ -127,54 +127,18 @@ class EpubLocalBookParser implements LocalBookParser {
       if (archiveEntry == null) {
         continue;
       }
-      final html = _readArchiveEntryAsText(archiveEntry);
-      if (html.trim().isEmpty) {
+      if (_isLikelyNonBodyIndexEntry(candidate.archivePath)) {
         continue;
       }
-
-      final document = html_parser.parse(html);
-      final normalizedEntryPath = _normalizeArchivePath(archiveEntry.name);
-      final preview = _buildChapterCandidatePreview(
-        document: document,
-        entryPath: normalizedEntryPath,
-        index: index + 1,
-      );
-      final resolvedTitle = _resolveCandidateTitle(
-        candidate: candidate,
-        fallbackTitle: preview.title,
-      );
-      if (preview.category != _EpubDocumentCategory.body) {
-        continue;
-      }
-      if (!preview.hasReadableSignal) {
-        continue;
-      }
-
-      final extraction = await _extractChapterContent(
-        book: book,
-        documentHtml: html,
-        chapterEntryName: archiveEntry.name,
-        archiveFileIndex: loadedArchive.archiveFileIndex,
-        assetRootDir: assetDir,
-        startFragmentId: candidate.startFragmentId,
-        endFragmentId: candidate.endFragmentId,
-      );
-      final structuredDocument = _withFallbackChapterTitle(
-        extraction.document,
-        chapterTitle: resolvedTitle,
-      );
-      if (structuredDocument.compatibilityContent.trim().isEmpty &&
-          structuredDocument.imageUrls.isEmpty) {
-        continue;
-      }
-
       chapters.add(
         LocalParsedChapter(
-          title: resolvedTitle,
-          content: _compatibilityContentForChapter(structuredDocument),
-          imageUrls: structuredDocument.imageUrls,
+          title: _resolveIndexOnlyChapterTitle(
+            candidate: candidate,
+            archiveEntryName: archiveEntry.name,
+            index: index + 1,
+          ),
+          content: '',
           sourceRef: _encodeChapterSourceRef(candidate),
-          document: structuredDocument,
         ),
       );
       index += 1;
@@ -194,6 +158,36 @@ class EpubLocalBookParser implements LocalBookParser {
       description: metadata.description,
       coverPath: coverPath,
     );
+  }
+
+  String _resolveIndexOnlyChapterTitle({
+    required _EpubChapterCandidate candidate,
+    required String archiveEntryName,
+    required int index,
+  }) {
+    final normalizedCandidateTitle = _normalizeInlineText(
+      candidate.title ?? '',
+    );
+    if (normalizedCandidateTitle.isNotEmpty) {
+      return normalizedCandidateTitle;
+    }
+    final fileNameTitle = p.basenameWithoutExtension(archiveEntryName).trim();
+    if (fileNameTitle.isNotEmpty) {
+      return fileNameTitle;
+    }
+    return '第 $index 章';
+  }
+
+  bool _isLikelyNonBodyIndexEntry(String archivePath) {
+    final basename = p.basenameWithoutExtension(archivePath).toLowerCase();
+    return basename == 'toc' ||
+        basename == 'nav' ||
+        basename == 'navigation' ||
+        basename == 'cover' ||
+        basename == 'title' ||
+        basename == 'copyright' ||
+        basename == 'rights' ||
+        basename == 'metadata';
   }
 
   Future<LocalParsedChapter> parseChapter({
@@ -1075,231 +1069,6 @@ class EpubLocalBookParser implements LocalBookParser {
     return null;
   }
 
-  _EpubChapterCandidatePreview _buildChapterCandidatePreview({
-    required dom.Document document,
-    required String entryPath,
-    required int index,
-  }) {
-    final normalizedText = _normalizeText(
-      document.body?.text ??
-          document.documentElement?.text ??
-          document.outerHtml,
-    );
-    final hasInlineImages = document
-        .querySelectorAll('*')
-        .any(
-          (element) => _isImageElement((element.localName ?? '').toLowerCase()),
-        );
-    final title = _resolveDocumentTitle(
-      document: document,
-      entryName: entryPath,
-      index: index,
-    );
-    final category = _classifyDocumentCategory(
-      document: document,
-      entryPath: entryPath,
-      title: title,
-      normalizedText: normalizedText,
-      hasInlineImages: hasInlineImages,
-    );
-    return _EpubChapterCandidatePreview(
-      category: category,
-      title: title,
-      normalizedText: normalizedText,
-      hasInlineImages: hasInlineImages,
-      document: _buildPreviewDocument(
-        title: title,
-        previewText: normalizedText,
-      ),
-    );
-  }
-
-  ReaderDocument _buildPreviewDocument({
-    required String title,
-    required String previewText,
-  }) {
-    final normalizedTitle = _normalizeInlineText(title);
-    final withoutDuplicateTitle = _stripDuplicateLeadingTitle(
-      previewText,
-      normalizedTitle,
-    );
-    final excerpt = _buildPreviewExcerpt(withoutDuplicateTitle);
-    if (normalizedTitle.isEmpty && excerpt.isEmpty) {
-      return ReaderDocument(blocks: const <ReaderBlock>[]);
-    }
-    return ReaderDocument.fromContent(
-      content: excerpt,
-      title: normalizedTitle.isEmpty ? null : normalizedTitle,
-      includeTitleBlock: normalizedTitle.isNotEmpty,
-    );
-  }
-
-  String _buildPreviewExcerpt(String value) {
-    final normalized = _normalizeText(value);
-    if (normalized.isEmpty) {
-      return '';
-    }
-    if (normalized.length <= 280) {
-      return normalized;
-    }
-    return '${normalized.substring(0, 280).trim()}...';
-  }
-
-  String _stripDuplicateLeadingTitle(String previewText, String title) {
-    final normalizedPreview = _normalizeText(previewText);
-    if (normalizedPreview.isEmpty || title.isEmpty) {
-      return normalizedPreview;
-    }
-    if (normalizedPreview == title) {
-      return '';
-    }
-    if (normalizedPreview.startsWith('$title\n')) {
-      return normalizedPreview.substring(title.length).trimLeft();
-    }
-    if (normalizedPreview.startsWith('$title ')) {
-      return normalizedPreview.substring(title.length).trimLeft();
-    }
-    return normalizedPreview;
-  }
-
-  _EpubDocumentCategory _classifyDocumentCategory({
-    required dom.Document document,
-    required String entryPath,
-    required String title,
-    required String normalizedText,
-    required bool hasInlineImages,
-  }) {
-    if (_isNavigationDocument(entryPath: entryPath, properties: '')) {
-      return _EpubDocumentCategory.navigation;
-    }
-
-    if (_isNavigationLikeDocument(
-      document: document,
-      entryPath: entryPath,
-      normalizedText: normalizedText,
-    )) {
-      return _EpubDocumentCategory.navigation;
-    }
-
-    if (_isCoverLikeDocument(
-      document: document,
-      entryPath: entryPath,
-      title: title,
-      normalizedText: normalizedText,
-      hasInlineImages: hasInlineImages,
-    )) {
-      return _EpubDocumentCategory.cover;
-    }
-
-    if (_isMetadataLikeDocument(
-      entryPath: entryPath,
-      title: title,
-      normalizedText: normalizedText,
-      hasInlineImages: hasInlineImages,
-    )) {
-      return _EpubDocumentCategory.metadata;
-    }
-
-    if (normalizedText.isEmpty && !hasInlineImages) {
-      return _EpubDocumentCategory.resource;
-    }
-
-    return _EpubDocumentCategory.body;
-  }
-
-  bool _isNavigationLikeDocument({
-    required dom.Document document,
-    required String entryPath,
-    required String normalizedText,
-  }) {
-    final lowerEntryPath = entryPath.toLowerCase();
-    if (lowerEntryPath.contains('/toc') || lowerEntryPath.contains('/nav')) {
-      return true;
-    }
-
-    final navElements = document.querySelectorAll('nav');
-    if (navElements.isNotEmpty) {
-      return true;
-    }
-
-    final lowerText = normalizedText.toLowerCase();
-    final hasTocKeyword =
-        lowerText.contains('table of contents') ||
-        lowerText.contains('contents') ||
-        normalizedText.contains('目录');
-    if (!hasTocKeyword) {
-      return false;
-    }
-
-    final anchorCount = document.querySelectorAll('a[href]').length;
-    return anchorCount >= 2;
-  }
-
-  bool _isCoverLikeDocument({
-    required dom.Document document,
-    required String entryPath,
-    required String title,
-    required String normalizedText,
-    required bool hasInlineImages,
-  }) {
-    final lowerEntryPath = entryPath.toLowerCase();
-    final lowerTitle = title.toLowerCase();
-    final hasCoverHint =
-        lowerEntryPath.contains('cover') ||
-        lowerEntryPath.contains('titlepage') ||
-        lowerEntryPath.contains('title_page') ||
-        entryPath.contains('封面') ||
-        entryPath.contains('扉页') ||
-        lowerTitle.contains('cover') ||
-        title.contains('封面');
-    if (!hasCoverHint) {
-      return false;
-    }
-
-    final nonEmptyBodyChildren =
-        (document.body ?? document.documentElement)?.children
-            .where(
-              (element) =>
-                  _normalizeInlineText(element.text).isNotEmpty ||
-                  _isImageElement((element.localName ?? '').toLowerCase()),
-            )
-            .length ??
-        0;
-    return hasInlineImages &&
-        normalizedText.length <= 48 &&
-        nonEmptyBodyChildren <= 3;
-  }
-
-  bool _isMetadataLikeDocument({
-    required String entryPath,
-    required String title,
-    required String normalizedText,
-    required bool hasInlineImages,
-  }) {
-    if (hasInlineImages) {
-      return false;
-    }
-
-    final path = entryPath.toLowerCase();
-    final lowerTitle = title.toLowerCase();
-    final hasMetadataHint =
-        path.contains('copyright') ||
-        path.contains('colophon') ||
-        path.contains('imprint') ||
-        path.contains('license') ||
-        path.contains('rights') ||
-        title.contains('版权') ||
-        title.contains('版权页') ||
-        lowerTitle.contains('copyright') ||
-        lowerTitle.contains('colophon') ||
-        lowerTitle.contains('imprint');
-    if (!hasMetadataHint) {
-      return false;
-    }
-
-    return normalizedText.length <= 400;
-  }
-
   bool _isLikelyHtmlNavigationHref(String? href) {
     final value = href?.trim().toLowerCase() ?? '';
     if (value.isEmpty) {
@@ -1344,19 +1113,6 @@ class EpubLocalBookParser implements LocalBookParser {
       }
     }
     return null;
-  }
-
-  String _resolveCandidateTitle({
-    required _EpubChapterCandidate candidate,
-    required String fallbackTitle,
-  }) {
-    final normalizedCandidateTitle = _normalizeInlineText(
-      candidate.title ?? '',
-    );
-    if (normalizedCandidateTitle.isNotEmpty) {
-      return normalizedCandidateTitle;
-    }
-    return fallbackTitle;
   }
 
   String _encodeChapterSourceRef(_EpubChapterCandidate candidate) {
@@ -1548,10 +1304,6 @@ class EpubLocalBookParser implements LocalBookParser {
       return true;
     }
     return mediaType == 'application/xhtml+xml' || mediaType == 'text/html';
-  }
-
-  bool _isImageElement(String tagName) {
-    return tagName == 'img' || tagName == 'image';
   }
 
   bool _isNavigationDocument({
@@ -2012,33 +1764,6 @@ class EpubLocalBookParser implements LocalBookParser {
     }
   }
 
-  String _resolveDocumentTitle({
-    required dom.Document document,
-    required String entryName,
-    required int index,
-  }) {
-    final titleCandidate =
-        document.querySelector('h1')?.text ??
-        document.querySelector('h2')?.text ??
-        document.querySelector('h3')?.text ??
-        document.querySelector('title')?.text;
-
-    final normalized = _normalizeInlineText(titleCandidate ?? '');
-    if (normalized.isNotEmpty) {
-      return normalized;
-    }
-
-    final fileName = entryName.split('/').last;
-    final dot = fileName.lastIndexOf('.');
-    final fallback = dot > 0 ? fileName.substring(0, dot) : fileName;
-    final fallbackNormalized = _normalizeInlineText(fallback);
-    if (fallbackNormalized.isNotEmpty) {
-      return fallbackNormalized;
-    }
-
-    return '第 $index 章';
-  }
-
   String _normalizeText(String text) {
     return text
         .replaceAll('\r\n', '\n')
@@ -2138,29 +1863,6 @@ class _ResolvedEpubChapterSourceRef {
 }
 
 const Object _epubCandidateSentinel = Object();
-
-enum _EpubDocumentCategory { body, navigation, cover, metadata, resource }
-
-class _EpubChapterCandidatePreview {
-  const _EpubChapterCandidatePreview({
-    required this.category,
-    required this.title,
-    required this.normalizedText,
-    required this.hasInlineImages,
-    required this.document,
-  });
-
-  final _EpubDocumentCategory category;
-  final String title;
-  final String normalizedText;
-  final bool hasInlineImages;
-  final ReaderDocument document;
-
-  bool get hasReadableSignal =>
-      title.trim().isNotEmpty ||
-      normalizedText.trim().isNotEmpty ||
-      hasInlineImages;
-}
 
 class _EpubMetadata {
   const _EpubMetadata({

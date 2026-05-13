@@ -13,6 +13,10 @@ const _docPaths = <String>[
   'docs/page_ui_scaffold_audit_2026-05-12.md',
   'docs/page_ui_state_component_audit_2026-05-12.md',
   'docs/page_ui_modal_surface_audit_2026-05-12.md',
+  'docs/adaptive_component_coverage_matrix_2026-05-13.md',
+  'docs/adaptive_ui_antipatterns_2026-05-13.md',
+  'docs/adaptive_legacy_page_migration_inventory_2026-05-13.md',
+  'docs/adaptive_size_typography_tokens_2026-05-13.md',
 ];
 
 final class _Finding {
@@ -67,6 +71,34 @@ void main(List<String> args) {
             line: index + 1,
             message:
                 'Prefer showAdaptiveActionSurface for new filter, settings, resource picker, or detail surfaces.',
+          ),
+        );
+      }
+
+      if (line.contains('showDialog') &&
+          !relativePath.endsWith('adaptive_bottom_sheet.dart') &&
+          !relativePath.endsWith('adaptive_page_scaffold.dart') &&
+          !relativePath.contains('/reader/')) {
+        findings.add(
+          _Finding(
+            kind: 'dialog-surface',
+            path: relativePath,
+            line: index + 1,
+            message:
+                'Review direct showDialog; prefer an adaptive surface for new page-level actions.',
+          ),
+        );
+      }
+
+      if (_hasPresentationPlatformBranch(line) &&
+          !_isAllowedPlatformBranch(relativePath)) {
+        findings.add(
+          _Finding(
+            kind: 'platform-branch',
+            path: relativePath,
+            line: index + 1,
+            message:
+                'Review page-level platform branch; prefer capability or adaptive metrics.',
           ),
         );
       }
@@ -210,6 +242,22 @@ bool _isAllowedScaffold(String path) {
       path.contains('/reader/') ||
       path.contains('/core/webview/') ||
       path.contains('/source/');
+}
+
+bool _hasPresentationPlatformBranch(String line) {
+  return RegExp(
+    r'\b(kIsWeb|defaultTargetPlatform|Platform\.is(Android|IOS|MacOS|Windows|Linux))\b',
+  ).hasMatch(line);
+}
+
+bool _isAllowedPlatformBranch(String path) {
+  return path.contains('/platform/') ||
+      path.contains('/capabilit') ||
+      path.contains('/bridge') ||
+      path.contains('/core/webview/') ||
+      path.endsWith('app_layout.dart') ||
+      path.endsWith('app_adaptive.dart') ||
+      path.endsWith('bootstrap.dart');
 }
 
 String _relativePath(File file) {

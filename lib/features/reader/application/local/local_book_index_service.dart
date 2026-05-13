@@ -328,7 +328,9 @@ class LocalBookIndexService {
 
   bool _hasReadableIndexedPayload(LocalBook book, LocalChapter chapter) {
     return chapter.hasReadablePayload ||
-        (book.format == LocalBookFormat.txt && chapter.hasOffsetRange);
+        (book.format == LocalBookFormat.txt && chapter.hasOffsetRange) ||
+        (book.format == LocalBookFormat.epub &&
+            (chapter.sourceRef?.trim().isNotEmpty ?? false));
   }
 
   Future<_PreparedBookResult> _refreshStorageFromSourceIfChanged(

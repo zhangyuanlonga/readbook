@@ -224,8 +224,9 @@ class ReaderPaginationEngine {
   }
 
   Future<ReaderPaginationResult?> paginateParagraphs(
-    ReaderPaginationRequest request,
-  ) {
+    ReaderPaginationRequest request, {
+    void Function(List<ReaderPagedSlice> page, int pageIndex)? onPageReady,
+  }) {
     final timelineTask =
         developer.TimelineTask()..start(
           'reader.pagination.paragraphs',
@@ -235,7 +236,7 @@ class ReaderPaginationEngine {
             'contentHeight': request.spec.contentHeight,
           },
         );
-    return _paginateParagraphsInternal(request).then(
+    return _paginateParagraphsInternal(request, onPageReady: onPageReady).then(
       (result) {
         timelineTask.finish(
           arguments: <String, Object?>{
@@ -258,8 +259,9 @@ class ReaderPaginationEngine {
   }
 
   Future<ReaderPaginationResult?> _paginateParagraphsInternal(
-    ReaderPaginationRequest request,
-  ) async {
+    ReaderPaginationRequest request, {
+    void Function(List<ReaderPagedSlice> page, int pageIndex)? onPageReady,
+  }) async {
     final paragraphModels = _resolveParagraphModels(request);
     if (paragraphModels.isEmpty || paragraphModels.first.text.trim().isEmpty) {
       return const ReaderPaginationResult(
@@ -356,6 +358,18 @@ class ReaderPaginationEngine {
     var lastSpacingAfter = 0.0;
     final yieldStopwatch = Stopwatch()..start();
 
+    void flushCurrentPage() {
+      if (currentPage.isEmpty) {
+        return;
+      }
+      final page = List<ReaderPagedSlice>.unmodifiable(currentPage);
+      pages.add(page);
+      onPageReady?.call(page, pages.length - 1);
+      currentPage = <ReaderPagedSlice>[];
+      remainingHeight = maxHeight;
+      lastSpacingAfter = 0.0;
+    }
+
     Future<bool> maybeYield() async {
       if (request.shouldAbort?.call() ?? false) {
         return true;
@@ -396,10 +410,7 @@ class ReaderPaginationEngine {
 
         if (currentPage.isNotEmpty) {
           if (remainingHeight <= lastSpacingAfter + _kPageTailSafetyBuffer) {
-            pages.add(currentPage);
-            currentPage = <ReaderPagedSlice>[];
-            remainingHeight = maxHeight;
-            lastSpacingAfter = 0.0;
+            flushCurrentPage();
             if (await maybeYield()) {
               return null;
             }
@@ -411,10 +422,7 @@ class ReaderPaginationEngine {
         final fitLen = resolveFitLength(paragraph, offset, remainingHeight);
         if (fitLen <= 0) {
           if (currentPage.isNotEmpty) {
-            pages.add(currentPage);
-            currentPage = <ReaderPagedSlice>[];
-            remainingHeight = maxHeight;
-            lastSpacingAfter = 0.0;
+            flushCurrentPage();
             continue;
           }
 
@@ -440,10 +448,7 @@ class ReaderPaginationEngine {
           );
           lastSpacingAfter = paragraph.spacingAfter;
           offset = end;
-          pages.add(currentPage);
-          currentPage = <ReaderPagedSlice>[];
-          remainingHeight = maxHeight;
-          lastSpacingAfter = 0.0;
+          flushCurrentPage();
           if (await maybeYield()) {
             return null;
           }
@@ -474,10 +479,7 @@ class ReaderPaginationEngine {
         offset = end;
 
         if (offset < paragraph.text.length) {
-          pages.add(currentPage);
-          currentPage = <ReaderPagedSlice>[];
-          remainingHeight = maxHeight;
-          lastSpacingAfter = 0.0;
+          flushCurrentPage();
           if (await maybeYield()) {
             return null;
           }
@@ -490,7 +492,7 @@ class ReaderPaginationEngine {
     }
 
     if (currentPage.isNotEmpty) {
-      pages.add(currentPage);
+      flushCurrentPage();
     }
 
     return ReaderPaginationResult(
@@ -502,8 +504,9 @@ class ReaderPaginationEngine {
   }
 
   Future<ReaderBlockPaginationResult?> paginateBlocks(
-    ReaderBlockPaginationRequest request,
-  ) {
+    ReaderBlockPaginationRequest request, {
+    void Function(List<ReaderPagedBlock> page, int pageIndex)? onPageReady,
+  }) {
     final timelineTask =
         developer.TimelineTask()..start(
           'reader.pagination.blocks',
@@ -514,7 +517,7 @@ class ReaderPaginationEngine {
             'contentHeight': request.spec.contentHeight,
           },
         );
-    return _paginateBlocksInternal(request).then(
+    return _paginateBlocksInternal(request, onPageReady: onPageReady).then(
       (result) {
         timelineTask.finish(
           arguments: <String, Object?>{
@@ -537,8 +540,9 @@ class ReaderPaginationEngine {
   }
 
   Future<ReaderBlockPaginationResult?> _paginateBlocksInternal(
-    ReaderBlockPaginationRequest request,
-  ) async {
+    ReaderBlockPaginationRequest request, {
+    void Function(List<ReaderPagedBlock> page, int pageIndex)? onPageReady,
+  }) async {
     if (request.renderItems.isEmpty) {
       return const ReaderBlockPaginationResult(
         pages: <List<ReaderPagedBlock>>[],
@@ -583,6 +587,7 @@ class ReaderPaginationEngine {
         return;
       }
       pages.add(List<ReaderPagedBlock>.unmodifiable(currentPage));
+      onPageReady?.call(pages.last, pages.length - 1);
       currentPage = <ReaderPagedBlock>[];
       remainingHeight = request.spec.contentHeight;
     }

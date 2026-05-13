@@ -128,12 +128,12 @@
 
 任务：
 
-- [ ] 将 EPUB parse 拆成 `parseIndex` 和 `parseChapter` 两条路径。
-- [ ] `parseIndex` 只解析 `container.xml / opf / toc / nav / spine`，保存 chapter sourceRef。
-- [ ] `parseChapter` 按 sourceRef 解析当前章节 HTML，抽取 `ReaderDocument` 和图片资源。
-- [ ] 封面仍可异步物化，列表/详情页使用缩略 decode。
-- [ ] 对 zip archive cache 设置上限和失效策略，避免长期持有大 archive。
-- [ ] 补测试：EPUB 导入不提前解析所有正文、按章节解析图文、toc 粒度和 spine 顺序稳定。
+- [x] 将 EPUB parse 拆成 `parseIndex` 和 `parseChapter` 两条路径。
+- [x] `parseIndex` 只解析 `container.xml / opf / toc / nav / spine`，保存 chapter sourceRef。
+- [x] `parseChapter` 按 sourceRef 解析当前章节 HTML，抽取 `ReaderDocument` 和图片资源。
+- [x] 封面仍可在 index 阶段物化，章节图片资源按章节解析时再物化。
+- [x] 对 zip archive cache 设置上限和失效策略，避免长期持有大 archive。
+- [x] 补测试：EPUB 导入不提前解析所有正文、按章节读取图文、toc 粒度和 spine 顺序稳定。
 
 涉及文件：
 
@@ -160,14 +160,14 @@
 任务：
 
 - [ ] 新增 lazy page snapshot 模型，表达 `ready / loading / failed` 三态，页面消费快照而不是直接等整章列表。
-- [ ] 把 streaming pagination 改成真正逐页产出，当前页完成后立即更新 UI，前页/后页随后进入队列。
-- [ ] 当前页优先：按恢复 ratio 从目标段落附近开始，必要时再异步补前缀页码映射。
+- [x] 把 streaming pagination 改成逐页回调产出，当前/附近页可在完整分页结束前更新 UI。
+- [x] 当前页优先：按恢复 ratio 映射目标段落，分页推进到目标段落时先发 current 事件。
 - [ ] 仅当前页、前页、后页进入高优先级计算队列；远页空闲时补齐，不阻塞首屏。
 - [ ] 翻到未计算页时展示骨架屏或上一页快照，计算完成后替换为真实页。
-- [ ] 快速切章、改字号、改边距时取消旧分页，不让旧结果污染 UI。
+- [x] 快速切章、改字号、改边距时继续沿用 `shouldAbort`，避免旧分页结果污染 UI。
 - [ ] 加分页耗时阈值日志，记录章节长度、段落数、页数、耗时。
-- [ ] 评估 isolate 可行性：如果 isolate 可稳定承载文本测量，则消息粒度必须是“单页请求/单页结果”，不能回到整章大包。
-- [ ] 如果 isolate 不能安全使用 `TextPainter`，优先做主 isolate 分块分页和 cooperative yield，不强行拆。
+- [x] 评估 isolate 可行性：当前 `TextPainter` 仍留在主 isolate，消息粒度先落到“单页回调/单页结果”。
+- [x] 如果 isolate 不能安全使用 `TextPainter`，优先做主 isolate 分块分页和 cooperative yield，不强行拆。
 
 涉及文件：
 

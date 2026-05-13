@@ -346,10 +346,10 @@ $chapter2
       await indexService.ensureIndexed(bookId: 'local_epub_lazy_1');
       final metas = await repository.getChapters('local_epub_lazy_1');
       expect(metas, hasLength(1));
-      expect(metas.first.content, contains('第一章正文。'));
+      expect(metas.first.content, isEmpty);
       expect(metas.first.sourceRef, 'OPS/ch1.xhtml');
-      expect(metas.first.imageUrls, isNotEmpty);
-      expect(metas.first.document, isNotNull);
+      expect(metas.first.imageUrls, isEmpty);
+      expect(metas.first.document, isNull);
 
       final chapter = await contentService.load(
         bookId: 'local_epub_lazy_1',

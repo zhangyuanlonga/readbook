@@ -64,10 +64,27 @@ void main() {
       final result = await parser.parse(book);
 
       expect(result.chapters, hasLength(2));
-      expect(result.chapters.first.title, contains('第一章'));
-      expect(result.chapters.last.title, contains('第二章'));
-      expect(result.chapters.first.content, contains('第一章内容'));
-      final document = _expectDocument(result.chapters.first.document);
+      expect(result.chapters.first.title, 'chapter1');
+      expect(result.chapters.last.title, 'chapter2');
+      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.document, isNull);
+      expect(result.chapters.first.sourceRef, 'OPS/chapter1.xhtml');
+
+      final parsedChapter = await parser.parseChapter(
+        book: book,
+        chapter: LocalChapter(
+          id: 'chapter_1',
+          bookId: book.id,
+          chapterIndex: 0,
+          title: result.chapters.first.title,
+          content: '',
+          sourceRef: result.chapters.first.sourceRef,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      expect(parsedChapter.content, contains('第一章内容'));
+      final document = _expectDocument(parsedChapter.document);
       expect(document.blocks.first, isA<ReaderTitleBlock>());
     });
 
@@ -242,8 +259,8 @@ void main() {
       expect(result.title, '排序修复测试');
       expect(result.chapters, hasLength(2));
       expect(result.chapters.map((chapter) => chapter.title), <String>[
-        '第二章',
-        '第十章',
+        'chapter2',
+        'chapter10',
       ]);
     });
 
@@ -340,11 +357,9 @@ void main() {
 
         expect(result.chapters, hasLength(2));
         expect(result.chapters.first.title, '第一节');
-        expect(result.chapters.first.content, contains('第一节内容'));
-        expect(result.chapters.first.content, isNot(contains('第二节内容')));
+        expect(result.chapters.first.content, isEmpty);
         expect(result.chapters.last.title, '第二节');
-        expect(result.chapters.last.content, contains('第二节内容'));
-        expect(result.chapters.last.content, isNot(contains('第一节内容')));
+        expect(result.chapters.last.content, isEmpty);
         expect(
           result.chapters.first.sourceRef,
           startsWith('epub-ref://chapter?'),
@@ -443,9 +458,9 @@ void main() {
         );
 
         expect(result.chapters, hasLength(2));
-        expect(result.chapters.first.title, '其一');
-        final document = _expectDocument(result.chapters.first.document);
-        expect(document.blocks.first, isA<ReaderTitleBlock>());
+        expect(result.chapters.first.title, 'short');
+        expect(result.chapters.first.content, isEmpty);
+        expect(result.chapters.first.document, isNull);
       },
     );
 
@@ -526,7 +541,7 @@ void main() {
         );
 
         expect(result.chapters, hasLength(1));
-        expect(result.chapters.single.title, '第一章');
+        expect(result.chapters.single.title, 'chapter1');
       },
     );
 
@@ -564,9 +579,9 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.imageUrls, isNotEmpty);
+      expect(result.chapters.first.imageUrls, isEmpty);
       expect(result.chapters.first.sourceRef, 'OPS/chapter1.xhtml');
-      expect(result.chapters.first.document, isNotNull);
+      expect(result.chapters.first.document, isNull);
       final parsedChapter = await parser.parseChapter(
         book: LocalBook(
           id: 'local_epub_image_1',
@@ -702,8 +717,8 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.content, contains('第一段文字。'));
-      expect(result.chapters.first.imageUrls, isNotEmpty);
+      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.imageUrls, isEmpty);
       final parsedChapter = await parser.parseChapter(
         book: LocalBook(
           id: 'local_epub_mixed_1',
@@ -819,7 +834,29 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      final document = _expectDocument(result.chapters.first.document);
+      expect(result.chapters.first.document, isNull);
+      final parsedChapter = await parser.parseChapter(
+        book: LocalBook(
+          id: 'local_epub_preview_document_1',
+          title: '预览结构测试',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        chapter: LocalChapter(
+          id: 'chapter_1',
+          bookId: 'local_epub_preview_document_1',
+          chapterIndex: 0,
+          title: result.chapters.first.title,
+          content: '',
+          sourceRef: result.chapters.first.sourceRef,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final document = _expectDocument(parsedChapter.document);
       expect(
         document.blocks,
         containsAllInOrder(<Matcher>[
