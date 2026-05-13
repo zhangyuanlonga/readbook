@@ -193,13 +193,13 @@
 
 任务：
 
-- [ ] 新增 block layout 缓存模型，保存 text block 字符区间和 image block 归一化 bounds。
-- [ ] 缓存 value 只保存布局描述，例如 `blockId/type/start/end/imageId/bounds`，不保存 widget、不保存渲染像素。
+- [x] 新增 block layout 缓存模型，保存 text block 字符区间和 image block 布局高度/引用。
+- [x] 缓存 value 只保存布局描述，例如 `kind/paragraphIndex/start/end/imageUrl/height`，不保存 widget、不保存渲染像素。
 - [ ] 缓存 key 扩展：章节 ID、章节内容版本、字体、字号、行高、段距、页宽高、图片占位策略。
-- [ ] 图文分页完成后写入 block layout。
-- [ ] 命中缓存时直接恢复 `pagedBlockPages`。
+- [x] 图文分页完成后写入 block layout。
+- [x] 命中缓存时直接恢复 `pagedBlockPages`。
 - [ ] 图片真实尺寸获取后，只在尺寸变化超阈值时触发重分页，避免小抖动导致全量失效。
-- [ ] 设置变化时只重新分割文字区间和布局图片位置，不重新解析 EPUB HTML。
+- [x] 设置变化时只重新分割文字区间和布局图片位置，不重新解析 EPUB HTML。
 
 涉及文件：
 
@@ -218,11 +218,11 @@
 
 任务：
 
-- [ ] 建立阅读器交互状态：idle、dragging、animating、settling。
-- [ ] dragging/animating 时暂停低优先级图片预载和远章分页预热。
-- [ ] 动画结束 200ms 后恢复暂停的低优先级队列，避免手指刚松开就抢占。
-- [ ] 当前章内容加载和当前页必要图片不暂停。
-- [ ] 页级内容外包 `RepaintBoundary`，单页重绘不污染相邻页。
+- [x] 建立阅读器交互状态：idle、dragging、animating、settling。
+- [x] dragging/animating 时暂停低优先级图片预载和远章分页预热。
+- [x] 动画结束 200ms 后恢复暂停的低优先级队列，避免手指刚松开就抢占。
+- [x] 当前章内容加载和当前页必要图片不暂停。
+- [x] 页级内容外包 `RepaintBoundary`，单页重绘不污染相邻页。
 - [ ] 避免在 `PageView.builder` 的 `itemBuilder` 内做异步加载后全局 `setState`；分页页内容通过 page snapshot/listenable 精准更新。
 - [ ] 分页模式只保留水平分页手势，滚动模式只走纵向滚动和点击滚动。
 - [ ] 检查 `PageView` 物理参数和自定义 curl/cover/translate renderer 的重建范围。

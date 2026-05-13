@@ -257,6 +257,7 @@ bool _isAllowedPlatformBranch(String path) {
       path.contains('/core/webview/') ||
       path.endsWith('app_layout.dart') ||
       path.endsWith('app_adaptive.dart') ||
+      path.endsWith('reader_layout_context.dart') ||
       path.endsWith('bootstrap.dart');
 }
 

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:shuxiang_reading_next/app/widgets/adaptive_content_container.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_filter_bar.dart';
+import 'package:shuxiang_reading_next/app/widgets/adaptive_list_tile.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_search_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_setting_tile.dart';
 import '../../test_utils/adaptive_test_harness.dart';
@@ -131,5 +134,92 @@ void main() {
     );
     expect(description.maxLines, 2);
     expect(find.byType(Switch), findsOneWidget);
+  });
+
+  testWidgets('AdaptiveContentContainer uses default width token on desktop', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 1280,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AdaptiveContentContainer(child: SizedBox(height: 20)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final constrainedBox = tester.widget<ConstrainedBox>(
+      find
+          .ancestor(
+            of: find.byType(SizedBox),
+            matching: find.byType(ConstrainedBox),
+          )
+          .first,
+    );
+    expect(constrainedBox.constraints.maxWidth, 820);
+  });
+
+  testWidgets('AdaptiveListTile supports selected and disabled states', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AdaptiveListTile(
+            selected: true,
+            enabled: false,
+            title: const Text('章节'),
+            subtitle: const Text('不可点击'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              tapped = true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('章节'));
+
+    expect(tapped, isFalse);
+    final semantics = tester.getSemantics(find.byType(AdaptiveListTile));
+    expect(semantics.hasFlag(SemanticsFlag.isSelected), isTrue);
+    expect(semantics.hasFlag(SemanticsFlag.isEnabled), isFalse);
+  });
+
+  testWidgets('AdaptiveSettingTile exposes tap path when enabled', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AdaptiveSettingTile(
+            icon: Icons.tune_rounded,
+            title: '阅读设置',
+            description: '打开阅读设置',
+            onTap: () {
+              tapped = true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('阅读设置'));
+
+    expect(tapped, isTrue);
   });
 }

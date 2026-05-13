@@ -201,13 +201,16 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
     _setReaderInteractionState(_ReaderInteractionState.settling);
     _readerInteractionSettleTimer?.cancel();
-    _readerInteractionSettleTimer = Timer(const Duration(milliseconds: 200), () {
-      if (!mounted) {
-        return;
-      }
-      _readerInteractionSettleTimer = null;
-      _setReaderInteractionState(_ReaderInteractionState.idle);
-    });
+    _readerInteractionSettleTimer = Timer(
+      const Duration(milliseconds: 200),
+      () {
+        if (!mounted) {
+          return;
+        }
+        _readerInteractionSettleTimer = null;
+        _setReaderInteractionState(_ReaderInteractionState.idle);
+      },
+    );
   }
 
   void _handlePagedScrollInteractionChanged(bool isInteracting) {

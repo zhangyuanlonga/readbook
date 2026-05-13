@@ -13,19 +13,25 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     required Widget child,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
+    final readerLayoutContext = ReaderLayoutContext.resolve(
+      context,
+      viewportKind: _currentViewportKind,
+    );
     final floatingColor =
         backgroundColor ??
         readerModalTheme.colorScheme.surface.withValues(alpha: 0.9);
     final borderColor = readerModalTheme.colorScheme.outlineVariant.withValues(
       alpha: 0.35,
     );
-    final useSidePanel = metrics.isExpandedWindow;
+    final useSidePanel =
+        readerLayoutContext.settingsPanelPresentation ==
+        ReaderPanelPresentation.sidePanel;
     final useEdgeToEdgeSheet = !useSidePanel;
     final radius = metrics.cardRadius + (useEdgeToEdgeSheet ? 10 : 12);
     final horizontalInset = useEdgeToEdgeSheet ? 0.0 : sheetHorizontal;
     final resolvedMaxWidth =
         useSidePanel
-            ? min(maxWidth, 520.0)
+            ? min(maxWidth, readerLayoutContext.sidePanelMaxWidth)
             : min(maxWidth, metrics.bottomSheetMaxWidth);
     final sidePanelHeightFactor = heightFactor.clamp(0.76, 0.9).toDouble();
     return AnimatedPadding(

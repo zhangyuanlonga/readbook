@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
@@ -184,6 +185,7 @@ class ReaderTextPagedView extends StatefulWidget {
     this.pageController,
     this.onPageChanged,
     this.onVisiblePositionChanged,
+    this.onScrollInteractionChanged,
     this.pageFrameBuilder,
     this.resolvedPageBuilder,
     this.resolvedSliceBuilder,
@@ -198,6 +200,7 @@ class ReaderTextPagedView extends StatefulWidget {
   final PageController? pageController;
   final ValueChanged<int>? onPageChanged;
   final ValueChanged<ReaderVisiblePosition>? onVisiblePositionChanged;
+  final ValueChanged<bool>? onScrollInteractionChanged;
   final ReaderPagedPageFrameBuilder? pageFrameBuilder;
   final ReaderResolvedPagedPageBuilder? resolvedPageBuilder;
   final ReaderResolvedPagedSliceBuilder? resolvedSliceBuilder;
@@ -328,7 +331,7 @@ class _ReaderTextPagedViewState extends State<ReaderTextPagedView> {
 
     final controller = widget.pageController ?? _ownedPageController;
 
-    return PageView.builder(
+    final pageView = PageView.builder(
       controller: controller,
       physics: widget.physics,
       itemCount: effectivePageCount,
@@ -337,14 +340,28 @@ class _ReaderTextPagedViewState extends State<ReaderTextPagedView> {
       },
       itemBuilder: (context, index) {
         final pageChild = _buildPageChild(context, index);
-        return widget.pageFrameBuilder?.call(
-              context,
-              model,
-              index,
-              pageChild,
-            ) ??
+        final framed =
+            widget.pageFrameBuilder?.call(context, model, index, pageChild) ??
             pageChild;
+        return RepaintBoundary(
+          key: ValueKey<String>('reader_text_page_$index'),
+          child: framed,
+        );
       },
+    );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification) {
+          widget.onScrollInteractionChanged?.call(true);
+        } else if (notification is ScrollEndNotification) {
+          widget.onScrollInteractionChanged?.call(false);
+        } else if (notification is UserScrollNotification &&
+            notification.direction == ScrollDirection.idle) {
+          widget.onScrollInteractionChanged?.call(false);
+        }
+        return false;
+      },
+      child: pageView,
     );
   }
 

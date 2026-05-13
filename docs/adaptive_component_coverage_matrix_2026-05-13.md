@@ -30,11 +30,17 @@
 
 ## 2. 组件 API 补强清单
 
-- [ ] `AdaptiveListTile` 检查 leading / trailing / subtitle / selected / hover / focus 能力是否覆盖常见页面。
-- [ ] `AdaptiveSettingTile` 检查 switch、slider、dropdown、stepper、文本按钮组合。
-- [ ] `AdaptiveActionSurface` 检查桌面 side panel、popover 与居中 dialog 的选择策略。
-- [ ] `AdaptiveContentContainer` 接入 `AppSizeTokens` 的默认内容宽度阶梯。
+- [x] `AdaptiveListTile` 检查 leading / trailing / subtitle / selected / hover / focus 能力是否覆盖常见页面。
+- [x] `AdaptiveSettingTile` 检查 switch、slider、dropdown、stepper、文本按钮组合。
+- [x] `AdaptiveActionSurface` 检查桌面 side panel、popover 与居中 dialog 的选择策略。
+- [x] `AdaptiveContentContainer` 接入 `AppSizeTokens` 的默认内容宽度阶梯。
 - [ ] `AppTaskStatusData` 后续接任务队列、取消、重试和恢复。
+
+本轮补强：
+
+- `AdaptiveListTile` 增加 `enabled`、`selected`、`dense`、`onLongPress`、focus/autofocus/mouseCursor。
+- `AdaptiveSettingTile` 增加 `onTap`、`onLongPress`、`enabled`、`dense`、`padding`。
+- `AdaptiveContentContainer` 默认使用 `AppSizeTokens.defaultContentMaxWidthForWidth`。
 
 ## 3. Review 问题
 

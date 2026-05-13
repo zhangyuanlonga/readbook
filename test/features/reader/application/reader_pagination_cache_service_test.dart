@@ -54,6 +54,45 @@ void main() {
       expect(loaded.pagedPages.first.first.end, 2);
     });
 
+    test('stores and reloads precomputed block layout', () async {
+      const layout = ReaderPrecomputedChapterLayout(
+        paragraphs: <String>['图文正文'],
+        pagedPages: <List<ReaderPagedSlice>>[],
+        pagedBlockPages: <List<ReaderPagedBlock>>[
+          <ReaderPagedBlock>[
+            ReaderPagedBlock.text(
+              paragraphIndex: 0,
+              start: 0,
+              end: 4,
+              height: 24,
+            ),
+            ReaderPagedBlock.image(imageUrl: 'file:///tmp/p1.png', height: 120),
+          ],
+        ],
+        paginationSignature: 'chapter-block|sig',
+      );
+
+      service.storePrecomputedChapterLayout(
+        sourceId: 'local',
+        chapterUrl: 'chapter://block',
+        layout: layout,
+      );
+
+      final loaded = await service.loadPrecomputedChapterLayout(
+        sourceId: 'local',
+        chapterUrl: 'chapter://block',
+        signature: 'chapter-block|sig',
+      );
+
+      expect(loaded, isNotNull);
+      expect(loaded!.pagedBlockPages, hasLength(1));
+      expect(
+        loaded.pagedBlockPages.first.last.kind,
+        ReaderPagedBlockKind.image,
+      );
+      expect(loaded.pagedBlockPages.first.last.imageUrl, 'file:///tmp/p1.png');
+    });
+
     test('prunes persisted layouts by byte budget', () async {
       for (var index = 0; index < 3; index++) {
         await File(

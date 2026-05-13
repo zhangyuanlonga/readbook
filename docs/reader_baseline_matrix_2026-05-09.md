@@ -82,3 +82,12 @@
 - EPUB 当前章读取时按 `sourceRef` 调用 `parseChapter`，解析完成后通过 `updateChapterContent` 回填正文、图片和结构化文档。
 - 分页控制器已从“整章完成后切 prefix”改为“分页引擎每产出一页即回调”，到达目标段落后先发送 current page 事件，附近页随后发送，完整页表最后发送 complete。
 - 当前仍未完成真机表回填，也未引入真正的 lazy snapshot 三态 UI；阶段 3 这部分需要后续在阅读页视图层继续做。
+
+## 8. 2026-05-13 阶段 4/5 执行记录
+
+- 图文分页缓存已扩展到 block layout：缓存 `ReaderPagedBlock` 的文本区间、图片引用和布局高度，命中后可直接恢复 `pagedBlockPages`。
+- 阅读页图文分页完成后会写入 block layout，后续相同签名可跳过图文分页计算。
+- 阅读器新增 `idle / dragging / animating / settling` 交互状态；分页拖动和动画期间会延迟邻章内容预载与远章分页预热。
+- 交互结束后延迟 200ms 再恢复低优先级预载，避免松手瞬间抢占翻页体验。
+- `ReaderTextPagedView` 页级已包 `RepaintBoundary`，减少单页重绘影响。
+- 当前仍未完成图片真实尺寸变化阈值重分页、设备等级翻页降级、lazy snapshot 三态 UI 和真机帧率回填。

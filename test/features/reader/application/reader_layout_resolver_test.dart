@@ -125,14 +125,14 @@ void main() {
       expect(metrics.bodyPadding, const EdgeInsets.fromLTRB(24, 18, 24, 20));
       expect(
         metrics.effectivePagePadding,
-        const EdgeInsets.fromLTRB(260, 18, 260, 20),
+        const EdgeInsets.fromLTRB(280, 18, 280, 20),
       );
       expect(metrics.scrollBodyPadding, metrics.effectivePagePadding);
       expect(
         metrics.contentWidth,
         ReaderLayoutResolver.desktopReadableContentMaxWidth,
       );
-      expect(metrics.contentRect, const Rect.fromLTWH(260, 18, 760, 762));
+      expect(metrics.contentRect, const Rect.fromLTWH(280, 18, 720, 762));
     });
   });
 }

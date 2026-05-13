@@ -8,7 +8,7 @@ import 'reader_surface_metrics.dart';
 class ReaderLayoutResolver {
   const ReaderLayoutResolver();
 
-  static const double desktopReadableContentMaxWidth = 760;
+  static const double desktopReadableContentMaxWidth = 720;
 
   bool showsPinnedChapterHeader(ReaderSettings settings) {
     return settings.showChapterHeader;

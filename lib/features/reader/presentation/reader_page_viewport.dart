@@ -326,6 +326,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
               _syncActiveReadingRecordSessionProgress();
               _scheduleProgressSave();
             },
+            onScrollInteractionChanged: _handlePagedScrollInteractionChanged,
           );
         }
 

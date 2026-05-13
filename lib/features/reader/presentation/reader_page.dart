@@ -134,6 +134,7 @@ import 'reader_body_region.dart';
 import 'reader_chrome_widgets.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
+import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'reader_page_lifecycle_delegate.dart';
 import 'reader_selection_state.dart';
@@ -1314,9 +1315,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       scrollBottomReserve: scrollBottomReserve ?? reserves.scrollBottomReserve,
       pagedBottomReserve: pagedBottomReserve ?? reserves.pagedBottomReserve,
       maxContentWidth:
-          AppLayout.isExpandedUp(context)
-              ? ReaderLayoutResolver.desktopReadableContentMaxWidth
-              : null,
+          ReaderLayoutContext.resolve(
+            context,
+            viewportKind: effectiveViewportKind,
+          ).contentMaxWidth,
     );
   }
 
@@ -2401,6 +2403,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           toIndex: currentIndex,
         );
       });
+      _scheduleReaderInteractionSettle();
       return;
     }
 
@@ -2413,6 +2416,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _curlTransition = const _CurlTransitionState();
       });
       _recordFirstPageTurnCompleted(mode: 'curl_cross_chapter');
+      _scheduleReaderInteractionSettle();
       return;
     }
 
@@ -2427,6 +2431,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _curlTransition = const _CurlTransitionState();
         _currentPageIndex = 0;
       });
+      _scheduleReaderInteractionSettle();
       return;
     }
     final nextIndex = _curlAnimationToIndex.clamp(
@@ -2446,6 +2451,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'curl');
+    _scheduleReaderInteractionSettle();
   }
 
   Future<void> _autoTurnCurlPage(int direction) async {
@@ -2469,6 +2475,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    _markReaderInteractionBusy(_ReaderInteractionState.animating);
     setState(() {
       _curlTransition = _curlTransition.copyWith(
         direction: direction,
@@ -2551,6 +2558,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (!mounted || taskId != _paginationTaskId) {
         return;
       }
+      if (cachedLayout != null && cachedLayout.pagedBlockPages.isNotEmpty) {
+        final targetIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
+          targetRatio: plan.preservedRatio,
+          pageCount: cachedLayout.pagedBlockPages.length,
+        );
+        setState(() {
+          _pagedPages = const <List<ReaderPagedSlice>>[];
+          _pagedBlockPages = cachedLayout.pagedBlockPages;
+          _currentPageIndex = targetIndex;
+          _pagedPaginationState = ReaderPaginationSessionState(
+            signature: cachedLayout.paginationSignature,
+          );
+          if (_paragraphs.isEmpty && cachedLayout.paragraphs.isNotEmpty) {
+            _paragraphs = List<String>.unmodifiable(cachedLayout.paragraphs);
+          }
+          _resetPagedTransitionState();
+          _resetCurlAnimationState();
+        });
+        return;
+      }
       if (cachedLayout != null && cachedLayout.pagedPages.isNotEmpty) {
         final targetIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
           targetRatio: plan.preservedRatio,
@@ -2558,6 +2585,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         setState(() {
           _pagedPages = cachedLayout.pagedPages;
+          _pagedBlockPages = const <List<ReaderPagedBlock>>[];
           _currentPageIndex = targetIndex;
           _pagedPaginationState = ReaderPaginationSessionState(
             signature: cachedLayout.paginationSignature,
@@ -2579,6 +2607,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _textPaginationFallbackDiagnostic = null;
       _pagedPaginationState = plan.buildLoadingState();
       _pagedPages = const [];
+      _pagedBlockPages = const <List<ReaderPagedBlock>>[];
       _currentPageIndex = 0;
     });
 
@@ -2712,6 +2741,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _currentPageIndex = targetIndex;
           _resetCurlAnimationState();
         });
+        if (event.completed &&
+            _paginationCacheService.shouldPersistChapterLayout(
+              sourceId: _sourceId ?? '',
+              chapterUrl: _chapterUrl ?? '',
+            )) {
+          _storePrecomputedChapterLayout(
+            sourceId: _sourceId ?? '',
+            chapterUrl: _chapterUrl ?? '',
+            layout: ReaderPrecomputedChapterLayout(
+              paragraphs: paragraphs,
+              pagedPages: const <List<ReaderPagedSlice>>[],
+              pagedBlockPages: pages,
+              paginationSignature: signature,
+            ),
+          );
+        }
       }
       return;
     }

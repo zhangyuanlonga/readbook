@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -11,8 +10,10 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
+import '../application/reader_mode_model.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_logical_position.dart';
+import 'reader_layout_context.dart';
 
 class ReaderCatalogSheetSelection {
   const ReaderCatalogSheetSelection({
@@ -63,13 +64,15 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required ValueChanged<String> showMessage,
 }) async {
   final routeContext = Navigator.of(context).context;
-  final metrics = AppAdaptiveMetrics.of(context);
+  final readerLayoutContext = ReaderLayoutContext.resolve(
+    context,
+    viewportKind: ReaderModeViewportKind.textScroll,
+  );
   final barrierLabel =
       MaterialLocalizations.of(context).modalBarrierDismissLabel;
-  final isDesktopSurface = metrics.isDesktopLikeForPlatform(
-    isWeb: kIsWeb,
-    platform: Theme.of(context).platform,
-  );
+  final isDesktopSurface =
+      readerLayoutContext.catalogPanelPresentation ==
+      ReaderPanelPresentation.sidePanel;
   const itemExtent = 52.0;
   final anchorIndex =
       currentChapterIndex == null
