@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/app/platform/app_capability_state.dart';
 import 'package:shuxiang_reading_next/app/platform/app_platform_capabilities.dart';
 
 void main() {
@@ -36,6 +37,11 @@ void main() {
     expect(capabilities.supportsSourceRuntime, isFalse);
     expect(capabilities.supportsInteractiveWebView, isFalse);
     expect(capabilities.supportsWebDavSync, isFalse);
+    expect(
+      capabilities.sourceRuntime.availability,
+      AppCapabilityAvailability.needsSetup,
+    );
+    expect(capabilities.sourceRuntime.canShowEntry, isTrue);
   });
 
   test('source runtime explicit override is still respected', () {
@@ -49,6 +55,7 @@ void main() {
     expect(disabled.supportsSourceRuntime, isFalse);
     expect(disabled.supportsInteractiveWebView, isFalse);
     expect(disabled.supportsWebDavSync, isFalse);
+    expect(disabled.sourceRuntime.needsSetup, isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
@@ -59,5 +66,21 @@ void main() {
 
     expect(enabled.supportsSourceRuntime, !kIsWeb);
     expect(enabled.supportsWebDavSync, !kIsWeb);
+  });
+
+  test('local file capabilities expose unsupported state on web hosts', () {
+    final capabilities = AppPlatformCapabilities.current(
+      sourceRuntimeEnabled: true,
+      webDavSyncEnabled: true,
+    );
+
+    if (kIsWeb) {
+      expect(capabilities.localFileImport.isUnsupported, isTrue);
+      expect(capabilities.managedFileStorage.isUnsupported, isTrue);
+      expect(capabilities.webDavSync.isUnsupported, isTrue);
+    } else {
+      expect(capabilities.localFileImport.isSupported, isTrue);
+      expect(capabilities.managedFileStorage.isSupported, isTrue);
+    }
   });
 }

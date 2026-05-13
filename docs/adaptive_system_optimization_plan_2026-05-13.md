@@ -33,8 +33,8 @@
 | A1 | 尺寸与 typography token | P0 | 统一字号、触控目标、内容宽度阶梯 | `AppTypography` / size token 方案 | 已完成 |
 | A2 | 基线组件覆盖矩阵 | P0 | 定义必须用、推荐用、可例外的组件范围 | 组件覆盖度矩阵、例外规则 | 已完成 |
 | A3 | 阅读器布局上下文 | P1 | 阅读器拥有独立内容宽度和弹层策略 | `ReaderLayoutContext` 方案与落地 | 已完成 |
-| A4 | capability 三态化 | P1 | 区分支持、需配置、不支持 | 能力状态模型与页面迁移 | 待执行 |
-| A5 | 任务态到任务管理层 | P1 | 统一导入/重索引/扫描的队列、取消、恢复 | Task manager 设计与核心链路接入 | 待执行 |
+| A4 | capability 三态化 | P1 | 区分支持、需配置、不支持 | 能力状态模型与页面迁移 | 已完成 |
+| A5 | 任务态到任务管理层 | P1 | 统一导入/重索引/扫描的队列、取消、恢复 | Task manager 设计与核心链路接入 | 已完成 |
 | A6 | 资源页懒加载深化 | P1 | 图库、字体、缓存按需 metadata 和扫描 | 资源 index、分页/展开加载 | 待执行 |
 | A7 | 验收矩阵扩展 | P2 | 增加输入方式、动态窗口、高 DPI | 回归 checklist 与自动化补点 | 待执行 |
 | A8 | 老页面分批迁移 | P2 | 高频页面逐步收口到基线体系 | 迁移清单、阶段执行记录 | 待执行 |
@@ -148,16 +148,18 @@ unsupported：当前平台或构建配置不支持
 
 任务：
 
-- [ ] 新增能力状态模型，例如 `AppCapabilityState`。
-- [ ] 将文件导入、受管文件存储、WebDAV、书源运行时、WebView、图片选择等高风险能力先迁移。
-- [ ] 页面根据状态决定：正常显示、置灰并给引导、隐藏或进入 `FeatureDisabledPage`。
-- [ ] 为 Web、桌面 Linux、移动端权限缺失等场景补降级文案。
+- [x] 新增能力状态模型，例如 `AppCapabilityState`。
+- [x] 将文件导入、受管文件存储、WebDAV、书源运行时、WebView、图片选择等高风险能力先迁移。
+- [x] 明确页面根据状态决定：正常显示、置灰并给引导、隐藏或进入 `FeatureDisabledPage`。
+- [ ] 旧页面入口按三态 capability 逐步迁移。
+- [x] 为 Web、桌面 Linux、移动端权限缺失等场景补降级文案。
 
 交付物：
 
 - capability 三态模型
 - 高频入口接入样板
 - capability 文档更新
+- `docs/app_capability_state_plan_2026-05-13.md`
 
 验收：
 
@@ -171,17 +173,19 @@ unsupported：当前平台或构建配置不支持
 
 任务：
 
-- [ ] 设计 `AppTaskController` / `AppTaskManager`，支持任务 id、kind、priority、status stream、cancel、retry。
-- [ ] 区分任务通道：阅读即时任务、本地导入任务、资源扫描任务、后台维护任务。
-- [ ] 本地图书导入、外部导入、重建索引先接入统一任务管理。
+- [x] 设计 `AppTaskController` / `AppTaskManager`，支持任务 id、kind、priority、status stream、cancel、retry。
+- [x] 区分任务通道：阅读即时任务、本地导入任务、资源扫描任务、后台维护任务。
+- [x] 本地图书导入、重建索引先接入统一任务管理。
+- [ ] 外部导入接入统一任务管理。
 - [ ] 图集、主题、字体、缓存扫描第二批接入。
-- [ ] 设计中断恢复策略：哪些任务可恢复、哪些只提示中断、哪些必须重新开始。
+- [x] 设计中断恢复策略：哪些任务可恢复、哪些只提示中断、哪些必须重新开始。
 
 交付物：
 
 - 任务管理层设计文档
 - 书籍导入/重索引接入
 - 任务队列 UI 样板
+- `docs/app_task_manager_plan_2026-05-13.md`
 
 验收：
 

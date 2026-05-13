@@ -112,6 +112,26 @@ class CoverImageDiskCache {
     return count;
   }
 
+  Future<int> estimateAllBytes() async {
+    final directory = await _ensureCacheDir();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    var bytes = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      try {
+        bytes += await entity.length();
+      } catch (_) {
+        // Ignore single-file stat failure.
+      }
+    }
+    return bytes;
+  }
+
   Future<int> compact({
     Duration stalePeriod = _stalePeriod,
     int maxEntries = 300,

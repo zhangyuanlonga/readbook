@@ -816,6 +816,8 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - `docs/adaptive_ui_antipatterns_2026-05-13.md`：A0 自适应 UI 反模式清单
 - `docs/adaptive_size_typography_tokens_2026-05-13.md`：A1 尺寸与 Typography Token
 - `docs/reader_layout_context_2026-05-13.md`：A3 阅读器布局上下文
+- `docs/app_capability_state_plan_2026-05-13.md`：A4 Capability 三态化
+- `docs/app_task_manager_plan_2026-05-13.md`：A5 任务管理层
 - `docs/app_task_status_unification_plan_2026-05-12.md`：导入与重索引任务态统一计划
 - `docs/resource_page_lazy_loading_audit_2026-05-12.md`：资源页面懒加载审计
 - `docs/cross_platform_boundary_refactor_plan.md`：跨端与原生边界

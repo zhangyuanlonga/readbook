@@ -155,5 +155,64 @@ void main() {
 
       expect(baseSignature, isNot(equals(changedSignature)));
     });
+
+    test('signature changes with image placeholder strategy', () {
+      const baseSpec = ReaderPaginationSpec(
+        contentWidth: 320,
+        contentHeight: 640,
+        contentRectLeft: 0,
+        contentRectTop: 0,
+        pagePaddingTop: 16,
+        pagePaddingRight: 16,
+        pagePaddingBottom: 16,
+        pagePaddingLeft: 16,
+        pinnedHeaderHeight: 0,
+        fontSize: 18,
+        lineHeight: 1.6,
+        paragraphSpacing: 12,
+        paragraphIndent: 2,
+        letterSpacing: 0,
+        textFullJustifyEnabled: false,
+        bodyTextItalicEnabled: false,
+        fontWeightLevel: ReaderFontWeightLevel.regular,
+        fontWeightValue: null,
+        fontSource: ReaderFontSource.system,
+        systemFontPreset: ReaderSystemFontPreset.defaultSans,
+        fontFamilyKey: null,
+      );
+      const changedSpec = ReaderPaginationSpec(
+        contentWidth: 320,
+        contentHeight: 640,
+        contentRectLeft: 0,
+        contentRectTop: 0,
+        pagePaddingTop: 16,
+        pagePaddingRight: 16,
+        pagePaddingBottom: 16,
+        pagePaddingLeft: 16,
+        pinnedHeaderHeight: 0,
+        fontSize: 18,
+        lineHeight: 1.6,
+        paragraphSpacing: 12,
+        paragraphIndent: 2,
+        letterSpacing: 0,
+        textFullJustifyEnabled: false,
+        bodyTextItalicEnabled: false,
+        fontWeightLevel: ReaderFontWeightLevel.regular,
+        fontWeightValue: null,
+        fontSource: ReaderFontSource.system,
+        systemFontPreset: ReaderSystemFontPreset.defaultSans,
+        fontFamilyKey: null,
+        imagePlaceholderAspectRatio: 1.25,
+      );
+
+      expect(
+        resolver.buildSignature(chapterId: 'chapter_3', spec: baseSpec),
+        isNot(
+          equals(
+            resolver.buildSignature(chapterId: 'chapter_3', spec: changedSpec),
+          ),
+        ),
+      );
+    });
   });
 }

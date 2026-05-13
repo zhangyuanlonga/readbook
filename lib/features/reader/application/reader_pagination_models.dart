@@ -106,6 +106,46 @@ class ReaderBlockPaginationResult {
   final List<List<ReaderPagedBlock>> pages;
 }
 
+enum ReaderLazyPageSnapshotStatus { loading, ready, failed }
+
+class ReaderLazyPageSnapshot<T> {
+  const ReaderLazyPageSnapshot._({
+    required this.pageIndex,
+    required this.status,
+    this.page,
+    this.errorMessage,
+  });
+
+  const ReaderLazyPageSnapshot.loading({required int pageIndex})
+    : this._(
+        pageIndex: pageIndex,
+        status: ReaderLazyPageSnapshotStatus.loading,
+      );
+
+  const ReaderLazyPageSnapshot.ready({required int pageIndex, required T page})
+    : this._(
+        pageIndex: pageIndex,
+        status: ReaderLazyPageSnapshotStatus.ready,
+        page: page,
+      );
+
+  const ReaderLazyPageSnapshot.failed({
+    required int pageIndex,
+    required String errorMessage,
+  }) : this._(
+         pageIndex: pageIndex,
+         status: ReaderLazyPageSnapshotStatus.failed,
+         errorMessage: errorMessage,
+       );
+
+  final int pageIndex;
+  final ReaderLazyPageSnapshotStatus status;
+  final T? page;
+  final String? errorMessage;
+
+  bool get isReady => status == ReaderLazyPageSnapshotStatus.ready;
+}
+
 class ReaderPrecomputedChapterLayout {
   const ReaderPrecomputedChapterLayout({
     required this.paragraphs,

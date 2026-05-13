@@ -24,6 +24,7 @@ class ReaderPaginationSpec {
     required this.fontSource,
     required this.systemFontPreset,
     required this.fontFamilyKey,
+    this.imagePlaceholderAspectRatio = 3 / 4,
   });
 
   final double contentWidth;
@@ -47,11 +48,12 @@ class ReaderPaginationSpec {
   final ReaderFontSource fontSource;
   final ReaderSystemFontPreset systemFontPreset;
   final String? fontFamilyKey;
+  final double imagePlaceholderAspectRatio;
 }
 
 class ReaderPaginationSpecResolver {
   const ReaderPaginationSpecResolver();
-  static const String _kPaginationLayoutVersion = 'paged_layout_v7';
+  static const String _kPaginationLayoutVersion = 'paged_layout_v8';
 
   ReaderPaginationSpec resolve({
     required ReaderSettings settings,
@@ -110,6 +112,7 @@ class ReaderPaginationSpecResolver {
       spec.fontSource.name,
       spec.systemFontPreset.name,
       spec.fontFamilyKey ?? '',
+      spec.imagePlaceholderAspectRatio.toStringAsFixed(3),
     ].join('|');
   }
 }

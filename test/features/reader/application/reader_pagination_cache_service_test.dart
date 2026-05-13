@@ -6,6 +6,26 @@ import 'package:shuxiang_reading_next/features/reader/application/reader_paginat
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_models.dart';
 
 void main() {
+  test('lazy page snapshot models loading ready and failed states', () {
+    const loading = ReaderLazyPageSnapshot<List<ReaderPagedSlice>>.loading(
+      pageIndex: 0,
+    );
+    const ready = ReaderLazyPageSnapshot<List<ReaderPagedSlice>>.ready(
+      pageIndex: 1,
+      page: <ReaderPagedSlice>[
+        ReaderPagedSlice(paragraphIndex: 0, start: 0, end: 1, height: 12),
+      ],
+    );
+    const failed = ReaderLazyPageSnapshot<List<ReaderPagedSlice>>.failed(
+      pageIndex: 2,
+      errorMessage: 'timeout',
+    );
+
+    expect(loading.status, ReaderLazyPageSnapshotStatus.loading);
+    expect(ready.isReady, isTrue);
+    expect(failed.errorMessage, 'timeout');
+  });
+
   group('ReaderPaginationCacheService', () {
     late Directory tempDir;
     late ReaderPaginationCacheService service;
@@ -113,6 +133,35 @@ void main() {
 
       expect(deleted, 2);
       expect(remaining, 1);
+    });
+
+    test('reports memory and persisted cache stats', () async {
+      const layout = ReaderPrecomputedChapterLayout(
+        paragraphs: <String>['正文'],
+        pagedPages: <List<ReaderPagedSlice>>[
+          <ReaderPagedSlice>[
+            ReaderPagedSlice(paragraphIndex: 0, start: 0, end: 2, height: 24),
+          ],
+        ],
+        paginationSignature: 'chapter-stats|sig',
+      );
+
+      await service.persistPrecomputedChapterLayout(
+        sourceId: 'local',
+        chapterUrl: 'chapter://stats',
+        layout: layout,
+      );
+      service.storePrecomputedChapterLayout(
+        sourceId: 'local',
+        chapterUrl: 'chapter://stats',
+        layout: layout,
+      );
+
+      final stats = await service.loadStats();
+
+      expect(stats.memoryEntries, 1);
+      expect(stats.persistedEntries, 1);
+      expect(stats.persistedBytes, greaterThan(0));
     });
   });
 }

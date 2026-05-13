@@ -9,6 +9,8 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/tasks/app_task_manager.dart';
+import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
@@ -82,6 +84,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         _reindexingBookId = null;
       }
     });
+    _updateReindexTaskFromEvent(event);
   }
 
   Future<void> _pickAndImportFiles() async {
@@ -103,6 +106,25 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     if (!mounted || files.isEmpty) {
       return;
     }
+
+    final taskManager = ref.read(appTaskManagerProvider);
+    final importTaskId =
+        'local-book-import:${DateTime.now().microsecondsSinceEpoch}';
+    taskManager.startTask(
+      id: importTaskId,
+      channel: AppTaskChannel.localBookImport,
+      priority: AppTaskPriority.userInitiated,
+      canCancel: false,
+      canRetry: true,
+      status: AppTaskStatusData(
+        title: '正在导入本地图书',
+        message: '正在准备处理 ${files.length} 个文件。',
+        kind: AppTaskStatusKind.localBookImport,
+        progress: 0,
+        progressLabel: '0/${files.length}',
+        detail: '本地图书导入',
+      ),
+    );
 
     setState(() {
       _isImporting = true;
@@ -151,14 +173,15 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             }
             final nextStage = progress.stage;
             final shouldUpdateStage = _lastProgressStage != nextStage;
+            final currentStageText = switch (progress.stage) {
+              LocalBookImportStage.preparing => '准备文件',
+              LocalBookImportStage.persisted => '写入书架',
+              LocalBookImportStage.indexing => '建立目录',
+              LocalBookImportStage.completed => '完成导入',
+            };
             setState(() {
               _lastProgressStage = nextStage;
-              _currentStageText = switch (progress.stage) {
-                LocalBookImportStage.preparing => '准备文件',
-                LocalBookImportStage.persisted => '写入书架',
-                LocalBookImportStage.indexing => '建立目录',
-                LocalBookImportStage.completed => '完成导入',
-              };
+              _currentStageText = currentStageText;
               if (shouldUpdateStage || _taskStatus == null) {
                 _taskStatus = ImportExportTaskStatus(
                   title: '正在导入本地图书',
@@ -176,6 +199,21 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                 );
               }
             });
+            taskManager.updateTask(
+              importTaskId,
+              AppTaskStatusData(
+                title: '正在导入本地图书',
+                message: '${progress.displayName} · $currentStageText',
+                kind: AppTaskStatusKind.localBookImport,
+                progress:
+                    _importTotal <= 0 ? null : _importCompleted / _importTotal,
+                progressLabel:
+                    _importTotal <= 0
+                        ? null
+                        : '$_importCompleted/$_importTotal',
+                detail: progress.detail,
+              ),
+            );
             _showOrRefreshTaskSheet();
           },
         );
@@ -209,6 +247,22 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             }
           });
           _showOrRefreshTaskSheet();
+          taskManager.updateTask(
+            importTaskId,
+            AppTaskStatusData(
+              title: '正在导入本地图书',
+              message:
+                  _currentImportLabel?.trim().isNotEmpty == true
+                      ? '${_currentImportLabel!} · ${_currentStageText ?? '处理中'}'
+                      : (_currentStageText ?? '处理中'),
+              kind: AppTaskStatusKind.localBookImport,
+              progress:
+                  _importTotal <= 0 ? null : _importCompleted / _importTotal,
+              progressLabel:
+                  _importTotal <= 0 ? null : '$_importCompleted/$_importTotal',
+              detail: _taskStatus?.detail,
+            ),
+          );
         }
       }
     }
@@ -232,6 +286,26 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
               )
               : null;
     });
+    taskManager.updateTask(
+      importTaskId,
+      successCount > 0
+          ? AppTaskStatusData(
+            title: '本地图书已导入',
+            message: '目录已建立，可直接阅读。',
+            kind: AppTaskStatusKind.localBookImport,
+            progress: 1,
+            progressLabel: '$_importCompleted/$_importTotal',
+            detail: _currentImportLabel,
+            result: AppTaskStatusResult.success,
+          )
+          : AppTaskStatusData(
+            title: '本地图书导入失败',
+            message: _lastErrorText ?? '导入失败，请重试。',
+            kind: AppTaskStatusKind.localBookImport,
+            result: AppTaskStatusResult.failure,
+          ),
+      canRetry: successCount == 0,
+    );
     _showOrRefreshTaskSheet();
 
     if (successCount > 0) {
@@ -357,6 +431,22 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     if (_reindexingBookId != null) {
       return;
     }
+    final taskManager = ref.read(appTaskManagerProvider);
+    final taskId = _localBookReindexTaskId(book.id);
+    taskManager.startTask(
+      id: taskId,
+      channel: AppTaskChannel.localBookIndex,
+      priority: AppTaskPriority.userInitiated,
+      canCancel: false,
+      canRetry: true,
+      recoveryKey: book.id,
+      status: AppTaskStatusData(
+        title: '正在重索引本地图书',
+        message: '正在重建 ${book.title} 的章节目录。',
+        kind: AppTaskStatusKind.localBookReindex,
+        detail: '本地索引',
+      ),
+    );
     setState(() {
       _reindexingBookId = book.id;
       _reindexStatusText = '正在重索引 ${book.title}';
@@ -371,6 +461,16 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         _reindexingBookId = null;
         _reindexStatusText = '重索引完成';
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '重索引完成',
+          message: '${book.title} 的章节目录已重建。',
+          kind: AppTaskStatusKind.localBookReindex,
+          result: AppTaskStatusResult.success,
+        ),
+        canRetry: false,
+      );
     } on AppException catch (error) {
       if (!mounted) {
         return;
@@ -379,6 +479,16 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         _reindexingBookId = null;
         _reindexErrorText = error.briefMessage;
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '重索引失败',
+          message: error.briefMessage,
+          kind: AppTaskStatusKind.localBookReindex,
+          result: AppTaskStatusResult.failure,
+        ),
+        canRetry: true,
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -387,7 +497,53 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
         _reindexingBookId = null;
         _reindexErrorText = '重索引失败：$error';
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '重索引失败',
+          message: '重索引失败：$error',
+          kind: AppTaskStatusKind.localBookReindex,
+          result: AppTaskStatusResult.failure,
+        ),
+        canRetry: true,
+      );
     }
+  }
+
+  void _updateReindexTaskFromEvent(LocalBookIndexEvent event) {
+    final taskId = _localBookReindexTaskId(event.bookId);
+    final taskManager = ref.read(appTaskManagerProvider);
+    final status = switch (event.status) {
+      LocalBookIndexStatus.ready => AppTaskStatusData(
+        title: '重索引完成',
+        message: '章节目录已重建，共 ${event.chapterCount} 章。',
+        kind: AppTaskStatusKind.localBookReindex,
+        progress: 1,
+        result: AppTaskStatusResult.success,
+      ),
+      LocalBookIndexStatus.failed => AppTaskStatusData(
+        title: '重索引失败',
+        message: '章节目录重建失败。',
+        kind: AppTaskStatusKind.localBookReindex,
+        result: AppTaskStatusResult.failure,
+      ),
+      _ => AppTaskStatusData(
+        title: '正在重索引本地图书',
+        message: _localIndexStatusLabel(event.status),
+        kind: AppTaskStatusKind.localBookReindex,
+        progressLabel:
+            event.chapterCount > 0 ? '${event.chapterCount} 章' : null,
+      ),
+    };
+    taskManager.updateTask(
+      taskId,
+      status,
+      canRetry: event.status == LocalBookIndexStatus.failed,
+    );
+  }
+
+  String _localBookReindexTaskId(String bookId) {
+    return 'local-book-reindex:$bookId';
   }
 
   Future<void> _openLocalBook(LocalBook book) async {

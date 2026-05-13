@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'reader_pagination_engine.dart';
 import 'reader_pagination_models.dart';
@@ -82,6 +83,13 @@ class ReaderStreamingPaginationController {
               _textPageReachesTarget(page, targetParagraphIndex)) {
             currentPageEmitted = true;
             currentPageCount = pagesSoFar.length;
+            _traceReadyEvent(
+              'reader.pagination.current_page_ready',
+              pageIndex: pageIndex,
+              pageCount: pagesSoFar.length,
+              paragraphCount: request.paragraphs.length,
+              isBlock: false,
+            );
             controller.add(
               ReaderStreamingPaginationEvent(
                 type: ReaderStreamingPaginationEventType.currentPageReady,
@@ -94,6 +102,13 @@ class ReaderStreamingPaginationController {
               !nearbyPageEmitted &&
               pagesSoFar.length >= currentPageCount + nearbyPageRadius) {
             nearbyPageEmitted = true;
+            _traceReadyEvent(
+              'reader.pagination.nearby_pages_ready',
+              pageIndex: pageIndex,
+              pageCount: pagesSoFar.length,
+              paragraphCount: request.paragraphs.length,
+              isBlock: false,
+            );
             controller.add(
               ReaderStreamingPaginationEvent(
                 type: ReaderStreamingPaginationEventType.nearbyPageReady,
@@ -190,6 +205,13 @@ class ReaderStreamingPaginationController {
               _blockPageReachesTarget(page, targetParagraphIndex)) {
             currentPageEmitted = true;
             currentPageCount = pagesSoFar.length;
+            _traceReadyEvent(
+              'reader.pagination.current_page_ready',
+              pageIndex: pageIndex,
+              pageCount: pagesSoFar.length,
+              paragraphCount: request.paragraphs.length,
+              isBlock: true,
+            );
             controller.add(
               ReaderBlockStreamingPaginationEvent(
                 type: ReaderStreamingPaginationEventType.currentPageReady,
@@ -202,6 +224,13 @@ class ReaderStreamingPaginationController {
               !nearbyPageEmitted &&
               pagesSoFar.length >= currentPageCount + nearbyPageRadius) {
             nearbyPageEmitted = true;
+            _traceReadyEvent(
+              'reader.pagination.nearby_pages_ready',
+              pageIndex: pageIndex,
+              pageCount: pagesSoFar.length,
+              paragraphCount: request.paragraphs.length,
+              isBlock: true,
+            );
             controller.add(
               ReaderBlockStreamingPaginationEvent(
                 type: ReaderStreamingPaginationEventType.nearbyPageReady,
@@ -301,5 +330,23 @@ class ReaderStreamingPaginationController {
   static List<List<T>> _prefixThrough<T>(List<List<T>> pages, int pageIndex) {
     final safeIndex = pageIndex.clamp(0, pages.length - 1);
     return pages.take(safeIndex + 1).toList(growable: false);
+  }
+
+  static void _traceReadyEvent(
+    String name, {
+    required int pageIndex,
+    required int pageCount,
+    required int paragraphCount,
+    required bool isBlock,
+  }) {
+    developer.Timeline.instantSync(
+      name,
+      arguments: <String, Object?>{
+        'pageIndex': pageIndex,
+        'pageCount': pageCount,
+        'paragraphCount': paragraphCount,
+        'kind': isBlock ? 'block' : 'text',
+      },
+    );
   }
 }

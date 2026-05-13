@@ -1,10 +1,108 @@
 enum ReaderDeviceTier { low, normal, high }
 
+enum ReaderDevicePlatform { android, ios, desktop, web, unknown }
+
 enum ReaderBatteryTier { lowBattery, normal }
 
 enum ReaderNetworkTier { offline, metered, unmetered }
 
 enum ReaderWorkScene { foregroundReading, backgroundPrefetch, cacheManagement }
+
+class ReaderDeviceTierInput {
+  const ReaderDeviceTierInput({
+    this.platform = ReaderDevicePlatform.unknown,
+    this.modelName,
+    this.operatingSystemVersion,
+    this.physicalMemoryMb,
+    this.isPhysicalDevice,
+    this.batteryLevel,
+    this.scene = ReaderWorkScene.foregroundReading,
+  });
+
+  final ReaderDevicePlatform platform;
+  final String? modelName;
+  final String? operatingSystemVersion;
+  final int? physicalMemoryMb;
+  final bool? isPhysicalDevice;
+  final int? batteryLevel;
+  final ReaderWorkScene scene;
+}
+
+class ReaderDeviceTierResolver {
+  const ReaderDeviceTierResolver();
+
+  ReaderDeviceTier resolve(ReaderDeviceTierInput input) {
+    final batteryLevel = input.batteryLevel;
+    if (batteryLevel != null && batteryLevel <= 15) {
+      return ReaderDeviceTier.low;
+    }
+    if (input.scene != ReaderWorkScene.foregroundReading &&
+        batteryLevel != null &&
+        batteryLevel <= 25) {
+      return ReaderDeviceTier.low;
+    }
+
+    final memoryMb = input.physicalMemoryMb;
+    if (memoryMb != null) {
+      if (memoryMb < 3072) {
+        return ReaderDeviceTier.low;
+      }
+      if (memoryMb >= 6144) {
+        return ReaderDeviceTier.high;
+      }
+    }
+
+    final modelName = input.modelName?.toLowerCase().trim() ?? '';
+    if (_looksLikeLegacyPhone(modelName)) {
+      return ReaderDeviceTier.low;
+    }
+    if (_looksLikeRecentFlagship(modelName)) {
+      return ReaderDeviceTier.high;
+    }
+
+    if (input.platform == ReaderDevicePlatform.desktop) {
+      return ReaderDeviceTier.high;
+    }
+    return ReaderDeviceTier.normal;
+  }
+
+  bool _looksLikeLegacyPhone(String modelName) {
+    if (modelName.isEmpty) {
+      return false;
+    }
+    const lowHints = <String>[
+      'iphone 6',
+      'iphone 7',
+      'iphone 8',
+      'iphone se',
+      'redmi 6',
+      'redmi 7',
+      'redmi 8',
+      'android go',
+      'a10',
+      'a20',
+    ];
+    return lowHints.any(modelName.contains);
+  }
+
+  bool _looksLikeRecentFlagship(String modelName) {
+    if (modelName.isEmpty) {
+      return false;
+    }
+    const highHints = <String>[
+      'iphone 15',
+      'iphone 16',
+      'iphone 17',
+      'ipad pro',
+      'pixel 8',
+      'pixel 9',
+      'galaxy s23',
+      'galaxy s24',
+      'galaxy s25',
+    ];
+    return highHints.any(modelName.contains);
+  }
+}
 
 class ReaderResourceBudgetInput {
   const ReaderResourceBudgetInput({

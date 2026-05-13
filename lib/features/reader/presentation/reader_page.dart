@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:math';
 import 'dart:ui';
 
@@ -249,6 +250,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderStreamingPaginationController();
   final ReaderImageDecodeBudgetResolver _imageDecodeBudgetResolver =
       const ReaderImageDecodeBudgetResolver();
+  final ReaderDeviceTierResolver _deviceTierResolver =
+      const ReaderDeviceTierResolver();
   late final ReaderPaginationCacheService _paginationCacheService;
   final ReaderPaginationSpecResolver _paginationSpecResolver =
       const ReaderPaginationSpecResolver();
@@ -678,16 +681,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ReaderResourceBudget _currentResourceBudget({
     ReaderWorkScene scene = ReaderWorkScene.foregroundReading,
   }) {
+    final batteryTier =
+        (_readerBatteryLevel != null && _readerBatteryLevel! <= 20)
+            ? ReaderBatteryTier.lowBattery
+            : ReaderBatteryTier.normal;
     return _resourceBudgetResolver.resolve(
       ReaderResourceBudgetInput(
-        batteryTier:
-            (_readerBatteryLevel != null && _readerBatteryLevel! <= 20)
-                ? ReaderBatteryTier.lowBattery
-                : ReaderBatteryTier.normal,
+        deviceTier: _deviceTierResolver.resolve(
+          ReaderDeviceTierInput(
+            platform: _currentReaderDevicePlatform(),
+            batteryLevel: _readerBatteryLevel,
+            scene: scene,
+          ),
+        ),
+        batteryTier: batteryTier,
         networkTier: ReaderNetworkTier.unmetered,
         scene: scene,
       ),
     );
+  }
+
+  ReaderDevicePlatform _currentReaderDevicePlatform() {
+    if (kIsWeb) {
+      return ReaderDevicePlatform.web;
+    }
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => ReaderDevicePlatform.android,
+      TargetPlatform.iOS => ReaderDevicePlatform.ios,
+      TargetPlatform.macOS ||
+      TargetPlatform.windows ||
+      TargetPlatform.linux => ReaderDevicePlatform.desktop,
+      _ => ReaderDevicePlatform.unknown,
+    };
   }
 
   ReaderImageDecodeBudget _readerImageDecodeBudget({
@@ -2576,6 +2601,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _resetPagedTransitionState();
           _resetCurlAnimationState();
         });
+        _traceReaderFirstPageReady(
+          source: 'block_cache',
+          pageCount: cachedLayout.pagedBlockPages.length,
+        );
         return;
       }
       if (cachedLayout != null && cachedLayout.pagedPages.isNotEmpty) {
@@ -2596,6 +2625,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _resetPagedTransitionState();
           _resetCurlAnimationState();
         });
+        _traceReaderFirstPageReady(
+          source: 'text_cache',
+          pageCount: cachedLayout.pagedPages.length,
+        );
         return;
       }
     }
@@ -2705,6 +2738,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           paragraphModels: _buildPaginationParagraphModels(colors, paragraphs),
           textScaler: MediaQuery.textScalerOf(context),
           shouldAbort: () => !mounted || taskId != _paginationTaskId,
+          imagePlaceholderAspectRatio: spec.imagePlaceholderAspectRatio,
         ),
         targetRatio: _pagedPaginationState.pendingRestoreRatio ?? 0,
       )) {
@@ -2741,6 +2775,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _currentPageIndex = targetIndex;
           _resetCurlAnimationState();
         });
+        _traceReaderFirstPageReady(
+          source: event.completed ? 'block_complete' : 'block_stream',
+          pageCount: pages.length,
+        );
         if (event.completed &&
             _paginationCacheService.shouldPersistChapterLayout(
               sourceId: _sourceId ?? '',
@@ -2801,6 +2839,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _currentPageIndex = targetIndex;
         _resetCurlAnimationState();
       });
+      _traceReaderFirstPageReady(
+        source: event.completed ? 'text_complete' : 'text_stream',
+        pageCount: pages.length,
+      );
       if (event.completed) {
         if (_paginationCacheService.shouldPersistChapterLayout(
           sourceId: _sourceId ?? '',
@@ -2819,6 +2861,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
     return;
+  }
+
+  void _traceReaderFirstPageReady({
+    required String source,
+    required int pageCount,
+  }) {
+    developer.Timeline.instantSync(
+      'reader.first_page_ready',
+      arguments: <String, Object?>{
+        'source': source,
+        'pageCount': pageCount,
+        'chapterId': _chapterId,
+      },
+    );
   }
 
   void _fallbackTextPaginationToScroll(String diagnostic) {

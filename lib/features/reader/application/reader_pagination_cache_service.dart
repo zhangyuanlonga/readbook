@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -9,6 +10,18 @@ import 'package:path_provider/path_provider.dart';
 import 'reader_pagination_models.dart';
 
 typedef ReaderPaginationCacheDirectoryProvider = Future<Directory> Function();
+
+class ReaderPaginationCacheStats {
+  const ReaderPaginationCacheStats({
+    required this.memoryEntries,
+    required this.persistedEntries,
+    required this.persistedBytes,
+  });
+
+  final int memoryEntries;
+  final int persistedEntries;
+  final int persistedBytes;
+}
 
 class ReaderPaginationCacheService {
   ReaderPaginationCacheService({
@@ -49,12 +62,28 @@ class ReaderPaginationCacheService {
     );
     final memoryCached = _memoryCache[cacheKey];
     if (memoryCached != null) {
+      _traceCacheEvent(
+        'reader.pagination.cache.hit',
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: signature,
+        status: 'memory',
+        pageCount: memoryCached.pagedPages.length,
+        blockPageCount: memoryCached.pagedBlockPages.length,
+      );
       return Future<ReaderPrecomputedChapterLayout?>.value(memoryCached);
     }
     if (!shouldPersistChapterLayout(
       sourceId: sourceId,
       chapterUrl: chapterUrl,
     )) {
+      _traceCacheEvent(
+        'reader.pagination.cache.skip',
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: signature,
+        status: 'unpersistable',
+      );
       return Future<ReaderPrecomputedChapterLayout?>.value(null);
     }
     return _readPersistedChapterLayout(
@@ -77,6 +106,15 @@ class ReaderPaginationCacheService {
     );
     _memoryCache[cacheKey] = layout;
     _trimMemoryCache();
+    _traceCacheEvent(
+      'reader.pagination.cache.write',
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      signature: layout.paginationSignature,
+      status: 'memory',
+      pageCount: layout.pagedPages.length,
+      blockPageCount: layout.pagedBlockPages.length,
+    );
     if (shouldPersistChapterLayout(
       sourceId: sourceId,
       chapterUrl: chapterUrl,
@@ -104,6 +142,56 @@ class ReaderPaginationCacheService {
       }
     }
     return count;
+  }
+
+  Future<int> estimatePersistedChapterLayoutBytes() async {
+    final directory = await _directoryProvider();
+    if (!await directory.exists()) {
+      return 0;
+    }
+
+    var bytes = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      try {
+        bytes += await entity.length();
+      } catch (_) {
+        // Ignore single-file stat failure.
+      }
+    }
+    return bytes;
+  }
+
+  Future<ReaderPaginationCacheStats> loadStats() async {
+    final directory = await _directoryProvider();
+    if (!await directory.exists()) {
+      return ReaderPaginationCacheStats(
+        memoryEntries: _memoryCache.length,
+        persistedEntries: 0,
+        persistedBytes: 0,
+      );
+    }
+
+    var persistedEntries = 0;
+    var persistedBytes = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      persistedEntries++;
+      try {
+        persistedBytes += await entity.length();
+      } catch (_) {
+        // Ignore single-file stat failure.
+      }
+    }
+    return ReaderPaginationCacheStats(
+      memoryEntries: _memoryCache.length,
+      persistedEntries: persistedEntries,
+      persistedBytes: persistedBytes,
+    );
   }
 
   Future<int> clearPersistedChapterLayouts() async {
@@ -214,7 +302,23 @@ class ReaderPaginationCacheService {
         signature: layout.paginationSignature,
       );
       await file.writeAsString(jsonEncode(layout.toJson()), flush: false);
+      _traceCacheEvent(
+        'reader.pagination.cache.write',
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: layout.paginationSignature,
+        status: 'disk',
+        pageCount: layout.pagedPages.length,
+        blockPageCount: layout.pagedBlockPages.length,
+      );
     } catch (_) {
+      _traceCacheEvent(
+        'reader.pagination.cache.write',
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: layout.paginationSignature,
+        status: 'disk_error',
+      );
       // Persistence failures should not block active pagination.
     }
   }
@@ -256,26 +360,92 @@ class ReaderPaginationCacheService {
         signature: signature,
       );
       if (!await file.exists()) {
+        _traceCacheEvent(
+          'reader.pagination.cache.miss',
+          sourceId: sourceId,
+          chapterUrl: chapterUrl,
+          signature: signature,
+          status: 'disk_missing',
+        );
         return null;
       }
       final raw = await file.readAsString();
       if (raw.trim().isEmpty) {
+        _traceCacheEvent(
+          'reader.pagination.cache.miss',
+          sourceId: sourceId,
+          chapterUrl: chapterUrl,
+          signature: signature,
+          status: 'disk_empty',
+        );
         return null;
       }
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) {
+        _traceCacheEvent(
+          'reader.pagination.cache.miss',
+          sourceId: sourceId,
+          chapterUrl: chapterUrl,
+          signature: signature,
+          status: 'disk_invalid',
+        );
         return null;
       }
       final layout = ReaderPrecomputedChapterLayout.fromJson(decoded);
       if (layout.paginationSignature != signature) {
+        _traceCacheEvent(
+          'reader.pagination.cache.miss',
+          sourceId: sourceId,
+          chapterUrl: chapterUrl,
+          signature: signature,
+          status: 'signature_mismatch',
+        );
         return null;
       }
       _memoryCache[cacheKey] = layout;
       _trimMemoryCache();
+      _traceCacheEvent(
+        'reader.pagination.cache.hit',
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: signature,
+        status: 'disk',
+        pageCount: layout.pagedPages.length,
+        blockPageCount: layout.pagedBlockPages.length,
+      );
       return layout;
     } catch (_) {
+      _traceCacheEvent(
+        'reader.pagination.cache.miss',
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: signature,
+        status: 'read_error',
+      );
       return null;
     }
+  }
+
+  void _traceCacheEvent(
+    String name, {
+    required String sourceId,
+    required String chapterUrl,
+    required String signature,
+    required String status,
+    int? pageCount,
+    int? blockPageCount,
+  }) {
+    developer.Timeline.instantSync(
+      name,
+      arguments: <String, Object?>{
+        'status': status,
+        'sourceId': sourceId,
+        'chapterUrl': chapterUrl,
+        'signature': signature,
+        if (pageCount != null) 'pageCount': pageCount,
+        if (blockPageCount != null) 'blockPageCount': blockPageCount,
+      },
+    );
   }
 
   void _trimMemoryCache() {

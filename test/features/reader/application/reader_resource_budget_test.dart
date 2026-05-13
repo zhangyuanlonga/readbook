@@ -37,5 +37,39 @@ void main() {
       expect(budget.chapterDownloadConcurrency, 0);
       expect(budget.webViewConcurrency, 0);
     });
+
+    test('device tier resolver grades low battery and recent devices', () {
+      const tierResolver = ReaderDeviceTierResolver();
+
+      expect(
+        tierResolver.resolve(
+          const ReaderDeviceTierInput(
+            platform: ReaderDevicePlatform.android,
+            physicalMemoryMb: 2048,
+          ),
+        ),
+        ReaderDeviceTier.low,
+      );
+      expect(
+        tierResolver.resolve(
+          const ReaderDeviceTierInput(
+            platform: ReaderDevicePlatform.ios,
+            modelName: 'iPhone 16 Plus',
+            batteryLevel: 80,
+          ),
+        ),
+        ReaderDeviceTier.high,
+      );
+      expect(
+        tierResolver.resolve(
+          const ReaderDeviceTierInput(
+            platform: ReaderDevicePlatform.ios,
+            modelName: 'iPhone 16 Plus',
+            batteryLevel: 10,
+          ),
+        ),
+        ReaderDeviceTier.low,
+      );
+    });
   });
 }

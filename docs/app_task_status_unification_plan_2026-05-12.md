@@ -12,6 +12,8 @@
 - [x] 保留 `ImportExportTaskStatus` 旧 API，避免一次性改动现有导入导出页面。
 - [x] 增加 `ImportExportTaskStatus.fromAppTaskStatus` 与 `toAppTaskStatusData`，允许旧导入导出任务逐步迁移到统一模型。
 - [x] 增加模型转换测试，避免后续枚举映射漂移。
+- [x] 新增 `AppTaskManager`，开始把任务态从单个 UI 状态推进到任务管理层。
+- [x] 本地图书导入和本地书库重索引已接入 `AppTaskManager`。
 
 ## 任务分类
 

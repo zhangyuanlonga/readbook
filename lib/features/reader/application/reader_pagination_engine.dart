@@ -171,6 +171,7 @@ class ReaderPaginationEngine {
   const ReaderPaginationEngine();
 
   static const double _kPageTailSafetyBuffer = 4.0;
+  static const Duration _kSlowPaginationThreshold = Duration(milliseconds: 300);
 
   ReaderPaginationEnsurePlan buildEnsurePlan(
     ReaderPaginationEnsureRequest request,
@@ -227,6 +228,7 @@ class ReaderPaginationEngine {
     ReaderPaginationRequest request, {
     void Function(List<ReaderPagedSlice> page, int pageIndex)? onPageReady,
   }) {
+    final stopwatch = Stopwatch()..start();
     final timelineTask =
         developer.TimelineTask()..start(
           'reader.pagination.paragraphs',
@@ -238,11 +240,20 @@ class ReaderPaginationEngine {
         );
     return _paginateParagraphsInternal(request, onPageReady: onPageReady).then(
       (result) {
+        stopwatch.stop();
         timelineTask.finish(
           arguments: <String, Object?>{
             'status': result == null ? 'aborted' : 'ready',
             'pageCount': result?.pages.length ?? 0,
+            'costMs': stopwatch.elapsedMilliseconds,
           },
+        );
+        _logSlowPagination(
+          name: 'reader.pagination.paragraphs.slow',
+          elapsed: stopwatch.elapsed,
+          paragraphCount: request.paragraphs.length,
+          pageCount: result?.pages.length ?? 0,
+          blockCount: 0,
         );
         return result;
       },
@@ -507,6 +518,7 @@ class ReaderPaginationEngine {
     ReaderBlockPaginationRequest request, {
     void Function(List<ReaderPagedBlock> page, int pageIndex)? onPageReady,
   }) {
+    final stopwatch = Stopwatch()..start();
     final timelineTask =
         developer.TimelineTask()..start(
           'reader.pagination.blocks',
@@ -519,11 +531,20 @@ class ReaderPaginationEngine {
         );
     return _paginateBlocksInternal(request, onPageReady: onPageReady).then(
       (result) {
+        stopwatch.stop();
         timelineTask.finish(
           arguments: <String, Object?>{
             'status': result == null ? 'aborted' : 'ready',
             'pageCount': result?.pages.length ?? 0,
+            'costMs': stopwatch.elapsedMilliseconds,
           },
+        );
+        _logSlowPagination(
+          name: 'reader.pagination.blocks.slow',
+          elapsed: stopwatch.elapsed,
+          paragraphCount: request.paragraphs.length,
+          pageCount: result?.pages.length ?? 0,
+          blockCount: request.renderItems.length,
         );
         return result;
       },
@@ -716,6 +737,34 @@ class ReaderPaginationEngine {
     final width = request.spec.contentWidth;
     final height = width / aspectRatio;
     return height.clamp(80.0, request.spec.contentHeight).toDouble();
+  }
+
+  static void _logSlowPagination({
+    required String name,
+    required Duration elapsed,
+    required int paragraphCount,
+    required int pageCount,
+    required int blockCount,
+  }) {
+    if (elapsed < _kSlowPaginationThreshold) {
+      return;
+    }
+    developer.log(
+      'Reader pagination exceeded threshold',
+      name: name,
+      time: DateTime.now(),
+      sequenceNumber: elapsed.inMilliseconds,
+      level: 800,
+    );
+    developer.Timeline.instantSync(
+      name,
+      arguments: <String, Object?>{
+        'costMs': elapsed.inMilliseconds,
+        'paragraphCount': paragraphCount,
+        'blockCount': blockCount,
+        'pageCount': pageCount,
+      },
+    );
   }
 }
 

@@ -56,6 +56,12 @@ class StartupStorageMaintenanceService {
       return;
     }
 
+    final chapterCountBefore = await _database.countChapterCaches();
+    final chapterBytesBefore = await _database.estimateChapterCachesBytes();
+    final paginationStatsBefore = await _paginationCacheService.loadStats();
+    final coverCountBefore = await _coverImageDiskCache.countAll();
+    final coverBytesBefore = await _coverImageDiskCache.estimateAllBytes();
+
     final deletedChapterCaches = await _database.pruneChapterCachesByBudget(
       maxEntries: AppCacheBudgetPolicies.chapterCaches.maxEntries,
       maxBytes: AppCacheBudgetPolicies.chapterCaches.maxBytes,
@@ -74,6 +80,11 @@ class StartupStorageMaintenanceService {
     );
     final deletedLegacyResidual =
         await CacheManagementService().clearLegacyResidualOnly();
+    final chapterCountAfter = await _database.countChapterCaches();
+    final chapterBytesAfter = await _database.estimateChapterCachesBytes();
+    final paginationStatsAfter = await _paginationCacheService.loadStats();
+    final coverCountAfter = await _coverImageDiskCache.countAll();
+    final coverBytesAfter = await _coverImageDiskCache.estimateAllBytes();
 
     await prefs.setString(_lastRunVersionKey, currentVersionKey);
     await prefs.setInt(_lastRunAtKey, now.millisecondsSinceEpoch);
@@ -82,8 +93,39 @@ class StartupStorageMaintenanceService {
       'Startup storage maintenance complete',
       context: <String, Object?>{
         'version': currentVersionKey,
+        'reason':
+            lastRunVersion != currentVersionKey
+                ? 'version_changed'
+                : 'repeat_interval',
+        'chapterCacheMaxEntries':
+            AppCacheBudgetPolicies.chapterCaches.maxEntries,
+        'chapterCacheMaxBytes': AppCacheBudgetPolicies.chapterCaches.maxBytes,
+        'chapterCacheStaleDays':
+            AppCacheBudgetPolicies.chapterCaches.stalePeriod.inDays,
+        'chapterCacheCountBefore': chapterCountBefore,
+        'chapterCacheCountAfter': chapterCountAfter,
+        'chapterCacheBytesBefore': chapterBytesBefore,
+        'chapterCacheBytesAfter': chapterBytesAfter,
         'deletedChapterCaches': deletedChapterCaches,
+        'paginationCacheMaxEntries':
+            AppCacheBudgetPolicies.paginationLayouts.maxEntries,
+        'paginationCacheMaxBytes':
+            AppCacheBudgetPolicies.paginationLayouts.maxBytes,
+        'paginationCacheStaleDays':
+            AppCacheBudgetPolicies.paginationLayouts.stalePeriod.inDays,
+        'paginationCacheCountBefore': paginationStatsBefore.persistedEntries,
+        'paginationCacheCountAfter': paginationStatsAfter.persistedEntries,
+        'paginationCacheBytesBefore': paginationStatsBefore.persistedBytes,
+        'paginationCacheBytesAfter': paginationStatsAfter.persistedBytes,
         'deletedPaginationCaches': deletedPaginationCaches,
+        'coverCacheMaxEntries': AppCacheBudgetPolicies.coverImages.maxEntries,
+        'coverCacheMaxBytes': AppCacheBudgetPolicies.coverImages.maxBytes,
+        'coverCacheStaleDays':
+            AppCacheBudgetPolicies.coverImages.stalePeriod.inDays,
+        'coverCacheCountBefore': coverCountBefore,
+        'coverCacheCountAfter': coverCountAfter,
+        'coverCacheBytesBefore': coverBytesBefore,
+        'coverCacheBytesAfter': coverBytesAfter,
         'deletedCoverCaches': deletedCoverCaches,
         'deletedLegacyResidual': deletedLegacyResidual,
       },
