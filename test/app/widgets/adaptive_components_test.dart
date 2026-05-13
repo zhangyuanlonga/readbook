@@ -9,7 +9,10 @@ import 'package:shuxiang_reading_next/app/widgets/adaptive_filter_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_list_tile.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_search_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_setting_tile.dart';
+import 'package:shuxiang_reading_next/app/widgets/app_empty_state_card.dart';
 import 'package:shuxiang_reading_next/app/widgets/app_task_bottom_sheet.dart';
+import 'package:shuxiang_reading_next/app/widgets/import_export_task_overlay.dart';
+import 'package:shuxiang_reading_next/app/widgets/import_export_task_sheet.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
@@ -224,6 +227,61 @@ void main() {
     await tester.tap(find.text('阅读设置'));
 
     expect(tapped, isTrue);
+  });
+
+  testWidgets('AppEmptyStateCard renders animated icon and action', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AppEmptyStateCard(
+            icon: Icons.book_outlined,
+            title: '暂无内容',
+            description: '稍后再试。',
+            actionLabel: '去添加',
+            onAction: () {
+              tapped = true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('暂无内容'), findsOneWidget);
+    expect(find.text('去添加'), findsOneWidget);
+
+    await tester.tap(find.text('去添加'));
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('ImportExportTaskSheet reflects failure result', (tester) async {
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: ImportExportTaskSheet(
+            status: ImportExportTaskStatus(
+              title: '导入失败',
+              message: '文件格式不支持',
+              result: ImportExportTaskResult.failure,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('处理失败'), findsOneWidget);
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
   });
 
   testWidgets('AppTaskBottomSheet fills compact mobile width', (tester) async {

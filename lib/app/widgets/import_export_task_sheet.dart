@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../motion/app_motion.dart';
 import 'import_export_task_overlay.dart';
 
 class ImportExportProgressCard extends StatelessWidget {
@@ -15,6 +16,7 @@ class ImportExportProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final motionDuration = AppMotion.durationOf(context, AppMotion.medium);
 
     return SafeArea(
       top: false,
@@ -45,32 +47,48 @@ class ImportExportProgressCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      status.message,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                    AnimatedSwitcher(
+                      duration: motionDuration,
+                      child: Text(
+                        status.message,
+                        key: ValueKey<String>(status.message),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     if ((status.progressLabel ?? '').trim().isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text(
-                        status.progressLabel!,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
+                      AnimatedSwitcher(
+                        duration: motionDuration,
+                        child: Text(
+                          status.progressLabel!,
+                          key: ValueKey<String>(status.progressLabel!),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
                     if ((status.detail ?? '').trim().isNotEmpty) ...[
                       const SizedBox(height: 6),
-                      Text(
-                        '执行阶段：${status.detail!}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.45,
+                      AnimatedSwitcher(
+                        duration: motionDuration,
+                        child: Text(
+                          '执行阶段：${status.detail!}',
+                          key: ValueKey<String>(status.detail!),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            height: 1.45,
+                          ),
                         ),
                       ),
                     ],
@@ -102,6 +120,8 @@ class ImportExportTaskSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final motionDuration = AppMotion.durationOf(context, AppMotion.medium);
+    final statusVisual = _taskResultVisual(status.result, colorScheme);
 
     return SafeArea(
       top: false,
@@ -113,26 +133,35 @@ class ImportExportTaskSheet extends StatelessWidget {
           decoration: _taskCardDecoration(colorScheme),
           child: Row(
             children: [
-              Container(
+              AnimatedContainer(
+                duration: motionDuration,
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  color: statusVisual.color.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.check_rounded,
-                  color: colorScheme.primary,
-                  size: 18,
+                child: AnimatedSwitcher(
+                  duration: motionDuration,
+                  child: Icon(
+                    statusVisual.icon,
+                    key: ValueKey<ImportExportTaskResult>(status.result),
+                    color: statusVisual.color,
+                    size: 18,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  '已完成',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                child: AnimatedSwitcher(
+                  duration: motionDuration,
+                  child: Text(
+                    statusVisual.label,
+                    key: ValueKey<ImportExportTaskResult>(status.result),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -141,6 +170,39 @@ class ImportExportTaskSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+({IconData icon, Color color, String label}) _taskResultVisual(
+  ImportExportTaskResult result,
+  ColorScheme colorScheme,
+) {
+  return switch (result) {
+    ImportExportTaskResult.failure => (
+      icon: Icons.close_rounded,
+      color: colorScheme.error,
+      label: '处理失败',
+    ),
+    ImportExportTaskResult.cancelled => (
+      icon: Icons.block_rounded,
+      color: colorScheme.onSurfaceVariant,
+      label: '已取消',
+    ),
+    ImportExportTaskResult.running => (
+      icon: Icons.sync_rounded,
+      color: colorScheme.primary,
+      label: '处理中',
+    ),
+    ImportExportTaskResult.idle => (
+      icon: Icons.hourglass_empty_rounded,
+      color: colorScheme.onSurfaceVariant,
+      label: '等待中',
+    ),
+    ImportExportTaskResult.success => (
+      icon: Icons.check_rounded,
+      color: colorScheme.primary,
+      label: '已完成',
+    ),
+  };
 }
 
 BoxDecoration _taskCardDecoration(ColorScheme colorScheme) {

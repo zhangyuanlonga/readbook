@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
+import '../motion/app_motion.dart';
 
 class AdaptiveListTile extends StatelessWidget {
   const AdaptiveListTile({
@@ -42,6 +43,7 @@ class AdaptiveListTile extends StatelessWidget {
     final effectiveOnLongPress = enabled ? onLongPress : null;
     final minHeight =
         dense ? metrics.listTileMinHeight - 8 : metrics.listTileMinHeight;
+    final motionDuration = AppMotion.durationOf(context, AppMotion.medium);
 
     return Semantics(
       button: onTap != null || onLongPress != null,
@@ -55,8 +57,8 @@ class AdaptiveListTile extends StatelessWidget {
         onLongPress: effectiveOnLongPress,
         borderRadius: BorderRadius.circular(metrics.cardRadius),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
+          duration: motionDuration,
+          curve: AppMotion.standard,
           decoration: BoxDecoration(
             color:
                 selected

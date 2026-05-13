@@ -58,7 +58,9 @@ extension on _BookshelfPageState {
     )) {
       return;
     }
-    _updateBookshelfState(() => _setSelectionEnabled(true, selectedKeys: const <String>{}));
+    _updateBookshelfState(
+      () => _setSelectionEnabled(true, selectedKeys: const <String>{}),
+    );
   }
 
   void _toggleBookSelection(BookshelfBook book) {
@@ -139,12 +141,7 @@ extension on _BookshelfPageState {
       return;
     }
 
-    final confirmed = await _showConfirmDialog(
-      title: '删除书籍',
-      content: '确定删除已选 ${selected.length} 本书吗？该操作不可撤销。',
-      confirmText: '删除',
-    );
-    if (!mounted || confirmed != true) {
+    if (!mounted) {
       return;
     }
 

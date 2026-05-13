@@ -22,6 +22,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/images/local_file_image.dart';
+import '../../../app/motion/app_motion.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_theme.dart';
@@ -1478,8 +1479,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     void Function(VoidCallback fn)? updateModalState,
   }) => _refreshSharedReaderAssetsImpl(updateModalState: updateModalState);
 
-  Widget _buildReaderContent(_ReaderThemeColors colors) =>
-      _composeReaderContent(colors);
+  Widget _buildReaderContent(_ReaderThemeColors colors) {
+    final hasRenderableContent =
+        _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty;
+    return AppAnimatedSwitcher(
+      duration: AppMotion.fast,
+      child: KeyedSubtree(
+        key: ValueKey<String>(
+          'reader_content_${_chapterId}_$hasRenderableContent',
+        ),
+        child: _composeReaderContent(colors),
+      ),
+    );
+  }
 
   ReaderChromePalette _chromePalette(_ReaderThemeColors colors) {
     return ReaderChromePalette(

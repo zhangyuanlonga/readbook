@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/motion/app_motion.dart';
 
 class BookDetailPrimaryActions extends StatelessWidget {
   const BookDetailPrimaryActions({
@@ -53,22 +54,21 @@ class BookDetailPrimaryActions extends StatelessWidget {
       required VoidCallback? onPressed,
       bool enabled = true,
     }) {
+      final effectiveEnabled = enabled && onPressed != null;
       return SizedBox(
         height: buttonHeight,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: key,
-            borderRadius: BorderRadius.circular(metrics.cardRadius * 0.72),
-            onTap: enabled ? onPressed : null,
-            child: Opacity(
-              opacity: enabled ? 1 : 0.45,
-              child: _ActionButtonContent(
-                icon: icon,
-                label: label,
-                iconGap: metrics.isCompactDensity ? 2 : 3,
-                textStyle: buttonTextStyle,
-              ),
+        child: _ActionButtonSurface(
+          inkKey: key,
+          onTap: effectiveEnabled ? onPressed : null,
+          enabled: effectiveEnabled,
+          borderRadius: BorderRadius.circular(metrics.cardRadius * 0.72),
+          child: Opacity(
+            opacity: enabled ? 1 : 0.45,
+            child: _ActionButtonContent(
+              icon: icon,
+              label: label,
+              iconGap: metrics.isCompactDensity ? 2 : 3,
+              textStyle: buttonTextStyle,
             ),
           ),
         ),
@@ -157,6 +157,62 @@ class BookDetailPrimaryActions extends StatelessWidget {
         SizedBox(width: buttonGap),
         Expanded(child: cacheButton),
       ],
+    );
+  }
+}
+
+class _ActionButtonSurface extends StatefulWidget {
+  const _ActionButtonSurface({
+    required this.inkKey,
+    required this.child,
+    required this.borderRadius,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final Key inkKey;
+  final Widget child;
+  final BorderRadius borderRadius;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  State<_ActionButtonSurface> createState() => _ActionButtonSurfaceState();
+}
+
+class _ActionButtonSurfaceState extends State<_ActionButtonSurface> {
+  bool _pressed = false;
+
+  bool get _enabled => widget.enabled && widget.onTap != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final motionEnabled = AppMotion.enabledOf(context, enabled: widget.enabled);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: widget.inkKey,
+        borderRadius: widget.borderRadius,
+        onTap: _enabled ? widget.onTap : null,
+        onHighlightChanged: (value) {
+          if (_pressed == value) {
+            return;
+          }
+          setState(() {
+            _pressed = value;
+          });
+        },
+        child: AnimatedScale(
+          scale: motionEnabled && _pressed ? 0.97 : 1,
+          duration: AppMotion.durationOf(
+            context,
+            AppMotion.fast,
+            enabled: widget.enabled,
+          ),
+          curve: AppMotion.standard,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

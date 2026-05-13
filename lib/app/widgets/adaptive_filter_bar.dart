@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
+import '../motion/app_motion.dart';
 
 class AdaptiveFilterChipData {
   const AdaptiveFilterChipData({
@@ -67,6 +68,7 @@ class AdaptiveFilterBar extends StatelessWidget {
 
     Widget buildChip(AdaptiveFilterChipData chip, {bool secondary = false}) {
       final selected = chip.selected;
+      final motionDuration = AppMotion.durationOf(context, AppMotion.fast);
       final resolvedSelectedColor =
           secondary
               ? (secondarySelectedColor ?? colorScheme.secondaryContainer)
@@ -75,44 +77,49 @@ class AdaptiveFilterBar extends StatelessWidget {
           foregroundColor ?? colorScheme.onSurfaceVariant;
       return Padding(
         padding: EdgeInsets.only(right: metrics.isCompactDensity ? 6 : 8),
-        child: GestureDetector(
-          onLongPress: chip.onLongPress,
-          child: ChoiceChip(
-            label: Text(chip.label),
-            labelPadding: EdgeInsets.symmetric(
-              horizontal: metrics.isCompactDensity ? 2 : 4,
-            ),
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            selected: selected,
-            showCheckmark: false,
-            onSelected: chip.onTap == null ? null : (_) => chip.onTap!.call(),
-            backgroundColor:
-                backgroundColor ??
-                colorScheme.surfaceContainerLow.withValues(alpha: 0.6),
-            selectedColor: resolvedSelectedColor,
-            labelStyle: chipTextStyle?.copyWith(
-              color:
-                  selected
-                      ? (secondary
-                          ? (secondaryForegroundColor ??
-                              colorScheme.onSecondaryContainer)
-                          : (selectedForegroundColor ??
-                              colorScheme.onPrimaryContainer))
-                      : resolvedForeground,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                metrics.isCompactDensity ? 9 : 10,
+        child: AnimatedScale(
+          duration: motionDuration,
+          curve: AppMotion.standard,
+          scale: selected ? 1.018 : 1,
+          child: GestureDetector(
+            onLongPress: chip.onLongPress,
+            child: ChoiceChip(
+              label: Text(chip.label),
+              labelPadding: EdgeInsets.symmetric(
+                horizontal: metrics.isCompactDensity ? 2 : 4,
               ),
-            ),
-            side: BorderSide(
-              color:
-                  selected
-                      ? (selectedBorderColor ?? colorScheme.outlineVariant)
-                      : (borderColor ?? colorScheme.outlineVariant),
-              width: 0.8,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              selected: selected,
+              showCheckmark: false,
+              onSelected: chip.onTap == null ? null : (_) => chip.onTap!.call(),
+              backgroundColor:
+                  backgroundColor ??
+                  colorScheme.surfaceContainerLow.withValues(alpha: 0.6),
+              selectedColor: resolvedSelectedColor,
+              labelStyle: chipTextStyle?.copyWith(
+                color:
+                    selected
+                        ? (secondary
+                            ? (secondaryForegroundColor ??
+                                colorScheme.onSecondaryContainer)
+                            : (selectedForegroundColor ??
+                                colorScheme.onPrimaryContainer))
+                        : resolvedForeground,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  metrics.isCompactDensity ? 9 : 10,
+                ),
+              ),
+              side: BorderSide(
+                color:
+                    selected
+                        ? (selectedBorderColor ?? colorScheme.outlineVariant)
+                        : (borderColor ?? colorScheme.outlineVariant),
+                width: 0.8,
+              ),
             ),
           ),
         ),

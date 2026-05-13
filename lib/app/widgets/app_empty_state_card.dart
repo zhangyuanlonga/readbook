@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../motion/app_motion.dart';
+
 const double _kEmptyStateHorizontalPadding = 18;
 const double _kEmptyStateVerticalPadding = 24;
 const double _kEmptyStateCompactVerticalPadding = 20;
@@ -65,7 +67,7 @@ class AppEmptyStateCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (trailing == null) ...[
-            Icon(icon, size: iconSize, color: colorScheme.primary),
+            _EmptyStateIcon(icon: icon, size: iconSize),
             SizedBox(
               height:
                   compact ? _kEmptyStateCompactTitleGap : _kEmptyStateTitleGap,
@@ -81,7 +83,7 @@ class AppEmptyStateCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, size: iconSize, color: colorScheme.primary),
+                _EmptyStateIcon(icon: icon, size: iconSize),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -125,6 +127,66 @@ class AppEmptyStateCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _EmptyStateIcon extends StatefulWidget {
+  const _EmptyStateIcon({required this.icon, required this.size});
+
+  final IconData icon;
+  final double size;
+
+  @override
+  State<_EmptyStateIcon> createState() => _EmptyStateIconState();
+}
+
+class _EmptyStateIconState extends State<_EmptyStateIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 1, end: 1.045), weight: 50),
+      TweenSequenceItem(tween: Tween<double>(begin: 1.045, end: 1), weight: 50),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.enabledOf(context)) {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) {
+        return Transform.scale(scale: _scale.value, child: child);
+      },
+      child: Icon(widget.icon, size: widget.size, color: colorScheme.primary),
     );
   }
 }

@@ -14,6 +14,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/motion/app_motion.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
@@ -1783,7 +1784,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   ),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
+                    child: _buildAnimatedBookshelfProgressBar(
                       value: progressDisplay.progressValue,
                       minHeight: 3,
                       backgroundColor: palette.elevatedSurfaceColor,
@@ -2067,7 +2068,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         SizedBox(height: _listCompactMode ? 5 : 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
+                          child: _buildAnimatedBookshelfProgressBar(
                             value: progressDisplay.progressValue,
                             minHeight: 3,
                             backgroundColor: palette.elevatedSurfaceColor,
@@ -2082,6 +2083,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAnimatedBookshelfProgressBar({
+    required double value,
+    required double minHeight,
+    required Color backgroundColor,
+  }) {
+    final clampedValue = value.clamp(0.0, 1.0).toDouble();
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: clampedValue),
+      duration: AppMotion.durationOf(context, AppMotion.medium),
+      curve: AppMotion.standard,
+      builder: (context, animatedValue, _) {
+        return LinearProgressIndicator(
+          value: animatedValue,
+          minHeight: minHeight,
+          backgroundColor: backgroundColor,
+        );
+      },
     );
   }
 
@@ -4747,48 +4768,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     _showMessage('已从书架移除。');
-  }
-
-  Future<bool?> _showConfirmDialog({
-    required String title,
-    required String content,
-    String confirmText = '确认',
-  }) {
-    return showAdaptiveActionSurface<bool>(
-      context: context,
-      maxWidth: 460,
-      builder: (dialogContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                dialogContext,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            Text(content, style: Theme.of(dialogContext).textTheme.bodyMedium),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(confirmText),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
   }
 }
 
