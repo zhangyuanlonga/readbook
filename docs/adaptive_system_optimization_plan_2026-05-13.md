@@ -286,6 +286,9 @@ unsupported：当前平台或构建配置不支持
 - 2026-05-13：资源图集列表页暂保留直接 `Scaffold`，原因是它们依赖透明 AppBar、主题背景和 `extendBodyBehindAppBar`；待 `AdaptivePageScaffold` 支持 backdrop / transparent app bar slot 后回收该例外。
 - 2026-05-13：A8-B3 继续迁移资源编辑页；`BottomNavIconGalleryEditorPage` 收口为 `ConsumerStatefulWidget + provider`，封面图集编辑器、启动图集编辑器和阅读背景页的删除确认统一迁到 `showAdaptiveActionSurface`。
 - 2026-05-13：图片预览全屏黑底 `showDialog` 本批保留为例外，原因是它承载 `InteractiveViewer` 缩放和沉浸预览，不属于普通操作弹层；后续如新增全屏预览基线组件再回收。
+- 2026-05-13：A8-B4 按“两项一组”迁移公告列表和公告详情；公告列表从一次性拼装 `ListView(children)` 改为 `CustomScrollView + SliverList.builder`，公告详情正文最大宽度收窄到设置页内容宽度，避免桌面长文行宽过长。
+- 2026-05-13：A8 继续按两项一组迁移关于页与同步历史；`AboutPage` 收口为 `ConsumerStatefulWidget`，`SyncHistoryPage` 任务详情从裸 `showModalBottomSheet` 迁到 `showAdaptiveActionSurface`。
+- 2026-05-13：A8 按三个功能模块批量推进：标签/分类管理模块收口到 `ConsumerStatefulWidget` 且重命名/删除走 adaptive surface；书签模块内部详情页增加宽屏内容约束；缓存/字体资源模块将清理确认、明细弹层、字体导入说明和重命名统一迁到 `showAdaptiveActionSurface`。
 
 ## 11. 排期建议
 

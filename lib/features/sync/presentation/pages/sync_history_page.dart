@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/layout/app_layout.dart';
 import '../../../../app/motion/app_motion_widgets.dart';
+import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../domain/sync_conflict.dart';
 import '../../domain/sync_job.dart';
 import '../../domain/sync_scope.dart';
@@ -186,48 +187,40 @@ class _JobTile extends StatelessWidget {
   }
 
   void _showJobDetail(BuildContext context) {
-    showModalBottomSheet<void>(
+    showAdaptiveActionSurface<void>(
       context: context,
+      maxWidth: 520,
       builder: (sheetContext) {
         final metrics = AppAdaptiveMetrics.of(sheetContext);
         return AppFadeSlideTransition(
-          child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                metrics.pagePadding,
-                metrics.sectionGap,
-                metrics.pagePadding,
-                metrics.sectionGap,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '任务详情',
+                style: Theme.of(
+                  sheetContext,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '任务详情',
-                    style: Theme.of(sheetContext).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  SizedBox(height: metrics.contentGap),
-                  _JobDetailLine(label: '配置', value: job.profileId),
-                  _JobDetailLine(label: '状态', value: job.status.name),
-                  _JobDetailLine(label: '触发方式', value: job.triggerKind.name),
-                  _JobDetailLine(
-                    label: '开始时间',
-                    value: job.startedAt.toLocal().toString(),
-                  ),
-                  if (job.endedAt != null)
-                    _JobDetailLine(
-                      label: '结束时间',
-                      value: job.endedAt!.toLocal().toString(),
-                    ),
-                  if ((job.summaryJson ?? '').trim().isNotEmpty)
-                    _JobDetailLine(label: '摘要', value: job.summaryJson!),
-                  if ((job.errorMessage ?? '').trim().isNotEmpty)
-                    _JobDetailLine(label: '错误', value: job.errorMessage!),
-                ],
+              SizedBox(height: metrics.contentGap),
+              _JobDetailLine(label: '配置', value: job.profileId),
+              _JobDetailLine(label: '状态', value: job.status.name),
+              _JobDetailLine(label: '触发方式', value: job.triggerKind.name),
+              _JobDetailLine(
+                label: '开始时间',
+                value: job.startedAt.toLocal().toString(),
               ),
-            ),
+              if (job.endedAt != null)
+                _JobDetailLine(
+                  label: '结束时间',
+                  value: job.endedAt!.toLocal().toString(),
+                ),
+              if ((job.summaryJson ?? '').trim().isNotEmpty)
+                _JobDetailLine(label: '摘要', value: job.summaryJson!),
+              if ((job.errorMessage ?? '').trim().isNotEmpty)
+                _JobDetailLine(label: '错误', value: job.errorMessage!),
+            ],
           ),
         );
       },

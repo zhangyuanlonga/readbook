@@ -10,6 +10,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
@@ -1026,9 +1027,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       if (_selectedOptions.contains(_StorageClearOption.localImportedBooks))
         '本地图书数据',
     ];
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder: (context) {
+      maxWidth: 520,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
         final highRiskLabels = <String>[
           if (_selectedOptions.contains(_StorageClearOption.legacyResidual))
             '旧版残留',
@@ -1037,21 +1040,39 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
           if (_selectedOptions.contains(_StorageClearOption.localImportedBooks))
             '本地图书数据',
         ];
-        return AlertDialog(
-          title: const Text('清理所选内容？'),
-          content: Text(
-            highRiskLabels.isEmpty
-                ? '将清理：${labels.join('、')}。'
-                : '将清理：${labels.join('、')}。\n\n高风险项：${highRiskLabels.join('、')}。\n其中本地图书数据清理后需要重新导入，其他数据与旧版残留清理后可能无法恢复。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '清理所选内容？',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('清理'),
+            const SizedBox(height: 10),
+            Text(
+              highRiskLabels.isEmpty
+                  ? '将清理：${labels.join('、')}。'
+                  : '将清理：${labels.join('、')}。\n\n高风险项：${highRiskLabels.join('、')}。\n其中本地图书数据清理后需要重新导入，其他数据与旧版残留清理后可能无法恢复。',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('清理'),
+                ),
+              ],
             ),
           ],
         );
@@ -1236,43 +1257,25 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     if (!mounted) {
       return;
     }
-    final metrics = AppAdaptiveMetrics.of(context);
     final content = _StorageDetailsContent(
       title: title,
       entries: entries,
       emptyText: emptyText,
       formatBytes: _formatBytes,
     );
-    if (metrics.isMediumUpWindow) {
-      await showDialog<void>(
-        context: context,
-        builder:
-            (context) => Dialog(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 680,
-                  maxHeight: 620,
-                ),
-                child: content,
-              ),
-            ),
-      );
-      return;
-    }
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 680,
+      maxHeightFactor: 0.82,
+      padding: EdgeInsets.zero,
       builder:
-          (context) => SafeArea(
-            child: SizedBox(
-              height:
-                  MediaQuery.sizeOf(context).height *
-                  (AppAdaptiveMetrics.of(context).isCompactDensity
-                      ? 0.82
-                      : 0.72),
-              child: content,
-            ),
+          (surfaceContext) => SizedBox(
+            height:
+                MediaQuery.sizeOf(surfaceContext).height *
+                (AppAdaptiveMetrics.of(surfaceContext).isCompactDensity
+                    ? 0.82
+                    : 0.72),
+            child: content,
           ),
     );
   }
@@ -1286,20 +1289,42 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
             ? presentation!.title!.trim()
             : '未知书籍';
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('清理本书缓存？'),
-          content: Text('将删除《$title》的已缓存章节（${summary.cachedCount} 章）。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '清理本书缓存？',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('清理'),
+            const SizedBox(height: 10),
+            Text(
+              '将删除《$title》的已缓存章节（${summary.cachedCount} 章）。',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('清理'),
+                ),
+              ],
             ),
           ],
         );

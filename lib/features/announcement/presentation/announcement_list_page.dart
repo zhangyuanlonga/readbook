@@ -272,60 +272,88 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       );
     }
 
-    final children = <Widget>[];
     final metrics = AppAdaptiveMetrics.of(context);
-    if (latest != null) {
-      children.add(_buildLatestCard(context, latest));
-      children.add(SizedBox(height: metrics.contentGap));
-    }
-    for (final item in listItems) {
-      children.add(_buildAnnouncementCard(context, item));
-      children.add(SizedBox(height: metrics.contentGap));
-    }
-    if (_isLoadingMore) {
-      children.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
-          child: Center(
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
-      );
-    } else if (!_hasMore && listItems.isNotEmpty) {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(
-            '已加载全部公告',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      );
-    }
-
     return AppFadeSlideTransition(
       child: RefreshIndicator(
         onRefresh: () => _loadInitial(forceRefresh: true),
-        child: ListView(
+        child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            topInset + metrics.contentGap,
-            horizontal,
-            metrics.contentGap + bottomSafe,
-          ),
-          children: children,
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                topInset + metrics.contentGap,
+                horizontal,
+                0,
+              ),
+              sliver:
+                  latest == null
+                      ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                      : SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: metrics.contentGap),
+                          child: _buildLatestCard(context, latest),
+                        ),
+                      ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
+              sliver: SliverList.builder(
+                itemCount: listItems.length,
+                itemBuilder:
+                    (context, index) => Padding(
+                      padding: EdgeInsets.only(bottom: metrics.contentGap),
+                      child: _buildAnnouncementCard(context, listItems[index]),
+                    ),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                0,
+                horizontal,
+                metrics.contentGap + bottomSafe,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: _buildFooter(
+                  context,
+                  hasListItems: listItems.isNotEmpty,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildFooter(BuildContext context, {required bool hasListItems}) {
+    if (_isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (!_hasMore && hasListItems) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          '已加载全部公告',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildStatusBody(

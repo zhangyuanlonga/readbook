@@ -110,7 +110,7 @@ class _AnnouncementDetailPageState
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
               context,
-              maxWidth: AppLayout.mineContentMaxWidth,
+              maxWidth: AppLayout.settingsContentMaxWidth,
             );
 
             return Align(

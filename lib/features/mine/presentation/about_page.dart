@@ -11,11 +11,11 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/device/device_identity_service.dart';
 import '../application/advanced_theme_provider.dart';
 
-class AboutPage extends StatefulWidget {
+class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
 
   @override
-  State<AboutPage> createState() => _AboutPageState();
+  ConsumerState<AboutPage> createState() => _AboutPageState();
 
   static const String _appVersion = '1.1.0';
   static const List<String> _projectFocus = [
@@ -43,7 +43,7 @@ class AboutPage extends StatefulWidget {
   );
 }
 
-class _AboutPageState extends State<AboutPage> {
+class _AboutPageState extends ConsumerState<AboutPage> {
   final DeviceIdentityService _identityService = DeviceIdentityService();
 
   String _appVersionName = AboutPage._appVersion;
@@ -71,115 +71,109 @@ class _AboutPageState extends State<AboutPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final activeAdvancedTheme =
-            ref.watch(activeAdvancedThemeProvider).valueOrNull;
-        final backdrop = resolveAdvancedThemeBackdrop(
-          Theme.of(context).colorScheme,
-          activeAdvancedTheme,
-        );
-        final metrics = AppAdaptiveMetrics.of(context);
-        final horizontal = metrics.pagePadding;
-        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-        return PopScope<void>(
-          canPop: context.canPop(),
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !context.mounted) {
-              return;
-            }
-            context.go('/mine');
-          },
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text('关于'),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-            ),
-            body: LayoutBuilder(
-              builder: (context, _) {
-                final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(
-                  context,
-                );
-
-                return DecoratedBox(
-                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: contentMaxWidth),
-                      child: LayoutBuilder(
-                        builder: (context, innerConstraints) {
-                          final innerMetrics =
-                              AppAdaptiveMetrics.resolveForConstraints(
-                                context,
-                                innerConstraints,
-                              );
-                          final isExpanded = innerMetrics.isExpandedWindow;
-                          final contentGap = innerMetrics.contentGap;
-                          final desktopCards = <Widget>[
-                            _buildIntroCard(context),
-                            _buildWebsiteCard(context),
-                            _buildSectionCard(
-                              context,
-                              title: '项目当前重点',
-                              subtitle: '当前版本以个人阅读和稳定体验为主。',
-                              icon: Icons.track_changes_outlined,
-                              items: AboutPage._projectFocus,
-                            ),
-                            _buildTagCard(
-                              context,
-                              title: '技术栈',
-                              subtitle: '当前版本采用的核心方案。',
-                              icon: Icons.developer_mode_rounded,
-                              tags: AboutPage._techStack,
-                            ),
-                            _buildSectionCard(
-                              context,
-                              title: '当前能力',
-                              subtitle: '优先覆盖本地文档与个人阅读管理。',
-                              icon: Icons.checklist_rounded,
-                              items: AboutPage._mvpScope,
-                            ),
-                            _buildComplianceCard(context),
-                          ];
-
-                          return AppFadeSlideTransition(
-                            child: ListView(
-                              padding: EdgeInsets.fromLTRB(
-                                horizontal,
-                                topInset + metrics.contentGap,
-                                horizontal,
-                                metrics.contentGap + bottomSafe,
-                              ),
-                              children: [
-                                if (!isExpanded)
-                                  ..._buildAboutLinearEntries(
-                                    desktopCards,
-                                    spacing: contentGap,
-                                  ),
-                                if (isExpanded)
-                                  ..._buildAboutDesktopColumns(
-                                    desktopCards,
-                                    spacing: contentGap,
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
       },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: const Text('关于'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(context);
+
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                  child: LayoutBuilder(
+                    builder: (context, innerConstraints) {
+                      final innerMetrics =
+                          AppAdaptiveMetrics.resolveForConstraints(
+                            context,
+                            innerConstraints,
+                          );
+                      final isExpanded = innerMetrics.isExpandedWindow;
+                      final contentGap = innerMetrics.contentGap;
+                      final desktopCards = <Widget>[
+                        _buildIntroCard(context),
+                        _buildWebsiteCard(context),
+                        _buildSectionCard(
+                          context,
+                          title: '项目当前重点',
+                          subtitle: '当前版本以个人阅读和稳定体验为主。',
+                          icon: Icons.track_changes_outlined,
+                          items: AboutPage._projectFocus,
+                        ),
+                        _buildTagCard(
+                          context,
+                          title: '技术栈',
+                          subtitle: '当前版本采用的核心方案。',
+                          icon: Icons.developer_mode_rounded,
+                          tags: AboutPage._techStack,
+                        ),
+                        _buildSectionCard(
+                          context,
+                          title: '当前能力',
+                          subtitle: '优先覆盖本地文档与个人阅读管理。',
+                          icon: Icons.checklist_rounded,
+                          items: AboutPage._mvpScope,
+                        ),
+                        _buildComplianceCard(context),
+                      ];
+
+                      return AppFadeSlideTransition(
+                        child: ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            topInset + metrics.contentGap,
+                            horizontal,
+                            metrics.contentGap + bottomSafe,
+                          ),
+                          children: [
+                            if (!isExpanded)
+                              ..._buildAboutLinearEntries(
+                                desktopCards,
+                                spacing: contentGap,
+                              ),
+                            if (isExpanded)
+                              ..._buildAboutDesktopColumns(
+                                desktopCards,
+                                spacing: contentGap,
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 

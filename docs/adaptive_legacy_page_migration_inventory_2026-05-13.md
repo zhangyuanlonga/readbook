@@ -162,3 +162,45 @@
 
 - 封面、启动图和阅读背景的全屏图片预览仍保留 `showDialog`。原因：该弹层是沉浸式黑底预览，包含 `InteractiveViewer` 手势缩放和点按关闭，不是普通操作面板。回收条件：新增 `AdaptiveFullscreenPreviewSurface` 或同等全屏预览基线组件后再统一迁移。
 - 底栏图集编辑器仍保留直接 `Scaffold`。原因：编辑器结构为专用 slot 矩阵，当前收益主要在状态来源和任务态收口；回收条件：资源编辑器统一骨架支持专用矩阵布局后迁移。
+
+### 2026-05-13：A8-B4 公告页面两项迁移
+
+选择范围：
+
+| 路由/入口 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| `/announcements` | `AnnouncementListPage` | 公告列表从 `ListView(children)` 改为 `CustomScrollView + SliverList.builder`，保留最新公告置顶和加载更多 footer | 下拉刷新、滚动加载更多、空/错误状态、360/1280 宽度 | 已完成 |
+| `/announcements/:id` | `AnnouncementDetailPage` | 正文最大宽度从 `mineContentMaxWidth` 收窄到 `settingsContentMaxWidth` | 长公告正文、大字体、桌面宽屏阅读 | 已完成 |
+
+本批例外：
+
+- 两个公告页暂保留直接 `Scaffold`。原因：页面和资源页一样依赖透明 AppBar、主题 backdrop 和 `extendBodyBehindAppBar`；回收条件同资源页，待 `AdaptivePageScaffold` 支持透明 AppBar/backdrop 后统一迁移。
+
+### 2026-05-13：A8 两项并行迁移：关于页 + 同步历史
+
+选择范围：
+
+| 路由/入口 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| `/about` | `AboutPage` | 从 `StatefulWidget + Consumer` 收口为 `ConsumerStatefulWidget` | 版本信息加载、主题 backdrop、桌面双列卡片 | 已完成 |
+| `/sync/history` | `SyncHistoryPage` | 任务详情从裸 `showModalBottomSheet` 迁到 `showAdaptiveActionSurface` | 移动底部面板、桌面居中详情、任务/冲突双栏 | 已完成 |
+
+本批例外：
+
+- `AboutPage` 暂保留直接 `Scaffold`，原因同公告页，依赖透明 AppBar 与主题 backdrop。
+- `SyncHistoryPage` 暂保留直接 `Scaffold`，原因是同步能力页后续还要和 A4 capability 三态入口一起做整页 gated 迁移；本批只处理明确的弹层反模式。
+
+### 2026-05-13：A8 三个功能模块批量迁移
+
+选择范围：
+
+| 功能模块 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| 标签/分类管理 | `/mine/tags`、`/mine/categories` | `MineManagementPage` 内部管理页从 `StatefulWidget + Consumer` 收口为 `ConsumerStatefulWidget`；重命名和删除确认迁到 `showAdaptiveActionSurface` | 新增、重命名、删除、空状态、加载失败重试 | 已完成 |
+| 书签/灵感 | `/bookmarks`、`_BookmarkBookDetailPage` | 内部详情页增加内容最大宽度与自适应间距，避免桌面详情横向拉满 | 书籍分组、章节分组、删除后返回、桌面宽屏 | 已完成 |
+| 缓存/字体资源 | `/cache`、`/font-management` | 缓存清理确认、缓存明细、单书清理、字体导入说明、字体重命名统一迁到 `showAdaptiveActionSurface` | 移动底部面板、桌面居中面板、清理任务态、字体导入任务态 | 已完成 |
+
+本批例外：
+
+- `MineManagementPage`、`BookmarksPage`、`CacheManagementPage`、`FontManagementPage` 暂保留直接 `Scaffold`。原因：这些页面已有透明 AppBar、主题 backdrop 或专用任务 overlay；回收条件同前，待 `AdaptivePageScaffold` 支持透明 AppBar/backdrop/overlay slot 后统一迁移骨架。
+- 缓存清理和字体导入的业务流程不在本批重写，只迁 UI surface 和状态来源，避免影响实际数据删除、导入和任务态。

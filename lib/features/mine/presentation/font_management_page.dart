@@ -13,6 +13,7 @@ import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_task_status.dart';
@@ -973,11 +974,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       );
       return;
     }
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
+      maxWidth: 520,
+      maxHeightFactor: 0.72,
       builder: (sheetContext) {
         var mode = _FontImportEntryMode.add;
         return StatefulBuilder(
@@ -998,18 +998,31 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               trailing: IconButton(
                 tooltip: '导入说明',
                 onPressed: () {
-                  showDialog<void>(
+                  showAdaptiveActionSurface<void>(
                     context: sheetContext,
-                    builder: (context) {
-                      return AlertDialog(
-                        title: const Text('导入说明'),
-                        content: const Text(
-                          '字体导入统一分为：添加文件 -> 注册字体 -> 完成。导入后可用于界面和阅读器设置。',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('知道了'),
+                    maxWidth: 420,
+                    builder: (surfaceContext) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            '导入说明',
+                            style: Theme.of(surfaceContext)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 10),
+                          Text('字体导入统一分为：添加文件 -> 注册字体 -> 完成。导入后可用于界面和阅读器设置。'),
+                          const SizedBox(height: 18),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton(
+                              onPressed:
+                                  () => Navigator.of(surfaceContext).pop(),
+                              child: const Text('知道了'),
+                            ),
                           ),
                         ],
                       );
@@ -1125,32 +1138,50 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
 
   Future<void> _renameFont(ReaderCustomFontEntry font) async {
     final controller = TextEditingController(text: font.displayName);
-    final nextName = await showDialog<String>(
+    final nextName = await showAdaptiveActionSurface<String>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('重命名字体'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '显示名称',
-              hintText: '输入新的字体名称',
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '重命名字体',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) {
-              Navigator.of(dialogContext).pop(controller.text.trim());
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '显示名称',
+                hintText: '输入新的字体名称',
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) {
+                Navigator.of(surfaceContext).pop(controller.text.trim());
+              },
             ),
-            FilledButton(
-              onPressed:
-                  () => Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('保存'),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      () => Navigator.of(
+                        surfaceContext,
+                      ).pop(controller.text.trim()),
+                  child: const Text('保存'),
+                ),
+              ],
             ),
           ],
         );

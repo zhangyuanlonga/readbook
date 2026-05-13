@@ -619,6 +619,9 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 底栏图集页从 `StatefulWidget + Consumer + ProviderScope.containerOf` 收口为 `ConsumerStatefulWidget + provider`，空搜索结果仍展示搜索框和统一空状态。
 - 三个资源图集列表页暂保留直接 `Scaffold` 作为沉浸式背景例外，待 `AdaptivePageScaffold` 支持透明 AppBar/backdrop 后回收。
 - 第二批继续收口资源编辑页：底栏图集编辑器改为 `ConsumerStatefulWidget + provider`，封面图集编辑器、启动图集编辑器和阅读背景页的删除确认统一为 adaptive surface；全屏图片预览作为沉浸式预览例外保留。
+- A8-B4 开始按两项一组执行：公告列表改为 Sliver builder 承载分页列表，公告详情桌面正文宽度收窄，避免大屏长文横向过长。
+- 关于页与同步历史作为下一组两项迁移：关于页收口状态读取方式，同步历史任务详情弹层在桌面/Web 改为 dialog surface，移动端保留底部面板。
+- A8 按三个功能模块批量推进：标签/分类管理、书签/灵感、缓存/字体资源已完成第一轮 UI surface 和内容宽度收口；缓存/字体弹层在桌面/Web 统一为 dialog surface，移动端保留底部面板。
 
 ### 2026-05-12 UI-G0/G1 组件治理
 

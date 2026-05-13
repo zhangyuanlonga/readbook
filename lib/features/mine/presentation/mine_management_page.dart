@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -57,7 +58,7 @@ class _BookshelfTaxonomyItem {
   final int count;
 }
 
-class _BookshelfTaxonomyManagementPage extends StatefulWidget {
+class _BookshelfTaxonomyManagementPage extends ConsumerStatefulWidget {
   const _BookshelfTaxonomyManagementPage({
     required this.kind,
     this.bookshelfService,
@@ -69,12 +70,12 @@ class _BookshelfTaxonomyManagementPage extends StatefulWidget {
   final Duration loadTimeout;
 
   @override
-  State<_BookshelfTaxonomyManagementPage> createState() =>
+  ConsumerState<_BookshelfTaxonomyManagementPage> createState() =>
       _BookshelfTaxonomyManagementPageState();
 }
 
 class _BookshelfTaxonomyManagementPageState
-    extends State<_BookshelfTaxonomyManagementPage> {
+    extends ConsumerState<_BookshelfTaxonomyManagementPage> {
   late final BookshelfService _bookshelfService;
   List<_BookshelfTaxonomyItem> _items = const <_BookshelfTaxonomyItem>[];
   bool _isLoading = true;
@@ -297,27 +298,52 @@ class _BookshelfTaxonomyManagementPageState
   }
 
   Future<void> _deleteItem(_BookshelfTaxonomyItem item) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text('删除$_entityName'),
-            content: Text(
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '删除$_entityName',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Text(
               item.count > 0
                   ? '确定删除$_entityName ${item.name} 吗？会从 ${item.count} 本书中移除。'
                   : '确定删除$_entityName ${item.name} 吗？',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colorScheme.error,
+                    foregroundColor: colorScheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('删除'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
     if (confirmed != true || !mounted) {
       return;
@@ -354,11 +380,12 @@ class _BookshelfTaxonomyManagementPageState
     var draftValue = initialValue;
     String? errorText;
 
-    return showDialog<String>(
+    return showAdaptiveActionSurface<String>(
       context: context,
-      builder: (dialogContext) {
+      maxWidth: 420,
+      builder: (surfaceContext) {
         return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
+          builder: (surfaceContext, setSurfaceState) {
             String? validate() {
               final value = draftValue.trim();
               if (value.isEmpty) {
@@ -376,41 +403,55 @@ class _BookshelfTaxonomyManagementPageState
             void submit() {
               final validation = validate();
               if (validation != null) {
-                setDialogState(() {
+                setSurfaceState(() {
                   errorText = validation;
                 });
                 return;
               }
-              Navigator.of(dialogContext).pop(draftValue.trim());
+              Navigator.of(surfaceContext).pop(draftValue.trim());
             }
 
-            return AlertDialog(
-              title: Text(title),
-              content: TextFormField(
-                initialValue: initialValue,
-                autofocus: appEnableAutoFocusForTextInput,
-                maxLength: 12,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  errorText: errorText,
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(surfaceContext).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                onChanged: (value) {
-                  draftValue = value;
-                  if (errorText == null) {
-                    return;
-                  }
-                  setDialogState(() {
-                    errorText = null;
-                  });
-                },
-                onFieldSubmitted: (_) => submit(),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: initialValue,
+                  autofocus: appEnableAutoFocusForTextInput,
+                  maxLength: 12,
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    errorText: errorText,
+                  ),
+                  onChanged: (value) {
+                    draftValue = value;
+                    if (errorText == null) {
+                      return;
+                    }
+                    setSurfaceState(() {
+                      errorText = null;
+                    });
+                  },
+                  onFieldSubmitted: (_) => submit(),
                 ),
-                FilledButton(onPressed: submit, child: Text(confirmText)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(surfaceContext).pop(),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(onPressed: submit, child: Text(confirmText)),
+                  ],
+                ),
               ],
             );
           },
@@ -421,108 +462,102 @@ class _BookshelfTaxonomyManagementPageState
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final activeAdvancedTheme =
-            ref.watch(activeAdvancedThemeProvider).valueOrNull;
-        final backdrop = resolveAdvancedThemeBackdrop(
-          Theme.of(context).colorScheme,
-          activeAdvancedTheme,
-        );
-        final horizontal = AppSpacing.pageHorizontal(context);
-        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-        return PopScope<void>(
-          canPop: context.canPop(),
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !context.mounted) {
-              return;
-            }
-            context.go('/mine');
-          },
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: Text(_title),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              actions: [
-                IconButton(
-                  tooltip:
-                      _showCreateInput ? '收起新增$_entityName' : '新增$_entityName',
-                  onPressed:
-                      _isSaving
-                          ? null
-                          : () {
-                            setState(() {
-                              _showCreateInput = !_showCreateInput;
-                              _createErrorText = null;
-                              if (!_showCreateInput) {
-                                _createDraft = '';
-                              }
-                            });
-                          },
-                  icon: Icon(
-                    _showCreateInput
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.add_rounded,
-                  ),
-                ),
-              ],
-            ),
-            body: LayoutBuilder(
-              builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.settingsContentMaxWidth,
-                );
-
-                return DecoratedBox(
-                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child:
-                          _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  horizontal,
-                                  topInset + 12,
-                                  horizontal,
-                                  16 + bottomSafe,
-                                ),
-                                children: [
-                                  _buildTaxonomyHeroCard(context),
-                                  const SizedBox(height: 12),
-                                  if (_loadErrorText != null) ...[
-                                    _buildErrorCard(context),
-                                    if (_items.isNotEmpty)
-                                      const SizedBox(height: 12),
-                                  ],
-                                  if (_showCreateInput) ...[
-                                    _buildCreateInputCard(context),
-                                    const SizedBox(height: 12),
-                                  ],
-                                  if (_loadErrorText == null ||
-                                      _items.isNotEmpty)
-                                    if (_items.isEmpty)
-                                      _buildEmptyCard(context)
-                                    else
-                                      _buildListCard(context),
-                                ],
-                              ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
       },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: Text(_title),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          actions: [
+            IconButton(
+              tooltip: _showCreateInput ? '收起新增$_entityName' : '新增$_entityName',
+              onPressed:
+                  _isSaving
+                      ? null
+                      : () {
+                        setState(() {
+                          _showCreateInput = !_showCreateInput;
+                          _createErrorText = null;
+                          if (!_showCreateInput) {
+                            _createDraft = '';
+                          }
+                        });
+                      },
+              icon: Icon(
+                _showCreateInput
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.add_rounded,
+              ),
+            ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child:
+                      _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + 12,
+                              horizontal,
+                              16 + bottomSafe,
+                            ),
+                            children: [
+                              _buildTaxonomyHeroCard(context),
+                              const SizedBox(height: 12),
+                              if (_loadErrorText != null) ...[
+                                _buildErrorCard(context),
+                                if (_items.isNotEmpty)
+                                  const SizedBox(height: 12),
+                              ],
+                              if (_showCreateInput) ...[
+                                _buildCreateInputCard(context),
+                                const SizedBox(height: 12),
+                              ],
+                              if (_loadErrorText == null || _items.isNotEmpty)
+                                if (_items.isEmpty)
+                                  _buildEmptyCard(context)
+                                else
+                                  _buildListCard(context),
+                            ],
+                          ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
