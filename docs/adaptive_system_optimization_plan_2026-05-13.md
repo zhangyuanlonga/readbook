@@ -29,8 +29,8 @@
 
 | 阶段 | 名称 | 优先级 | 目标 | 主要产物 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| A0 | 基线盘点与冻结 | P0 | 明确现状和禁止继续扩散的点 | 覆盖矩阵、反模式清单 | 执行中 |
-| A1 | 尺寸与 typography token | P0 | 统一字号、触控目标、内容宽度阶梯 | `AppTypography` / size token 方案 | 执行中 |
+| A0 | 基线盘点与冻结 | P0 | 明确现状和禁止继续扩散的点 | 覆盖矩阵、反模式清单 | 已完成 |
+| A1 | 尺寸与 typography token | P0 | 统一字号、触控目标、内容宽度阶梯 | `AppTypography` / size token 方案 | 已完成 |
 | A2 | 基线组件覆盖矩阵 | P0 | 定义必须用、推荐用、可例外的组件范围 | 组件覆盖度矩阵、例外规则 | 待执行 |
 | A3 | 阅读器布局上下文 | P1 | 阅读器拥有独立内容宽度和弹层策略 | `ReaderLayoutContext` 方案与落地 | 待执行 |
 | A4 | capability 三态化 | P1 | 区分支持、需配置、不支持 | 能力状态模型与页面迁移 | 待执行 |
@@ -48,7 +48,7 @@
 - [x] 汇总现有裸 `Scaffold`、直接 `showModalBottomSheet`、直接 `showDialog`、页面内 `Platform.isXxx / kIsWeb`、长列表 `ListView(children)` 的位置。
 - [x] 区分“必须整改”“历史保留”“允许例外”的页面。
 - [x] 在 review checklist 中增加反模式条目。
-- [ ] 更新 `tool/check_ui_component_governance.dart`，把新增反模式纳入 warning。
+- [x] 更新 `tool/check_ui_component_governance.dart`，把新增反模式纳入 warning。
 
 交付物：
 

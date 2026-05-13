@@ -173,6 +173,64 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
   }
 
+  bool get _isLowPriorityReaderWorkPaused =>
+      _readerInteractionState == _ReaderInteractionState.dragging ||
+      _readerInteractionState == _ReaderInteractionState.animating ||
+      _readerInteractionState == _ReaderInteractionState.settling;
+
+  void _setReaderInteractionState(_ReaderInteractionState state) {
+    if (_readerInteractionState == state) {
+      return;
+    }
+    _readerInteractionState = state;
+    if (state == _ReaderInteractionState.idle && _deferredNeighborPreload) {
+      _deferredNeighborPreload = false;
+      _startNeighborPreloadNow();
+    }
+  }
+
+  void _markReaderInteractionBusy(_ReaderInteractionState state) {
+    _readerInteractionSettleTimer?.cancel();
+    _readerInteractionSettleTimer = null;
+    _setReaderInteractionState(state);
+  }
+
+  void _scheduleReaderInteractionSettle() {
+    if (!mounted) {
+      return;
+    }
+    _setReaderInteractionState(_ReaderInteractionState.settling);
+    _readerInteractionSettleTimer?.cancel();
+    _readerInteractionSettleTimer = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted) {
+        return;
+      }
+      _readerInteractionSettleTimer = null;
+      _setReaderInteractionState(_ReaderInteractionState.idle);
+    });
+  }
+
+  void _handlePagedScrollInteractionChanged(bool isInteracting) {
+    if (isInteracting) {
+      _markReaderInteractionBusy(_ReaderInteractionState.dragging);
+    } else {
+      _scheduleReaderInteractionSettle();
+    }
+  }
+
+  void _scheduleNeighborPreload() {
+    if (_isLowPriorityReaderWorkPaused) {
+      _deferredNeighborPreload = true;
+      return;
+    }
+    _startNeighborPreloadNow();
+  }
+
+  void _startNeighborPreloadNow() {
+    final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
+    unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+  }
+
   void _disposeMangaTransformControllers() {
     // ReaderMangaView owns zoom controllers and gesture state after stage F.
   }
@@ -856,6 +914,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (transitionState == null || motion == null) {
       return;
     }
+    _markReaderInteractionBusy(_ReaderInteractionState.animating);
     _pagedTransitionController.duration = motion.duration;
     setState(() {
       _pagedTransition = transitionState;
@@ -881,6 +940,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (_isPagedTransitionAnimating) {
       return;
     }
+    _markReaderInteractionBusy(_ReaderInteractionState.animating);
     _pagedTransitionController.duration = motion.duration;
     setState(() {
       _pagedTransition = transitionState;
@@ -900,6 +960,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (_isCurlAutoTurning) {
       return;
     }
+    _markReaderInteractionBusy(_ReaderInteractionState.animating);
     _curlAutoTurnController.duration = motion.duration;
     setState(() {
       _curlTransition = _curlTransition.copyWith(
@@ -937,5 +998,6 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'animated');
+    _scheduleReaderInteractionSettle();
   }
 }

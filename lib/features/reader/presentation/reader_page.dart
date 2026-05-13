@@ -166,6 +166,8 @@ enum _ReaderSettingsTab { interface, reading }
 
 enum _OverlayEdge { top, bottom }
 
+enum _ReaderInteractionState { idle, dragging, animating, settling }
+
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({
     super.key,
@@ -467,6 +469,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const <_ContinuousTextChapter>[];
   DateTime? _lastInlineImagePrecacheAt;
   bool _deferredBootstrapWarmupStarted = false;
+  _ReaderInteractionState _readerInteractionState =
+      _ReaderInteractionState.idle;
+  Timer? _readerInteractionSettleTimer;
+  bool _deferredNeighborPreload = false;
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',

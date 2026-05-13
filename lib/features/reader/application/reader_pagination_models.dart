@@ -70,6 +70,34 @@ class ReaderPagedBlock {
   final int? end;
   final String? imageUrl;
   final double height;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'kind': kind.name,
+      'paragraphIndex': paragraphIndex,
+      'start': start,
+      'end': end,
+      'imageUrl': imageUrl,
+      'height': height,
+    };
+  }
+
+  factory ReaderPagedBlock.fromJson(Map<String, dynamic> json) {
+    final kindName = json['kind']?.toString();
+    final height = (json['height'] as num?)?.toDouble() ?? 0;
+    if (kindName == ReaderPagedBlockKind.image.name) {
+      return ReaderPagedBlock.image(
+        imageUrl: json['imageUrl']?.toString() ?? '',
+        height: height,
+      );
+    }
+    return ReaderPagedBlock.text(
+      paragraphIndex: (json['paragraphIndex'] as num?)?.toInt() ?? 0,
+      start: (json['start'] as num?)?.toInt() ?? 0,
+      end: (json['end'] as num?)?.toInt() ?? 0,
+      height: height,
+    );
+  }
 }
 
 class ReaderBlockPaginationResult {
@@ -83,10 +111,12 @@ class ReaderPrecomputedChapterLayout {
     required this.paragraphs,
     required this.pagedPages,
     required this.paginationSignature,
+    this.pagedBlockPages = const <List<ReaderPagedBlock>>[],
   });
 
   final List<String> paragraphs;
   final List<List<ReaderPagedSlice>> pagedPages;
+  final List<List<ReaderPagedBlock>> pagedBlockPages;
   final String paginationSignature;
 
   Map<String, Object?> toJson() {
@@ -99,12 +129,19 @@ class ReaderPrecomputedChapterLayout {
                 page.map((slice) => slice.toJson()).toList(growable: false),
           )
           .toList(growable: false),
+      'pagedBlockPages': pagedBlockPages
+          .map(
+            (page) =>
+                page.map((block) => block.toJson()).toList(growable: false),
+          )
+          .toList(growable: false),
     };
   }
 
   factory ReaderPrecomputedChapterLayout.fromJson(Map<String, dynamic> json) {
     final rawParagraphs = json['paragraphs'];
     final rawPages = json['pagedPages'];
+    final rawBlockPages = json['pagedBlockPages'];
     return ReaderPrecomputedChapterLayout(
       paragraphs:
           rawParagraphs is List
@@ -130,6 +167,24 @@ class ReaderPrecomputedChapterLayout {
                   )
                   .toList(growable: false)
               : const <List<ReaderPagedSlice>>[],
+      pagedBlockPages:
+          rawBlockPages is List
+              ? rawBlockPages
+                  .whereType<List>()
+                  .map(
+                    (page) => page
+                        .whereType<Map>()
+                        .map(
+                          (block) => ReaderPagedBlock.fromJson(
+                            block.map(
+                              (key, value) => MapEntry(key.toString(), value),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  )
+                  .toList(growable: false)
+              : const <List<ReaderPagedBlock>>[],
       paginationSignature: json['paginationSignature']?.toString().trim() ?? '',
     );
   }

@@ -505,8 +505,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     _scheduleReadingRecordSessionStart(initialRatio: activation.initialRatio);
     _scheduleProgressSave();
-    final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
-    unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+    _scheduleNeighborPreload();
   }
 
   void _syncActiveContinuousTextChapterFromScrollFlow() {
@@ -709,8 +708,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     await _saveProgress();
     _hasPromptedMissingSourceSwitch = false;
     if (_canWarmNeighborPaginationCache()) {
-      final preloadTaskToken = _readerSessionController.nextPreloadTaskToken();
-      unawaited(_preloadNeighborsFlow(taskToken: preloadTaskToken));
+      _scheduleNeighborPreload();
     }
   }
 
@@ -1048,6 +1046,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
   }
 
   Future<void> _preloadNeighborsFlow({required int taskToken}) async {
+    if (_isLowPriorityReaderWorkPaused) {
+      _deferredNeighborPreload = true;
+      return;
+    }
     final sourceId = _sourceId;
     final currentIndex = _currentIndex;
     if (sourceId == null || currentIndex == null || _chapters.isEmpty) {
@@ -1073,6 +1075,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     for (final index in orderedIndexes) {
       if (!mounted || taskToken != _preloadTaskToken) {
+        return;
+      }
+      if (_isLowPriorityReaderWorkPaused) {
+        _deferredNeighborPreload = true;
         return;
       }
 
@@ -1147,7 +1153,11 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
                   effectiveParagraphs,
                 ),
                 textScaler: textScaler,
-                shouldAbort: () => !mounted || taskToken != _preloadTaskToken,
+                shouldAbort:
+                    () =>
+                        !mounted ||
+                        taskToken != _preloadTaskToken ||
+                        _isLowPriorityReaderWorkPaused,
               ),
             );
             final pages = paginationResult?.pages;
