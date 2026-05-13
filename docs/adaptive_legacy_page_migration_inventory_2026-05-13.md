@@ -320,3 +320,9 @@
 
 - `lib/features` 下除 `lib/features/source/` 和书源脚本编辑器外，已无直接 `showDialog` / `showModalBottomSheet` 调用。
 - Source/书源模块保留到书源专项阶段处理，避免本轮跨模块改动影响书源编辑、调试和脚本运行链路。
+
+全局复查补漏：
+
+- 任务队列、换源候选、图片来源选择、应用更新弹窗已从全局直接 `showDialog` / `showModalBottomSheet` 收口到 adaptive 基线。
+- 当前除 `adaptive_bottom_sheet.dart` 基线内部和 Source/书源专项外，`lib` 下已无直接 `showDialog` / `showModalBottomSheet` 调用。
+- 阅读器设置和目录仍保留 `showGeneralDialog`，用于沉浸阅读内的自绘浮层/侧栏 route，不属于普通业务弹层。

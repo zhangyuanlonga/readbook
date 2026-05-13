@@ -11,6 +11,7 @@ Future<T?> showAdaptiveActionSurface<T>({
   required WidgetBuilder builder,
   bool useRootNavigator = false,
   bool barrierDismissible = true,
+  bool showDragHandle = true,
   double? maxWidth,
   double maxHeightFactor = 0.82,
   EdgeInsetsGeometry? padding,
@@ -28,7 +29,7 @@ Future<T?> showAdaptiveActionSurface<T>({
       context: context,
       useRootNavigator: useRootNavigator,
       useSafeArea: true,
-      showDragHandle: true,
+      showDragHandle: showDragHandle,
       isScrollControlled: true,
       isDismissible: barrierDismissible,
       enableDrag: barrierDismissible,
@@ -60,6 +61,52 @@ Future<T?> showAdaptiveActionSurface<T>({
               padding: padding,
               child: builder(surfaceContext),
             ),
+          ),
+    ),
+  };
+}
+
+Future<T?> showAdaptiveRawSurface<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool useRootNavigator = false,
+  bool barrierDismissible = true,
+  bool showDragHandle = true,
+  Color? mobileBackgroundColor,
+  AdaptiveActionSurfaceMode? mode,
+}) {
+  final platform = Theme.of(context).platform;
+  final effectiveMode =
+      mode ??
+      (AppLayout.isDesktopLike(context, platform: platform)
+          ? AdaptiveActionSurfaceMode.desktopDialog
+          : AdaptiveActionSurfaceMode.mobileSheet);
+
+  return switch (effectiveMode) {
+    AdaptiveActionSurfaceMode.mobileSheet => showModalBottomSheet<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      useSafeArea: true,
+      showDragHandle: showDragHandle,
+      isScrollControlled: true,
+      isDismissible: barrierDismissible,
+      enableDrag: barrierDismissible,
+      backgroundColor: mobileBackgroundColor,
+      builder: builder,
+    ),
+    AdaptiveActionSurfaceMode.desktopDialog => showDialog<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      barrierDismissible: barrierDismissible,
+      builder:
+          (surfaceContext) => Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 24,
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: builder(surfaceContext),
           ),
     ),
   };

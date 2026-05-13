@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app/widgets/adaptive_bottom_sheet.dart';
 import 'app_update_release.dart';
 
 class AppUpdateDialog {
@@ -86,14 +87,14 @@ class AppUpdateDialog {
         (release.versionCode != null ? '版本 ${release.versionCode}' : '新版本');
     final changelog = release.changelog?.trim();
 
-    await showModalBottomSheet<void>(
+    await showAdaptiveActionSurface<void>(
       context: context,
       useRootNavigator: true,
-      useSafeArea: true,
+      barrierDismissible: !forceUpdate,
       showDragHandle: !forceUpdate,
-      isDismissible: !forceUpdate,
-      enableDrag: !forceUpdate,
-      isScrollControlled: true,
+      maxWidth: 520,
+      maxHeightFactor: 0.76,
+      padding: EdgeInsets.zero,
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
         final colorScheme = theme.colorScheme;

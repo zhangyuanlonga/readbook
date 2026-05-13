@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../layout/app_adaptive.dart';
 import '../layout/app_layout.dart';
 import '../tasks/app_task_manager.dart';
+import 'adaptive_bottom_sheet.dart';
 import 'app_empty_state_card.dart';
 import 'app_task_bottom_sheet.dart';
 import 'app_task_status.dart';
@@ -71,30 +72,17 @@ class AppTaskQueueButton extends ConsumerWidget {
 }
 
 Future<void> showAppTaskQueueSurface(BuildContext context) {
-  final desktopLike = AppLayout.isDesktopLike(
-    context,
-    platform: Theme.of(context).platform,
-  );
-  if (desktopLike ||
+  final desktopLike =
+      AppLayout.isDesktopLike(context, platform: Theme.of(context).platform) ||
       kIsWeb ||
-      AppAdaptiveMetrics.of(context).isMediumUpWindow) {
-    return showDialog<void>(
-      context: context,
-      builder:
-          (context) => const Dialog(
-            insetPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: _AppTaskQueuePanel(),
-          ),
-    );
-  }
-
-  return showModalBottomSheet<void>(
+      AppAdaptiveMetrics.of(context).isMediumUpWindow;
+  return showAdaptiveRawSurface<void>(
     context: context,
-    useSafeArea: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    mode:
+        desktopLike
+            ? AdaptiveActionSurfaceMode.desktopDialog
+            : AdaptiveActionSurfaceMode.mobileSheet,
+    mobileBackgroundColor: Colors.transparent,
     builder: (context) => const _AppTaskQueuePanel(),
   );
 }

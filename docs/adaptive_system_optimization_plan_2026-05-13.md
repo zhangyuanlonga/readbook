@@ -296,6 +296,7 @@ unsupported：当前平台或构建配置不支持
 - 2026-05-13：按“两批压下去”口径完成 Batch 1 普通业务入口压降：首页目标设置、搜索书源筛选/来源选择、发现书源/分类选择、书籍详情更多操作/归类/重索引确认、书架排序/设置/筛选 helper 和普通确认迁到 `showAdaptiveActionSurface`。保留书籍封面沉浸预览、书架导入任务态和标签/分类自定义编辑器作为专项例外。
 - 2026-05-13：完成 Batch 2 高频高级主题/阅读器面板压降：高级主题批量分类、兼容导入说明、导出说明，阅读器书源不可用提示、章节差异确认、漫画长图定位、章节缓存范围/进度、阅读记录热力日历详情迁到 `showAdaptiveActionSurface`。阅读器目录/设置/选择菜单保留阅读器专属策略，后续按 `ReaderLayoutContext` 侧栏/浮层专项处理。
 - 2026-05-13：A8 非 Source 收尾完成。新增 `showAdaptiveFullscreenPreview` 回收沉浸图片预览；高级主题编辑/列表、书架导入与分类编辑、阅读器设置/目录/字体面板完成统一 adaptive surface 或阅读器自绘 route 收口。当前 `lib/features` 下除书源/Source 专项外，已无直接 `showDialog` / `showModalBottomSheet` 调用。
+- 2026-05-13：A8 全局复查补漏完成。任务队列、换源候选、图片来源选择、应用更新弹窗从全局直接 `showDialog` / `showModalBottomSheet` 收口到 adaptive 基线；当前除 `adaptive_bottom_sheet.dart` 基线内部和 Source/书源专项外，`lib` 下已无直接 `showDialog` / `showModalBottomSheet` 调用。
 
 ## 11. 排期建议
 

@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 
+import '../../app/widgets/adaptive_bottom_sheet.dart';
+
 enum ImageSelectionSource { auto, gallery, files }
 
 class PickedImageData {
@@ -34,11 +36,12 @@ class ImageSelectionService {
     String filesSubtitle = '从文件 App 或本地目录选择图片',
     bool useRootNavigator = false,
   }) {
-    return showModalBottomSheet<ImageSelectionSource>(
+    return showAdaptiveActionSurface<ImageSelectionSource>(
       context: context,
       useRootNavigator: useRootNavigator,
-      showDragHandle: true,
-      useSafeArea: true,
+      maxWidth: 420,
+      maxHeightFactor: 0.46,
+      padding: EdgeInsets.zero,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         final bottomInset = _bottomSafeInset(context);

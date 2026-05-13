@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../app/layout/app_spacing.dart';
 import '../../domain/entities/source_health.dart';
-import 'source_health_badge.dart';
 import '../../features/reader/application/switch_source_shared.dart';
+import 'adaptive_bottom_sheet.dart';
+import 'source_health_badge.dart';
 
 Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
   required BuildContext context,
@@ -25,8 +26,8 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
   final resolvedBottomInset =
       bottomInset ?? MediaQuery.viewPaddingOf(context).bottom;
 
-  final sheet = FractionallySizedBox(
-    heightFactor: heightFactor,
+  final sheet = SizedBox(
+    height: MediaQuery.sizeOf(context).height * heightFactor,
     child: Padding(
       padding: EdgeInsets.fromLTRB(
         resolvedHorizontal,
@@ -132,8 +133,9 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
                                 (author == null || author.isEmpty)
                                     ? candidate.book.title
                                     : '${candidate.book.title} · $author';
-                            final riskPresentation =
-                                _resolveRiskPresentation(healthLevel);
+                            final riskPresentation = _resolveRiskPresentation(
+                              healthLevel,
+                            );
 
                             return InkWell(
                               onTap: () => Navigator.of(context).pop(candidate),
@@ -329,21 +331,20 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
   );
 
   if (themeData != null) {
-    return showModalBottomSheet<SwitchSourceCandidate>(
+    return showAdaptiveActionSurface<SwitchSourceCandidate>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: themeData.colorScheme.surface,
+      maxWidth: 720,
+      maxHeightFactor: heightFactor,
+      padding: EdgeInsets.zero,
       builder: (context) => Theme(data: themeData, child: sheet),
     );
   }
 
-  return showModalBottomSheet<SwitchSourceCandidate>(
+  return showAdaptiveActionSurface<SwitchSourceCandidate>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
+    maxWidth: 720,
+    maxHeightFactor: heightFactor,
+    padding: EdgeInsets.zero,
     builder: (context) => sheet,
   );
 }
@@ -429,8 +430,16 @@ String _buildRecommendationText(
 
 (String, Color, Color)? _resolveRiskPresentation(SourceHealthLevel? level) {
   return switch (level) {
-    SourceHealthLevel.healthy => ('稳定', const Color(0xFFE7F6EC), const Color(0xFF1F7A3D)),
-    SourceHealthLevel.warning => ('需验证', const Color(0xFFFFF4D9), const Color(0xFF9A6700)),
+    SourceHealthLevel.healthy => (
+      '稳定',
+      const Color(0xFFE7F6EC),
+      const Color(0xFF1F7A3D),
+    ),
+    SourceHealthLevel.warning => (
+      '需验证',
+      const Color(0xFFFFF4D9),
+      const Color(0xFF9A6700),
+    ),
     SourceHealthLevel.risky || SourceHealthLevel.unavailable => (
       '高风险',
       const Color(0xFFFDE7EA),
