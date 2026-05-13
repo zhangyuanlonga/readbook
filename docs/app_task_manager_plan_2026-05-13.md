@@ -28,15 +28,16 @@
 - 当前任务管理层先管理状态，不负责实际调度 isolate、队列执行或持久化。
 - `AppTaskPriority.immediate` 用于阅读打开、正文加载等用户即时路径；导入/扫描不得阻塞它。
 - `AppTaskPriority.background` 用于资源扫描、缓存维护。
-- 真正的持久化恢复需要在后续阶段接入存储。
+- `AppTaskRecoveryPolicy` 用于声明中断后的处理方式：`resumable`、`interruptedNotice`、`restartRequired`。
+- 真正的跨启动持久化恢复需要在后续阶段接入存储；当前先把恢复策略写进任务模型和队列 UI。
 
 ## 4. 后续迁移
 
 - [x] 外部导入接入 `AppTaskManager`。
 - [x] 图集、字体、主题导入接入 `resourceImport`。
 - [x] 缓存扫描、图库 metadata 扫描接入 `resourceScan`。
-- [ ] 设计任务队列 UI：移动端任务面板，桌面/Web 右侧或居中任务面板。
-- [ ] 明确哪些任务可恢复，哪些任务只展示“上次中断”。
+- [x] 设计任务队列 UI：移动端任务面板，桌面/Web 右侧或居中任务面板。
+- [x] 明确哪些任务可恢复，哪些任务只展示“上次中断”。
 
 ## 5. 本次补充
 
@@ -46,3 +47,5 @@
 - 字体管理页的手动导入和外部导入接入 `resourceImport`，取消、失败、成功都会写回统一任务状态。
 - 高级主题外部导入接入 `resourceImport`，批量主题包会同步写入进度状态。
 - 缓存管理页的书籍展示索引扫描、存储占用扫描接入 `resourceScan`，缓存清理接入 `maintenance`。
+- 新增全局任务队列入口，移动端打开底部任务面板，桌面/Web 打开居中任务面板。
+- 新增 `AppTaskRecoveryPolicy`：同步任务默认可恢复，索引/扫描/维护任务默认展示中断提示，阅读、导入和其他任务默认需要重新开始。

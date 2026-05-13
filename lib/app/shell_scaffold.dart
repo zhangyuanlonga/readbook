@@ -18,6 +18,7 @@ import 'platform/app_platform_capabilities.dart';
 import 'shell_navigation_provider.dart';
 import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
+import 'widgets/app_task_queue_surface.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
   const ShellScaffold({
@@ -180,7 +181,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             : shellChild;
     final clippedChild = ClipRect(child: switchedChild);
 
-    final body =
+    final navigatedBody =
         enableTabSwipe
             ? GestureDetector(
               behavior: HitTestBehavior.translucent,
@@ -194,6 +195,13 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
               child: clippedChild,
             )
             : clippedChild;
+    final taskQueueBottom = useNavigationRail ? 24.0 : 96.0;
+    final body = Stack(
+      children: [
+        Positioned.fill(child: navigatedBody),
+        AppTaskQueueButton(bottom: taskQueueBottom),
+      ],
+    );
 
     if (!canShowNavigation) {
       return Scaffold(body: body);

@@ -5,6 +5,8 @@ import '../widgets/app_task_status.dart';
 
 enum AppTaskPriority { immediate, userInitiated, background }
 
+enum AppTaskRecoveryPolicy { resumable, interruptedNotice, restartRequired }
+
 enum AppTaskChannel {
   reader,
   localBookImport,
@@ -27,6 +29,7 @@ class AppTaskSnapshot {
     required this.updatedAt,
     this.canCancel = false,
     this.canRetry = false,
+    this.recoveryPolicy = AppTaskRecoveryPolicy.restartRequired,
     this.recoveryKey,
   });
 
@@ -38,6 +41,7 @@ class AppTaskSnapshot {
   final DateTime updatedAt;
   final bool canCancel;
   final bool canRetry;
+  final AppTaskRecoveryPolicy recoveryPolicy;
   final String? recoveryKey;
 
   bool get isFinished => status.isFinished;
@@ -49,6 +53,7 @@ class AppTaskSnapshot {
     DateTime? updatedAt,
     bool? canCancel,
     bool? canRetry,
+    AppTaskRecoveryPolicy? recoveryPolicy,
     Object? recoveryKey = _sentinel,
   }) {
     return AppTaskSnapshot(
@@ -60,6 +65,7 @@ class AppTaskSnapshot {
       updatedAt: updatedAt ?? this.updatedAt,
       canCancel: canCancel ?? this.canCancel,
       canRetry: canRetry ?? this.canRetry,
+      recoveryPolicy: recoveryPolicy ?? this.recoveryPolicy,
       recoveryKey:
           identical(recoveryKey, _sentinel)
               ? this.recoveryKey
@@ -98,6 +104,7 @@ class AppTaskManager extends ChangeNotifier {
     AppTaskPriority priority = AppTaskPriority.userInitiated,
     bool canCancel = false,
     bool canRetry = false,
+    AppTaskRecoveryPolicy? recoveryPolicy,
     String? recoveryKey,
   }) {
     final now = _now();
@@ -110,6 +117,8 @@ class AppTaskManager extends ChangeNotifier {
       updatedAt: now,
       canCancel: canCancel,
       canRetry: canRetry,
+      recoveryPolicy:
+          recoveryPolicy ?? _defaultRecoveryPolicy(channel: channel),
       recoveryKey: recoveryKey,
     );
     _tasks[id] = task;
@@ -122,6 +131,7 @@ class AppTaskManager extends ChangeNotifier {
     AppTaskStatusData status, {
     bool? canCancel,
     bool? canRetry,
+    AppTaskRecoveryPolicy? recoveryPolicy,
     Object? recoveryKey = _sentinel,
   }) {
     final current = _tasks[id];
@@ -133,6 +143,7 @@ class AppTaskManager extends ChangeNotifier {
       updatedAt: _now(),
       canCancel: canCancel,
       canRetry: canRetry,
+      recoveryPolicy: recoveryPolicy,
       recoveryKey: recoveryKey,
     );
     _tasks[id] = next;
@@ -186,6 +197,31 @@ class AppTaskManager extends ChangeNotifier {
       AppTaskPriority.immediate => 0,
       AppTaskPriority.userInitiated => 1,
       AppTaskPriority.background => 2,
+    };
+  }
+
+  AppTaskRecoveryPolicy _defaultRecoveryPolicy({
+    required AppTaskChannel channel,
+  }) {
+    return switch (channel) {
+      AppTaskChannel.sync => AppTaskRecoveryPolicy.resumable,
+      AppTaskChannel.localBookIndex ||
+      AppTaskChannel.resourceScan ||
+      AppTaskChannel.maintenance => AppTaskRecoveryPolicy.interruptedNotice,
+      AppTaskChannel.reader ||
+      AppTaskChannel.localBookImport ||
+      AppTaskChannel.resourceImport ||
+      AppTaskChannel.other => AppTaskRecoveryPolicy.restartRequired,
+    };
+  }
+}
+
+extension AppTaskRecoveryPolicyLabel on AppTaskRecoveryPolicy {
+  String get label {
+    return switch (this) {
+      AppTaskRecoveryPolicy.resumable => '可恢复',
+      AppTaskRecoveryPolicy.interruptedNotice => '中断提示',
+      AppTaskRecoveryPolicy.restartRequired => '需重新开始',
     };
   }
 }

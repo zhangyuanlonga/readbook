@@ -52,4 +52,31 @@ void main() {
     manager.clearFinished();
     expect(manager.taskById('import'), isNull);
   });
+
+  test('assigns recovery policies by task channel and allows overrides', () {
+    final manager = AppTaskManager(now: () => DateTime(2026, 5, 13, 9));
+
+    manager.startTask(
+      id: 'scan',
+      channel: AppTaskChannel.resourceScan,
+      priority: AppTaskPriority.background,
+      status: const AppTaskStatusData(title: '扫描资源', message: '后台扫描中'),
+    );
+    expect(
+      manager.taskById('scan')?.recoveryPolicy,
+      AppTaskRecoveryPolicy.interruptedNotice,
+    );
+
+    manager.startTask(
+      id: 'import',
+      channel: AppTaskChannel.resourceImport,
+      priority: AppTaskPriority.userInitiated,
+      recoveryPolicy: AppTaskRecoveryPolicy.resumable,
+      status: const AppTaskStatusData(title: '导入资源', message: '正在导入'),
+    );
+    expect(
+      manager.taskById('import')?.recoveryPolicy,
+      AppTaskRecoveryPolicy.resumable,
+    );
+  });
 }
