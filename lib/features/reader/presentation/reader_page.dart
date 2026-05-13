@@ -273,6 +273,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderFeedbackService();
   final ReaderThemeModeService _readerThemeModeService =
       const ReaderThemeModeService();
+  late final bool _supportsSourceRuntime;
   final ReaderRuntimeController _readerRuntimeController =
       const ReaderRuntimeController();
   final ReaderPageLifecycleDelegate _lifecycleDelegate =
@@ -594,7 +595,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return _staticPagedTextPageControllerInstance;
     }
     if (controller.hasClients) {
-      final current = controller.page?.round() ?? controller.initialPage;
+      final current = _readSingleAttachedPage(controller);
       if (current != safePage &&
           !_pagedTransition.isAnimating &&
           !_isCurlAutoTurning) {
@@ -612,8 +613,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             0,
             _safePageUpperBound(_currentPagedPageCount),
           );
-          final currentPage =
-              controller.page?.round() ?? controller.initialPage;
+          final currentPage = _readSingleAttachedPage(controller);
           if (currentPage != target) {
             controller.jumpToPage(target);
           }
@@ -621,6 +621,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
     return controller;
+  }
+
+  int _readSingleAttachedPage(PageController controller) {
+    if (!controller.hasClients || controller.positions.length != 1) {
+      return controller.initialPage;
+    }
+    return controller.page?.round() ?? controller.initialPage;
   }
 
   TextAlign _paragraphTextAlign(ReaderSettings settings) {
@@ -1073,8 +1080,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         contentMode: _currentContentMode,
         contentCapabilities: _contentCapabilities,
         hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
-        supportsSourceRuntime:
-            ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime,
+        supportsSourceRuntime: _supportsSourceRuntime,
       );
 
   bool get _supportsAutoRead => _readerModeCapabilities.canAutoRead;
@@ -1484,6 +1490,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty;
     return AppAnimatedSwitcher(
       duration: AppMotion.fast,
+      layoutBuilder: (currentChild, previousChildren) {
+        return currentChild ?? const SizedBox.shrink();
+      },
       child: KeyedSubtree(
         key: ValueKey<String>(
           'reader_content_${_chapterId}_$hasRenderableContent',

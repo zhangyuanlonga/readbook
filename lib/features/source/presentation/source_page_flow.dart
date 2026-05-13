@@ -1483,12 +1483,20 @@ extension on _SourcePageState {
     if (!mounted || result == null || result.trim().isEmpty) {
       return;
     }
+    await _reloadScriptSourcesSilently();
+    if (!mounted) {
+      return;
+    }
     _showMessage(result);
   }
 
   Future<void> _openPasteImportPage() async {
     final result = await context.push<String>('/source/paste-import');
     if (!mounted || result == null || result.trim().isEmpty) {
+      return;
+    }
+    await _reloadScriptSourcesSilently();
+    if (!mounted) {
       return;
     }
     _showMessage(result);
@@ -1663,6 +1671,10 @@ extension on _SourcePageState {
     });
 
     if (summary.hasSuccess) {
+      await _reloadScriptSourcesSilently();
+      if (!mounted) {
+        return;
+      }
       if (summary.truncatedByLimit) {
         _showMessage('已导入 ${summary.successCount} 个书源，已达到当前导入上限。');
         return;
@@ -1708,6 +1720,10 @@ extension on _SourcePageState {
           return _sourceRuntimeFacade.saveScriptSource(sourceCode: sourceCode);
         },
       );
+      if (!mounted) {
+        return;
+      }
+      await _reloadScriptSourcesSilently();
       if (!mounted) {
         return;
       }
@@ -1838,6 +1854,10 @@ extension on _SourcePageState {
         ExternalImportPayloadType.scriptSource,
         cached.label,
       );
+      await _reloadScriptSourcesSilently();
+      if (!mounted) {
+        return;
+      }
       _showMessage('已导入 ${cached.label}');
     } catch (error) {
       if (!mounted) {

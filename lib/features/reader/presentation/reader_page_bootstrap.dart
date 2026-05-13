@@ -108,6 +108,9 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
   }
 
   Future<void> _refreshReaderInfoSnapshot({bool force = false}) async {
+    if (!mounted) {
+      return;
+    }
     final now = DateTime.now();
 
     int? batteryLevel;

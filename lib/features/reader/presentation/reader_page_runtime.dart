@@ -55,8 +55,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         if (!mounted || !_isReaderRuntimeVisible) {
           return;
         }
-        unawaited(_refreshReaderInfoSnapshot());
-        _scheduleReaderInfoMinuteTick();
+        unawaited(_refreshReaderInfoSnapshot().then((_) {
+          if (!mounted) {
+            return;
+          }
+          _scheduleReaderInfoMinuteTick();
+        }));
       },
     );
   }

@@ -272,7 +272,7 @@ class _ReaderTextPagedViewState extends State<ReaderTextPagedView> {
       return;
     }
 
-    final currentPage = controller.page?.round() ?? controller.initialPage;
+    final currentPage = _readSingleAttachedPage(controller);
     if (currentPage != safePage) {
       _scheduleJumpToPage(safePage);
     }
@@ -298,7 +298,7 @@ class _ReaderTextPagedViewState extends State<ReaderTextPagedView> {
         return;
       }
       final safeTarget = target.clamp(0, effectivePageCount - 1);
-      final currentPage = controller.page?.round() ?? controller.initialPage;
+      final currentPage = _readSingleAttachedPage(controller);
       if (currentPage != safeTarget) {
         controller.jumpToPage(safeTarget);
       }
@@ -379,6 +379,13 @@ class _ReaderTextPagedViewState extends State<ReaderTextPagedView> {
       enabled: model.enableLightweightRenderCache,
       pageIndex: pageIndex,
     );
+  }
+
+  int _readSingleAttachedPage(PageController controller) {
+    if (!controller.hasClients || controller.positions.length != 1) {
+      return controller.initialPage;
+    }
+    return controller.page?.round() ?? controller.initialPage;
   }
 
   Widget _buildDefaultEmptyState() {

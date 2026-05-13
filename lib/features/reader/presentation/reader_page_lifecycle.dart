@@ -41,6 +41,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       readerFeatureDependenciesFactoryProvider,
     );
     const _ReaderPageDependencyBinder().bind(this, dependenciesFactory());
+    _supportsSourceRuntime =
+        ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
   }
 
   void _initializeReaderPage() {

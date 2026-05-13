@@ -326,33 +326,6 @@ extension on _BookshelfPageState {
                 await _setBookshelfViewMode(useGridView);
               }
 
-              Widget buildSectionTitle(String title, String subtitle) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 12.5,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
               Widget buildGroupHeader(String title) {
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 5),
@@ -488,8 +461,6 @@ extension on _BookshelfPageState {
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
                   children: [
-                    buildSectionTitle('网格设置', '自定义网格列数与间距，自适应开启后会按屏幕宽度自动分列。'),
-                    buildGroupHeader('布局设置'),
                     buildCompactSwitchTile(
                       value: draftAdaptive,
                       title: '自适应列数',
@@ -848,7 +819,6 @@ extension on _BookshelfPageState {
                         unawaited(persistGridSettings());
                       },
                     ),
-                    buildGroupHeader('其他设置'),
                     buildCompactSwitchTile(
                       value: !draftShowProgressBar,
                       title: '隐藏进度条',
@@ -871,8 +841,6 @@ extension on _BookshelfPageState {
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
                   children: [
-                    buildSectionTitle('列表设置', '调整列表模式下展示哪些信息。'),
-                    buildGroupHeader('文字信息'),
                     buildCompactSwitchTile(
                       value: draftListCompactMode,
                       title: '紧凑列表',
@@ -1018,7 +986,6 @@ extension on _BookshelfPageState {
                         unawaited(persistListSettings());
                       },
                     ),
-                    buildGroupHeader('其他设置'),
                     buildCompactSwitchTile(
                       value: !draftListShowProgressBar,
                       title: '隐藏进度条',

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
 
@@ -1176,6 +1177,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           builder: (sheetContext) {
             return _AdvancedThemeBatchImportSheet(
               importFile: _importThemeBatchFile,
+              onImportCompleted: () {
+                if (!mounted) {
+                  return;
+                }
+                ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+                unawaited(_load());
+              },
               onShowImportSupportHelp: () {
                 return _showThemeImportSupportHelp(sheetContext);
               },
@@ -2691,10 +2699,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         selectedCategory == null || selectedCategory.isEmpty
             ? '全部分类'
             : selectedCategory;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final shouldUseCompactCategoryLabel =
+        categoryLabel == '全部分类' && textScale > 1.1;
+    final categoryControlFlex = shouldUseCompactCategoryLabel ? 3 : 2;
     return Row(
       children: [
         Flexible(
-          flex: 5,
+          flex: shouldUseCompactCategoryLabel ? 4 : 5,
           child: CompactCollectionSearchField(
             controller: _searchController,
             hintText: '搜索主题名称或分类',
@@ -2716,7 +2728,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         ),
         const SizedBox(width: 8),
         Flexible(
-          flex: 2,
+          flex: categoryControlFlex,
           child: PopupMenuButton<String?>(
             tooltip: '分类筛选',
             initialValue: _selectedCategory,
@@ -2757,15 +2769,23 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 alignment: Alignment.center,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    child: Text(
-                      categoryLabel,
-                      maxLines: 1,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+                    padding: const EdgeInsets.only(left: 4, right: 18),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        categoryLabel,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                          fontSize: math.max(
+                            11,
+                            (Theme.of(context).textTheme.bodySmall?.fontSize ??
+                                    12) -
+                                (shouldUseCompactCategoryLabel ? 1 : 0),
+                          ).toDouble(),
+                        ),
                       ),
                     ),
                   ),
@@ -3370,10 +3390,12 @@ class _AdvancedThemeBatchImportSheet extends StatefulWidget {
   const _AdvancedThemeBatchImportSheet({
     required this.importFile,
     required this.onShowImportSupportHelp,
+    required this.onImportCompleted,
   });
 
   final _AdvancedThemeBatchFileImportRunner importFile;
   final Future<void> Function() onShowImportSupportHelp;
+  final VoidCallback onImportCompleted;
 
   @override
   State<_AdvancedThemeBatchImportSheet> createState() =>
@@ -3522,6 +3544,9 @@ class _AdvancedThemeBatchImportSheetState
 
     if (!mounted) {
       return;
+    }
+    if (successCount > 0) {
+      widget.onImportCompleted();
     }
     setState(() {
       _isImporting = false;
