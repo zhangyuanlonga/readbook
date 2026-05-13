@@ -91,23 +91,23 @@ final List<RouteBase> readerRoutes = <RouteBase>[
       final chapterIndex = int.tryParse(
         state.uri.queryParameters['chapterIndex'] ?? '',
       );
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
       final isOnlineSource =
           sourceId != null &&
           sourceId.trim().isNotEmpty &&
           !LocalReaderIdentity.isLocalSourceId(sourceId);
 
-      if (isOnlineSource && !supportsSourceRuntime) {
+      if (isOnlineSource && !sourceRuntime.isSupported) {
         return buildFadeTransitionPage(
           state: state,
           transitionDuration: const Duration(milliseconds: 180),
           reverseTransitionDuration: const Duration(milliseconds: 140),
           beginOpacity: 0.88,
-          child: FeatureDisabledPages.onlineChapter(),
+          child: FeatureDisabledPages.onlineChapter(capability: sourceRuntime),
         );
       }
 

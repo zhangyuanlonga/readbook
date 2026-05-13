@@ -7,6 +7,7 @@ enum AppTaskStatusKind {
   themeImport,
   fontImport,
   sourceImport,
+  cacheScan,
   cacheCleanup,
   logExport,
   sync,

@@ -8,7 +8,9 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cache_management_service.dart';
@@ -59,6 +61,18 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     if (_isBookPresentationIndexLoading) {
       return;
     }
+    const taskId = 'cache-book-presentation-index-scan';
+    final taskManager = ref.read(appTaskManagerProvider);
+    taskManager.startTask(
+      id: taskId,
+      status: const AppTaskStatusData(
+        title: '正在扫描缓存书籍信息',
+        message: '正在建立缓存展示索引…',
+        kind: AppTaskStatusKind.cacheScan,
+      ),
+      channel: AppTaskChannel.resourceScan,
+      priority: AppTaskPriority.background,
+    );
     setState(() {
       _isBookPresentationIndexLoading = true;
     });
@@ -72,6 +86,27 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         _bookPresentationIndex = presentationIndex;
         _hasLoadedBookPresentationIndex = true;
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '缓存书籍信息扫描完成',
+          message: '已索引 ${presentationIndex.length} 本书。',
+          kind: AppTaskStatusKind.cacheScan,
+          progress: 1,
+          result: AppTaskStatusResult.success,
+        ),
+      );
+    } catch (error) {
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '缓存书籍信息扫描失败',
+          message: '$error',
+          kind: AppTaskStatusKind.cacheScan,
+          result: AppTaskStatusResult.failure,
+        ),
+      );
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {
@@ -85,6 +120,18 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     if (_isStorageSnapshotLoading) {
       return;
     }
+    const taskId = 'cache-storage-snapshot-scan';
+    final taskManager = ref.read(appTaskManagerProvider);
+    taskManager.startTask(
+      id: taskId,
+      status: const AppTaskStatusData(
+        title: '正在扫描存储占用',
+        message: '正在统计缓存、主题资源和本地图书占用…',
+        kind: AppTaskStatusKind.cacheScan,
+      ),
+      channel: AppTaskChannel.resourceScan,
+      priority: AppTaskPriority.background,
+    );
     setState(() {
       _isStorageSnapshotLoading = true;
     });
@@ -96,6 +143,27 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       setState(() {
         _storageSnapshot = snapshot;
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '存储占用扫描完成',
+          message: '已完成缓存和资源占用统计。',
+          kind: AppTaskStatusKind.cacheScan,
+          progress: 1,
+          result: AppTaskStatusResult.success,
+        ),
+      );
+    } catch (error) {
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '存储占用扫描失败',
+          message: '$error',
+          kind: AppTaskStatusKind.cacheScan,
+          result: AppTaskStatusResult.failure,
+        ),
+      );
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {
@@ -809,6 +877,18 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     setState(() {
       _isClearingSelection = true;
     });
+    final taskId = 'cache-cleanup:${DateTime.now().microsecondsSinceEpoch}';
+    final taskManager = ref.read(appTaskManagerProvider);
+    taskManager.startTask(
+      id: taskId,
+      status: AppTaskStatusData(
+        title: '正在清理缓存',
+        message: '将清理：${labels.join('、')}。',
+        kind: AppTaskStatusKind.cacheCleanup,
+      ),
+      channel: AppTaskChannel.maintenance,
+      priority: AppTaskPriority.userInitiated,
+    );
 
     var clearedChapterCount = 0;
     var clearedPaginationCount = 0;
@@ -819,35 +899,102 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     var clearedLocalBooksCount = 0;
     try {
       if (_selectedOptions.contains(_StorageClearOption.chapterCaches)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理章节缓存…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedChapterCount =
             await _cacheManagementService.clearChapterCachesOnly();
       }
       if (_selectedOptions.contains(_StorageClearOption.paginationCaches)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理分页缓存…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedPaginationCount =
             await _cacheManagementService.clearPaginationCachesOnly();
       }
       if (_selectedOptions.contains(_StorageClearOption.coverCaches)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理封面缓存…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedCoverCount =
             await _cacheManagementService.clearCoverCachesOnly();
       }
       if (_selectedOptions.contains(_StorageClearOption.searchSourceHits)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理搜索命中记录…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedSearchHitCount =
             await _cacheManagementService.clearSearchSourceHitsOnly();
       }
       if (_selectedOptions.contains(_StorageClearOption.legacyResidual)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理旧版残留…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedLegacyResidualCount =
             await _cacheManagementService.clearLegacyResidualOnly();
       }
       if (_selectedOptions.contains(_StorageClearOption.otherAppData)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理其他数据…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedOtherDataCount =
             await _cacheManagementService.clearOtherAppDataOnly();
       }
       if (_selectedOptions.contains(_StorageClearOption.localImportedBooks)) {
+        taskManager.updateTask(
+          taskId,
+          const AppTaskStatusData(
+            title: '正在清理缓存',
+            message: '正在清理本地图书数据…',
+            kind: AppTaskStatusKind.cacheCleanup,
+          ),
+        );
         clearedLocalBooksCount =
             await _cacheManagementService.clearLocalImportedBooksOnly();
       }
       await _loadBookPresentationIndex();
       await _loadStorageSnapshot();
+    } catch (error) {
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '缓存清理失败',
+          message: '$error',
+          kind: AppTaskStatusKind.cacheCleanup,
+          result: AppTaskStatusResult.failure,
+        ),
+      );
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {
@@ -876,9 +1023,20 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       if (_selectedOptions.contains(_StorageClearOption.localImportedBooks))
         '本地图书数据 $clearedLocalBooksCount 本',
     ];
+    final message = '已清理：${fragments.join('，')}。';
+    taskManager.updateTask(
+      taskId,
+      AppTaskStatusData(
+        title: '缓存清理完成',
+        message: message,
+        kind: AppTaskStatusKind.cacheCleanup,
+        progress: 1,
+        result: AppTaskStatusResult.success,
+      ),
+    );
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('已清理：${fragments.join('，')}。')));
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showStorageDetails({

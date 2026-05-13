@@ -19,22 +19,24 @@ final List<RouteBase> bookRoutes = <RouteBase>[
       final author = state.uri.queryParameters['author'];
       final coverUrl = state.uri.queryParameters['coverUrl'];
       final heroTag = state.uri.queryParameters['heroTag'];
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
       final isOnlineSource =
           sourceId != null &&
           sourceId.trim().isNotEmpty &&
           !LocalReaderIdentity.isLocalSourceId(sourceId);
 
-      if (isOnlineSource && !supportsSourceRuntime) {
+      if (isOnlineSource && !sourceRuntime.isSupported) {
         return buildFadeSlideTransitionPage(
           state: state,
           transitionDuration: const Duration(milliseconds: 260),
           reverseTransitionDuration: const Duration(milliseconds: 200),
-          child: FeatureDisabledPages.onlineBookDetail(),
+          child: FeatureDisabledPages.onlineBookDetail(
+            capability: sourceRuntime,
+          ),
         );
       }
 

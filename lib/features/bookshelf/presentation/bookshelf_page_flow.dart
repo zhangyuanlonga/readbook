@@ -1193,6 +1193,7 @@ extension on _BookshelfPageState {
           payload: payload,
           externalImportCoordinator: _externalImportCoordinator,
           importService: _localBookImportService,
+          taskManager: ref.read(appTaskManagerProvider),
           onReload: () => _loadBookshelf(force: true),
           onShowMessage: _showMessage,
         );
@@ -1990,6 +1991,7 @@ class _BookshelfExternalImportSheet extends StatefulWidget {
     required this.payload,
     required this.externalImportCoordinator,
     required this.importService,
+    required this.taskManager,
     required this.onReload,
     required this.onShowMessage,
   });
@@ -1997,6 +1999,7 @@ class _BookshelfExternalImportSheet extends StatefulWidget {
   final IncomingExternalImportPayload payload;
   final BookshelfExternalImportCoordinator externalImportCoordinator;
   final LocalBookImportService importService;
+  final AppTaskManager taskManager;
   final Future<void> Function() onReload;
   final void Function(String message) onShowMessage;
 
@@ -2012,6 +2015,9 @@ class _BookshelfExternalImportSheetState
     message: '正在读取外部文件并准备导入…',
   );
   bool _started = false;
+  bool _taskRegistered = false;
+  late final String _taskId =
+      'external-book-import:${DateTime.now().microsecondsSinceEpoch}';
 
   List<AppTaskStep> get _steps {
     final current =
@@ -2040,6 +2046,7 @@ class _BookshelfExternalImportSheetState
     setState(() {
       _started = true;
     });
+    _publishTaskStatus(_status);
     final cached = await widget.externalImportCoordinator
         .cacheExternalFileFromUri(widget.payload);
     if (!mounted) {
@@ -2180,6 +2187,30 @@ class _BookshelfExternalImportSheetState
     setState(() {
       _status = status;
     });
+    _publishTaskStatus(status);
+  }
+
+  void _publishTaskStatus(ImportExportTaskStatus status) {
+    final appStatus = status.toAppTaskStatusData(
+      kind: AppTaskStatusKind.localBookImport,
+    );
+    if (_taskRegistered) {
+      widget.taskManager.updateTask(
+        _taskId,
+        appStatus,
+        canCancel: !appStatus.isFinished,
+      );
+      return;
+    }
+    _taskRegistered = true;
+    widget.taskManager.startTask(
+      id: _taskId,
+      status: appStatus,
+      channel: AppTaskChannel.localBookImport,
+      priority: AppTaskPriority.userInitiated,
+      canCancel: !appStatus.isFinished,
+      recoveryKey: 'external-book-import:${widget.payload.uri}',
+    );
   }
 
   @override

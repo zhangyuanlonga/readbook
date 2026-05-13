@@ -11,13 +11,13 @@ final StatefulShellBranch discoverShellBranch = StatefulShellBranch(
       path: '/discover',
       name: 'discover',
       builder: (context, state) {
-        final supportsSourceRuntime =
+        final sourceRuntime =
             ProviderScope.containerOf(
               context,
               listen: false,
-            ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
-        if (!supportsSourceRuntime) {
-          return FeatureDisabledPages.discover();
+            ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
+        if (!sourceRuntime.isSupported) {
+          return FeatureDisabledPages.discover(capability: sourceRuntime);
         }
         return const DiscoverPage();
       },

@@ -9,6 +9,8 @@ import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/shell_navigation_provider.dart';
+import '../../../app/tasks/app_task_manager.dart';
+import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -117,6 +119,19 @@ class _BottomNavIconGalleryEditorPageState
     setState(() {
       _isSaving = true;
     });
+    final taskId =
+        'bottom-nav-icon-import:${DateTime.now().microsecondsSinceEpoch}';
+    final taskManager = container.read(appTaskManagerProvider);
+    taskManager.startTask(
+      id: taskId,
+      status: AppTaskStatusData(
+        title: '正在导入底栏图标',
+        message: '正在导入 ${selectedIcon.name}…',
+        kind: AppTaskStatusKind.galleryImport,
+      ),
+      channel: AppTaskChannel.resourceImport,
+      priority: AppTaskPriority.userInitiated,
+    );
     try {
       final asset = await _service.importIconAssetBytes(
         galleryId: gallery.id,
@@ -141,6 +156,27 @@ class _BottomNavIconGalleryEditorPageState
       setState(() {
         _gallery = saved;
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '底栏图标导入完成',
+          message: selectedIcon.name,
+          kind: AppTaskStatusKind.galleryImport,
+          progress: 1,
+          result: AppTaskStatusResult.success,
+        ),
+      );
+    } catch (error) {
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '底栏图标导入失败',
+          message: '$error',
+          kind: AppTaskStatusKind.galleryImport,
+          result: AppTaskStatusResult.failure,
+        ),
+      );
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {

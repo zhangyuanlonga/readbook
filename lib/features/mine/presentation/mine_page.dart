@@ -256,15 +256,15 @@ class _MinePageState extends ConsumerState<MinePage> {
     final snapshot = await _sessionService.loadSession(
       refreshRemote: refreshRemote,
     );
-    final supportsSourceRuntime =
-        ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
+    final showSourceEntry =
+        ref.read(appPlatformCapabilitiesProvider).sourceRuntime.canShowEntry;
     if (!mounted) {
       return;
     }
     setState(() {
       _userId = snapshot.session?.userId;
       _username = snapshot.session?.username;
-      _showSourceEntry = supportsSourceRuntime && snapshot.showSourceEntry;
+      _showSourceEntry = showSourceEntry && snapshot.showSourceEntry;
       _hasMembership = snapshot.hasMembership;
       _hasThemeCustom = snapshot.hasThemeCustom;
       _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
@@ -497,10 +497,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _handleSourceTap() async {
-    if (!ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime) {
-      await _pushMineRoute('/source');
-      return;
-    }
     await _pushMineRoute('/source');
   }
 

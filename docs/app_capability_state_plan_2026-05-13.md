@@ -33,7 +33,14 @@
 
 ## 4. 后续迁移
 
-- [ ] 文件导入入口从 bool 判断迁移到 `localFileImport` 三态。
-- [ ] WebDAV 设置页迁移到 `webDavSync` 三态。
-- [ ] 书源、搜索、发现、WebView 登录迁移到 `sourceRuntime` / `interactiveWebView` 三态。
-- [ ] 为 `needsSetup` 补统一禁用按钮和引导文案组件。
+- [x] 文件导入入口从 bool 判断迁移到 `localFileImport` 三态。
+- [x] WebDAV 设置页迁移到 `webDavSync` 三态。
+- [x] 书源、搜索、发现、WebView 登录迁移到 `sourceRuntime` / `interactiveWebView` 三态。
+- [x] 为 `needsSetup` 补统一禁用按钮和引导文案组件。
+
+## 5. 本次补充
+
+- `FeatureDisabledPages` 支持透传 `AppCapabilityState`，禁用页可显示 capability 的 `reason`。
+- 书源、发现、搜索、在线详情、在线章节、WebDAV 同步路由从旧 bool 判断迁移到三态字段。
+- 桌面/Web 这类 `needsSetup` 场景可以保留入口，点击后进入解释页，不再静默隐藏成“什么都没有”。
+- 本地书库、字体管理的文件导入入口改读 `localFileImport` / `managedFileStorage` 三态，并展示对应降级原因。

@@ -32,8 +32,17 @@
 
 ## 4. 后续迁移
 
-- [ ] 外部导入接入 `AppTaskManager`。
-- [ ] 图集、字体、主题导入接入 `resourceImport`。
-- [ ] 缓存扫描、图库 metadata 扫描接入 `resourceScan`。
+- [x] 外部导入接入 `AppTaskManager`。
+- [x] 图集、字体、主题导入接入 `resourceImport`。
+- [x] 缓存扫描、图库 metadata 扫描接入 `resourceScan`。
 - [ ] 设计任务队列 UI：移动端任务面板，桌面/Web 右侧或居中任务面板。
 - [ ] 明确哪些任务可恢复，哪些任务只展示“上次中断”。
+
+## 5. 本次补充
+
+- 外部导入接收阶段新增 handoff 任务，按文件类型映射到本地图书导入、书源导入、主题导入或字体导入。
+- 书架外部图书导入 sheet 接入 `AppTaskManager`，并复用现有 `ImportExportTaskStatus` 到 `AppTaskStatusData` 的转换。
+- 封面图集、启动图集和底栏图标图集导入接入 `resourceImport`。
+- 字体管理页的手动导入和外部导入接入 `resourceImport`，取消、失败、成功都会写回统一任务状态。
+- 高级主题外部导入接入 `resourceImport`，批量主题包会同步写入进度状态。
+- 缓存管理页的书籍展示索引扫描、存储占用扫描接入 `resourceScan`，缓存清理接入 `maintenance`。

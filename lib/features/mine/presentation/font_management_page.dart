@@ -8,11 +8,14 @@ import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/platform/app_capability_state.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
+import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
@@ -147,23 +150,46 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    final taskId =
+        'external-font-import:${DateTime.now().microsecondsSinceEpoch}';
+    final taskManager = ref.read(appTaskManagerProvider);
+    final initialStatus = ImportExportTaskStatus(
+      title: '正在导入字体',
+      message: '正在读取 ${payload.label} 并准备注册到字体库…',
+    );
+    taskManager.startTask(
+      id: taskId,
+      status: initialStatus.toAppTaskStatusData(
+        kind: AppTaskStatusKind.fontImport,
+      ),
+      channel: AppTaskChannel.resourceImport,
+      priority: AppTaskPriority.userInitiated,
+      recoveryKey: 'external-font-import:${payload.uri}',
+    );
     setState(() {
-      _taskStatus = ImportExportTaskStatus(
-        title: '正在导入字体',
-        message: '正在读取 ${payload.label} 并准备注册到字体库…',
-      );
+      _taskStatus = initialStatus;
     });
     final cached = await _externalImportBridge.cacheExternalFileFromUri(
       payload,
     );
     if (cached == null) {
       ExternalImportDiagnostics.logCacheFailed(payload);
-      _showSnackBar(
-        ExternalImportDiagnostics.readFailedMessage(
-          payload.type,
-          payload.label,
-        ),
+      final message = ExternalImportDiagnostics.readFailedMessage(
+        payload.type,
+        payload.label,
       );
+      taskManager.updateTask(
+        taskId,
+        initialStatus
+            .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+            .copyWith(message: message, result: AppTaskStatusResult.failure),
+      );
+      _showSnackBar(message);
+      if (mounted) {
+        setState(() {
+          _taskStatus = null;
+        });
+      }
       return;
     }
 
@@ -176,13 +202,34 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
           ExternalImportPayloadType.font,
           cached.label,
         );
-        _showSnackBar(
-          ExternalImportCatalog.unsupportedFileMessage(
-            ExternalImportPayloadType.font,
-            cached.label,
-          ),
+        final message = ExternalImportCatalog.unsupportedFileMessage(
+          ExternalImportPayloadType.font,
+          cached.label,
         );
+        taskManager.updateTask(
+          taskId,
+          initialStatus
+              .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+              .copyWith(message: message, result: AppTaskStatusResult.failure),
+        );
+        _showSnackBar(message);
         return;
+      }
+      final registeringStatus = ImportExportTaskStatus(
+        title: '正在导入字体',
+        message: '正在注册 ${cached.label}…',
+        detail: '注册字体',
+      );
+      taskManager.updateTask(
+        taskId,
+        registeringStatus.toAppTaskStatusData(
+          kind: AppTaskStatusKind.fontImport,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _taskStatus = registeringStatus;
+        });
       }
       final entry = await _fontRegistryService.importFontFile(
         filePath: cached.path,
@@ -196,6 +243,15 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         ExternalImportPayloadType.font,
         entry.displayName,
       );
+      taskManager.updateTask(
+        taskId,
+        ImportExportTaskStatus(
+          title: '字体导入完成',
+          message: entry.displayName,
+          progress: 1,
+          result: ImportExportTaskResult.success,
+        ).toAppTaskStatusData(kind: AppTaskStatusKind.fontImport),
+      );
       _showSnackBar('已导入字体：${entry.displayName}');
     } on ReaderFontRegistryException catch (error) {
       if (!mounted) {
@@ -205,6 +261,15 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         ExternalImportPayloadType.font,
         cached.label,
         error,
+      );
+      taskManager.updateTask(
+        taskId,
+        initialStatus
+            .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+            .copyWith(
+              message: error.message,
+              result: AppTaskStatusResult.failure,
+            ),
       );
       _showSnackBar(error.message);
     } catch (error) {
@@ -216,13 +281,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         cached.label,
         error,
       );
-      _showSnackBar(
-        ExternalImportDiagnostics.importFailedMessage(
-          ExternalImportPayloadType.font,
-          '$error',
-          label: cached.label,
-        ),
+      final message = ExternalImportDiagnostics.importFailedMessage(
+        ExternalImportPayloadType.font,
+        '$error',
+        label: cached.label,
       );
+      taskManager.updateTask(
+        taskId,
+        initialStatus
+            .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+            .copyWith(message: message, result: AppTaskStatusResult.failure),
+      );
+      _showSnackBar(message);
     } finally {
       if (mounted) {
         setState(() {
@@ -287,10 +357,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                 _isImporting
                     ? null
                     : () => _showImportFontSheet(
-                      supportsLocalFileImport:
-                          capabilities.supportsLocalFileImport,
-                      supportsManagedFileStorage:
-                          capabilities.supportsManagedFileStorage,
+                      localFileImport: capabilities.localFileImport,
+                      managedFileStorage: capabilities.managedFileStorage,
                     ),
             icon: const Icon(Icons.file_upload_outlined),
             label: const Text('导入字体'),
@@ -782,22 +850,51 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   }
 
   Future<void> _importFont() async {
+    final taskId = 'font-import:${DateTime.now().microsecondsSinceEpoch}';
+    final taskManager = ref.read(appTaskManagerProvider);
+    const initialStatus = ImportExportTaskStatus(
+      title: '正在导入字体',
+      message: '正在打开文件选择器并准备注册字体…',
+    );
+    taskManager.startTask(
+      id: taskId,
+      status: initialStatus.toAppTaskStatusData(
+        kind: AppTaskStatusKind.fontImport,
+      ),
+      channel: AppTaskChannel.resourceImport,
+      priority: AppTaskPriority.userInitiated,
+    );
     setState(() {
       _isImporting = true;
-      _taskStatus = const ImportExportTaskStatus(
-        title: '正在导入字体',
-        message: '正在打开文件选择器并准备注册字体…',
-      );
+      _taskStatus = initialStatus;
     });
     try {
       final entry = await _fontRegistryService.pickAndImportFont();
       if (!mounted || entry == null) {
+        taskManager.updateTask(
+          taskId,
+          initialStatus
+              .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+              .copyWith(
+                message: '用户取消了字体选择。',
+                result: AppTaskStatusResult.cancelled,
+              ),
+        );
         return;
       }
       await _reload();
       if (!mounted) {
         return;
       }
+      taskManager.updateTask(
+        taskId,
+        ImportExportTaskStatus(
+          title: '字体导入完成',
+          message: entry.displayName,
+          progress: 1,
+          result: ImportExportTaskResult.success,
+        ).toAppTaskStatusData(kind: AppTaskStatusKind.fontImport),
+      );
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('已导入字体：${entry.displayName}')));
@@ -808,6 +905,15 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
+      taskManager.updateTask(
+        taskId,
+        initialStatus
+            .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+            .copyWith(
+              message: error.message,
+              result: AppTaskStatusResult.failure,
+            ),
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -815,6 +921,15 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('导入字体失败：$error')));
+      taskManager.updateTask(
+        taskId,
+        initialStatus
+            .toAppTaskStatusData(kind: AppTaskStatusKind.fontImport)
+            .copyWith(
+              message: '导入字体失败：$error',
+              result: AppTaskStatusResult.failure,
+            ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -826,14 +941,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   }
 
   Future<void> _showImportFontSheet({
-    required bool supportsLocalFileImport,
-    required bool supportsManagedFileStorage,
+    required AppCapabilityState localFileImport,
+    required AppCapabilityState managedFileStorage,
   }) async {
     if (_isImporting || !mounted) {
       return;
     }
-    if (!supportsLocalFileImport || !supportsManagedFileStorage) {
-      _showSnackBar('当前平台暂不支持导入字体文件。');
+    if (!localFileImport.isSupported || !managedFileStorage.isSupported) {
+      _showSnackBar(
+        localFileImport.reason ??
+            managedFileStorage.reason ??
+            '当前平台暂不支持导入字体文件。',
+      );
       return;
     }
     await showModalBottomSheet<void>(

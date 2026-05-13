@@ -11,17 +11,17 @@ final List<RouteBase> searchRoutes = <RouteBase>[
     path: '/search',
     name: 'search',
     pageBuilder: (context, state) {
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
       return buildFadeTransitionPage(
         state: state,
         child:
-            supportsSourceRuntime
+            sourceRuntime.isSupported
                 ? const SearchPage()
-                : FeatureDisabledPages.onlineSearch(),
+                : FeatureDisabledPages.onlineSearch(capability: sourceRuntime),
       );
     },
   ),

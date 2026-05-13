@@ -91,8 +91,10 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     if (_isImporting) {
       return;
     }
-    if (!ref.read(appPlatformCapabilitiesProvider).supportsLocalFileImport) {
-      _showMessage('当前平台暂不支持从本地文件选择器导入。');
+    final localFileImport =
+        ref.read(appPlatformCapabilitiesProvider).localFileImport;
+    if (!localFileImport.isSupported) {
+      _showMessage(localFileImport.reason ?? '当前平台暂不支持从本地文件选择器导入。');
       return;
     }
 
@@ -623,11 +625,12 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
   Widget _buildImportPanel(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
-    final supportsImport = ref.watch(
+    final localFileImport = ref.watch(
       appPlatformCapabilitiesProvider.select(
-        (capabilities) => capabilities.supportsLocalFileImport,
+        (capabilities) => capabilities.localFileImport,
       ),
     );
+    final supportsImport = localFileImport.isSupported;
     return InkWell(
       onTap: _isImporting || !supportsImport ? null : _pickAndImportFiles,
       borderRadius: BorderRadius.circular(metrics.cardRadius + 6),

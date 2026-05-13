@@ -15,13 +15,13 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     path: '/source',
     name: 'source',
     builder: (context, state) {
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
-      if (!supportsSourceRuntime) {
-        return FeatureDisabledPages.sourceRuntime();
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
+      if (!sourceRuntime.isSupported) {
+        return FeatureDisabledPages.sourceRuntime(capability: sourceRuntime);
       }
       return const SourcePage();
     },
@@ -30,13 +30,13 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     path: '/source/login',
     name: 'script-source-login',
     builder: (context, state) {
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
-      if (!supportsSourceRuntime) {
-        return FeatureDisabledPages.sourceLogin();
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
+      if (!sourceRuntime.isSupported) {
+        return FeatureDisabledPages.sourceLogin(capability: sourceRuntime);
       }
       final sourceId = state.uri.queryParameters['id'] ?? '';
       return SourceLoginPage(sourceId: sourceId);
@@ -46,13 +46,15 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     path: '/source/web-login',
     name: 'script-source-web-login',
     builder: (context, state) {
-      final supportsSourceRuntime =
+      final interactiveWebView =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
-      if (!supportsSourceRuntime) {
-        return FeatureDisabledPages.sourceWebLogin();
+          ).read(app_providers.appCapabilitiesProvider).interactiveWebView;
+      if (!interactiveWebView.isSupported) {
+        return FeatureDisabledPages.sourceWebLogin(
+          capability: interactiveWebView,
+        );
       }
       final sourceId = state.uri.queryParameters['id'] ?? '';
       return SourceWebLoginPage(sourceId: sourceId);
@@ -62,15 +64,15 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     path: '/source/script-editor',
     name: 'script-source-editor',
     pageBuilder: (context, state) {
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
-      if (!supportsSourceRuntime) {
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
+      if (!sourceRuntime.isSupported) {
         return buildFadeSlideTransitionPage(
           state: state,
-          child: FeatureDisabledPages.sourceEditor(),
+          child: FeatureDisabledPages.sourceEditor(capability: sourceRuntime),
         );
       }
       return buildFadeSlideTransitionPage(
@@ -85,15 +87,15 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     path: '/source/paste-import',
     name: 'script-source-paste-import',
     pageBuilder: (context, state) {
-      final supportsSourceRuntime =
+      final sourceRuntime =
           ProviderScope.containerOf(
             context,
             listen: false,
-          ).read(app_providers.appCapabilitiesProvider).supportsSourceRuntime;
-      if (!supportsSourceRuntime) {
+          ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
+      if (!sourceRuntime.isSupported) {
         return buildFadeSlideTransitionPage(
           state: state,
-          child: FeatureDisabledPages.sourceImport(),
+          child: FeatureDisabledPages.sourceImport(capability: sourceRuntime),
         );
       }
       return buildFadeSlideTransitionPage(

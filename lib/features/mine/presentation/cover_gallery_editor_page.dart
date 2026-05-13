@@ -7,6 +7,8 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
+import '../../../app/tasks/app_task_manager.dart';
+import '../../../app/widgets/app_task_status.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_provider.dart';
@@ -116,6 +118,8 @@ class _CoverGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
+    String? taskId;
+    AppTaskManager? taskManager;
     try {
       final source = await _selectImageSource();
       if (source == null || !mounted) {
@@ -132,8 +136,30 @@ class _CoverGalleryEditorPageState
       setState(() {
         _isSaving = true;
       });
+      taskId = 'cover-gallery-import:${DateTime.now().microsecondsSinceEpoch}';
+      taskManager = ref.read(appTaskManagerProvider);
+      taskManager!.startTask(
+        id: taskId,
+        status: AppTaskStatusData(
+          title: '正在导入封面图集',
+          message: '准备导入 ${pickedImages.length} 张封面…',
+          kind: AppTaskStatusKind.galleryImport,
+        ),
+        channel: AppTaskChannel.resourceImport,
+        priority: AppTaskPriority.userInitiated,
+      );
       var saved = gallery;
-      for (final picked in pickedImages) {
+      for (var index = 0; index < pickedImages.length; index += 1) {
+        final picked = pickedImages[index];
+        taskManager.updateTask(
+          taskId,
+          AppTaskStatusData(
+            title: '正在导入封面图集',
+            message: '正在导入 ${index + 1}/${pickedImages.length}：${picked.name}',
+            kind: AppTaskStatusKind.galleryImport,
+            progress: (index + 1) / pickedImages.length,
+          ),
+        );
         saved = await _service.importImage(
           galleryId: gallery.id,
           bytes: picked.bytes,
@@ -147,9 +173,43 @@ class _CoverGalleryEditorPageState
       setState(() {
         _gallery = saved;
       });
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '封面图集导入完成',
+          message: '已添加 ${pickedImages.length} 张封面。',
+          kind: AppTaskStatusKind.galleryImport,
+          progress: 1,
+          result: AppTaskStatusResult.success,
+        ),
+      );
       _showMessage('已添加 ${pickedImages.length} 张封面');
     } on ImageSelectionException catch (error) {
+      if (taskId != null && taskManager != null) {
+        taskManager.updateTask(
+          taskId,
+          AppTaskStatusData(
+            title: '封面图集导入失败',
+            message: error.message,
+            kind: AppTaskStatusKind.galleryImport,
+            result: AppTaskStatusResult.failure,
+          ),
+        );
+      }
       _showMessage(error.message);
+    } catch (error) {
+      if (taskId != null && taskManager != null) {
+        taskManager.updateTask(
+          taskId,
+          AppTaskStatusData(
+            title: '封面图集导入失败',
+            message: '$error',
+            kind: AppTaskStatusKind.galleryImport,
+            result: AppTaskStatusResult.failure,
+          ),
+        );
+      }
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'composition/app_providers.dart' as app_providers;
 import 'platform/app_platform_capabilities.dart';
+import 'tasks/app_task_manager.dart';
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_release.dart';
 import '../core/auth/auth_event_bus.dart';
@@ -16,6 +17,7 @@ import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/source/application/external_import_catalog.dart';
 import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
+import 'widgets/app_task_status.dart';
 import 'widgets/import_export_copy.dart';
 import 'widgets/import_export_task_overlay.dart';
 import 'lifecycle/app_lifecycle_coordinator.dart';
@@ -471,18 +473,33 @@ class _SystemUiOverlayWrapperState
   }
 
   void _onIncomingExternalImportPayload(IncomingExternalImportPayload payload) {
-    if (!ref.read(appPlatformCapabilitiesProvider).supportsLocalFileImport) {
+    final localFileImport =
+        ref.read(appPlatformCapabilitiesProvider).localFileImport;
+    if (!localFileImport.isSupported) {
       return;
     }
 
+    final taskId =
+        'external-import-handoff:${DateTime.now().microsecondsSinceEpoch}';
+    final taskManager = ref.read(appTaskManagerProvider);
+    final handoffStatus = ImportExportCopy.running(
+      title: '已接收外部文件',
+      message:
+          '正在接管${ExternalImportDiagnostics.payloadLabel(payload.type)}并跳转到对应页面…',
+      detail: payload.label,
+    );
+    taskManager.startTask(
+      id: taskId,
+      status: handoffStatus.toAppTaskStatusData(
+        kind: _externalImportTaskKind(payload.type),
+      ),
+      channel: _externalImportTaskChannel(payload.type),
+      priority: AppTaskPriority.userInitiated,
+      recoveryKey: 'external-import:${payload.uri}',
+    );
     if (mounted) {
       setState(() {
-        _externalImportStatus = ImportExportCopy.running(
-          title: '已接收外部文件',
-          message:
-              '正在接管${ExternalImportDiagnostics.payloadLabel(payload.type)}并跳转到对应页面…',
-          detail: payload.label,
-        );
+        _externalImportStatus = handoffStatus;
       });
       Future<void>.delayed(const Duration(milliseconds: 900), () {
         if (!mounted) {
@@ -491,6 +508,16 @@ class _SystemUiOverlayWrapperState
         setState(() {
           _externalImportStatus = null;
         });
+        taskManager.updateTask(
+          taskId,
+          handoffStatus
+              .toAppTaskStatusData(kind: _externalImportTaskKind(payload.type))
+              .copyWith(
+                title: '外部文件已转交',
+                message: '已跳转到对应页面继续处理。',
+                result: AppTaskStatusResult.success,
+              ),
+        );
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -501,6 +528,24 @@ class _SystemUiOverlayWrapperState
       final target = ExternalImportCatalog.routeForPayloadType(payload.type);
       _safeGo(target);
     });
+  }
+
+  AppTaskStatusKind _externalImportTaskKind(ExternalImportPayloadType type) {
+    return switch (type) {
+      ExternalImportPayloadType.localBook => AppTaskStatusKind.localBookImport,
+      ExternalImportPayloadType.scriptSource => AppTaskStatusKind.sourceImport,
+      ExternalImportPayloadType.advancedTheme => AppTaskStatusKind.themeImport,
+      ExternalImportPayloadType.font => AppTaskStatusKind.fontImport,
+    };
+  }
+
+  AppTaskChannel _externalImportTaskChannel(ExternalImportPayloadType type) {
+    return switch (type) {
+      ExternalImportPayloadType.localBook => AppTaskChannel.localBookImport,
+      ExternalImportPayloadType.scriptSource ||
+      ExternalImportPayloadType.advancedTheme ||
+      ExternalImportPayloadType.font => AppTaskChannel.resourceImport,
+    };
   }
 
   void _safeGo(String targetPath) {

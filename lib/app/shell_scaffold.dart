@@ -125,7 +125,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
     final navigationState = ref.watch(appShellNavigationProvider);
     final capabilities = ref.watch(appPlatformCapabilitiesProvider);
-    final supportsSourceRuntime = capabilities.supportsSourceRuntime;
+    final showSourceRuntimeEntry = capabilities.sourceRuntime.canShowEntry;
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final activeIconGallery =
         ref.watch(effectiveBottomNavIconGalleryProvider).value;
@@ -238,7 +238,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         activeIconGallery: activeIconGallery,
         standardAppearance: standardNavigationAppearance,
         cupertinoDockAppearance: cupertinoDockAppearance,
-        showSearchButton: supportsSourceRuntime,
+        showSearchButton: showSourceRuntimeEntry,
       ),
     );
   }

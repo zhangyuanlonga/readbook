@@ -16,8 +16,10 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -855,6 +857,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    final taskId =
+        'external-theme-import:${DateTime.now().microsecondsSinceEpoch}';
+    final taskManager = ref.read(appTaskManagerProvider);
+    taskManager.startTask(
+      id: taskId,
+      status: AppTaskStatusData(
+        title: '正在导入主题',
+        message: '正在读取 ${payload.label} 并准备导入…',
+        kind: AppTaskStatusKind.themeImport,
+      ),
+      channel: AppTaskChannel.resourceImport,
+      priority: AppTaskPriority.userInitiated,
+      recoveryKey: 'external-theme-import:${payload.uri}',
+    );
     setState(() {
       _isSaving = true;
       _savingStatusText = '正在读取外部主题文件并准备导入…';
@@ -865,12 +881,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       cached = await _pageFlowCoordinator.cacheExternalFileFromUri(payload);
       if (cached == null) {
         ExternalImportDiagnostics.logCacheFailed(payload);
-        _showMessage(
-          ExternalImportDiagnostics.readFailedMessage(
-            payload.type,
-            payload.label,
+        final message = ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        );
+        taskManager.updateTask(
+          taskId,
+          AppTaskStatusData(
+            title: '主题导入失败',
+            message: message,
+            kind: AppTaskStatusKind.themeImport,
+            result: AppTaskStatusResult.failure,
           ),
         );
+        _showMessage(message);
         return;
       }
       if (!ExternalImportCatalog.supportsFileLabel(
@@ -881,12 +905,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           ExternalImportPayloadType.advancedTheme,
           cached.label,
         );
-        _showMessage(
-          ExternalImportCatalog.unsupportedFileMessage(
-            ExternalImportPayloadType.advancedTheme,
-            cached.label,
+        final message = ExternalImportCatalog.unsupportedFileMessage(
+          ExternalImportPayloadType.advancedTheme,
+          cached.label,
+        );
+        taskManager.updateTask(
+          taskId,
+          AppTaskStatusData(
+            title: '主题导入失败',
+            message: message,
+            kind: AppTaskStatusKind.themeImport,
+            result: AppTaskStatusResult.failure,
           ),
         );
+        _showMessage(message);
         return;
       }
       final mimeType = cached.mimeType ?? payload.mimeType;
@@ -894,7 +926,17 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         final summary = await _importThemeBatchFile(
           path: cached.path,
           mimeType: mimeType,
-          onProgress: (_, message) => _updateSavingStatus(message),
+          onProgress: (_, message) {
+            _updateSavingStatus(message);
+            taskManager.updateTask(
+              taskId,
+              AppTaskStatusData(
+                title: '正在导入主题',
+                message: message,
+                kind: AppTaskStatusKind.themeImport,
+              ),
+            );
+          },
         );
         if (!mounted) {
           return;
@@ -908,9 +950,31 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           ExternalImportPayloadType.advancedTheme,
           cached.label,
         );
+        taskManager.updateTask(
+          taskId,
+          AppTaskStatusData(
+            title: '主题批量导入完成',
+            message:
+                '成功 ${summary.successCount} 个，失败 ${summary.failureCount} 个',
+            kind: AppTaskStatusKind.themeImport,
+            progress: 1,
+            result:
+                summary.failureCount == 0
+                    ? AppTaskStatusResult.success
+                    : AppTaskStatusResult.failure,
+          ),
+        );
         _showBatchImportSummary(summary);
         return;
       }
+      taskManager.updateTask(
+        taskId,
+        const AppTaskStatusData(
+          title: '正在导入主题',
+          message: '正在解析并写入主题资源…',
+          kind: AppTaskStatusKind.themeImport,
+        ),
+      );
       final importedTheme = await _importThemeFromPath(
         path: cached.path,
         mimeType: mimeType,
@@ -922,6 +986,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         ExternalImportPayloadType.advancedTheme,
         importedTheme.name,
       );
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '主题导入完成',
+          message: importedTheme.name,
+          kind: AppTaskStatusKind.themeImport,
+          progress: 1,
+          result: AppTaskStatusResult.success,
+        ),
+      );
       _showMessage('已导入主题「${importedTheme.name}」');
     } on FormatException catch (error) {
       if (!mounted) {
@@ -931,6 +1005,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         ExternalImportPayloadType.advancedTheme,
         cached?.label ?? payload.label,
         error,
+      );
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '主题导入失败',
+          message: error.message,
+          kind: AppTaskStatusKind.themeImport,
+          result: AppTaskStatusResult.failure,
+        ),
       );
       _showMessage(error.message);
     } catch (error) {
@@ -942,13 +1025,21 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         cached?.label ?? payload.label,
         error,
       );
-      _showMessage(
-        ExternalImportDiagnostics.importFailedMessage(
-          ExternalImportPayloadType.advancedTheme,
-          '$error',
-          label: cached?.label ?? payload.label,
+      final message = ExternalImportDiagnostics.importFailedMessage(
+        ExternalImportPayloadType.advancedTheme,
+        '$error',
+        label: cached?.label ?? payload.label,
+      );
+      taskManager.updateTask(
+        taskId,
+        AppTaskStatusData(
+          title: '主题导入失败',
+          message: message,
+          kind: AppTaskStatusKind.themeImport,
+          result: AppTaskStatusResult.failure,
         ),
       );
+      _showMessage(message);
     } finally {
       if (mounted) {
         setState(() {

@@ -231,7 +231,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   bool get _isDiscoverEnabled {
-    return ref.read(appCapabilitiesProvider).supportsSourceRuntime;
+    return ref.read(appCapabilitiesProvider).sourceRuntime.canShowEntry;
   }
 
   Future<void> _persistState(AppShellNavigationState state) async {

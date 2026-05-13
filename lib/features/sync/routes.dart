@@ -14,8 +14,10 @@ final List<RouteBase> syncRoutes = <RouteBase>[
         (context, state) => Consumer(
           builder: (context, ref, _) {
             final capabilities = ref.watch(appPlatformCapabilitiesProvider);
-            if (!capabilities.supportsWebDavSync) {
-              return FeatureDisabledPages.webDavSync();
+            if (!capabilities.webDavSync.isSupported) {
+              return FeatureDisabledPages.webDavSync(
+                capability: capabilities.webDavSync,
+              );
             }
             return const SyncSettingsPage();
           },
@@ -28,8 +30,10 @@ final List<RouteBase> syncRoutes = <RouteBase>[
         (context, state) => Consumer(
           builder: (context, ref, _) {
             final capabilities = ref.watch(appPlatformCapabilitiesProvider);
-            if (!capabilities.supportsWebDavSync) {
-              return FeatureDisabledPages.syncHistory();
+            if (!capabilities.webDavSync.isSupported) {
+              return FeatureDisabledPages.syncHistory(
+                capability: capabilities.webDavSync,
+              );
             }
             return const SyncHistoryPage();
           },
