@@ -706,12 +706,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required String processingDetail,
     required Future<bool> Function(ValueChanged<String> onProgress) runTask,
   }) async {
-    await showAdaptiveActionSurface<void>(
+    await showAdaptiveRawSurface<void>(
       context: context,
       useRootNavigator: true,
-      maxWidth: 520,
-      maxHeightFactor: 0.42,
-      padding: EdgeInsets.zero,
+      showDragHandle: false,
+      mobileBackgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return _AdvancedThemeSingleTaskSheet(
           title: title,
@@ -1169,11 +1168,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     final summary =
-        await showAdaptiveActionSurface<_AdvancedThemeBatchImportSummary>(
+        await showAdaptiveRawSurface<_AdvancedThemeBatchImportSummary>(
           context: context,
-          maxWidth: 560,
-          maxHeightFactor: 0.72,
-          padding: EdgeInsets.zero,
+          useRootNavigator: true,
+          showDragHandle: false,
+          mobileBackgroundColor: Colors.transparent,
           builder: (sheetContext) {
             return _AdvancedThemeBatchImportSheet(
               importFile: _importThemeBatchFile,
@@ -3592,156 +3591,131 @@ class _AdvancedThemeBatchImportSheetState
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final summary = _summary;
     final isEmptyState = _items.isEmpty && summary == null && !_isImporting;
-    final maxHeightFactor = isEmptyState ? 0.36 : 0.56;
+    final maxHeightFactor = isEmptyState ? 0.46 : 0.56;
+    final currentStep =
+        summary != null
+            ? 2
+            : _isImporting || _items.isNotEmpty
+            ? 1
+            : 0;
+    final steps = <AppTaskStep>[
+      AppTaskStep(label: '添加文件', active: currentStep >= 0),
+      AppTaskStep(label: '解析导入', active: currentStep >= 1),
+      AppTaskStep(label: '完成', active: currentStep >= 2),
+    ];
 
     return PopScope<void>(
       canPop: !_isImporting,
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor,
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(14, 8, 14, 8 + bottomSafe),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const SizedBox(width: 40),
-                    Expanded(
-                      child: Text(
-                        '批量导入主题',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 40,
-                      child: IconButton(
-                        tooltip: '导入说明',
-                        onPressed:
-                            _isImporting
-                                ? null
-                                : widget.onShowImportSupportHelp,
-                        icon: const Icon(Icons.help_outline_rounded),
-                        visualDensity: const VisualDensity(
-                          horizontal: -2,
-                          vertical: -2,
-                        ),
-                      ),
-                    ),
-                  ],
+      child: AppTaskBottomSheet(
+        title: '批量导入主题',
+        maxHeightFactor: maxHeightFactor,
+        fitContent: isEmptyState,
+        steps: steps,
+        trailing: IconButton(
+          tooltip: '导入说明',
+          onPressed: _isImporting ? null : widget.onShowImportSupportHelp,
+          icon: const Icon(Icons.help_outline_rounded),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+        ),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_headerMessage.trim().isNotEmpty) ...[
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: Text(
+                  _headerMessage,
+                  key: ValueKey<String>(_headerMessage),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
                 ),
-                if (_headerMessage.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: Text(
-                      _headerMessage,
-                      key: ValueKey<String>(_headerMessage),
+              ),
+              SizedBox(height: isEmptyState ? 14 : 8),
+            ],
+            if (_isImporting || summary != null) ...[
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _isImporting
+                                ? '导入进度 $_completedCount/${_items.length}'
+                                : '导入结果',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (_isImporting)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 8,
+                        value: _progressValue,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      summary == null
+                          ? '正在本地解析、解压并导入主题资源，请保持当前页面。'
+                          : summary.hasSuccess
+                          ? '成功 ${summary.successCount} 个，失败 ${summary.failureCount} 个。'
+                          : (summary.lastError ?? '没有成功导入的主题。'),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         height: 1.4,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (_items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: _buildEmptyPicker(context),
+              )
+            else
+              Expanded(child: _buildImportQueue(context)),
+            if (_items.isNotEmpty && !_isImporting) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: summary == null ? _startImport : _resetQueue,
+                  icon: Icon(
+                    summary == null
+                        ? Icons.file_upload_outlined
+                        : Icons.restart_alt_rounded,
                   ),
-                ],
-                SizedBox(height: isEmptyState ? 14 : 8),
-                if (_isImporting || summary != null) ...[
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(
-                          alpha: 0.45,
-                        ),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _isImporting
-                                    ? '导入进度 $_completedCount/${_items.length}'
-                                    : '导入结果',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            if (_isImporting)
-                              const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            minHeight: 8,
-                            value: _progressValue,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          summary == null
-                              ? '正在本地解析、解压并导入主题资源，请保持当前页面。'
-                              : summary.hasSuccess
-                              ? '成功 ${summary.successCount} 个，失败 ${summary.failureCount} 个。'
-                              : (summary.lastError ?? '没有成功导入的主题。'),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (_items.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: _buildEmptyPicker(context),
-                  )
-                else
-                  Flexible(child: _buildImportQueue(context)),
-                if (_items.isNotEmpty && !_isImporting) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: summary == null ? _startImport : _resetQueue,
-                      icon: Icon(
-                        summary == null
-                            ? Icons.file_upload_outlined
-                            : Icons.restart_alt_rounded,
-                      ),
-                      label: Text(summary == null ? '开始导入' : '再导入一批'),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+                  label: Text(summary == null ? '开始导入' : '再导入一批'),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -3759,55 +3733,12 @@ class _AdvancedThemeBatchImportSheetState
   }
 
   Widget _buildEmptyPicker(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
+    return AppTaskActionCard(
+      title: '添加主题文件',
+      description: '支持一次选择多个 JSON / ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
+      icon: Icons.add_photo_alternate_outlined,
+      dashedBorder: true,
       onTap: _pickFiles,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.add_photo_alternate_outlined,
-                color: colorScheme.primary,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '添加主题文件',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '支持一次选择多个 JSON / ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

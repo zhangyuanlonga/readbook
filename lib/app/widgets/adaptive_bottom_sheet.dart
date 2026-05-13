@@ -6,6 +6,25 @@ import '../motion/app_motion_widgets.dart';
 
 enum AdaptiveActionSurfaceMode { mobileSheet, desktopDialog }
 
+class AdaptiveSheetDragHandle extends StatelessWidget {
+  const AdaptiveSheetDragHandle({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Container(
+        width: 44,
+        height: 5,
+        decoration: BoxDecoration(
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
+}
+
 Future<T?> showAdaptiveActionSurface<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -92,6 +111,9 @@ Future<T?> showAdaptiveRawSurface<T>({
       isDismissible: barrierDismissible,
       enableDrag: barrierDismissible,
       backgroundColor: mobileBackgroundColor,
+      constraints: BoxConstraints.tightFor(
+        width: MediaQuery.sizeOf(context).width,
+      ),
       builder: builder,
     ),
     AdaptiveActionSurfaceMode.desktopDialog => showDialog<T>(
@@ -171,6 +193,7 @@ class AdaptiveBottomSheet extends StatelessWidget {
     return AppFadeSlideTransition(
       child: Align(
         alignment: Alignment.bottomCenter,
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: maxWidth ?? metrics.bottomSheetMaxWidth,

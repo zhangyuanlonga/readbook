@@ -1791,23 +1791,36 @@ class _AdvancedThemeEditorPageState
     );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final desktopLike = AppLayout.isDesktopLike(
+      context,
+      platform: theme.platform,
+    );
+    final panelRadius = BorderRadius.vertical(
+      top: const Radius.circular(28),
+      bottom: desktopLike ? const Radius.circular(28) : Radius.zero,
+    );
 
-    final result = await showAdaptiveActionSurface<int>(
+    final result = await showAdaptiveRawSurface<int>(
       context: context,
-      maxWidth: 430,
-      maxHeightFactor: 0.86,
-      padding: EdgeInsets.zero,
+      showDragHandle: false,
+      mobileBackgroundColor: Colors.transparent,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return Material(
               color: colorScheme.surfaceContainerHigh,
+              shape: RoundedRectangleBorder(borderRadius: panelRadius),
+              clipBehavior: Clip.antiAlias,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!desktopLike) ...[
+                      const AdaptiveSheetDragHandle(),
+                      const SizedBox(height: 12),
+                    ],
                     Row(
                       children: [
                         Expanded(

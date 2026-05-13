@@ -197,6 +197,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             : clippedChild;
     final taskQueueBottom = useNavigationRail ? 24.0 : 96.0;
     final body = Stack(
+      fit: StackFit.expand,
       children: [
         Positioned.fill(child: navigatedBody),
         AppTaskQueueButton(bottom: taskQueueBottom),

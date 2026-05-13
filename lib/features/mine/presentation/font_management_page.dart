@@ -974,10 +974,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       );
       return;
     }
-    await showAdaptiveActionSurface<void>(
+    await showAdaptiveRawSurface<void>(
       context: context,
-      maxWidth: 520,
-      maxHeightFactor: 0.72,
+      showDragHandle: false,
+      mobileBackgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var mode = _FontImportEntryMode.add;
         return StatefulBuilder(

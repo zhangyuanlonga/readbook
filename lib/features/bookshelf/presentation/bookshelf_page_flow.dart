@@ -1208,6 +1208,15 @@ extension on _BookshelfPageState {
     bool isScrollControlled = false,
     bool useAdaptiveSurface = true,
   }) {
+    if (!useAdaptiveSurface) {
+      return showAdaptiveRawSurface<T>(
+        context: context,
+        useRootNavigator: true,
+        showDragHandle: false,
+        mobileBackgroundColor: Colors.transparent,
+        builder: builder,
+      );
+    }
     return showAdaptiveActionSurface<T>(
       context: context,
       useRootNavigator: true,
@@ -1681,11 +1690,10 @@ extension on _BookshelfPageState {
         existingItem?.colorValue ??
         BookshelfTaxonomyItem.defaultColorForName(isTag ? '新标签' : '新分类');
 
-    final result = await showAdaptiveActionSurface<_BookshelfTaxonomyEditorResult>(
+    final result = await showAdaptiveRawSurface<_BookshelfTaxonomyEditorResult>(
       context: context,
-      maxWidth: 430,
-      maxHeightFactor: 0.86,
-      padding: EdgeInsets.zero,
+      showDragHandle: false,
+      mobileBackgroundColor: Colors.transparent,
       builder:
           (dialogContext) => _BookshelfTaxonomyEditorDialog(
             kind: kind,
@@ -1820,140 +1828,154 @@ class _BookshelfTaxonomyEditorDialogState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final desktopLike = AppLayout.isDesktopLike(
+      context,
+      platform: theme.platform,
+    );
+    final panelRadius = BorderRadius.vertical(
+      top: const Radius.circular(28),
+      bottom: desktopLike ? const Radius.circular(28) : Radius.zero,
+    );
     final title =
         widget.isNew ? (_isTag ? '新增标签' : '新增分类') : '编辑${_isTag ? '标签' : '分类'}';
 
     return Material(
       color: colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: panelRadius),
+      clipBehavior: Clip.antiAlias,
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+            if (!desktopLike) ...[
+              const AdaptiveSheetDragHandle(),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  if (!widget.isNew)
-                    IconButton(
-                      onPressed:
-                          () => Navigator.of(
-                            context,
-                          ).pop(const _BookshelfTaxonomyEditorResult.delete()),
-                      tooltip: '删除',
-                      icon: const Icon(Icons.delete_outline_rounded),
-                    ),
-                  FilledButton.tonal(onPressed: _save, child: const Text('保存')),
-                ],
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: _nameController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: _isTag ? '标签名称' : '分类名称',
-                  errorText: _errorText,
-                  filled: true,
-                  fillColor: colorScheme.surface.withValues(alpha: 0.72),
                 ),
-                onChanged: (_) {
-                  if (_errorText == null) {
-                    return;
-                  }
-                  setState(() {
-                    _errorText = null;
-                  });
-                },
-                onSubmitted: (_) => _save(),
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: _hexController,
-                keyboardType: TextInputType.text,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
-                ],
-                onChanged: (value) {
-                  final parsed = _parseTaxonomyHexColor(value);
-                  if (parsed == null) {
-                    return;
-                  }
-                  setState(() {
-                    _draftColor = Color(parsed);
-                  });
-                },
-                decoration: InputDecoration(
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.tag_rounded, size: 18),
-                  hintText: '#RRGGBB / #AARRGGBB',
-                  filled: true,
-                  fillColor: colorScheme.surface.withValues(alpha: 0.72),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ColorPicker(
-                pickerColor: _draftColor,
-                onColorChanged: (color) {
-                  setState(() {
-                    _draftColor = color;
-                  });
-                },
-                enableAlpha: true,
-                displayThumbColor: true,
-                portraitOnly: true,
-                paletteType: PaletteType.hsvWithHue,
-                colorPickerWidth: 360,
-                pickerAreaHeightPercent: 0.62,
-                pickerAreaBorderRadius: const BorderRadius.all(
-                  Radius.circular(12),
-                ),
-                labelTypes: const [],
-                hexInputController: _hexController,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: _draftColor,
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(
-                        color: colorScheme.outline.withValues(alpha: 0.38),
-                      ),
-                    ),
+                if (!widget.isNew)
+                  IconButton(
+                    onPressed:
+                        () => Navigator.of(
+                          context,
+                        ).pop(const _BookshelfTaxonomyEditorResult.delete()),
+                    tooltip: '删除',
+                    icon: const Icon(Icons.delete_outline_rounded),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _formatTaxonomyHex(_draftColor.toARGB32()),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                FilledButton.tonal(onPressed: _save, child: const Text('保存')),
+              ],
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: _isTag ? '标签名称' : '分类名称',
+                errorText: _errorText,
+                filled: true,
+                fillColor: colorScheme.surface.withValues(alpha: 0.72),
+              ),
+              onChanged: (_) {
+                if (_errorText == null) {
+                  return;
+                }
+                setState(() {
+                  _errorText = null;
+                });
+              },
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _hexController,
+              keyboardType: TextInputType.text,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
+              ],
+              onChanged: (value) {
+                final parsed = _parseTaxonomyHexColor(value);
+                if (parsed == null) {
+                  return;
+                }
+                setState(() {
+                  _draftColor = Color(parsed);
+                });
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                hintText: '#RRGGBB / #AARRGGBB',
+                filled: true,
+                fillColor: colorScheme.surface.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ColorPicker(
+              pickerColor: _draftColor,
+              onColorChanged: (color) {
+                setState(() {
+                  _draftColor = color;
+                });
+              },
+              enableAlpha: true,
+              displayThumbColor: true,
+              portraitOnly: true,
+              paletteType: PaletteType.hsvWithHue,
+              colorPickerWidth: 360,
+              pickerAreaHeightPercent: 0.62,
+              pickerAreaBorderRadius: const BorderRadius.all(
+                Radius.circular(12),
+              ),
+              labelTypes: const [],
+              hexInputController: _hexController,
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: _draftColor,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: colorScheme.outline.withValues(alpha: 0.38),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _formatTaxonomyHex(_draftColor.toARGB32()),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
+            ),
           ],
         ),
       ),

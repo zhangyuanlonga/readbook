@@ -3,11 +3,13 @@ import 'dart:ui' show Tristate;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:shuxiang_reading_next/app/widgets/adaptive_bottom_sheet.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_content_container.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_filter_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_list_tile.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_search_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_setting_tile.dart';
+import 'package:shuxiang_reading_next/app/widgets/app_task_bottom_sheet.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
@@ -222,5 +224,88 @@ void main() {
     await tester.tap(find.text('阅读设置'));
 
     expect(tapped, isTrue);
+  });
+
+  testWidgets('AppTaskBottomSheet fills compact mobile width', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AppTaskBottomSheet(
+            title: '导入本地图书',
+            fitContent: true,
+            body: SizedBox(height: 120),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(AdaptiveSheetDragHandle), findsOneWidget);
+
+    final sheetBox =
+        find
+            .ancestor(
+              of: find.text('导入本地图书'),
+              matching: find.byType(DecoratedBox),
+            )
+            .first;
+    expect(tester.getSize(sheetBox).width, 390);
+  });
+
+  testWidgets('showAdaptiveRawSurface dismisses when tapping outside', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Builder(
+          builder: (context) {
+            return Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () {
+                    showAdaptiveRawSurface<void>(
+                      context: context,
+                      showDragHandle: false,
+                      mobileBackgroundColor: Colors.transparent,
+                      builder:
+                          (context) => const AppTaskBottomSheet(
+                            title: '导入本地图书',
+                            fitContent: true,
+                            body: SizedBox(height: 120),
+                          ),
+                    );
+                  },
+                  child: const Text('打开'),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('导入本地图书'), findsOneWidget);
+    expect(find.byType(AdaptiveSheetDragHandle), findsOneWidget);
+
+    await tester.tapAt(const Offset(20, 120));
+    await tester.pumpAndSettle();
+
+    expect(find.text('导入本地图书'), findsNothing);
   });
 }

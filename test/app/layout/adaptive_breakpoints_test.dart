@@ -632,6 +632,35 @@ void main() {
     }
   });
 
+  testWidgets('ShellScaffold body 在任务队列为空时仍铺满页面', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    Size? bodySize;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: ShellScaffold(
+          location: '/bookshelf',
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              bodySize = constraints.biggest;
+              return const ColoredBox(color: Colors.white);
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(bodySize, isNotNull);
+    expect(bodySize!.width, 390);
+    expect(bodySize!.height, 844);
+  });
+
   testWidgets('ShellScaffold 到达平板断点后切换为侧边栏', (tester) async {
     await _pumpShellScaffold(tester, width: AppLayout.railBreakpointWidth);
 
