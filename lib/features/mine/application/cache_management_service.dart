@@ -113,6 +113,29 @@ enum ThemeDataBucket {
   readerFont,
 }
 
+enum StorageSnapshotBucket {
+  chapterCaches,
+  paginationCaches,
+  coverCaches,
+  searchSourceHits,
+  legacyResidual,
+  themeAssets,
+  localImportedBooks,
+  otherAppData,
+}
+
+const Set<StorageSnapshotBucket> allStorageSnapshotBuckets =
+    <StorageSnapshotBucket>{
+      StorageSnapshotBucket.chapterCaches,
+      StorageSnapshotBucket.paginationCaches,
+      StorageSnapshotBucket.coverCaches,
+      StorageSnapshotBucket.searchSourceHits,
+      StorageSnapshotBucket.legacyResidual,
+      StorageSnapshotBucket.themeAssets,
+      StorageSnapshotBucket.localImportedBooks,
+      StorageSnapshotBucket.otherAppData,
+    };
+
 class CacheManagementService {
   CacheManagementService({
     AppDatabase? database,
@@ -161,38 +184,84 @@ class CacheManagementService {
   final BookDisplayStateResolver _resolver;
   final CoverImageDiskCache _coverImageDiskCache;
 
-  Future<StorageManagementSnapshot> loadStorageSnapshot() async {
-    final cachedBooks = await _chapterCacheService.watchCachedBooks().first;
-    final cachedChapterCount = cachedBooks.fold<int>(
-      0,
-      (sum, item) => sum + item.cachedCount,
+  Future<StorageManagementSnapshot> loadStorageSnapshot({
+    Set<StorageSnapshotBucket>? buckets,
+  }) async {
+    final resolvedBuckets = buckets ?? allStorageSnapshotBuckets;
+    final includeChapter = resolvedBuckets.contains(
+      StorageSnapshotBucket.chapterCaches,
     );
-    final chapterCachesBytes = await _database.estimateChapterCachesBytes();
+    final includePagination = resolvedBuckets.contains(
+      StorageSnapshotBucket.paginationCaches,
+    );
+    final includeCover = resolvedBuckets.contains(
+      StorageSnapshotBucket.coverCaches,
+    );
+    final includeSearch = resolvedBuckets.contains(
+      StorageSnapshotBucket.searchSourceHits,
+    );
+    final includeLegacy = resolvedBuckets.contains(
+      StorageSnapshotBucket.legacyResidual,
+    );
+    final includeTheme = resolvedBuckets.contains(
+      StorageSnapshotBucket.themeAssets,
+    );
+    final includeLocalBooks = resolvedBuckets.contains(
+      StorageSnapshotBucket.localImportedBooks,
+    );
+    final includeOther = resolvedBuckets.contains(
+      StorageSnapshotBucket.otherAppData,
+    );
+
+    final cachedBooks =
+        includeChapter
+            ? await _chapterCacheService.watchCachedBooks().first
+            : null;
+    final cachedChapterCount =
+        cachedBooks?.fold<int>(0, (sum, item) => sum + item.cachedCount) ?? 0;
+    final chapterCachesBytes =
+        includeChapter ? await _database.estimateChapterCachesBytes() : 0;
     final paginationLayoutCount =
-        await _paginationCacheService.countPersistedChapterLayouts();
-    final paginationLayoutsBytes = await _directorySize(
-      await _paginationCacheDirectory(),
-    );
-    final coverCacheCount = await _coverImageDiskCache.countAll();
-    final coverCachesBytes = await _directorySize(await _coverCacheDirectory());
-    final searchSourceHitCount = await _database.countSearchSourceHits();
+        includePagination
+            ? await _paginationCacheService.countPersistedChapterLayouts()
+            : 0;
+    final paginationLayoutsBytes =
+        includePagination
+            ? await _directorySize(await _paginationCacheDirectory())
+            : 0;
+    final coverCacheCount =
+        includeCover ? await _coverImageDiskCache.countAll() : 0;
+    final coverCachesBytes =
+        includeCover ? await _directorySize(await _coverCacheDirectory()) : 0;
+    final searchSourceHitCount =
+        includeSearch ? await _database.countSearchSourceHits() : 0;
     final searchSourceHitsBytes =
-        await _database.estimateSearchSourceHitsBytes();
-    final legacyResidualTargets = await _resolveLegacyResidualTargets();
-    final legacyResidualBytes = await _entitiesSize(legacyResidualTargets);
-    final themeAssetBytes = await _calculateThemeAssetBytes();
+        includeSearch ? await _database.estimateSearchSourceHitsBytes() : 0;
+    final legacyResidualTargets =
+        includeLegacy
+            ? await _resolveLegacyResidualTargets()
+            : const <FileSystemEntity>[];
+    final legacyResidualBytes =
+        includeLegacy ? await _entitiesSize(legacyResidualTargets) : 0;
+    final themeAssetBytes =
+        includeTheme ? await _calculateThemeAssetBytes() : 0;
     final localImportedBookCount =
-        await (_localBookRepository?.getAllBooks().then(
-              (items) => items.length,
-            ) ??
-            Future<int>.value(0));
-    final localImportedBookBytes = await _directorySize(
-      await _localBookStorageService.resolveStorageDirectory(),
-    );
-    final otherDataBytes = await _calculateOtherDataBytes();
+        includeLocalBooks
+            ? await (_localBookRepository?.getAllBooks().then(
+                  (items) => items.length,
+                ) ??
+                Future<int>.value(0))
+            : 0;
+    final localImportedBookBytes =
+        includeLocalBooks
+            ? await _directorySize(
+              await _localBookStorageService.resolveStorageDirectory(),
+            )
+            : 0;
+    final otherDataBytes = includeOther ? await _calculateOtherDataBytes() : 0;
 
     return StorageManagementSnapshot(
-      cachedBookCount: cachedBooks.length,
+      cachedBookCount: cachedBooks?.length ?? 0,
       cachedChapterCount: cachedChapterCount,
       chapterCachesBytes: chapterCachesBytes,
       paginationLayoutCount: paginationLayoutCount,

@@ -90,24 +90,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     });
     try {
       final fonts = await _fontRegistryService.listRegisteredFonts();
-      final fileExistsEntries = await Future.wait(
-        fonts.map((font) async {
-          return MapEntry(
-            font.fontFamilyKey,
-            await localFileExists(font.filePath),
-          );
-        }),
-      );
-      final fileExistsByFamilyKey = <String, bool>{
-        for (final entry in fileExistsEntries) entry.key: entry.value,
-      };
       final readerSettings = await _readerPreferencesService.loadSettings();
       if (!mounted) {
         return;
       }
       setState(() {
         _fonts = fonts;
-        _fontFileExistsByFamilyKey = fileExistsByFamilyKey;
+        _fontFileExistsByFamilyKey = <String, bool>{
+          for (final font in fonts)
+            if (_fontFileExistsByFamilyKey.containsKey(font.fontFamilyKey))
+              font.fontFamilyKey:
+                  _fontFileExistsByFamilyKey[font.fontFamilyKey]!,
+        };
         _readerSettings = readerSettings;
       });
     } catch (error) {
@@ -724,7 +718,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     required AppInterfaceFontSettings interfaceFontSettings,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final exists = _fontFileExistsByFamilyKey[font.fontFamilyKey] ?? false;
+    final exists = _fontFileExistsByFamilyKey[font.fontFamilyKey];
     final importedAt = DateTime.fromMillisecondsSinceEpoch(
       font.importedAtEpochMs,
     );
@@ -756,16 +750,27 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        exists ? '文件可用' : '文件已丢失',
+                        exists == null
+                            ? '文件状态未检查'
+                            : exists
+                            ? '文件可用'
+                            : '文件已丢失',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color:
-                              exists
+                              exists == null
+                                  ? colorScheme.onSurfaceVariant
+                                  : exists
                                   ? colorScheme.onSurfaceVariant
                                   : colorScheme.error,
                         ),
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  tooltip: '检查文件状态',
+                  onPressed: () => unawaited(_checkFontFile(font)),
+                  icon: const Icon(Icons.fact_check_outlined),
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
@@ -826,7 +831,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                   Text(
                     '今天的阅读不只是在翻页，也是在塑造自己的语言节奏。',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontFamily: exists ? font.fontFamilyKey : null,
+                      fontFamily: exists == true ? font.fontFamilyKey : null,
                       height: 1.4,
                     ),
                   ),
@@ -847,6 +852,19 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _checkFontFile(ReaderCustomFontEntry font) async {
+    final exists = await localFileExists(font.filePath);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _fontFileExistsByFamilyKey = <String, bool>{
+        ..._fontFileExistsByFamilyKey,
+        font.fontFamilyKey: exists,
+      };
+    });
   }
 
   Future<void> _importFont() async {

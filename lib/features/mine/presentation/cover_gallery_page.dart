@@ -9,7 +9,6 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
-import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_service.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 
@@ -26,7 +25,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
   late final CoverGalleryService _service;
   final TextEditingController _searchController = TextEditingController();
 
-  List<CoverGallery> _galleries = const <CoverGallery>[];
+  List<CoverGalleryIndexItem> _galleries = const <CoverGalleryIndexItem>[];
   String _searchQuery = '';
   bool _isLoading = true;
   bool _isSaving = false;
@@ -39,7 +38,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
   }
 
   Future<void> _load() async {
-    final galleries = await _service.loadGalleries();
+    final galleries = await _service.loadGalleryIndex();
     if (!mounted) {
       return;
     }
@@ -73,7 +72,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     }
   }
 
-  Future<void> _openGalleryEditor(CoverGallery gallery) async {
+  Future<void> _openGalleryEditor(CoverGalleryIndexItem gallery) async {
     await _pushMineRoute('/cover-galleries/editor?id=${gallery.id}');
   }
 
@@ -116,7 +115,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     return value.trim();
   }
 
-  Future<void> _renameGallery(CoverGallery gallery) async {
+  Future<void> _renameGallery(CoverGalleryIndexItem gallery) async {
     final name = await _showNameDialog(
       title: '重命名图集',
       initialValue: gallery.name,
@@ -140,7 +139,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     }
   }
 
-  Future<void> _duplicateGallery(CoverGallery gallery) async {
+  Future<void> _duplicateGallery(CoverGalleryIndexItem gallery) async {
     final name = await _showNameDialog(
       title: '复制图集',
       initialValue: '${gallery.name} 副本',
@@ -171,7 +170,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     }
   }
 
-  Future<void> _deleteGallery(CoverGallery gallery) async {
+  Future<void> _deleteGallery(CoverGalleryIndexItem gallery) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -223,7 +222,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     super.dispose();
   }
 
-  List<CoverGallery> get _visibleGalleries {
+  List<CoverGalleryIndexItem> get _visibleGalleries {
     final keyword = _searchQuery.trim().toLowerCase();
     if (keyword.isEmpty) {
       return _galleries;
@@ -413,7 +412,10 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     );
   }
 
-  Widget _buildGalleryCard(BuildContext context, CoverGallery gallery) {
+  Widget _buildGalleryCard(
+    BuildContext context,
+    CoverGalleryIndexItem gallery,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     const previewCount = 4;
     return InkWell(
@@ -488,7 +490,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
             Row(
               children: [
                 Text(
-                  '${gallery.imagePaths.length} 张封面',
+                  '${gallery.imageCount} 张封面',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -507,10 +509,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(previewCount, (index) {
-                  final path =
-                      index < gallery.imagePaths.length
-                          ? gallery.imagePaths[index]
-                          : null;
+                  final path = index == 0 ? gallery.previewPath : null;
                   return Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(

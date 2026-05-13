@@ -64,6 +64,41 @@ class LaunchImageGalleryService {
   static const String _startupSnapshotUpdatedAtKey =
       'launchImageGallery.startupSnapshot.updatedAt';
 
+  Future<List<LaunchImageGalleryIndexItem>> loadGalleryIndex() async {
+    final customGalleries = await _loadCustomGalleryIndex();
+    return <LaunchImageGalleryIndexItem>[
+      LaunchImageGalleryIndexItem.fromGallery(defaultLaunchImageGallery),
+      ...customGalleries,
+    ];
+  }
+
+  Future<List<LaunchImageGalleryIndexItem>> _loadCustomGalleryIndex() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_galleriesKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <LaunchImageGalleryIndexItem>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <LaunchImageGalleryIndexItem>[];
+      }
+      final items = decoded
+          .whereType<Map>()
+          .map((item) {
+            final gallery = LaunchImageGallery.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ).copyWith(isBuiltIn: false, isEditable: true, isDeletable: true);
+            return LaunchImageGalleryIndexItem.fromGallery(gallery);
+          })
+          .toList(growable: false);
+      items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return items;
+    } catch (_) {
+      return const <LaunchImageGalleryIndexItem>[];
+    }
+  }
+
   static bool readStartupEnabled(SharedPreferences prefs) {
     return prefs.getBool(_startupEnabledKey) ?? true;
   }
@@ -539,4 +574,39 @@ class LaunchImageGalleryService {
     }
     return extension.toLowerCase();
   }
+}
+
+class LaunchImageGalleryIndexItem {
+  const LaunchImageGalleryIndexItem({
+    required this.id,
+    required this.name,
+    required this.updatedAt,
+    required this.imageCount,
+    required this.isBuiltIn,
+    required this.isEditable,
+    required this.isDeletable,
+    this.previewPath,
+  });
+
+  factory LaunchImageGalleryIndexItem.fromGallery(LaunchImageGallery gallery) {
+    return LaunchImageGalleryIndexItem(
+      id: gallery.id,
+      name: gallery.name,
+      updatedAt: gallery.updatedAt,
+      imageCount: gallery.imagePaths.length,
+      isBuiltIn: gallery.isBuiltIn,
+      isEditable: gallery.isEditable,
+      isDeletable: gallery.isDeletable,
+      previewPath: gallery.imagePaths.isEmpty ? null : gallery.imagePaths.first,
+    );
+  }
+
+  final String id;
+  final String name;
+  final DateTime updatedAt;
+  final int imageCount;
+  final bool isBuiltIn;
+  final bool isEditable;
+  final bool isDeletable;
+  final String? previewPath;
 }

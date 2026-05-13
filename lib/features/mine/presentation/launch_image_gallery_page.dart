@@ -7,7 +7,6 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../domain/entities/launch_image_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/launch_image_gallery_provider.dart';
 import '../application/launch_image_gallery_service.dart';
@@ -28,7 +27,8 @@ class _LaunchImageGalleryPageState
   late final LaunchImageGalleryService _service;
   final TextEditingController _searchController = TextEditingController();
 
-  List<LaunchImageGallery> _galleries = const <LaunchImageGallery>[];
+  List<LaunchImageGalleryIndexItem> _galleries =
+      const <LaunchImageGalleryIndexItem>[];
   String _searchQuery = '';
   bool _startupEnabled = true;
   bool _isLoading = true;
@@ -42,7 +42,7 @@ class _LaunchImageGalleryPageState
   }
 
   Future<void> _load() async {
-    final galleries = await _service.loadGalleries();
+    final galleries = await _service.loadGalleryIndex();
     final startupEnabled = await _service.loadStartupEnabled();
     if (!mounted) {
       return;
@@ -101,11 +101,11 @@ class _LaunchImageGalleryPageState
     }
   }
 
-  Future<void> _openGalleryEditor(LaunchImageGallery gallery) async {
+  Future<void> _openGalleryEditor(LaunchImageGalleryIndexItem gallery) async {
     await _pushMineRoute('/appearance/launch-image/editor?id=${gallery.id}');
   }
 
-  Future<void> _setDefaultGallery(LaunchImageGallery gallery) async {
+  Future<void> _setDefaultGallery(LaunchImageGalleryIndexItem gallery) async {
     if (_isSaving) {
       return;
     }
@@ -125,7 +125,7 @@ class _LaunchImageGalleryPageState
     }
   }
 
-  Future<void> _renameGallery(LaunchImageGallery gallery) async {
+  Future<void> _renameGallery(LaunchImageGalleryIndexItem gallery) async {
     final name = await _showNameDialog(
       title: '重命名图集',
       initialValue: gallery.name,
@@ -149,7 +149,7 @@ class _LaunchImageGalleryPageState
     }
   }
 
-  Future<void> _duplicateGallery(LaunchImageGallery gallery) async {
+  Future<void> _duplicateGallery(LaunchImageGalleryIndexItem gallery) async {
     final name = await _showNameDialog(
       title: '复制图集',
       initialValue: '${gallery.name} 副本',
@@ -180,7 +180,7 @@ class _LaunchImageGalleryPageState
     }
   }
 
-  Future<void> _deleteGallery(LaunchImageGallery gallery) async {
+  Future<void> _deleteGallery(LaunchImageGalleryIndexItem gallery) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -280,7 +280,7 @@ class _LaunchImageGalleryPageState
     super.dispose();
   }
 
-  List<LaunchImageGallery> get _visibleGalleries {
+  List<LaunchImageGalleryIndexItem> get _visibleGalleries {
     final keyword = _searchQuery.trim().toLowerCase();
     if (keyword.isEmpty) {
       return _galleries;
@@ -522,7 +522,10 @@ class _LaunchImageGalleryPageState
     );
   }
 
-  Widget _buildGalleryCard(BuildContext context, LaunchImageGallery gallery) {
+  Widget _buildGalleryCard(
+    BuildContext context,
+    LaunchImageGalleryIndexItem gallery,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     const previewCount = 3;
     return InkWell(
@@ -616,7 +619,7 @@ class _LaunchImageGalleryPageState
             Row(
               children: [
                 Text(
-                  '${gallery.imagePaths.length} 张启动图',
+                  '${gallery.imageCount} 张启动图',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -639,14 +642,7 @@ class _LaunchImageGalleryPageState
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(previewCount, (index) {
-                  final previewPath =
-                      index < gallery.imagePaths.length
-                          ? _service.resolveGalleryPreviewPath(
-                            gallery.copyWith(
-                              imagePaths: <String>[gallery.imagePaths[index]],
-                            ),
-                          )
-                          : null;
+                  final previewPath = index == 0 ? gallery.previewPath : null;
                   return Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(

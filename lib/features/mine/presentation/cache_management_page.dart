@@ -42,6 +42,8 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   bool _isBookPresentationIndexLoading = false;
   bool _hasLoadedBookPresentationIndex = false;
   bool _isStorageSnapshotLoading = false;
+  Set<StorageSnapshotBucket> _loadedStorageBuckets =
+      const <StorageSnapshotBucket>{};
   bool _isClearingSelection = false;
   Set<_StorageClearOption> _selectedOptions = <_StorageClearOption>{
     _StorageClearOption.chapterCaches,
@@ -54,7 +56,6 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     super.initState();
     _cacheManagementService = ref.read(cacheManagementServiceProvider);
     unawaited(_loadBookPresentationIndex());
-    unawaited(_loadStorageSnapshot());
   }
 
   Future<void> _loadBookPresentationIndex() async {
@@ -116,10 +117,13 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     }
   }
 
-  Future<void> _loadStorageSnapshot() async {
+  Future<void> _loadStorageSnapshot({
+    Set<StorageSnapshotBucket>? buckets,
+  }) async {
     if (_isStorageSnapshotLoading) {
       return;
     }
+    final targetBuckets = buckets ?? allStorageSnapshotBuckets;
     const taskId = 'cache-storage-snapshot-scan';
     final taskManager = ref.read(appTaskManagerProvider);
     taskManager.startTask(
@@ -136,12 +140,22 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
       _isStorageSnapshotLoading = true;
     });
     try {
-      final snapshot = await _cacheManagementService.loadStorageSnapshot();
+      final snapshot = await _cacheManagementService.loadStorageSnapshot(
+        buckets: targetBuckets,
+      );
       if (!mounted) {
         return;
       }
       setState(() {
-        _storageSnapshot = snapshot;
+        _storageSnapshot = _mergeStorageSnapshot(
+          current: _storageSnapshot,
+          next: snapshot,
+          buckets: targetBuckets,
+        );
+        _loadedStorageBuckets = <StorageSnapshotBucket>{
+          ..._loadedStorageBuckets,
+          ...targetBuckets,
+        };
       });
       taskManager.updateTask(
         taskId,
@@ -171,6 +185,80 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         });
       }
     }
+  }
+
+  StorageManagementSnapshot _mergeStorageSnapshot({
+    required StorageManagementSnapshot? current,
+    required StorageManagementSnapshot next,
+    required Set<StorageSnapshotBucket> buckets,
+  }) {
+    final base =
+        current ??
+        const StorageManagementSnapshot(
+          cachedBookCount: 0,
+          cachedChapterCount: 0,
+          chapterCachesBytes: 0,
+          paginationLayoutCount: 0,
+          paginationLayoutsBytes: 0,
+          coverCacheCount: 0,
+          coverCachesBytes: 0,
+          searchSourceHitCount: 0,
+          searchSourceHitsBytes: 0,
+          legacyResidualCount: 0,
+          legacyResidualBytes: 0,
+          themeAssetBytes: 0,
+          localImportedBookCount: 0,
+          localImportedBookBytes: 0,
+          otherDataBytes: 0,
+        );
+    final hasChapter = buckets.contains(StorageSnapshotBucket.chapterCaches);
+    final hasPagination = buckets.contains(
+      StorageSnapshotBucket.paginationCaches,
+    );
+    final hasCover = buckets.contains(StorageSnapshotBucket.coverCaches);
+    final hasSearch = buckets.contains(StorageSnapshotBucket.searchSourceHits);
+    final hasLegacy = buckets.contains(StorageSnapshotBucket.legacyResidual);
+    final hasTheme = buckets.contains(StorageSnapshotBucket.themeAssets);
+    final hasLocalBooks = buckets.contains(
+      StorageSnapshotBucket.localImportedBooks,
+    );
+    final hasOther = buckets.contains(StorageSnapshotBucket.otherAppData);
+    return StorageManagementSnapshot(
+      cachedBookCount: hasChapter ? next.cachedBookCount : base.cachedBookCount,
+      cachedChapterCount:
+          hasChapter ? next.cachedChapterCount : base.cachedChapterCount,
+      chapterCachesBytes:
+          hasChapter ? next.chapterCachesBytes : base.chapterCachesBytes,
+      paginationLayoutCount:
+          hasPagination
+              ? next.paginationLayoutCount
+              : base.paginationLayoutCount,
+      paginationLayoutsBytes:
+          hasPagination
+              ? next.paginationLayoutsBytes
+              : base.paginationLayoutsBytes,
+      coverCacheCount: hasCover ? next.coverCacheCount : base.coverCacheCount,
+      coverCachesBytes:
+          hasCover ? next.coverCachesBytes : base.coverCachesBytes,
+      searchSourceHitCount:
+          hasSearch ? next.searchSourceHitCount : base.searchSourceHitCount,
+      searchSourceHitsBytes:
+          hasSearch ? next.searchSourceHitsBytes : base.searchSourceHitsBytes,
+      legacyResidualCount:
+          hasLegacy ? next.legacyResidualCount : base.legacyResidualCount,
+      legacyResidualBytes:
+          hasLegacy ? next.legacyResidualBytes : base.legacyResidualBytes,
+      themeAssetBytes: hasTheme ? next.themeAssetBytes : base.themeAssetBytes,
+      localImportedBookCount:
+          hasLocalBooks
+              ? next.localImportedBookCount
+              : base.localImportedBookCount,
+      localImportedBookBytes:
+          hasLocalBooks
+              ? next.localImportedBookBytes
+              : base.localImportedBookBytes,
+      otherDataBytes: hasOther ? next.otherDataBytes : base.otherDataBytes,
+    );
   }
 
   @override
@@ -286,8 +374,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
 
                         final isBootstrapLoading =
                             (_isBookPresentationIndexLoading &&
-                                !_hasLoadedBookPresentationIndex) ||
-                            _isStorageSnapshotLoading;
+                                !_hasLoadedBookPresentationIndex);
 
                         return AppFadeSlideTransition(
                           child: ListView(
@@ -311,6 +398,10 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                               ),
                               if (isBootstrapLoading)
                                 const SizedBox(height: 12),
+                              if (_loadedStorageBuckets.isEmpty) ...[
+                                _buildStorageLazyNotice(context),
+                                SizedBox(height: metrics.contentGap),
+                              ],
                               if (!capabilities.supportsManagedFileStorage) ...[
                                 _buildStorageCapabilityNotice(context),
                                 SizedBox(height: metrics.contentGap),
@@ -332,6 +423,49 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildStorageLazyNotice(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: EdgeInsets.all(metrics.cardPadding),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.speed_outlined, color: colorScheme.primary),
+          SizedBox(width: metrics.contentGap),
+          Expanded(
+            child: Text(
+              '存储占用已改为按需统计，进入页面不会立即扫描缓存和资源目录。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                height: 1.4,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed:
+                _isStorageSnapshotLoading
+                    ? null
+                    : () => unawaited(_loadStorageSnapshot()),
+            icon:
+                _isStorageSnapshotLoading
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.refresh_rounded),
+            label: const Text('统计'),
+          ),
+        ],
       ),
     );
   }
@@ -390,8 +524,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.chapterCaches,
         icon: Icons.menu_book_outlined,
         title: '章节缓存',
-        statsLabel:
-            '${snapshot.cachedChapterCount} 条 · ${_formatBytes(snapshot.chapterCachesBytes)}',
+        statsBucket: StorageSnapshotBucket.chapterCaches,
+        statsLabel: _snapshotStatsLabel(
+          '${snapshot.cachedChapterCount} 条 · ${_formatBytes(snapshot.chapterCachesBytes)}',
+          StorageSnapshotBucket.chapterCaches,
+        ),
       ),
       _buildListDivider(context),
       _buildStorageOptionRow(
@@ -399,8 +536,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.paginationCaches,
         icon: Icons.auto_stories_outlined,
         title: '分页缓存',
-        statsLabel:
-            '${snapshot.paginationLayoutCount} 条 · ${_formatBytes(snapshot.paginationLayoutsBytes)}',
+        statsBucket: StorageSnapshotBucket.paginationCaches,
+        statsLabel: _snapshotStatsLabel(
+          '${snapshot.paginationLayoutCount} 条 · ${_formatBytes(snapshot.paginationLayoutsBytes)}',
+          StorageSnapshotBucket.paginationCaches,
+        ),
       ),
       _buildListDivider(context),
       _buildStorageOptionRow(
@@ -408,8 +548,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.coverCaches,
         icon: Icons.image_outlined,
         title: '封面缓存',
-        statsLabel:
-            '${snapshot.coverCacheCount} 条 · ${_formatBytes(snapshot.coverCachesBytes)}',
+        statsBucket: StorageSnapshotBucket.coverCaches,
+        statsLabel: _snapshotStatsLabel(
+          '${snapshot.coverCacheCount} 条 · ${_formatBytes(snapshot.coverCachesBytes)}',
+          StorageSnapshotBucket.coverCaches,
+        ),
       ),
       _buildListDivider(context),
       _buildStorageOptionRow(
@@ -417,8 +560,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.searchSourceHits,
         icon: Icons.travel_explore_outlined,
         title: '搜索命中记录',
-        statsLabel:
-            '${snapshot.searchSourceHitCount} 条 · ${_formatBytes(snapshot.searchSourceHitsBytes)}',
+        statsBucket: StorageSnapshotBucket.searchSourceHits,
+        statsLabel: _snapshotStatsLabel(
+          '${snapshot.searchSourceHitCount} 条 · ${_formatBytes(snapshot.searchSourceHitsBytes)}',
+          StorageSnapshotBucket.searchSourceHits,
+        ),
       ),
       _buildListDivider(context),
       _buildStorageOptionRow(
@@ -426,8 +572,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.legacyResidual,
         icon: Icons.restore_from_trash_outlined,
         title: '旧版残留',
-        statsLabel:
-            '${snapshot.legacyResidualCount} 项 · ${_formatBytes(snapshot.legacyResidualBytes)}',
+        statsBucket: StorageSnapshotBucket.legacyResidual,
+        statsLabel: _snapshotStatsLabel(
+          '${snapshot.legacyResidualCount} 项 · ${_formatBytes(snapshot.legacyResidualBytes)}',
+          StorageSnapshotBucket.legacyResidual,
+        ),
         highRisk: true,
         onDetailsTap:
             () => _showStorageDetails(
@@ -441,7 +590,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.otherAppData,
         icon: Icons.layers_clear_outlined,
         title: '其他数据',
-        statsLabel: _formatBytes(snapshot.otherDataBytes),
+        statsBucket: StorageSnapshotBucket.otherAppData,
+        statsLabel: _snapshotStatsLabel(
+          _formatBytes(snapshot.otherDataBytes),
+          StorageSnapshotBucket.otherAppData,
+        ),
         highRisk: true,
         onDetailsTap:
             () => _showStorageDetails(
@@ -456,7 +609,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         context,
         icon: Icons.palette_outlined,
         title: '主题数据',
-        statsLabel: _formatBytes(snapshot.themeAssetBytes),
+        statsBucket: StorageSnapshotBucket.themeAssets,
+        statsLabel: _snapshotStatsLabel(
+          _formatBytes(snapshot.themeAssetBytes),
+          StorageSnapshotBucket.themeAssets,
+        ),
         onDetailsTap:
             () => _showStorageDetails(
               title: '主题数据',
@@ -470,8 +627,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         option: _StorageClearOption.localImportedBooks,
         icon: Icons.folder_delete_outlined,
         title: '本地图书数据',
-        statsLabel:
-            '${snapshot.localImportedBookCount} 本 · ${_formatBytes(snapshot.localImportedBookBytes)}',
+        statsBucket: StorageSnapshotBucket.localImportedBooks,
+        statsLabel: _snapshotStatsLabel(
+          '${snapshot.localImportedBookCount} 本 · ${_formatBytes(snapshot.localImportedBookBytes)}',
+          StorageSnapshotBucket.localImportedBooks,
+        ),
         highRisk: true,
       ),
       SizedBox(height: metrics.contentGap),
@@ -528,11 +688,16 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     ];
   }
 
+  String _snapshotStatsLabel(String value, StorageSnapshotBucket bucket) {
+    return _loadedStorageBuckets.contains(bucket) ? value : '未统计';
+  }
+
   Widget _buildStorageOptionRow(
     BuildContext context, {
     required _StorageClearOption option,
     required IconData icon,
     required String title,
+    required StorageSnapshotBucket statsBucket,
     required String statsLabel,
     bool highRisk = false,
     VoidCallback? onDetailsTap,
@@ -599,6 +764,17 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                   icon: const Icon(Icons.chevron_right_rounded),
                 ),
               ],
+              IconButton(
+                tooltip: '刷新统计',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    _isStorageSnapshotLoading
+                        ? null
+                        : () => unawaited(
+                          _loadStorageSnapshot(buckets: {statsBucket}),
+                        ),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
             ],
           ),
         ),
@@ -610,6 +786,7 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
     BuildContext context, {
     required IconData icon,
     required String title,
+    required StorageSnapshotBucket statsBucket,
     required String statsLabel,
     VoidCallback? onDetailsTap,
   }) {
@@ -652,6 +829,17 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
                   icon: const Icon(Icons.chevron_right_rounded),
                 ),
               ],
+              IconButton(
+                tooltip: '刷新统计',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    _isStorageSnapshotLoading
+                        ? null
+                        : () => unawaited(
+                          _loadStorageSnapshot(buckets: {statsBucket}),
+                        ),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
             ],
           ),
         ),

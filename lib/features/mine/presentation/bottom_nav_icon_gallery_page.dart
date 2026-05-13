@@ -31,7 +31,8 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   final BottomNavIconGalleryService _service = BottomNavIconGalleryService();
   final TextEditingController _searchController = TextEditingController();
 
-  List<BottomNavIconGallery> _galleries = const <BottomNavIconGallery>[];
+  List<BottomNavIconGalleryIndexItem> _galleries =
+      const <BottomNavIconGalleryIndexItem>[];
   String? _activeGalleryId;
   String _searchQuery = '';
   bool _isLoading = true;
@@ -44,7 +45,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   }
 
   Future<void> _load() async {
-    final galleries = await _service.loadGalleries();
+    final galleries = await _service.loadGalleryIndex();
     final activeGallery = await _service.loadActiveGallery();
     if (!mounted) {
       return;
@@ -146,7 +147,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     }
   }
 
-  Future<void> _renameGallery(BottomNavIconGallery gallery) async {
+  Future<void> _renameGallery(BottomNavIconGalleryIndexItem gallery) async {
     final name = await _showNameDialog(
       title: '重命名图集',
       initialValue: gallery.name,
@@ -173,7 +174,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     }
   }
 
-  Future<void> _duplicateGallery(BottomNavIconGallery gallery) async {
+  Future<void> _duplicateGallery(BottomNavIconGalleryIndexItem gallery) async {
     final name = await _showNameDialog(
       title: '复制图集',
       initialValue: '${gallery.name} 副本',
@@ -207,7 +208,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     }
   }
 
-  Future<void> _deleteGallery(BottomNavIconGallery gallery) async {
+  Future<void> _deleteGallery(BottomNavIconGalleryIndexItem gallery) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -254,7 +255,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     super.dispose();
   }
 
-  List<BottomNavIconGallery> get _visibleGalleries {
+  List<BottomNavIconGalleryIndexItem> get _visibleGalleries {
     final keyword = _searchQuery.trim().toLowerCase();
     if (keyword.isEmpty) {
       return _galleries;
@@ -351,7 +352,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
 
   Widget _buildGalleryCard(
     BuildContext context, {
-    required BottomNavIconGallery gallery,
+    required BottomNavIconGalleryIndexItem gallery,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
@@ -616,12 +617,12 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
 
   Widget _buildLightPreviewSlot(
     BuildContext context, {
-    required BottomNavIconGallery gallery,
+    required BottomNavIconGalleryIndexItem gallery,
     required BottomNavIconGalleryTab tab,
     required bool active,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final iconSet = gallery.items[tab] ?? const BottomNavIconSet();
+    final iconSet = gallery.previewItems[tab] ?? const BottomNavIconSet();
     final asset = iconSet.lightUnselected ?? iconSet.lightSelected;
     final resolved = _fallbackIconForTab(tab).copyWith(assetRef: asset);
     return Container(

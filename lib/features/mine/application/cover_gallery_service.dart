@@ -14,18 +14,52 @@ class CoverGalleryService {
   CoverGalleryService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _assetStore = assetStore ?? ManagedAssetStore();
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
 
   static const Uuid _uuid = Uuid();
   static const String _galleriesKey = 'coverGallery.galleries';
+
+  Future<List<CoverGalleryIndexItem>> loadGalleryIndex() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_galleriesKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <CoverGalleryIndexItem>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <CoverGalleryIndexItem>[];
+      }
+      final items = decoded
+          .whereType<Map>()
+          .map((item) {
+            final gallery = CoverGallery.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            );
+            return CoverGalleryIndexItem(
+              id: gallery.id,
+              name: gallery.name,
+              updatedAt: gallery.updatedAt,
+              imageCount: gallery.imagePaths.length,
+              previewPath:
+                  gallery.imagePaths.isEmpty ? null : gallery.imagePaths.first,
+            );
+          })
+          .toList(growable: false);
+      items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return items;
+    } catch (_) {
+      return const <CoverGalleryIndexItem>[];
+    }
+  }
 
   Future<List<CoverGallery>> loadGalleries() async {
     final prefs = await _preferencesFuture;
@@ -158,7 +192,8 @@ class CoverGalleryService {
     if (sourceGallery == null) {
       throw const FormatException('Gallery not found.');
     }
-    final normalizedName = name.trim().isEmpty ? '${sourceGallery.name} 副本' : name.trim();
+    final normalizedName =
+        name.trim().isEmpty ? '${sourceGallery.name} 副本' : name.trim();
     final now = DateTime.now().toUtc();
     final copied = CoverGallery(
       id: 'cover_gallery_${_uuid.v4()}',
@@ -257,4 +292,20 @@ class CoverGalleryService {
     }
     return extension.toLowerCase();
   }
+}
+
+class CoverGalleryIndexItem {
+  const CoverGalleryIndexItem({
+    required this.id,
+    required this.name,
+    required this.updatedAt,
+    required this.imageCount,
+    this.previewPath,
+  });
+
+  final String id;
+  final String name;
+  final DateTime updatedAt;
+  final int imageCount;
+  final String? previewPath;
 }
