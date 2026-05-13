@@ -278,26 +278,14 @@ class _CoverGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showImageResourceConfirmSurface(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('删除图集'),
-          content: Text('确定删除「${gallery.name}」吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
-            ),
-          ],
-        );
-      },
+      title: '删除图集',
+      message: '确定删除「${gallery.name}」吗？',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     setState(() {

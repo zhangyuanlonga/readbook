@@ -1,7 +1,122 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/images/local_file_image.dart';
+import '../../../../app/platform/app_input_focus_behavior.dart';
+import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
+
+Future<String?> showImageResourceNameSurface({
+  required BuildContext context,
+  required String title,
+  required String initialValue,
+  String labelText = '名称',
+}) async {
+  final controller = TextEditingController(text: initialValue);
+  try {
+    return showAdaptiveActionSurface<String>(
+      context: context,
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        void submit() {
+          Navigator.of(surfaceContext).pop(controller.text.trim());
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: appEnableAutoFocusForTextInput,
+              decoration: InputDecoration(labelText: labelText),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => submit(),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(onPressed: submit, child: const Text('确定')),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  } finally {
+    controller.dispose();
+  }
+}
+
+Future<bool> showImageResourceConfirmSurface({
+  required BuildContext context,
+  required String title,
+  required String message,
+  String confirmLabel = '确定',
+  bool destructive = false,
+}) async {
+  final result = await showAdaptiveActionSurface<bool>(
+    context: context,
+    maxWidth: 420,
+    builder: (surfaceContext) {
+      final colorScheme = Theme.of(surfaceContext).colorScheme;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              surfaceContext,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.of(surfaceContext).pop(false),
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                style:
+                    destructive
+                        ? FilledButton.styleFrom(
+                          backgroundColor: colorScheme.error,
+                          foregroundColor: colorScheme.onError,
+                        )
+                        : null,
+                onPressed: () => Navigator.of(surfaceContext).pop(true),
+                child: Text(confirmLabel),
+              ),
+            ],
+          ),
+        ],
+      );
+    },
+  );
+  return result ?? false;
+}
 
 class CompactCollectionSearchField extends StatelessWidget {
   const CompactCollectionSearchField({

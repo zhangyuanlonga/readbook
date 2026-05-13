@@ -6,29 +6,29 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../app/platform/app_input_focus_behavior.dart';
-import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 
-class BottomNavIconGalleryPage extends StatefulWidget {
+class BottomNavIconGalleryPage extends ConsumerStatefulWidget {
   const BottomNavIconGalleryPage({super.key});
 
   @override
-  State<BottomNavIconGalleryPage> createState() =>
+  ConsumerState<BottomNavIconGalleryPage> createState() =>
       _BottomNavIconGalleryPageState();
 }
 
 enum _GalleryAction { activate, edit, rename, duplicate, delete }
 
-class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
-  final BottomNavIconGalleryService _service = BottomNavIconGalleryService();
+class _BottomNavIconGalleryPageState
+    extends ConsumerState<BottomNavIconGalleryPage> {
+  late final BottomNavIconGalleryService _service;
   final TextEditingController _searchController = TextEditingController();
 
   List<BottomNavIconGalleryIndexItem> _galleries =
@@ -41,6 +41,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   @override
   void initState() {
     super.initState();
+    _service = ref.read(bottomNavIconGalleryServiceProvider);
     _load();
   }
 
@@ -61,15 +62,12 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (_isSaving || _activeGalleryId == id) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.saveActiveGalleryId(id);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -89,34 +87,11 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     required String title,
     required String initialValue,
   }) async {
-    var draftValue = initialValue;
-    final value = await showDialog<String>(
+    final value = await showImageResourceNameSurface(
       context: context,
-      builder: (dialogContext) {
-        void submit() {
-          Navigator.of(dialogContext).pop(draftValue.trim());
-        }
-
-        return AlertDialog(
-          title: Text(title),
-          content: TextFormField(
-            initialValue: initialValue,
-            autofocus: appEnableAutoFocusForTextInput,
-            decoration: const InputDecoration(labelText: '图集名称'),
-            onChanged: (value) {
-              draftValue = value;
-            },
-            onFieldSubmitted: (_) => submit(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(onPressed: submit, child: const Text('确定')),
-          ],
-        );
-      },
+      title: title,
+      initialValue: initialValue,
+      labelText: '图集名称',
     );
     if (value == null || value.trim().isEmpty) {
       return null;
@@ -126,15 +101,12 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
 
   Future<void> _createGallery() async {
     if (_isSaving || !mounted) return;
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       final gallery = await _service.createGallery(name: '未命名图集');
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) return;
       await _openEditor(gallery.id);
@@ -155,15 +127,12 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (name == null || !mounted) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.renameGallery(galleryId: gallery.id, name: name);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       await _load();
     } finally {
       if (mounted) {
@@ -182,7 +151,6 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (name == null || !mounted) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
@@ -191,9 +159,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
         sourceGalleryId: gallery.id,
         name: name,
       );
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
         return;
@@ -209,36 +175,22 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   }
 
   Future<void> _deleteGallery(BottomNavIconGalleryIndexItem gallery) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showImageResourceConfirmSurface(
       context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('删除图集'),
-            content: Text('确定删除「${gallery.name}」吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+      title: '删除图集',
+      message: '确定删除「${gallery.name}」吗？',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.deleteGallery(gallery.id);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       await _load();
     } finally {
       if (mounted) {
@@ -275,78 +227,74 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final activeAdvancedTheme =
-            ref.watch(activeAdvancedThemeProvider).valueOrNull;
-        final backdrop = resolveAdvancedThemeBackdrop(
-          Theme.of(context).colorScheme,
-          activeAdvancedTheme,
-        );
-        final metrics = AppAdaptiveMetrics.of(context);
-        final horizontal = metrics.pagePadding;
-        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-        return PopScope<void>(
-          canPop: context.canPop(),
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !context.mounted) {
-              return;
-            }
-            context.go('/mine');
-          },
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text('底栏图集'),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              actions: [
-                IconButton(
-                  tooltip: '新增图集',
-                  onPressed: _isLoading || _isSaving ? null : _createGallery,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ],
-            ),
-            body: LayoutBuilder(
-              builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.settingsContentMaxWidth,
-                );
-
-                return DecoratedBox(
-                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: AppAnimatedSwitcher(
-                        child:
-                            _isLoading
-                                ? const Center(
-                                  key: ValueKey('bottom_nav_gallery_loading'),
-                                  child: CircularProgressIndicator(),
-                                )
-                                : _buildGalleryContent(
-                                  context,
-                                  metrics: metrics,
-                                  horizontal: horizontal,
-                                  topInset: topInset,
-                                  bottomSafe: bottomSafe,
-                                ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
       },
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: const Text('底栏图集'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          actions: [
+            IconButton(
+              tooltip: '新增图集',
+              onPressed: _isLoading || _isSaving ? null : _createGallery,
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: AppAnimatedSwitcher(
+                    child:
+                        _isLoading
+                            ? const Center(
+                              key: ValueKey('bottom_nav_gallery_loading'),
+                              child: CircularProgressIndicator(),
+                            )
+                            : _buildGalleryContent(
+                              context,
+                              metrics: metrics,
+                              horizontal: horizontal,
+                              topInset: topInset,
+                              bottomSafe: bottomSafe,
+                            ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -541,8 +489,10 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
           horizontal,
           metrics.sectionGap + bottomSafe,
         ),
-        children: const [
-          AppAnimatedSwitcher(
+        children: [
+          search,
+          SizedBox(height: metrics.contentGap),
+          const AppAnimatedSwitcher(
             child: ImageResourceEmptyStateCard(
               key: ValueKey('bottom_nav_gallery_empty'),
               icon: Icons.dock_outlined,

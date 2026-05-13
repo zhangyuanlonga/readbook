@@ -26,6 +26,7 @@ import 'package:shuxiang_reading_next/features/mine/application/cover_gallery_se
 import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/reader_background_service.dart';
+import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/advanced_theme_editor_page.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/advanced_theme_list_page.dart';
 import 'package:shuxiang_reading_next/features/mine/providers.dart';
@@ -199,6 +200,9 @@ void main() {
         authSessionStore: sessionStore,
         mobileFeatureService: _FakeMobileFeatureService(),
         membershipService: _FakeMembershipService(),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(
+          preferences: prefs,
+        ),
       );
       await mineSessionService.loadSession(refreshRemote: true);
 

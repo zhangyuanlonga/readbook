@@ -305,3 +305,5 @@
 
 - 2026-05-12：建立组件治理任务文档，纳入逐页面 UI 多端计划和架构约束引用。
 - 2026-05-12：UI-G0 到 UI-G6 已完成收口，形成 scaffold、状态组件、弹层、列表卡片、桌面交互审计文档，并接入 UI 组件治理静态检查。
+- 2026-05-13：A8-B3 首批老页面迁移落到资源图集列表页；封面图集、启动图集、底栏图集的命名/删除弹层统一走 `showAdaptiveActionSurface`，底栏图集页收口到 `ConsumerStatefulWidget + provider`，直接 `Scaffold` 作为透明 AppBar/backdrop 例外记录到 A8 清单。
+- 2026-05-13：A8-B3 第二批迁移底栏图集编辑器、封面图集编辑器、启动图集编辑器和阅读背景页；普通删除确认继续收口到 `showAdaptiveActionSurface`，全屏图片预览作为专用例外记录到 A8 清单。

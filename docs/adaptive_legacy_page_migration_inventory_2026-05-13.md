@@ -123,3 +123,42 @@
 - 首个动作优先 UI 骨架、状态组件、弹层和内容宽度，不先动深层业务。
 - 完成页面迁移后更新本清单状态，并同步对应 UI 展示计划。
 - 无法迁移的页面必须写例外原因、影响平台和回收条件。
+
+## 11. 执行记录
+
+### 2026-05-13：A8-B3 资源图集列表页首批迁移
+
+选择范围：
+
+| 路由/入口 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| `/cover-galleries` | `CoverGalleryPage` | 重命名/删除弹层迁到 `showAdaptiveActionSurface`；保留轻量 index、移动单列、桌面多列网格 | 新增、重命名、复制、删除；360/600/1280；大字体 | 已完成 |
+| `/appearance/launch-image` | `LaunchImageGalleryPage` | 重命名/删除弹层迁到 `showAdaptiveActionSurface`；保留启动图开关和轻量 index | 启动图开关、新增、重命名、复制、删除；移动/桌面 | 已完成 |
+| `/bottom-nav-icon-galleries` | `BottomNavIconGalleryPage` | 收口到 `ConsumerStatefulWidget` 和 provider；重命名/删除弹层迁到 adaptive surface；空搜索结果保留搜索框 | 默认图集切换、搜索空态、编辑入口、删除确认 | 已完成 |
+
+影响平台：
+
+- 移动端：命名和确认操作改为底部操作面板，保留原有单列触控列表。
+- Web/桌面：命名和确认操作改为居中 dialog surface，避免手机弹层原样放大。
+- 平板/大屏：列表继续使用已有 600dp+ 多列网格与内容最大宽度。
+
+本批例外：
+
+- `CoverGalleryPage`、`LaunchImageGalleryPage`、`BottomNavIconGalleryPage` 暂保留直接 `Scaffold`，因为页面依赖透明 AppBar、主题背景和 `extendBodyBehindAppBar`。回收条件：`AdaptivePageScaffold` 支持 backdrop、透明 AppBar 和沉浸式顶部 inset 后，再迁移页面骨架。
+- 图集编辑器页本批不迁移。原因：编辑器包含完整资源列表、文件导入、排序和删除等深层业务路径；回收条件：下一批 A8-B3 先抽出编辑器通用 adaptive picker / confirm surface 后再迁移。
+
+### 2026-05-13：A8-B3 资源编辑页第二批迁移
+
+选择范围：
+
+| 路由/入口 | 页面 | 本批动作 | 回归重点 | 状态 |
+| --- | --- | --- | --- | --- |
+| `/bottom-nav-icon-galleries/editor` | `BottomNavIconGalleryEditorPage` | 从 `StatefulWidget + 直接 new service + ProviderScope.containerOf` 收口为 `ConsumerStatefulWidget + provider` | 导入图标、清空 slot、复制日间到夜间、保存名称、任务态 | 已完成 |
+| `/cover-galleries/editor` | `CoverGalleryEditorPage` | 删除图集确认迁到 `showAdaptiveActionSurface` | 删除确认、删除后返回、移动/桌面弹层形态 | 已完成 |
+| `/appearance/launch-image/editor` | `LaunchImageGalleryEditorPage` | 删除图集确认迁到 `showAdaptiveActionSurface` | 内置图集不可删、自定义图集删除、返回结果 | 已完成 |
+| `/appearance/reader-background` | `ReaderBackgroundPage` | 删除阅读背景确认迁到 `showAdaptiveActionSurface` | 删除确认、搜索/空态、移动/桌面弹层形态 | 已完成 |
+
+本批例外：
+
+- 封面、启动图和阅读背景的全屏图片预览仍保留 `showDialog`。原因：该弹层是沉浸式黑底预览，包含 `InteractiveViewer` 手势缩放和点按关闭，不是普通操作面板。回收条件：新增 `AdaptiveFullscreenPreviewSurface` 或同等全屏预览基线组件后再统一迁移。
+- 底栏图集编辑器仍保留直接 `Scaffold`。原因：编辑器结构为专用 slot 矩阵，当前收益主要在状态来源和任务态收口；回收条件：资源编辑器统一骨架支持专用矩阵布局后迁移。

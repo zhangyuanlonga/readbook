@@ -17,19 +17,20 @@ import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../providers.dart';
 
-class BottomNavIconGalleryEditorPage extends StatefulWidget {
+class BottomNavIconGalleryEditorPage extends ConsumerStatefulWidget {
   const BottomNavIconGalleryEditorPage({super.key, required this.galleryId});
 
   final String galleryId;
 
   @override
-  State<BottomNavIconGalleryEditorPage> createState() =>
+  ConsumerState<BottomNavIconGalleryEditorPage> createState() =>
       _BottomNavIconGalleryEditorPageState();
 }
 
 class _BottomNavIconGalleryEditorPageState
-    extends State<BottomNavIconGalleryEditorPage> {
-  final BottomNavIconGalleryService _service = BottomNavIconGalleryService();
+    extends ConsumerState<BottomNavIconGalleryEditorPage> {
+  late final BottomNavIconGalleryService _service;
+  late final ImageSelectionService _imageSelectionService;
 
   BottomNavIconGallery? _gallery;
   bool _isLoading = true;
@@ -40,6 +41,8 @@ class _BottomNavIconGalleryEditorPageState
   @override
   void initState() {
     super.initState();
+    _service = ref.read(bottomNavIconGalleryServiceProvider);
+    _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _load();
   }
 
@@ -75,14 +78,10 @@ class _BottomNavIconGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
 
-    final imageSelectionService = container.read(
-      mineImageSelectionServiceProvider,
-    );
     PickedImageData? picked;
     try {
-      final source = await imageSelectionService.chooseImageSource(
+      final source = await _imageSelectionService.chooseImageSource(
         context,
         title: '添加底栏图标',
         gallerySubtitle: '从系统照片库选择 PNG 或 GIF 图标',
@@ -91,7 +90,7 @@ class _BottomNavIconGalleryEditorPageState
       if (source == null || !mounted) {
         return;
       }
-      picked = await imageSelectionService.pickImage(
+      picked = await _imageSelectionService.pickImage(
         confirmButtonText: '选择图标',
         allowedExtensions: const {'svg', 'png', 'gif'},
         source: source,
@@ -121,7 +120,7 @@ class _BottomNavIconGalleryEditorPageState
     });
     final taskId =
         'bottom-nav-icon-import:${DateTime.now().microsecondsSinceEpoch}';
-    final taskManager = container.read(appTaskManagerProvider);
+    final taskManager = ref.read(appTaskManagerProvider);
     taskManager.startTask(
       id: taskId,
       status: AppTaskStatusData(
@@ -147,9 +146,7 @@ class _BottomNavIconGalleryEditorPageState
         currentSet.copyWithSlot(slot, asset: asset),
       );
       final saved = await _service.saveGallery(updatedGallery);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -203,7 +200,6 @@ class _BottomNavIconGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
-    final container = ProviderScope.containerOf(context);
 
     final currentSet = gallery.items[tab] ?? const BottomNavIconSet();
     final previousAsset = currentSet.assetForSlot(slot);
@@ -220,9 +216,7 @@ class _BottomNavIconGalleryEditorPageState
         currentSet.copyWithSlot(slot, clear: true),
       );
       final saved = await _service.saveGallery(updatedGallery);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -380,7 +374,6 @@ class _BottomNavIconGalleryEditorPageState
     if (gallery == null || _isSaving) return;
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
-    final container = ProviderScope.containerOf(context);
 
     setState(() {
       _isSaving = true;
@@ -389,9 +382,7 @@ class _BottomNavIconGalleryEditorPageState
       final saved = await _service.saveGallery(
         gallery.copyWith(name: newName, updatedAt: DateTime.now()),
       );
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) return;
       setState(() {
         _gallery = saved;
@@ -409,7 +400,6 @@ class _BottomNavIconGalleryEditorPageState
   Future<void> _saveGallery() async {
     final gallery = _gallery;
     if (gallery == null || _isSaving) return;
-    final container = ProviderScope.containerOf(context);
 
     setState(() {
       _isSaving = true;
@@ -417,9 +407,7 @@ class _BottomNavIconGalleryEditorPageState
     try {
       final updated = gallery.copyWith(updatedAt: DateTime.now());
       final saved = await _service.saveGallery(updated);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) return;
       setState(() {
         _gallery = saved;
@@ -700,7 +688,6 @@ class _BottomNavIconGalleryEditorPageState
   Future<void> _copyLightToDark(BottomNavIconGalleryTab tab) async {
     final gallery = _gallery;
     if (gallery == null || _isSaving) return;
-    final container = ProviderScope.containerOf(context);
 
     final lightSet = gallery.items[tab] ?? const BottomNavIconSet();
     if (lightSet.lightUnselected == null && lightSet.lightSelected == null) {
@@ -739,9 +726,7 @@ class _BottomNavIconGalleryEditorPageState
 
       final updatedGallery = gallery.copyWithItem(tab, darkSet);
       final saved = await _service.saveGallery(updatedGallery);
-      container
-          .read(bottomNavIconGalleryRevisionProvider.notifier)
-          .markChanged();
+      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) return;
       setState(() {
         _gallery = saved;

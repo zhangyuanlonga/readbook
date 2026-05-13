@@ -613,6 +613,13 @@ artifacts/adaptive_baseline/page_ui_multiplatform/<page>/<viewport>_text-<scale>
 - 高级主题列表在 840dp+ 改为左侧搜索/主题列表、右侧主题预览与操作面板；移动端继续保留单列主题卡。
 - 验证：`flutter analyze` 通过；`flutter test test/features/mine/presentation/advanced_theme_pages_smoke_test.dart` 通过。
 
+### 2026-05-13 A8-B3 老页面首批迁移
+
+- 封面图集、启动图集、底栏图集列表页继续保留移动单列和 600dp+ 多列网格，但重命名/删除确认已迁到 `showAdaptiveActionSurface`，移动端为底部面板，Web/桌面为居中 dialog surface。
+- 底栏图集页从 `StatefulWidget + Consumer + ProviderScope.containerOf` 收口为 `ConsumerStatefulWidget + provider`，空搜索结果仍展示搜索框和统一空状态。
+- 三个资源图集列表页暂保留直接 `Scaffold` 作为沉浸式背景例外，待 `AdaptivePageScaffold` 支持透明 AppBar/backdrop 后回收。
+- 第二批继续收口资源编辑页：底栏图集编辑器改为 `ConsumerStatefulWidget + provider`，封面图集编辑器、启动图集编辑器和阅读背景页的删除确认统一为 adaptive surface；全屏图片预览作为沉浸式预览例外保留。
+
 ### 2026-05-12 UI-G0/G1 组件治理
 
 - 新增 `docs/page_ui_component_governance_plan_2026-05-12.md` 的 G0/G1 执行状态，明确新页面默认使用 adaptive 基线组件，旧页面按高频核心页、管理页、能力页、低频静态页顺序迁移。

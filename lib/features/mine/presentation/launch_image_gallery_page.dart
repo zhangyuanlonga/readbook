@@ -181,25 +181,14 @@ class _LaunchImageGalleryPageState
   }
 
   Future<void> _deleteGallery(LaunchImageGalleryIndexItem gallery) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showImageResourceConfirmSurface(
       context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('删除图集'),
-            content: Text('确定删除「${gallery.name}」吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+      title: '删除图集',
+      message: '确定删除「${gallery.name}」吗？',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     setState(() {
@@ -239,34 +228,11 @@ class _LaunchImageGalleryPageState
     required String title,
     required String initialValue,
   }) async {
-    var draftValue = initialValue;
-    final value = await showDialog<String>(
+    final value = await showImageResourceNameSurface(
       context: context,
-      builder: (dialogContext) {
-        void submit() {
-          Navigator.of(dialogContext).pop(draftValue.trim());
-        }
-
-        return AlertDialog(
-          title: Text(title),
-          content: TextFormField(
-            initialValue: initialValue,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: '图集名称'),
-            onChanged: (value) {
-              draftValue = value;
-            },
-            onFieldSubmitted: (_) => submit(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(onPressed: submit, child: const Text('确定')),
-          ],
-        );
-      },
+      title: title,
+      initialValue: initialValue,
+      labelText: '图集名称',
     );
     if (value == null || value.trim().isEmpty) {
       return null;

@@ -109,25 +109,14 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
   }
 
   Future<void> _confirmDeleteBackground(String path) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showImageResourceConfirmSurface(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('删除阅读背景'),
-            content: const Text('确定要删除这个阅读背景吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('删除', style: TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
+      title: '删除阅读背景',
+      message: '确定要删除这个阅读背景吗？',
+      confirmLabel: '删除',
+      destructive: true,
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     setState(() {
