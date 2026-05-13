@@ -464,7 +464,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       if (!hasBookmarkRequested) {
         unawaited(ensureBookmarksLoaded(setModalState, context));
       }
-      final title = isBookmarkLoading ? '灵感' : '灵感（${bookmarks.length}）';
 
       return Padding(
         padding: EdgeInsets.fromLTRB(sheetHorizontal, 0, sheetHorizontal, 12),
@@ -475,12 +474,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               context,
               controller: bookmarkSearchController,
               hintText: '搜索灵感',
-            ),
-            Text(
-              title,
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
             ),
             const SizedBox(height: 8),
             Expanded(

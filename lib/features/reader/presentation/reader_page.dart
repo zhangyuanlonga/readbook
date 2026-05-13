@@ -173,6 +173,8 @@ enum _OverlayEdge { top, bottom }
 
 enum _ReaderInteractionState { idle, dragging, animating, settling }
 
+enum _ReaderTopMoreAction { cacheChapter, switchSource, toggleBookshelf }
+
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({
     super.key,
@@ -3412,6 +3414,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildTopOverlay(_ReaderThemeColors colors) {
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '阅读';
+    final bookTitle = _bookTitle.trim().isNotEmpty ? _bookTitle.trim() : '阅读';
+    final displayBookTitle = _ellipsizeReaderTopTitle(bookTitle);
+    final sourceName = _currentSourceNameForTopOverlay();
+    final chapterLine = '$chapterTitle · ${_chapterProgressLabel()}';
 
     return Positioned(
       top: 0,
@@ -3454,99 +3460,98 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     child: SafeArea(
                       bottom: false,
                       child: SizedBox(
-                        height: 68,
+                        height: 92,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                          child: Row(
+                          padding: const EdgeInsets.fromLTRB(6, 8, 12, 10),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              _buildTopActionButton(
-                                icon: Icons.arrow_back_ios_new,
-                                tooltip: '返回',
-                                onPressed: _handleBackNavigation,
-                                colors: colors,
-                                emphasizeHitArea: true,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      chapterTitle,
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  _buildTopActionButton(
+                                    icon: Icons.arrow_back_ios_new,
+                                    tooltip: '返回',
+                                    onPressed: _handleBackNavigation,
+                                    colors: colors,
+                                    emphasizeHitArea: true,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      displayBookTitle,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: colors.text,
+                                        fontSize: 21,
+                                        height: 1.1,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _chapterProgressLabel(),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: colors.meta,
-                                        fontSize: 11,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _buildTopActionButton(
+                                    icon: Icons.info_outline,
+                                    tooltip: '查看详情',
+                                    onPressed: _openDetailPage,
+                                    colors: colors,
+                                    emphasizeHitArea: true,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  _buildTopActionButton(
+                                    icon: Icons.more_vert_rounded,
+                                    tooltip: '更多',
+                                    onPressed:
+                                        () => unawaited(
+                                          _showTopMoreActions(colors),
+                                        ),
+                                    colors: colors,
+                                    emphasizeHitArea: true,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 15),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        chapterLine,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: colors.meta,
+                                          fontSize: 13,
+                                          height: 1.1,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
+                                    if (sourceName.isNotEmpty) ...[
+                                      const SizedBox(width: 12),
+                                      Flexible(
+                                        flex: 0,
+                                        child: Text(
+                                          sourceName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.end,
+                                          style: TextStyle(
+                                            color: colors.meta.withValues(
+                                              alpha: 0.82,
+                                            ),
+                                            fontSize: 12,
+                                            height: 1.1,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              if (_canCacheChapter)
-                                _buildTopActionButton(
-                                  icon:
-                                      _isCurrentChapterCached
-                                          ? Icons.cloud_done_rounded
-                                          : Icons.cloud_download_outlined,
-                                  tooltip:
-                                      _isCurrentChapterCached
-                                          ? '已缓存章节'
-                                          : '缓存章节',
-                                  onPressed:
-                                      () => unawaited(_openChapterCache()),
-                                  colors: colors,
-                                ),
-                              if (_canSwitchSource) ...[
-                                const SizedBox(width: 2),
-                                _buildTopActionButton(
-                                  icon: Icons.swap_horiz_rounded,
-                                  tooltip:
-                                      _isSwitchSourceLoading
-                                          ? '换源中...'
-                                          : '切换书源',
-                                  onPressed:
-                                      _isSwitchSourceLoading
-                                          ? null
-                                          : () => unawaited(
-                                            _showSwitchSourceSheet(),
-                                          ),
-                                  colors: colors,
-                                  loading: _isSwitchSourceLoading,
-                                ),
-                              ],
-                              const SizedBox(width: 2),
-                              _buildTopActionButton(
-                                icon:
-                                    _isInBookshelf
-                                        ? Icons.bookmark_added
-                                        : Icons.bookmark_add_outlined,
-                                tooltip: _isInBookshelf ? '从书架移除' : '加入书架',
-                                onPressed:
-                                    _isShelfActionLoading
-                                        ? null
-                                        : () => unawaited(_toggleBookshelf()),
-                                colors: colors,
-                                loading: _isShelfActionLoading,
-                              ),
-                              const SizedBox(width: 2),
-                              _buildTopActionButton(
-                                icon: Icons.info_outline,
-                                tooltip: '查看详情',
-                                onPressed: _openDetailPage,
-                                colors: colors,
                               ),
                             ],
                           ),
@@ -3561,6 +3566,124 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ),
       ),
     );
+  }
+
+  String _ellipsizeReaderTopTitle(String title) {
+    const maxCharacters = 12;
+    final normalized = title.trim();
+    if (normalized.runes.length <= maxCharacters) {
+      return normalized;
+    }
+    return '${String.fromCharCodes(normalized.runes.take(maxCharacters))}...';
+  }
+
+  String _currentSourceNameForTopOverlay() {
+    final sourceId = (_sourceId ?? '').trim();
+    if (sourceId.isEmpty || LocalReaderIdentity.isLocalSourceId(sourceId)) {
+      return '';
+    }
+    final registered = _sourceRuntimeFacade.registeredScriptSourceById(
+      sourceId,
+    );
+    return registered?.runtime.name.trim() ?? '';
+  }
+
+  Future<void> _showTopMoreActions(_ReaderThemeColors colors) async {
+    final action = await showAdaptiveActionSurface<_ReaderTopMoreAction>(
+      context: context,
+      maxWidth: 420,
+      padding: EdgeInsets.zero,
+      builder: (actionContext) {
+        final colorScheme = Theme.of(actionContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_canCacheChapter)
+                ListTile(
+                  leading: Icon(
+                    _isCurrentChapterCached
+                        ? Icons.cloud_done_rounded
+                        : Icons.cloud_download_outlined,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  title: Text(_isCurrentChapterCached ? '已缓存章节' : '缓存章节'),
+                  onTap:
+                      _isCurrentChapterCached
+                          ? null
+                          : () => Navigator.of(
+                            actionContext,
+                          ).pop(_ReaderTopMoreAction.cacheChapter),
+                ),
+              if (_canSwitchSource)
+                ListTile(
+                  leading:
+                      _isSwitchSourceLoading
+                          ? SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          )
+                          : Icon(
+                            Icons.swap_horiz_rounded,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                  title: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
+                  onTap:
+                      _isSwitchSourceLoading
+                          ? null
+                          : () => Navigator.of(
+                            actionContext,
+                          ).pop(_ReaderTopMoreAction.switchSource),
+                ),
+              ListTile(
+                leading:
+                    _isShelfActionLoading
+                        ? SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                        : Icon(
+                          _isInBookshelf
+                              ? Icons.bookmark_added
+                              : Icons.bookmark_add_outlined,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                title: Text(_isInBookshelf ? '从书架移除' : '加入书架'),
+                onTap:
+                    _isShelfActionLoading
+                        ? null
+                        : () => Navigator.of(
+                          actionContext,
+                        ).pop(_ReaderTopMoreAction.toggleBookshelf),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    switch (action) {
+      case _ReaderTopMoreAction.cacheChapter:
+        await _openChapterCache();
+        return;
+      case _ReaderTopMoreAction.switchSource:
+        await _showSwitchSourceSheet();
+        return;
+      case _ReaderTopMoreAction.toggleBookshelf:
+        await _toggleBookshelf();
+        return;
+    }
   }
 
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
@@ -3811,7 +3934,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   color: colors.text,
                 ),
               )
-              : Icon(icon, size: 18),
+              : Icon(icon, size: emphasizeHitArea ? 22 : 18),
     );
   }
 
