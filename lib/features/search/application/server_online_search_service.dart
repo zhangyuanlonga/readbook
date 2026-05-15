@@ -43,6 +43,14 @@ class ServerOnlineSearchService {
 
   static const int _rawSearchPageSize = 100;
 
+  static String _contentTypeParam(SearchContentMode mode) {
+    return switch (mode) {
+      SearchContentMode.manga => 'manga',
+      SearchContentMode.audio => 'audio',
+      SearchContentMode.novel => 'novel',
+    };
+  }
+
   Future<SearchExecutionReport> search({
     required String keyword,
     required SearchContentMode contentMode,
@@ -79,7 +87,7 @@ class ServerOnlineSearchService {
     final selectedSourceIds = _normalizedList(sourceIds);
     final payload = <String, Object?>{
       'keyword': keyword,
-      'contentType': contentMode == SearchContentMode.manga ? 'manga' : 'novel',
+      'contentType': _contentTypeParam(contentMode),
       'matchMode': preciseMatch ? 'exact' : 'fuzzy',
       'scenario': 'globalSearch',
       'sourceScope': {
@@ -133,7 +141,7 @@ class ServerOnlineSearchService {
     final selectedSourceIds = _normalizedList(sourceIds);
     final queryParameters = <String, String>{
       'keyword': normalizedKeyword,
-      'contentType': contentMode == SearchContentMode.manga ? 'manga' : 'novel',
+      'contentType': _contentTypeParam(contentMode),
       'matchMode': preciseMatch ? 'exact' : 'fuzzy',
       'scenario': 'globalSearch',
       'sourceScopeMode': selectedSourceIds.isEmpty ? 'all' : 'include',
@@ -303,8 +311,7 @@ class ServerOnlineSearchService {
       method: ApiMethod.get,
       path: 'v1/sources',
       queryParameters: <String, dynamic>{
-        'contentType':
-            contentMode == SearchContentMode.manga ? 'manga' : 'novel',
+        'contentType': _contentTypeParam(contentMode),
         'enabled': true,
         if ((keyword ?? '').trim().isNotEmpty) 'keyword': keyword!.trim(),
         'page': page.clamp(1, 1 << 30),

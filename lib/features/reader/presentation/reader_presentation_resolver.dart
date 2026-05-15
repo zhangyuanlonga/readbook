@@ -27,6 +27,9 @@ class ReaderSessionSeed {
     this.chapterUrl,
     this.chapterTitle,
     this.chapterIndex,
+    this.resolvedContentType,
+    this.audioUrl,
+    this.audioManifestUrl,
     this.chapters = const <Chapter>[],
   });
 
@@ -41,6 +44,9 @@ class ReaderSessionSeed {
   final String? chapterUrl;
   final String? chapterTitle;
   final int? chapterIndex;
+  final String? resolvedContentType;
+  final String? audioUrl;
+  final String? audioManifestUrl;
   final List<Chapter> chapters;
 }
 
@@ -71,6 +77,9 @@ class ReaderPresentationResolver {
           chapterUrl: seed.chapterUrl,
           chapterTitle: seed.chapterTitle,
           chapterIndex: seed.chapterIndex,
+          resolvedContentType: seed.resolvedContentType,
+          audioUrl: seed.audioUrl,
+          audioManifestUrl: seed.audioManifestUrl,
           chapters: seed.chapters,
         );
   }

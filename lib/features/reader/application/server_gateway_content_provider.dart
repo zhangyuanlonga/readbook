@@ -117,7 +117,13 @@ class ServerGatewayContentProvider extends ContentProvider {
         normalizedImages.isEmpty
             ? _cleaner.clean(rawContent)
             : _contentWithoutServerImages(rawContent, normalizedImages);
-    if (normalizedContent.isEmpty && normalizedImages.isEmpty) {
+    final hasAudioContent =
+        (content.audioUrl?.trim().isNotEmpty ?? false) ||
+        (content.audioManifestUrl?.trim().isNotEmpty ?? false) ||
+        content.contentType.trim().toLowerCase() == 'audio';
+    if (normalizedContent.isEmpty &&
+        normalizedImages.isEmpty &&
+        !hasAudioContent) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
@@ -129,6 +135,10 @@ class ServerGatewayContentProvider extends ContentProvider {
       fromCache: content.cacheHit,
       imageUrls: normalizedImages,
       imageHeaders: content.imageHeaders,
+      contentType: content.contentType,
+      audioUrl: content.audioUrl,
+      audioManifestUrl: content.audioManifestUrl,
+      audioHeaders: content.audioHeaders,
       displayChapterTitle: chapterTitle,
     );
   }

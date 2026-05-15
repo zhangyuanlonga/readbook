@@ -19,6 +19,10 @@ class ChapterContentResult {
     required bool fromCache,
     List<String> imageUrls = const [],
     Map<String, String> imageHeaders = const {},
+    String? contentType,
+    String? audioUrl,
+    String? audioManifestUrl,
+    Map<String, String> audioHeaders = const {},
     String? displayChapterTitle,
     ReaderDocument? document,
   }) {
@@ -36,6 +40,10 @@ class ChapterContentResult {
               ? resolvedDocument.imageUrls
               : const <String>[],
       imageHeaders: Map<String, String>.unmodifiable(imageHeaders),
+      contentType: _normalizeOptionalTextStatic(contentType),
+      audioUrl: _normalizeOptionalTextStatic(audioUrl),
+      audioManifestUrl: _normalizeOptionalTextStatic(audioManifestUrl),
+      audioHeaders: Map<String, String>.unmodifiable(audioHeaders),
       displayChapterTitle: displayChapterTitle,
       document: resolvedDocument,
     );
@@ -46,6 +54,10 @@ class ChapterContentResult {
     required this.fromCache,
     required this.imageUrls,
     required this.imageHeaders,
+    required this.contentType,
+    required this.audioUrl,
+    required this.audioManifestUrl,
+    required this.audioHeaders,
     required this.displayChapterTitle,
     required this.document,
   });
@@ -54,10 +66,24 @@ class ChapterContentResult {
   final bool fromCache;
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
+  final String? contentType;
+  final String? audioUrl;
+  final String? audioManifestUrl;
+  final Map<String, String> audioHeaders;
   final String? displayChapterTitle;
   final ReaderDocument document;
 
   bool get isImageContent => document.isPureImageDocument;
+  bool get hasAudioContent =>
+      (audioUrl?.isNotEmpty ?? false) || (audioManifestUrl?.isNotEmpty ?? false);
+
+  static String? _normalizeOptionalTextStatic(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
 }
 
 class ChapterContentService {

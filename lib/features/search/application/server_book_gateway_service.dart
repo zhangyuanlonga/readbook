@@ -473,6 +473,9 @@ class ServerGatewayContentResult {
     required this.format,
     this.imageUrls = const <String>[],
     this.imageHeaders = const <String, String>{},
+    this.audioUrl,
+    this.audioManifestUrl,
+    this.audioHeaders = const <String, String>{},
   });
 
   final String content;
@@ -481,6 +484,9 @@ class ServerGatewayContentResult {
   final String format;
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
+  final String? audioUrl;
+  final String? audioManifestUrl;
+  final Map<String, String> audioHeaders;
 
   factory ServerGatewayContentResult.fromEnvelopeData(Object? data) {
     final map = _asMap(data);
@@ -496,6 +502,11 @@ class ServerGatewayContentResult {
         'image_urls',
       ]),
       imageHeaders: _stringMap(map['imageHeaders'] ?? map['image_headers']),
+      audioUrl: _optionalString(map['audioUrl'] ?? map['audio_url']),
+      audioManifestUrl: _optionalString(
+        map['audioManifestUrl'] ?? map['audio_manifest_url'],
+      ),
+      audioHeaders: _stringMap(map['audioHeaders'] ?? map['audio_headers']),
     );
   }
 }

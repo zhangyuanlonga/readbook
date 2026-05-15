@@ -18,6 +18,9 @@ void main() {
       chapterUrl: 'https://example.com/chapter/1',
       chapterTitle: '第一章',
       chapterIndex: 0,
+      resolvedContentType: 'text',
+      audioUrl: 'https://cdn.example/chapter-1.mp3',
+      audioManifestUrl: 'https://cdn.example/chapter-1.m3u8',
       chapters: <Chapter>[
         Chapter(
           id: 'chapter_1',
@@ -51,6 +54,7 @@ void main() {
       expect(updated.bookTitle, '新的标题');
       expect(updated.sourceId, baseSession.sourceId);
       expect(updated.chapterId, baseSession.chapterId);
+      expect(updated.audioUrl, baseSession.audioUrl);
       expect(updated.sessionState, same(baseSession.sessionState));
     });
 
@@ -58,11 +62,15 @@ void main() {
       final updated = baseSession.copyWith(
         bookAuthor: null,
         chapterTitle: null,
+        audioUrl: null,
+        audioManifestUrl: null,
         sessionState: null,
       );
 
       expect(updated.bookAuthor, isNull);
       expect(updated.chapterTitle, isNull);
+      expect(updated.audioUrl, isNull);
+      expect(updated.audioManifestUrl, isNull);
       expect(updated.sessionState, isNull);
     });
   });

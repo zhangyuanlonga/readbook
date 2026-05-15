@@ -313,7 +313,10 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent,
       hasError: _errorText != null,
-      hasTextContent: _content.trim().isNotEmpty,
+      hasTextContent:
+          _content.trim().isNotEmpty ||
+          (_chapterAudioUrl?.trim().isNotEmpty ?? false) ||
+          (_chapterAudioManifestUrl?.trim().isNotEmpty ?? false),
       hasScrollClients: hasScrollClients,
       maxScrollExtent: position?.maxScrollExtent ?? 0,
       scrollOffset: position?.pixels ?? 0,
@@ -564,7 +567,10 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
       return;
     }
-    if ((_content.trim().isEmpty && _chapterImageUrls.isEmpty) ||
+    if ((_content.trim().isEmpty &&
+            _chapterImageUrls.isEmpty &&
+            (_chapterAudioUrl?.trim().isEmpty ?? true) &&
+            (_chapterAudioManifestUrl?.trim().isEmpty ?? true)) ||
         _currentIndex == null) {
       return;
     }

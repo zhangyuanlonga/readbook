@@ -137,9 +137,17 @@ class _SearchPlanner {
         capabilities.contains('novel') ||
         capabilities.contains('book') ||
         capabilities.contains('text');
+    final declaresAudio =
+        capabilities.contains('audio') ||
+        capabilities.contains('audiobook') ||
+        capabilities.contains('voice');
 
     if (contentMode == SearchContentMode.manga) {
       return declaresManga;
+    }
+
+    if (contentMode == SearchContentMode.audio) {
+      return declaresAudio;
     }
 
     if (declaresManga && !declaresNovel) {

@@ -72,6 +72,18 @@ class SearchInputCard extends StatelessWidget {
                     ? null
                     : () => onContentModeChanged(SearchContentMode.manga),
           ),
+          SizedBox(width: metrics.contentGap),
+          _ModeChip(
+            icon: Icons.headphones_rounded,
+            label: '听书',
+            isActive: searchContentMode == SearchContentMode.audio,
+            activeBackgroundColor: modeActiveBackgroundColor,
+            activeForegroundColor: modeActiveForegroundColor,
+            onTap:
+                isSearching
+                    ? null
+                    : () => onContentModeChanged(SearchContentMode.audio),
+          ),
           SizedBox(width: metrics.contentGap + 2),
           _OptionChip(
             icon:

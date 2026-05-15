@@ -7,6 +7,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     String content, {
     List<String> imageUrls = const [],
     Map<String, String> imageHeaders = const {},
+    String? contentType,
+    String? audioUrl,
+    String? audioManifestUrl,
+    Map<String, String> audioHeaders = const {},
     ReaderDocument? document,
     List<String>? precomputedParagraphs,
     List<List<ReaderPagedSlice>>? precomputedPagedPages,
@@ -29,8 +33,16 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _disposeMangaTransformControllers();
     _document = resolvedContentState.document;
     _content = resolvedContentState.content;
+    _resolvedContentType = contentType?.trim().isEmpty ?? true
+        ? null
+        : contentType!.trim();
     _chapterImageUrls = resolvedContentState.chapterImageUrls;
     _chapterImageHeaders = resolvedContentState.imageHeaders;
+    _chapterAudioUrl =
+        audioUrl?.trim().isEmpty ?? true ? null : audioUrl!.trim();
+    _chapterAudioManifestUrl =
+        audioManifestUrl?.trim().isEmpty ?? true ? null : audioManifestUrl!.trim();
+    _chapterAudioHeaders = Map<String, String>.unmodifiable(audioHeaders);
     _mangaImageRetryNonce.clear();
     _precachedInlineImageUrls.clear();
     _lastInlineImagePrecacheAt = null;
@@ -682,6 +694,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         snapshot.result.content,
         imageUrls: snapshot.result.imageUrls,
         imageHeaders: snapshot.result.imageHeaders,
+        contentType: snapshot.result.contentType,
+        audioUrl: snapshot.result.audioUrl,
+        audioManifestUrl: snapshot.result.audioManifestUrl,
+        audioHeaders: snapshot.result.audioHeaders,
         document: snapshot.result.document,
         precomputedParagraphs: precomputedParagraphs,
         precomputedPagedPages: precomputedPagedPages,
@@ -751,6 +767,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           _setContentFlow(
             chapter.content,
             imageUrls: chapter.imageUrls,
+            contentType: null,
             document: chapter.document,
           );
           previewRatio = _resolveDocumentRestoreRatio(

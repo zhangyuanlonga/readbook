@@ -100,7 +100,10 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             !_showHiddenLoadingPlaceholder &&
             !_hasVisibleReaderContent,
         hasRenderableContent:
-            _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty,
+            _content.trim().isNotEmpty ||
+            _chapterImageUrls.isNotEmpty ||
+            (_chapterAudioUrl?.trim().isNotEmpty ?? false) ||
+            (_chapterAudioManifestUrl?.trim().isNotEmpty ?? false),
         errorText: _errorText,
         canSwitchSource: _canSwitchSource,
         isSwitchSourceLoading: _isSwitchSourceLoading,
@@ -126,10 +129,19 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   }
 
   Widget _buildReaderViewportContent(_ReaderThemeColors colors) {
+    if (_currentContentMode == ReaderContentMode.audio) {
+      return _buildAudioReader(colors);
+    }
     if (_shouldUseContinuousTextFlow && _continuousTextChapters.isNotEmpty) {
       return _buildContinuousTextReader(colors);
     }
     return _buildStandardReaderList(colors);
+  }
+
+  Widget _buildAudioReader(_ReaderThemeColors colors) {
+    return ReaderAudioView(
+      model: ReaderAudioViewModel(contentSession: _resolvedContentSession()),
+    );
   }
 
   Widget _buildMangaViewport(_ReaderThemeColors colors) {

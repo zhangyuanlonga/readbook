@@ -68,6 +68,9 @@ void main() {
         chapterUrl: 'https://example.com/chapter/1',
         chapterTitle: '第一章',
         chapterIndex: 0,
+        resolvedContentType: null,
+        audioUrl: null,
+        audioManifestUrl: null,
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -86,6 +89,9 @@ void main() {
         chapterUrl: 'https://example.com/chapter/1',
         chapterTitle: '第一章',
         chapterIndex: 0,
+        resolvedContentType: null,
+        audioUrl: null,
+        audioManifestUrl: null,
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -109,6 +115,9 @@ void main() {
         chapterUrl: ' https://example.com/chapter/1 ',
         chapterTitle: ' 第一章 ',
         chapterIndex: 0,
+        resolvedContentType: ' audio ',
+        audioUrl: ' https://cdn.example/chapter-1.mp3 ',
+        audioManifestUrl: ' https://cdn.example/chapter-1.m3u8 ',
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -125,6 +134,9 @@ void main() {
       expect(session.chapterId, 'chapter_1');
       expect(session.chapterUrl, 'https://example.com/chapter/1');
       expect(session.chapterTitle, '第一章');
+      expect(session.resolvedContentType, 'audio');
+      expect(session.audioUrl, 'https://cdn.example/chapter-1.mp3');
+      expect(session.audioManifestUrl, 'https://cdn.example/chapter-1.m3u8');
       expect(session.chapters, hasLength(1));
       expect(session.bootstrapProgress, same(bootstrapProgress));
       expect(session.readingRecordSession, same(readingRecordSession));

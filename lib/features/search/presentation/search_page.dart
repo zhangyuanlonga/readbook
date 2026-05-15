@@ -447,8 +447,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   ) {
     final theme = Theme.of(context);
     final metrics = AppAdaptiveMetrics.of(context);
-    final isMangaMode = _searchContentMode == SearchContentMode.manga;
-    final hintText = isMangaMode ? '输入漫画名或作者' : '输入书名或作者';
+    final hintText = switch (_searchContentMode) {
+      SearchContentMode.manga => '输入漫画名或作者',
+      SearchContentMode.audio => '输入有声书名或作者',
+      SearchContentMode.novel => '输入书名或作者',
+    };
 
     return Padding(
       padding: EdgeInsets.only(right: metrics.contentGap + 2),
@@ -840,9 +843,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         capabilities.contains('novel') ||
         capabilities.contains('book') ||
         capabilities.contains('text');
+    final declaresAudio =
+        capabilities.contains('audio') ||
+        capabilities.contains('audiobook') ||
+        capabilities.contains('voice');
 
     if (contentMode == SearchContentMode.manga) {
       return declaresManga;
+    }
+
+    if (contentMode == SearchContentMode.audio) {
+      return declaresAudio;
     }
 
     if (declaresManga && !declaresNovel) {

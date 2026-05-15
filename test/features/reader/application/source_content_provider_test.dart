@@ -132,6 +132,8 @@ void main() {
     final contentResult = ChapterContentResult(
       content: '正文内容',
       fromCache: false,
+      contentType: 'audio',
+      audioUrl: 'https://cdn.example/chapter-1.mp3',
     );
 
     final fakeDetailService = _FakeBookDetailService(detailResult);
@@ -181,6 +183,8 @@ void main() {
     expect(fakeContentService.chapterIndex, 0);
     expect(fakeContentService.chapterTitle, '第一章');
     expect(fakeContentService.nextChapterUrl, 'https://example.com/book/1/c2');
+    expect(loadedContent.contentType, 'audio');
+    expect(loadedContent.audioUrl, 'https://cdn.example/chapter-1.mp3');
   });
 
   test('exposes cached detail peek for reader bootstrap reuse', () {

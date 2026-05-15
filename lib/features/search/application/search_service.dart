@@ -88,7 +88,7 @@ class SearchExecutionReport {
 
 typedef SearchProgressCallback = void Function(SearchExecutionReport report);
 
-enum SearchContentMode { novel, manga }
+enum SearchContentMode { novel, manga, audio }
 
 enum SearchPlanScenario { globalSearch, switchSource, autoSwitchSource }
 
@@ -278,7 +278,11 @@ class SearchService {
           stage: ErrorStage.search,
         );
       }
-      final modeLabel = contentMode == SearchContentMode.manga ? '漫画' : '小说';
+      final modeLabel = switch (contentMode) {
+        SearchContentMode.manga => '漫画',
+        SearchContentMode.audio => '听书',
+        SearchContentMode.novel => '小说',
+      };
       throw UnknownSourceException(
         briefMessage: '没有可用$modeLabel书源，请先在书源页导入并启用对应书源。',
         stage: ErrorStage.search,

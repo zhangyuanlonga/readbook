@@ -133,6 +133,7 @@ import '../application/reader_dependencies_provider.dart';
 import 'chapter_cache_sheets.dart';
 import 'reader_catalog_sheet.dart';
 import 'reader_annotated_text.dart';
+import 'reader_audio_view.dart';
 import 'reader_annotation_interaction.dart';
 import 'reader_body_region.dart';
 import 'reader_chrome_widgets.dart';
@@ -382,8 +383,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   List<ReaderRenderBlockItem> _renderItems = const [];
   Map<int, ReaderRenderTextItem> _renderTextItemsByParagraph =
       const <int, ReaderRenderTextItem>{};
+  String? _resolvedContentType;
   List<String> _chapterImageUrls = const [];
   Map<String, String> _chapterImageHeaders = const {};
+  String? _chapterAudioUrl;
+  String? _chapterAudioManifestUrl;
+  Map<String, String> _chapterAudioHeaders = const {};
   bool _isEditingBookmarkNote = false;
   ReaderSelectionState _selectionState = const ReaderSelectionState();
   List<Bookmark> _chapterBookmarks = const [];
@@ -921,6 +926,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterUrl: _chapterUrl,
       chapterTitle: _chapterTitle,
       chapterIndex: _currentIndex,
+      resolvedContentType: _resolvedContentType,
+      audioUrl: _chapterAudioUrl,
+      audioManifestUrl: _chapterAudioManifestUrl,
       chapters: _chapters,
       sessionState:
           contentMode == ReaderContentMode.text
@@ -949,6 +957,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterUrl: _chapterUrl,
         chapterTitle: _chapterTitle,
         chapterIndex: _currentIndex,
+        resolvedContentType: _resolvedContentType,
+        audioUrl: _chapterAudioUrl,
+        audioManifestUrl: _chapterAudioManifestUrl,
         chapters: _chapters,
       ),
     );
@@ -1049,7 +1060,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderContentMode get _currentContentMode {
-    return _contentModeResolver.resolveFromDocument(_document);
+    return _contentModeResolver.resolveFromChapterResult(
+      ChapterContentResult(
+        content: _content,
+        fromCache: _isCurrentChapterCached,
+        imageUrls: _chapterImageUrls,
+        imageHeaders: _chapterImageHeaders,
+        contentType: _resolvedContentType,
+        audioUrl: _chapterAudioUrl,
+        audioManifestUrl: _chapterAudioManifestUrl,
+        audioHeaders: _chapterAudioHeaders,
+        document: _document,
+      ),
+    );
   }
 
   bool get _isMangaChapter => _currentContentMode == ReaderContentMode.comic;
@@ -1180,7 +1203,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _showsOuterFooterInfoBarFor(_currentViewportKind);
 
   bool get _hasVisibleReaderContent =>
-      _content.trim().isNotEmpty || !_document.isEmpty;
+      _content.trim().isNotEmpty ||
+      !_document.isEmpty ||
+      (_chapterAudioUrl?.trim().isNotEmpty ?? false) ||
+      (_chapterAudioManifestUrl?.trim().isNotEmpty ?? false);
 
   bool get _needsBlockingLoadingUi {
     if (_isBootstrapping && !_hasVisibleReaderContent) {

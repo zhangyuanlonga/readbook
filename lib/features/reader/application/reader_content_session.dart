@@ -18,6 +18,9 @@ class ReaderContentSession {
     this.chapterUrl,
     this.chapterTitle,
     this.chapterIndex,
+    this.resolvedContentType,
+    this.audioUrl,
+    this.audioManifestUrl,
     this.chapters = const <Chapter>[],
     this.sessionState,
     this.bootstrapProgress,
@@ -35,6 +38,9 @@ class ReaderContentSession {
   final String? chapterUrl;
   final String? chapterTitle;
   final int? chapterIndex;
+  final String? resolvedContentType;
+  final String? audioUrl;
+  final String? audioManifestUrl;
   final List<Chapter> chapters;
   final ReaderSessionState? sessionState;
   final ReadingProgress? bootstrapProgress;
@@ -52,6 +58,9 @@ class ReaderContentSession {
     Object? chapterUrl = _sentinel,
     Object? chapterTitle = _sentinel,
     Object? chapterIndex = _sentinel,
+    Object? resolvedContentType = _sentinel,
+    Object? audioUrl = _sentinel,
+    Object? audioManifestUrl = _sentinel,
     List<Chapter>? chapters,
     Object? sessionState = _sentinel,
     Object? bootstrapProgress = _sentinel,
@@ -78,6 +87,16 @@ class ReaderContentSession {
               : chapterTitle as String?,
       chapterIndex:
           identical(chapterIndex, _sentinel) ? this.chapterIndex : chapterIndex as int?,
+      resolvedContentType:
+          identical(resolvedContentType, _sentinel)
+              ? this.resolvedContentType
+              : resolvedContentType as String?,
+      audioUrl:
+          identical(audioUrl, _sentinel) ? this.audioUrl : audioUrl as String?,
+      audioManifestUrl:
+          identical(audioManifestUrl, _sentinel)
+              ? this.audioManifestUrl
+              : audioManifestUrl as String?,
       chapters: chapters ?? this.chapters,
       sessionState:
           identical(sessionState, _sentinel)
