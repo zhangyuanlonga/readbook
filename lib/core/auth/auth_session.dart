@@ -39,5 +39,21 @@ class AuthSession {
     return loginIdentity;
   }
 
+  bool isAccessExpired({Duration skew = const Duration(minutes: 1)}) {
+    final expiresAt = accessExpiresAt;
+    if (expiresAt == null) {
+      return false;
+    }
+    return DateTime.now().toUtc().isAfter(expiresAt.subtract(skew));
+  }
+
+  bool isRefreshExpired({Duration skew = const Duration(minutes: 1)}) {
+    final expiresAt = refreshExpiresAt;
+    if (expiresAt == null) {
+      return false;
+    }
+    return DateTime.now().toUtc().isAfter(expiresAt.subtract(skew));
+  }
+
   bool get isValid => accessToken.trim().isNotEmpty;
 }

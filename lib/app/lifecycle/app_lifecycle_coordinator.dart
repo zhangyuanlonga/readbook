@@ -41,6 +41,7 @@ class AppLifecycleCoordinator {
 
   static const Duration heartbeatThrottle = Duration(minutes: 2);
   static const Duration visitThrottle = Duration(minutes: 30);
+  static const Duration authRefreshThrottle = Duration(minutes: 5);
 
   final Stream<IncomingExternalImportPayload> _incomingExternalImportStream;
   final Stream<AuthEvent> _authEventStream;
@@ -57,8 +58,10 @@ class AppLifecycleCoordinator {
   bool _initialized = false;
   bool _isHeartbeatInFlight = false;
   bool _isVisitInFlight = false;
+  bool _isAuthRefreshInFlight = false;
   DateTime? _lastHeartbeatAt;
   DateTime? _lastVisitAt;
+  DateTime? _lastAuthRefreshAt;
 
   Future<void> initialize({
     required AppIncomingExternalImportHandler onIncomingExternalImportPayload,
@@ -81,8 +84,31 @@ class AppLifecycleCoordinator {
     if (state != AppLifecycleState.resumed) {
       return;
     }
+    unawaited(refreshAuthSessionIfNeeded());
     unawaited(sendHeartbeat());
     unawaited(sendVisitEvent());
+  }
+
+  Future<void> refreshAuthSessionIfNeeded() async {
+    final refresher =
+        _authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher;
+    if (refresher == null || _isAuthRefreshInFlight) {
+      return;
+    }
+    final now = _now();
+    final last = _lastAuthRefreshAt;
+    if (last != null && now.difference(last) < authRefreshThrottle) {
+      return;
+    }
+    _isAuthRefreshInFlight = true;
+    try {
+      await refresher.refreshToken();
+      _lastAuthRefreshAt = now;
+    } catch (_) {
+      // Ignore resume refresh failures and let authenticated requests retry.
+    } finally {
+      _isAuthRefreshInFlight = false;
+    }
   }
 
   Future<void> sendHeartbeat() async {

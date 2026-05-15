@@ -1,4 +1,5 @@
 import '../network/auth_token_refresher.dart';
+import '../network/api_client.dart';
 import 'auth_event_bus.dart';
 import 'auth_service.dart';
 import 'auth_session_store.dart';
@@ -29,10 +30,26 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
         refreshToken: refreshToken,
       );
       return session.isValid;
+    } on ApiException catch (error) {
+      if (_shouldInvalidateSession(error)) {
+        await _sessionStore.clear();
+        AuthEventBus.instance.emitSessionExpired();
+      }
+      return false;
     } catch (_) {
-      await _sessionStore.clear();
-      AuthEventBus.instance.emitSessionExpired();
+      // Transient refresh failures should not immediately wipe local session.
+      // Let the next authenticated request or foreground refresh retry again.
       return false;
     }
+  }
+
+  bool _shouldInvalidateSession(ApiException error) {
+    final apiCode = error.apiCode.toUpperCase();
+    return error.statusCode == 401 ||
+        error.statusCode == 403 ||
+        apiCode.contains('UNAUTHORIZED') ||
+        apiCode.contains('TOKEN') ||
+        apiCode.contains('SESSION') ||
+        apiCode.contains('REFRESH');
   }
 }
