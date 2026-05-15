@@ -458,6 +458,13 @@ class ExploreService {
       intro: _normalizeOptionalText(book.intro),
       coverUrl: _normalizeOptionalText(book.cover),
       latestChapter: _normalizeOptionalText(book.latestChapter),
+      wordCount: _normalizeOptionalText(book.wordCount),
+      category: _normalizeOptionalText(book.category),
+      tags: book.tags
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false),
+      updateTime: _normalizeOptionalText(book.updateTime),
     );
   }
 

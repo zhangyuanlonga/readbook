@@ -6,6 +6,8 @@ import '../source/application/source_runtime_facade.dart';
 import 'application/search_history_service.dart';
 import 'application/search_failure_export_service.dart';
 import 'application/search_service.dart';
+import 'application/server_book_gateway_service.dart';
+import 'application/server_online_search_service.dart';
 import 'application/search_system_settings_service.dart';
 
 final searchSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
@@ -16,6 +18,18 @@ final searchServiceProvider = Provider<SearchService>((ref) {
   return SearchService(
     sourceRuntimeFacade: ref.watch(searchSourceRuntimeFacadeProvider),
   );
+});
+
+final serverOnlineSearchServiceProvider = Provider<ServerOnlineSearchService>((
+  ref,
+) {
+  return ServerOnlineSearchService();
+});
+
+final serverBookGatewayServiceProvider = Provider<ServerBookGatewayService>((
+  ref,
+) {
+  return ServerBookGatewayService();
 });
 
 final searchHistoryServiceProvider = Provider<SearchHistoryService>((ref) {

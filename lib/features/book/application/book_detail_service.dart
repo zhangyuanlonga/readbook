@@ -770,6 +770,15 @@ class BookDetailService {
             _normalizeOptionalText(detailed.tocUrl) ??
             _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
             _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
+        latestChapterTitle: _normalizeOptionalText(detailed.latestChapter),
+        totalChapterNum: chapters.isNotEmpty ? chapters.length : null,
+        wordCount: _normalizeOptionalText(detailed.wordCount),
+        category: _normalizeOptionalText(detailed.category),
+        tags: detailed.tags
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false),
+        updateTime: _normalizeOptionalText(detailed.updateTime),
       ),
       chapters: chapters,
       sourceName: sourceName,

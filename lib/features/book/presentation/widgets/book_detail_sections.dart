@@ -46,14 +46,12 @@ class BookDetailSummaryCard extends StatelessWidget {
     required this.title,
     required this.sourceName,
     this.author,
-    this.latestChapter,
     required this.cover,
   });
 
   final String title;
   final String sourceName;
   final String? author;
-  final String? latestChapter;
   final Widget cover;
 
   @override
@@ -85,7 +83,6 @@ class BookDetailSummaryCard extends StatelessWidget {
                   title: title,
                   sourceName: sourceName,
                   author: author,
-                  latestChapter: latestChapter,
                 ),
               ),
             ],
@@ -101,13 +98,11 @@ class _BookDetailSummaryText extends StatelessWidget {
     required this.title,
     required this.sourceName,
     this.author,
-    this.latestChapter,
   });
 
   final String title;
   final String sourceName;
   final String? author;
-  final String? latestChapter;
 
   @override
   Widget build(BuildContext context) {
@@ -137,30 +132,16 @@ class _BookDetailSummaryText extends StatelessWidget {
         ),
         SizedBox(height: metrics.isCompactDensity ? 5 : 7),
         _BookDetailInfoLine(label: '来源', value: sourceName),
-        SizedBox(height: metrics.isCompactDensity ? 5 : 7),
-        _BookDetailInfoLine(
-          label: '最新',
-          value:
-              latestChapter != null && latestChapter!.trim().isNotEmpty
-                  ? latestChapter!.trim()
-                  : '暂无',
-          maxLines: 2,
-        ),
       ],
     );
   }
 }
 
 class _BookDetailInfoLine extends StatelessWidget {
-  const _BookDetailInfoLine({
-    required this.label,
-    required this.value,
-    this.maxLines = 1,
-  });
+  const _BookDetailInfoLine({required this.label, required this.value});
 
   final String label;
   final String value;
-  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +166,7 @@ class _BookDetailInfoLine extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            maxLines: maxLines,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: valueStyle,
           ),
@@ -213,6 +194,186 @@ class BookDetailQuickActionsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class BookDetailServerMetaLine extends StatelessWidget {
+  const BookDetailServerMetaLine({
+    super.key,
+    this.wordCount,
+    this.category,
+    this.tags = const <String>[],
+    this.updateTime,
+  });
+
+  final String? wordCount;
+  final String? category;
+  final List<String> tags;
+  final String? updateTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _buildItems();
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Wrap(
+      spacing: metrics.isCompactDensity ? 7 : 8,
+      runSpacing: metrics.isCompactDensity ? 7 : 8,
+      children: [
+        for (final item in items)
+          _BookDetailInlinePill(
+            text: item,
+            backgroundColor: colorScheme.surfaceContainerHigh,
+            textColor: colorScheme.onSurfaceVariant,
+          ),
+      ],
+    );
+  }
+
+  List<String> _buildItems() {
+    final items = <String>[];
+    final word = _cleanLabeledValue(wordCount, label: '字数');
+    if (word != null) {
+      items.add(word);
+    }
+    final seenTags = <String>{};
+    final normalizedCategory = _cleanLabeledValue(category, label: '分类');
+    if (normalizedCategory != null) {
+      seenTags.add(normalizedCategory);
+      items.add(normalizedCategory);
+    }
+    for (final tag in tags) {
+      final normalized = _cleanLabeledValue(tag, label: '标签');
+      if (normalized == null || seenTags.contains(normalized)) {
+        continue;
+      }
+      seenTags.add(normalized);
+      items.add(normalized);
+      if (items.length >= 6) {
+        break;
+      }
+    }
+    final update = _cleanLabeledValue(updateTime, label: '更新');
+    if (update != null) {
+      items.add('更新: $update');
+    }
+    return items;
+  }
+}
+
+class _BookDetailInlinePill extends StatelessWidget {
+  const _BookDetailInlinePill({
+    required this.text,
+    required this.backgroundColor,
+    required this.textColor,
+  });
+
+  final String text;
+  final Color backgroundColor;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Container(
+      constraints: BoxConstraints(
+        maxWidth: metrics.isCompactDensity ? 160 : 220,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.isCompactDensity ? 10 : 11,
+        vertical: metrics.isCompactDensity ? 6 : 7,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class BookDetailChapterStatusLine extends StatelessWidget {
+  const BookDetailChapterStatusLine({
+    super.key,
+    this.totalChapterNum,
+    this.latestChapter,
+  });
+
+  final int? totalChapterNum;
+  final String? latestChapter;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = totalChapterNum;
+    final latest = _stripLeadingUpdateFromLatestChapter(latestChapter);
+    final items = <String>[
+      if (total != null && total > 0) '共 $total 章',
+      if (latest != null && latest.isNotEmpty) '最新 · $latest',
+    ];
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.cardPadding,
+        vertical: metrics.isCompactDensity ? 8 : 9,
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+      ),
+      child: Text(
+        items.join('  ｜  '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+String? _cleanLabeledValue(String? value, {required String label}) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  var normalized = trimmed;
+  final pattern = RegExp('^$label[：:]\\s*');
+  while (pattern.hasMatch(normalized)) {
+    normalized = normalized.replaceFirst(pattern, '').trim();
+  }
+  return normalized.isEmpty ? null : normalized;
+}
+
+String? _stripLeadingUpdateFromLatestChapter(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final normalized =
+      trimmed
+          .replaceFirst(
+            RegExp(r'^\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?\s*(更新|更)?\s*'),
+            '',
+          )
+          .trim();
+  return normalized.isEmpty ? trimmed : normalized;
 }
 
 class BookDetailIntroCard extends StatefulWidget {

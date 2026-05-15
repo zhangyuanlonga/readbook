@@ -8,6 +8,10 @@ class Book {
     this.intro,
     this.coverUrl,
     this.latestChapter,
+    this.wordCount,
+    this.category,
+    this.tags = const <String>[],
+    this.updateTime,
   });
 
   final String id;
@@ -18,6 +22,10 @@ class Book {
   final String? intro;
   final String? coverUrl;
   final String? latestChapter;
+  final String? wordCount;
+  final String? category;
+  final List<String> tags;
+  final String? updateTime;
 
   Book copyWith({
     String? id,
@@ -32,6 +40,13 @@ class Book {
     bool clearCoverUrl = false,
     String? latestChapter,
     bool clearLatestChapter = false,
+    String? wordCount,
+    bool clearWordCount = false,
+    String? category,
+    bool clearCategory = false,
+    List<String>? tags,
+    String? updateTime,
+    bool clearUpdateTime = false,
   }) {
     return Book(
       id: id ?? this.id,
@@ -43,6 +58,10 @@ class Book {
       coverUrl: clearCoverUrl ? null : (coverUrl ?? this.coverUrl),
       latestChapter:
           clearLatestChapter ? null : (latestChapter ?? this.latestChapter),
+      wordCount: clearWordCount ? null : (wordCount ?? this.wordCount),
+      category: clearCategory ? null : (category ?? this.category),
+      tags: tags ?? this.tags,
+      updateTime: clearUpdateTime ? null : (updateTime ?? this.updateTime),
     );
   }
 
@@ -56,6 +75,10 @@ class Book {
       'intro': intro,
       'coverUrl': coverUrl,
       'latestChapter': latestChapter,
+      'wordCount': wordCount,
+      'category': category,
+      'tags': tags,
+      'updateTime': updateTime,
     };
   }
 
@@ -69,6 +92,10 @@ class Book {
       intro: _optionalString(json['intro']),
       coverUrl: _optionalString(json['coverUrl']),
       latestChapter: _optionalString(json['latestChapter']),
+      wordCount: _optionalString(json['wordCount']),
+      category: _optionalString(json['category']),
+      tags: _stringList(json['tags']),
+      updateTime: _optionalString(json['updateTime']),
     );
   }
 
@@ -89,5 +116,15 @@ class Book {
       return null;
     }
     return normalized;
+  }
+
+  static List<String> _stringList(Object? value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+    return value
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 }

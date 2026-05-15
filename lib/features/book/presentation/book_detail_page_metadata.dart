@@ -320,6 +320,12 @@ extension on _BookDetailPageState {
         intro: presentation.displayIntro,
         coverUrl: presentation.displayCover ?? result.detail.coverUrl,
         tocUrl: result.detail.tocUrl,
+        latestChapterTitle: result.detail.latestChapterTitle,
+        totalChapterNum: result.detail.totalChapterNum,
+        wordCount: result.detail.wordCount,
+        category: result.detail.category,
+        tags: result.detail.tags,
+        updateTime: result.detail.updateTime,
       ),
     );
   }

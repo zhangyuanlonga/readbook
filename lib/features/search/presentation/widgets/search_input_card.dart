@@ -8,6 +8,7 @@ class SearchInputCard extends StatelessWidget {
     super.key,
     required this.isSearching,
     required this.searchContentMode,
+    required this.serverOnlineSearchEnabled,
     required this.isPreciseBookMatch,
     required this.selectedSourceCount,
     required this.availableSourceCount,
@@ -25,6 +26,7 @@ class SearchInputCard extends StatelessWidget {
 
   final bool isSearching;
   final SearchContentMode searchContentMode;
+  final bool serverOnlineSearchEnabled;
   final bool isPreciseBookMatch;
   final int selectedSourceCount;
   final int availableSourceCount;
@@ -72,10 +74,13 @@ class SearchInputCard extends StatelessWidget {
           ),
           SizedBox(width: metrics.contentGap + 2),
           _OptionChip(
-            icon: Icons.filter_list_rounded,
+            icon:
+                serverOnlineSearchEnabled
+                    ? Icons.cloud_queue_rounded
+                    : Icons.filter_list_rounded,
             label: _buildSourceLabel(),
-            isActive: selectedSourceCount > 0,
-            isLoading: isLoadingSourceCount,
+            isActive: serverOnlineSearchEnabled || selectedSourceCount > 0,
+            isLoading: !serverOnlineSearchEnabled && isLoadingSourceCount,
             activeBackgroundColor: optionActiveBackgroundColor,
             activeForegroundColor: optionActiveForegroundColor,
             onTap:
@@ -123,6 +128,12 @@ class SearchInputCard extends StatelessWidget {
   }
 
   String _buildSourceLabel() {
+    if (serverOnlineSearchEnabled) {
+      if (isLoadingSourceCount && availableSourceCount == 0) return '服务器...';
+      if (availableSourceCount == 0) return '无服务器源';
+      if (selectedSourceCount == 0) return '服务器$availableSourceCount';
+      return '服务器$selectedSourceCount源';
+    }
     if (isLoadingSourceCount && availableSourceCount == 0) return '书源...';
     if (availableSourceCount == 0) return '无书源';
     if (selectedSourceCount == 0) return '全部$availableSourceCount';

@@ -16,6 +16,8 @@ class SearchSystemSettingsService {
       'search.system.debugLogEnabled';
   static const String _maxConcurrentSourcesKey =
       'search.system.maxConcurrentSources';
+  static const String _serverOnlineSearchEnabledKey =
+      'search.system.serverOnlineSearchEnabled';
   static const int minMaxConcurrentSources = 1;
   static int get defaultMaxConcurrentSources => _isDesktopPlatform ? 8 : 4;
   static int get maxMaxConcurrentSources => _isDesktopPlatform ? 12 : 6;
@@ -59,5 +61,15 @@ class SearchSystemSettingsService {
       maxMaxConcurrentSources,
     );
     await prefs.setInt(_maxConcurrentSourcesKey, normalized);
+  }
+
+  Future<bool> loadServerOnlineSearchEnabled() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_serverOnlineSearchEnabledKey) ?? false;
+  }
+
+  Future<void> saveServerOnlineSearchEnabled(bool enabled) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_serverOnlineSearchEnabledKey, enabled);
   }
 }

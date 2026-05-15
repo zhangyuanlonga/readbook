@@ -1,5 +1,46 @@
 part of 'search_service.dart';
 
+Future<SearchExecutionReport> buildSearchExecutionReportWithExistingAggregator({
+  required String keyword,
+  required int sourceCount,
+  required int successSourceCount,
+  required Map<String, Book> booksById,
+  required List<SourceSearchFailure> failures,
+  required Map<String, String> sourceNames,
+  required Map<String, int> sourceOrderById,
+  required bool aggregateByTitleAuthor,
+  int? processedSourceCountOverride,
+}) async {
+  final report = await _SearchReportAssembler(
+    logger: AppLogger.instance,
+    searchHitCacheService: SearchHitCacheService(),
+    progressAggregationInterval: Duration.zero,
+  ).buildExecutionReport(
+    keyword: keyword,
+    sourceCount: sourceCount,
+    successSourceCount: successSourceCount,
+    booksById: booksById,
+    failures: failures,
+    sourceNames: sourceNames,
+    sourceOrderById: sourceOrderById,
+    aggregateByTitleAuthor: aggregateByTitleAuthor,
+  );
+  if (processedSourceCountOverride == null) {
+    return report;
+  }
+  return SearchExecutionReport(
+    keyword: report.keyword,
+    sourceCount: report.sourceCount,
+    successSourceCount: report.successSourceCount,
+    books: report.books,
+    failures: report.failures,
+    sourceNames: report.sourceNames,
+    bookSourceHitCounts: report.bookSourceHitCounts,
+    bookSourceHits: report.bookSourceHits,
+    processedSourceCountOverride: processedSourceCountOverride,
+  );
+}
+
 class _SearchReportAssembler {
   const _SearchReportAssembler({
     required AppLogger logger,
@@ -260,10 +301,7 @@ class _SearchReportAssembler {
     required Map<String, int> sourceOrderById,
   }) {
     var score =
-        _resolveBookRelevanceTier(
-          book,
-          normalizedKeyword: normalizedKeyword,
-        ) *
+        _resolveBookRelevanceTier(book, normalizedKeyword: normalizedKeyword) *
         1000;
     if (book.coverUrl?.trim().isNotEmpty == true) {
       score += 40;
@@ -286,10 +324,7 @@ class _SearchReportAssembler {
     }
     normalized = normalized.replaceAll(RegExp(r'<[^>]+>'), ' ');
     normalized = normalized.replaceAll(RegExp(r'[\u3000\s]+'), ' ');
-    normalized = normalized.replaceAll(
-      RegExp(r'[《》〈〉【】\\[\\]()（）<>「」『』]'),
-      '',
-    );
+    normalized = normalized.replaceAll(RegExp(r'[《》〈〉【】\\[\\]()（）<>「」『』]'), '');
     return normalized.trim();
   }
 }
@@ -530,9 +565,6 @@ String _normalizeAggregateTextForIsolate(String raw) {
   }
   normalized = normalized.replaceAll(RegExp(r'<[^>]+>'), ' ');
   normalized = normalized.replaceAll(RegExp(r'[\u3000\s]+'), ' ');
-  normalized = normalized.replaceAll(
-    RegExp(r'[《》〈〉【】\\[\\]()（）<>「」『』]'),
-    '',
-  );
+  normalized = normalized.replaceAll(RegExp(r'[《》〈〉【】\\[\\]()（）<>「」『』]'), '');
   return normalized.trim();
 }

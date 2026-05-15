@@ -48,6 +48,7 @@ import '../../reader/application/local/local_book_storage_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../reader/application/local_content_provider.dart';
 import '../../reader/application/reader_preferences_service.dart';
+import '../../reader/application/server_gateway_content_provider.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/reading_record_service.dart';
 import '../../reader/application/source_content_provider.dart';
@@ -57,6 +58,7 @@ import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../../reader/presentation/reader_catalog_sheet.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../search/providers.dart' as search_providers;
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
@@ -296,6 +298,14 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             bookDetailLocalChapterContentServiceProvider,
           ),
           previewService: ref.read(bookDetailLocalBookPreviewServiceProvider),
+        ),
+        ServerGatewayContentProvider(
+          gatewayService: ref.read(
+            search_providers.serverBookGatewayServiceProvider,
+          ),
+          settingsService: ref.read(
+            search_providers.searchSystemSettingsServiceProvider,
+          ),
         ),
         _sourceContentProvider,
       ],
@@ -638,7 +648,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       title: presentation.displayTitle,
       sourceName: result.sourceName,
       author: _cleanSummaryMetaValue(presentation.displayAuthor),
-      latestChapter: _resolveLatestChapter(result)?.title,
       cover: _buildCoverPreview(
         presentation.realCoverUrl,
         customCoverPath: presentation.customCoverPath,
@@ -661,6 +670,41 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           raw,
         ).replaceFirst(RegExp(r'^(作者|来源|最新章节|最新)\s*[:：]\s*'), '').trim();
     return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _resolveDisplayLatestChapterTitle(BookDetailLoadResult result) {
+    final fromDetail = _normalizeLatestChapterCandidate(
+      result.detail.latestChapterTitle,
+    );
+    if (fromDetail != null) {
+      return fromDetail;
+    }
+    return _normalizeLatestChapterCandidate(
+      _resolveLatestChapter(result)?.title,
+    );
+  }
+
+  String? _normalizeLatestChapterCandidate(String? raw) {
+    final normalized = _cleanSummaryMetaValue(raw);
+    if (normalized == null || _looksLikeUpdateTime(normalized)) {
+      return null;
+    }
+    final withoutLeadingUpdate =
+        normalized
+            .replaceFirst(
+              RegExp(r'^\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?\s*(更新|更)?\s*'),
+              '',
+            )
+            .trim();
+    return withoutLeadingUpdate.isEmpty ? null : withoutLeadingUpdate;
+  }
+
+  bool _looksLikeUpdateTime(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return true;
+    }
+    return RegExp(r'^\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?$').hasMatch(normalized);
   }
 
   Widget _buildQuickActionsCard({
@@ -687,6 +731,42 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         },
       ),
     );
+  }
+
+  Widget _buildDetailServerMetaLine(BookDetailLoadResult result) {
+    final detail = result.detail;
+    return BookDetailServerMetaLine(
+      wordCount: detail.wordCount,
+      category: detail.category,
+      tags: detail.tags,
+      updateTime: detail.updateTime,
+    );
+  }
+
+  Widget _buildDetailChapterStatusLine(BookDetailLoadResult result) {
+    final detail = result.detail;
+    return BookDetailChapterStatusLine(
+      totalChapterNum:
+          detail.totalChapterNum ??
+          (result.chapters.isNotEmpty ? result.chapters.length : null),
+      latestChapter: _resolveDisplayLatestChapterTitle(result),
+    );
+  }
+
+  bool _hasDetailServerMeta(BookDetailLoadResult result) {
+    final detail = result.detail;
+    return (detail.wordCount?.trim().isNotEmpty ?? false) ||
+        (detail.category?.trim().isNotEmpty ?? false) ||
+        detail.tags.any((item) => item.trim().isNotEmpty) ||
+        (detail.updateTime?.trim().isNotEmpty ?? false);
+  }
+
+  bool _hasDetailChapterStatus(BookDetailLoadResult result) {
+    final total =
+        result.detail.totalChapterNum ??
+        (result.chapters.isNotEmpty ? result.chapters.length : 0);
+    return total > 0 ||
+        (_resolveDisplayLatestChapterTitle(result)?.trim().isNotEmpty ?? false);
   }
 
   Widget _buildDetailOrganizationCard() {
@@ -792,6 +872,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         auxiliaryState: auxiliaryState,
         hasCatalog: _canOpenCatalogForResult(result),
       );
+      final serverMetaLine = _buildDetailServerMetaLine(result);
+      final chapterStatusLine = _buildDetailChapterStatusLine(result);
+      final hasServerMeta = _hasDetailServerMeta(result);
+      final hasChapterStatus = _hasDetailChapterStatus(result);
       if (metrics.isMediumUpWindow) {
         final compactDesktop = metrics.isMediumWindow;
         final sideWidth = compactDesktop ? 220.0 : 260.0;
@@ -806,6 +890,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                 flex: 5,
                 child: Column(
                   children: [
+                    if (hasChapterStatus) ...[
+                      chapterStatusLine,
+                      if (introCard != null ||
+                          presentationState.tocWarningText != null)
+                        SizedBox(height: metrics.sectionGap),
+                    ],
                     if (introCard != null) introCard,
                     if (presentationState.tocWarningText != null) ...[
                       SizedBox(height: metrics.sectionGap),
@@ -819,6 +909,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                 width: actionWidth,
                 child: Column(
                   children: [
+                    if (hasServerMeta) ...[
+                      serverMetaLine,
+                      SizedBox(height: metrics.sectionGap),
+                    ],
                     quickActionsCard,
                     if (_detailCategory != null || _detailTags.isNotEmpty) ...[
                       SizedBox(height: metrics.sectionGap),
@@ -838,6 +932,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         sections.addAll(<Widget>[
           detailCard,
           SizedBox(height: metrics.sectionGap),
+          if (hasServerMeta) ...[
+            serverMetaLine,
+            SizedBox(height: metrics.sectionGap),
+          ],
           quickActionsCard,
           if (_detailCategory != null || _detailTags.isNotEmpty) ...[
             SizedBox(height: metrics.sectionGap),
@@ -845,6 +943,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           ],
           if (introCard != null) ...[
             SizedBox(height: metrics.sectionGap),
+            if (hasChapterStatus) ...[
+              chapterStatusLine,
+              SizedBox(height: metrics.sectionGap),
+            ],
             introCard,
           ],
         ]);
@@ -1924,6 +2026,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       unawaited(
         _loadSupplementaryState(result: result, loadRequestToken: requestToken),
       );
+      _scheduleCatalogWarmupIfNeeded(
+        result: result,
+        backgroundRefresh: backgroundRefresh,
+        shouldIncludeCatalog: shouldIncludeCatalog,
+      );
       return true;
     } on AppException catch (error) {
       if (!_isActiveDetailLoadRequest(requestToken)) {
@@ -1977,6 +2084,21 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       }
       lease.release();
     }
+  }
+
+  void _scheduleCatalogWarmupIfNeeded({
+    required BookDetailLoadResult result,
+    required bool backgroundRefresh,
+    required bool shouldIncludeCatalog,
+  }) {
+    if (backgroundRefresh ||
+        shouldIncludeCatalog ||
+        result.catalogLoaded ||
+        !result.catalogAvailable ||
+        result.detail.totalChapterNum != null) {
+      return;
+    }
+    unawaited(_load(includeCatalog: true, backgroundRefresh: true));
   }
 
   List<String> _currentConflictKeys() {

@@ -11,6 +11,7 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../../mine/application/reader_background_service.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../search/providers.dart' as search_providers;
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
@@ -34,6 +35,7 @@ import 'reading_record_service.dart';
 import 'reader_cached_chapter_store.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import 'source_content_provider.dart';
+import 'server_gateway_content_provider.dart';
 
 class ReaderFeatureDependencies {
   const ReaderFeatureDependencies({
@@ -155,6 +157,14 @@ final readerFeatureDependenciesFactoryProvider =
                 detailService: localBookDetailService,
                 chapterContentService: localChapterContentService,
                 previewService: localBookPreviewService,
+              ),
+              ServerGatewayContentProvider(
+                gatewayService: ref.watch(
+                  search_providers.serverBookGatewayServiceProvider,
+                ),
+                settingsService: ref.watch(
+                  search_providers.searchSystemSettingsServiceProvider,
+                ),
               ),
               if (capabilities.supportsSourceRuntime) SourceContentProvider(),
             ],

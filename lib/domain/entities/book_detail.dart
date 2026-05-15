@@ -8,6 +8,12 @@ class BookDetail {
     this.intro,
     this.coverUrl,
     this.tocUrl,
+    this.latestChapterTitle,
+    this.totalChapterNum,
+    this.wordCount,
+    this.category,
+    this.tags = const <String>[],
+    this.updateTime,
   });
 
   final String id;
@@ -18,6 +24,12 @@ class BookDetail {
   final String? intro;
   final String? coverUrl;
   final String? tocUrl;
+  final String? latestChapterTitle;
+  final int? totalChapterNum;
+  final String? wordCount;
+  final String? category;
+  final List<String> tags;
+  final String? updateTime;
 
   Map<String, dynamic> toJson() {
     return {
@@ -29,6 +41,12 @@ class BookDetail {
       'intro': intro,
       'coverUrl': coverUrl,
       'tocUrl': tocUrl,
+      'latestChapterTitle': latestChapterTitle,
+      'totalChapterNum': totalChapterNum,
+      'wordCount': wordCount,
+      'category': category,
+      'tags': tags,
+      'updateTime': updateTime,
     };
   }
 
@@ -42,6 +60,12 @@ class BookDetail {
       intro: _optionalString(json['intro']),
       coverUrl: _optionalString(json['coverUrl']),
       tocUrl: _optionalString(json['tocUrl']),
+      latestChapterTitle: _optionalString(json['latestChapterTitle']),
+      totalChapterNum: _optionalInt(json['totalChapterNum']),
+      wordCount: _optionalString(json['wordCount']),
+      category: _optionalString(json['category']),
+      tags: _stringList(json['tags']),
+      updateTime: _optionalString(json['updateTime']),
     );
   }
 
@@ -62,5 +86,22 @@ class BookDetail {
       return null;
     }
     return normalized;
+  }
+
+  static int? _optionalInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  static List<String> _stringList(Object? value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+    return value
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 }

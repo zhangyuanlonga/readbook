@@ -58,6 +58,7 @@ class SearchExecutionReport {
     required this.sourceNames,
     this.bookSourceHitCounts = const <String, int>{},
     this.bookSourceHits = const <String, List<Book>>{},
+    this.processedSourceCountOverride,
   });
 
   final String keyword;
@@ -68,9 +69,11 @@ class SearchExecutionReport {
   final Map<String, String> sourceNames;
   final Map<String, int> bookSourceHitCounts;
   final Map<String, List<Book>> bookSourceHits;
+  final int? processedSourceCountOverride;
 
   int get failedSourceCount => failures.length;
-  int get processedSourceCount => successSourceCount + failedSourceCount;
+  int get processedSourceCount =>
+      processedSourceCountOverride ?? successSourceCount + failedSourceCount;
 
   int sourceHitCountOf(Book book) => bookSourceHitCounts[book.id] ?? 1;
 
