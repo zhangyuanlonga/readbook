@@ -205,7 +205,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       return;
     }
     _userId = session.userId;
-    _username = session.username;
+    _username = session.displayIdentity ?? session.loginIdentity;
   }
 
   Future<void> _restoreLayoutMode() async {
@@ -263,7 +263,8 @@ class _MinePageState extends ConsumerState<MinePage> {
     }
     setState(() {
       _userId = snapshot.session?.userId;
-      _username = snapshot.session?.username;
+      _username =
+          snapshot.session?.displayIdentity ?? snapshot.session?.loginIdentity;
       _showSourceEntry = showSourceEntry && snapshot.showSourceEntry;
       _hasMembership = snapshot.hasMembership;
       _hasThemeCustom = snapshot.hasThemeCustom;

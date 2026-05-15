@@ -15,6 +15,8 @@ class AuthSessionStore {
   static const String _refreshExpiresAtKey = 'auth.refresh_expires_at';
   static const String _userIdKey = 'auth.user_id';
   static const String _usernameKey = 'auth.username';
+  static const String _accountKey = 'auth.account';
+  static const String _displayNameKey = 'auth.display_name';
 
   final Future<SharedPreferences> _preferencesFuture;
 
@@ -30,6 +32,8 @@ class AuthSessionStore {
     }
     final userId = (prefs.getString(_userIdKey) ?? '').trim();
     final username = (prefs.getString(_usernameKey) ?? '').trim();
+    final account = (prefs.getString(_accountKey) ?? '').trim();
+    final displayName = (prefs.getString(_displayNameKey) ?? '').trim();
     final refreshToken = (prefs.getString(_refreshTokenKey) ?? '').trim();
     final accessExpiresAt = _parseTime(prefs.getString(_accessExpiresAtKey));
     final refreshExpiresAt = _parseTime(prefs.getString(_refreshExpiresAtKey));
@@ -40,6 +44,8 @@ class AuthSessionStore {
       refreshExpiresAt: refreshExpiresAt,
       userId: userId.isEmpty ? null : userId,
       username: username.isEmpty ? null : username,
+      account: account.isEmpty ? null : account,
+      displayName: displayName.isEmpty ? null : displayName,
     );
   }
 
@@ -77,11 +83,25 @@ class AuthSessionStore {
       await prefs.setString(_userIdKey, userId);
     }
 
-    final username = session.username?.trim() ?? '';
+    final username = session.loginIdentity?.trim() ?? '';
     if (username.isEmpty) {
       await prefs.remove(_usernameKey);
     } else {
       await prefs.setString(_usernameKey, username);
+    }
+
+    final account = session.account?.trim() ?? '';
+    if (account.isEmpty) {
+      await prefs.remove(_accountKey);
+    } else {
+      await prefs.setString(_accountKey, account);
+    }
+
+    final displayName = session.displayName?.trim() ?? '';
+    if (displayName.isEmpty) {
+      await prefs.remove(_displayNameKey);
+    } else {
+      await prefs.setString(_displayNameKey, displayName);
     }
 
     final refreshToken = session.refreshToken?.trim() ?? '';
@@ -112,6 +132,8 @@ class AuthSessionStore {
     await prefs.remove(_accessTokenKey);
     await prefs.remove(_userIdKey);
     await prefs.remove(_usernameKey);
+    await prefs.remove(_accountKey);
+    await prefs.remove(_displayNameKey);
     await prefs.remove(_refreshTokenKey);
     await prefs.remove(_accessExpiresAtKey);
     await prefs.remove(_refreshExpiresAtKey);

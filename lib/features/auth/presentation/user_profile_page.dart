@@ -9,6 +9,7 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
+import '../../../core/errors/app_exception.dart';
 import '../../../core/user/user_profile.dart';
 import '../../../core/user/user_profile_service.dart';
 import '../providers.dart';
@@ -30,6 +31,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   bool _isLoading = true;
   bool _isLoadingProfile = false;
   bool _isLoggingOut = false;
+  bool _isSavingProfile = false;
 
   @override
   void initState() {
@@ -113,6 +115,14 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('账号信息'),
+          actions: [
+            if (_session != null)
+              IconButton(
+                tooltip: '编辑资料',
+                onPressed: _isSavingProfile ? null : _showEditProfileSheet,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+          ],
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
@@ -214,7 +224,10 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
     final profile = _profile;
     final displayName =
-        profile?.username ?? session.username ?? session.userId ?? '用户';
+        profile?.displayIdentity ??
+        session.displayIdentity ??
+        session.userId ??
+        '用户';
     final userId = profile?.userId ?? session.userId ?? '-';
     final membershipLabel = _resolveMembershipLabel(profile);
     final membershipHint = _resolveMembershipHint(profile);
@@ -244,9 +257,19 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         description: '账号的基础身份信息。',
         rows: [
           _ProfileRow(
-            label: '用户名',
-            value: profile?.username ?? session.username ?? '-',
+            label: '显示名',
+            value: profile?.displayIdentity ?? session.displayIdentity ?? '-',
           ),
+          _ProfileRow(
+            label: '账号',
+            value:
+                profile?.loginIdentity ??
+                session.loginIdentity ??
+                session.userId ??
+                '-',
+          ),
+          _ProfileRow(label: '手机号', value: profile?.phone ?? '-'),
+          _ProfileRow(label: '邮箱', value: profile?.email ?? '-'),
           _ProfileRow(label: '用户 ID', value: userId),
           _ProfileRow(label: '注册时间', value: _formatTime(profile?.createdAt)),
         ],
@@ -712,6 +735,89 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       }
     }
   }
+
+  Future<void> _showEditProfileSheet() async {
+    final session = _session;
+    if (session == null) {
+      return;
+    }
+    final profile = _profile;
+    final result = await showAdaptiveActionSurface<UserProfileUpdateInput>(
+      context: context,
+      maxWidth: 520,
+      builder: (surfaceContext) {
+        return _EditProfileSurface(
+          initialAccount:
+              profile?.account ?? session.account ?? session.username ?? '',
+          initialDisplayName:
+              profile?.displayName ??
+              session.displayName ??
+              profile?.username ??
+              session.username ??
+              '',
+          initialPhone: profile?.phone ?? '',
+          initialEmail: profile?.email ?? '',
+        );
+      },
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _isSavingProfile = true;
+    });
+    try {
+      final updated = await _userProfileService.updateProfile(
+        result,
+        userId: session.userId,
+      );
+      final nextSession = AuthSession(
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        accessExpiresAt: session.accessExpiresAt,
+        refreshExpiresAt: session.refreshExpiresAt,
+        userId: session.userId,
+        username: updated.username,
+        account: updated.account,
+        displayName:
+            updated.displayName?.trim().isNotEmpty == true
+                ? updated.displayName
+                : updated.username,
+      );
+      await _sessionStore.saveSession(nextSession);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _session = nextSession;
+        _profile = updated;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('资料已更新')));
+    } on AppException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.briefMessage)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，请稍后再试。')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingProfile = false;
+        });
+      }
+    }
+  }
 }
 
 class _ProfileRow {
@@ -719,4 +825,201 @@ class _ProfileRow {
 
   final String label;
   final String value;
+}
+
+class _EditProfileSurface extends StatefulWidget {
+  const _EditProfileSurface({
+    required this.initialAccount,
+    required this.initialDisplayName,
+    required this.initialPhone,
+    required this.initialEmail,
+  });
+
+  final String initialAccount;
+  final String initialDisplayName;
+  final String initialPhone;
+  final String initialEmail;
+
+  @override
+  State<_EditProfileSurface> createState() => _EditProfileSurfaceState();
+}
+
+class _EditProfileSurfaceState extends State<_EditProfileSurface> {
+  late final TextEditingController _accountController;
+  late final TextEditingController _displayNameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
+  late final TextEditingController _confirmPasswordController;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _accountController = TextEditingController(text: widget.initialAccount);
+    _displayNameController = TextEditingController(
+      text: widget.initialDisplayName,
+    );
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    _emailController = TextEditingController(text: widget.initialEmail);
+    _passwordController = TextEditingController();
+    _confirmPasswordController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _accountController.dispose();
+    _displayNameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '编辑资料',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '可修改当前账号的显示名、账号和联系方式。',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _accountController,
+          decoration: const InputDecoration(labelText: '账号', hintText: '请输入账号'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _displayNameController,
+          decoration: const InputDecoration(
+            labelText: '显示名',
+            hintText: '请输入显示名',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _phoneController,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: '手机号',
+            hintText: '请输入手机号',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: '邮箱', hintText: '请输入邮箱'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          decoration: InputDecoration(
+            labelText: '新密码',
+            hintText: '留空则不修改密码',
+            suffixIcon: IconButton(
+              onPressed: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _confirmPasswordController,
+          obscureText: _obscureConfirmPassword,
+          decoration: InputDecoration(
+            labelText: '确认新密码',
+            hintText: '再次输入新密码',
+            suffixIcon: IconButton(
+              onPressed: () {
+                setState(() {
+                  _obscureConfirmPassword = !_obscureConfirmPassword;
+                });
+              },
+              icon: Icon(
+                _obscureConfirmPassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
+        ),
+        if (_errorText != null) ...[
+          const SizedBox(height: 12),
+          Text(_errorText!, style: TextStyle(color: colorScheme.error)),
+        ],
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(onPressed: _submit, child: const Text('保存')),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    final account = _accountController.text.trim();
+    final displayName = _displayNameController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+    if (account.isEmpty) {
+      setState(() {
+        _errorText = '账号不能为空';
+      });
+      return;
+    }
+    if (password.isNotEmpty && password.length < 6) {
+      setState(() {
+        _errorText = '新密码至少需要 6 位';
+      });
+      return;
+    }
+    if (password != confirmPassword) {
+      setState(() {
+        _errorText = '两次输入的新密码不一致';
+      });
+      return;
+    }
+    Navigator.of(context).pop(
+      UserProfileUpdateInput(
+        account: account,
+        displayName: displayName.isEmpty ? account : displayName,
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        password: password.trim(),
+      ),
+    );
+  }
 }

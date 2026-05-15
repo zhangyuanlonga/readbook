@@ -103,5 +103,32 @@ void main() {
       expect(document.blocks[2], isA<ReaderTextBlock>());
       expect(document.paragraphs, containsAll(<String>['• 第一项', '引用内容']));
     });
+
+    test('merges wrapped body lines into one paragraph', () {
+      final document = ReaderDocument.fromContent(
+        content: '这是正文第一行\n这是正文第二行\n这是正文第三行',
+      );
+
+      expect(document.paragraphs, <String>['这是正文第一行这是正文第二行这是正文第三行']);
+    });
+
+    test('preserves explicit short-line layout such as poetry', () {
+      final document = ReaderDocument.fromContent(
+        content: '床前明月光\n疑是地上霜\n举头望明月\n低头思故乡',
+      );
+
+      expect(
+        document.paragraphs,
+        <String>['床前明月光\n疑是地上霜\n举头望明月\n低头思故乡'],
+      );
+    });
+
+    test('inserts a space when merging latin wrapped words', () {
+      final document = ReaderDocument.fromContent(
+        content: 'Hello world\nfrom Selune',
+      );
+
+      expect(document.paragraphs, <String>['Hello world from Selune']);
+    });
   });
 }

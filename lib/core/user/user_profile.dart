@@ -2,6 +2,10 @@ class UserProfile {
   const UserProfile({
     required this.userId,
     required this.username,
+    required this.account,
+    required this.displayName,
+    required this.phone,
+    required this.email,
     required this.role,
     required this.createdAt,
     required this.vipLevel,
@@ -13,6 +17,10 @@ class UserProfile {
 
   final String userId;
   final String username;
+  final String account;
+  final String? displayName;
+  final String? phone;
+  final String? email;
   final String? role;
   final DateTime? createdAt;
   final String? vipLevel;
@@ -21,6 +29,22 @@ class UserProfile {
   final DateTime? vipExpireAt;
   final List<String> features;
 
+  String get loginIdentity {
+    final normalizedAccount = account.trim();
+    if (normalizedAccount.isNotEmpty) {
+      return normalizedAccount;
+    }
+    return username;
+  }
+
+  String get displayIdentity {
+    final normalizedDisplayName = displayName?.trim() ?? '';
+    if (normalizedDisplayName.isNotEmpty) {
+      return normalizedDisplayName;
+    }
+    return loginIdentity;
+  }
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     final rawUser = json['user'];
     if (rawUser is! Map) {
@@ -28,17 +52,19 @@ class UserProfile {
     }
     final data = rawUser.map((key, value) => MapEntry(key.toString(), value));
 
-    String readString(String key) {
-      final value = data[key]?.toString().trim() ?? '';
-      if (value.isEmpty) {
-        throw FormatException('Missing required field: $key');
-      }
-      return value;
-    }
-
     String? readOptionalString(String key) {
       final value = data[key]?.toString().trim() ?? '';
       return value.isEmpty ? null : value;
+    }
+
+    String requireOneOf(List<String> keys) {
+      for (final key in keys) {
+        final value = readOptionalString(key);
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+      throw FormatException('Missing required fields: ${keys.join(", ")}');
     }
 
     DateTime? readTime(String key) {
@@ -60,8 +86,12 @@ class UserProfile {
     }
 
     return UserProfile(
-      userId: readString('user_id'),
-      username: readString('username'),
+      userId: requireOneOf(const <String>['user_id']),
+      username: requireOneOf(const <String>['username', 'account']),
+      account: requireOneOf(const <String>['account', 'username']),
+      displayName: readOptionalString('display_name'),
+      phone: readOptionalString('phone'),
+      email: readOptionalString('email'),
       role: readOptionalString('role'),
       createdAt: readTime('created_at'),
       vipLevel: readOptionalString('vip_level'),

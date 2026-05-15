@@ -22,7 +22,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     milliseconds: 180,
   );
 
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _accountController = TextEditingController();
+  final TextEditingController _displayNameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   late final AuthService _authService;
@@ -34,7 +35,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _accountController.dispose();
+    _displayNameController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
@@ -166,7 +168,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _isRegister ? '注册后可同步阅读进度与账号权益。' : '登录后可继续同步阅读数据与账号权益。',
+                    _isRegister
+                        ? '注册时可自定义账号与显示名，后续可同步阅读进度与账号权益。'
+                        : '登录后可继续同步阅读数据与账号权益。',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -211,11 +215,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         child: Column(
           children: [
             TextField(
-              controller: _usernameController,
+              controller: _accountController,
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
-                labelText: '用户名',
-                hintText: '请输入用户名',
+                labelText: '账号',
+                hintText: '请输入账号（兼容用户名）',
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
@@ -244,6 +248,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               onSubmitted: _isRegister ? null : (_) => _submit(),
             ),
             if (_isRegister) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _displayNameController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: '显示名',
+                  hintText: '请输入显示名（可选）',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _confirmController,
@@ -275,11 +289,12 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _submit() async {
-    final username = _usernameController.text.trim();
+    final account = _accountController.text.trim();
+    final displayName = _displayNameController.text.trim();
     final password = _passwordController.text;
     final confirm = _confirmController.text;
 
-    if (username.isEmpty || password.isEmpty) {
+    if (account.isEmpty || password.isEmpty) {
       _showMessage('请输入账号和密码。');
       return;
     }
@@ -295,14 +310,12 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     try {
       if (_isRegister) {
         await _authService.registerAndStore(
-          username: username,
+          account: account,
           password: password,
+          displayName: displayName.isEmpty ? account : displayName,
         );
       } else {
-        await _authService.loginAndStore(
-          username: username,
-          password: password,
-        );
+        await _authService.loginAndStore(account: account, password: password);
       }
 
       if (!mounted) {

@@ -350,19 +350,92 @@ class ReaderDocument {
   static List<String> _splitParagraphs(String content) {
     return content
         .split(RegExp(r'\n{2,}'))
-        .map((item) => item.trim())
+        .map(_normalizeParagraphBlock)
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
   }
 
   static String _normalizeContent(String content) {
     return content
-        .replaceAll(r'\r\n', '\n')
-        .replaceAll(r'\n', '\n')
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
-        .replaceAll(RegExp(r'\n+'), '\n\n')
+        // Keep author-provided single line breaks inside a paragraph. Only
+        // collapse overly large blank regions to a single paragraph break.
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
+  }
+
+  static String _normalizeParagraphBlock(String paragraph) {
+    final lines = paragraph
+        .split('\n')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (lines.isEmpty) {
+      return '';
+    }
+    if (lines.length == 1) {
+      return lines.first;
+    }
+    if (_shouldPreserveInlineLineBreaks(lines)) {
+      return lines.join('\n');
+    }
+    return _joinWrappedLines(lines);
+  }
+
+  static bool _shouldPreserveInlineLineBreaks(List<String> lines) {
+    if (lines.length <= 1) {
+      return false;
+    }
+    if (lines.any((line) => tryParseInlineImageParagraph(line) != null)) {
+      return true;
+    }
+    final shortLineCount = lines.where((line) => line.length <= 8).length;
+    return lines.length >= 4 && shortLineCount == lines.length;
+  }
+
+  static String _joinWrappedLines(List<String> lines) {
+    final buffer = StringBuffer(lines.first);
+    var previous = lines.first;
+    for (final line in lines.skip(1)) {
+      if (_needsSpaceBetween(previous, line)) {
+        buffer.write(' ');
+      }
+      buffer.write(line);
+      previous = line;
+    }
+    return buffer.toString();
+  }
+
+  static bool _needsSpaceBetween(String previous, String next) {
+    if (previous.isEmpty || next.isEmpty) {
+      return false;
+    }
+    final previousCode = previous.codeUnitAt(previous.length - 1);
+    final nextCode = next.codeUnitAt(0);
+    if (_isAsciiWordLike(previousCode) && _isAsciiWordLike(nextCode)) {
+      return true;
+    }
+    if (_isAsciiSpacingPunctuation(previousCode) && _isAsciiWordLike(nextCode)) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _isAsciiWordLike(int codeUnit) {
+    return (codeUnit >= 48 && codeUnit <= 57) ||
+        (codeUnit >= 65 && codeUnit <= 90) ||
+        (codeUnit >= 97 && codeUnit <= 122);
+  }
+
+  static bool _isAsciiSpacingPunctuation(int codeUnit) {
+    return codeUnit == 33 ||
+        codeUnit == 41 ||
+        codeUnit == 44 ||
+        codeUnit == 46 ||
+        codeUnit == 58 ||
+        codeUnit == 59 ||
+        codeUnit == 63;
   }
 
   static String? _normalizeText(String? value) {

@@ -1,4 +1,5 @@
 import '../device/device_identity_service.dart';
+import '../device/device_identity.dart';
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
@@ -60,21 +61,7 @@ class MembershipService {
       },
       decoder: _decodeMap,
     );
-    return MembershipEntitlement.fromJson({
-      'vip_level': data['vip_level'],
-      'membership_level': data['membership_level'],
-      'vip_status': 'active',
-      'plan_type': data['plan_type'],
-      'expire_at': data['expire_at'],
-      'source': data['source'],
-      'grant_type': data['grant_type'],
-      'grant_subtype': data['grant_subtype'],
-      'grant_label': data['grant_label'],
-      'is_custom_expire': data['is_custom_expire'],
-      'is_trial': data['is_trial'],
-      'max_devices': data['max_devices'],
-      'features': data['features'],
-    });
+    return MembershipEntitlement.fromJson(_extractEntitlementPayload(data));
   }
 
   Future<MembershipEntitlement> claimTrialMembership({
@@ -105,21 +92,7 @@ class MembershipService {
         },
         decoder: _decodeMap,
       );
-      return MembershipEntitlement.fromJson({
-        'vip_level': data['vip_level'],
-        'membership_level': data['membership_level'],
-        'vip_status': 'active',
-        'plan_type': data['plan_type'],
-        'expire_at': data['expire_at'],
-        'source': data['source'],
-        'grant_type': data['grant_type'],
-        'grant_subtype': data['grant_subtype'],
-        'grant_label': data['grant_label'],
-        'is_custom_expire': data['is_custom_expire'],
-        'is_trial': data['is_trial'],
-        'max_devices': data['max_devices'],
-        'features': data['features'],
-      });
+      return MembershipEntitlement.fromJson(_extractEntitlementPayload(data));
     } on ApiException catch (error) {
       if (error.apiCode == 'TRIAL_ALREADY_CLAIMED') {
         throw const AppException(
@@ -135,32 +108,33 @@ class MembershipService {
   Future<MembershipSeatSyncResult> syncCurrentDeviceSeat() async {
     _ensureBaseUrl();
     final identity = await _identityService.loadIdentity();
-    final data = await _client.request<Map<String, dynamic>>(
+    final payload = <String, dynamic>{
+      'install_id': identity.installId,
+      'device_uid': identity.deviceUid,
+      'device_fingerprint': identity.deviceFingerprint,
+    };
+    final data = await _requestWithLegacyFallback(
       method: ApiMethod.post,
-      path: '/v1/me/device-seats/sync',
+      primaryPath: '/v1/me/device-seats/sync',
+      legacyPath: '/v1/me/devices/activate',
       attachAccessToken: true,
       stage: ErrorStage.unknown,
-      body: {
-        'install_id': identity.installId,
-        'device_uid': identity.deviceUid,
-        'device_fingerprint': identity.deviceFingerprint,
-      },
-      decoder: _decodeMap,
+      body: payload,
     );
-    return MembershipSeatSyncResult.fromJson(data);
+    return MembershipSeatSyncResult.fromJson(_extractSeatSyncPayload(data));
   }
 
   Future<List<MembershipDeviceSeat>> fetchDeviceSeats() async {
     _ensureBaseUrl();
-    final data = await _client.request<Map<String, dynamic>>(
+    final data = await _requestWithLegacyFallback(
       method: ApiMethod.get,
-      path: '/v1/me/device-seats',
+      primaryPath: '/v1/me/device-seats',
+      legacyPath: '/v1/me/devices',
       attachAccessToken: true,
       stage: ErrorStage.unknown,
-      decoder: _decodeMap,
     );
 
-    final rawItems = data['items'];
+    final rawItems = _extractSeatItems(data);
     if (rawItems is! List) {
       return const <MembershipDeviceSeat>[];
     }
@@ -185,13 +159,32 @@ class MembershipService {
       );
     }
 
-    await _client.request<Map<String, dynamic>>(
+    await _requestWithLegacyFallback(
       method: ApiMethod.delete,
-      path: '/v1/me/device-seats/$normalized',
+      primaryPath: '/v1/me/device-seats/$normalized',
+      legacyPath: '/v1/me/devices/$normalized',
       attachAccessToken: true,
       stage: ErrorStage.unknown,
-      decoder: _decodeMap,
     );
+  }
+
+  Future<DeviceIdentity> loadCurrentDeviceIdentity() {
+    return _identityService.loadIdentity();
+  }
+
+  bool currentDeviceHasActiveSeat(
+    List<MembershipDeviceSeat> seats,
+    DeviceIdentity identity,
+  ) {
+    return seats.any((seat) {
+      if (!seat.isActive) {
+        return false;
+      }
+      return seat.installId == identity.installId ||
+          (seat.deviceUid != null && seat.deviceUid == identity.deviceUid) ||
+          (seat.deviceFingerprint != null &&
+              seat.deviceFingerprint == identity.deviceFingerprint);
+    });
   }
 
   void _ensureBaseUrl() {
@@ -210,5 +203,87 @@ class MembershipService {
       return data.map((key, value) => MapEntry(key.toString(), value));
     }
     return const <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> _requestWithLegacyFallback({
+    required ApiMethod method,
+    required String primaryPath,
+    required String legacyPath,
+    required bool attachAccessToken,
+    required ErrorStage stage,
+    Object? body,
+  }) async {
+    try {
+      return await _client.request<Map<String, dynamic>>(
+        method: method,
+        path: primaryPath,
+        attachAccessToken: attachAccessToken,
+        stage: stage,
+        body: body,
+        decoder: _decodeMap,
+      );
+    } on ApiException catch (error) {
+      if (!_shouldFallbackToLegacyEndpoint(error)) {
+        rethrow;
+      }
+    }
+
+    return _client.request<Map<String, dynamic>>(
+      method: method,
+      path: legacyPath,
+      attachAccessToken: attachAccessToken,
+      stage: stage,
+      body: body,
+      decoder: _decodeMap,
+    );
+  }
+
+  bool _shouldFallbackToLegacyEndpoint(ApiException error) {
+    return error.statusCode == 404 || error.apiCode == 'NOT_FOUND';
+  }
+
+  Map<String, dynamic> _extractEntitlementPayload(Map<String, dynamic> data) {
+    final nested =
+        _readNestedMap(data['entitlement']) ??
+        _readNestedMap(data['membership']) ??
+        _readNestedMap(data['benefit']) ??
+        _readNestedMap(data['result']);
+    final source = nested ?? data;
+
+    return <String, dynamic>{
+      'vip_level': source['vip_level'] ?? data['vip_level'],
+      'membership_level':
+          source['membership_level'] ?? data['membership_level'],
+      'vip_status': source['vip_status'] ?? data['vip_status'] ?? 'active',
+      'plan_type': source['plan_type'] ?? data['plan_type'],
+      'expire_at': source['expire_at'] ?? data['expire_at'],
+      'source': source['source'] ?? data['source'],
+      'grant_type': source['grant_type'] ?? data['grant_type'],
+      'grant_subtype': source['grant_subtype'] ?? data['grant_subtype'],
+      'grant_label': source['grant_label'] ?? data['grant_label'],
+      'is_custom_expire':
+          source['is_custom_expire'] ?? data['is_custom_expire'],
+      'is_trial': source['is_trial'] ?? data['is_trial'],
+      'max_devices': source['max_devices'] ?? data['max_devices'],
+      'features': source['features'] ?? data['features'],
+    };
+  }
+
+  Map<String, dynamic> _extractSeatSyncPayload(Map<String, dynamic> data) {
+    return _readNestedMap(data['seat_sync']) ??
+        _readNestedMap(data['device']) ??
+        _readNestedMap(data['result']) ??
+        data;
+  }
+
+  Object? _extractSeatItems(Map<String, dynamic> data) {
+    return data['items'] ?? data['seats'] ?? data['devices'];
+  }
+
+  Map<String, dynamic>? _readNestedMap(Object? value) {
+    if (value is Map) {
+      return value.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return null;
   }
 }

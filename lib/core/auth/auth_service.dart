@@ -45,51 +45,69 @@ class AuthService {
   final AppLogger _logger = AppLogger.instance;
 
   Future<AuthSession> login({
-    required String username,
+    required String account,
     required String password,
   }) async {
     _ensureBaseUrl();
+    final normalizedAccount = account.trim();
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.post,
       path: '/v1/auth/login',
-      body: {'username': username, 'password': password},
+      body: {
+        'account': normalizedAccount,
+        'username': normalizedAccount,
+        'password': password,
+      },
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
 
-    return _parseSession(data);
+    return _resolveSessionIdentity(_parseSession(data));
   }
 
   Future<AuthSession> loginAndStore({
-    required String username,
+    required String account,
     required String password,
   }) async {
-    final session = await login(username: username, password: password);
+    final session = await login(account: account, password: password);
     await _persistAuthenticatedSession(session);
     return session;
   }
 
   Future<AuthSession> register({
-    required String username,
+    required String account,
     required String password,
+    String? displayName,
   }) async {
     _ensureBaseUrl();
+    final normalizedAccount = account.trim();
+    final normalizedDisplayName = (displayName ?? normalizedAccount).trim();
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.post,
       path: '/v1/auth/register',
-      body: {'username': username, 'password': password},
+      body: {
+        'account': normalizedAccount,
+        'username': normalizedAccount,
+        'display_name': normalizedDisplayName,
+        'password': password,
+      },
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
 
-    return _parseSession(data);
+    return _resolveSessionIdentity(_parseSession(data));
   }
 
   Future<AuthSession> registerAndStore({
-    required String username,
+    required String account,
     required String password,
+    String? displayName,
   }) async {
-    final session = await register(username: username, password: password);
+    final session = await register(
+      account: account,
+      password: password,
+      displayName: displayName,
+    );
     await _persistAuthenticatedSession(session);
     return session;
   }
@@ -117,7 +135,10 @@ class AuthService {
       decoder: _decodeMap,
     );
 
-    return _parseSession(data);
+    final currentSession = await _sessionStore.getSession();
+    return _resolveSessionIdentity(
+      _mergeSessionIdentity(_parseSession(data), fallback: currentSession),
+    );
   }
 
   Future<AuthSession> refreshAndStore({String? refreshToken}) async {
@@ -212,17 +233,53 @@ class AuthService {
   }
 
   AuthSession _parseSession(Map<String, dynamic> data) {
-    String requireString(String key) {
-      final raw = data[key]?.toString().trim() ?? '';
-      if (raw.isEmpty) {
-        throw FormatException('Missing required field: $key');
-      }
-      return raw;
+    String? readOptionalStringFrom(Map<String, dynamic> source, String key) {
+      final raw = source[key]?.toString().trim() ?? '';
+      return raw.isEmpty ? null : raw;
     }
 
-    String? readOptionalString(String key) {
-      final raw = data[key]?.toString().trim() ?? '';
-      return raw.isEmpty ? null : raw;
+    String? firstNonEmpty(List<String?> values) {
+      for (final value in values) {
+        final normalized = value?.trim();
+        if (normalized != null && normalized.isNotEmpty) {
+          return normalized;
+        }
+      }
+      return null;
+    }
+
+    final rawUser = data['user'];
+    final userData =
+        rawUser is Map
+            ? rawUser.map((key, value) => MapEntry(key.toString(), value))
+            : const <String, dynamic>{};
+
+    String requireString(
+      String key, {
+      List<String> aliases = const <String>[],
+    }) {
+      final resolved = firstNonEmpty(<String?>[
+        readOptionalStringFrom(data, key),
+        for (final alias in aliases) readOptionalStringFrom(data, alias),
+        readOptionalStringFrom(userData, key),
+        for (final alias in aliases) readOptionalStringFrom(userData, alias),
+      ]);
+      if (resolved == null) {
+        throw FormatException('Missing required field: $key');
+      }
+      return resolved;
+    }
+
+    String? readOptionalString(
+      String key, {
+      List<String> aliases = const <String>[],
+    }) {
+      return firstNonEmpty(<String?>[
+        readOptionalStringFrom(data, key),
+        for (final alias in aliases) readOptionalStringFrom(data, alias),
+        readOptionalStringFrom(userData, key),
+        for (final alias in aliases) readOptionalStringFrom(userData, alias),
+      ]);
     }
 
     return AuthSession(
@@ -230,8 +287,87 @@ class AuthService {
       refreshToken: readOptionalString('refresh_token'),
       accessExpiresAt: _parseTime(data['access_expires_at']),
       refreshExpiresAt: _parseTime(data['refresh_expires_at']),
-      userId: requireString('user_id'),
-      username: requireString('username'),
+      userId: readOptionalString('user_id'),
+      username: readOptionalString('username', aliases: <String>['account']),
+      account: readOptionalString('account', aliases: <String>['username']),
+      displayName: readOptionalString(
+        'display_name',
+        aliases: <String>['username', 'account'],
+      ),
+    );
+  }
+
+  Future<AuthSession> _resolveSessionIdentity(AuthSession session) async {
+    if (_hasResolvedIdentity(session)) {
+      return session;
+    }
+
+    final profile = await _fetchCurrentUserIdentity(session.accessToken);
+    if (profile == null) {
+      return session;
+    }
+
+    return _mergeSessionIdentity(session, fallback: profile);
+  }
+
+  bool _hasResolvedIdentity(AuthSession session) {
+    final userId = session.userId?.trim() ?? '';
+    final loginIdentity = session.loginIdentity?.trim() ?? '';
+    return userId.isNotEmpty && loginIdentity.isNotEmpty;
+  }
+
+  Future<AuthSession?> _fetchCurrentUserIdentity(String accessToken) async {
+    try {
+      final data = await _client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: '/v1/users/me',
+        headers: <String, String>{'Authorization': 'Bearer $accessToken'},
+        stage: ErrorStage.unknown,
+        enableAuthRefresh: false,
+        decoder: _decodeMap,
+      );
+      final rawUser = data['user'];
+      if (rawUser is! Map) {
+        return null;
+      }
+      final userData = rawUser.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      String? read(String key) {
+        final raw = userData[key]?.toString().trim() ?? '';
+        return raw.isEmpty ? null : raw;
+      }
+
+      return AuthSession(
+        accessToken: accessToken,
+        userId: read('user_id'),
+        username: read('username') ?? read('account'),
+        account: read('account') ?? read('username'),
+        displayName:
+            read('display_name') ?? read('username') ?? read('account'),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  AuthSession _mergeSessionIdentity(
+    AuthSession session, {
+    AuthSession? fallback,
+  }) {
+    return AuthSession(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken ?? fallback?.refreshToken,
+      accessExpiresAt: session.accessExpiresAt ?? fallback?.accessExpiresAt,
+      refreshExpiresAt: session.refreshExpiresAt ?? fallback?.refreshExpiresAt,
+      userId: session.userId ?? fallback?.userId,
+      username: session.username ?? fallback?.username ?? fallback?.account,
+      account: session.account ?? fallback?.account ?? fallback?.username,
+      displayName:
+          session.displayName ??
+          fallback?.displayName ??
+          fallback?.username ??
+          fallback?.account,
     );
   }
 

@@ -16,11 +16,13 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
+import '../../../core/device/device_identity.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/membership/membership_device_seat.dart';
 import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_seat_sync_result.dart';
 import '../../../core/membership/membership_service.dart';
+import '../../../core/network/api_client.dart';
 import '../application/advanced_theme_provider.dart';
 import '../providers.dart';
 import '../../search/application/search_system_settings_service.dart';
@@ -285,13 +287,48 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       String? transientError;
       var seats = const <MembershipDeviceSeat>[];
       if (entitlement.isActive) {
+        seats = await _membershipService.fetchDeviceSeats();
         try {
-          seatSyncResult = await _membershipService.syncCurrentDeviceSeat();
+          final identity = await _membershipService.loadCurrentDeviceIdentity();
+          final activeSeatCount = seats.where((item) => item.isActive).length;
+          final hasCurrentSeat = _membershipService.currentDeviceHasActiveSeat(
+            seats,
+            identity,
+          );
+          final currentSeat = _findCurrentSeat(seats, identity);
+          if (hasCurrentSeat) {
+            seatSyncResult = MembershipSeatSyncResult(
+              deviceStatus: 'ok',
+              maxDevices: entitlement.maxDevices,
+              activeDeviceCount: activeSeatCount,
+              seat: currentSeat,
+            );
+          } else if (activeSeatCount >= entitlement.maxDevices) {
+            seatSyncResult = MembershipSeatSyncResult(
+              deviceStatus: 'over_limit',
+              maxDevices: entitlement.maxDevices,
+              activeDeviceCount: activeSeatCount,
+              seat: null,
+            );
+          } else {
+            seatSyncResult = await _membershipService.syncCurrentDeviceSeat();
+            seats = await _membershipService.fetchDeviceSeats();
+          }
+        } on ApiException catch (error) {
+          if (_isSeatOverLimitError(error)) {
+            seatSyncResult = MembershipSeatSyncResult(
+              deviceStatus: 'over_limit',
+              maxDevices: entitlement.maxDevices,
+              activeDeviceCount: seats.where((item) => item.isActive).length,
+              seat: null,
+            );
+          } else {
+            transientError = error.briefMessage;
+          }
         } catch (error) {
           transientError =
               error is AppException ? error.briefMessage : '设备席位同步失败。';
         }
-        seats = await _membershipService.fetchDeviceSeats();
       } else if (_serverOnlineSearchEnabled) {
         await _searchSystemSettingsService.saveServerOnlineSearchEnabled(false);
       }
@@ -320,6 +357,35 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                 : _MembershipMessages.loadFailed;
       });
     }
+  }
+
+  bool _isSeatOverLimitError(ApiException error) {
+    final apiCode = error.apiCode.toLowerCase();
+    final message = error.briefMessage.toLowerCase();
+    return apiCode.contains('over_limit') ||
+        apiCode.contains('seat') ||
+        message.contains('device seat over limit') ||
+        message.contains('over limit') ||
+        message.contains('设备席位') ||
+        message.contains('超上限');
+  }
+
+  MembershipDeviceSeat? _findCurrentSeat(
+    List<MembershipDeviceSeat> seats,
+    DeviceIdentity identity,
+  ) {
+    for (final seat in seats) {
+      if (!seat.isActive) {
+        continue;
+      }
+      if (seat.installId == identity.installId ||
+          (seat.deviceUid != null && seat.deviceUid == identity.deviceUid) ||
+          (seat.deviceFingerprint != null &&
+              seat.deviceFingerprint == identity.deviceFingerprint)) {
+        return seat;
+      }
+    }
+    return null;
   }
 
   Future<bool> _redeemCode() async {

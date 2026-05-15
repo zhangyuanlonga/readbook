@@ -766,7 +766,8 @@ class ReaderSettings {
           (_asDouble(json['paragraphIndent']) ?? 2)
               .clamp(minParagraphIndent, maxParagraphIndent)
               .toDouble(),
-      textFullJustifyEnabled: _asBool(json['textFullJustifyEnabled']) ?? false,
+      textFullJustifyEnabled:
+          _asBool(json['textFullJustifyEnabled']) ?? true,
       textBottomJustifyEnabled:
           _asBool(json['textBottomJustifyEnabled']) ?? false,
       letterSpacing:

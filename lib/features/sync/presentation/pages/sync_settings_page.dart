@@ -106,7 +106,7 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
                         ButtonSegment<_SyncPanel>(
                           value: _SyncPanel.account,
                           icon: Icon(Icons.cloud_outlined),
-                          label: Text('连接 / 账号'),
+                          label: Text('连接 / 鉴权'),
                         ),
                         ButtonSegment<_SyncPanel>(
                           value: _SyncPanel.content,
@@ -209,7 +209,10 @@ class _SyncSettingsPageState extends ConsumerState<SyncSettingsPage>
               const SizedBox(height: 12),
               TextField(
                 controller: _usernameController,
-                decoration: const InputDecoration(labelText: '用户名'),
+                decoration: const InputDecoration(
+                  labelText: 'WebDAV 用户名 / 账号',
+                  hintText: '请输入 WebDAV 服务端要求的登录名',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -966,7 +969,9 @@ class _SavedProfileTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(profile.name),
-      subtitle: Text('${profile.endpointUrl} · ${profile.basePath}'),
+      subtitle: Text(
+        '${profile.endpointUrl} · ${profile.basePath} · ${profile.username}',
+      ),
       trailing: PopupMenuButton<_ProfileAction>(
         onSelected: (action) {
           switch (action) {
