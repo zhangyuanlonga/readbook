@@ -245,7 +245,8 @@ class ServerBookGatewayService {
         },
         'options': {
           'refresh': refresh,
-          'format': 'plain',
+          'format': 'auto',
+          'includeImages': true,
           'followNextContent': false,
           'timeoutMs': 45000,
         },
@@ -468,10 +469,18 @@ class ServerGatewayContentResult {
   const ServerGatewayContentResult({
     required this.content,
     required this.cacheHit,
+    required this.contentType,
+    required this.format,
+    this.imageUrls = const <String>[],
+    this.imageHeaders = const <String, String>{},
   });
 
   final String content;
   final bool cacheHit;
+  final String contentType;
+  final String format;
+  final List<String> imageUrls;
+  final Map<String, String> imageHeaders;
 
   factory ServerGatewayContentResult.fromEnvelopeData(Object? data) {
     final map = _asMap(data);
@@ -479,6 +488,14 @@ class ServerGatewayContentResult {
     return ServerGatewayContentResult(
       content: map['content']?.toString() ?? '',
       cacheHit: report['cacheHit'] == true,
+      contentType: _optionalString(map['contentType']) ?? '',
+      format: _optionalString(map['format']) ?? 'plain',
+      imageUrls: _firstStringList(map, const [
+        'imageUrls',
+        'images',
+        'image_urls',
+      ]),
+      imageHeaders: _stringMap(map['imageHeaders'] ?? map['image_headers']),
     );
   }
 }
@@ -537,4 +554,29 @@ List<String> _stringList(Object? value) {
       .map((item) => item?.toString().trim() ?? '')
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
+}
+
+List<String> _firstStringList(Map<String, Object?> map, List<String> keys) {
+  for (final key in keys) {
+    final items = _stringList(map[key]);
+    if (items.isNotEmpty) {
+      return items;
+    }
+  }
+  return const <String>[];
+}
+
+Map<String, String> _stringMap(Object? value) {
+  if (value is! Map) {
+    return const <String, String>{};
+  }
+  final result = <String, String>{};
+  for (final entry in value.entries) {
+    final key = entry.key?.toString().trim() ?? '';
+    final itemValue = entry.value?.toString().trim() ?? '';
+    if (key.isNotEmpty && itemValue.isNotEmpty) {
+      result[key] = itemValue;
+    }
+  }
+  return Map<String, String>.unmodifiable(result);
 }

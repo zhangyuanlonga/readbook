@@ -331,11 +331,12 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       onInlineStatus,
                     ) async {
                       try {
-                        final imported =
-                            await _fontRegistryService.pickAndImportFont();
-                        if (imported == null || !context.mounted) {
+                        final importedFonts =
+                            await _fontRegistryService.pickAndImportFonts();
+                        if (importedFonts.isEmpty || !context.mounted) {
                           return null;
                         }
+                        final imported = importedFonts.first;
                         final refreshedFonts =
                             await _fontRegistryService.listRegisteredFonts();
                         setModalState(() {
@@ -351,6 +352,23 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                             _customFonts = refreshedFonts;
                           });
                         }
+                        onInlineStatus(
+                          ImportExportTaskStatus(
+                            title: '字体导入完成',
+                            message:
+                                importedFonts.length == 1
+                                    ? '已完成字体注册，正在应用到当前阅读设置…'
+                                    : '已导入 ${importedFonts.length} 个字体，正在应用首个字体…',
+                            detail:
+                                importedFonts.length == 1
+                                    ? imported.displayName
+                                    : imported.displayName,
+                            presentation:
+                                ImportExportTaskPresentation.inlineCompact,
+                            progress: 1,
+                            result: ImportExportTaskResult.success,
+                          ),
+                        );
                         return imported;
                       } on PlatformException catch (error) {
                         onInlineStatus(

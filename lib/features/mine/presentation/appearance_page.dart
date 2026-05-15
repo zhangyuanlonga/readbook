@@ -551,10 +551,11 @@ class _FontFamilyPickerDialogState
     });
 
     try {
-      final imported = await widget.fontRegistryService.pickAndImportFont();
-      if (imported == null) {
+      final importedFonts = await widget.fontRegistryService.pickAndImportFonts();
+      if (importedFonts.isEmpty) {
         return;
       }
+      final imported = importedFonts.first;
       final refreshedFonts =
           await widget.fontRegistryService.listRegisteredFonts();
       if (!mounted) {
@@ -565,7 +566,10 @@ class _FontFamilyPickerDialogState
         _inlineImportStatus = ImportExportTaskStatus(
           title: '字体导入完成',
           message: '已完成字体注册，正在应用到当前界面设置…',
-          detail: imported.displayName,
+          detail:
+              importedFonts.length == 1
+                  ? imported.displayName
+                  : '共导入 ${importedFonts.length} 个字体',
           progress: 1,
           presentation: ImportExportTaskPresentation.inlineCompact,
           result: ImportExportTaskResult.success,

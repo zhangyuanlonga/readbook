@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/reader_document.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../search/application/server_book_gateway_service.dart';
 import '../../search/application/server_gateway_identity.dart';
@@ -104,8 +107,17 @@ class ServerGatewayContentProvider extends ContentProvider {
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
     );
-    final normalizedContent = _cleaner.clean(content.content.trim());
-    if (normalizedContent.isEmpty) {
+    final rawContent = content.content.trim();
+    final normalizedImages = _normalizeServerImageUrls(
+      content.imageUrls.isNotEmpty
+          ? content.imageUrls
+          : _extractImageUrlsFromServerContent(rawContent),
+    );
+    final normalizedContent =
+        normalizedImages.isEmpty
+            ? _cleaner.clean(rawContent)
+            : _contentWithoutServerImages(rawContent, normalizedImages);
+    if (normalizedContent.isEmpty && normalizedImages.isEmpty) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
@@ -115,8 +127,177 @@ class ServerGatewayContentProvider extends ContentProvider {
     return ChapterContentResult(
       content: normalizedContent,
       fromCache: content.cacheHit,
+      imageUrls: normalizedImages,
+      imageHeaders: content.imageHeaders,
       displayChapterTitle: chapterTitle,
     );
+  }
+
+  List<String> _normalizeServerImageUrls(Iterable<String> values) {
+    final seen = <String>{};
+    final images = <String>[];
+    for (final value in values) {
+      final normalized = value.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
+      }
+      images.add(normalized);
+    }
+    return List<String>.unmodifiable(images);
+  }
+
+  List<String> _extractImageUrlsFromServerContent(String content) {
+    final fromStructuredPayload = _extractImagesFromStructuredPayload(content);
+    if (fromStructuredPayload.isNotEmpty) {
+      return fromStructuredPayload;
+    }
+
+    final fromHtml = _extractImageUrlsFromHtml(content);
+    if (fromHtml.isNotEmpty) {
+      return fromHtml;
+    }
+
+    final markerImages = _extractInlineImageMarkers(content);
+    if (markerImages.isNotEmpty) {
+      return markerImages;
+    }
+
+    return _extractImageUrlLines(content);
+  }
+
+  List<String> _extractImagesFromStructuredPayload(String content) {
+    try {
+      final decoded = jsonDecode(content);
+      return _extractImagesFromJson(decoded);
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  List<String> _extractImagesFromJson(Object? value) {
+    if (value == null) {
+      return const <String>[];
+    }
+    if (value is String) {
+      return _looksLikeImageUrl(value) ? <String>[value] : const <String>[];
+    }
+    if (value is List) {
+      final images = <String>[];
+      for (final item in value) {
+        images.addAll(_extractImagesFromJson(item));
+      }
+      return images;
+    }
+    if (value is Map) {
+      final images = <String>[];
+      for (final key in const [
+        'imageUrls',
+        'images',
+        'image_urls',
+        'picUrls',
+        'pics',
+        'url',
+        'src',
+      ]) {
+        images.addAll(_extractImagesFromJson(value[key]));
+      }
+      if (images.isNotEmpty) {
+        return images;
+      }
+      for (final item in value.values) {
+        images.addAll(_extractImagesFromJson(item));
+      }
+      return images;
+    }
+    return const <String>[];
+  }
+
+  List<String> _extractImageUrlsFromHtml(String content) {
+    final matches = RegExp(
+      r'''<img\b[^>]*(?:src|data-src|data-original|data-url)\s*=\s*["']([^"']+)["'][^>]*>''',
+      caseSensitive: false,
+    ).allMatches(content);
+    return matches
+        .map((match) => match.group(1)?.trim() ?? '')
+        .where(_looksLikeImageUrl)
+        .toList(growable: false);
+  }
+
+  List<String> _extractInlineImageMarkers(String content) {
+    final escapedPrefix = RegExp.escape(ReaderDocument.inlineImageMarkerPrefix);
+    final escapedSuffix = RegExp.escape(ReaderDocument.inlineImageMarkerSuffix);
+    final matches = RegExp(
+      '$escapedPrefix(.*?)$escapedSuffix',
+      dotAll: true,
+    ).allMatches(content);
+    return matches
+        .map((match) => match.group(1)?.trim() ?? '')
+        .where(_looksLikeImageUrl)
+        .toList(growable: false);
+  }
+
+  List<String> _extractImageUrlLines(String content) {
+    final lines = content
+        .split(RegExp(r'[\r\n,，\s]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (lines.isEmpty || lines.any((line) => !_looksLikeImageUrl(line))) {
+      return const <String>[];
+    }
+    return lines;
+  }
+
+  String _contentWithoutServerImages(String content, List<String> imageUrls) {
+    final withoutHtmlImages = content.replaceAll(
+      RegExp(r'<img\b[^>]*>', caseSensitive: false),
+      '',
+    );
+    final withoutMarkers = withoutHtmlImages.replaceAll(
+      RegExp(
+        '${RegExp.escape(ReaderDocument.inlineImageMarkerPrefix)}.*?${RegExp.escape(ReaderDocument.inlineImageMarkerSuffix)}',
+        dotAll: true,
+      ),
+      '',
+    );
+    final cleaned = _cleaner.clean(withoutMarkers);
+    if (cleaned.isEmpty) {
+      return '';
+    }
+    final remainingLines = cleaned
+        .split(RegExp(r'\n+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .where((line) => !imageUrls.contains(line))
+        .where((line) => !_looksLikeImageUrl(line))
+        .toList(growable: false);
+    return remainingLines.join('\n\n').trim();
+  }
+
+  bool _looksLikeImageUrl(String value) {
+    final normalized = value.trim();
+    if (normalized.startsWith('data:image/')) {
+      return true;
+    }
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) {
+      return false;
+    }
+    if (uri.scheme != 'http' && uri.scheme != 'https' && uri.scheme != 'file') {
+      return false;
+    }
+    final path = uri.path.toLowerCase();
+    return path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.png') ||
+        path.endsWith('.webp') ||
+        path.endsWith('.gif') ||
+        path.endsWith('.bmp') ||
+        path.endsWith('.svg') ||
+        path.endsWith('.svgz') ||
+        uri.queryParameters.keys.any(
+          (key) => key.toLowerCase().contains('image'),
+        );
   }
 
   Future<void> _ensureServerGatewayEnabled(ErrorStage stage) async {

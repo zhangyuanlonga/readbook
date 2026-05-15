@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -16,12 +17,14 @@ class ReaderCustomFontEntry {
     required this.displayName,
     required this.filePath,
     required this.importedAtEpochMs,
+    this.fileHash,
   });
 
   final String fontFamilyKey;
   final String displayName;
   final String filePath;
   final int importedAtEpochMs;
+  final String? fileHash;
 
   Map<String, dynamic> toJson() {
     return {
@@ -29,6 +32,7 @@ class ReaderCustomFontEntry {
       'displayName': displayName,
       'filePath': filePath,
       'importedAtEpochMs': importedAtEpochMs,
+      'fileHash': fileHash,
     };
   }
 
@@ -42,6 +46,9 @@ class ReaderCustomFontEntry {
           importedAt is int
               ? importedAt
               : int.tryParse(importedAt?.toString() ?? '') ?? 0,
+      fileHash: (json['fileHash'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['fileHash'] ?? '').toString().trim(),
     );
   }
 }
@@ -129,6 +136,29 @@ class ReaderFontRegistryService {
     );
   }
 
+  Future<List<ReaderCustomFontEntry>> pickAndImportFonts({
+    String confirmButtonText = '导入字体',
+  }) async {
+    final pickedFiles = await openFiles(
+      acceptedTypeGroups: const [_fontTypeGroup],
+      confirmButtonText: confirmButtonText,
+    );
+    if (pickedFiles.isEmpty) {
+      return const <ReaderCustomFontEntry>[];
+    }
+
+    final imported = <ReaderCustomFontEntry>[];
+    for (final file in pickedFiles) {
+      imported.add(
+        await importFontFile(
+          filePath: file.path,
+          displayName: path.basenameWithoutExtension(file.name),
+        ),
+      );
+    }
+    return imported;
+  }
+
   Future<ReaderCustomFontEntry> importFontFile({
     required String filePath,
     String? displayName,
@@ -150,6 +180,12 @@ class ReaderFontRegistryService {
     final bytes = await sourceFile.readAsBytes();
     if (bytes.isEmpty) {
       throw ReaderFontRegistryException('字体文件为空，无法导入。');
+    }
+    final fileHash = sha256.convert(bytes).toString();
+
+    final existingEntry = await _findEntryByHash(fileHash);
+    if (existingEntry != null) {
+      return existingEntry;
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -176,6 +212,7 @@ class ReaderFontRegistryService {
       displayName: normalizedDisplayName,
       filePath: targetPath,
       importedAtEpochMs: now,
+      fileHash: fileHash,
     );
 
     final entries = await _loadRegistry();
@@ -385,6 +422,7 @@ class ReaderFontRegistryService {
               displayName: entry.displayName,
               filePath: resolved,
               importedAtEpochMs: entry.importedAtEpochMs,
+              fileHash: entry.fileHash,
             ),
           );
           continue;
@@ -412,9 +450,24 @@ class ReaderFontRegistryService {
               await _assetStore.relativizePersistedPath(entry.filePath) ??
               entry.filePath,
           importedAtEpochMs: entry.importedAtEpochMs,
+          fileHash: entry.fileHash,
         ).toJson(),
       );
     }
     await registryFile.writeAsString(jsonEncode(payload), flush: true);
+  }
+
+  Future<ReaderCustomFontEntry?> _findEntryByHash(String fileHash) async {
+    final normalizedHash = fileHash.trim();
+    if (normalizedHash.isEmpty) {
+      return null;
+    }
+    final entries = await _loadRegistry();
+    for (final entry in entries) {
+      if ((entry.fileHash?.trim() ?? '') == normalizedHash) {
+        return entry;
+      }
+    }
+    return null;
   }
 }

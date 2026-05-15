@@ -893,6 +893,11 @@ class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
   }
 
   void _syncArtwork({bool precache = true}) {
+    if (StartupArtworkStore.isPriming &&
+        StartupArtworkStore.primedImagePath == null &&
+        _imageProvider != null) {
+      return;
+    }
     final revision = StartupArtworkStore.revision;
     final hasExpectedProvider = _imageProvider != null;
     if (_seenRevision == revision && hasExpectedProvider) {
@@ -928,17 +933,21 @@ class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
       });
     }
     final imageProvider =
-        _imageProvider ?? const AssetImage(_fallbackStartupArtwork);
+        _imageProvider ??
+        (StartupArtworkStore.isPriming ? null : const AssetImage(_fallbackStartupArtwork));
     return ColoredBox(
       color: const Color(0xFFF6F8FB),
       child: SizedBox.expand(
-        child: Image(
-          key: ValueKey<Object?>(_imageKey),
-          image: imageProvider,
-          fit: BoxFit.fill,
-          alignment: Alignment.center,
-          filterQuality: FilterQuality.high,
-        ),
+        child:
+            imageProvider == null
+                ? const SizedBox.expand()
+                : Image(
+                  key: ValueKey<Object?>(_imageKey),
+                  image: imageProvider,
+                  fit: BoxFit.fill,
+                  alignment: Alignment.center,
+                  filterQuality: FilterQuality.high,
+                ),
       ),
     );
   }

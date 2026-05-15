@@ -129,18 +129,16 @@ class DeviceIdentityService {
         brand: 'web',
         model: _nonEmpty(web.browserName.name, 'browser'),
         osVersion: _nonEmpty(web.userAgent, web.appVersion ?? 'web'),
-        hardwareId: web.userAgent,
+        hardwareId: null,
       );
     }
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         final info = await _deviceInfo.androidInfo;
-        final hardwareId = _firstNonEmpty([
-          info.serialNumber,
-          info.id,
-          info.fingerprint,
-        ]);
+        final hardwareId = selectAndroidHardwareId(
+          serialNumber: info.serialNumber,
+        );
         return _ResolvedDeviceInfo(
           brand: info.brand,
           model: info.model,
@@ -204,8 +202,11 @@ class DeviceIdentityService {
     required String? hardwareId,
     required String fallback,
   }) {
-    final raw = '${platform.trim()}|${(hardwareId ?? '').trim()}';
-    final normalized = raw.trim().isEmpty ? fallback.trim() : raw.trim();
+    final normalizedHardwareId = normalizeHardwareId(hardwareId);
+    final normalized =
+        normalizedHardwareId == null
+            ? fallback.trim()
+            : '${platform.trim()}|$normalizedHardwareId';
     final digest = sha256.convert(utf8.encode(normalized));
     return digest.toString();
   }
@@ -235,14 +236,20 @@ class DeviceIdentityService {
     return normalized.isEmpty ? fallback : normalized;
   }
 
-  String? _firstNonEmpty(List<String?> values) {
-    for (final value in values) {
-      final normalized = value?.trim() ?? '';
-      if (normalized.isNotEmpty && normalized.toLowerCase() != 'unknown') {
-        return normalized;
-      }
+  @visibleForTesting
+  static String? selectAndroidHardwareId({
+    required String? serialNumber,
+  }) {
+    return normalizeHardwareId(serialNumber);
+  }
+
+  @visibleForTesting
+  static String? normalizeHardwareId(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty || normalized.toLowerCase() == 'unknown') {
+      return null;
     }
-    return null;
+    return normalized;
   }
 
   static int normalizeVersionCode({

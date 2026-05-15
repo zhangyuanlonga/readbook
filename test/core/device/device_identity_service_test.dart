@@ -2,6 +2,42 @@ import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('DeviceIdentityService.selectAndroidHardwareId', () {
+    test('accepts serial number when available', () {
+      final value = DeviceIdentityService.selectAndroidHardwareId(
+        serialNumber: 'SERIAL-123',
+      );
+
+      expect(value, 'SERIAL-123');
+    });
+
+    test('drops blank or unknown serial number', () {
+      expect(
+        DeviceIdentityService.selectAndroidHardwareId(serialNumber: ''),
+        isNull,
+      );
+      expect(
+        DeviceIdentityService.selectAndroidHardwareId(serialNumber: 'unknown'),
+        isNull,
+      );
+    });
+  });
+
+  group('DeviceIdentityService.normalizeHardwareId', () {
+    test('returns null for blank or unknown values', () {
+      expect(DeviceIdentityService.normalizeHardwareId(''), isNull);
+      expect(DeviceIdentityService.normalizeHardwareId('unknown'), isNull);
+      expect(DeviceIdentityService.normalizeHardwareId('  '), isNull);
+    });
+
+    test('keeps non-empty stable identifiers', () {
+      expect(
+        DeviceIdentityService.normalizeHardwareId('device-stable-id'),
+        'device-stable-id',
+      );
+    });
+  });
+
   group('DeviceIdentityService.normalizeVersionCode', () {
     test('prefers semantic version code over small build number', () {
       final code = DeviceIdentityService.normalizeVersionCode(

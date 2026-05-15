@@ -729,6 +729,8 @@ class _HomePageState extends ConsumerState<HomePage>
               const Spacer(),
               Text(
                 '累计 ${_formatMinutes(record.totalReadMillis)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: colorScheme.primary,

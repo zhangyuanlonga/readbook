@@ -44,6 +44,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       ReaderFontRegistryService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
+  final ScrollController _scrollController = ScrollController();
   late final ExternalImportBridge _externalImportBridge;
 
   bool _isLoading = true;
@@ -77,6 +78,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     unawaited(_importSubscription?.cancel());
     super.dispose();
   }
@@ -92,17 +94,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     try {
       final fonts = await _fontRegistryService.listRegisteredFonts();
       final readerSettings = await _readerPreferencesService.loadSettings();
+      final nextExistsByFamilyKey = <String, bool>{};
+      for (final font in fonts) {
+        final known = _fontFileExistsByFamilyKey[font.fontFamilyKey];
+        nextExistsByFamilyKey[font.fontFamilyKey] =
+            known ?? await localFileExists(font.filePath);
+      }
       if (!mounted) {
         return;
       }
       setState(() {
         _fonts = fonts;
-        _fontFileExistsByFamilyKey = <String, bool>{
-          for (final font in fonts)
-            if (_fontFileExistsByFamilyKey.containsKey(font.fontFamilyKey))
-              font.fontFamilyKey:
-                  _fontFileExistsByFamilyKey[font.fontFamilyKey]!,
-        };
+        _fontFileExistsByFamilyKey = nextExistsByFamilyKey;
         _readerSettings = readerSettings;
       });
     } catch (error) {
@@ -373,6 +376,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                     child: RefreshIndicator(
                       onRefresh: _reload,
                       child: ListView(
+                        controller: _scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
@@ -868,7 +872,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     });
   }
 
-  Future<void> _importFont() async {
+  Future<List<ReaderCustomFontEntry>> _importFont() async {
     final taskId = 'font-import:${DateTime.now().microsecondsSinceEpoch}';
     final taskManager = ref.read(appTaskManagerProvider);
     const initialStatus = ImportExportTaskStatus(
@@ -888,8 +892,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       _taskStatus = initialStatus;
     });
     try {
-      final entry = await _fontRegistryService.pickAndImportFont();
-      if (!mounted || entry == null) {
+      final importedFonts = await _fontRegistryService.pickAndImportFonts();
+      if (!mounted || importedFonts.isEmpty) {
         taskManager.updateTask(
           taskId,
           initialStatus
@@ -899,27 +903,33 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                 result: AppTaskStatusResult.cancelled,
               ),
         );
-        return;
+        return const <ReaderCustomFontEntry>[];
       }
       await _reload();
       if (!mounted) {
-        return;
+        return importedFonts;
       }
+      final primaryEntry = importedFonts.first;
+      final message =
+          importedFonts.length == 1
+              ? primaryEntry.displayName
+              : '已导入 ${importedFonts.length} 个字体';
       taskManager.updateTask(
         taskId,
         ImportExportTaskStatus(
           title: '字体导入完成',
-          message: entry.displayName,
+          message: message,
           progress: 1,
           result: ImportExportTaskResult.success,
         ).toAppTaskStatusData(kind: AppTaskStatusKind.fontImport),
       );
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('已导入字体：${entry.displayName}')));
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return importedFonts;
     } on ReaderFontRegistryException catch (error) {
       if (!mounted) {
-        return;
+        return const <ReaderCustomFontEntry>[];
       }
       ScaffoldMessenger.of(
         context,
@@ -935,7 +945,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       );
     } catch (error) {
       if (!mounted) {
-        return;
+        return const <ReaderCustomFontEntry>[];
       }
       ScaffoldMessenger.of(
         context,
@@ -957,6 +967,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         });
       }
     }
+    return const <ReaderCustomFontEntry>[];
   }
 
   Future<void> _showImportFontSheet({
@@ -1047,12 +1058,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                         setSheetState(() {
                           mode = _FontImportEntryMode.processing;
                         });
-                        await _importFont();
+                        final importedFonts = await _importFont();
                         if (!mounted) {
                           return;
                         }
+                        if (importedFonts.isNotEmpty) {
+                          if (sheetContext.mounted) {
+                            Navigator.of(sheetContext).pop();
+                          }
+                          return;
+                        }
                         setSheetState(() {
-                          mode = _FontImportEntryMode.completed;
+                          mode = _FontImportEntryMode.add;
                         });
                       },
                     )
@@ -1082,6 +1099,9 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   }
 
   Future<void> _removeFont(ReaderCustomFontEntry font) async {
+    final offset = _scrollController.hasClients
+        ? _scrollController.offset
+        : 0.0;
     await _fontRegistryService.removeFont(font.fontFamilyKey);
     if (!mounted) {
       return;
@@ -1089,6 +1109,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     await _reload();
     if (!mounted) {
       return;
+    }
+    if (_scrollController.hasClients) {
+      final maxScrollExtent = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(offset.clamp(0.0, maxScrollExtent));
     }
     ScaffoldMessenger.of(
       context,

@@ -417,7 +417,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       fallbackTitle: detail?.title ?? _displayTitle ?? widget.title,
       fallbackAuthor: detail?.author,
       fallbackIntro: detail?.intro,
-      realCoverUrl: detail?.coverUrl,
+      realCoverUrl: detail?.coverUrl ?? widget.coverUrl,
       localBook: _localBookMeta,
       metadataOverride: _metadataOverride,
     );
