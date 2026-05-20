@@ -502,27 +502,6 @@ extension on _MinePageState {
         ),
       );
     }
-    if (_showSourceEntry &&
-        visibilityState.isVisible(MinePageItemId.sourceManagement)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.menu_book_rounded,
-          label: '书源管理',
-          subtitle: _buildSourceSubtitle(),
-          onTap: _handleSourceTap,
-        ),
-      );
-    }
-    if (visibilityState.isVisible(MinePageItemId.cacheManagement)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.cloud_outlined,
-          label: '存储管理',
-          subtitle: '分类清理章节缓存、分页缓存、封面缓存等',
-          onTap: _pushMineRouteAction('/cache'),
-        ),
-      );
-    }
     return actions;
   }
 

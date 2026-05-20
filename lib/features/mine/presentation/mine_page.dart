@@ -14,7 +14,6 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
-import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
@@ -61,11 +60,9 @@ class _MinePageState extends ConsumerState<MinePage> {
   String? _username;
   String? _localAvatarPath;
   bool _isCheckingUpdate = false;
-  bool _showSourceEntry = false;
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
   bool _isRemoteAccessResolved = false;
-  int _sourceImportLimit = 10;
   _MineLayoutMode _layoutMode = _MineLayoutMode.list;
   bool _didRestoreLayoutMode = false;
   String? _openingRoute;
@@ -256,8 +253,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     final snapshot = await _sessionService.loadSession(
       refreshRemote: refreshRemote,
     );
-    final showSourceEntry =
-        ref.read(appPlatformCapabilitiesProvider).sourceRuntime.canShowEntry;
     if (!mounted) {
       return;
     }
@@ -265,11 +260,9 @@ class _MinePageState extends ConsumerState<MinePage> {
       _userId = snapshot.session?.userId;
       _username =
           snapshot.session?.displayIdentity ?? snapshot.session?.loginIdentity;
-      _showSourceEntry = showSourceEntry && snapshot.showSourceEntry;
       _hasMembership = snapshot.hasMembership;
       _hasThemeCustom = snapshot.hasThemeCustom;
       _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
-      _sourceImportLimit = snapshot.sourceImportLimit;
       _localAvatarPath = snapshot.localAvatarPath;
     });
     if (snapshot.session == null) {
@@ -431,15 +424,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  String _buildSourceSubtitle() {
-    if (_sourceImportLimit < 0) {
-      return _hasMembership ? '会员不限数量' : '默认可用';
-    }
-    if (_hasMembership && _sourceImportLimit > 10) {
-      return '当前上限 $_sourceImportLimit 个';
-    }
-    return '默认最多 $_sourceImportLimit 个，扩容需会员';
-  }
 
   Future<void> _handleAdvancedThemeTap() async {
     if (_hasThemeCustom) {
@@ -465,10 +449,6 @@ class _MinePageState extends ConsumerState<MinePage> {
       return;
     }
     unawaited(_showMembershipPrompt('多端同步为会员计划功能，当前正在开发中。'));
-  }
-
-  Future<void> _handleSourceTap() async {
-    await _pushMineRoute('/source');
   }
 
   Future<void> _openMembershipCenter() async {

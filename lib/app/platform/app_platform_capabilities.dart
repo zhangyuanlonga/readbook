@@ -31,15 +31,9 @@ class AppPlatformCapabilities {
         platform == TargetPlatform.windows ||
         platform == TargetPlatform.linux;
     final supportsNativeFileSystem = !kIsWeb;
-    final resolvedSourceRuntimeEnabled =
-        sourceRuntimeEnabled ??
-        (_hasSourceRuntimeEnabledDefine
-            ? _sourceRuntimeEnabledByDefine
-            : isMobile);
     final resolvedWebDavSyncEnabled =
         webDavSyncEnabled ??
         (_hasWebDavSyncEnabledDefine ? _webDavSyncEnabledByDefine : isMobile);
-    final sourceRuntimeSupportedPlatform = !kIsWeb && (isMobile || isDesktop);
 
     final localFileImport = _capability(
       supported: supportsNativeFileSystem,
@@ -76,19 +70,15 @@ class AppPlatformCapabilities {
       label: '阅读器音量键桥接',
       unsupportedReason: '音量键桥接仅在 Android/iOS 原生端启用。',
     );
-    final sourceRuntime = _runtimeCapability(
-      enabled: resolvedSourceRuntimeEnabled,
-      supportedPlatform: sourceRuntimeSupportedPlatform,
+    final sourceRuntime = _capability(
+      supported: false,
       label: '书源运行时',
-      disabledReason: '书源运行时当前未启用，需要开启构建能力后使用。',
-      unsupportedReason: '当前平台暂不支持书源运行时。',
+      unsupportedReason: '本地脚本书源运行时已移除。',
     );
-    final interactiveWebView = _runtimeCapability(
-      enabled: resolvedSourceRuntimeEnabled,
-      supportedPlatform: sourceRuntimeSupportedPlatform,
+    final interactiveWebView = _capability(
+      supported: false,
       label: '交互式 WebView',
-      disabledReason: '交互式 WebView 当前未启用，需要开启书源运行时后使用。',
-      unsupportedReason: '当前平台暂不支持交互式 WebView。',
+      unsupportedReason: '本地脚本书源交互式 WebView 已移除。',
     );
     final webDavSync = _runtimeCapability(
       enabled: resolvedWebDavSyncEnabled,
@@ -176,15 +166,6 @@ AppCapabilityState _runtimeCapability({
     reason: unsupportedReason,
   );
 }
-
-const bool _sourceRuntimeEnabledByDefine = bool.fromEnvironment(
-  'APP_ENABLE_SOURCE_RUNTIME',
-  defaultValue: false,
-);
-
-const bool _hasSourceRuntimeEnabledDefine = bool.hasEnvironment(
-  'APP_ENABLE_SOURCE_RUNTIME',
-);
 
 const bool _webDavSyncEnabledByDefine = bool.fromEnvironment(
   'APP_ENABLE_WEBDAV_SYNC',

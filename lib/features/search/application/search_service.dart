@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:math';
 
+import '../../../core/session/session_cancellation.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -12,7 +13,6 @@ import '../../../core/network/request_context.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/source_health.dart';
-import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../source/application/source_health_auto_disable_service.dart';

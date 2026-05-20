@@ -21,14 +21,12 @@ import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
-import '../../../runtime/sources/source_registry.dart';
 import '../../book/application/book_display_state.dart';
 import '../../book/application/book_presentation_query_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
-import '../../source/application/source_runtime_facade.dart';
-import '../application/search_history_service.dart';
 import '../application/search_service.dart';
+import '../application/search_history_service.dart';
 import '../application/server_online_search_service.dart';
 import '../application/search_system_settings_service.dart';
 import '../providers.dart';
@@ -53,8 +51,6 @@ class SearchPage extends ConsumerStatefulWidget {
 class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  late final SourceRuntimeFacade _sourceRuntimeFacade;
-  late final SearchService _searchService;
   late final ServerOnlineSearchService _serverOnlineSearchService;
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
@@ -78,7 +74,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   static const Duration _scrollUiMaxDeferredWindow = Duration(seconds: 2);
 
   bool _isSearching = false;
-  bool _isLoadingSourceCount = false;
   bool _isLoadingServerSourceCount = false;
   final ValueNotifier<SearchExecutionReport?> _progressReportNotifier =
       ValueNotifier<SearchExecutionReport?>(null);
@@ -89,9 +84,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   SearchContentMode _searchContentMode = SearchContentMode.novel;
   bool _isPreciseBookMatch = false;
   bool _aggregateByTitleAuthorEnabled = true;
-  bool _serverOnlineSearchEnabled = false;
-  int _availableSourceCount = 0;
-  Set<String> _selectedSourceIds = <String>{};
   int _availableServerSourceCount = 0;
   Set<String> _selectedServerSourceIds = <String>{};
   final ScrollController _pageScrollController = ScrollController();
@@ -114,12 +106,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   void initState() {
     super.initState();
-    _sourceRuntimeFacade = ref.read(searchSourceRuntimeFacadeProvider);
-    _searchService = ref.read(searchServiceProvider);
     _serverOnlineSearchService = ref.read(serverOnlineSearchServiceProvider);
-    _bookPresentationQueryService = ref.read(
-      searchBookPresentationQueryServiceProvider,
-    );
+    _bookPresentationQueryService =
+        ref.read(searchBookPresentationQueryServiceProvider);
     _historyService = ref.read(searchHistoryServiceProvider);
     _searchSystemSettingsService = ref.read(
       searchSystemSettingsServiceProvider,
@@ -127,7 +116,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_refreshSourceCount());
+      unawaited(_refreshServerSourceCount());
       unawaited(_loadSearchHistory());
       unawaited(_loadSearchSystemSettings());
     });
@@ -227,21 +216,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                 child: SearchInputCard(
                                   isSearching: _isSearching,
                                   searchContentMode: _searchContentMode,
-                                  serverOnlineSearchEnabled:
-                                      _serverOnlineSearchEnabled,
+                                  serverOnlineSearchEnabled: true,
                                   isPreciseBookMatch: _isPreciseBookMatch,
                                   selectedSourceCount:
-                                      _serverOnlineSearchEnabled
-                                          ? _selectedServerSourceIds.length
-                                          : _selectedSourceIds.length,
+                                      _selectedServerSourceIds.length,
                                   availableSourceCount:
-                                      _serverOnlineSearchEnabled
-                                          ? _availableServerSourceCount
-                                          : _availableSourceCount,
+                                      _availableServerSourceCount,
                                   isLoadingSourceCount:
-                                      _serverOnlineSearchEnabled
-                                          ? _isLoadingServerSourceCount
-                                          : _isLoadingSourceCount,
+                                      _isLoadingServerSourceCount,
                                   modeActiveBackgroundColor:
                                       palette.primaryColor,
                                   modeActiveForegroundColor:
@@ -352,7 +334,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                             _isPreciseBookMatch &&
                                             report.books.isNotEmpty,
                                         canSwitchAllSources:
-                                            _selectedSourceIds.isNotEmpty,
+                                            _selectedServerSourceIds.isNotEmpty,
                                         onDisablePreciseMatch:
                                             _disablePreciseMatchFallback,
                                         onSwitchAllSources:
@@ -511,14 +493,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void _onContentModeChanged(SearchContentMode mode) {
     setState(() {
       _searchContentMode = mode;
-      _selectedSourceIds = <String>{};
       _selectedServerSourceIds = <String>{};
     });
     _clearSearchOutput();
-    unawaited(_refreshSourceCount());
-    if (_serverOnlineSearchEnabled) {
-      unawaited(_refreshServerSourceCount());
-    }
+    unawaited(_refreshServerSourceCount());
   }
 
   void _onPreciseMatchChanged(bool value) {
@@ -547,18 +525,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   void _clearActiveSourceFilter() {
-    if (_serverOnlineSearchEnabled) {
-      _clearServerSourceFilter();
-    } else {
-      _clearSourceFilter();
-    }
-  }
-
-  void _clearSourceFilter() {
-    setState(() {
-      _selectedSourceIds = <String>{};
-    });
-    _clearSearchOutput();
+    _clearServerSourceFilter();
   }
 
   void _clearServerSourceFilter() {
@@ -575,24 +542,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       final enabled =
           await _searchSystemSettingsService
               .loadAggregateByTitleAuthorEnabled();
-      final debugLogEnabled =
-          await _searchSystemSettingsService.loadSearchDebugLogEnabled();
-      final maxConcurrentSources =
-          await _searchSystemSettingsService.loadMaxConcurrentSources();
-      final serverOnlineSearchEnabled =
-          await _searchSystemSettingsService.loadServerOnlineSearchEnabled();
-      _searchService.setSearchDebugLoggingEnabled(debugLogEnabled);
-      _searchService.setMaxConcurrentSources(maxConcurrentSources);
+      await _searchSystemSettingsService.loadSearchDebugLogEnabled();
       if (!mounted) {
         return;
       }
       setState(() {
         _aggregateByTitleAuthorEnabled = enabled;
-        _serverOnlineSearchEnabled = serverOnlineSearchEnabled;
       });
-      if (serverOnlineSearchEnabled) {
-        unawaited(_refreshServerSourceCount());
-      }
+      unawaited(_refreshServerSourceCount());
     } catch (_) {
       // Keep default when settings loading fails.
     }
@@ -636,56 +593,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   // ── Source filter ──
 
   Future<void> _showActiveSourceFilterSheet() async {
-    if (_serverOnlineSearchEnabled) {
-      await _showServerSourceFilterSheet();
-    } else {
-      await _showSourceFilterSheet();
-    }
-  }
-
-  Future<void> _refreshSourceCount() async {
-    if (!mounted) return;
-
-    final requestedMode = _searchContentMode;
-
-    setState(() {
-      _isLoadingSourceCount = true;
-    });
-
-    try {
-      final sources = await _loadAvailableScriptSourcesForUi(
-        contentMode: requestedMode,
-      ).timeout(_sourceCountLoadTimeout);
-
-      if (!mounted || requestedMode != _searchContentMode) {
-        return;
-      }
-
-      final availableSourceIds =
-          sources.map((source) => source.runtime.id).toSet();
-      final nextSelectedSourceIds =
-          _selectedSourceIds.where(availableSourceIds.contains).toSet();
-
-      setState(() {
-        _availableSourceCount = sources.length;
-        _selectedSourceIds = nextSelectedSourceIds;
-      });
-    } catch (error) {
-      if (!mounted || requestedMode != _searchContentMode) {
-        return;
-      }
-
-      debugPrint('Failed to load source count: $error');
-      setState(() {
-        _availableSourceCount = 0;
-      });
-    } finally {
-      if (mounted && requestedMode == _searchContentMode) {
-        setState(() {
-          _isLoadingSourceCount = false;
-        });
-      }
-    }
+    await _showServerSourceFilterSheet();
   }
 
   Future<void> _refreshServerSourceCount() async {
@@ -724,51 +632,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
   }
 
-  Future<void> _showSourceFilterSheet() async {
-    final requestedMode = _searchContentMode;
-    final sources = await _loadAvailableScriptSourcesForUi(
-      contentMode: requestedMode,
-    );
-    if (!mounted || requestedMode != _searchContentMode) {
-      return;
-    }
-
-    final filterItems = sources
-        .map(
-          (source) => _ScriptSourceFilterItem(
-            id: source.runtime.id,
-            name: source.runtime.name,
-            group:
-                source.runtime.group.trim().isEmpty
-                    ? null
-                    : source.runtime.group.trim(),
-          ),
-        )
-        .toList(growable: false);
-    final selected = await showAdaptiveActionSurface<Set<String>>(
-      context: context,
-      maxWidth: 680,
-      maxHeightFactor: 0.86,
-      padding: EdgeInsets.zero,
-      builder:
-          (context) => _ScriptSourceFilterSheet(
-            items: filterItems,
-            initialSelectedIds: _selectedSourceIds,
-          ),
-    );
-
-    if (!mounted || requestedMode != _searchContentMode || selected == null) {
-      return;
-    }
-    final allowedIds = filterItems.map((item) => item.id).toSet();
-    final normalized = selected.where(allowedIds.contains).toSet();
-
-    setState(() {
-      _selectedSourceIds = normalized;
-    });
-    _clearSearchOutput();
-  }
-
   Future<void> _showServerSourceFilterSheet() async {
     final requestedMode = _searchContentMode;
     final selected = await showAdaptiveActionSurface<Set<String>>(
@@ -792,74 +655,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       _selectedServerSourceIds = selected;
     });
     _clearSearchOutput();
-  }
-
-  Future<List<RegisteredSource>> _loadAvailableScriptSourcesForUi({
-    required SearchContentMode contentMode,
-  }) async {
-    var sources = _sourceRuntimeFacade.registeredScriptSources(
-      enabledOnly: true,
-    );
-    if (sources.isEmpty) {
-      final report = await _sourceRuntimeFacade.reloadScriptSources();
-      sources = report.loaded;
-    }
-
-    final filtered = sources
-        .where(
-          (source) =>
-              _matchesScriptSourceContentMode(source, contentMode: contentMode),
-        )
-        .toList(growable: false);
-    filtered.sort((a, b) {
-      final groupCompare = a.runtime.group.toLowerCase().compareTo(
-        b.runtime.group.toLowerCase(),
-      );
-      if (groupCompare != 0) {
-        return groupCompare;
-      }
-      return a.runtime.name.toLowerCase().compareTo(
-        b.runtime.name.toLowerCase(),
-      );
-    });
-    return filtered;
-  }
-
-  bool _matchesScriptSourceContentMode(
-    RegisteredSource source, {
-    required SearchContentMode contentMode,
-  }) {
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-    final declaresManga =
-        capabilities.contains('manga') ||
-        capabilities.contains('comic') ||
-        capabilities.contains('manhua') ||
-        capabilities.contains('manhwa');
-    final declaresNovel =
-        capabilities.contains('novel') ||
-        capabilities.contains('book') ||
-        capabilities.contains('text');
-    final declaresAudio =
-        capabilities.contains('audio') ||
-        capabilities.contains('audiobook') ||
-        capabilities.contains('voice');
-
-    if (contentMode == SearchContentMode.manga) {
-      return declaresManga;
-    }
-
-    if (contentMode == SearchContentMode.audio) {
-      return declaresAudio;
-    }
-
-    if (declaresManga && !declaresNovel) {
-      return false;
-    }
-    return true;
   }
 
   // ── Scroll pagination ──
@@ -1144,11 +939,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<void> _switchToAllSourcesFallback() async {
-    if (_selectedSourceIds.isEmpty || _isSearching) {
+    if (_selectedServerSourceIds.isEmpty || _isSearching) {
       return;
     }
     setState(() {
-      _selectedSourceIds = <String>{};
+      _selectedServerSourceIds = <String>{};
     });
     await _runSearch();
   }
@@ -1354,65 +1149,30 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     });
 
     try {
-      final selectedSourceIds =
-          _selectedSourceIds.isEmpty
-              ? null
-              : _selectedSourceIds.toList(growable: false);
       final selectedServerSourceIds =
           _selectedServerSourceIds.isEmpty
               ? null
               : _selectedServerSourceIds.toList(growable: false);
-      final useServerOnlineSearch =
-          await _searchSystemSettingsService.loadServerOnlineSearchEnabled();
-      if (mounted && useServerOnlineSearch != _serverOnlineSearchEnabled) {
-        setState(() {
-          _serverOnlineSearchEnabled = useServerOnlineSearch;
-        });
-        if (useServerOnlineSearch) {
-          unawaited(_refreshServerSourceCount());
-        }
-      }
-      final report =
-          useServerOnlineSearch
-              ? await _serverOnlineSearchService.search(
-                keyword: keyword,
-                contentMode: _searchContentMode,
-                sourceIds: selectedServerSourceIds,
-                preciseMatch: _isPreciseBookMatch,
-                aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
-                cancellationToken: token,
-                onProgress: (progress) {
-                  if (!mounted ||
-                      token.isCancelled ||
-                      sessionId != _searchSessionId) {
-                    return;
-                  }
-                  _updateProgressReportThrottled(
-                    report: progress,
-                    token: token,
-                    sessionId: sessionId,
-                  );
-                },
-              )
-              : await _searchService.search(
-                keyword: keyword,
-                contentMode: _searchContentMode,
-                sourceIds: selectedSourceIds,
-                aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
-                cancellationToken: token,
-                onProgress: (progress) {
-                  if (!mounted ||
-                      token.isCancelled ||
-                      sessionId != _searchSessionId) {
-                    return;
-                  }
-                  _updateProgressReportThrottled(
-                    report: progress,
-                    token: token,
-                    sessionId: sessionId,
-                  );
-                },
-              );
+      final report = await _serverOnlineSearchService.search(
+        keyword: keyword,
+        contentMode: _searchContentMode,
+        sourceIds: selectedServerSourceIds,
+        preciseMatch: _isPreciseBookMatch,
+        aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
+        cancellationToken: token,
+        onProgress: (progress) {
+          if (!mounted ||
+              token.isCancelled ||
+              sessionId != _searchSessionId) {
+            return;
+          }
+          _updateProgressReportThrottled(
+            report: progress,
+            token: token,
+            sessionId: sessionId,
+          );
+        },
+      );
 
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
@@ -1597,279 +1357,6 @@ class _DeferredProgressUiUpdate {
   final int sessionId;
   final bool forceRenderState;
   final bool isFinalReport;
-}
-
-class _ScriptSourceFilterItem {
-  const _ScriptSourceFilterItem({
-    required this.id,
-    required this.name,
-    this.group,
-  });
-
-  final String id;
-  final String name;
-  final String? group;
-}
-
-class _ScriptSourceFilterSheet extends StatefulWidget {
-  const _ScriptSourceFilterSheet({
-    required this.items,
-    required this.initialSelectedIds,
-  });
-
-  final List<_ScriptSourceFilterItem> items;
-  final Set<String> initialSelectedIds;
-
-  @override
-  State<_ScriptSourceFilterSheet> createState() =>
-      _ScriptSourceFilterSheetState();
-}
-
-class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
-  late final Set<String> _allIds;
-  late Set<String> _draftSelectedIds;
-  final TextEditingController _filterController = TextEditingController();
-  String _filterKeyword = '';
-
-  @override
-  void dispose() {
-    _filterController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _allIds = widget.items.map((item) => item.id).toSet();
-    _draftSelectedIds =
-        widget.initialSelectedIds.isEmpty
-            ? <String>{..._allIds}
-            : widget.initialSelectedIds.where(_allIds.contains).toSet();
-    if (_allIds.isNotEmpty && _draftSelectedIds.isEmpty) {
-      _draftSelectedIds = <String>{..._allIds};
-    }
-  }
-
-  bool get _allSelected =>
-      _allIds.isNotEmpty && _draftSelectedIds.length == _allIds.length;
-
-  List<_ScriptSourceFilterItem> get _visibleItems {
-    final keyword = _filterKeyword.trim().toLowerCase();
-    if (keyword.isEmpty) {
-      return widget.items;
-    }
-    return widget.items
-        .where((item) {
-          final group = item.group?.trim().toLowerCase() ?? '';
-          return item.name.toLowerCase().contains(keyword) ||
-              group.contains(keyword);
-        })
-        .toList(growable: false);
-  }
-
-  Set<String> _resultSelection() {
-    if (_allIds.isEmpty || _draftSelectedIds.length == _allIds.length) {
-      return <String>{};
-    }
-    return Set<String>.of(_draftSelectedIds);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.78,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text('指定书源', style: theme.textTheme.titleMedium),
-                  ),
-                  Text(
-                    '共 ${widget.items.length} 个',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            if (widget.items.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Text('当前模式下没有可用书源', style: theme.textTheme.bodyMedium),
-                ),
-              )
-            else
-              Expanded(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: TextField(
-                        controller: _filterController,
-                        onChanged: (value) {
-                          setState(() {
-                            _filterKeyword = value;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          hintText: '筛选书源名称或分组',
-                          prefixIcon: const Icon(
-                            Icons.search_rounded,
-                            size: 18,
-                          ),
-                          suffixIcon:
-                              _filterKeyword.isEmpty
-                                  ? null
-                                  : IconButton(
-                                    tooltip: '清空筛选',
-                                    onPressed: () {
-                                      _filterController.clear();
-                                      setState(() {
-                                        _filterKeyword = '';
-                                      });
-                                    },
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      size: 18,
-                                    ),
-                                  ),
-                          isDense: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Row(
-                        children: [
-                          Text(
-                            _draftSelectedIds.isEmpty
-                                ? '当前未勾选，应用后将恢复全部书源'
-                                : '已选 ${_draftSelectedIds.length} / ${widget.items.length}',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const Spacer(),
-                          Opacity(
-                            opacity: _draftSelectedIds.isNotEmpty ? 1 : 0.45,
-                            child: TextButton(
-                              onPressed:
-                                  _draftSelectedIds.isNotEmpty
-                                      ? () {
-                                        setState(() {
-                                          _draftSelectedIds.clear();
-                                        });
-                                      }
-                                      : null,
-                              child: const Text('清空勾选'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child:
-                          _visibleItems.isEmpty
-                              ? Center(
-                                child: Text(
-                                  '没有匹配的书源',
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              )
-                              : ListView(
-                                children: [
-                                  CheckboxListTile(
-                                    value: _allSelected,
-                                    title: Text(
-                                      '全部书源 (${widget.items.length})',
-                                    ),
-                                    subtitle:
-                                        _draftSelectedIds.isEmpty
-                                            ? const Text('不指定时默认搜索全部书源')
-                                            : null,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        if (value == true) {
-                                          _draftSelectedIds = <String>{
-                                            ..._allIds,
-                                          };
-                                        } else {
-                                          _draftSelectedIds.clear();
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  ..._visibleItems.map((item) {
-                                    final selected = _draftSelectedIds.contains(
-                                      item.id,
-                                    );
-                                    return CheckboxListTile(
-                                      value: selected,
-                                      title: Text(item.name),
-                                      subtitle:
-                                          item.group == null ||
-                                                  item.group!.trim().isEmpty
-                                              ? null
-                                              : Text(item.group!),
-                                      controlAffinity:
-                                          ListTileControlAffinity.leading,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          if (value == true) {
-                                            _draftSelectedIds.add(item.id);
-                                          } else {
-                                            _draftSelectedIds.remove(item.id);
-                                          }
-                                        });
-                                      },
-                                    );
-                                  }),
-                                ],
-                              ),
-                    ),
-                  ],
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        if (_draftSelectedIds.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('请至少勾选一个书源')),
-                          );
-                          return;
-                        }
-                        Navigator.of(context).pop(_resultSelection());
-                      },
-                      child: const Text('应用筛选'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ServerSourceFilterSheet extends StatefulWidget {

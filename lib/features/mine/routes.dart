@@ -7,7 +7,6 @@ import 'presentation/appearance_page.dart';
 import 'presentation/bookmarks_page.dart';
 import 'presentation/bottom_nav_icon_gallery_editor_page.dart';
 import 'presentation/bottom_nav_icon_gallery_page.dart';
-import 'presentation/cache_management_page.dart';
 import 'presentation/cover_gallery_editor_page.dart';
 import 'presentation/cover_gallery_page.dart';
 import 'presentation/feedback_page.dart';
@@ -102,11 +101,6 @@ final List<RouteBase> mineRoutes = <RouteBase>[
       final galleryId = state.uri.queryParameters['id'] ?? '';
       return CoverGalleryEditorPage(galleryId: galleryId);
     },
-  ),
-  GoRoute(
-    path: '/cache',
-    name: 'cache',
-    builder: (context, state) => const CacheManagementPage(),
   ),
   GoRoute(
     path: '/mine/tags',

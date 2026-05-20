@@ -12,7 +12,6 @@ import '../features/mine/routes.dart';
 import '../features/mine/providers.dart';
 import '../features/reader/routes.dart';
 import '../features/search/routes.dart';
-import '../features/source/routes.dart';
 import '../features/sync/routes.dart';
 import 'shell_scaffold.dart';
 
@@ -44,7 +43,6 @@ final GoRouter appRouter = GoRouter(
     ...mineRoutes,
     ...announcementRoutes,
     ...authRoutes,
-    ...sourceRoutes,
     ...syncRoutes,
     ...searchRoutes,
     ...bookshelfRoutes,

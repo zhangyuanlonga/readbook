@@ -6,12 +6,9 @@ import '../../data/datasources/local/app_database.dart';
 import '../../data/repositories/book_metadata_override_repository_impl.dart';
 import '../../data/repositories/bookmark_repository_impl.dart';
 import '../../data/repositories/local_book_repository_impl.dart';
-import '../../data/repositories/script_source_repository_impl.dart';
-import '../../core/webview/interactive_verification_browser_executor.dart';
 import '../../domain/repositories/book_metadata_override_repository.dart';
 import '../../domain/repositories/bookmark_repository.dart';
 import '../../domain/repositories/local_book_repository.dart';
-import '../../domain/repositories/script_source_repository.dart';
 import '../../features/source/application/external_source_import_bridge.dart';
 import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
@@ -44,14 +41,8 @@ final localBookRepositoryProvider = Provider<LocalBookRepository>((ref) {
   return LocalBookRepositoryImpl(ref.watch(appDatabaseProvider));
 });
 
-final scriptSourceRepositoryProvider = Provider<ScriptSourceRepository>((ref) {
-  return ScriptSourceRepositoryImpl(ref.watch(appDatabaseProvider));
-});
-
 final appSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
-  return SourceRuntimeFacade(
-    scriptSourceRepository: ref.watch(scriptSourceRepositoryProvider),
-  );
+  return SourceRuntimeFacade();
 });
 
 final appSourceHealthServiceProvider = Provider<SourceHealthService>((ref) {
@@ -71,11 +62,6 @@ final appSourceRuntimeTaskConflictServiceProvider =
 final appExternalImportBridgeProvider = Provider<ExternalImportBridge>((ref) {
   return ExternalImportBridge.instance;
 });
-
-final appInteractiveVerificationBrowserExecutorProvider =
-    Provider<InteractiveVerificationBrowserExecutor>((ref) {
-      return InteractiveVerificationBrowserExecutor.instance;
-    });
 
 final appAuthEventStreamProvider = Provider<Stream<AuthEvent>>((ref) {
   return AuthEventBus.instance.stream;
@@ -129,17 +115,12 @@ final appStartupCoordinatorFactoryProvider =
         required Future<BuildContext?> Function() resolveDialogContext,
         required StartupUpdateDialogPresenter showUpdateDialog,
       }) {
-        final capabilities = ref.watch(appCapabilitiesProvider);
         return AppStartupCoordinator(
           sendHeartbeat: sendHeartbeat,
           sendVisitEvent: sendVisitEvent,
           showStartupAnnouncementIfNeeded: showStartupAnnouncementIfNeeded,
           resolveDialogContext: resolveDialogContext,
           showUpdateDialog: showUpdateDialog,
-          sourceRuntimeFacade:
-              capabilities.supportsSourceRuntime
-                  ? ref.watch(appSourceRuntimeFacadeProvider)
-                  : null,
         );
       };
     });

@@ -35,8 +35,6 @@ enum MinePageItemId {
   categoryManagement,
   fontManagement,
   systemSettings,
-  sourceManagement,
-  cacheManagement,
   feedback,
   officialGroup,
   checkUpdate,
@@ -144,16 +142,6 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
     title: '系统',
     sectionTitle: '数据',
     displayable: false,
-  ),
-  MinePageItemDefinition(
-    id: MinePageItemId.sourceManagement,
-    title: '书源管理',
-    sectionTitle: '数据',
-  ),
-  MinePageItemDefinition(
-    id: MinePageItemId.cacheManagement,
-    title: '存储管理',
-    sectionTitle: '数据',
   ),
   MinePageItemDefinition(
     id: MinePageItemId.feedback,

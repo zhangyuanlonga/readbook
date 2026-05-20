@@ -34,7 +34,6 @@ import 'reader_system_settings_service.dart';
 import 'reading_record_service.dart';
 import 'reader_cached_chapter_store.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
-import 'source_content_provider.dart';
 import 'server_gateway_content_provider.dart';
 
 class ReaderFeatureDependencies {
@@ -127,7 +126,6 @@ final readerFeatureDependenciesFactoryProvider =
         final readerSystemSettingsService = ReaderSystemSettingsService();
         final readerBackgroundService = ReaderBackgroundService();
         final localBookStorageService = LocalBookStorageService();
-        final capabilities = ref.watch(app_providers.appCapabilitiesProvider);
         final readingRecordService = ReadingRecordService(database: database);
         final bookshelfService = BookshelfService();
         final localBookIndexService = LocalBookIndexService(
@@ -166,7 +164,6 @@ final readerFeatureDependenciesFactoryProvider =
                   search_providers.searchSystemSettingsServiceProvider,
                 ),
               ),
-              if (capabilities.supportsSourceRuntime) SourceContentProvider(),
             ],
           ),
           preferencesService: readerPreferencesService,

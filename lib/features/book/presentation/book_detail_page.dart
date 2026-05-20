@@ -14,7 +14,6 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion_widgets.dart';
-import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
@@ -47,11 +46,11 @@ import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../reader/application/local_content_provider.dart';
+import '../../reader/application/removed_script_source_guard.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/server_gateway_content_provider.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/reading_record_service.dart';
-import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
@@ -193,7 +192,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _LocalCharsetOption(label: 'GB18030', charset: 'gb18030'),
         _LocalCharsetOption(label: 'Big5', charset: 'big5'),
       ];
-  late final SourceContentProvider _sourceContentProvider;
   late final ContentProviderRegistry _contentProviderRegistry;
   late final BookshelfService _bookshelfService;
   late final SearchService _switchSourceSearchService;
@@ -237,6 +235,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final BookDetailMetadataFlowService _metadataFlowService;
   late final BookDetailActionService _actionService;
   late final BookDetailCatalogService _catalogService;
+  late final BookDetailService _bookDetailService;
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   final AppLogger _logger = AppLogger.instance;
   final Stopwatch _detailOpenStopwatch = Stopwatch()..start();
@@ -285,11 +284,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _readingRecordService = dependencies.readingRecordService;
     _localBookIndexService = dependencies.localBookIndexService;
     _readRouteService = dependencies.readRouteService;
-    final detailService =
-        widget.bookDetailService ?? dependencies.bookDetailService;
-    _sourceContentProvider = SourceContentProvider(
-      detailService: detailService,
-    );
+    _bookDetailService = widget.bookDetailService ?? dependencies.bookDetailService;
     _contentProviderRegistry = ContentProviderRegistry(
       providers: [
         LocalContentProvider(
@@ -307,7 +302,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             search_providers.searchSystemSettingsServiceProvider,
           ),
         ),
-        _sourceContentProvider,
       ],
     );
     _bookshelfService =
@@ -445,7 +439,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return false;
     }
 
-    final cached = _sourceContentProvider.peekCachedDetail(
+    final cached = _bookDetailService.peekCached(
       sourceId: sourceId,
       detailUrl: detailUrl,
     );
@@ -547,9 +541,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   bool get _isLocalContent => _contentCapabilities.canReindexLocal;
 
   bool get _canSwitchSource {
-    final capabilities = ref.read(appPlatformCapabilitiesProvider);
-    return capabilities.supportsSourceRuntime &&
-        _contentCapabilities.canSwitchSource;
+    return false;
   }
 
   ImageProvider? _resolveDetailCoverBackdropProvider({
@@ -622,6 +614,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
     final provider = _contentProviderRegistry.findForSourceId(normalized);
     if (provider == null) {
+      if (isRemovedScriptSourceId(normalized)) {
+        throwRemovedScriptSource(stage: stage, sourceId: normalized);
+      }
       throw AppException(
         code: ErrorCode.unknownSource,
         stage: stage,

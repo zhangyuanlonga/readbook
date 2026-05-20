@@ -9,9 +9,6 @@ import '../../core/media/image_selection_service.dart';
 import '../../core/membership/membership_service.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
 import '../../domain/repositories/bookmark_repository.dart';
-import '../../features/reader/application/chapter_cache_service.dart';
-import '../../features/reader/application/reader_pagination_cache_service.dart';
-import '../../features/reader/application/reading_record_service.dart';
 import '../../features/reader/application/local/local_reader_entry_guard_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
@@ -21,7 +18,6 @@ import 'application/advanced_theme_editor_state_service.dart';
 import 'application/appearance_page_resource_service.dart';
 import 'application/app_background_service.dart';
 import 'application/bookmarks_query_service.dart';
-import 'application/cache_management_service.dart';
 import 'application/cover_gallery_provider.dart';
 import 'application/mine_page_flow_coordinator.dart';
 import 'application/mine_page_preferences_service.dart';
@@ -37,21 +33,6 @@ final mineBookshelfServiceProvider = Provider<BookshelfService>((ref) {
 
 final mineBookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
   return ref.watch(app_providers.bookmarkRepositoryProvider);
-});
-
-final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
-  final database = ref.watch(app_providers.appDatabaseProvider);
-  return CacheManagementService(
-    database: database,
-    bookshelfService: ref.watch(mineBookshelfServiceProvider),
-    readingRecordService: ReadingRecordService(database: database),
-    localBookRepository: ref.watch(app_providers.localBookRepositoryProvider),
-    bookMetadataOverrideRepository: ref.watch(
-      app_providers.bookMetadataOverrideRepositoryProvider,
-    ),
-    chapterCacheService: ChapterCacheService(database: database),
-    paginationCacheService: ReaderPaginationCacheService(),
-  );
 });
 
 final bookmarksQueryServiceProvider = Provider<BookmarksQueryService>((ref) {

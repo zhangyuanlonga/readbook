@@ -247,7 +247,7 @@ class ServerBookGatewayService {
           'refresh': refresh,
           'format': 'auto',
           'includeImages': true,
-          'followNextContent': false,
+          'followNextContent': true,
           'timeoutMs': 45000,
         },
       },

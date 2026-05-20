@@ -8,6 +8,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import 'removed_script_source_guard.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_task_gate_service.dart';
 import '../../source/application/source_runtime_facade.dart';
@@ -132,6 +133,13 @@ class ChapterContentService {
         code: ErrorCode.validation,
         stage: ErrorStage.content,
         briefMessage: '加载正文缺少参数。',
+      );
+    }
+
+    if (isRemovedScriptSourceId(normalizedSourceId)) {
+      throwRemovedScriptSource(
+        stage: ErrorStage.content,
+        sourceId: normalizedSourceId,
       );
     }
 

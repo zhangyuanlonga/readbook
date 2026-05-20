@@ -6,7 +6,6 @@ import '../../../core/logging/app_logger.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../source/application/source_health_service.dart';
-import '../../source/application/source_runtime_facade.dart';
 import 'chapter_content_service.dart';
 
 class ChapterCacheCancellationToken {
@@ -47,14 +46,11 @@ class ChapterCacheService {
   ChapterCacheService({
     AppDatabase? database,
     ChapterContentService? contentService,
-    SourceRuntimeFacade? sourceRuntimeFacade,
     SourceHealthService? sourceHealthService,
     AppLogger? logger,
     int? maxConcurrentLoads,
   }) : _database = database ?? AppDatabase.instance,
        _contentService = contentService ?? ChapterContentService(),
-       _sourceRuntimeFacade =
-           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _sourceHealthService =
            sourceHealthService ?? SourceHealthService.instance,
        _logger = logger ?? AppLogger.instance,
@@ -62,7 +58,6 @@ class ChapterCacheService {
 
   final AppDatabase _database;
   final ChapterContentService _contentService;
-  final SourceRuntimeFacade? _sourceRuntimeFacade;
   final SourceHealthService _sourceHealthService;
   final AppLogger _logger;
   final int _maxConcurrentLoads;
@@ -341,61 +336,45 @@ class ChapterCacheService {
       return 1;
     }
 
-    final facade = _sourceRuntimeFacade;
-    final registered = facade?.registeredScriptSourceById(sourceId);
-    final capabilities =
-        registered?.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet() ??
-        const <String>{};
     final snapshot = _sourceHealthService.snapshotFor(sourceId);
-
-    final declaresBrowser =
-        capabilities.contains('browser') ||
-        capabilities.contains('webview') ||
-        capabilities.contains('challenge');
-    final declaresHeavy =
-        capabilities.contains('js-heavy') ||
-        capabilities.contains('script-heavy');
     final hasBrowserRisk = snapshot.browserRiskCount > 0;
     final hasRepeatedFailures = snapshot.totalFailures >= 2;
 
     final suggested = switch (defaultTargetPlatform) {
       TargetPlatform.android =>
-        declaresBrowser || hasBrowserRisk
+        hasBrowserRisk
             ? 1
-            : declaresHeavy || hasRepeatedFailures
+            : hasRepeatedFailures
             ? 3
             : 6,
       TargetPlatform.iOS =>
-        declaresBrowser || hasBrowserRisk
+        hasBrowserRisk
             ? 1
-            : declaresHeavy || hasRepeatedFailures
+            : hasRepeatedFailures
             ? 2
             : 4,
       TargetPlatform.macOS =>
-        declaresBrowser || hasBrowserRisk
+        hasBrowserRisk
             ? 1
-            : declaresHeavy || hasRepeatedFailures
+            : hasRepeatedFailures
             ? 2
             : 4,
       TargetPlatform.windows =>
-        declaresBrowser || hasBrowserRisk
+        hasBrowserRisk
             ? 1
-            : declaresHeavy || hasRepeatedFailures
+            : hasRepeatedFailures
             ? 3
             : 5,
       TargetPlatform.linux =>
-        declaresBrowser || hasBrowserRisk
+        hasBrowserRisk
             ? 1
-            : declaresHeavy || hasRepeatedFailures
+            : hasRepeatedFailures
             ? 3
             : 5,
       _ =>
-        declaresBrowser || hasBrowserRisk
+        hasBrowserRisk
             ? 1
-            : declaresHeavy || hasRepeatedFailures
+            : hasRepeatedFailures
             ? 2
             : 3,
     };
@@ -407,8 +386,6 @@ class ChapterCacheService {
         'sourceId': sourceId,
         'chapterCount': chapterCount,
         'parallelism': resolved,
-        'declaresBrowser': declaresBrowser,
-        'declaresHeavy': declaresHeavy,
         'browserRiskCount': snapshot.browserRiskCount,
         'totalFailures': snapshot.totalFailures,
       },

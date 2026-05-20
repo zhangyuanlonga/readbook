@@ -722,7 +722,6 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _restoreScrollPosition(targetRatio);
 
     await _saveProgress();
-    _hasPromptedMissingSourceSwitch = false;
     if (_canWarmNeighborPaginationCache()) {
       _scheduleNeighborPreload();
     }

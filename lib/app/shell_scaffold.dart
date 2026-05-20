@@ -14,7 +14,6 @@ import 'layout/app_layout.dart';
 import 'navigation/bottom_nav_icon_gallery_provider.dart';
 import 'navigation/bottom_nav_icon_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
-import 'platform/app_platform_capabilities.dart';
 import 'shell_navigation_provider.dart';
 import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
@@ -125,8 +124,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       appCupertinoDockAppearanceProvider,
     );
     final navigationState = ref.watch(appShellNavigationProvider);
-    final capabilities = ref.watch(appPlatformCapabilitiesProvider);
-    final showSourceRuntimeEntry = capabilities.sourceRuntime.canShowEntry;
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final activeIconGallery =
         ref.watch(effectiveBottomNavIconGalleryProvider).value;
@@ -247,7 +244,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         activeIconGallery: activeIconGallery,
         standardAppearance: standardNavigationAppearance,
         cupertinoDockAppearance: cupertinoDockAppearance,
-        showSearchButton: showSourceRuntimeEntry,
+        showSearchButton: true,
       ),
     );
   }

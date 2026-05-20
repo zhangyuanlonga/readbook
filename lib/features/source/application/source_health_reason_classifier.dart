@@ -1,6 +1,6 @@
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
-import '../../../runtime/session/source_session.dart';
+import '../../../core/session/session_cancellation.dart';
 import '../../../domain/entities/source_health.dart';
 
 class SourceHealthReasonClassifier {

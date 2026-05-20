@@ -1,70 +1,33 @@
-import '../../../runtime/sources/source_executor.dart';
+import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/error_codes.dart';
+import '../../../core/errors/error_stage.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
-import 'source_runtime_request_execution_container.dart';
 
-abstract class SourceRuntimeDiagnosticExecutionContainer {
-  String get sourceId;
-  String get sourceName;
-
-  Future<List<runtime_models.Book>> search(String keyword);
-
-  Future<runtime_models.Book> detail(runtime_models.Book book);
-
-  Future<List<runtime_models.Chapter>> chapters(runtime_models.Book book);
-
-  Future<runtime_models.Content> content(
-    runtime_models.Book book,
-    runtime_models.Chapter chapter,
-  );
-
-  void dispose();
-}
-
-class DefaultSourceRuntimeDiagnosticExecutionContainer
-    implements SourceRuntimeDiagnosticExecutionContainer {
-  const DefaultSourceRuntimeDiagnosticExecutionContainer({
+class SourceRuntimeDiagnosticExecutionContainer {
+  const SourceRuntimeDiagnosticExecutionContainer({
     required this.source,
-    required this.requestContainer,
   });
 
   final RegisteredSource source;
-  final SourceRuntimeRequestExecutionContainer requestContainer;
 
-  SourceExecutor get _executor => requestContainer.executor;
-
-  @override
-  String get sourceId => source.runtime.id;
-
-  @override
-  String get sourceName => source.runtime.name;
-
-  @override
-  Future<List<runtime_models.Book>> search(String keyword) {
-    return _executor.search(source, keyword);
+  Future<runtime_models.Book> detail(runtime_models.Book book) async {
+    throw AppException(
+      code: ErrorCode.unknownSource,
+      stage: ErrorStage.detail,
+      sourceId: source.runtime.id,
+      briefMessage: '该本地脚本书源能力已移除，请重新搜索并加入服务器书源版本。',
+    );
   }
 
-  @override
-  Future<runtime_models.Book> detail(runtime_models.Book book) {
-    return _executor.detail(source, book);
+  Future<List<runtime_models.Chapter>> chapters(runtime_models.Book book) async {
+    throw AppException(
+      code: ErrorCode.unknownSource,
+      stage: ErrorStage.toc,
+      sourceId: source.runtime.id,
+      briefMessage: '该本地脚本书源能力已移除，请重新搜索并加入服务器书源版本。',
+    );
   }
 
-  @override
-  Future<List<runtime_models.Chapter>> chapters(runtime_models.Book book) {
-    return _executor.chapters(source, book);
-  }
-
-  @override
-  Future<runtime_models.Content> content(
-    runtime_models.Book book,
-    runtime_models.Chapter chapter,
-  ) {
-    return _executor.content(source, book, chapter);
-  }
-
-  @override
-  void dispose() {
-    source.definition.dispose?.call();
-    requestContainer.dispose();
-  }
+  void dispose() {}
 }

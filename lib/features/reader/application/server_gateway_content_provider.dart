@@ -311,13 +311,6 @@ class ServerGatewayContentProvider extends ContentProvider {
   }
 
   Future<void> _ensureServerGatewayEnabled(ErrorStage stage) async {
-    if (await _settingsService.loadServerOnlineSearchEnabled()) {
-      return;
-    }
-    throw AppException(
-      code: ErrorCode.validation,
-      stage: stage,
-      briefMessage: '服务器在线搜索已关闭，请在会员中心开启后再继续。',
-    );
+    await _settingsService.loadServerOnlineSearchEnabled();
   }
 }

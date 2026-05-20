@@ -4,6 +4,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../domain/entities/chapter.dart';
 import '../application/chapter_content_service.dart';
 import '../application/content_provider.dart';
+import '../application/removed_script_source_guard.dart';
 import '../application/reader_chapter_navigation.dart';
 
 class ReaderChapterLoadSnapshot {
@@ -86,6 +87,9 @@ class ReaderContentLoadingPresenter {
 
     final provider = registry.findForSourceId(normalized);
     if (provider == null) {
+      if (isRemovedScriptSourceId(normalized)) {
+        throwRemovedScriptSource(stage: stage, sourceId: normalized);
+      }
       throw AppException(
         code: ErrorCode.unknownSource,
         stage: stage,

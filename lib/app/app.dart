@@ -533,7 +533,6 @@ class _SystemUiOverlayWrapperState
   AppTaskStatusKind _externalImportTaskKind(ExternalImportPayloadType type) {
     return switch (type) {
       ExternalImportPayloadType.localBook => AppTaskStatusKind.localBookImport,
-      ExternalImportPayloadType.scriptSource => AppTaskStatusKind.sourceImport,
       ExternalImportPayloadType.advancedTheme => AppTaskStatusKind.themeImport,
       ExternalImportPayloadType.font => AppTaskStatusKind.fontImport,
     };
@@ -542,7 +541,6 @@ class _SystemUiOverlayWrapperState
   AppTaskChannel _externalImportTaskChannel(ExternalImportPayloadType type) {
     return switch (type) {
       ExternalImportPayloadType.localBook => AppTaskChannel.localBookImport,
-      ExternalImportPayloadType.scriptSource ||
       ExternalImportPayloadType.advancedTheme ||
       ExternalImportPayloadType.font => AppTaskChannel.resourceImport,
     };

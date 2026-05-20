@@ -6,8 +6,6 @@ import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/repositories/local_book_repository.dart';
-import '../../../runtime/sources/source_registry.dart';
-import '../../source/application/source_runtime_facade.dart';
 import 'local_book_import_service.dart';
 
 class BookshelfPresentationQueryService {
@@ -15,16 +13,13 @@ class BookshelfPresentationQueryService {
     required AppDatabase database,
     required BookPresentationQueryService bookPresentationQueryService,
     required LocalBookRepository localBookRepository,
-    required SourceRuntimeFacade sourceRuntimeFacade,
   }) : _database = database,
        _bookPresentationQueryService = bookPresentationQueryService,
-       _localBookRepository = localBookRepository,
-       _sourceRuntimeFacade = sourceRuntimeFacade;
+       _localBookRepository = localBookRepository;
 
   final AppDatabase _database;
   final BookPresentationQueryService _bookPresentationQueryService;
   final LocalBookRepository _localBookRepository;
-  final SourceRuntimeFacade _sourceRuntimeFacade;
   final BookDisplayStateResolver _presentationResolver =
       const BookDisplayStateResolver();
 
@@ -106,32 +101,10 @@ class BookshelfPresentationQueryService {
 
   Future<Map<String, int>> loadSourceTypeMap({
     required Duration timeout,
-    required int Function(RegisteredSource source) inferRuntimeSourceType,
     required int Function(String sourceCode) inferPersistedSourceType,
   }) async {
-    final sourceTypeBySourceId = <String, int>{};
-
-    final runtimeSources = _sourceRuntimeFacade.registeredScriptSources(
-      enabledOnly: false,
-    );
-    for (final source in runtimeSources) {
-      sourceTypeBySourceId[source.runtime.id] = inferRuntimeSourceType(source);
-    }
-
-    try {
-      final persistedSources = await _sourceRuntimeFacade
-          .listScriptSources()
-          .timeout(timeout);
-      for (final source in persistedSources) {
-        sourceTypeBySourceId[source.id] = inferPersistedSourceType(
-          source.sourceCode,
-        );
-      }
-    } catch (_) {
-      // Keep runtime-derived metadata when persisted source loading fails.
-    }
-
-    return sourceTypeBySourceId;
+    await Future<void>.delayed(Duration.zero);
+    return const <String, int>{};
   }
 
   String _bookKey(BookshelfBook book) {

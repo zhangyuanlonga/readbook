@@ -88,6 +88,7 @@ import '../application/reader_chapter_navigation.dart';
 import '../application/reader_document_render_model.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_image_decode_budget.dart';
+import '../application/removed_script_source_guard.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
@@ -121,7 +122,6 @@ import '../application/reader_system_settings_service.dart';
 import '../application/reader_theme_mode_service.dart';
 import '../application/reader_typography_resolver.dart';
 import '../application/reader_typography_metrics_resolver.dart';
-import '../application/source_content_provider.dart';
 import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';
@@ -374,7 +374,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _autoSwitchSourceOnFailureEnabled = false;
   bool _readingRecordEnabled = true;
   bool _isScrollEdgeAdvancingChapter = false;
-  bool _hasPromptedMissingSourceSwitch = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
   ReaderDocument _document = ReaderDocument(blocks: const <ReaderBlock>[]);
@@ -929,6 +928,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       resolvedContentType: _resolvedContentType,
       audioUrl: _chapterAudioUrl,
       audioManifestUrl: _chapterAudioManifestUrl,
+      audioHeaders: _chapterAudioHeaders,
       chapters: _chapters,
       sessionState:
           contentMode == ReaderContentMode.text
@@ -960,6 +960,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         resolvedContentType: _resolvedContentType,
         audioUrl: _chapterAudioUrl,
         audioManifestUrl: _chapterAudioManifestUrl,
+        audioHeaders: _chapterAudioHeaders,
         chapters: _chapters,
       ),
     );
@@ -4562,7 +4563,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return provider?.capabilities ?? const ContentCapabilities();
   }
 
-  bool get _canSwitchSource => _readerModeCapabilities.canSwitchSource;
+  bool get _canSwitchSource => false;
   bool get _canCacheChapter => _readerModeCapabilities.canCacheChapter;
 
   String get _currentBookId {
@@ -4592,6 +4593,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final provider = _contentProviderRegistry.findForSourceId(normalized);
     if (provider == null) {
+      if (isRemovedScriptSourceId(normalized)) {
+        throwRemovedScriptSource(stage: stage, sourceId: normalized);
+      }
       throw AppException(
         code: ErrorCode.unknownSource,
         stage: stage,

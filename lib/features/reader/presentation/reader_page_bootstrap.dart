@@ -739,16 +739,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
   }
 
   BookDetailLoadResult? _peekCachedDetailResult() {
-    final sourceId = (_sourceId ?? '').trim();
-    final detailUrl = (_detailUrl ?? '').trim();
-    if (sourceId.isEmpty || detailUrl.isEmpty) {
-      return null;
-    }
-    final provider = _contentProviderRegistry.findForSourceId(sourceId);
-    if (provider is! SourceContentProvider) {
-      return null;
-    }
-    return provider.peekCachedDetail(sourceId: sourceId, detailUrl: detailUrl);
+    return null;
   }
 
   String _resolveNoReadableChapterMessage({

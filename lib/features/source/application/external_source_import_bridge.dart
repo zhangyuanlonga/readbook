@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'external_import_diagnostics.dart';
 
-enum ExternalImportPayloadType { localBook, scriptSource, advancedTheme, font }
+enum ExternalImportPayloadType { localBook, advancedTheme, font }
 
 class IncomingExternalImportPayload {
   const IncomingExternalImportPayload.localBook({
@@ -14,12 +14,6 @@ class IncomingExternalImportPayload {
     required this.label,
     this.mimeType,
   }) : type = ExternalImportPayloadType.localBook;
-
-  const IncomingExternalImportPayload.scriptSource({
-    required this.uri,
-    required this.label,
-    this.mimeType,
-  }) : type = ExternalImportPayloadType.scriptSource;
 
   const IncomingExternalImportPayload.advancedTheme({
     required this.uri,
@@ -123,7 +117,6 @@ class ExternalImportBridge {
     IncomingExternalImportPayload payload,
   ) async {
     if ((payload.type != ExternalImportPayloadType.localBook &&
-            payload.type != ExternalImportPayloadType.scriptSource &&
             payload.type != ExternalImportPayloadType.advancedTheme &&
             payload.type != ExternalImportPayloadType.font) ||
         payload.uri.trim().isEmpty) {
@@ -136,7 +129,6 @@ class ExternalImportBridge {
         <String, dynamic>{
           'type': switch (payload.type) {
             ExternalImportPayloadType.localBook => 'localBook',
-            ExternalImportPayloadType.scriptSource => 'scriptSource',
             ExternalImportPayloadType.advancedTheme => 'advancedTheme',
             ExternalImportPayloadType.font => 'font',
           },
@@ -226,22 +218,6 @@ class ExternalImportBridge {
               ? mimeTypeRaw.trim()
               : null;
       return IncomingExternalImportPayload.localBook(
-        uri: uriRaw,
-        label: label,
-        mimeType: mimeType,
-      );
-    }
-    if (typeRaw == 'scriptsource') {
-      final uriRaw = raw['uri']?.toString().trim() ?? '';
-      if (uriRaw.isEmpty) {
-        return null;
-      }
-      final mimeTypeRaw = raw['mimeType'];
-      final mimeType =
-          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
-              ? mimeTypeRaw.trim()
-              : null;
-      return IncomingExternalImportPayload.scriptSource(
         uri: uriRaw,
         label: label,
         mimeType: mimeType,

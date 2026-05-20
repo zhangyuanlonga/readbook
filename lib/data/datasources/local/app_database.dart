@@ -12,7 +12,6 @@ import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
-import '../../../domain/entities/script_source.dart';
 import 'app_database_connection.dart';
 
 part 'app_database.g.dart';
@@ -232,28 +231,6 @@ class SearchSourceHits extends Table {
   Set<Column<Object>> get primaryKey => {titleNorm, authorNorm, sourceId};
 }
 
-class StoredScriptSources extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get group => text().nullable()();
-  TextColumn get author => text().nullable()();
-  TextColumn get description => text().nullable()();
-  TextColumn get checkKeyword => text().nullable()();
-  TextColumn get primaryHost => text().nullable()();
-  TextColumn get registrableDomain => text().nullable()();
-  TextColumn get clusterKey => text().nullable()();
-  TextColumn get sourceCode => text()();
-  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  String get tableName => 'script_sources';
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
 class StoredSyncProfiles extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
@@ -387,7 +364,6 @@ class SearchSourceHitUpsert {
     StoredReadingRecordSessions,
     StoredReadingBookStatuses,
     SearchSourceHits,
-    StoredScriptSources,
     StoredSyncProfiles,
     StoredSyncScopeStates,
     StoredSyncJobs,
@@ -404,7 +380,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   @override
   MigrationStrategy get migration {
@@ -503,50 +479,6 @@ class AppDatabase extends _$AppDatabase {
                 ),
           );
         }
-        if (from < 19) {
-          await _addColumnIfMissing(
-            migrator: migrator,
-            tableName: storedScriptSources.tableName,
-            columnName: 'primary_host',
-            addColumn:
-                () => migrator.addColumn(
-                  storedScriptSources,
-                  storedScriptSources.primaryHost,
-                ),
-          );
-          await _addColumnIfMissing(
-            migrator: migrator,
-            tableName: storedScriptSources.tableName,
-            columnName: 'registrable_domain',
-            addColumn:
-                () => migrator.addColumn(
-                  storedScriptSources,
-                  storedScriptSources.registrableDomain,
-                ),
-          );
-          await _addColumnIfMissing(
-            migrator: migrator,
-            tableName: storedScriptSources.tableName,
-            columnName: 'cluster_key',
-            addColumn:
-                () => migrator.addColumn(
-                  storedScriptSources,
-                  storedScriptSources.clusterKey,
-                ),
-          );
-        }
-        if (from < 20) {
-          await _addColumnIfMissing(
-            migrator: migrator,
-            tableName: storedScriptSources.tableName,
-            columnName: 'check_keyword',
-            addColumn:
-                () => migrator.addColumn(
-                  storedScriptSources,
-                  storedScriptSources.checkKeyword,
-                ),
-          );
-        }
         if (from < 21) {
           await migrator.createTable(storedReadingBookStatuses);
         }
@@ -640,9 +572,6 @@ class AppDatabase extends _$AppDatabase {
         if (from < 15) {
           await _removeDeprecatedLocalBookColumns(migrator);
         }
-        if (from < 16) {
-          await migrator.createTable(storedScriptSources);
-        }
         if (from < 17) {
           await _addColumnIfMissing(
             migrator: migrator,
@@ -666,6 +595,9 @@ class AppDatabase extends _$AppDatabase {
                   storedLocalChapters.documentJson,
                 ),
           );
+        }
+        if (from < 27) {
+          await customStatement('DROP TABLE IF EXISTS script_sources;');
         }
       },
       beforeOpen: (_) async {
@@ -775,88 +707,6 @@ class AppDatabase extends _$AppDatabase {
     final escaped = identifier.replaceAll('"', '""');
     return '"$escaped"';
   }
-
-  Future<List<ScriptSource>> getAllScriptSources() async {
-    final rows =
-        await (select(storedScriptSources)..orderBy([
-          (table) => OrderingTerm.asc(table.group),
-          (table) => OrderingTerm.asc(table.name),
-        ])).get();
-    return rows.map(_mapRowToScriptSource).toList(growable: false);
-  }
-
-  Stream<List<ScriptSource>> watchAllScriptSources() {
-    final query = select(storedScriptSources)..orderBy([
-      (table) => OrderingTerm.asc(table.group),
-      (table) => OrderingTerm.asc(table.name),
-    ]);
-    return query.watch().map(
-      (rows) => rows.map(_mapRowToScriptSource).toList(growable: false),
-    );
-  }
-
-  Future<ScriptSource?> getScriptSourceById(String id) async {
-    final normalized = id.trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-
-    final row =
-        await (select(storedScriptSources)
-          ..where((table) => table.id.equals(normalized))).getSingleOrNull();
-    if (row == null) {
-      return null;
-    }
-    return _mapRowToScriptSource(row);
-  }
-
-  Future<void> upsertScriptSource(ScriptSource source) {
-    return into(storedScriptSources).insertOnConflictUpdate(
-      StoredScriptSourcesCompanion(
-        id: Value(source.id),
-        name: Value(source.name),
-        group: Value(source.group),
-        author: Value(source.author),
-        description: Value(source.description),
-        checkKeyword: Value(source.checkKeyword),
-        primaryHost: Value(source.primaryHost),
-        registrableDomain: Value(source.registrableDomain),
-        clusterKey: Value(source.clusterKey),
-        sourceCode: Value(source.sourceCode),
-        enabled: Value(source.enabled),
-        createdAt: Value(source.createdAt),
-        updatedAt: Value(source.updatedAt),
-      ),
-    );
-  }
-
-  Future<void> setScriptSourceEnabled({
-    required String id,
-    required bool enabled,
-  }) {
-    final normalized = id.trim();
-    if (normalized.isEmpty) {
-      return Future<void>.value();
-    }
-    return (update(storedScriptSources)
-      ..where((table) => table.id.equals(normalized))).write(
-      StoredScriptSourcesCompanion(
-        enabled: Value(enabled),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
-  Future<void> deleteScriptSource(String id) {
-    final normalized = id.trim();
-    if (normalized.isEmpty) {
-      return Future<void>.value();
-    }
-    return (delete(storedScriptSources)
-      ..where((table) => table.id.equals(normalized))).go();
-  }
-
-  Future<void> clearScriptSources() => delete(storedScriptSources).go();
 
   Future<List<StoredSyncProfile>> getAllSyncProfiles() {
     return (select(storedSyncProfiles)
@@ -2941,24 +2791,6 @@ class AppDatabase extends _$AppDatabase {
         (item) => item.name == row.statusOverride,
         orElse: () => ReadingBookStatusOverride.reading,
       ),
-      updatedAt: row.updatedAt,
-    );
-  }
-
-  ScriptSource _mapRowToScriptSource(StoredScriptSource row) {
-    return ScriptSource(
-      id: row.id,
-      name: row.name,
-      group: _nullableString(row.group),
-      author: _nullableString(row.author),
-      description: _nullableString(row.description),
-      checkKeyword: _nullableString(row.checkKeyword),
-      primaryHost: _nullableString(row.primaryHost),
-      registrableDomain: _nullableString(row.registrableDomain),
-      clusterKey: _nullableString(row.clusterKey),
-      sourceCode: row.sourceCode,
-      enabled: row.enabled,
-      createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     );
   }

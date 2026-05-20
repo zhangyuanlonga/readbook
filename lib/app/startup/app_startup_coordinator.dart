@@ -6,7 +6,6 @@ import 'package:flutter/widgets.dart';
 import '../../core/app_update/app_update_release.dart';
 import '../../core/app_update/app_update_service.dart';
 import '../../core/logging/app_logger.dart';
-import '../../features/source/application/source_runtime_facade.dart';
 import 'startup_task_gate_service.dart';
 
 typedef StartupUpdateDialogPresenter =
@@ -21,7 +20,6 @@ class AppStartupCoordinator {
     required StartupUpdateDialogPresenter showUpdateDialog,
     AppLogger? logger,
     AppUpdateService? appUpdateService,
-    SourceRuntimeFacade? sourceRuntimeFacade,
     Future<void> Function()? warmupLocalDatabase,
     StartupTaskGateService? taskGateService,
     Duration? startupMinDuration,
@@ -34,7 +32,6 @@ class AppStartupCoordinator {
        _showUpdateDialog = showUpdateDialog,
        _logger = logger ?? AppLogger.instance,
        _appUpdateService = appUpdateService ?? AppUpdateService(),
-       _sourceRuntimeFacade = sourceRuntimeFacade,
        _warmupLocalDatabaseOverride = warmupLocalDatabase,
        _taskGateService = taskGateService ?? StartupTaskGateService(),
        _startupMinDuration = startupMinDuration ?? _defaultStartupMinDuration,
@@ -61,7 +58,6 @@ class AppStartupCoordinator {
   final StartupUpdateDialogPresenter _showUpdateDialog;
   final AppLogger _logger;
   final AppUpdateService _appUpdateService;
-  final SourceRuntimeFacade? _sourceRuntimeFacade;
   final Future<void> Function()? _warmupLocalDatabaseOverride;
   final StartupTaskGateService _taskGateService;
   final Duration _startupMinDuration;
@@ -167,32 +163,13 @@ class AppStartupCoordinator {
       await warmupLocalDatabase();
       return;
     }
-    final sourceRuntimeFacade = _sourceRuntimeFacade;
-    if (sourceRuntimeFacade == null) {
-      _logger.info(
-        'Startup warmup local database skipped',
-        context: <String, Object?>{
-          'reason': 'source_runtime_disabled',
-          'elapsedMs': elapsedMilliseconds,
-        },
-      );
-      return;
-    }
-
-    final stopwatch = Stopwatch()..start();
-    try {
-      await sourceRuntimeFacade.listScriptSources();
-    } catch (_) {
-      // Ignore warmup failures to avoid affecting app startup or first frame.
-    } finally {
-      _logger.info(
-        'Startup warmup local database',
-        context: <String, Object?>{
-          'costMs': stopwatch.elapsedMilliseconds,
-          'elapsedMs': elapsedMilliseconds,
-        },
-      );
-    }
+    _logger.info(
+      'Startup warmup local database skipped',
+      context: <String, Object?>{
+        'reason': 'script_source_runtime_removed',
+        'elapsedMs': elapsedMilliseconds,
+      },
+    );
   }
 
   Future<void> _checkStartupUpdateIfNeeded({

@@ -30,6 +30,7 @@ class ReaderSessionSeed {
     this.resolvedContentType,
     this.audioUrl,
     this.audioManifestUrl,
+    this.audioHeaders = const <String, String>{},
     this.chapters = const <Chapter>[],
   });
 
@@ -47,6 +48,7 @@ class ReaderSessionSeed {
   final String? resolvedContentType;
   final String? audioUrl;
   final String? audioManifestUrl;
+  final Map<String, String> audioHeaders;
   final List<Chapter> chapters;
 }
 
@@ -80,6 +82,7 @@ class ReaderPresentationResolver {
           resolvedContentType: seed.resolvedContentType,
           audioUrl: seed.audioUrl,
           audioManifestUrl: seed.audioManifestUrl,
+          audioHeaders: seed.audioHeaders,
           chapters: seed.chapters,
         );
   }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'composition/app_providers.dart';
 import 'preferences/app_preferences_service.dart';
 
 enum AppShellTab { home, bookshelf, discover, stats, mine }
@@ -231,7 +230,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   bool get _isDiscoverEnabled {
-    return ref.read(appCapabilitiesProvider).sourceRuntime.canShowEntry;
+    return true;
   }
 
   Future<void> _persistState(AppShellNavigationState state) async {

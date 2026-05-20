@@ -805,8 +805,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                 const SizedBox(height: 6),
                 Text(
                   _hasActiveMembership
-                      ? '开启后，搜索关键词和书源范围会发送至服务器书源网关；关闭后继续使用本机旧搜索逻辑。'
-                      : '会员开启后可使用服务器书源网关搜索；搜索关键词会发送至服务器，未开启前不影响当前本机搜索逻辑。',
+                      ? '开启后，搜索关键词和书源范围会发送至服务器书源网关。'
+                      : '会员开启后可使用服务器书源网关搜索；搜索关键词会发送至服务器。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                     height: 1.45,

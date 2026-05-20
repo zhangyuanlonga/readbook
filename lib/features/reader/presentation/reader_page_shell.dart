@@ -471,16 +471,12 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
 
     if (localPosition.dx < centerLeft) {
-      unawaited(
-        _turnReaderByDirection(forward: false, includeMangaPaged: false),
-      );
+      unawaited(_turnReaderByDirection(forward: false));
       return;
     }
 
     if (localPosition.dx > centerRight) {
-      unawaited(
-        _turnReaderByDirection(forward: true, includeMangaPaged: false),
-      );
+      unawaited(_turnReaderByDirection(forward: true));
     }
   }
 
@@ -675,64 +671,6 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   void _maybePromptSwitchSourceForMissingSource(ErrorCode? code) {
-    final shouldPrompt = _readerFeedbackService
-        .shouldPromptSwitchSourceForMissingSource(
-          canSwitchSource: _canSwitchSource,
-          code: code,
-          mounted: mounted,
-          hasPromptedMissingSourceSwitch: _hasPromptedMissingSourceSwitch,
-          isSwitchSourceLoading: _isSwitchSourceLoading,
-        );
-    if (!shouldPrompt) {
-      return;
-    }
-    _hasPromptedMissingSourceSwitch = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || _isSwitchSourceLoading) {
-        return;
-      }
-      final confirmed = await showAdaptiveActionSurface<bool>(
-        context: context,
-        maxWidth: 460,
-        builder: (dialogContext) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '当前书源不可用',
-                style: Theme.of(
-                  dialogContext,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '该书源可能已被删除或停用，是否现在切换到其他书源？',
-                style: Theme.of(dialogContext).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(false),
-                    child: const Text('稍后'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(true),
-                    child: const Text('立即换源'),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed == true && mounted) {
-        await _showSwitchSourceSheet();
-      }
-    });
+    return;
   }
 }

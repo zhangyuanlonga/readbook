@@ -1,26 +1,19 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/composition/app_providers.dart' as app_providers;
 import '../../app/widgets/feature_disabled_page.dart';
-import 'presentation/discover_page.dart';
 
 final StatefulShellBranch discoverShellBranch = StatefulShellBranch(
   routes: [
     GoRoute(
       path: '/discover',
       name: 'discover',
-      builder: (context, state) {
-        final sourceRuntime =
-            ProviderScope.containerOf(
-              context,
-              listen: false,
-            ).read(app_providers.appCapabilitiesProvider).sourceRuntime;
-        if (!sourceRuntime.isSupported) {
-          return FeatureDisabledPages.discover(capability: sourceRuntime);
-        }
-        return const DiscoverPage();
-      },
+      builder:
+          (context, state) => const FeatureDisabledPage(
+            title: '服务器发现开发中',
+            message: '发现页将切换到服务器实现。当前本地脚本书源发现能力已停止入口投放，待服务器能力完成后再开放。',
+            icon: Icons.travel_explore_rounded,
+          ),
     ),
   ],
 );

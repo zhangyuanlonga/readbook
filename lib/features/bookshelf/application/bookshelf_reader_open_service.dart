@@ -9,7 +9,6 @@ import '../../book/application/book_detail_service.dart';
 import '../../reader/application/reader_chapter_navigation.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/reader_preferences_service.dart';
-import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import 'local_book_import_service.dart';
 
@@ -57,30 +56,20 @@ class BookshelfReaderOpenService {
     required ReaderEntryRouteResolver readerEntryRouteResolver,
     required LocalBookRepository localBookRepository,
     required BookDetailService bookDetailService,
-    SourceContentProvider? sourceContentProvider,
     AppLogger? logger,
   }) : _readerPreferencesService = readerPreferencesService,
        _readerEntryRouteResolver = readerEntryRouteResolver,
        _localBookRepository = localBookRepository,
        _bookDetailService = bookDetailService,
-       _sourceContentProvider =
-           sourceContentProvider ?? SourceContentProvider(),
        _logger = logger ?? AppLogger.instance;
 
   static const Duration _progressLoadTimeout = Duration(seconds: 2);
   static const Duration _snapshotLoadTimeout = Duration(milliseconds: 600);
-  static const Duration _remoteDetailPrefetchTimeout = Duration(
-    milliseconds: 900,
-  );
-  static const Duration _remoteChapterPrefetchTimeout = Duration(
-    milliseconds: 750,
-  );
 
   final ReaderPreferencesService _readerPreferencesService;
   final ReaderEntryRouteResolver _readerEntryRouteResolver;
   final LocalBookRepository _localBookRepository;
   final BookDetailService _bookDetailService;
-  final SourceContentProvider _sourceContentProvider;
   final AppLogger _logger;
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
@@ -258,23 +247,10 @@ class BookshelfReaderOpenService {
         return plan;
       }
 
-      final prefetchedPlan = await _tryResolveRemotePrefetchPlan(
-        book: book,
-        openRequestedAtMs: openRequestedAtMs,
-      );
-      if (prefetchedPlan != null) {
-        plan = prefetchedPlan;
-        return plan;
-      }
-
       plan = BookshelfReaderOpenPlan(
-        action: BookshelfReaderOpenAction.openReader,
-        kind: BookshelfReaderOpenKind.readerFallback,
-        readerRoute: _readerEntryRouteResolver.buildRouteFromBookshelfFallback(
-          book,
-          openRequestedAtMs: openRequestedAtMs,
-          openRouteKind: BookshelfReaderOpenKind.readerFallback.name,
-        ),
+        action: BookshelfReaderOpenAction.openDetail,
+        kind: BookshelfReaderOpenKind.openDetail,
+        feedbackMessage: '当前书籍缺少可直接打开的目录信息，请先进入详情页加载目录。',
       );
       return plan;
     } finally {
@@ -311,79 +287,6 @@ class BookshelfReaderOpenService {
       sourceId: normalizedSourceId,
       detailUrl: normalizedDetailUrl,
     );
-  }
-
-  Future<BookshelfReaderOpenPlan?> _tryResolveRemotePrefetchPlan({
-    required BookshelfBook book,
-    required int openRequestedAtMs,
-  }) async {
-    final normalizedSourceId = book.sourceId.trim();
-    final normalizedDetailUrl = book.detailUrl.trim();
-    final normalizedBookId = book.bookId.trim();
-    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
-      return null;
-    }
-
-    try {
-      final detailResult = await _bookDetailService
-          .load(
-            sourceId: normalizedSourceId,
-            bookId: normalizedBookId,
-            detailUrl: normalizedDetailUrl,
-            fallbackTitle: book.title,
-            fallbackAuthor: book.author,
-          )
-          .timeout(_remoteDetailPrefetchTimeout);
-      final chapter = _firstReadableChapter(detailResult.chapters);
-      if (chapter == null) {
-        return null;
-      }
-
-      await _readerPreferencesService.saveTocSnapshot(
-        ReaderTocSnapshot(
-          bookId: normalizedBookId,
-          sourceId: normalizedSourceId,
-          detailUrl: normalizedDetailUrl,
-          title: detailResult.detail.title,
-          author: detailResult.detail.author,
-          coverUrl: detailResult.detail.coverUrl,
-          chapters: detailResult.chapters,
-          updatedAt: DateTime.now(),
-        ),
-      );
-
-      try {
-        await _sourceContentProvider
-            .loadChapterContent(
-              sourceId: normalizedSourceId,
-              bookId: normalizedBookId,
-              bookTitle: detailResult.detail.title,
-              detailUrl: normalizedDetailUrl,
-              chapterId: chapter.id,
-              chapterUrl: chapter.chapterUrl,
-              chapterIndex: chapter.index,
-              chapterTitle: chapter.title,
-            )
-            .timeout(_remoteChapterPrefetchTimeout);
-      } catch (_) {
-        // Fall back to normal reader bootstrap when chapter prefetch misses.
-      }
-
-      return BookshelfReaderOpenPlan(
-        action: BookshelfReaderOpenAction.openReader,
-        kind: BookshelfReaderOpenKind.remotePrefetch,
-        readerRoute: _readerEntryRouteResolver.buildRouteFromChapter(
-          bookId: normalizedBookId,
-          sourceId: normalizedSourceId,
-          detailUrl: normalizedDetailUrl,
-          chapter: chapter,
-          openRequestedAtMs: openRequestedAtMs,
-          openRouteKind: BookshelfReaderOpenKind.remotePrefetch.name,
-        ),
-      );
-    } catch (_) {
-      return null;
-    }
   }
 
   Chapter? _firstReadableChapter(List<Chapter>? chapters) {

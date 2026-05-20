@@ -16,9 +16,6 @@ import '../reader/application/reader_preferences_service.dart';
 import '../reader/application/reader_entry_route_resolver.dart';
 import '../reader/application/reader_system_settings_service.dart';
 import '../reader/application/reading_record_service.dart';
-import '../reader/application/source_content_provider.dart';
-import '../source/application/source_runtime_facade.dart';
-import '../source/application/source_login_state_service.dart';
 import '../source/application/source_runtime_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
 import 'application/bookshelf_flow_coordinator.dart';
@@ -113,11 +110,6 @@ final bookshelfLoggerProvider = Provider<AppLogger>((ref) {
   return AppLogger.instance;
 });
 
-final bookshelfSourceLoginStateServiceProvider =
-    Provider<SourceLoginStateService>((ref) {
-      return SourceLoginStateService();
-    });
-
 final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
   return BookDetailService(
     sourceRuntimeFacade: ref.watch(
@@ -148,17 +140,10 @@ final bookshelfReaderOpenServiceProvider = Provider<BookshelfReaderOpenService>(
       ),
       localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
       bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
-      sourceContentProvider: ref.watch(bookshelfSourceContentProvider),
       logger: ref.watch(bookshelfLoggerProvider),
     );
   },
 );
-
-final bookshelfSourceContentProvider = Provider<SourceContentProvider>((ref) {
-  return SourceContentProvider(
-    detailService: ref.watch(bookshelfBookDetailServiceProvider),
-  );
-});
 
 final bookshelfPageRouteServiceProvider = Provider<BookshelfPageRouteService>((
   ref,
@@ -190,9 +175,6 @@ final localBookImportServiceProvider = Provider<LocalBookImportService>((ref) {
       bookshelfLocalBookStorageServiceProvider,
     ),
     logger: ref.watch(bookshelfLoggerProvider),
-    sourceLoginStateService: ref.watch(
-      bookshelfSourceLoginStateServiceProvider,
-    ),
     localBookIndexService: ref.watch(bookshelfLocalBookIndexServiceProvider),
   );
 });
@@ -263,12 +245,6 @@ final bookshelfMetadataOverrideRepositoryProvider =
       return ref.watch(app_providers.bookMetadataOverrideRepositoryProvider);
     });
 
-final bookshelfSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((
-  ref,
-) {
-  return ref.watch(app_providers.appSourceRuntimeFacadeProvider);
-});
-
 final bookshelfTaskConflictServiceProvider =
     Provider<SourceRuntimeTaskConflictService>((ref) {
       return ref.watch(
@@ -278,15 +254,14 @@ final bookshelfTaskConflictServiceProvider =
 
 final bookshelfPresentationQueryServiceProvider =
     Provider<BookshelfPresentationQueryService>((ref) {
-      return BookshelfPresentationQueryService(
-        database: ref.watch(app_providers.appDatabaseProvider),
-        bookPresentationQueryService: ref.watch(
-          app_providers.bookPresentationQueryServiceProvider,
-        ),
-        localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
-        sourceRuntimeFacade: ref.watch(bookshelfSourceRuntimeFacadeProvider),
-      );
-    });
+  return BookshelfPresentationQueryService(
+    database: ref.watch(app_providers.appDatabaseProvider),
+    bookPresentationQueryService: ref.watch(
+      app_providers.bookPresentationQueryServiceProvider,
+    ),
+    localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+  );
+});
 
 typedef BookshelfExternalImportCoordinatorFactory =
     BookshelfExternalImportCoordinator Function();

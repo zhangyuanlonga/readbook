@@ -74,9 +74,6 @@ final syncStage4ServiceProvider = Provider<SyncStage4Service>((ref) {
     bookMetadataOverrideRepository: ref.watch(
       app_providers.bookMetadataOverrideRepositoryProvider,
     ),
-    scriptSourceRepository: ref.watch(
-      app_providers.scriptSourceRepositoryProvider,
-    ),
     readingBookStatusService: ReadingBookStatusService(
       database: ref.watch(app_providers.appDatabaseProvider),
     ),
@@ -86,9 +83,6 @@ final syncStage4ServiceProvider = Provider<SyncStage4Service>((ref) {
     localBookRepository: ref.watch(app_providers.localBookRepositoryProvider),
     bookshelfService: BookshelfService(),
     advancedThemeService: AdvancedThemeService(),
-    sourceRuntimeFacade: ref.watch(
-      app_providers.appSourceRuntimeFacadeProvider,
-    ),
     logger: AppLogger.instance,
   );
 });

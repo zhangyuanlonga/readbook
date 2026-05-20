@@ -17,7 +17,6 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/motion/app_motion.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
-import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
@@ -30,6 +29,7 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/session/session_cancellation.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
@@ -61,8 +61,6 @@ import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
-import '../../../runtime/sources/source_registry.dart';
-import '../../../runtime/session/source_session.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
 
@@ -659,10 +657,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 const SizedBox.shrink()
             else ...[
               _buildAnnouncementAction(),
-              if (showTopSearchAction &&
-                  ref
-                      .watch(appPlatformCapabilitiesProvider)
-                      .supportsSourceRuntime)
+              if (showTopSearchAction)
                 IconButton(
                   tooltip: '搜索书籍',
                   onPressed: () => context.push('/search'),
@@ -3283,9 +3278,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     await _loadProgressMapInBatches(books, ticket: ticket);
     if (_skipNextBackgroundLatestInfoRefresh) {
       _skipNextBackgroundLatestInfoRefresh = false;
-    } else if (ref
-        .read(appPlatformCapabilitiesProvider)
-        .supportsSourceRuntime) {
+    } else {
       final refreshEpoch = ++_latestInfoRefreshEpoch;
       unawaited(
         _refreshOnlineBookshelfLatestInfo(
@@ -3937,23 +3930,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
-    if (!ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime) {
-      return const <String, int>{};
-    }
     return _bookshelfPresentationQueryService.loadSourceTypeMap(
       timeout: _kSourceMapLoadTimeout,
-      inferRuntimeSourceType: _inferScriptSourceType,
       inferPersistedSourceType: _inferScriptSourceTypeFromCode,
     );
-  }
-
-  int _inferScriptSourceType(RegisteredSource source) {
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-    return _isMangaCapabilities(capabilities) ? 2 : 0;
   }
 
   int _inferScriptSourceTypeFromCode(String sourceCode) {
@@ -4695,13 +4675,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         return;
       }
       _openReaderFallbackForSourceSwitch(book);
-      _showMessage('当前书源可能不可用，可在阅读页直接换源。');
+      _showMessage('当前书籍来源可能已失效，请重新搜索服务器书源版本。');
     } catch (_) {
       if (!mounted) {
         return;
       }
       _openReaderFallbackForSourceSwitch(book);
-      _showMessage('打开详情失败，已进入阅读页，可尝试换源。');
+      _showMessage('打开详情失败，请重新搜索服务器书源版本。');
     } finally {
       if (mounted) {
         setState(() {

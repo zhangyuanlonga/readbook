@@ -5,22 +5,6 @@ import 'external_source_import_bridge.dart';
 class ExternalImportCatalog {
   ExternalImportCatalog._();
 
-  static const XTypeGroup scriptSourceTypeGroup = XTypeGroup(
-    label: 'Script Sources',
-    extensions: <String>['js', 'mjs'],
-    mimeTypes: <String>[
-      'text/javascript',
-      'application/javascript',
-      'application/x-javascript',
-      'application/octet-stream',
-    ],
-    uniformTypeIdentifiers: <String>[
-      'com.netscape.javascript-source',
-      'public.plain-text',
-      'public.data',
-    ],
-  );
-
   static const XTypeGroup localBookTypeGroup = XTypeGroup(
     label: 'Book Files',
     extensions: <String>[
@@ -122,7 +106,6 @@ class ExternalImportCatalog {
 
   static String routeForPayloadType(ExternalImportPayloadType type) {
     return switch (type) {
-      ExternalImportPayloadType.scriptSource => '/source',
       ExternalImportPayloadType.localBook => '/bookshelf',
       ExternalImportPayloadType.advancedTheme => '/appearance/advanced-themes',
       ExternalImportPayloadType.font => '/font-management',
@@ -135,8 +118,6 @@ class ExternalImportCatalog {
       return false;
     }
     return switch (type) {
-      ExternalImportPayloadType.scriptSource => _scriptSourceExtensions
-          .contains(extension),
       ExternalImportPayloadType.localBook => _localBookExtensions.contains(
         extension,
       ),
@@ -151,7 +132,6 @@ class ExternalImportCatalog {
     String label,
   ) {
     return switch (type) {
-      ExternalImportPayloadType.scriptSource => '暂不支持导入该书源文件：$label',
       ExternalImportPayloadType.localBook => '暂不支持导入该文件：$label',
       ExternalImportPayloadType.advancedTheme => '暂不支持导入该主题文件：$label',
       ExternalImportPayloadType.font => '暂不支持导入该字体文件：$label',
@@ -165,8 +145,6 @@ class ExternalImportCatalog {
     }
     return normalized.substring(normalized.lastIndexOf('.'));
   }
-
-  static const Set<String> _scriptSourceExtensions = <String>{'.js', '.mjs'};
 
   static const Set<String> _localBookExtensions = <String>{
     '.txt',

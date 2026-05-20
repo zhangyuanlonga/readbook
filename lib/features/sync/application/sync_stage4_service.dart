@@ -17,17 +17,14 @@ import '../../../domain/entities/managed_asset.dart';
 import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../../domain/entities/reading_progress.dart';
-import '../../../domain/entities/script_source.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
-import '../../../domain/repositories/script_source_repository.dart';
 import '../../../features/bookshelf/application/bookshelf_service.dart';
 import '../../../features/mine/application/advanced_theme_service.dart';
 import '../../../features/reader/application/reader_preferences_service.dart';
 import '../../../features/reader/application/reading_book_status_service.dart';
 import '../../../features/reader/application/reading_record_service.dart';
-import '../../../features/source/application/source_runtime_facade.dart';
 import '../../../core/logging/app_logger.dart';
 import '../data/local/sync_local_store.dart';
 import '../data/remote/webdav_sync_remote_driver.dart';
@@ -60,13 +57,11 @@ class SyncStage4Service {
     required ReaderPreferencesService readerPreferencesService,
     required BookmarkRepository bookmarkRepository,
     required BookMetadataOverrideRepository bookMetadataOverrideRepository,
-    required ScriptSourceRepository scriptSourceRepository,
     required ReadingBookStatusService readingBookStatusService,
     required ReadingRecordService readingRecordService,
     required LocalBookRepository localBookRepository,
     required BookshelfService bookshelfService,
     required AdvancedThemeService advancedThemeService,
-    required SourceRuntimeFacade sourceRuntimeFacade,
     AppLogger? logger,
     Uuid? uuid,
   }) : _profileService = profileService,
@@ -75,13 +70,11 @@ class SyncStage4Service {
        _readerPreferencesService = readerPreferencesService,
        _bookmarkRepository = bookmarkRepository,
        _bookMetadataOverrideRepository = bookMetadataOverrideRepository,
-       _scriptSourceRepository = scriptSourceRepository,
        _readingBookStatusService = readingBookStatusService,
        _readingRecordService = readingRecordService,
        _localBookRepository = localBookRepository,
        _bookshelfService = bookshelfService,
        _advancedThemeService = advancedThemeService,
-       _sourceRuntimeFacade = sourceRuntimeFacade,
        _logger = logger ?? AppLogger.instance,
        _uuid = uuid ?? const Uuid();
 
@@ -91,20 +84,17 @@ class SyncStage4Service {
   final ReaderPreferencesService _readerPreferencesService;
   final BookmarkRepository _bookmarkRepository;
   final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
-  final ScriptSourceRepository _scriptSourceRepository;
   final ReadingBookStatusService _readingBookStatusService;
   final ReadingRecordService _readingRecordService;
   final LocalBookRepository _localBookRepository;
   final BookshelfService _bookshelfService;
   final AdvancedThemeService _advancedThemeService;
-  final SourceRuntimeFacade _sourceRuntimeFacade;
   final AppLogger _logger;
   final Uuid _uuid;
 
   static const List<SyncScope> _supportedScopes = <SyncScope>[
     SyncScope.readingProgress,
     SyncScope.bookmarks,
-    SyncScope.scriptSources,
     SyncScope.readingBookStatuses,
     SyncScope.bookMetadataOverrides,
     SyncScope.bookMetadataAssets,
@@ -177,8 +167,6 @@ class SyncStage4Service {
               driver: driver,
               localBookIds: localBookIds,
             );
-          case SyncScope.scriptSources:
-            await _syncScriptSources(profile: profile, driver: driver);
           case SyncScope.readingBookStatuses:
             await _syncReadingBookStatuses(
               profile: profile,
@@ -339,37 +327,6 @@ class SyncStage4Service {
           }
           await _bookmarkRepository.removeBookmark(item.id);
         }
-      },
-    );
-  }
-
-  Future<void> _syncScriptSources({
-    required SyncProfile profile,
-    required SyncRemoteDriver driver,
-  }) async {
-    final localItems = await _scriptSourceRepository.getAll();
-    await _syncScope<ScriptSource>(
-      profile: profile,
-      scope: SyncScope.scriptSources,
-      driver: driver,
-      localItems: localItems,
-      keyOf: (item) => item.id,
-      updatedAtOf: (item) => item.updatedAt,
-      toJson: (item) => item.toJson(),
-      fromJson: (json) => ScriptSource.fromJson(json),
-      applyMerged: (merged) async {
-        final existing = await _scriptSourceRepository.getAll();
-        final mergedIds = merged.map((item) => item.id).toSet();
-        for (final item in merged) {
-          await _scriptSourceRepository.upsert(item);
-        }
-        for (final item in existing) {
-          if (mergedIds.contains(item.id)) {
-            continue;
-          }
-          await _scriptSourceRepository.deleteById(item.id);
-        }
-        await _sourceRuntimeFacade.reloadScriptSources();
       },
     );
   }

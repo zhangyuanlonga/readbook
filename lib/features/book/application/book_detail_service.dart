@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'dart:collection';
 
+import '../../../core/session/session_cancellation.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
-import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../reader/application/removed_script_source_guard.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_task_gate_service.dart';
 import '../../source/application/source_runtime_facade.dart';
@@ -188,6 +189,13 @@ class BookDetailService {
       );
     }
 
+    if (isRemovedScriptSourceId(normalizedSourceId)) {
+      throwRemovedScriptSource(
+        stage: ErrorStage.detail,
+        sourceId: normalizedSourceId,
+      );
+    }
+
     final cacheKey = '$normalizedSourceId|$normalizedDetailUrl';
     if (!forceRefresh) {
       final cached = _readDetailCache(cacheKey);
@@ -254,6 +262,13 @@ class BookDetailService {
         code: ErrorCode.validation,
         stage: ErrorStage.detail,
         briefMessage: '加载详情缺少参数。',
+      );
+    }
+
+    if (isRemovedScriptSourceId(normalizedSourceId)) {
+      throwRemovedScriptSource(
+        stage: ErrorStage.detail,
+        sourceId: normalizedSourceId,
       );
     }
 
