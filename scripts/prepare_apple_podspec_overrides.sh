@@ -102,18 +102,6 @@ def ensure_line_after(path: pathlib.Path, anchor: str, line: str) -> None:
         path.write_text(updated)
         print(f"patched {path}")
 
-def patch_inappwebview(name: str, platform_dir: str) -> None:
-    root = packages.get(name)
-    if root is None:
-        return
-    base = root / platform_dir
-    ordered_set_file = base / "Classes/Types/OrderedSet.swift"
-    controller_file = base / "Classes/Types/WKUserContentController.swift"
-    podspec_file = base / f"{name}.podspec"
-    write_if_changed(ordered_set_file, ORDERED_SET)
-    replace_in_file(controller_file, "import OrderedSet\n", "")
-    replace_in_file(podspec_file, "  s.dependency 'OrderedSet', '~>6.0.3'\n", "")
-
 def patch_shared_preferences() -> None:
     root = packages.get("shared_preferences_foundation")
     if root is None:
@@ -145,8 +133,6 @@ def patch_sqlite3_flutter_libs() -> None:
 """
     replace_in_file(podspec, dependency_block, "    s.libraries = 'sqlite3'\n")
 
-patch_inappwebview("flutter_inappwebview_ios", "ios")
-patch_inappwebview("flutter_inappwebview_macos", "macos")
 patch_shared_preferences()
 patch_sqlite3_flutter_libs()
 PY
