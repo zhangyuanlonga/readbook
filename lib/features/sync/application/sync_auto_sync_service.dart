@@ -55,8 +55,6 @@ class SyncAutoSyncService {
       SyncScope.sourceLoginState ||
       SyncScope.bookCustomState ||
       SyncScope.discoverCacheSnapshots ||
-      SyncScope.sourceHealthSnapshots ||
-      SyncScope.sourceRuntimeDiagnostics ||
       SyncScope.searchSourceHits ||
       SyncScope.chapterCaches ||
       SyncScope.localBooks ||

@@ -17,7 +17,6 @@ enum SyncScope {
   readingBookStatuses,
   bookMetadataOverrides,
   bookMetadataAssets,
-  scriptSources,
   advancedThemePresets,
   advancedThemeAssets,
   readerSettings,
@@ -45,8 +44,6 @@ enum SyncScope {
   sourceLoginState,
   bookCustomState,
   discoverCacheSnapshots,
-  sourceHealthSnapshots,
-  sourceRuntimeDiagnostics,
   searchSourceHits,
   chapterCaches,
   localBooks,
@@ -65,7 +62,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.readingBookStatuses => '阅读 - 在读 / 读完状态',
     SyncScope.bookMetadataOverrides => '书籍资料 - 自定义元数据',
     SyncScope.bookMetadataAssets => '书籍资料 - 自定义封面资源',
-    SyncScope.scriptSources => '书源 - 书源列表 / 源码 / 启用状态',
     SyncScope.advancedThemePresets => '高级主题 - 主题配置',
     SyncScope.advancedThemeAssets => '高级主题 - 壁纸资源',
     SyncScope.readerSettings => '阅读器 - 界面设置',
@@ -93,8 +89,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.sourceLoginState => '排除 - 书源登录态',
     SyncScope.bookCustomState => '排除 - 书源图书自定义状态',
     SyncScope.discoverCacheSnapshots => '排除 - Discover 缓存快照',
-    SyncScope.sourceHealthSnapshots => '排除 - 书源健康快照',
-    SyncScope.sourceRuntimeDiagnostics => '排除 - 书源运行时诊断',
     SyncScope.searchSourceHits => '排除 - 搜索命中缓存',
     SyncScope.chapterCaches => '排除 - 章节缓存',
     SyncScope.localBooks => '排除 - 本地图书索引',
@@ -112,7 +106,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.readingBookStatuses => 'reading_book_statuses.json',
     SyncScope.bookMetadataOverrides => 'book_metadata_overrides.json',
     SyncScope.bookMetadataAssets => 'book_metadata_assets.json',
-    SyncScope.scriptSources => 'script_sources.json',
     SyncScope.advancedThemePresets => 'advanced_theme_presets.json',
     SyncScope.advancedThemeAssets => 'advanced_theme_assets.json',
     SyncScope.readerSettings => 'reader_settings.json',
@@ -142,8 +135,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.sourceLoginState => 'source_login_state.json',
     SyncScope.bookCustomState => 'book_custom_state.json',
     SyncScope.discoverCacheSnapshots => 'discover_cache_snapshots.json',
-    SyncScope.sourceHealthSnapshots => 'source_health_snapshots.json',
-    SyncScope.sourceRuntimeDiagnostics => 'source_runtime_diagnostics.json',
     SyncScope.searchSourceHits => 'search_source_hits.json',
     SyncScope.chapterCaches => 'chapter_caches.json',
     SyncScope.localBooks => 'local_books.json',
@@ -160,8 +151,7 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.bookmarks ||
     SyncScope.readingBookStatuses ||
     SyncScope.bookMetadataOverrides ||
-    SyncScope.bookMetadataAssets ||
-    SyncScope.scriptSources => SyncScopeCategory.coreReading,
+    SyncScope.bookMetadataAssets => SyncScopeCategory.coreReading,
     SyncScope.advancedThemePresets ||
     SyncScope.advancedThemeAssets => SyncScopeCategory.membershipAppearance,
     SyncScope.readerSettings ||
@@ -189,8 +179,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.sourceLoginState ||
     SyncScope.bookCustomState ||
     SyncScope.discoverCacheSnapshots ||
-    SyncScope.sourceHealthSnapshots ||
-    SyncScope.sourceRuntimeDiagnostics ||
     SyncScope.searchSourceHits ||
     SyncScope.chapterCaches ||
     SyncScope.localBooks ||
@@ -229,14 +217,12 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.readingBookStatuses ||
     SyncScope.bookMetadataOverrides ||
     SyncScope.bookMetadataAssets ||
-    SyncScope.scriptSources ||
     SyncScope.advancedThemePresets ||
     SyncScope.advancedThemeAssets => true,
     _ => false,
   };
 
   bool get isDefaultEnabledInUi => switch (this) {
-    SyncScope.scriptSources => false,
     SyncScope.bookMetadataAssets => false,
     SyncScope.advancedThemeAssets => false,
     _ => category != SyncScopeCategory.excluded,

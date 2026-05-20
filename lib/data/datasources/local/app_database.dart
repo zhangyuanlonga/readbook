@@ -596,9 +596,6 @@ class AppDatabase extends _$AppDatabase {
                 ),
           );
         }
-        if (from < 27) {
-          await customStatement('DROP TABLE IF EXISTS script_sources;');
-        }
       },
       beforeOpen: (_) async {
         await _ensurePerformanceIndexes();
