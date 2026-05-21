@@ -1,6 +1,7 @@
 import 'dart:collection';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive.dart';
 import 'package:html/dom.dart' as dom;
@@ -99,49 +100,50 @@ class EpubLocalBookParser implements LocalBookParser {
   }
 
   Future<LocalParsedBook> _parseInternal(LocalBook book) async {
-    final loadedArchive = await _loadArchive(book);
-    final chapterCandidates = _resolveChapterCandidates(
-      archive: loadedArchive.archive,
-      archiveFileIndex: loadedArchive.archiveFileIndex,
-      packageDocument: loadedArchive.packageDocument,
-    );
     final assetDir = await _prepareAssetDirectory(book);
-    final metadata = _extractMetadata(
-      loadedArchive.archiveFileIndex,
-      packageDocument: loadedArchive.packageDocument,
+    final file = File(book.storagePath);
+    if (!await file.exists()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地文件不存在：${book.storagePath}',
+      );
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 文件为空，无法建立章节索引。',
+      );
+    }
+
+    final parsedIndex = await Isolate.run<Map<String, Object?>>(
+      () => EpubLocalBookParser()._parseArchiveBytesInBackground(bytes),
     );
-    final coverPath = await _materializeCoverPath(
-      metadata: metadata,
-      archiveFileIndex: loadedArchive.archiveFileIndex,
+    final coverPath = await _materializeCoverPathFromBackground(
+      payload: parsedIndex,
       assetRootDir: assetDir,
     );
 
+    final rawChapters =
+        (parsedIndex['chapters'] as List<Object?>? ?? const <Object?>[])
+            .whereType<Map>()
+            .toList(growable: false);
     final chapters = <LocalParsedChapter>[];
-    var index = 0;
-
-    for (final candidate in chapterCandidates) {
-      final archiveEntry = _findArchiveFile(
-        loadedArchive.archiveFileIndex,
-        candidate.archivePath,
+    for (final rawChapter in rawChapters) {
+      final normalized = rawChapter.map(
+        (key, value) => MapEntry(key.toString(), value),
       );
-      if (archiveEntry == null) {
-        continue;
-      }
-      if (_isLikelyNonBodyIndexEntry(candidate.archivePath)) {
-        continue;
-      }
       chapters.add(
         LocalParsedChapter(
-          title: _resolveIndexOnlyChapterTitle(
-            candidate: candidate,
-            archiveEntryName: archiveEntry.name,
-            index: index + 1,
-          ),
+          title: normalized['title']?.toString().trim().isNotEmpty == true
+              ? normalized['title']!.toString().trim()
+              : '未命名章节',
           content: '',
-          sourceRef: _encodeChapterSourceRef(candidate),
+          sourceRef: normalized['sourceRef']?.toString(),
         ),
       );
-      index += 1;
     }
 
     if (chapters.isEmpty) {
@@ -153,11 +155,84 @@ class EpubLocalBookParser implements LocalBookParser {
     }
     return LocalParsedBook(
       chapters: chapters,
-      title: metadata.title,
-      author: metadata.author,
-      description: metadata.description,
+      title: _nullableMapString(parsedIndex['title']),
+      author: _nullableMapString(parsedIndex['author']),
+      description: _nullableMapString(parsedIndex['description']),
       coverPath: coverPath,
     );
+  }
+
+  Map<String, Object?> _parseArchiveBytesInBackground(List<int> bytes) {
+    Archive archive;
+    try {
+      archive = _archiveDecoder.decodeBytes(bytes);
+    } catch (error) {
+      throw AppException(
+        code: ErrorCode.decode,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 解压失败：$error',
+      );
+    }
+    final archiveFileIndex = <String, ArchiveFile>{
+      for (final entry in archive.files.where((item) => item.isFile))
+        _normalizeArchivePath(entry.name): entry,
+    };
+    final packageDocument = _loadPackageDocument(archiveFileIndex);
+    final metadata = _extractMetadata(
+      archiveFileIndex,
+      packageDocument: packageDocument,
+    );
+    final chapterCandidates = _resolveChapterCandidates(
+      archive: archive,
+      archiveFileIndex: archiveFileIndex,
+      packageDocument: packageDocument,
+    );
+
+    final chapters = <Map<String, Object?>>[];
+    var index = 0;
+    for (final candidate in chapterCandidates) {
+      final archiveEntry = _findArchiveFile(
+        archiveFileIndex,
+        candidate.archivePath,
+      );
+      if (archiveEntry == null) {
+        continue;
+      }
+      if (_isLikelyNonBodyIndexEntry(candidate.archivePath)) {
+        continue;
+      }
+      chapters.add(<String, Object?>{
+        'title': _resolveIndexOnlyChapterTitle(
+          candidate: candidate,
+          archiveEntryName: archiveEntry.name,
+          index: index + 1,
+        ),
+        'sourceRef': _encodeChapterSourceRef(candidate),
+      });
+      index += 1;
+    }
+
+    List<int>? coverBytes;
+    String? coverArchivePath;
+    final rawCoverArchivePath = metadata.coverArchivePath?.trim() ?? '';
+    if (rawCoverArchivePath.isNotEmpty) {
+      final archiveEntry = _findArchiveFile(archiveFileIndex, rawCoverArchivePath);
+      final lowerName = rawCoverArchivePath.toLowerCase();
+      final extension = p.posix.extension(lowerName);
+      if (archiveEntry != null && _supportedImageExtensions.contains(extension)) {
+        coverBytes = _readArchiveEntryBytes(archiveEntry);
+        coverArchivePath = rawCoverArchivePath;
+      }
+    }
+
+    return <String, Object?>{
+      'title': metadata.title,
+      'author': metadata.author,
+      'description': metadata.description,
+      'chapters': chapters,
+      'coverArchivePath': coverArchivePath,
+      'coverBytes': coverBytes,
+    };
   }
 
   String _resolveIndexOnlyChapterTitle({
@@ -1375,6 +1450,32 @@ class EpubLocalBookParser implements LocalBookParser {
     return targetFile.path;
   }
 
+  Future<String?> _materializeCoverPathFromBackground({
+    required Map<String, Object?> payload,
+    required Directory assetRootDir,
+  }) async {
+    final archivePath = _nullableMapString(payload['coverArchivePath']) ?? '';
+    final rawBytes = payload['coverBytes'];
+    if (archivePath.isEmpty || rawBytes is! List) {
+      return null;
+    }
+    final extension = p.posix.extension(archivePath.toLowerCase());
+    if (!_supportedImageExtensions.contains(extension)) {
+      return null;
+    }
+    final targetFile = File(
+      p.join(assetRootDir.path, _safeAssetRelativePath(archivePath)),
+    );
+    if (!await targetFile.parent.exists()) {
+      await targetFile.parent.create(recursive: true);
+    }
+    await targetFile.writeAsBytes(
+      rawBytes.whereType<int>().toList(growable: false),
+      flush: true,
+    );
+    return targetFile.path;
+  }
+
   Future<_EpubChapterExtraction> _extractChapterContent({
     required LocalBook book,
     required String documentHtml,
@@ -1778,6 +1879,11 @@ class EpubLocalBookParser implements LocalBookParser {
         .replaceAll(RegExp(r'[\r\n\t]+'), ' ')
         .replaceAll(RegExp(r'\s{2,}'), ' ')
         .trim();
+  }
+
+  String? _nullableMapString(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }
 

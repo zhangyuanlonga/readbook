@@ -513,6 +513,7 @@ class SearchSourceHitUpsert {
 class AppDatabase extends _$AppDatabase {
   static const int _localChapterInsertBatchSize = 64;
   static const int _localChapterInsertYieldEveryChunks = 2;
+  static const String _localChapterBodiesTableName = 'local_chapter_bodies';
 
   AppDatabase({QueryExecutor? executor})
     : super(executor ?? openAppDatabaseConnection());
@@ -520,13 +521,14 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (migrator) async {
         await migrator.createAll();
+        await _createLocalChapterBodiesTable();
       },
       onUpgrade: (migrator, from, to) async {
         if (from < 2) {
@@ -750,8 +752,13 @@ class AppDatabase extends _$AppDatabase {
                 ),
           );
         }
+        if (from < 31) {
+          await _createLocalChapterBodiesTable();
+          await _migrateLegacyLocalChapterBodies();
+        }
       },
       beforeOpen: (_) async {
+        await _ensureLocalChapterBodiesTable();
         await _ensurePerformanceIndexes();
       },
     );
@@ -759,6 +766,10 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _ensurePerformanceIndexes() async {
     const statements = <String>[
+      'CREATE INDEX IF NOT EXISTS idx_local_chapter_bodies_book_id '
+          'ON local_chapter_bodies(book_id)',
+      'CREATE INDEX IF NOT EXISTS idx_local_chapter_bodies_updated_at '
+          'ON local_chapter_bodies(updated_at)',
       'CREATE INDEX IF NOT EXISTS idx_chapter_caches_book_id '
           'ON chapter_caches(book_id)',
       'CREATE INDEX IF NOT EXISTS idx_chapter_caches_book_source_chapter '
@@ -781,6 +792,76 @@ class AppDatabase extends _$AppDatabase {
     for (final statement in statements) {
       await customStatement(statement);
     }
+  }
+
+  Future<void> _createLocalChapterBodiesTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS ${_quoteIdentifier(_localChapterBodiesTableName)} (
+        chapter_id TEXT NOT NULL PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        image_urls_json TEXT NOT NULL DEFAULT '[]',
+        document_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _ensureLocalChapterBodiesTable() async {
+    if (await _tableExists(_localChapterBodiesTableName)) {
+      return;
+    }
+    await _createLocalChapterBodiesTable();
+  }
+
+  Future<void> _migrateLegacyLocalChapterBodies() async {
+    final hasTable = await _tableExists(storedLocalChapters.tableName);
+    if (!hasTable) {
+      return;
+    }
+    final hasContentColumn = await _tableHasColumn(
+      storedLocalChapters.tableName,
+      'content',
+    );
+    if (!hasContentColumn) {
+      return;
+    }
+    final now = DateTime.now().toIso8601String();
+    await customStatement('''
+      INSERT OR REPLACE INTO ${_quoteIdentifier(_localChapterBodiesTableName)} (
+        chapter_id,
+        book_id,
+        content,
+        image_urls_json,
+        document_json,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        book_id,
+        COALESCE(content, ''),
+        COALESCE(image_urls_json, '[]'),
+        document_json,
+        COALESCE(created_at, '$now'),
+        COALESCE(updated_at, '$now')
+      FROM ${_quoteIdentifier(storedLocalChapters.tableName)}
+      WHERE TRIM(COALESCE(content, '')) != ''
+         OR TRIM(COALESCE(image_urls_json, '[]')) != '[]'
+         OR document_json IS NOT NULL
+    ''');
+  }
+
+  Future<bool> _tableExists(String tableName) async {
+    final rows = await customSelect(
+      'SELECT name FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+      variables: <Variable<Object>>[
+        const Variable<String>('table'),
+        Variable<String>(tableName),
+      ],
+    ).get();
+    return rows.isNotEmpty;
   }
 
   Future<void> _removeDeprecatedLocalBookColumns(Migrator migrator) async {
@@ -1767,14 +1848,12 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       await (delete(storedLocalChapters)
         ..where((table) => table.bookId.equals(normalizedBookId))).go();
+      await _deleteLocalChapterBodiesByBookId(normalizedBookId);
 
       final sanitizedChapters = chapters
           .where((chapter) {
             final normalizedId = chapter.id.trim();
             final normalizedTitle = chapter.title.trim();
-            final normalizedContent = chapter.content.trim();
-            final hasImages = chapter.imageUrls.isNotEmpty;
-            final hasDocument = chapter.document != null;
             final hasSourceRef =
                 (chapter.sourceRef?.trim().isNotEmpty ?? false);
             final hasExternalRange =
@@ -1783,11 +1862,9 @@ class AppDatabase extends _$AppDatabase {
                 chapter.endOffset! > chapter.startOffset!;
             return normalizedId.isNotEmpty &&
                 normalizedTitle.isNotEmpty &&
-                (normalizedContent.isNotEmpty ||
-                    hasExternalRange ||
-                    hasImages ||
-                    hasDocument ||
-                    hasSourceRef);
+                (hasExternalRange ||
+                    hasSourceRef ||
+                    chapter.hasReadablePayload);
           })
           .toList(growable: false);
 
@@ -1815,13 +1892,9 @@ class AppDatabase extends _$AppDatabase {
                   bookId: Value(normalizedBookId),
                   chapterIndex: Value(chapter.chapterIndex),
                   title: Value(normalizedTitle),
-                  content: Value(chapter.content),
-                  imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
-                  documentJson: Value(
-                    chapter.document == null
-                        ? null
-                        : jsonEncode(chapter.document!.toJson()),
-                  ),
+                  content: const Value(''),
+                  imageUrlsJson: const Value('[]'),
+                  documentJson: const Value(null),
                   sourceRef: Value(chapter.sourceRef),
                   startOffset: Value(chapter.startOffset),
                   endOffset: Value(chapter.endOffset),
@@ -1837,6 +1910,16 @@ class AppDatabase extends _$AppDatabase {
               end < sanitizedChapters.length) {
             await Future<void>.delayed(Duration.zero);
           }
+        }
+
+        final chaptersWithBodies = sanitizedChapters
+            .where((chapter) => chapter.hasReadablePayload)
+            .toList(growable: false);
+        if (chaptersWithBodies.isNotEmpty) {
+          await _replaceLocalChapterBodies(
+            bookId: normalizedBookId,
+            chapters: chaptersWithBodies,
+          );
         }
       }
 
@@ -1862,7 +1945,12 @@ class AppDatabase extends _$AppDatabase {
               ..orderBy([(table) => OrderingTerm.asc(table.chapterIndex)]))
             .get();
 
-    return rows.map(_mapRowToLocalChapter).toList(growable: false);
+    final chapters = rows.map(_mapRowToLocalChapter).toList(growable: false);
+    final hydrated = <LocalChapter>[];
+    for (final chapter in chapters) {
+      hydrated.add(await _hydrateLocalChapterBody(chapter));
+    }
+    return hydrated;
   }
 
   Future<List<LocalChapter>> getLocalChapterMetas(String bookId) async {
@@ -1971,19 +2059,20 @@ class AppDatabase extends _$AppDatabase {
       return null;
     }
 
-    return LocalChapter(
+    final chapter = LocalChapter(
       id: row.read(storedLocalChapters.id)!,
       bookId: row.read(storedLocalChapters.bookId)!,
       chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
       title: row.read(storedLocalChapters.title)!,
-      content: row.read(storedLocalChapters.content) ?? '',
-      imageUrls: _decodeStringList(row.read(storedLocalChapters.imageUrlsJson)),
+      content: '',
+      imageUrls: const <String>[],
       sourceRef: row.read(storedLocalChapters.sourceRef),
       createdAt: row.read(storedLocalChapters.createdAt)!,
       updatedAt: row.read(storedLocalChapters.updatedAt)!,
       startOffset: row.read(storedLocalChapters.startOffset),
       endOffset: row.read(storedLocalChapters.endOffset),
     );
+    return _hydrateLocalChapterBody(chapter);
   }
 
   Future<LocalChapter?> getLocalChapterMetaByIndex({
@@ -2048,6 +2137,47 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalChapter(row);
   }
 
+  Future<LocalChapter?> getLocalChapterMetaById(String chapterId) async {
+    final normalizedId = chapterId.trim();
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    final query =
+        selectOnly(storedLocalChapters)
+          ..addColumns([
+            storedLocalChapters.id,
+            storedLocalChapters.bookId,
+            storedLocalChapters.chapterIndex,
+            storedLocalChapters.title,
+            storedLocalChapters.sourceRef,
+            storedLocalChapters.startOffset,
+            storedLocalChapters.endOffset,
+            storedLocalChapters.createdAt,
+            storedLocalChapters.updatedAt,
+          ])
+          ..where(storedLocalChapters.id.equals(normalizedId))
+          ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    return LocalChapter(
+      id: row.read(storedLocalChapters.id)!,
+      bookId: row.read(storedLocalChapters.bookId)!,
+      chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
+      title: row.read(storedLocalChapters.title)!,
+      content: '',
+      sourceRef: row.read(storedLocalChapters.sourceRef),
+      createdAt: row.read(storedLocalChapters.createdAt)!,
+      updatedAt: row.read(storedLocalChapters.updatedAt)!,
+      startOffset: row.read(storedLocalChapters.startOffset),
+      endOffset: row.read(storedLocalChapters.endOffset),
+    );
+  }
+
   Future<LocalChapter?> getLocalChapterContentById(String chapterId) async {
     final normalizedId = chapterId.trim();
     if (normalizedId.isEmpty) {
@@ -2077,19 +2207,20 @@ class AppDatabase extends _$AppDatabase {
       return null;
     }
 
-    return LocalChapter(
+    final chapter = LocalChapter(
       id: row.read(storedLocalChapters.id)!,
       bookId: row.read(storedLocalChapters.bookId)!,
       chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
       title: row.read(storedLocalChapters.title)!,
-      content: row.read(storedLocalChapters.content) ?? '',
-      imageUrls: _decodeStringList(row.read(storedLocalChapters.imageUrlsJson)),
+      content: '',
+      imageUrls: const <String>[],
       sourceRef: row.read(storedLocalChapters.sourceRef),
       createdAt: row.read(storedLocalChapters.createdAt)!,
       updatedAt: row.read(storedLocalChapters.updatedAt)!,
       startOffset: row.read(storedLocalChapters.startOffset),
       endOffset: row.read(storedLocalChapters.endOffset),
     );
+    return _hydrateLocalChapterBody(chapter);
   }
 
   Future<void> updateLocalChapterContent({
@@ -2102,15 +2233,16 @@ class AppDatabase extends _$AppDatabase {
     if (normalizedChapterId.isEmpty) {
       return;
     }
-    await (update(storedLocalChapters)
-      ..where((table) => table.id.equals(normalizedChapterId))).write(
-      StoredLocalChaptersCompanion(
-        content: Value(content),
-        imageUrlsJson: Value(jsonEncode(imageUrls)),
-        documentJson: Value(
-          document == null ? null : jsonEncode(document.toJson()),
-        ),
-        updatedAt: Value(DateTime.now()),
+    final meta = await getLocalChapterMetaById(normalizedChapterId);
+    if (meta == null) {
+      return;
+    }
+    await _upsertLocalChapterBody(
+      chapter: meta.copyWith(
+        content: content,
+        imageUrls: imageUrls,
+        document: document,
+        updatedAt: DateTime.now(),
       ),
     );
   }
@@ -2122,11 +2254,86 @@ class AppDatabase extends _$AppDatabase {
     }
 
     await transaction(() async {
+      await _deleteLocalChapterBodiesByBookId(normalizedId);
       await (delete(storedLocalChapters)
         ..where((table) => table.bookId.equals(normalizedId))).go();
       await (delete(storedLocalBooks)
         ..where((table) => table.id.equals(normalizedId))).go();
     });
+  }
+
+  Future<void> _replaceLocalChapterBodies({
+    required String bookId,
+    required List<LocalChapter> chapters,
+  }) async {
+    await _deleteLocalChapterBodiesByBookId(bookId);
+    for (final chapter in chapters) {
+      await _upsertLocalChapterBody(chapter: chapter);
+    }
+  }
+
+  Future<void> _upsertLocalChapterBody({required LocalChapter chapter}) async {
+    final normalizedChapterId = chapter.id.trim();
+    final normalizedBookId = chapter.bookId.trim();
+    if (normalizedChapterId.isEmpty || normalizedBookId.isEmpty) {
+      return;
+    }
+    await customStatement(
+      '''
+      INSERT OR REPLACE INTO ${_quoteIdentifier(_localChapterBodiesTableName)} (
+        chapter_id,
+        book_id,
+        content,
+        image_urls_json,
+        document_json,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ''',
+      <Object?>[
+        normalizedChapterId,
+        normalizedBookId,
+        chapter.content,
+        jsonEncode(chapter.imageUrls),
+        chapter.document == null ? null : jsonEncode(chapter.document!.toJson()),
+        chapter.createdAt.toIso8601String(),
+        chapter.updatedAt.toIso8601String(),
+      ],
+    );
+  }
+
+  Future<void> _deleteLocalChapterBodiesByBookId(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+    await customStatement(
+      'DELETE FROM ${_quoteIdentifier(_localChapterBodiesTableName)} WHERE book_id = ?',
+      <Object>[normalizedBookId],
+    );
+  }
+
+  Future<LocalChapter> _hydrateLocalChapterBody(LocalChapter chapter) async {
+    final rows = await customSelect(
+      '''
+      SELECT content, image_urls_json, document_json, created_at, updated_at
+      FROM ${_quoteIdentifier(_localChapterBodiesTableName)}
+      WHERE chapter_id = ?
+      LIMIT 1
+      ''',
+      variables: <Variable<Object>>[Variable<String>(chapter.id)],
+    ).get();
+    if (rows.isEmpty) {
+      return chapter;
+    }
+    final row = rows.first.data;
+    return chapter.copyWith(
+      content: (row['content'] ?? '').toString(),
+      imageUrls: _decodeStringList(row['image_urls_json']?.toString()),
+      document: _decodeReaderDocument(row['document_json']?.toString()),
+      createdAt: _decodeDateTime(row['created_at']),
+      updatedAt: _decodeDateTime(row['updated_at']),
+    );
   }
 
   Future<void> upsertBookmark(Bookmark bookmark) async {

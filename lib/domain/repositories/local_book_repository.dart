@@ -46,6 +46,8 @@ abstract class LocalBookRepository {
 
   Future<LocalChapter?> getChapterById(String chapterId);
 
+  Future<LocalChapter?> getChapterMetaById(String chapterId);
+
   Future<LocalChapter?> getChapterByIndex(String bookId, int chapterIndex);
 
   /// Returns a single directory entry without loading正文内容。

@@ -51,7 +51,7 @@ class AdvancedThemeListPage extends ConsumerStatefulWidget {
       _AdvancedThemeListPageState();
 }
 
-enum _AdvancedThemeAction { edit, duplicate, exportJson, exportZip, delete }
+enum _AdvancedThemeAction { edit, duplicate, exportZip, delete }
 
 enum _ThemeImportPackageKind { official, red, rgshare }
 
@@ -611,24 +611,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
-  Future<void> _exportTheme(String themeId) async {
-    final theme = await _loadThemeDetail(themeId);
-    if (theme == null || !mounted) {
-      if (mounted) {
-        _showMessage('主题不存在或已被删除');
-      }
-      return;
-    }
-    await _showAdvancedThemeSingleTaskSheet(
-      title: '导出颜色配置',
-      description: '导出当前主题的颜色 JSON 配置。',
-      icon: Icons.palette_outlined,
-      processingMessage: theme.name,
-      processingDetail: '准备导出颜色配置',
-      runTask: (onProgress) => _runExportTheme(theme, onProgress),
-    );
-  }
-
   Future<void> _exportThemeBundle(String themeId) async {
     final theme = await _loadThemeDetail(themeId);
     if (theme == null || !mounted) {
@@ -723,73 +705,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         );
       },
     );
-  }
-
-  Future<bool> _runExportTheme(
-    AppAdvancedTheme theme, [
-    ValueChanged<String>? onProgress,
-  ]) async {
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      onProgress?.call('正在准备导出颜色配置…');
-      final service = ref.read(advancedThemeServiceProvider);
-      final fileName = '${_normalizedFileName(theme.name)}.json';
-      final content = service.encodeThemeColorJson(theme);
-      String? successMessage;
-      if (_shouldUseSaveLocationPicker) {
-        final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[
-            ExternalImportCatalog.advancedThemeJsonTypeGroup,
-          ],
-          suggestedName: fileName,
-          confirmButtonText: '导出',
-        );
-        if (location == null) {
-          _showMessage('已取消导出颜色配置');
-          return false;
-        }
-        final file = File(location.path);
-        await file.writeAsString(content, flush: true);
-      } else {
-        final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsString(content, flush: true);
-        final shareResult = await _shareExportedThemeFile(
-          file: file,
-          text: '分享颜色主题：${theme.name}',
-          subject: theme.name,
-          clipboardText: content,
-          onProgress: onProgress,
-        );
-        if (!mounted) {
-          return false;
-        }
-        if (!shareResult.isCompleted) {
-          _showMessage(shareResult.message ?? '已取消导出颜色配置');
-          return false;
-        }
-        successMessage = shareResult.message;
-      }
-      if (!mounted) {
-        return false;
-      }
-      _showMessage(successMessage ?? '已导出颜色配置「${theme.name}」');
-      return true;
-    } catch (error) {
-      if (!mounted) {
-        return false;
-      }
-      _showMessage('导出失败：${formatAdvancedThemeExportError(error)}');
-      return false;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
   }
 
   Future<bool> _runExportThemeBundle(
@@ -1091,6 +1006,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final service = ref.read(advancedThemeServiceProvider);
     final effectiveKind =
         packageKind ?? await _detectPackageKind(path: path, mimeType: mimeType);
+    final normalizedExtension = p.extension(path).trim().toLowerCase();
+    if (effectiveKind == _ThemeImportPackageKind.official &&
+        normalizedExtension == '.json') {
+      throw const FormatException('已不再支持导入 JSON 主题文件，请使用 ZIP 主题包。');
+    }
     if (effectiveKind == _ThemeImportPackageKind.official &&
         _isZipThemeFile(path: path, mimeType: mimeType)) {
       final importedTheme = await service.importThemeBundleZipFile(path);
@@ -1134,7 +1054,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _ThemeImportPackageKind.official =>
         _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
             ? await service.importThemeBundleZipBytes(bytes)
-            : await service.importThemeColorJson(utf8.decode(bytes)),
+            : throw const FormatException(
+              '已不再支持导入 JSON 主题文件，请使用 ZIP 主题包。',
+            ),
     };
     if (markRevision) {
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
@@ -1892,18 +1814,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (normalizedExtension == '.zip') {
       return _ThemeImportPackageKind.official;
     }
-    if (normalizedExtension == '.json') {
-      return _ThemeImportPackageKind.official;
-    }
-    try {
-      if (_looksLikeThemeColorJson(
-        utf8.decode(resolvedBytes, allowMalformed: true),
-      )) {
-        return _ThemeImportPackageKind.official;
-      }
-    } catch (_) {
-      // Fall through to the default package kind.
-    }
     return _ThemeImportPackageKind.official;
   }
 
@@ -1953,21 +1863,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   bool _looksLikeRedTheme(Map<String, dynamic> payload) {
     return payload['light'] is Map && payload['dark'] is Map;
-  }
-
-  bool _looksLikeThemeColorJson(String content) {
-    try {
-      final decoded = jsonDecode(content);
-      if (decoded is! Map) {
-        return false;
-      }
-      final payload = decoded.map(
-        (key, value) => MapEntry(key.toString(), value),
-      );
-      return payload['type']?.toString().trim() == 'advanced_theme_colors';
-    } catch (_) {
-      return false;
-    }
   }
 
   bool _hasRedHeader(List<int> bytes) {
@@ -2270,7 +2165,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   String _normalizedFileName(String name) {
     final normalized = name.trim().replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_');
-    return normalized.isEmpty ? 'advanced_theme_colors' : normalized;
+    return normalized.isEmpty ? 'advanced_theme' : normalized;
   }
 
   String _formattedTimestampForFileName(DateTime value) {
@@ -2936,8 +2831,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                           _openEditor(theme.id);
                         case _AdvancedThemeAction.duplicate:
                           unawaited(_duplicateTheme(theme.id));
-                        case _AdvancedThemeAction.exportJson:
-                          unawaited(_exportTheme(theme.id));
                         case _AdvancedThemeAction.exportZip:
                           unawaited(_exportThemeBundle(theme.id));
                         case _AdvancedThemeAction.delete:
@@ -2953,10 +2846,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                           PopupMenuItem(
                             value: _AdvancedThemeAction.duplicate,
                             child: Text('复制'),
-                          ),
-                          PopupMenuItem(
-                            value: _AdvancedThemeAction.exportJson,
-                            child: Text('导出颜色 JSON'),
                           ),
                           PopupMenuItem(
                             value: _AdvancedThemeAction.exportZip,
@@ -3760,7 +3649,7 @@ class _AdvancedThemeBatchImportSheetState
   Widget _buildEmptyPicker(BuildContext context) {
     return AppTaskActionCard(
       title: '添加主题文件',
-      description: '支持一次选择多个 JSON / ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
+      description: '支持一次选择多个 ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
       icon: Icons.add_photo_alternate_outlined,
       dashedBorder: true,
       onTap: _pickFiles,

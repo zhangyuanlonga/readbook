@@ -157,6 +157,11 @@ class _FakeLocalBookRepository implements LocalBookRepository {
   }
 
   @override
+  Future<LocalChapter?> getChapterMetaById(String chapterId) async {
+    return chaptersById[chapterId];
+  }
+
+  @override
   Future<LocalChapter?> getChapterMetaByIndex(
     String bookId,
     int chapterIndex,

@@ -371,9 +371,9 @@ $chapter2
 
       final persisted = await repository.getChapterById(metas.first.id);
       expect(persisted, isNotNull);
-      expect(persisted!.content, contains('第一章正文。'));
-      expect(persisted.imageUrls, isNotEmpty);
-      expect(persisted.document, isNotNull);
+      expect(persisted!.content, isEmpty);
+      expect(persisted.imageUrls, isEmpty);
+      expect(persisted.document, isNull);
     });
 
     test('rejects ready epub chapters with missing stored content', () async {
