@@ -6,6 +6,8 @@ String buildBookDetailRoute({
   String? author,
   String? coverUrl,
   String? heroTag,
+  String? titleHeroTag,
+  String? metaHeroTag,
 }) {
   final normalizedBookId = bookId.trim();
   final effectiveBookId =
@@ -26,6 +28,8 @@ String buildBookDetailRoute({
   putIfNotBlank('author', author);
   putIfNotBlank('coverUrl', coverUrl);
   putIfNotBlank('heroTag', heroTag);
+  putIfNotBlank('titleHeroTag', titleHeroTag);
+  putIfNotBlank('metaHeroTag', metaHeroTag);
   final encodedBookId = Uri.encodeComponent(effectiveBookId);
 
   return Uri(

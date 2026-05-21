@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../layout/app_adaptive.dart';
 import '../layout/app_layout.dart';
 import '../motion/app_motion_widgets.dart';
+import '../theme/app_component_theme_tokens.dart';
 
 enum AdaptiveActionSurfaceMode { mobileSheet, desktopDialog }
 
@@ -233,7 +234,13 @@ class AdaptiveDialogSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final dialogTheme = Theme.of(context).dialogTheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     final maxHeight = MediaQuery.sizeOf(context).height * maxHeightFactor;
+    final backgroundColor =
+        dialogTheme.backgroundColor ?? colorScheme.surfaceContainerLow;
+    final shadowColor =
+        dialogTheme.shadowColor ?? colorScheme.shadow.withValues(alpha: 0.18);
     return AppFadeSlideTransition(
       child: Center(
         child: ConstrainedBox(
@@ -242,13 +249,16 @@ class AdaptiveDialogSurface extends StatelessWidget {
             maxHeight: maxHeight,
           ),
           child: Material(
-            color: colorScheme.surface,
+            color: backgroundColor,
             elevation: 8,
-            shadowColor: colorScheme.shadow.withValues(alpha: 0.18),
+            shadowColor: shadowColor,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
+              borderRadius: BorderRadius.circular(
+                componentTokens.overlay.radius,
+              ),
               side: BorderSide(
                 color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+                width: componentTokens.overlay.borderWidth,
               ),
             ),
             clipBehavior: Clip.antiAlias,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/motion/app_motion.dart';
@@ -62,13 +63,16 @@ class BookDetailPrimaryActions extends StatelessWidget {
           onTap: effectiveEnabled ? onPressed : null,
           enabled: effectiveEnabled,
           borderRadius: BorderRadius.circular(metrics.cardRadius * 0.72),
-          child: Opacity(
-            opacity: enabled ? 1 : 0.45,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            opacity: effectiveEnabled ? 1 : 0.45,
             child: _ActionButtonContent(
               icon: icon,
               label: label,
               iconGap: metrics.isCompactDensity ? 2 : 3,
               textStyle: buttonTextStyle,
+              enabled: effectiveEnabled,
             ),
           ),
         ),
@@ -194,6 +198,7 @@ class _ActionButtonSurfaceState extends State<_ActionButtonSurface> {
         key: widget.inkKey,
         borderRadius: widget.borderRadius,
         onTap: _enabled ? widget.onTap : null,
+        onTapDown: _enabled ? (_) => HapticFeedback.lightImpact() : null,
         onHighlightChanged: (value) {
           if (_pressed == value) {
             return;
@@ -204,12 +209,8 @@ class _ActionButtonSurfaceState extends State<_ActionButtonSurface> {
         },
         child: AnimatedScale(
           scale: motionEnabled && _pressed ? 0.97 : 1,
-          duration: AppMotion.durationOf(
-            context,
-            AppMotion.fast,
-            enabled: widget.enabled,
-          ),
-          curve: AppMotion.standard,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutBack,
           child: widget.child,
         ),
       ),
@@ -222,21 +223,27 @@ class _ActionButtonContent extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.iconGap,
+    required this.enabled,
     this.textStyle,
   });
 
   final Widget icon;
   final String label;
   final double iconGap;
+  final bool enabled;
   final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
+    final foregroundColor =
+        enabled
+            ? Theme.of(context).colorScheme.onSurface
+            : Theme.of(context).colorScheme.onSurfaceVariant;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          icon,
+          IconTheme.merge(data: IconThemeData(color: foregroundColor), child: icon),
           SizedBox(height: iconGap),
           Text(
             label,
@@ -244,7 +251,7 @@ class _ActionButtonContent extends StatelessWidget {
             softWrap: false,
             overflow: TextOverflow.ellipsis,
             style: textStyle?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
+              color: foregroundColor,
             ),
           ),
         ],

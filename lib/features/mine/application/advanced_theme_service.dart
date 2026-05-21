@@ -3140,6 +3140,7 @@ class AdvancedThemeService {
       cardColorValue: colors.cardColorValue,
       cardTextColorValue: colors.cardTextColorValue,
       textSecondaryColorValue: colors.textSecondaryColorValue,
+      componentStyle: config.componentStyle,
       wallpaperPath: await _resolvePreviewWallpaperPath(
         config.wallpaperAsset,
         previewPathCache: previewPathCache,
@@ -3265,6 +3266,7 @@ class AdvancedThemeModeSummary {
     required this.cardColorValue,
     required this.cardTextColorValue,
     required this.textSecondaryColorValue,
+    required this.componentStyle,
     required this.wallpaperPath,
     required this.hasWallpaper,
     required this.hasReaderWallpaper,
@@ -3282,6 +3284,7 @@ class AdvancedThemeModeSummary {
       cardColorValue: colors.cardColorValue,
       cardTextColorValue: colors.cardTextColorValue,
       textSecondaryColorValue: colors.textSecondaryColorValue,
+      componentStyle: config.componentStyle,
       wallpaperPath: config.wallpaperPath,
       hasWallpaper: config.hasWallpaper,
       hasReaderWallpaper: config.hasReaderWallpaper,
@@ -3295,6 +3298,7 @@ class AdvancedThemeModeSummary {
   final int? cardColorValue;
   final int? cardTextColorValue;
   final int? textSecondaryColorValue;
+  final AppAdvancedThemeComponentStyle componentStyle;
   final String? wallpaperPath;
   final bool hasWallpaper;
   final bool hasReaderWallpaper;
@@ -3311,6 +3315,7 @@ class AdvancedThemeModeSummary {
       cardColorValue: cardColorValue,
       cardTextColorValue: cardTextColorValue,
       textSecondaryColorValue: textSecondaryColorValue,
+      componentStyle: componentStyle,
       wallpaperPath:
           clearWallpaperPath ? null : (wallpaperPath ?? this.wallpaperPath),
       hasWallpaper: hasWallpaper,

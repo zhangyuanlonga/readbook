@@ -44,96 +44,110 @@ class SearchInputCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    return Padding(
       padding: EdgeInsets.symmetric(vertical: metrics.isCompactDensity ? 4 : 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ModeChip(
-            icon: Icons.menu_book_rounded,
-            label: '小说',
-            isActive: searchContentMode == SearchContentMode.novel,
-            activeBackgroundColor: modeActiveBackgroundColor,
-            activeForegroundColor: modeActiveForegroundColor,
-            onTap:
-                isSearching
-                    ? null
-                    : () => onContentModeChanged(SearchContentMode.novel),
-          ),
-          SizedBox(width: metrics.contentGap),
-          _ModeChip(
-            icon: Icons.auto_stories_rounded,
-            label: '漫画',
-            isActive: searchContentMode == SearchContentMode.manga,
-            activeBackgroundColor: modeActiveBackgroundColor,
-            activeForegroundColor: modeActiveForegroundColor,
-            onTap:
-                isSearching
-                    ? null
-                    : () => onContentModeChanged(SearchContentMode.manga),
-          ),
-          SizedBox(width: metrics.contentGap),
-          _ModeChip(
-            icon: Icons.headphones_rounded,
-            label: '听书',
-            isActive: searchContentMode == SearchContentMode.audio,
-            activeBackgroundColor: modeActiveBackgroundColor,
-            activeForegroundColor: modeActiveForegroundColor,
-            onTap:
-                isSearching
-                    ? null
-                    : () => onContentModeChanged(SearchContentMode.audio),
-          ),
-          SizedBox(width: metrics.contentGap + 2),
-          _OptionChip(
-            icon:
-                serverOnlineSearchEnabled
-                    ? Icons.cloud_queue_rounded
-                    : Icons.filter_list_rounded,
-            label: _buildSourceLabel(),
-            isActive: serverOnlineSearchEnabled || selectedSourceCount > 0,
-            isLoading: !serverOnlineSearchEnabled && isLoadingSourceCount,
-            activeBackgroundColor: optionActiveBackgroundColor,
-            activeForegroundColor: optionActiveForegroundColor,
-            onTap:
-                (isSearching || availableSourceCount == 0)
-                    ? null
-                    : onOpenSourceFilter,
-            onClear:
-                (selectedSourceCount > 0 && !isSearching)
-                    ? onClearSourceFilter
-                    : null,
-          ),
-          SizedBox(width: metrics.contentGap),
-          _OptionChip(
-            icon:
-                isPreciseBookMatch
-                    ? Icons.check_box_rounded
-                    : Icons.check_box_outline_blank_rounded,
-            label: '精准',
-            isActive: isPreciseBookMatch,
-            activeBackgroundColor: optionActiveBackgroundColor,
-            activeForegroundColor: optionActiveForegroundColor,
-            onTap:
-                isSearching
-                    ? null
-                    : () => onPreciseMatchChanged(!isPreciseBookMatch),
-          ),
-          if (selectedSourceCount > 0 || isPreciseBookMatch) ...[
-            SizedBox(width: metrics.contentGap),
-            TextButton(
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                minimumSize: Size(0, metrics.controlHeight),
-                padding: EdgeInsets.symmetric(
-                  horizontal: metrics.isCompactDensity ? 6 : 8,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _ModeChip(
+                  icon: Icons.menu_book_rounded,
+                  label: '小说',
+                  isActive: searchContentMode == SearchContentMode.novel,
+                  activeBackgroundColor: modeActiveBackgroundColor,
+                  activeForegroundColor: modeActiveForegroundColor,
+                  onTap:
+                      isSearching
+                          ? null
+                          : () => onContentModeChanged(SearchContentMode.novel),
                 ),
-              ),
-              onPressed: isSearching ? null : onClearResults,
-              child: const Text('清空'),
+                SizedBox(width: metrics.contentGap),
+                _ModeChip(
+                  icon: Icons.auto_stories_rounded,
+                  label: '漫画',
+                  isActive: searchContentMode == SearchContentMode.manga,
+                  activeBackgroundColor: modeActiveBackgroundColor,
+                  activeForegroundColor: modeActiveForegroundColor,
+                  onTap:
+                      isSearching
+                          ? null
+                          : () => onContentModeChanged(SearchContentMode.manga),
+                ),
+                SizedBox(width: metrics.contentGap),
+                _ModeChip(
+                  icon: Icons.headphones_rounded,
+                  label: '听书',
+                  isActive: searchContentMode == SearchContentMode.audio,
+                  activeBackgroundColor: modeActiveBackgroundColor,
+                  activeForegroundColor: modeActiveForegroundColor,
+                  onTap:
+                      isSearching
+                          ? null
+                          : () => onContentModeChanged(SearchContentMode.audio),
+                ),
+              ],
             ),
-          ],
+          ),
+          SizedBox(height: metrics.isCompactDensity ? 8 : 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _OptionChip(
+                  icon:
+                      serverOnlineSearchEnabled
+                          ? Icons.cloud_queue_rounded
+                          : Icons.filter_list_rounded,
+                  label: _buildSourceLabel(),
+                  isActive: serverOnlineSearchEnabled || selectedSourceCount > 0,
+                  isLoading: !serverOnlineSearchEnabled && isLoadingSourceCount,
+                  activeBackgroundColor: optionActiveBackgroundColor,
+                  activeForegroundColor: optionActiveForegroundColor,
+                  onTap:
+                      (isSearching || availableSourceCount == 0)
+                          ? null
+                          : onOpenSourceFilter,
+                  onClear:
+                      (selectedSourceCount > 0 && !isSearching)
+                          ? onClearSourceFilter
+                          : null,
+                ),
+                SizedBox(width: metrics.contentGap),
+                _OptionChip(
+                  icon:
+                      isPreciseBookMatch
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                  label: '精准',
+                  isActive: isPreciseBookMatch,
+                  activeBackgroundColor: optionActiveBackgroundColor,
+                  activeForegroundColor: optionActiveForegroundColor,
+                  onTap:
+                      isSearching
+                          ? null
+                          : () => onPreciseMatchChanged(!isPreciseBookMatch),
+                ),
+                if (selectedSourceCount > 0 || isPreciseBookMatch) ...[
+                  SizedBox(width: metrics.contentGap),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(0, metrics.controlHeight),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.isCompactDensity ? 6 : 8,
+                      ),
+                    ),
+                    onPressed: isSearching ? null : onClearResults,
+                    child: const Text('清空'),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

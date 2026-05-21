@@ -10,6 +10,7 @@ import '../features/mine/application/advanced_theme_provider.dart';
 import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_border_tokens.dart';
+import 'theme/app_component_theme_tokens.dart';
 import 'layout/app_layout.dart';
 import 'navigation/bottom_nav_icon_gallery_provider.dart';
 import 'navigation/bottom_nav_icon_resolver.dart';
@@ -273,6 +274,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       Theme.of(context).colorScheme,
       ref.read(activeAdvancedThemeProvider).valueOrNull,
     );
+    final componentTokens = appComponentThemeTokensOf(context);
     final hasWallpaper =
         backdrop.wallpaperPath != null && backdrop.wallpaperPath!.isNotEmpty;
 
@@ -291,13 +293,18 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           floating: floating,
           frosted: frosted,
         );
-        final radius = floating ? 28.0 : 0.0;
+        final radius =
+            floating ? componentTokens.navigation.standardFloatingRadius : 0.0;
         final navigationBar = NavigationBarTheme(
           data: NavigationBarThemeData(
             backgroundColor: Colors.transparent,
             surfaceTintColor: Colors.transparent,
             shadowColor: Colors.transparent,
             indicatorColor: Colors.transparent,
+            height:
+                showNavigationLabels
+                    ? componentTokens.navigation.standardHeightWithLabel
+                    : componentTokens.navigation.standardHeightIconOnly,
             labelTextStyle: WidgetStateProperty.resolveWith((states) {
               final selected = states.contains(WidgetState.selected);
               return Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -319,7 +326,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           child: IconTheme(
             data: IconThemeData(color: advancedPalette.textSecondaryColor),
             child: NavigationBar(
-              height: showNavigationLabels ? 72 : 58,
+              height:
+                  showNavigationLabels
+                      ? componentTokens.navigation.standardHeightWithLabel
+                      : componentTokens.navigation.standardHeightIconOnly,
               labelBehavior:
                   showNavigationLabels
                       ? NavigationDestinationLabelBehavior.alwaysShow
@@ -367,14 +377,29 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 floating
                     ? Border.all(
                       color: borderColor.withValues(alpha: 0.92),
-                      width: 0.8,
+                      width: componentTokens.navigation.standardBorderWidth,
                     )
-                    : Border(top: BorderSide(color: borderColor)),
+                    : Border(
+                      top: BorderSide(
+                        color: borderColor,
+                        width: componentTokens.navigation.standardBorderWidth,
+                      ),
+                    ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: floating ? 0.045 : 0.03),
-                blurRadius: floating ? 20 : 16,
-                offset: Offset(0, floating ? 10 : -4),
+                blurRadius:
+                    floating
+                        ? componentTokens.navigation.standardFloatingShadowBlur
+                        : componentTokens.navigation.standardAttachedShadowBlur,
+                offset: Offset(
+                  0,
+                  floating
+                      ? componentTokens.navigation.standardFloatingShadowOffsetY
+                      : componentTokens
+                          .navigation
+                          .standardAttachedShadowOffsetY,
+                ),
               ),
             ],
           ),
@@ -387,8 +412,22 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 floating ? BorderRadius.circular(radius) : BorderRadius.zero,
             child: BackdropFilter(
               filter: ImageFilter.blur(
-                sigmaX: floating ? 18 : 14,
-                sigmaY: floating ? 18 : 14,
+                sigmaX:
+                    floating
+                        ? componentTokens
+                            .navigation
+                            .standardFrostedBlurSigmaFloating
+                        : componentTokens
+                            .navigation
+                            .standardFrostedBlurSigmaAttached,
+                sigmaY:
+                    floating
+                        ? componentTokens
+                            .navigation
+                            .standardFrostedBlurSigmaFloating
+                        : componentTokens
+                            .navigation
+                            .standardFrostedBlurSigmaAttached,
               ),
               child: surface,
             ),

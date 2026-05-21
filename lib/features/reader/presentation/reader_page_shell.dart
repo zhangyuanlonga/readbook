@@ -252,6 +252,14 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   void _handleBackNavigation() {
     _markBackNavigationTriggered();
+    final now = DateTime.now();
+    final previousBackAt = _lastReaderBackAt;
+    _lastReaderBackAt = now;
+    if (previousBackAt != null &&
+        now.difference(previousBackAt) <= const Duration(milliseconds: 700)) {
+      context.go('/bookshelf');
+      return;
+    }
     if (context.canPop()) {
       context.pop();
       return;

@@ -15,6 +15,8 @@ final List<RouteBase> bookRoutes = <RouteBase>[
       final author = state.uri.queryParameters['author'];
       final coverUrl = state.uri.queryParameters['coverUrl'];
       final heroTag = state.uri.queryParameters['heroTag'];
+      final titleHeroTag = state.uri.queryParameters['titleHeroTag'];
+      final metaHeroTag = state.uri.queryParameters['metaHeroTag'];
 
       return buildFadeSlideTransitionPage(
         state: state,
@@ -28,6 +30,8 @@ final List<RouteBase> bookRoutes = <RouteBase>[
           author: author,
           coverUrl: coverUrl,
           heroTag: heroTag,
+          titleHeroTag: titleHeroTag,
+          metaHeroTag: metaHeroTag,
         ),
       );
     },

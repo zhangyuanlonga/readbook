@@ -290,6 +290,9 @@ class BookshelfPage extends ConsumerStatefulWidget {
 
 class _BookshelfPageState extends ConsumerState<BookshelfPage>
     with AutomaticKeepAliveClientMixin<BookshelfPage> {
+  static const Duration _kBookshelfPressAnimDuration = Duration(
+    milliseconds: 90,
+  );
   static const List<_BookshelfFilter> _kDefaultBaseFilters = <_BookshelfFilter>[
     _BookshelfFilter.all,
     _BookshelfFilter.local,
@@ -336,6 +339,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Map<String, int> _cachedChapterCountByBookKey = const <String, int>{};
   final Map<String, ValueNotifier<_BookshelfBookCardState>>
   _bookCardStateNotifiers = <String, ValueNotifier<_BookshelfBookCardState>>{};
+  String? _pressedBookKey;
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, BookMetadataOverride> _metadataOverridesByTargetKey =
@@ -560,6 +564,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       notifier.dispose();
     }
     super.dispose();
+  }
+
+  void _setPressedBookKey(String? value) {
+    if (_pressedBookKey == value) {
+      return;
+    }
+    if (!mounted) {
+      _pressedBookKey = value;
+      return;
+    }
+    setState(() {
+      _pressedBookKey = value;
+    });
   }
 
   @override
@@ -1536,25 +1553,45 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final titleText =
         _titleTextByBookKey[bookKey] ?? _toSingleLineText(displayTitle);
     final coverHeroTag = _buildBookCoverHeroTag(book);
+    final titleHeroTag = _buildBookTitleHeroTag(book);
+    final metaHeroTag = _buildBookMetaHeroTag(book);
     final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
     final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
     final overlayTitle =
         _gridVisualStyle == _BookshelfGridVisualStyle.overlayTitle;
     final coverOnly = _gridVisualStyle == _BookshelfGridVisualStyle.coverOnly;
+    final isPressed = _pressedBookKey == bookKey;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return AnimatedScale(
+      scale: isPressed ? 0.985 : 1,
+      duration: _kBookshelfPressAnimDuration,
+      curve: Curves.easeOutCubic,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
         borderRadius: BorderRadius.circular(14),
+        onTapDown:
+            _isSelectionMode
+                ? null
+                : (_) {
+                  _setPressedBookKey(bookKey);
+                  unawaited(HapticFeedback.lightImpact());
+                },
+        onTapCancel: () => _setPressedBookKey(null),
+        onTapUp: (_) => _setPressedBookKey(null),
         onLongPress:
             _isBatchDeleting
                 ? null
-                : () {
+                : () async {
+                  _setPressedBookKey(null);
                   if (_isSelectionMode) {
                     _toggleBookSelection(book);
                     return;
                   }
-                  _openBookDetail(book);
+                  await _openBookDetailFromLongPress(
+                    book,
+                    pressedKey: bookKey,
+                  );
                 },
         onTap:
             _isSelectionMode
@@ -1562,6 +1599,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 : isOpening || _isBatchDeleting
                 ? null
                 : () async {
+                  _setPressedBookKey(null);
                   await _openFromBookshelf(book, progress: progress);
                 },
         child: SizedBox.expand(
@@ -1721,28 +1759,36 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 if (!coverOnly && !overlayTitle && _gridShowTitle) ...[
                   SizedBox(
                     width: double.infinity,
-                    child: Text(
-                      titleText,
-                      maxLines: _gridTitleMaxLines,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign:
-                          _gridTitleCenter ? TextAlign.center : TextAlign.start,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: palette.cardTextColor,
+                    child: Hero(
+                      tag: titleHeroTag,
+                      child: Text(
+                        titleText,
+                        maxLines: _gridTitleMaxLines,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign:
+                            _gridTitleCenter
+                                ? TextAlign.center
+                                : TextAlign.start,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: palette.cardTextColor,
+                        ),
                       ),
                     ),
                   ),
                 ],
                 if (!coverOnly && !overlayTitle && _gridShowAuthor) ...[
                   SizedBox(height: _gridShowTitle ? 2 : 0),
-                  Text(
-                    authorLine,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: palette.textSecondaryColor,
-                      fontWeight: FontWeight.w500,
+                  Hero(
+                    tag: metaHeroTag,
+                    child: Text(
+                      authorLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.textSecondaryColor,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -1792,6 +1838,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -1825,6 +1872,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final titleText =
         _titleTextByBookKey[bookKey] ?? _toSingleLineText(displayTitle);
     final coverHeroTag = _buildBookCoverHeroTag(book);
+    final titleHeroTag = _buildBookTitleHeroTag(book);
+    final metaHeroTag = _buildBookMetaHeroTag(book);
     final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
     final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
     final isEditingSelected = _isSelectionMode && isSelected;
@@ -1838,8 +1887,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowRecentReadTime && progress != null
             ? '最近阅读: ${_formatRelativeReadTime(progress.updatedAt)}'
             : null;
+    final isPressed = _pressedBookKey == bookKey;
 
-    return Card(
+    return AnimatedScale(
+      scale: isPressed ? 0.988 : 1,
+      duration: _kBookshelfPressAnimDuration,
+      curve: Curves.easeOutCubic,
+      child: Card(
       margin: EdgeInsets.only(bottom: _listCompactMode ? 7 : 10),
       color:
           isEditingSelected
@@ -1857,12 +1911,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        onTapDown:
+            _isSelectionMode
+                ? null
+                : (_) {
+                  _setPressedBookKey(bookKey);
+                  unawaited(HapticFeedback.lightImpact());
+                },
+        onTapCancel: () => _setPressedBookKey(null),
+        onTapUp: (_) => _setPressedBookKey(null),
         onTap:
             _isSelectionMode
                 ? () => _toggleBookSelection(book)
                 : isOpening || _isBatchDeleting
                 ? null
                 : () async {
+                  _setPressedBookKey(null);
                   await _openFromBookshelf(book, progress: progress);
                 },
         borderRadius: BorderRadius.circular(14),
@@ -1883,12 +1947,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 onLongPress:
                     _isBatchDeleting
                         ? null
-                        : () {
+                        : () async {
+                          _setPressedBookKey(null);
                           if (_isSelectionMode) {
                             _toggleBookSelection(book);
                             return;
                           }
-                          _openBookDetail(book);
+                          await _openBookDetailFromLongPress(
+                            book,
+                            pressedKey: bookKey,
+                          );
                         },
                 containedInkWell: true,
                 borderRadius: BorderRadius.circular(12),
@@ -1935,12 +2003,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   onLongPress:
                       _isBatchDeleting
                           ? null
-                          : () {
+                          : () async {
                             if (_isSelectionMode) {
                               _toggleBookSelection(book);
                               return;
                             }
-                            _openBookDetail(book);
+                            await _openBookDetailFromLongPress(
+                              book,
+                              pressedKey: bookKey,
+                            );
                           },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1950,16 +2021,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         children: [
                           if (_listShowTitle)
                             Expanded(
-                              child: Text(
-                                titleText,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: palette.cardTextColor,
+                              child: Hero(
+                                tag: titleHeroTag,
+                                child: Text(
+                                  titleText,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: palette.cardTextColor,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             )
                           else
@@ -1992,15 +2066,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ),
                       if (_listShowAuthor) ...[
                         SizedBox(height: _listCompactMode ? 3 : 6),
-                        Text(
-                          authorLine,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: palette.textSecondaryColor,
-                            fontWeight: FontWeight.w500,
+                        Hero(
+                          tag: metaHeroTag,
+                          child: Text(
+                            authorLine,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: palette.textSecondaryColor,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ],
@@ -2077,6 +2154,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -2912,6 +2990,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   String _buildBookCoverHeroTag(BookshelfBook book) {
     return 'book_cover_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
+  }
+
+  String _buildBookTitleHeroTag(BookshelfBook book) {
+    return 'book_title_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
+  }
+
+  String _buildBookMetaHeroTag(BookshelfBook book) {
+    return 'book_meta_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
   }
 
   String? _displayBookAuthor(
@@ -4701,6 +4787,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
     final route = _pageRouteService.resolveReaderFallbackRoute(book);
     context.push(route);
+  }
+
+  Future<void> _openBookDetailFromLongPress(
+    BookshelfBook book, {
+    String? pressedKey,
+  }) async {
+    if (_isBatchDeleting || _isBatchUpdatingCovers) {
+      return;
+    }
+    final key = (pressedKey ?? _bookKey(book)).trim();
+    if (key.isNotEmpty) {
+      _setPressedBookKey(key);
+    }
+    unawaited(HapticFeedback.lightImpact());
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    if (!mounted) {
+      return;
+    }
+    _setPressedBookKey(null);
+    _openBookDetail(book);
   }
 
   void _openBookDetail(BookshelfBook book) {

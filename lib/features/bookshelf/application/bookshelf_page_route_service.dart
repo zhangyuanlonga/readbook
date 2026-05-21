@@ -88,6 +88,12 @@ class BookshelfPageRouteService {
   }
 
   String resolveBookDetailRoute(BookshelfBook book, {String? heroTag}) {
+    final normalizedSourceId = book.sourceId.trim();
+    final normalizedBookId = book.bookId.trim();
+    final titleHeroTag =
+        'book_title_${normalizedSourceId}_${normalizedBookId}_${book.detailUrl.hashCode}';
+    final metaHeroTag =
+        'book_meta_${normalizedSourceId}_${normalizedBookId}_${book.detailUrl.hashCode}';
     return buildBookDetailRoute(
       bookId: book.bookId,
       sourceId: book.sourceId,
@@ -96,6 +102,8 @@ class BookshelfPageRouteService {
       author: book.author,
       coverUrl: book.coverUrl,
       heroTag: heroTag,
+      titleHeroTag: titleHeroTag,
+      metaHeroTag: metaHeroTag,
     );
   }
 

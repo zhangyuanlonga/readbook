@@ -25,6 +25,7 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/appearance_page_resource_service.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/theme_semantic_spec.dart';
 import 'widgets/appearance_other_settings_card.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import '../../reader/application/reader_font_registry_service.dart';
@@ -551,7 +552,8 @@ class _FontFamilyPickerDialogState
     });
 
     try {
-      final importedFonts = await widget.fontRegistryService.pickAndImportFonts();
+      final importedFonts =
+          await widget.fontRegistryService.pickAndImportFonts();
       if (importedFonts.isEmpty) {
         return;
       }

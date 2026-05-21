@@ -47,12 +47,16 @@ class BookDetailSummaryCard extends StatelessWidget {
     required this.sourceName,
     this.author,
     required this.cover,
+    this.titleHeroTag,
+    this.metaHeroTag,
   });
 
   final String title;
   final String sourceName;
   final String? author;
   final Widget cover;
+  final String? titleHeroTag;
+  final String? metaHeroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +87,8 @@ class BookDetailSummaryCard extends StatelessWidget {
                   title: title,
                   sourceName: sourceName,
                   author: author,
+                  titleHeroTag: titleHeroTag,
+                  metaHeroTag: metaHeroTag,
                 ),
               ),
             ],
@@ -98,42 +104,53 @@ class _BookDetailSummaryText extends StatelessWidget {
     required this.title,
     required this.sourceName,
     this.author,
+    this.titleHeroTag,
+    this.metaHeroTag,
   });
 
   final String title;
   final String sourceName;
   final String? author;
+  final String? titleHeroTag;
+  final String? metaHeroTag;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
+    final titleWidget = Text(
+      title,
+      maxLines: metrics.isCompactDensity ? 2 : 3,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        height: 1.18,
+        color: colorScheme.onSurface,
+      ),
+    );
+    final authorText =
+        author != null && author!.trim().isNotEmpty ? author!.trim() : '未知';
+    final authorInfoLine = _BookDetailInfoLine(label: '作者', value: authorText);
+    final sourceInfoLine = _BookDetailInfoLine(label: '来源', value: sourceName);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          title,
-          maxLines: metrics.isCompactDensity ? 2 : 3,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            height: 1.18,
-            color: colorScheme.onSurface,
-          ),
-        ),
+        _wrapHero(titleHeroTag, titleWidget),
         SizedBox(height: metrics.contentGap),
-        _BookDetailInfoLine(
-          label: '作者',
-          value:
-              author != null && author!.trim().isNotEmpty
-                  ? author!.trim()
-                  : '未知',
-        ),
+        _wrapHero(metaHeroTag, authorInfoLine),
         SizedBox(height: metrics.isCompactDensity ? 5 : 7),
-        _BookDetailInfoLine(label: '来源', value: sourceName),
+        sourceInfoLine,
       ],
     );
+  }
+
+  Widget _wrapHero(String? tag, Widget child) {
+    final normalized = tag?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return child;
+    }
+    return Hero(tag: normalized, child: child);
   }
 }
 
@@ -392,6 +409,7 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
+    final surfaceColor = colorScheme.surfaceContainerHigh;
     final collapsedLines =
         metrics.isCompactDensity
             ? 5
@@ -399,12 +417,13 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
             ? 10
             : 7;
     final canExpand = widget.intro.trim().length > 120;
+    final showFadeMask = canExpand && !_expanded;
 
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(metrics.cardPadding),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(metrics.cardRadius),
       ),
       child: Column(
@@ -417,14 +436,48 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           SizedBox(height: metrics.contentGap),
-          Text(
-            widget.intro,
-            maxLines: _expanded ? null : collapsedLines,
-            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
+          Stack(
+            children: [
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: Text(
+                  widget.intro,
+                  maxLines: _expanded ? null : collapsedLines,
+                  overflow:
+                      _expanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+              if (showFadeMask)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 34,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: <Color>[
+                            surfaceColor.withValues(alpha: 0),
+                            surfaceColor.withValues(alpha: 0.92),
+                            surfaceColor,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           if (canExpand) ...[
             SizedBox(height: metrics.isCompactDensity ? 4 : 6),
@@ -440,7 +493,7 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
                     _expanded = !_expanded;
                   });
                 },
-                child: Text(_expanded ? '收起' : '展开'),
+                child: Text(_expanded ? '收起全文' : '展开全文'),
               ),
             ),
           ],

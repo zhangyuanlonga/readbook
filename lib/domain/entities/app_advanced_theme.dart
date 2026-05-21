@@ -5,6 +5,139 @@ enum AppAdvancedThemeMode { light, dark }
 
 enum AppAdvancedThemeWallpaperFit { fill, cover }
 
+enum AppAdvancedThemeCardStyle { soft, outlined, elevated }
+
+enum AppAdvancedThemeButtonStyle { stadium, rounded, sharp }
+
+enum AppAdvancedThemeInputStyle { soft, outlined, underlined }
+
+enum AppAdvancedThemeOverlayStyle { comfortable, compact }
+
+enum AppAdvancedThemeNavigationStyle { soft, floating, compact }
+
+enum AppAdvancedThemeSwitchStyle { soft, contrast }
+
+class AppAdvancedThemeComponentStyle {
+  const AppAdvancedThemeComponentStyle({
+    this.globalRadiusScale = 1,
+    this.shadowStrength = 0.5,
+    this.cardStyle = AppAdvancedThemeCardStyle.soft,
+    this.buttonStyle = AppAdvancedThemeButtonStyle.stadium,
+    this.inputStyle = AppAdvancedThemeInputStyle.soft,
+    this.overlayStyle = AppAdvancedThemeOverlayStyle.comfortable,
+    this.navigationStyle = AppAdvancedThemeNavigationStyle.soft,
+    this.switchStyle = AppAdvancedThemeSwitchStyle.soft,
+  });
+
+  final double globalRadiusScale;
+  final double shadowStrength;
+  final AppAdvancedThemeCardStyle cardStyle;
+  final AppAdvancedThemeButtonStyle buttonStyle;
+  final AppAdvancedThemeInputStyle inputStyle;
+  final AppAdvancedThemeOverlayStyle overlayStyle;
+  final AppAdvancedThemeNavigationStyle navigationStyle;
+  final AppAdvancedThemeSwitchStyle switchStyle;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'globalRadiusScale': globalRadiusScale,
+      'shadowStrength': shadowStrength,
+      'cardStyle': cardStyle.name,
+      'buttonStyle': buttonStyle.name,
+      'inputStyle': inputStyle.name,
+      'overlayStyle': overlayStyle.name,
+      'navigationStyle': navigationStyle.name,
+      'switchStyle': switchStyle.name,
+    };
+  }
+
+  factory AppAdvancedThemeComponentStyle.fromJson(Map<String, dynamic> json) {
+    return AppAdvancedThemeComponentStyle(
+      globalRadiusScale:
+          AppAdvancedThemeModeConfig._readDouble(json, 'globalRadiusScale') ??
+          1,
+      shadowStrength:
+          AppAdvancedThemeModeConfig._readDouble(json, 'shadowStrength') ?? 0.5,
+      cardStyle: _readCardStyle(json['cardStyle']?.toString().trim()),
+      buttonStyle: _readButtonStyle(json['buttonStyle']?.toString().trim()),
+      inputStyle: _readInputStyle(json['inputStyle']?.toString().trim()),
+      overlayStyle: _readOverlayStyle(json['overlayStyle']?.toString().trim()),
+      navigationStyle: _readNavigationStyle(
+        json['navigationStyle']?.toString().trim(),
+      ),
+      switchStyle: _readSwitchStyle(json['switchStyle']?.toString().trim()),
+    );
+  }
+
+  AppAdvancedThemeComponentStyle copyWith({
+    double? globalRadiusScale,
+    double? shadowStrength,
+    AppAdvancedThemeCardStyle? cardStyle,
+    AppAdvancedThemeButtonStyle? buttonStyle,
+    AppAdvancedThemeInputStyle? inputStyle,
+    AppAdvancedThemeOverlayStyle? overlayStyle,
+    AppAdvancedThemeNavigationStyle? navigationStyle,
+    AppAdvancedThemeSwitchStyle? switchStyle,
+  }) {
+    return AppAdvancedThemeComponentStyle(
+      globalRadiusScale: globalRadiusScale ?? this.globalRadiusScale,
+      shadowStrength: shadowStrength ?? this.shadowStrength,
+      cardStyle: cardStyle ?? this.cardStyle,
+      buttonStyle: buttonStyle ?? this.buttonStyle,
+      inputStyle: inputStyle ?? this.inputStyle,
+      overlayStyle: overlayStyle ?? this.overlayStyle,
+      navigationStyle: navigationStyle ?? this.navigationStyle,
+      switchStyle: switchStyle ?? this.switchStyle,
+    );
+  }
+
+  static AppAdvancedThemeCardStyle _readCardStyle(String? raw) {
+    return switch (raw) {
+      'outlined' => AppAdvancedThemeCardStyle.outlined,
+      'elevated' => AppAdvancedThemeCardStyle.elevated,
+      _ => AppAdvancedThemeCardStyle.soft,
+    };
+  }
+
+  static AppAdvancedThemeButtonStyle _readButtonStyle(String? raw) {
+    return switch (raw) {
+      'rounded' => AppAdvancedThemeButtonStyle.rounded,
+      'sharp' => AppAdvancedThemeButtonStyle.sharp,
+      _ => AppAdvancedThemeButtonStyle.stadium,
+    };
+  }
+
+  static AppAdvancedThemeInputStyle _readInputStyle(String? raw) {
+    return switch (raw) {
+      'outlined' => AppAdvancedThemeInputStyle.outlined,
+      'underlined' => AppAdvancedThemeInputStyle.underlined,
+      _ => AppAdvancedThemeInputStyle.soft,
+    };
+  }
+
+  static AppAdvancedThemeOverlayStyle _readOverlayStyle(String? raw) {
+    return switch (raw) {
+      'compact' => AppAdvancedThemeOverlayStyle.compact,
+      _ => AppAdvancedThemeOverlayStyle.comfortable,
+    };
+  }
+
+  static AppAdvancedThemeNavigationStyle _readNavigationStyle(String? raw) {
+    return switch (raw) {
+      'floating' => AppAdvancedThemeNavigationStyle.floating,
+      'compact' => AppAdvancedThemeNavigationStyle.compact,
+      _ => AppAdvancedThemeNavigationStyle.soft,
+    };
+  }
+
+  static AppAdvancedThemeSwitchStyle _readSwitchStyle(String? raw) {
+    return switch (raw) {
+      'contrast' => AppAdvancedThemeSwitchStyle.contrast,
+      _ => AppAdvancedThemeSwitchStyle.soft,
+    };
+  }
+}
+
 class AppAdvancedThemeColors {
   static const String semanticColorGroupsKey = 'semanticColorGroups';
 
@@ -399,6 +532,7 @@ class AppAdvancedThemeColors {
 class AppAdvancedThemeModeConfig {
   AppAdvancedThemeModeConfig({
     this.colors = const AppAdvancedThemeColors(),
+    this.componentStyle = const AppAdvancedThemeComponentStyle(),
     String? wallpaperPath,
     ManagedAssetRef? wallpaperAsset,
     String? readerWallpaperPath,
@@ -425,6 +559,7 @@ class AppAdvancedThemeModeConfig {
            );
 
   final AppAdvancedThemeColors colors;
+  final AppAdvancedThemeComponentStyle componentStyle;
   final ManagedAssetRef? wallpaperAsset;
   final ManagedAssetRef? readerWallpaperAsset;
   final double wallpaperOpacity;
@@ -449,6 +584,7 @@ class AppAdvancedThemeModeConfig {
   Map<String, dynamic> toJson() {
     return {
       'colors': colors.toJson(),
+      'componentStyle': componentStyle.toJson(),
       if (wallpaperAsset != null) 'wallpaperAsset': wallpaperAsset!.toJson(),
       if (readerWallpaperAsset != null)
         'readerWallpaperAsset': readerWallpaperAsset!.toJson(),
@@ -474,6 +610,14 @@ class AppAdvancedThemeModeConfig {
 
     return AppAdvancedThemeModeConfig(
       colors: colors,
+      componentStyle:
+          json['componentStyle'] is Map
+              ? AppAdvancedThemeComponentStyle.fromJson(
+                (json['componentStyle'] as Map).map(
+                  (key, value) => MapEntry(key.toString(), value),
+                ),
+              )
+              : const AppAdvancedThemeComponentStyle(),
       wallpaperAsset: _readAssetRef(json, 'wallpaperAsset'),
       wallpaperPath: _readNullableString(json, 'wallpaperPath'),
       readerWallpaperAsset: _readAssetRef(json, 'readerWallpaperAsset'),
@@ -498,6 +642,7 @@ class AppAdvancedThemeModeConfig {
 
   AppAdvancedThemeModeConfig copyWith({
     AppAdvancedThemeColors? colors,
+    AppAdvancedThemeComponentStyle? componentStyle,
     String? wallpaperPath,
     bool clearWallpaperPath = false,
     ManagedAssetRef? wallpaperAsset,
@@ -535,6 +680,7 @@ class AppAdvancedThemeModeConfig {
                 this.readerWallpaperAsset);
     return AppAdvancedThemeModeConfig(
       colors: colors ?? this.colors,
+      componentStyle: componentStyle ?? this.componentStyle,
       wallpaperAsset: nextWallpaperAsset,
       readerWallpaperAsset: nextReaderWallpaperAsset,
       wallpaperOpacity: wallpaperOpacity ?? this.wallpaperOpacity,

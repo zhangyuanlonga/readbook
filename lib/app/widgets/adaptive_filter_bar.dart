@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
 import '../motion/app_motion.dart';
+import '../theme/app_component_theme_tokens.dart';
 
 class AdaptiveFilterChipData {
   const AdaptiveFilterChipData({
@@ -65,6 +66,7 @@ class AdaptiveFilterBar extends StatelessWidget {
       context,
     ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600);
     final height = metrics.chipHeight + (metrics.isCompactDensity ? 0 : 2);
+    final componentTokens = appComponentThemeTokensOf(context);
 
     Widget buildChip(AdaptiveFilterChipData chip, {bool secondary = false}) {
       final selected = chip.selected;
@@ -110,7 +112,7 @@ class AdaptiveFilterBar extends StatelessWidget {
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(
-                  metrics.isCompactDensity ? 9 : 10,
+                  componentTokens.selection.chipRadius,
                 ),
               ),
               side: BorderSide(
@@ -118,7 +120,7 @@ class AdaptiveFilterBar extends StatelessWidget {
                     selected
                         ? (selectedBorderColor ?? colorScheme.outlineVariant)
                         : (borderColor ?? colorScheme.outlineVariant),
-                width: 0.8,
+                width: componentTokens.selection.chipBorderWidth,
               ),
             ),
           ),
@@ -132,6 +134,11 @@ class AdaptiveFilterBar extends StatelessWidget {
         minimumSize: Size(0, height),
         padding: EdgeInsets.symmetric(
           horizontal: metrics.isCompactDensity ? 4 : 6,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(
+            componentTokens.selection.segmentRadius,
+          ),
         ),
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,

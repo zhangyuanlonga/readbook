@@ -19,6 +19,7 @@ class ReaderEntryRouteResolver {
     String? bookmarkId,
     int? openRequestedAtMs,
     String? openRouteKind,
+    String? heroTag,
   }) {
     final normalizedSourceId = (sourceId ?? '').trim();
     return buildReaderRoute(
@@ -40,6 +41,7 @@ class ReaderEntryRouteResolver {
       bookmarkId: bookmarkId,
       openRequestedAtMs: openRequestedAtMs,
       openRouteKind: openRouteKind,
+      heroTag: heroTag,
     );
   }
 
@@ -47,6 +49,7 @@ class ReaderEntryRouteResolver {
     ReadingProgress progress, {
     int? openRequestedAtMs,
     String? openRouteKind,
+    String? heroTag,
   }) {
     return buildChapterRoute(
       bookId: progress.bookId,
@@ -58,6 +61,7 @@ class ReaderEntryRouteResolver {
       chapterIndex: progress.chapterIndex,
       openRequestedAtMs: openRequestedAtMs,
       openRouteKind: openRouteKind,
+      heroTag: heroTag,
     );
   }
 
@@ -65,6 +69,7 @@ class ReaderEntryRouteResolver {
     BookshelfBook book, {
     int? openRequestedAtMs,
     String? openRouteKind,
+    String? heroTag,
   }) {
     return buildChapterRoute(
       bookId: book.bookId,
@@ -74,6 +79,7 @@ class ReaderEntryRouteResolver {
       chapterTitle: book.title,
       openRequestedAtMs: openRequestedAtMs,
       openRouteKind: openRouteKind,
+      heroTag: heroTag,
     );
   }
 
@@ -84,6 +90,7 @@ class ReaderEntryRouteResolver {
     required Chapter chapter,
     int? openRequestedAtMs,
     String? openRouteKind,
+    String? heroTag,
   }) {
     return buildChapterRoute(
       bookId: bookId,
@@ -95,6 +102,7 @@ class ReaderEntryRouteResolver {
       chapterIndex: chapter.index,
       openRequestedAtMs: openRequestedAtMs,
       openRouteKind: openRouteKind,
+      heroTag: heroTag,
     );
   }
 
@@ -102,6 +110,7 @@ class ReaderEntryRouteResolver {
     required Bookmark bookmark,
     required String sourceId,
     required String detailUrl,
+    String? heroTag,
   }) {
     final chapterId =
         bookmark.chapterId.trim().isEmpty ? 'bootstrap' : bookmark.chapterId.trim();
@@ -112,6 +121,7 @@ class ReaderEntryRouteResolver {
       detailUrl: detailUrl,
       chapterIndex: bookmark.chapterIndex,
       bookmarkId: bookmark.id,
+      heroTag: heroTag,
     );
   }
 

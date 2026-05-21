@@ -507,40 +507,195 @@ extension on _AppearancePageState {
       context,
       icon: Icons.auto_awesome_outlined,
       title: '高级主题',
-      subtitle: '查看当前状态并前往主题列表管理。',
+      subtitle: '高级主题会覆盖页面背景、弹窗背景、卡片、文字和部分组件样式。',
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => context.push('/appearance/advanced-themes'),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.palette_outlined,
-                size: 18,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  activeAdvancedTheme.when(
-                    data: (theme) => theme == null ? '未启用' : '当前：${theme.name}',
-                    loading: () => '读取中',
-                    error: (_, _) => '未启用',
+              Row(
+                children: [
+                  Icon(
+                    Icons.palette_outlined,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      activeAdvancedTheme.when(
+                        data:
+                            (theme) => theme == null ? '未启用' : '当前：${theme.name}',
+                        loading: () => '读取中',
+                        error: (_, _) => '未启用',
+                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: colorScheme.onSurfaceVariant,
+              activeAdvancedTheme.when(
+                data:
+                    (theme) =>
+                        theme == null
+                            ? const SizedBox.shrink()
+                            : Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: _buildAdvancedThemeSemanticSummary(
+                                context,
+                                theme,
+                              ),
+                            ),
+                loading: () => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAdvancedThemeSemanticSummary(
+    BuildContext context,
+    AppAdvancedTheme theme,
+  ) {
+    final lightPreviews = _buildThemeSemanticModePreviews(
+      theme,
+      AppAdvancedThemeMode.light,
+    );
+    final darkPreviews = _buildThemeSemanticModePreviews(
+      theme,
+      AppAdvancedThemeMode.dark,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildThemeSemanticModeSummaryRow(
+          context,
+          label: '浅色',
+          previews: lightPreviews,
+        ),
+        const SizedBox(height: 8),
+        _buildThemeSemanticModeSummaryRow(
+          context,
+          label: '深色',
+          previews: darkPreviews,
+        ),
+      ],
+    );
+  }
+
+  List<ThemeSemanticColorPreview> _buildThemeSemanticModePreviews(
+    AppAdvancedTheme theme,
+    AppAdvancedThemeMode mode,
+  ) {
+    final seedColor = ref.read(appSeedColorProvider);
+    final colorScheme =
+        mode == AppAdvancedThemeMode.light
+            ? buildAppLightColorScheme(seedColor)
+            : buildAppDarkColorScheme(seedColor);
+    final config = theme.configFor(mode);
+    final palette = resolveAdvancedThemePaletteFromModeConfig(
+      colorScheme,
+      config,
+    );
+    final backdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      colorScheme,
+      config,
+    );
+    return buildColorCardThemeSemanticPreviews(
+      palette: palette,
+      backdrop: backdrop,
+    );
+  }
+
+  Widget _buildThemeSemanticModeSummaryRow(
+    BuildContext context, {
+    required String label,
+    required List<ThemeSemanticColorPreview> previews,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label 语义色块',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final preview in previews)
+                _buildThemeSemanticSummaryChip(context, preview: preview),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeSemanticSummaryChip(
+    BuildContext context, {
+    required ThemeSemanticColorPreview preview,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: preview.color,
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            themeSemanticFieldSpecFor(preview.id).label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

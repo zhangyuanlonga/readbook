@@ -53,10 +53,11 @@ final List<RouteBase> readerRoutes = <RouteBase>[
       final chapterId =
           state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
       final bookmarkId = state.uri.queryParameters['bookmarkId'];
+      final heroTag = state.uri.queryParameters['heroTag'];
       return buildFadeTransitionPage(
         state: state,
-        transitionDuration: const Duration(milliseconds: 180),
-        reverseTransitionDuration: const Duration(milliseconds: 140),
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
         beginOpacity: 0.88,
         child: _buildReaderRoutePage(
           context,
@@ -66,6 +67,7 @@ final List<RouteBase> readerRoutes = <RouteBase>[
           detailUrl: buildLocalBookDetailUrl(bookId),
           chapterUrl: buildLocalChapterUrl(chapterId),
           bookmarkId: bookmarkId,
+          heroTag: heroTag,
         ),
       );
     },
@@ -85,14 +87,15 @@ final List<RouteBase> readerRoutes = <RouteBase>[
         state.uri.queryParameters['openRequestedAtMs'] ?? '',
       );
       final openRouteKind = state.uri.queryParameters['openRouteKind'];
+      final heroTag = state.uri.queryParameters['heroTag'];
       final chapterIndex = int.tryParse(
         state.uri.queryParameters['chapterIndex'] ?? '',
       );
 
       return buildFadeTransitionPage(
         state: state,
-        transitionDuration: const Duration(milliseconds: 180),
-        reverseTransitionDuration: const Duration(milliseconds: 140),
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
         beginOpacity: 0.88,
         child: _buildReaderRoutePage(
           context,
@@ -106,6 +109,7 @@ final List<RouteBase> readerRoutes = <RouteBase>[
           bookmarkId: bookmarkId,
           openRequestedAtMs: openRequestedAtMs,
           openRouteKind: openRouteKind,
+          heroTag: heroTag,
         ),
       );
     },
@@ -124,6 +128,7 @@ Widget _buildReaderRoutePage(
   String? bookmarkId,
   int? openRequestedAtMs,
   String? openRouteKind,
+  String? heroTag,
 }) {
   return Consumer(
     builder: (context, ref, _) {
@@ -146,6 +151,7 @@ Widget _buildReaderRoutePage(
           bookmarkId: bookmarkId,
           openRequestedAtMs: openRequestedAtMs,
           openRouteKind: openRouteKind,
+          heroTag: heroTag,
         ),
       );
     },

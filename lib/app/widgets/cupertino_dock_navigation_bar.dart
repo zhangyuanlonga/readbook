@@ -8,6 +8,7 @@ import '../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../navigation/bottom_nav_icon_resolver.dart';
 import '../navigation/search_entry_transition.dart';
 import '../shell_navigation_provider.dart';
+import '../theme/app_component_theme_tokens.dart';
 import 'bottom_nav_icon_view.dart';
 
 class DockThemePalette {
@@ -70,6 +71,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = _Md3DockPalette.from(context, override: themePalette);
+    final componentTokens = appComponentThemeTokensOf(context);
     final dockHeight =
         showLabels ? _kDockHeightWithLabels : _kDockHeightIconOnly;
     final dockRadius = dockHeight / 2;
@@ -103,6 +105,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                   radius: dockRadius,
                   palette: palette,
                   frostedEffect: frostedEffect,
+                  navigationTokens: componentTokens.navigation,
                   child: SizedBox(
                     height: dockHeight,
                     child: Padding(
@@ -126,6 +129,8 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                                 showLabel: showLabels,
                                 activeIconGallery: activeIconGallery,
                                 palette: palette,
+                                itemRadius:
+                                    componentTokens.navigation.dockItemRadius,
                                 onTap: () => onDestinationSelected(index),
                               ),
                             ),
@@ -143,6 +148,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                   showLabel: showLabels,
                   palette: palette,
                   frostedEffect: frostedEffect,
+                  navigationTokens: componentTokens.navigation,
                   onPressed: onSearchPressed,
                 ),
               ],
@@ -159,12 +165,14 @@ class _DockSurface extends StatelessWidget {
     required this.radius,
     required this.palette,
     required this.frostedEffect,
+    required this.navigationTokens,
     required this.child,
   });
 
   final double radius;
   final _Md3DockPalette palette;
   final bool frostedEffect;
+  final AppNavigationComponentTokens navigationTokens;
   final Widget child;
 
   @override
@@ -173,12 +181,15 @@ class _DockSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.containerColor,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: palette.borderColor, width: 0.8),
+        border: Border.all(
+          color: palette.borderColor,
+          width: navigationTokens.dockSurfaceBorderWidth,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.028),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            blurRadius: navigationTokens.dockSurfaceShadowBlur,
+            offset: Offset(0, navigationTokens.dockSurfaceShadowOffsetY),
           ),
         ],
       ),
@@ -190,7 +201,10 @@ class _DockSurface extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(
+          sigmaX: navigationTokens.standardFrostedBlurSigmaFloating,
+          sigmaY: navigationTokens.standardFrostedBlurSigmaFloating,
+        ),
         child: decorated,
       ),
     );
@@ -204,6 +218,7 @@ class _DockItem extends StatelessWidget {
     required this.showLabel,
     required this.activeIconGallery,
     required this.palette,
+    required this.itemRadius,
     required this.onTap,
   });
 
@@ -212,6 +227,7 @@ class _DockItem extends StatelessWidget {
   final bool showLabel;
   final BottomNavIconGallery? activeIconGallery;
   final _Md3DockPalette palette;
+  final double itemRadius;
   final VoidCallback onTap;
 
   @override
@@ -237,7 +253,7 @@ class _DockItem extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(itemRadius),
             onTap: onTap,
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -254,7 +270,7 @@ class _DockItem extends StatelessWidget {
                     height: showLabel ? 27 : 31,
                     decoration: BoxDecoration(
                       color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(itemRadius - 4),
                     ),
                     child: Center(
                       child: AnimatedScale(
@@ -315,6 +331,7 @@ class _SearchIconButton extends StatelessWidget {
     required this.showLabel,
     required this.palette,
     required this.frostedEffect,
+    required this.navigationTokens,
     required this.onPressed,
   });
 
@@ -323,6 +340,7 @@ class _SearchIconButton extends StatelessWidget {
   final bool showLabel;
   final _Md3DockPalette palette;
   final bool frostedEffect;
+  final AppNavigationComponentTokens navigationTokens;
   final VoidCallback onPressed;
 
   @override
@@ -334,12 +352,15 @@ class _SearchIconButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.containerColor,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: palette.borderColor, width: 0.8),
+        border: Border.all(
+          color: palette.borderColor,
+          width: navigationTokens.dockSurfaceBorderWidth,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            blurRadius: navigationTokens.dockSearchShadowBlur,
+            offset: Offset(0, navigationTokens.dockSearchShadowOffsetY),
           ),
         ],
       ),
@@ -356,7 +377,10 @@ class _SearchIconButton extends StatelessWidget {
       child:
           frostedEffect
               ? BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                filter: ImageFilter.blur(
+                  sigmaX: navigationTokens.standardFrostedBlurSigmaFloating,
+                  sigmaY: navigationTokens.standardFrostedBlurSigmaFloating,
+                ),
                 child: searchSurface,
               )
               : searchSurface,

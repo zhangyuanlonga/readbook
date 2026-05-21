@@ -3104,6 +3104,21 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 ),
               ),
               const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: palette.elevatedSurfaceColor.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _componentStyleTag(config.componentStyle),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.textSecondaryColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               if (config.hasWallpaper)
                 Icon(
                   Icons.wallpaper_outlined,
@@ -3196,6 +3211,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     AdvancedThemeModeSummary summary,
   ) {
     return AppAdvancedThemeModeConfig(
+      componentStyle: summary.componentStyle,
       colors: AppAdvancedThemeColors(
         primaryColorValue: summary.primaryColorValue,
         backgroundColorValue: summary.backgroundColorValue,
@@ -3205,6 +3221,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         textSecondaryColorValue: summary.textSecondaryColorValue,
       ),
     );
+  }
+
+  String _componentStyleTag(AppAdvancedThemeComponentStyle style) {
+    final card = switch (style.cardStyle) {
+      AppAdvancedThemeCardStyle.soft => '柔和',
+      AppAdvancedThemeCardStyle.outlined => '描边',
+      AppAdvancedThemeCardStyle.elevated => '抬升',
+    };
+    final button = switch (style.buttonStyle) {
+      AppAdvancedThemeButtonStyle.stadium => '胶囊',
+      AppAdvancedThemeButtonStyle.rounded => '圆角',
+      AppAdvancedThemeButtonStyle.sharp => '利落',
+    };
+    return '$card/$button';
   }
 
   ColorScheme _defaultSchemeFor(

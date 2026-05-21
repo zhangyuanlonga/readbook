@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../domain/entities/app_advanced_theme.dart';
 import 'app_advanced_theme_tokens.dart';
 import 'app_border_tokens.dart';
+import 'app_component_theme_tokens.dart';
 
 class AppTheme {
   const AppTheme._();
@@ -11,6 +13,7 @@ class AppTheme {
     ColorScheme colorScheme, {
     ResolvedAdvancedThemePalette? advancedPalette,
     ResolvedAdvancedThemeBackdrop? advancedBackdrop,
+    AppAdvancedThemeModeConfig? advancedModeConfig,
     String? fontFamily,
     FontWeight? fontWeight,
   }) {
@@ -29,11 +32,34 @@ class AppTheme {
         advancedPalette?.textPrimaryColor ?? effectiveColorScheme.onSurface;
     final cardColor =
         advancedPalette?.cardColor ?? effectiveColorScheme.surface;
+    final modalSurfaceColor =
+        advancedPalette?.surfaceColor ??
+        effectiveColorScheme.surfaceContainerLow;
+    final componentTokens = resolveAppComponentThemeTokensFromModeConfig(
+      effectiveColorScheme,
+      modeConfig: advancedModeConfig,
+    );
+    final buttonShape =
+        componentTokens.button.shapeStyle == AppButtonShapeStyle.stadium
+            ? const StadiumBorder()
+            : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                componentTokens.button.radius,
+              ),
+            );
+    final overlayShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(componentTokens.overlay.radius),
+      side: BorderSide(
+        color: effectiveColorScheme.outlineVariant.withValues(alpha: 0.46),
+        width: componentTokens.overlay.borderWidth,
+      ),
+    );
     final overlayStyle = _overlayStyleForColor(appBarBackgroundColor);
 
     final baseTheme = ThemeData(
       useMaterial3: true,
       colorScheme: effectiveColorScheme,
+      extensions: <ThemeExtension<dynamic>>[componentTokens],
       fontFamily: fontFamily,
       scaffoldBackgroundColor: scaffoldBackgroundColor,
       visualDensity: const VisualDensity(horizontal: -0.2, vertical: -0.2),
@@ -46,22 +72,78 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         systemOverlayStyle: overlayStyle,
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: modalSurfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: effectiveColorScheme.shadow.withValues(
+          alpha: componentTokens.overlay.shadowAlpha,
+        ),
+        shape: overlayShape,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: modalSurfaceColor,
+        modalBackgroundColor: modalSurfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(componentTokens.overlay.topRadius),
+          ),
+          side: BorderSide(
+            color: effectiveColorScheme.outlineVariant.withValues(alpha: 0.46),
+            width: componentTokens.overlay.borderWidth,
+          ),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: modalSurfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: effectiveColorScheme.shadow.withValues(
+          alpha: componentTokens.overlay.shadowAlpha,
+        ),
+        shape: overlayShape,
+      ),
       cardTheme: CardThemeData(
         color: cardColor,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        elevation: componentTokens.card.elevation,
+        shadowColor: effectiveColorScheme.shadow.withValues(
+          alpha: componentTokens.card.shadowAlpha,
+        ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(componentTokens.card.radius),
           side: resolveAppBorderSide(
             effectiveColorScheme,
             containerColor: cardColor,
+          ).copyWith(width: componentTokens.card.borderWidth),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: componentTokens.navigation.standardHeightWithLabel,
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        labelColor: effectiveColorScheme.onSecondaryContainer,
+        unselectedLabelColor: effectiveColorScheme.onSurfaceVariant,
+        indicator: BoxDecoration(
+          color: effectiveColorScheme.secondaryContainer.withValues(
+            alpha: 0.82,
+          ),
+          borderRadius: BorderRadius.circular(
+            componentTokens.selection.tabIndicatorRadius,
+          ),
+          border: Border.all(
+            color: effectiveColorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: componentTokens.selection.chipBorderWidth,
           ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 40),
-          shape: const StadiumBorder(),
+          minimumSize: Size(0, componentTokens.button.height),
+          shape: buttonShape,
+          padding: EdgeInsets.symmetric(
+            horizontal: componentTokens.button.horizontalPadding,
+          ),
           backgroundColor: effectiveColorScheme.primary,
           foregroundColor: effectiveColorScheme.onPrimary,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
@@ -69,47 +151,97 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 40),
-          shape: const StadiumBorder(),
+          minimumSize: Size(0, componentTokens.button.height),
+          shape: buttonShape,
+          padding: EdgeInsets.symmetric(
+            horizontal: componentTokens.button.horizontalPadding,
+          ),
           foregroundColor: effectiveColorScheme.onSurface,
           side: resolveAppBorderSide(
             effectiveColorScheme,
             tone: AppBorderTone.strong,
+          ).copyWith(width: componentTokens.button.outlinedBorderWidth),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: Size(0, componentTokens.button.height),
+          shape: buttonShape,
+          padding: EdgeInsets.symmetric(
+            horizontal: componentTokens.button.horizontalPadding,
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          side: BorderSide(
+            color: effectiveColorScheme.outlineVariant,
+            width: componentTokens.selection.segmentBorderWidth,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              componentTokens.selection.segmentRadius,
+            ),
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: componentTokens.button.horizontalPadding * 0.75,
+            vertical: 8,
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(
+            componentTokens.selection.chipRadius,
+          ),
+          side: BorderSide(
+            color: effectiveColorScheme.outlineVariant.withValues(alpha: 0.78),
+            width: componentTokens.selection.chipBorderWidth,
+          ),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        trackOutlineWidth: WidgetStateProperty.all(
+          componentTokens.selection.switchTrackOutlineWidth,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: false,
         fillColor: Colors.transparent,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(componentTokens.input.radius),
           borderSide: resolveAppBorderSide(
             effectiveColorScheme,
             tone: AppBorderTone.subtle,
-          ),
+          ).copyWith(width: componentTokens.input.borderWidth),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(componentTokens.input.radius),
           borderSide: resolveAppBorderSide(
             effectiveColorScheme,
             tone: AppBorderTone.defaultTone,
-          ),
+          ).copyWith(width: componentTokens.input.borderWidth),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(componentTokens.input.radius),
           borderSide: BorderSide(
             color: effectiveColorScheme.primary.withValues(alpha: 0.86),
-            width: 1.4,
+            width: componentTokens.input.focusedBorderWidth,
           ),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(componentTokens.input.radius),
           borderSide: BorderSide(color: effectiveColorScheme.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: effectiveColorScheme.error, width: 1.4),
+          borderRadius: BorderRadius.circular(componentTokens.input.radius),
+          borderSide: BorderSide(
+            color: effectiveColorScheme.error,
+            width: componentTokens.input.focusedBorderWidth,
+          ),
         ),
       ),
     );

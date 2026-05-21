@@ -90,6 +90,8 @@ class BookDetailPage extends ConsumerStatefulWidget {
     this.author,
     this.coverUrl,
     this.heroTag,
+    this.titleHeroTag,
+    this.metaHeroTag,
     this.bookDetailService,
     this.bookshelfService,
     this.switchSourceSearchService,
@@ -102,6 +104,8 @@ class BookDetailPage extends ConsumerStatefulWidget {
   final String? author;
   final String? coverUrl;
   final String? heroTag;
+  final String? titleHeroTag;
+  final String? metaHeroTag;
   final BookDetailService? bookDetailService;
   final BookshelfService? bookshelfService;
   final SearchService? switchSourceSearchService;
@@ -257,6 +261,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   bool _editingSplitLongChapter = true;
   bool _defaultSplitLongChapterEnabled = true;
   bool _hasLoggedDetailBodyVisible = false;
+  DateTime? _lastReadActionAt;
+  bool _isDetailExitAnimating = false;
+  final ScrollController _detailScrollController = ScrollController();
+  double _detailScrollOffset = 0;
   String? _catalogSearchCacheFingerprint;
   Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
       const <String, List<ReaderCatalogSearchEntry>>{};
@@ -318,6 +326,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _activeSourceId = _normalizeRouteParam(widget.sourceId);
     _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
     _activeBookId = widget.bookId.trim();
+    _detailScrollController.addListener(_handleDetailScrollChanged);
     _cancelBackgroundRefreshConflictForCurrentBook(
       byScene: SourceRuntimeConflictScene.detail,
     );
@@ -350,6 +359,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   @override
   void dispose() {
+    _detailScrollController
+      ..removeListener(_handleDetailScrollChanged)
+      ..dispose();
     _detailLoadRequestToken += 1;
     _cancelActiveSwitchSourceSearch();
     _localIndexEventSubscription?.cancel();
@@ -367,6 +379,21 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _presentationStateNotifier.dispose();
     _auxiliaryStateNotifier.dispose();
     super.dispose();
+  }
+
+  void _handleDetailScrollChanged() {
+    if (!mounted) {
+      return;
+    }
+    final offset = _detailScrollController.hasClients
+        ? _detailScrollController.offset
+        : 0.0;
+    if ((offset - _detailScrollOffset).abs() < 0.5) {
+      return;
+    }
+    setState(() {
+      _detailScrollOffset = offset;
+    });
   }
 
   _BookDetailPresentationState get _presentationState =>
@@ -421,11 +448,43 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   Widget build(BuildContext context) => _buildBookDetailPage(context);
 
   void _handleBackNavigation() {
-    if (context.canPop()) {
-      context.pop();
+    if (_isDetailExitAnimating) {
       return;
     }
-    context.go('/bookshelf');
+    _updateDetailPageState(() {
+      _isDetailExitAnimating = true;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted) {
+        return;
+      }
+      if (context.canPop()) {
+        context.pop();
+        return;
+      }
+      context.go('/bookshelf');
+    });
+  }
+
+  String _buildReaderCoverHeroTag({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    return 'reader_cover_${sourceId.trim()}_${bookId.trim()}_${detailUrl.hashCode}';
+  }
+
+  void _setDetailExitAnimating(bool value) {
+    if (!mounted || _isDetailExitAnimating == value) {
+      return;
+    }
+    if (context.canPop()) {
+      _updateDetailPageState(() {
+        _isDetailExitAnimating = value;
+      });
+    } else {
+      _isDetailExitAnimating = value;
+    }
   }
 
   bool _hydrateCachedDetailIfAvailable() {
@@ -638,11 +697,21 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               sourceId: detail.sourceId,
               detailUrl: detail.detailUrl,
             );
+    final titleHeroTag =
+        widget.titleHeroTag?.trim().isNotEmpty == true
+            ? widget.titleHeroTag!.trim()
+            : 'book_title_${detail.sourceId.trim()}_${detail.id.trim()}_${detail.detailUrl.hashCode}';
+    final metaHeroTag =
+        widget.metaHeroTag?.trim().isNotEmpty == true
+            ? widget.metaHeroTag!.trim()
+            : 'book_meta_${detail.sourceId.trim()}_${detail.id.trim()}_${detail.detailUrl.hashCode}';
 
     return BookDetailSummaryCard(
       title: presentation.displayTitle,
       sourceName: result.sourceName,
       author: _cleanSummaryMetaValue(presentation.displayAuthor),
+      titleHeroTag: titleHeroTag,
+      metaHeroTag: metaHeroTag,
       cover: _buildCoverPreview(
         presentation.realCoverUrl,
         customCoverPath: presentation.customCoverPath,
@@ -861,7 +930,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           localBookMeta != null &&
           localBookMeta.indexStatus != LocalBookIndexStatus.ready;
 
-      final detailCard = _buildDetailCard(result);
+      final detailCard = Transform.translate(
+        offset: Offset(
+          0,
+          (-_detailScrollOffset.clamp(0.0, 80.0) * 0.1).clamp(-8.0, 0.0),
+        ),
+        child: _buildDetailCard(result),
+      );
       final organizationCard = _buildDetailOrganizationCard();
       final quickActionsCard = _buildQuickActionsCard(
         auxiliaryState: auxiliaryState,
@@ -963,9 +1038,23 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     }
     return [
       for (var index = 0; index < sections.length; index++)
-        AppFadeSlideTransition(
-          delay: Duration(milliseconds: (index * 48).clamp(0, 240).toInt()),
-          child: sections[index],
+        // Stage the reveal so focus lands on shared summary first,
+        // then actions, then supporting content.
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          opacity: _isDetailExitAnimating ? 0 : 1,
+          child: AppFadeSlideTransition(
+            delay: Duration(
+              milliseconds: switch (index) {
+                0 => 0,
+                1 => 36,
+                2 => 72,
+                _ => (96 + (index - 3) * 20).clamp(96, 260).toInt(),
+              },
+            ),
+            child: sections[index],
+          ),
         ),
     ];
   }
@@ -1234,15 +1323,54 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     if (readableChapters.isEmpty && fallbackRoute == null) {
       return null;
     }
-    return FloatingActionButton.extended(
+    final button = FloatingActionButton.extended(
       key: const Key('book_detail_read_button'),
       onPressed:
           readableChapters.isNotEmpty
-              ? () => _openChapter(readableChapters.first)
-              : () => context.push(fallbackRoute!),
+              ? () => _handleStartReading(chapter: readableChapters.first)
+              : () => _handleStartReading(fallbackRoute: fallbackRoute),
       icon: const Icon(Icons.chrome_reader_mode_outlined),
       label: const Text('开始阅读'),
     );
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutCubic,
+      offset: _isDetailExitAnimating ? const Offset(0, 0.06) : Offset.zero,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        opacity: _isDetailExitAnimating ? 0 : 1,
+        child: button,
+      ),
+    );
+  }
+
+  void _handleStartReading({Chapter? chapter, String? fallbackRoute}) {
+    final now = DateTime.now();
+    final previous = _lastReadActionAt;
+    if (previous != null &&
+        now.difference(previous) < const Duration(milliseconds: 300)) {
+      return;
+    }
+    _lastReadActionAt = now;
+    unawaited(HapticFeedback.lightImpact());
+
+    if (chapter != null) {
+      _openChapter(chapter);
+      return;
+    }
+    final normalizedFallback = (fallbackRoute ?? '').trim();
+    if (normalizedFallback.isEmpty) {
+      return;
+    }
+    _setDetailExitAnimating(true);
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted) {
+        return;
+      }
+      context.push(normalizedFallback);
+      _setDetailExitAnimating(false);
+    });
   }
 
   Widget _buildDetailLoadingSkeleton({
@@ -1937,13 +2065,25 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       sourceId: sourceId,
       detailUrl: detailUrl,
       chapter: chapter,
+      heroTag: _buildReaderCoverHeroTag(
+        bookId: _activeBookId,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      ),
     );
     if (route == null) {
       _showMessage('当前章节暂不可阅读。');
       return;
     }
 
-    context.push(route);
+    _setDetailExitAnimating(true);
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted) {
+        return;
+      }
+      context.push(route);
+      _setDetailExitAnimating(false);
+    });
   }
 
   Future<bool> _load({

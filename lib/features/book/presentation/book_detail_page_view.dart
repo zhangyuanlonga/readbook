@@ -18,6 +18,8 @@ extension on _BookDetailPageState {
         final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
         final canPopRoute = context.canPop();
+        final clampedOffset = _detailScrollOffset.clamp(0.0, 96.0);
+        final appBarOverlayOpacity = (clampedOffset / 96.0).clamp(0.0, 1.0);
 
         return PopScope<void>(
           canPop: canPopRoute,
@@ -31,7 +33,9 @@ extension on _BookDetailPageState {
             resizeToAvoidBottomInset: false,
             extendBodyBehindAppBar: true,
             appBar: AppBar(
-              backgroundColor: Colors.transparent,
+              backgroundColor: Theme.of(context).colorScheme.surface.withValues(
+                alpha: appBarOverlayOpacity * 0.92,
+              ),
               surfaceTintColor: Colors.transparent,
               shadowColor: Colors.transparent,
               leading: IconButton(
@@ -133,6 +137,7 @@ extension on _BookDetailPageState {
                           child: RefreshIndicator(
                             onRefresh: () => _load(forceRefresh: true),
                             child: ListView(
+                              controller: _detailScrollController,
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding: EdgeInsets.fromLTRB(
                                 horizontal,

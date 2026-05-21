@@ -86,4 +86,70 @@ void main() {
     expect(restored.buttonTextColorValue, 0xFFFFFFFF);
     expect(restored.shadowColorValue, 0xFF334455);
   });
+
+  test(
+    'mode config restores default component style when legacy json has no componentStyle',
+    () {
+      final restored = AppAdvancedThemeModeConfig.fromJson(<String, dynamic>{
+        'colors': <String, dynamic>{'primaryColorValue': 0xFF123456},
+        'wallpaperOpacity': 1.0,
+        'wallpaperBlurSigma': 0.0,
+        'wallpaperFit': 'cover',
+        'wallpaperOverlayOpacity': 0.32,
+      });
+
+      expect(restored.componentStyle.globalRadiusScale, 1);
+      expect(restored.componentStyle.shadowStrength, 0.5);
+      expect(restored.componentStyle.cardStyle, AppAdvancedThemeCardStyle.soft);
+      expect(
+        restored.componentStyle.buttonStyle,
+        AppAdvancedThemeButtonStyle.stadium,
+      );
+    },
+  );
+
+  test('mode config serializes and restores component style fields', () {
+    final config = AppAdvancedThemeModeConfig(
+      componentStyle: const AppAdvancedThemeComponentStyle(
+        globalRadiusScale: 1.25,
+        shadowStrength: 0.82,
+        cardStyle: AppAdvancedThemeCardStyle.elevated,
+        buttonStyle: AppAdvancedThemeButtonStyle.rounded,
+        inputStyle: AppAdvancedThemeInputStyle.outlined,
+        overlayStyle: AppAdvancedThemeOverlayStyle.compact,
+        navigationStyle: AppAdvancedThemeNavigationStyle.floating,
+        switchStyle: AppAdvancedThemeSwitchStyle.contrast,
+      ),
+    );
+
+    final json = config.toJson();
+    final restored = AppAdvancedThemeModeConfig.fromJson(json);
+
+    expect(restored.componentStyle.globalRadiusScale, 1.25);
+    expect(restored.componentStyle.shadowStrength, 0.82);
+    expect(
+      restored.componentStyle.cardStyle,
+      AppAdvancedThemeCardStyle.elevated,
+    );
+    expect(
+      restored.componentStyle.buttonStyle,
+      AppAdvancedThemeButtonStyle.rounded,
+    );
+    expect(
+      restored.componentStyle.inputStyle,
+      AppAdvancedThemeInputStyle.outlined,
+    );
+    expect(
+      restored.componentStyle.overlayStyle,
+      AppAdvancedThemeOverlayStyle.compact,
+    );
+    expect(
+      restored.componentStyle.navigationStyle,
+      AppAdvancedThemeNavigationStyle.floating,
+    );
+    expect(
+      restored.componentStyle.switchStyle,
+      AppAdvancedThemeSwitchStyle.contrast,
+    );
+  });
 }

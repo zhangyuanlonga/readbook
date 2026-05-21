@@ -32,6 +32,7 @@ class BookDetailReadRouteService {
     required String sourceId,
     required String detailUrl,
     required Chapter chapter,
+    String? heroTag,
   }) {
     if (chapter.isVolume || chapter.chapterUrl.trim().isEmpty) {
       return null;
@@ -46,6 +47,7 @@ class BookDetailReadRouteService {
       sourceId: normalizedSourceId,
       detailUrl: normalizedDetailUrl,
       chapter: chapter,
+      heroTag: heroTag,
     );
   }
 
@@ -54,6 +56,7 @@ class BookDetailReadRouteService {
     required String sourceId,
     required String detailUrl,
     String? fallbackTitle,
+    String? heroTag,
   }) {
     final normalizedSourceId = sourceId.trim();
     final normalizedDetailUrl = detailUrl.trim();
@@ -66,6 +69,7 @@ class BookDetailReadRouteService {
       sourceId: normalizedSourceId,
       detailUrl: normalizedDetailUrl,
       chapterTitle: fallbackTitle,
+      heroTag: heroTag,
     );
   }
 }

@@ -258,6 +258,11 @@ extension on _BookDetailPageState {
       sourceId: sourceId,
       detailUrl: detailUrl,
       fallbackTitle: result.detail.title,
+      heroTag: _buildReaderCoverHeroTag(
+        bookId: _activeBookId,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      ),
     );
   }
 

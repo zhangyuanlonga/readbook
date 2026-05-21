@@ -189,6 +189,7 @@ class ReaderPage extends ConsumerStatefulWidget {
     this.bookmarkId,
     this.openRequestedAtMs,
     this.openRouteKind,
+    this.heroTag,
   });
 
   final String bookId;
@@ -201,6 +202,7 @@ class ReaderPage extends ConsumerStatefulWidget {
   final String? bookmarkId;
   final int? openRequestedAtMs;
   final String? openRouteKind;
+  final String? heroTag;
 
   @override
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
@@ -447,6 +449,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   DateTime? _lastPointerScrollPageTurnAt;
   DateTime? _lastBackNavigationAt;
   DateTime? _readerInteractionUnlockAt;
+  DateTime? _lastReaderBackAt;
   OverlayEntry? _bookmarkToolbarEntry;
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead =
       ReaderPageTurnMode.tapAndSwipe;
@@ -3517,6 +3520,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       ),
                                     ),
                                   ),
+                                  if ((widget.heroTag ?? '').trim().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: Hero(
+                                        tag: widget.heroTag!.trim(),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: SizedBox(
+                                            width: 24,
+                                            height: 34,
+                                            child: _buildReaderTopCoverThumb(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   const SizedBox(width: 12),
                                   _buildTopActionButton(
                                     icon: Icons.info_outline,
@@ -3602,6 +3620,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return normalized;
     }
     return '${String.fromCharCodes(normalized.runes.take(maxCharacters))}...';
+  }
+
+  Widget _buildReaderTopCoverThumb() {
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: _bookCoverUrl,
+      customCoverPath: _bookCustomCoverPath,
+      activeTheme: _activeAdvancedTheme,
+      galleries: _coverGalleries,
+      brightness: Theme.of(context).brightness,
+      bookId: _currentBookId,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+    );
+    return ResolvedBookCoverView(
+      cover: resolvedCover,
+      title: _bookTitle,
+      author: _bookAuthor,
+      width: 24,
+      height: 34,
+      borderRadius: BorderRadius.circular(6),
+    );
   }
 
   String _currentSourceNameForTopOverlay() {
