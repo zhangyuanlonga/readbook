@@ -13,6 +13,7 @@ import 'local_book_index_service.dart';
 import 'local_book_parser.dart';
 import 'local_book_storage_service.dart';
 import 'local_text_encoding_detector.dart';
+import 'pdf_local_book_parser.dart';
 
 class LocalChapterContentService {
   LocalChapterContentService({
@@ -156,6 +157,14 @@ class LocalChapterContentService {
     if (_canLoadEpubChapterContentBySourceRef(book: book, chapter: chapter)) {
       final readableBook = await _hydrateReadableBook(book);
       return _loadEpubChapterContentBySourceRef(
+        book: readableBook,
+        chapter: chapter,
+      );
+    }
+
+    if (_canLoadPdfChapterContentBySourceRef(book: book, chapter: chapter)) {
+      final readableBook = await _hydrateReadableBook(book);
+      return _loadPdfChapterContentBySourceRef(
         book: readableBook,
         chapter: chapter,
       );
@@ -322,6 +331,14 @@ class LocalChapterContentService {
         (chapter.sourceRef?.trim().isNotEmpty ?? false);
   }
 
+  bool _canLoadPdfChapterContentBySourceRef({
+    required LocalBook book,
+    required LocalChapter chapter,
+  }) {
+    return book.format == LocalBookFormat.pdf &&
+        (chapter.sourceRef?.trim().isNotEmpty ?? false);
+  }
+
   bool _canUseLegacyTxtOffsetFallback({
     required LocalBook originalBook,
     required LocalBook? refreshedBook,
@@ -432,6 +449,45 @@ class LocalChapterContentService {
     LocalParsedChapter parsed;
     try {
       parsed = await const EpubLocalBookParser().parseChapter(
+        book: book,
+        chapter: chapter,
+      );
+    } on AppException catch (error) {
+      final message =
+          error.briefMessage.contains('重新索引')
+              ? error.briefMessage
+              : '${error.briefMessage}，请重新索引后重试。';
+      throw AppException(
+        code: error.code,
+        stage: ErrorStage.content,
+        briefMessage: message,
+        cause: error,
+        stackTrace: error.stackTrace,
+      );
+    }
+
+    await _localBookRepository.updateChapterContent(
+      chapterId: chapter.id,
+      content: parsed.content,
+      imageUrls: parsed.imageUrls,
+      document: parsed.document,
+    );
+    return chapter.copyWith(
+      title: parsed.title,
+      content: parsed.content,
+      imageUrls: parsed.imageUrls,
+      document: parsed.document,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<LocalChapter> _loadPdfChapterContentBySourceRef({
+    required LocalBook book,
+    required LocalChapter chapter,
+  }) async {
+    LocalParsedChapter parsed;
+    try {
+      parsed = await const PdfLocalBookParser().parsePage(
         book: book,
         chapter: chapter,
       );

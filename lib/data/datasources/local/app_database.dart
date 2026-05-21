@@ -6,10 +6,12 @@ import 'package:drift/drift.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_logical_position.dart';
+import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
@@ -232,6 +234,24 @@ class StoredReadingProgresses extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {bookId};
+}
+
+class StoredTocSnapshots extends Table {
+  TextColumn get storageKey => text()();
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get title => text()();
+  TextColumn get author => text().nullable()();
+  TextColumn get coverUrl => text().nullable()();
+  TextColumn get chaptersJson => text()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  String get tableName => 'toc_snapshots';
+
+  @override
+  Set<Column<Object>> get primaryKey => {storageKey};
 }
 
 class StoredRemoteAccessSnapshots extends Table {
@@ -496,6 +516,7 @@ class SearchSourceHitUpsert {
     StoredReadingRecordSessions,
     StoredReadingBookStatuses,
     StoredReadingProgresses,
+    StoredTocSnapshots,
     StoredRemoteAccessSnapshots,
     StoredSourceHealthSnapshots,
     StoredBookshelfBooks,
@@ -521,7 +542,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 32;
 
   @override
   MigrationStrategy get migration {
@@ -755,6 +776,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 31) {
           await _createLocalChapterBodiesTable();
           await _migrateLegacyLocalChapterBodies();
+        }
+        if (from < 32) {
+          await migrator.createTable(storedTocSnapshots);
         }
       },
       beforeOpen: (_) async {
@@ -2023,7 +2047,7 @@ class AppDatabase extends _$AppDatabase {
       return null;
     }
 
-    return _mapRowToLocalChapter(row);
+    return _hydrateLocalChapterBody(_mapRowToLocalChapter(row));
   }
 
   Future<LocalChapter?> getLocalChapterContentByIndex({
@@ -2072,7 +2096,7 @@ class AppDatabase extends _$AppDatabase {
       startOffset: row.read(storedLocalChapters.startOffset),
       endOffset: row.read(storedLocalChapters.endOffset),
     );
-    return _hydrateLocalChapterBody(chapter);
+    return _hydrateLocalChapterBody(chapter, includeDocument: false);
   }
 
   Future<LocalChapter?> getLocalChapterMetaByIndex({
@@ -2134,7 +2158,7 @@ class AppDatabase extends _$AppDatabase {
       return null;
     }
 
-    return _mapRowToLocalChapter(row);
+    return _hydrateLocalChapterBody(_mapRowToLocalChapter(row));
   }
 
   Future<LocalChapter?> getLocalChapterMetaById(String chapterId) async {
@@ -2220,7 +2244,7 @@ class AppDatabase extends _$AppDatabase {
       startOffset: row.read(storedLocalChapters.startOffset),
       endOffset: row.read(storedLocalChapters.endOffset),
     );
-    return _hydrateLocalChapterBody(chapter);
+    return _hydrateLocalChapterBody(chapter, includeDocument: false);
   }
 
   Future<void> updateLocalChapterContent({
@@ -2260,6 +2284,72 @@ class AppDatabase extends _$AppDatabase {
       await (delete(storedLocalBooks)
         ..where((table) => table.id.equals(normalizedId))).go();
     });
+  }
+
+  Future<ReaderTocSnapshot?> getTocSnapshot(String storageKey) async {
+    final normalizedKey = storageKey.trim();
+    if (normalizedKey.isEmpty) {
+      return null;
+    }
+    final row =
+        await (select(storedTocSnapshots)
+              ..where((table) => table.storageKey.equals(normalizedKey)))
+            .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(row.chaptersJson);
+      final chapters =
+          decoded is List
+              ? decoded
+                  .whereType<Map>()
+                  .map(
+                    (item) => Chapter.fromJson(
+                      item.map(
+                        (key, value) => MapEntry(key.toString(), value),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false)
+              : const <Chapter>[];
+      return ReaderTocSnapshot(
+        bookId: row.bookId,
+        sourceId: row.sourceId,
+        detailUrl: row.detailUrl,
+        title: row.title,
+        author: row.author,
+        coverUrl: row.coverUrl,
+        chapters: chapters,
+        updatedAt: row.updatedAt,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> upsertTocSnapshot(ReaderTocSnapshot snapshot) async {
+    final storageKey =
+        '${snapshot.sourceId.trim()}|${snapshot.detailUrl.trim()}';
+    if (storageKey.trim().isEmpty) {
+      return;
+    }
+    await into(storedTocSnapshots).insert(
+      StoredTocSnapshotsCompanion(
+        storageKey: Value(storageKey),
+        bookId: Value(snapshot.bookId.trim()),
+        sourceId: Value(snapshot.sourceId.trim()),
+        detailUrl: Value(snapshot.detailUrl.trim()),
+        title: Value(snapshot.title.trim()),
+        author: Value(_nullableString(snapshot.author)),
+        coverUrl: Value(_nullableString(snapshot.coverUrl)),
+        chaptersJson: Value(
+          jsonEncode(snapshot.chapters.map((item) => item.toJson()).toList()),
+        ),
+        updatedAt: Value(snapshot.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
   }
 
   Future<void> _replaceLocalChapterBodies({
@@ -2313,7 +2403,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  Future<LocalChapter> _hydrateLocalChapterBody(LocalChapter chapter) async {
+  Future<LocalChapter> _hydrateLocalChapterBody(
+    LocalChapter chapter, {
+    bool includeDocument = true,
+  }) async {
     final rows = await customSelect(
       '''
       SELECT content, image_urls_json, document_json, created_at, updated_at
@@ -2330,7 +2423,11 @@ class AppDatabase extends _$AppDatabase {
     return chapter.copyWith(
       content: (row['content'] ?? '').toString(),
       imageUrls: _decodeStringList(row['image_urls_json']?.toString()),
-      document: _decodeReaderDocument(row['document_json']?.toString()),
+      document:
+          includeDocument
+              ? _decodeReaderDocument(row['document_json']?.toString())
+              : null,
+      clearDocument: !includeDocument,
       createdAt: _decodeDateTime(row['created_at']),
       updatedAt: _decodeDateTime(row['updated_at']),
     );

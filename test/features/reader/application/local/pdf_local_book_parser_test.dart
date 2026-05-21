@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/pdf_local_book_parser.dart';
 
@@ -20,7 +21,7 @@ void main() {
       }
     });
 
-    test('extracts text pdf into page chapters', () async {
+    test('builds lightweight page index and lazily parses page content', () async {
       final file = File('${tempDir.path}/sample.pdf');
       await file.writeAsBytes(const <int>[1, 2, 3], flush: true);
       final parser = PdfLocalBookParser(
@@ -53,17 +54,44 @@ void main() {
       expect(result.author, 'PDF 作者');
       expect(result.description, 'PDF 简介');
       expect(result.chapters, hasLength(2));
-      expect(result.chapters.first.title, '第1章 开始');
+      expect(result.chapters.first.title, '第 1 页');
       expect(result.chapters.last.title, '第 2 页');
-      expect(result.chapters.last.content, contains('第二页内容'));
-      expect(result.chapters.first.document, isNotNull);
+      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.sourceRef, 'pdf:page:1');
+      expect(result.chapters.first.document, isNull);
+
+      final parsedPage = await parser.parsePage(
+        book: LocalBook(
+          id: 'local_pdf_1',
+          title: 'fallback',
+          format: LocalBookFormat.pdf,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        chapter: LocalChapter(
+          id: 'local_pdf_1_0',
+          bookId: 'local_pdf_1',
+          chapterIndex: 0,
+          title: result.chapters.first.title,
+          content: '',
+          sourceRef: result.chapters.first.sourceRef,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(parsedPage.title, '第1章 开始');
+      expect(parsedPage.content, contains('第一页内容。'));
+      expect(parsedPage.document, isNotNull);
       expect(
-        result.chapters.first.document!.blocks.first,
+        parsedPage.document!.blocks.first,
         isA<ReaderTitleBlock>(),
       );
     });
 
-    test('throws clear error when pdf has no text layer', () async {
+    test('throws clear error when a parsed page has no text layer', () async {
       final file = File('${tempDir.path}/no_text.pdf');
       await file.writeAsBytes(const <int>[1, 2, 3], flush: true);
       final parser = PdfLocalBookParser(
@@ -76,13 +104,23 @@ void main() {
 
       final now = DateTime.parse('2026-04-16T12:00:00.000Z');
       await expectLater(
-        () async => parser.parse(
-          LocalBook(
+        () async => parser.parsePage(
+          book: LocalBook(
             id: 'local_pdf_2',
             title: 'fallback',
             format: LocalBookFormat.pdf,
             storagePath: file.path,
             fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+          chapter: LocalChapter(
+            id: 'local_pdf_2_0',
+            bookId: 'local_pdf_2',
+            chapterIndex: 0,
+            title: '第 1 页',
+            content: '',
+            sourceRef: 'pdf:page:1',
             createdAt: now,
             updatedAt: now,
           ),

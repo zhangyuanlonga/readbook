@@ -22,6 +22,11 @@
 - `v27 -> v28`：新增 `reading_progresses`
 - `reader.progress.<bookId>` -> `reading_progresses`
 - `app.advancedThemes` -> `Documents/advanced_themes/index.json`
+- `v30 -> v31`：新增 `local_chapter_bodies`
+- EPUB 索引后台化 + 正文缓存拆分
+- PDF 轻索引 + 按页按需正文缓存
+- `reader.tocSnapshot.*` -> `toc_snapshots`
+- `ApplicationSupport/reader_pagination_cache` -> 缓存目录口径
 
 ## 2. 升级测试矩阵
 
@@ -35,6 +40,11 @@
 | 大量主题/图集用户 | 高级主题 + 图集迁移并存 | 部分覆盖 | 当前仅主题 |
 | 清缓存后重启 | 缓存删空但资产保留 | 未覆盖 | 后续补 |
 | 删除重装后恢复 | 重新安装后托管文件可恢复 | 未覆盖 | 后续补 |
+| 本地图书结构升级 | `local_chapters` -> `local_chapter_bodies` | 已覆盖 | 自动测试 |
+| 本地图书阅读链路 | EPUB 正文懒加载与正文缓存 | 已覆盖 | 自动测试 |
+| 本地图书阅读链路 | PDF 轻索引与按页提取 | 已覆盖 | 自动测试 |
+| 阅读器缓存迁移 | TOC 快照 prefs -> 数据库 | 已覆盖 | 自动测试 |
+| 阅读器缓存迁移 | 分页缓存旧目录回退读取 | 已覆盖 | 自动测试 |
 
 ## 3. 当前自动化验证项
 
@@ -57,6 +67,31 @@
   - 验证新写主题落 `advanced_themes/index.json`
   - 验证旧 `app.advancedThemes` 首次读取后迁移到 `index.json`
   - 验证迁移成功后旧 key 被清理
+
+### 3.4 本地图书正文缓存拆分
+
+- [local_book_repository_impl_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/data/repositories/local_book_repository_impl_test.dart)
+  - 验证章节索引与正文查询语义分离
+- [app_database_local_book_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/data/datasources/local/app_database_local_book_test.dart)
+  - 验证 `local_chapters` 与 `local_chapter_bodies` 的读写边界
+- [local_chapter_content_service_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/features/reader/application/local/local_chapter_content_service_test.dart)
+  - 验证 TXT / EPUB 正文读取与正文缓存链路
+
+### 3.5 PDF 轻索引与按页正文缓存
+
+- [pdf_local_book_parser_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/features/reader/application/local/pdf_local_book_parser_test.dart)
+  - 验证 PDF 仅建立轻量页目录
+  - 验证正文按页提取
+  - 验证无文本层、加密、平台限制分支
+
+### 3.6 阅读器缓存迁移链
+
+- [reader_preferences_service_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/features/reader/application/reader_preferences_service_test.dart)
+  - 验证 TOC 快照数据库优先与旧 prefs 迁移清理
+- [reader_pagination_cache_service_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/features/reader/application/reader_pagination_cache_service_test.dart)
+  - 验证分页缓存默认目录与旧目录兼容读取
+- [app_cache_governance_service_test.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/test/core/cache/app_cache_governance_service_test.dart)
+  - 验证章节缓存和分页缓存预算联动
 
 ## 4. 迁移失败回滚策略
 
@@ -89,3 +124,4 @@
 2. `launchImageGallery.galleries` 迁移验证
 3. 缓存删除后资产保留回归
 4. 多次覆盖安装重复启动幂等回归
+5. 本地图书大文件 EPUB / PDF 性能基线回归

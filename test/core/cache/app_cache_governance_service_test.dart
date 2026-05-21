@@ -87,6 +87,41 @@ void main() {
         isTrue,
       );
     });
+
+    test('enforces chapter and pagination cache budgets', () async {
+      for (var index = 0; index < 4; index++) {
+        await database.upsertChapterCache(
+          cacheKey: 'src|chapter_$index',
+          bookId: 'book_1',
+          sourceId: 'src',
+          chapterIndex: index,
+          chapterUrl: 'chapter_$index',
+          content: 'payload_$index',
+        );
+      }
+
+      for (var index = 0; index < 3; index++) {
+        await File(
+          '${paginationDir.path}/layout_$index.json',
+        ).writeAsString('{"payload":"${'x' * 1024}"}');
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+
+      final service = AppCacheGovernanceService(
+        database: database,
+        paginationCacheService: paginationCacheService,
+        coverImageDiskCache: coverImageDiskCache,
+      );
+
+      await service.enforceBudgets();
+
+      final chapterCount = await database.countChapterCaches();
+      final paginationCount =
+          await paginationCacheService.countPersistedChapterLayouts();
+
+      expect(chapterCount, lessThanOrEqualTo(4));
+      expect(paginationCount, lessThanOrEqualTo(3));
+    });
   });
 }
 

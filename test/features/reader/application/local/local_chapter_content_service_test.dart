@@ -18,6 +18,7 @@ import 'package:shuxiang_reading_next/features/reader/application/local/local_bo
 import 'package:shuxiang_reading_next/features/reader/application/local/local_chapter_content_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/epub_local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/pdf_local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -371,9 +372,9 @@ $chapter2
 
       final persisted = await repository.getChapterById(metas.first.id);
       expect(persisted, isNotNull);
-      expect(persisted!.content, isEmpty);
-      expect(persisted.imageUrls, isEmpty);
-      expect(persisted.document, isNull);
+      expect(persisted!.content, contains('第一章正文。'));
+      expect(persisted.imageUrls, isNotEmpty);
+      expect(persisted.document, isNotNull);
     });
 
     test('rejects ready epub chapters with missing stored content', () async {
@@ -420,6 +421,98 @@ $chapter2
           ),
         ),
       );
+    });
+
+    test('loads pdf page content lazily and persists body cache', () async {
+      final file = File('${tempDir.path}/sample.pdf');
+      await file.writeAsBytes(const <int>[1, 2, 3], flush: true);
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_pdf_lazy_1',
+          title: 'PDF 按需正文测试',
+          format: LocalBookFormat.pdf,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          indexStatus: LocalBookIndexStatus.ready,
+          chapterCount: 1,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await repository.replaceChapters(
+        bookId: 'local_pdf_lazy_1',
+        chapters: <LocalChapter>[
+          LocalChapter(
+            id: 'local_pdf_lazy_1_0',
+            bookId: 'local_pdf_lazy_1',
+            chapterIndex: 0,
+            title: '第 1 页',
+            content: '',
+            sourceRef: 'pdf:page:1',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ],
+      );
+
+      final contentService = LocalChapterContentService(
+        localBookRepository: repository,
+        indexService: indexService,
+        storageService: storageService,
+      );
+
+      final parser = PdfLocalBookParser(
+        extractor: _FakePdfTextExtractor(
+          document: const LocalPdfDocument(pageCount: 1),
+          pageTexts: const <int, String>{1: '第1章 开始\n第一页内容。'},
+        ),
+        isRuntimeSupported: () => true,
+      );
+
+      final chapter = await parser.parsePage(
+        book: LocalBook(
+          id: 'local_pdf_lazy_1',
+          title: 'PDF 按需正文测试',
+          format: LocalBookFormat.pdf,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          indexStatus: LocalBookIndexStatus.ready,
+          chapterCount: 1,
+          createdAt: now,
+          updatedAt: now,
+        ),
+        chapter: LocalChapter(
+          id: 'local_pdf_lazy_1_0',
+          bookId: 'local_pdf_lazy_1',
+          chapterIndex: 0,
+          title: '第 1 页',
+          content: '',
+          sourceRef: 'pdf:page:1',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await repository.updateChapterContent(
+        chapterId: chapter.id,
+        content: chapter.content,
+        imageUrls: chapter.imageUrls,
+        document: chapter.document,
+      );
+
+      final loaded = await contentService.load(
+        bookId: 'local_pdf_lazy_1',
+        chapterIndex: 0,
+      );
+      expect(loaded.content, contains('第一页内容。'));
+      expect(loaded.document, isNotNull);
+
+      final persisted = await repository.getChapterContentById(
+        'local_pdf_lazy_1_0',
+      );
+      expect(persisted, isNotNull);
+      expect(persisted!.content, contains('第一页内容。'));
     });
 
     test('does not auto index while local book is still pending', () async {

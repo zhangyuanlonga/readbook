@@ -879,6 +879,13 @@ class ReaderPreferencesService {
       return null;
     }
 
+    final databaseSnapshot = await _database.getTocSnapshot(
+      '${sourceId.trim()}|${detailUrl.trim()}',
+    );
+    if (databaseSnapshot != null) {
+      return databaseSnapshot;
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(key);
     if (raw == null || raw.trim().isEmpty) {
@@ -891,9 +898,12 @@ class ReaderPreferencesService {
         return null;
       }
 
-      return ReaderTocSnapshot.fromJson(
+      final snapshot = ReaderTocSnapshot.fromJson(
         decoded.map((key, value) => MapEntry(key.toString(), value)),
       );
+      await _database.upsertTocSnapshot(snapshot);
+      await prefs.remove(key);
+      return snapshot;
     } on FormatException {
       return null;
     }
@@ -912,8 +922,9 @@ class ReaderPreferencesService {
       return;
     }
 
+    await _database.upsertTocSnapshot(snapshot);
     final prefs = await _preferencesFuture;
-    await prefs.setString(key, jsonEncode(snapshot.toJson()));
+    await prefs.remove(key);
   }
 
   String? _buildTocSnapshotKey({

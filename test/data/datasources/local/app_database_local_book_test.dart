@@ -137,9 +137,9 @@ void main() {
       final chapter = await database.getLocalChapterById('c_2');
       expect(chapter, isNotNull);
       expect(chapter!.chapterIndex, 1);
-      expect(chapter.imageUrls, isEmpty);
+      expect(chapter.imageUrls, contains('file:///tmp/image_2.png'));
       expect(chapter.sourceRef, 'OPS/chapter2.xhtml');
-      expect(chapter.document, isNull);
+      expect(chapter.document, isNotNull);
 
       final chapterMeta = await database.getLocalChapterMetaByIndex(
         bookId: 'local_2',
@@ -155,8 +155,7 @@ void main() {
       expect(chapterContent, isNotNull);
       expect(chapterContent!.content, '第二章内容');
       expect(chapterContent.imageUrls, contains('file:///tmp/image_2.png'));
-      expect(chapterContent.document, isNotNull);
-      expect(chapterContent.document!.blocks.last, isA<ReaderImageBlock>());
+      expect(chapterContent.document, isNull);
 
       final book = await database.getLocalBookById('local_2');
       expect(book, isNotNull);

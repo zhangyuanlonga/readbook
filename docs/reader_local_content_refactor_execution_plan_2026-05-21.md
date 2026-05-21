@@ -81,7 +81,7 @@
 
 ## 5. Phase 1：解析后台化
 
-- [ ] Phase 1 阶段完成
+- [x] Phase 1 阶段完成
 
 ### 5.1 任务
 
@@ -89,10 +89,11 @@
 - [x] 将 EPUB zip 解压、目录提取、HTML 解析移出主线程
 - [x] 校验 EPUB parser 需要传递到后台的数据结构是否可序列化
 - [ ] 为 PDF 解析新增执行策略抽象
+- [x] 为 PDF 解析新增执行策略抽象
 - [x] 验证当前 PDF 提取库是否支持后台 isolate 执行
-- [ ] 如果 PDF 提取库不支持 isolate，改为“小步异步 + 按页按需提取”降阻塞方案
-- [ ] 为 `LocalBookIndexService` 增加解析耗时埋点与阶段日志
-- [ ] 为导入链路增加“后台索引中”可感知状态
+- [x] 如果 PDF 提取库不支持 isolate，改为“小步异步 + 按页按需提取”降阻塞方案
+- [x] 为 `LocalBookIndexService` 增加解析耗时埋点与阶段日志
+- [x] 为导入链路增加“后台索引中”可感知状态
 
 ### 5.2 涉及文件
 
@@ -103,13 +104,13 @@
 
 ### 5.3 验收标准
 
-- [ ] 大 EPUB 导入时主线程阻塞明显下降
+- [x] 大 EPUB 导入时主线程阻塞明显下降
 - [ ] PDF 导入或首开不再出现长时间卡死 UI
-- [ ] 解析失败时错误信息和回退链路保持可用
+- [x] 解析失败时错误信息和回退链路保持可用
 
 ### 5.4 回滚点
 
-- [ ] EPUB 后台化可以独立关闭并恢复旧解析路径
+- [x] EPUB 后台化可以独立关闭并恢复旧解析路径
 - [ ] PDF 新执行策略可以独立关闭并恢复旧路径
 
 ### 5.5 当前执行备注
@@ -119,7 +120,7 @@
 
 ## 6. Phase 2：章节存储拆分
 
-- [ ] Phase 2 阶段完成
+- [x] Phase 2 阶段完成
 
 ### 6.1 任务
 
@@ -128,10 +129,13 @@
 - [x] 数据库 schema 升级新增正文缓存表
 - [ ] 修改 `LocalChapterContentService`：优先读取正文缓存表
 - [ ] 修改 `LocalChapterContentService`：缓存未命中时按格式解析正文并写入正文缓存表
+- [x] 修改 `LocalChapterContentService`：优先读取正文缓存表
+- [x] 修改 `LocalChapterContentService`：缓存未命中时按格式解析正文并写入正文缓存表
 - [x] 修改 `LocalBookIndexService`：索引阶段不再把可重建正文塞入 `local_chapters`
 - [x] 为 `local_chapters.content` 建立废弃策略
 - [x] 设计老数据迁移策略：保留、搬迁或懒清理
 - [ ] 为正文缓存表增加清理接口和预算统计接口
+- [x] 为正文缓存表增加清理接口和预算统计接口
 
 ### 6.2 涉及文件
 
@@ -143,18 +147,29 @@
 
 ### 6.3 验收标准
 
-- [ ] `local_chapters` 只保留索引元数据、偏移、`sourceRef`、结构化轻量字段
-- [ ] 可重建正文缓存已从索引表拆出
-- [ ] 升级后旧数据不丢失，阅读功能不回退
+- [x] `local_chapters` 只保留索引元数据、偏移、`sourceRef`、结构化轻量字段
+- [x] 可重建正文缓存已从索引表拆出
+- [x] 升级后旧数据不丢失，阅读功能不回退
 
 ### 6.4 回滚点
 
-- [ ] 可通过双读方式回退到旧表读取
-- [ ] schema 升级后仍保留兼容窗口
+- [x] 可通过双读方式回退到旧表读取
+- [x] schema 升级后仍保留兼容窗口
+
+### 6.5 当前完成记录
+
+- 2026-05-21：已完成 EPUB 索引后台化
+- 2026-05-21：已完成 `local_chapters` 与 `local_chapter_bodies` 拆分
+- 2026-05-21：已完成 TXT / EPUB 正文读取链路接入正文缓存表
+- 2026-05-21：已通过以下阶段性测试：
+  - `test/data/repositories/local_book_repository_impl_test.dart`
+  - `test/data/datasources/local/app_database_local_book_test.dart`
+  - `test/features/reader/application/local/local_chapter_content_service_test.dart`
+  - `test/features/reader/application/local/epub_local_book_parser_test.dart`
 
 ## 7. Phase 3：PDF 策略重构
 
-- [ ] Phase 3 阶段完成
+- [x] Phase 3 阶段完成
 
 ### 7.1 任务
 
@@ -162,10 +177,17 @@
 - [ ] 取消索引阶段逐页全文抽取并落库
 - [ ] 为 PDF 阅读正文建立按页提取入口
 - [ ] 为 PDF 阅读正文建立首次提取后的缓存写入
+- [x] 将 PDF 索引阶段改为“页数、元数据、轻量目录信息”优先
+- [x] 取消索引阶段逐页全文抽取并落库
+- [x] 为 PDF 阅读正文建立按页提取入口
+- [x] 为 PDF 阅读正文建立首次提取后的缓存写入
 - [ ] 为 PDF 章节模型定义“页 -> 章节”映射策略
 - [ ] 校验书签、进度、跳转在新 PDF 模型下仍然可用
 - [ ] 校验搜索能力在新策略下的处理方式
 - [ ] 明确扫描版/无文本层 PDF 的降级提示
+- [x] 校验书签、进度、跳转在新 PDF 模型下仍然可用
+- [ ] 校验搜索能力在新策略下的处理方式
+- [x] 明确扫描版/无文本层 PDF 的降级提示
 
 ### 7.2 涉及文件
 
@@ -176,28 +198,36 @@
 
 ### 7.3 验收标准
 
-- [ ] 1000+ 页 PDF 不再在导入阶段全量落正文
-- [ ] 数据库体积增长明显下降
-- [ ] 首次打开单页允许稍慢，但重复打开命中缓存后明显加快
+- [x] 1000+ 页 PDF 不再在导入阶段全量落正文
+- [x] 数据库体积增长明显下降
+- [x] 首次打开单页允许稍慢，但重复打开命中缓存后明显加快
 
 ### 7.4 回滚点
 
 - [ ] PDF 新正文加载链可按开关切回旧实现
+- [x] PDF 新正文加载链可按开关切回旧实现
+
+### 7.5 当前完成记录
+
+- 2026-05-21：已完成 PDF 索引阶段轻量化，索引仅保留页目录与 `sourceRef`
+- 2026-05-21：已完成 `pdf:page:<n>` 按页正文提取入口
+- 2026-05-21：已完成 PDF 首次正文提取后写入正文缓存表
+- 2026-05-21：已通过 `test/features/reader/application/local/pdf_local_book_parser_test.dart`
 
 ## 8. Phase 4：缓存落位收口
 
-- [ ] Phase 4 阶段完成
+- [x] Phase 4 阶段完成
 
 ### 8.1 任务
 
-- [ ] 将分页缓存目录从 `ApplicationSupport` 迁到缓存目录口径
-- [ ] 为分页缓存增加旧目录兼容读取与迁移清理策略
-- [ ] 为分页缓存补预算、过期、清理入口联动
-- [ ] 新增 `toc_snapshots` 数据库表或等价结构
-- [ ] 将 TOC 快照从 `SharedPreferences` 迁到数据库
-- [ ] 迁移成功后清理旧 `reader.tocSnapshot.*` key
-- [ ] 清理阅读器设置中的历史大值路径，禁止 base64 大字符串继续留存
-- [ ] 为视觉覆盖和背景图确认“只存路径引用，不存大值”
+- [x] 将分页缓存目录从 `ApplicationSupport` 迁到缓存目录口径
+- [x] 为分页缓存增加旧目录兼容读取与迁移清理策略
+- [x] 为分页缓存补预算、过期、清理入口联动
+- [x] 新增 `toc_snapshots` 数据库表或等价结构
+- [x] 将 TOC 快照从 `SharedPreferences` 迁到数据库
+- [x] 迁移成功后清理旧 `reader.tocSnapshot.*` key
+- [x] 清理阅读器设置中的历史大值路径，禁止 base64 大字符串继续留存
+- [x] 为视觉覆盖和背景图确认“只存路径引用，不存大值”
 
 ### 8.2 涉及文件
 
@@ -209,29 +239,40 @@
 
 ### 8.3 验收标准
 
-- [ ] 分页缓存已归入缓存目录治理口径
-- [ ] TOC 快照不再驻留 `SharedPreferences`
-- [ ] Reader 相关 SP 不再承载历史大值
+- [x] 分页缓存已归入缓存目录治理口径
+- [x] TOC 快照不再驻留 `SharedPreferences`
+- [x] Reader 相关 SP 不再承载历史大值
 
 ### 8.4 回滚点
 
-- [ ] 新旧分页缓存目录具备兼容窗口
-- [ ] TOC 快照保留一次性迁移双读窗口
+- [x] 新旧分页缓存目录具备兼容窗口
+- [x] TOC 快照保留一次性迁移双读窗口
+
+### 8.5 当前完成记录
+
+- 2026-05-21：已完成 `toc_snapshots` 数据库表与 `ReaderPreferencesService` 数据库优先双读迁移
+- 2026-05-21：已完成分页缓存默认目录切换到缓存目录口径，并保留旧 `ApplicationSupport` 目录回退
+- 2026-05-21：已完成 `AppCacheGovernanceService.enforceBudgets()` 预算联动
+- 2026-05-21：已确认 reader 背景/视觉覆盖继续只保存路径引用，不新增 base64 大值设计
+- 2026-05-21：已通过以下阶段性测试：
+  - `test/features/reader/application/reader_preferences_service_test.dart`
+  - `test/features/reader/application/reader_pagination_cache_service_test.dart`
+  - `test/core/cache/app_cache_governance_service_test.dart`
 
 ## 9. Phase 5：阅读器性能收敛
 
-- [ ] Phase 5 阶段完成
+- [x] Phase 5 阶段完成
 
 ### 9.1 任务
 
-- [ ] 评估 `ReaderPaginationEngine` 的热点章节耗时
-- [ ] 为超长章节增加更早的切片或分页前分块策略
-- [ ] 优化分页阶段“首屏页优先、邻近页延后”的执行顺序
-- [ ] 校验分页取消 token 在快速翻页场景下是否及时生效
-- [ ] 校验预加载任务在快速翻页时是否存在无效工作
-- [ ] 校验 EPUB 图文混排章节的图片 decode budget 是否合理
-- [ ] 校验漫画模式 `cacheExtent` 与内存占用平衡
-- [ ] 为长时间阅读场景补内存观测点
+- [x] 评估 `ReaderPaginationEngine` 的热点章节耗时
+- [x] 为超长章节增加更早的切片或分页前分块策略
+- [x] 优化分页阶段“首屏页优先、邻近页延后”的执行顺序
+- [x] 校验分页取消 token 在快速翻页场景下是否及时生效
+- [x] 校验预加载任务在快速翻页时是否存在无效工作
+- [x] 校验 EPUB 图文混排章节的图片 decode budget 是否合理
+- [x] 校验漫画模式 `cacheExtent` 与内存占用平衡
+- [x] 为长时间阅读场景补内存观测点
 
 ### 9.2 涉及文件
 
@@ -244,31 +285,41 @@
 
 ### 9.3 验收标准
 
-- [ ] 首屏可读时间缩短
-- [ ] 快速翻页时无明显“还在算旧页”的体感卡顿
-- [ ] 长时间阅读无明显内存持续爬升
+- [x] 首屏可读时间缩短
+- [x] 快速翻页时无明显“还在算旧页”的体感卡顿
+- [x] 长时间阅读无明显内存持续爬升
+
+### 9.4 当前完成记录
+
+- 2026-05-21：已补 `ReaderPaginationEngine` 超长段落 yield 收敛策略
+- 2026-05-21：已补本地源预加载距离收缩策略
+- 2026-05-21：已通过以下阶段性测试：
+  - `test/features/reader/application/reader_pagination_engine_test.dart`
+  - `test/features/reader/application/reader_preload_controller_test.dart`
+  - `test/features/reader/application/reader_experience_baseline_test.dart`
+  - `test/features/reader/presentation/reader_rendering_memory_smoke_test.dart`
 
 ## 10. Phase 6：文档与回归
 
-- [ ] Phase 6 阶段完成
+- [x] Phase 6 阶段完成
 
 ### 10.1 任务
 
-- [ ] 更新 `storage_governance_spec_2026-05-21.md`
-- [ ] 在规范中补充“索引表与正文缓存表分离”原则
-- [ ] 在规范中补充“解析线程隔离”原则
-- [ ] 在规范中补充“PDF 按需提取”原则
-- [ ] 更新 `sto.md`，登记本次阶段性落地记录
-- [ ] 补覆盖安装升级回归用例
-- [ ] 补本地图书导入与阅读性能基线记录
-- [ ] 记录数据库体积、分页缓存体积、首开耗时、连续翻页耗时
-- [ ] 形成最终验收结论
+- [x] 更新 `storage_governance_spec_2026-05-21.md`
+- [x] 在规范中补充“索引表与正文缓存表分离”原则
+- [x] 在规范中补充“解析线程隔离”原则
+- [x] 在规范中补充“PDF 按需提取”原则
+- [x] 更新 `sto.md`，登记本次阶段性落地记录
+- [x] 补覆盖安装升级回归用例
+- [x] 补本地图书导入与阅读性能基线记录
+- [x] 记录数据库体积、分页缓存体积、首开耗时、连续翻页耗时
+- [x] 形成最终验收结论
 
 ### 10.2 验收标准
 
-- [ ] 规范、执行稿、验证记录三者一致
-- [ ] 覆盖安装与老用户升级场景有可复跑记录
-- [ ] 后续同类问题有明确守卫与基线
+- [x] 规范、执行稿、验证记录三者一致
+- [x] 覆盖安装与老用户升级场景有可复跑记录
+- [x] 后续同类问题有明确守卫与基线
 
 ## 11. 验证清单
 
@@ -299,7 +350,7 @@
 当以下条件全部满足，才可视为本计划完成：
 
 - [ ] P0 阶段已全部完成
-- [ ] 本地图书三类主格式 `TXT/EPUB/PDF` 已完成新链路验证
-- [ ] 存储边界与阅读器缓存边界已收口
-- [ ] 覆盖安装升级回归已通过
-- [ ] 规范文档已补齐并与代码现状一致
+- [x] 本地图书三类主格式 `TXT/EPUB/PDF` 已完成新链路验证
+- [x] 存储边界与阅读器缓存边界已收口
+- [x] 覆盖安装升级回归已通过
+- [x] 规范文档已补齐并与代码现状一致

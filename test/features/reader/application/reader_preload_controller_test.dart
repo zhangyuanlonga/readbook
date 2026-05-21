@@ -77,6 +77,27 @@ void main() {
       ]);
     });
 
+    test('local source constrains preload distance more aggressively', () {
+      final plan = controller.buildChapterPlan(
+        currentChapterIndex: 5,
+        chapterCount: 12,
+        budget: const ReaderResourceBudgetResolver().resolve(
+          const ReaderResourceBudgetInput(),
+        ),
+        isLocalSource: true,
+        isInBookshelf: true,
+        maxForwardChapterCount: 6,
+        maxBackwardChapterCount: 4,
+        bookshelfForwardChapterCount: 8,
+      );
+
+      expect(plan.chapterIndexesFor(ReaderPreloadTaskType.content), <int>[
+        6,
+        4,
+        7,
+      ]);
+    });
+
     test('exposes per task type concurrency from resource budget', () {
       final budget = const ReaderResourceBudgetResolver().resolve(
         const ReaderResourceBudgetInput(),

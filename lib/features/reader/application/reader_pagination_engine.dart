@@ -172,6 +172,8 @@ class ReaderPaginationEngine {
 
   static const double _kPageTailSafetyBuffer = 4.0;
   static const Duration _kSlowPaginationThreshold = Duration(milliseconds: 300);
+  static const int _kLargeParagraphCountThreshold = 80;
+  static const int _kLargeParagraphLengthThreshold = 6000;
 
   ReaderPaginationEnsurePlan buildEnsurePlan(
     ReaderPaginationEnsureRequest request,
@@ -281,6 +283,11 @@ class ReaderPaginationEngine {
       );
     }
 
+    final effectiveYieldInterval = _effectiveYieldInterval(
+      request.yieldInterval,
+      paragraphModels,
+    );
+
     final maxWidth = request.spec.contentWidth;
     final maxHeight = request.spec.contentHeight;
 
@@ -385,8 +392,8 @@ class ReaderPaginationEngine {
       if (request.shouldAbort?.call() ?? false) {
         return true;
       }
-      if (request.yieldInterval <= Duration.zero ||
-          yieldStopwatch.elapsed < request.yieldInterval) {
+      if (effectiveYieldInterval <= Duration.zero ||
+          yieldStopwatch.elapsed < effectiveYieldInterval) {
         return false;
       }
       await Future<void>.delayed(Duration.zero);
@@ -583,6 +590,10 @@ class ReaderPaginationEngine {
         textAlign: request.textAlign,
       ),
     );
+    final effectiveYieldInterval = _effectiveYieldInterval(
+      request.yieldInterval,
+      paragraphModels,
+    );
     final pages = <List<ReaderPagedBlock>>[];
     var currentPage = <ReaderPagedBlock>[];
     var remainingHeight = request.spec.contentHeight;
@@ -592,8 +603,8 @@ class ReaderPaginationEngine {
       if (request.shouldAbort?.call() ?? false) {
         return true;
       }
-      if (request.yieldInterval <= Duration.zero ||
-          yieldStopwatch.elapsed < request.yieldInterval) {
+      if (effectiveYieldInterval <= Duration.zero ||
+          yieldStopwatch.elapsed < effectiveYieldInterval) {
         return false;
       }
       await Future<void>.delayed(Duration.zero);
@@ -765,6 +776,23 @@ class ReaderPaginationEngine {
         'pageCount': pageCount,
       },
     );
+  }
+
+  static Duration _effectiveYieldInterval(
+    Duration base,
+    List<ReaderPaginationParagraph> paragraphModels,
+  ) {
+    if (base <= Duration.zero) {
+      return base;
+    }
+    final hasHugeParagraph = paragraphModels.any(
+      (item) => item.text.length >= _kLargeParagraphLengthThreshold,
+    );
+    if (paragraphModels.length >= _kLargeParagraphCountThreshold ||
+        hasHugeParagraph) {
+      return const Duration(milliseconds: 4);
+    }
+    return base;
   }
 }
 

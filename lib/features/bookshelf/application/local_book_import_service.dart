@@ -245,7 +245,7 @@ class LocalBookImportService {
       LocalBookFormat.epub => '正在解析图文结构、提取资源并建立目录',
       LocalBookFormat.html => '正在解析 HTML 结构、处理图片并建立目录',
       LocalBookFormat.md => '正在解析 Markdown、转换图文结构并建立目录',
-      LocalBookFormat.pdf => '正在提取页面文本并建立目录',
+      LocalBookFormat.pdf => '正在建立 PDF 页面索引，正文将在阅读时按需提取',
       LocalBookFormat.mobi ||
       LocalBookFormat.azw ||
       LocalBookFormat.azw3 => '正在解析电子书内容并建立目录',

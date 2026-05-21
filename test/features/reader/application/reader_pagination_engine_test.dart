@@ -146,5 +146,21 @@ void main() {
         expect(result.pages.first, isNotEmpty);
       },
     );
+
+    test(
+      'paginateParagraphs keeps working for very long paragraphs with default yield policy',
+      () async {
+        final result = await engine.paginateParagraphs(
+          ReaderPaginationRequest(
+            paragraphs: <String>['超长正文 ' * 2400],
+            spec: spec,
+            paragraphStyle: const TextStyle(fontSize: 18, height: 1.72),
+          ),
+        );
+
+        expect(result, isNotNull);
+        expect(result!.pages.length, greaterThan(1));
+      },
+    );
   });
 }

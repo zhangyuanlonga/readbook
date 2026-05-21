@@ -130,6 +130,9 @@ class ReaderPreloadController {
       maxBackwardChapterCount,
       budget.backwardPreloadChapterCount,
     );
+    final effectiveForwardCount = isLocalSource ? min(forwardCount, 2) : forwardCount;
+    final effectiveBackwardCount =
+        isLocalSource ? min(backwardCount, 1) : backwardCount;
 
     final chapterTargets = <_ReaderPreloadChapterTarget>[];
     final seenIndexes = <int>{};
@@ -146,16 +149,16 @@ class ReaderPreloadController {
       addTarget(currentChapterIndex, ReaderPreloadTaskPriority.current);
     }
 
-    final maxDistance = max(forwardCount, backwardCount);
+    final maxDistance = max(effectiveForwardCount, effectiveBackwardCount);
     for (var offset = 1; offset <= maxDistance; offset++) {
       final priority =
           offset == 1
               ? ReaderPreloadTaskPriority.nearby
               : ReaderPreloadTaskPriority.far;
-      if (offset <= forwardCount) {
+      if (offset <= effectiveForwardCount) {
         addTarget(currentChapterIndex + offset, priority);
       }
-      if (offset <= backwardCount) {
+      if (offset <= effectiveBackwardCount) {
         addTarget(currentChapterIndex - offset, priority);
       }
     }

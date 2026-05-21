@@ -7433,6 +7433,582 @@ class StoredReadingProgressesCompanion
   }
 }
 
+class $StoredTocSnapshotsTable extends StoredTocSnapshots
+    with TableInfo<$StoredTocSnapshotsTable, StoredTocSnapshot> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredTocSnapshotsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _storageKeyMeta = const VerificationMeta(
+    'storageKey',
+  );
+  @override
+  late final GeneratedColumn<String> storageKey = GeneratedColumn<String>(
+    'storage_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _authorMeta = const VerificationMeta('author');
+  @override
+  late final GeneratedColumn<String> author = GeneratedColumn<String>(
+    'author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverUrlMeta = const VerificationMeta(
+    'coverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrl = GeneratedColumn<String>(
+    'cover_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _chaptersJsonMeta = const VerificationMeta(
+    'chaptersJson',
+  );
+  @override
+  late final GeneratedColumn<String> chaptersJson = GeneratedColumn<String>(
+    'chapters_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    storageKey,
+    bookId,
+    sourceId,
+    detailUrl,
+    title,
+    author,
+    coverUrl,
+    chaptersJson,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'toc_snapshots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredTocSnapshot> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('storage_key')) {
+      context.handle(
+        _storageKeyMeta,
+        storageKey.isAcceptableOrUnknown(data['storage_key']!, _storageKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_storageKeyMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('author')) {
+      context.handle(
+        _authorMeta,
+        author.isAcceptableOrUnknown(data['author']!, _authorMeta),
+      );
+    }
+    if (data.containsKey('cover_url')) {
+      context.handle(
+        _coverUrlMeta,
+        coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
+      );
+    }
+    if (data.containsKey('chapters_json')) {
+      context.handle(
+        _chaptersJsonMeta,
+        chaptersJson.isAcceptableOrUnknown(
+          data['chapters_json']!,
+          _chaptersJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_chaptersJsonMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {storageKey};
+  @override
+  StoredTocSnapshot map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredTocSnapshot(
+      storageKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}storage_key'],
+          )!,
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      title:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}title'],
+          )!,
+      author: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author'],
+      ),
+      coverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url'],
+      ),
+      chaptersJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chapters_json'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredTocSnapshotsTable createAlias(String alias) {
+    return $StoredTocSnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredTocSnapshot extends DataClass
+    implements Insertable<StoredTocSnapshot> {
+  final String storageKey;
+  final String bookId;
+  final String sourceId;
+  final String detailUrl;
+  final String title;
+  final String? author;
+  final String? coverUrl;
+  final String chaptersJson;
+  final DateTime updatedAt;
+  const StoredTocSnapshot({
+    required this.storageKey,
+    required this.bookId,
+    required this.sourceId,
+    required this.detailUrl,
+    required this.title,
+    this.author,
+    this.coverUrl,
+    required this.chaptersJson,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['storage_key'] = Variable<String>(storageKey);
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || author != null) {
+      map['author'] = Variable<String>(author);
+    }
+    if (!nullToAbsent || coverUrl != null) {
+      map['cover_url'] = Variable<String>(coverUrl);
+    }
+    map['chapters_json'] = Variable<String>(chaptersJson);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredTocSnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return StoredTocSnapshotsCompanion(
+      storageKey: Value(storageKey),
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      title: Value(title),
+      author:
+          author == null && nullToAbsent ? const Value.absent() : Value(author),
+      coverUrl:
+          coverUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverUrl),
+      chaptersJson: Value(chaptersJson),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredTocSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredTocSnapshot(
+      storageKey: serializer.fromJson<String>(json['storageKey']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      title: serializer.fromJson<String>(json['title']),
+      author: serializer.fromJson<String?>(json['author']),
+      coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      chaptersJson: serializer.fromJson<String>(json['chaptersJson']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'storageKey': serializer.toJson<String>(storageKey),
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'title': serializer.toJson<String>(title),
+      'author': serializer.toJson<String?>(author),
+      'coverUrl': serializer.toJson<String?>(coverUrl),
+      'chaptersJson': serializer.toJson<String>(chaptersJson),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredTocSnapshot copyWith({
+    String? storageKey,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? title,
+    Value<String?> author = const Value.absent(),
+    Value<String?> coverUrl = const Value.absent(),
+    String? chaptersJson,
+    DateTime? updatedAt,
+  }) => StoredTocSnapshot(
+    storageKey: storageKey ?? this.storageKey,
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    title: title ?? this.title,
+    author: author.present ? author.value : this.author,
+    coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    chaptersJson: chaptersJson ?? this.chaptersJson,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredTocSnapshot copyWithCompanion(StoredTocSnapshotsCompanion data) {
+    return StoredTocSnapshot(
+      storageKey:
+          data.storageKey.present ? data.storageKey.value : this.storageKey,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      title: data.title.present ? data.title.value : this.title,
+      author: data.author.present ? data.author.value : this.author,
+      coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      chaptersJson:
+          data.chaptersJson.present
+              ? data.chaptersJson.value
+              : this.chaptersJson,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredTocSnapshot(')
+          ..write('storageKey: $storageKey, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('title: $title, ')
+          ..write('author: $author, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('chaptersJson: $chaptersJson, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    storageKey,
+    bookId,
+    sourceId,
+    detailUrl,
+    title,
+    author,
+    coverUrl,
+    chaptersJson,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredTocSnapshot &&
+          other.storageKey == this.storageKey &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.title == this.title &&
+          other.author == this.author &&
+          other.coverUrl == this.coverUrl &&
+          other.chaptersJson == this.chaptersJson &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredTocSnapshotsCompanion extends UpdateCompanion<StoredTocSnapshot> {
+  final Value<String> storageKey;
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> title;
+  final Value<String?> author;
+  final Value<String?> coverUrl;
+  final Value<String> chaptersJson;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredTocSnapshotsCompanion({
+    this.storageKey = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.title = const Value.absent(),
+    this.author = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.chaptersJson = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredTocSnapshotsCompanion.insert({
+    required String storageKey,
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String title,
+    this.author = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    required String chaptersJson,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : storageKey = Value(storageKey),
+       bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       title = Value(title),
+       chaptersJson = Value(chaptersJson),
+       updatedAt = Value(updatedAt);
+  static Insertable<StoredTocSnapshot> custom({
+    Expression<String>? storageKey,
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? title,
+    Expression<String>? author,
+    Expression<String>? coverUrl,
+    Expression<String>? chaptersJson,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (storageKey != null) 'storage_key': storageKey,
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (title != null) 'title': title,
+      if (author != null) 'author': author,
+      if (coverUrl != null) 'cover_url': coverUrl,
+      if (chaptersJson != null) 'chapters_json': chaptersJson,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredTocSnapshotsCompanion copyWith({
+    Value<String>? storageKey,
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? title,
+    Value<String?>? author,
+    Value<String?>? coverUrl,
+    Value<String>? chaptersJson,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredTocSnapshotsCompanion(
+      storageKey: storageKey ?? this.storageKey,
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      title: title ?? this.title,
+      author: author ?? this.author,
+      coverUrl: coverUrl ?? this.coverUrl,
+      chaptersJson: chaptersJson ?? this.chaptersJson,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (storageKey.present) {
+      map['storage_key'] = Variable<String>(storageKey.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (author.present) {
+      map['author'] = Variable<String>(author.value);
+    }
+    if (coverUrl.present) {
+      map['cover_url'] = Variable<String>(coverUrl.value);
+    }
+    if (chaptersJson.present) {
+      map['chapters_json'] = Variable<String>(chaptersJson.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredTocSnapshotsCompanion(')
+          ..write('storageKey: $storageKey, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('title: $title, ')
+          ..write('author: $author, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('chaptersJson: $chaptersJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     with
         TableInfo<
@@ -13319,6 +13895,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $StoredReadingBookStatusesTable(this);
   late final $StoredReadingProgressesTable storedReadingProgresses =
       $StoredReadingProgressesTable(this);
+  late final $StoredTocSnapshotsTable storedTocSnapshots =
+      $StoredTocSnapshotsTable(this);
   late final $StoredRemoteAccessSnapshotsTable storedRemoteAccessSnapshots =
       $StoredRemoteAccessSnapshotsTable(this);
   late final $StoredSourceHealthSnapshotsTable storedSourceHealthSnapshots =
@@ -13358,6 +13936,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedReadingRecordSessions,
     storedReadingBookStatuses,
     storedReadingProgresses,
+    storedTocSnapshots,
     storedRemoteAccessSnapshots,
     storedSourceHealthSnapshots,
     storedBookshelfBooks,
@@ -17020,6 +17599,312 @@ typedef $$StoredReadingProgressesTableProcessedTableManager =
       StoredReadingProgressesData,
       PrefetchHooks Function()
     >;
+typedef $$StoredTocSnapshotsTableCreateCompanionBuilder =
+    StoredTocSnapshotsCompanion Function({
+      required String storageKey,
+      required String bookId,
+      required String sourceId,
+      required String detailUrl,
+      required String title,
+      Value<String?> author,
+      Value<String?> coverUrl,
+      required String chaptersJson,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredTocSnapshotsTableUpdateCompanionBuilder =
+    StoredTocSnapshotsCompanion Function({
+      Value<String> storageKey,
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> title,
+      Value<String?> author,
+      Value<String?> coverUrl,
+      Value<String> chaptersJson,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredTocSnapshotsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredTocSnapshotsTable> {
+  $$StoredTocSnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get storageKey => $composableBuilder(
+    column: $table.storageKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chaptersJson => $composableBuilder(
+    column: $table.chaptersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredTocSnapshotsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredTocSnapshotsTable> {
+  $$StoredTocSnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get storageKey => $composableBuilder(
+    column: $table.storageKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chaptersJson => $composableBuilder(
+    column: $table.chaptersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredTocSnapshotsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredTocSnapshotsTable> {
+  $$StoredTocSnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get storageKey => $composableBuilder(
+    column: $table.storageKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get author =>
+      $composableBuilder(column: $table.author, builder: (column) => column);
+
+  GeneratedColumn<String> get coverUrl =>
+      $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get chaptersJson => $composableBuilder(
+    column: $table.chaptersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredTocSnapshotsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredTocSnapshotsTable,
+          StoredTocSnapshot,
+          $$StoredTocSnapshotsTableFilterComposer,
+          $$StoredTocSnapshotsTableOrderingComposer,
+          $$StoredTocSnapshotsTableAnnotationComposer,
+          $$StoredTocSnapshotsTableCreateCompanionBuilder,
+          $$StoredTocSnapshotsTableUpdateCompanionBuilder,
+          (
+            StoredTocSnapshot,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredTocSnapshotsTable,
+              StoredTocSnapshot
+            >,
+          ),
+          StoredTocSnapshot,
+          PrefetchHooks Function()
+        > {
+  $$StoredTocSnapshotsTableTableManager(
+    _$AppDatabase db,
+    $StoredTocSnapshotsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredTocSnapshotsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredTocSnapshotsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredTocSnapshotsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> storageKey = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> author = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String> chaptersJson = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredTocSnapshotsCompanion(
+                storageKey: storageKey,
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                title: title,
+                author: author,
+                coverUrl: coverUrl,
+                chaptersJson: chaptersJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String storageKey,
+                required String bookId,
+                required String sourceId,
+                required String detailUrl,
+                required String title,
+                Value<String?> author = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                required String chaptersJson,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredTocSnapshotsCompanion.insert(
+                storageKey: storageKey,
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                title: title,
+                author: author,
+                coverUrl: coverUrl,
+                chaptersJson: chaptersJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredTocSnapshotsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredTocSnapshotsTable,
+      StoredTocSnapshot,
+      $$StoredTocSnapshotsTableFilterComposer,
+      $$StoredTocSnapshotsTableOrderingComposer,
+      $$StoredTocSnapshotsTableAnnotationComposer,
+      $$StoredTocSnapshotsTableCreateCompanionBuilder,
+      $$StoredTocSnapshotsTableUpdateCompanionBuilder,
+      (
+        StoredTocSnapshot,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredTocSnapshotsTable,
+          StoredTocSnapshot
+        >,
+      ),
+      StoredTocSnapshot,
+      PrefetchHooks Function()
+    >;
 typedef $$StoredRemoteAccessSnapshotsTableCreateCompanionBuilder =
     StoredRemoteAccessSnapshotsCompanion Function({
       required String userId,
@@ -20272,6 +21157,8 @@ class $AppDatabaseManager {
         _db,
         _db.storedReadingProgresses,
       );
+  $$StoredTocSnapshotsTableTableManager get storedTocSnapshots =>
+      $$StoredTocSnapshotsTableTableManager(_db, _db.storedTocSnapshots);
   $$StoredRemoteAccessSnapshotsTableTableManager
   get storedRemoteAccessSnapshots =>
       $$StoredRemoteAccessSnapshotsTableTableManager(

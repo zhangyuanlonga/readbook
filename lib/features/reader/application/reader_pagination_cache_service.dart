@@ -359,17 +359,27 @@ class ReaderPaginationCacheService {
         chapterUrl: chapterUrl,
         signature: signature,
       );
-      if (!await file.exists()) {
-        _traceCacheEvent(
-          'reader.pagination.cache.miss',
+      var targetFile = file;
+      if (!await targetFile.exists()) {
+        final legacyFile = await _legacyChapterLayoutCacheFile(
           sourceId: sourceId,
           chapterUrl: chapterUrl,
           signature: signature,
-          status: 'disk_missing',
         );
-        return null;
+        if (await legacyFile.exists()) {
+          targetFile = legacyFile;
+        } else {
+          _traceCacheEvent(
+            'reader.pagination.cache.miss',
+            sourceId: sourceId,
+            chapterUrl: chapterUrl,
+            signature: signature,
+            status: 'disk_missing',
+          );
+          return null;
+        }
       }
-      final raw = await file.readAsString();
+      final raw = await targetFile.readAsString();
       if (raw.trim().isEmpty) {
         _traceCacheEvent(
           'reader.pagination.cache.miss',
@@ -455,8 +465,28 @@ class ReaderPaginationCacheService {
   }
 
   static Future<Directory> _defaultDirectoryProvider() async {
+    final tempDirectory = await getTemporaryDirectory();
+    return Directory(p.join(tempDirectory.path, 'reader_pagination_cache'));
+  }
+
+  Future<File> _legacyChapterLayoutCacheFile({
+    required String sourceId,
+    required String chapterUrl,
+    required String signature,
+  }) async {
     final supportDirectory = await getApplicationSupportDirectory();
-    return Directory(p.join(supportDirectory.path, 'reader_pagination_cache'));
+    final cacheKey = buildChapterLayoutCacheKey(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      signature: signature,
+    );
+    return File(
+      p.join(
+        supportDirectory.path,
+        'reader_pagination_cache',
+        '${_stablePaginationCacheHash(cacheKey)}.json',
+      ),
+    );
   }
 
   String _stablePaginationCacheHash(String input) {

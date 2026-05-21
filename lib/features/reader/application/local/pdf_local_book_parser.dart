@@ -6,6 +6,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
+import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/entities/reader_document.dart';
 import 'local_book_parser.dart';
 
@@ -50,46 +51,15 @@ class PdfLocalBookParser implements LocalBookParser {
       );
     }
 
-    final chapters = <LocalParsedChapter>[];
-    for (
-      var pageNumber = 1;
-      pageNumber <= document.pageCount;
-      pageNumber += 1
-    ) {
-      final rawText = await _extractor.extractPageText(
-        document: document,
-        pageNumber: pageNumber,
-      );
-      final text = _normalizePdfText(rawText);
-      if (text.isEmpty) {
-        continue;
-      }
-      final lines = text
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty)
-          .toList(growable: false);
-      final title = _resolvePageTitle(pageNumber, lines);
-      chapters.add(
-        LocalParsedChapter(
-          title: title,
-          content: text,
-          document: ReaderDocument.fromContent(
-            content: text,
-            title: title,
-            includeTitleBlock: true,
-          ),
-        ),
-      );
-    }
-
-    if (chapters.isEmpty) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: 'PDF 未提取到文本内容，可能是扫描版、图片版或无文本层文件。',
-      );
-    }
+    final chapters = List<LocalParsedChapter>.generate(
+      document.pageCount,
+      (index) => LocalParsedChapter(
+        title: '第 ${index + 1} 页',
+        content: '',
+        sourceRef: 'pdf:page:${index + 1}',
+      ),
+      growable: false,
+    );
 
     return LocalParsedBook(
       chapters: chapters,
@@ -98,6 +68,66 @@ class PdfLocalBookParser implements LocalBookParser {
       description: _normalizeNullable(
         document.subject,
         fallback: book.description,
+      ),
+    );
+  }
+
+  Future<LocalParsedChapter> parsePage({
+    required LocalBook book,
+    required LocalChapter chapter,
+  }) async {
+    final sourceRef = chapter.sourceRef?.trim() ?? '';
+    final pageNumber = _parsePageNumber(sourceRef);
+    if (pageNumber == null || pageNumber <= 0) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: 'PDF 页面定位信息缺失，请重新索引后重试。',
+      );
+    }
+    if (!_isRuntimeSupported()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: 'PDF 导入当前仅支持 Android 或 iOS 平台。',
+      );
+    }
+    final document = await _openDocument(book.storagePath);
+    if (pageNumber > document.pageCount) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'PDF 页面不存在，请重新索引后重试。',
+      );
+    }
+    final rawText = await _extractor.extractPageText(
+      document: document,
+      pageNumber: pageNumber,
+    );
+    final text = _normalizePdfText(rawText);
+    if (text.isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'PDF 当前页未提取到文本，可能是扫描版、图片版或无文本层页面。',
+      );
+    }
+    final title = _resolvePageTitle(
+      pageNumber,
+      text
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList(growable: false),
+    );
+    return LocalParsedChapter(
+      title: title,
+      content: text,
+      sourceRef: sourceRef,
+      document: ReaderDocument.fromContent(
+        content: text,
+        title: title,
+        includeTitleBlock: true,
       ),
     );
   }
@@ -132,6 +162,14 @@ class PdfLocalBookParser implements LocalBookParser {
       }
     }
     return '第 $pageNumber 页';
+  }
+
+  int? _parsePageNumber(String sourceRef) {
+    const prefix = 'pdf:page:';
+    if (!sourceRef.startsWith(prefix)) {
+      return null;
+    }
+    return int.tryParse(sourceRef.substring(prefix.length).trim());
   }
 
   bool _looksLikeChapterTitle(String line) {

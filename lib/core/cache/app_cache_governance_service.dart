@@ -59,6 +59,19 @@ class AppCacheGovernanceService {
   final ReaderPaginationCacheService _paginationCacheService;
   final CoverImageDiskCache _coverImageDiskCache;
 
+  Future<void> enforceBudgets() async {
+    await _database.pruneChapterCachesByBudget(
+      maxEntries: AppCacheBudgetPolicies.chapterCaches.maxEntries,
+      maxBytes: AppCacheBudgetPolicies.chapterCaches.maxBytes,
+      stalePeriod: AppCacheBudgetPolicies.chapterCaches.stalePeriod,
+    );
+    await _paginationCacheService.prunePersistedChapterLayoutsByBudget(
+      maxEntries: AppCacheBudgetPolicies.paginationLayouts.maxEntries,
+      maxBytes: AppCacheBudgetPolicies.paginationLayouts.maxBytes,
+      stalePeriod: AppCacheBudgetPolicies.paginationLayouts.stalePeriod,
+    );
+  }
+
   Future<AppCacheGovernanceSnapshot> loadSnapshot() async {
     final chapterEntries = await _database.countChapterCaches();
     final chapterBytes = await _database.estimateChapterCachesBytes();
