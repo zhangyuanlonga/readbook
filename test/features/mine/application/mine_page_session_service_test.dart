@@ -9,16 +9,41 @@ import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_servic
 import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 
+import '../../../test_utils/fake_auth_session_secret_store.dart';
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
   test(
+    'prime reads display-only prefs without token for startup preheat',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.user_id': 'user_prime',
+        'auth.username': 'reader_prime',
+        'auth.display_name': 'Reader Prime',
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      MinePageSessionPriming.prime(prefs);
+      final primed = MinePageSessionPriming.take();
+
+      expect(primed, isNotNull);
+      expect(primed?.accessToken, isEmpty);
+      expect(primed?.userId, 'user_prime');
+      expect(primed?.displayName, 'Reader Prime');
+    },
+  );
+
+  test(
     'loads session snapshot with membership and source visibility',
     () async {
       final prefs = await SharedPreferences.getInstance();
-      final store = AuthSessionStore(preferences: prefs);
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
       await store.saveSession(
         const AuthSession(
           accessToken: 'token',
@@ -49,7 +74,9 @@ void main() {
 
   test('persists and restores layout mode', () async {
     final service = MinePageSessionService(
-      authSessionStore: AuthSessionStore(),
+      authSessionStore: AuthSessionStore(
+        secretStore: FakeAuthSessionSecretStore(),
+      ),
       mobileFeatureService: _FakeMobileFeatureService(),
       membershipService: _FakeMembershipService(),
       remoteAccessSnapshotService: RemoteAccessSnapshotService(),
@@ -61,7 +88,10 @@ void main() {
 
   test('uses cached remote snapshot when remote refresh is disabled', () async {
     final prefs = await SharedPreferences.getInstance();
-    final store = AuthSessionStore(preferences: prefs);
+    final store = AuthSessionStore(
+      preferences: prefs,
+      secretStore: FakeAuthSessionSecretStore(),
+    );
     await store.saveSession(
       const AuthSession(
         accessToken: 'token',

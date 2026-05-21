@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
@@ -8,10 +10,42 @@ import 'package:shuxiang_reading_next/features/mine/application/launch_image_gal
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
   group('LaunchImageGalleryService', () {
     setUp(() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
+    });
+
+    setUp(() async {
+      final documentsDir = await Directory.systemTemp.createTemp(
+        'launch_gallery_docs_',
+      );
+      final supportDir = await Directory.systemTemp.createTemp(
+        'launch_gallery_support_',
+      );
+      _latestPathProviderDocumentsDir = documentsDir;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, (call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return documentsDir.path;
+            }
+            if (call.method == 'getApplicationSupportDirectory') {
+              return supportDir.path;
+            }
+            return null;
+          });
+      addTearDown(() async {
+        _latestPathProviderDocumentsDir = null;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(pathProviderChannel, null);
+        if (documentsDir.existsSync()) {
+          await documentsDir.delete(recursive: true);
+        }
+        if (supportDir.existsSync()) {
+          await supportDir.delete(recursive: true);
+        }
+      });
     });
 
     test('persists galleries and active gallery id', () async {
@@ -40,6 +74,64 @@ void main() {
       expect(savedGallery.name, '品牌启动图');
       expect(await service.loadActiveGalleryId(), gallery.id);
       expect((await service.loadActiveGallery())?.id, gallery.id);
+    });
+
+    test('persists custom galleries into index file instead of SharedPreferences', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final service = LaunchImageGalleryService(
+        preferences: prefs,
+        assetStore: await _createAssetStore(),
+      );
+      final gallery = LaunchImageGallery(
+        id: 'launch_gallery_index',
+        name: '索引启动图集',
+        createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+        imagePaths: const <String>[],
+      );
+
+      await service.saveGalleries(<LaunchImageGallery>[gallery]);
+
+      expect(prefs.containsKey('launchImageGallery.galleries'), isFalse);
+      final documentsDir = await _pathProviderDocumentsDir();
+      final indexFile = File(
+        '${documentsDir.path}/launch_image_galleries/index.json',
+      );
+      expect(await indexFile.exists(), isTrue);
+      expect(await indexFile.readAsString(), contains('launch_gallery_index'));
+    });
+
+    test('migrates legacy SharedPreferences payload into index file', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'launchImageGallery.galleries',
+        jsonEncode(<Map<String, dynamic>>[
+          LaunchImageGallery(
+            id: 'launch_gallery_legacy',
+            name: '旧启动图集',
+            createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            imagePaths: const <String>[],
+          ).toJson(),
+        ]),
+      );
+      final service = LaunchImageGalleryService(
+        preferences: prefs,
+        assetStore: await _createAssetStore(),
+      );
+
+      final galleries = await service.loadGalleries();
+
+      expect(
+        galleries.any((item) => item.id == 'launch_gallery_legacy'),
+        isTrue,
+      );
+      expect(prefs.containsKey('launchImageGallery.galleries'), isFalse);
+      final documentsDir = await _pathProviderDocumentsDir();
+      final indexFile = File(
+        '${documentsDir.path}/launch_image_galleries/index.json',
+      );
+      expect(await indexFile.exists(), isTrue);
     });
 
     test('loads built-in launch gallery by default', () async {
@@ -171,6 +263,16 @@ void main() {
       expect(snapshot.resolvedImagePath, isNull);
     });
   });
+}
+
+Directory? _latestPathProviderDocumentsDir;
+
+Future<Directory> _pathProviderDocumentsDir() async {
+  final directory = _latestPathProviderDocumentsDir;
+  if (directory == null) {
+    throw StateError('Missing path provider documents test directory.');
+  }
+  return directory;
 }
 
 Future<ManagedAssetStore> _createAssetStore() async {

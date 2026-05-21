@@ -23,9 +23,15 @@ void main() {
       addTearDown(database.close);
 
       final service = BookPresentationSyncService(
-        readerPreferencesService: ReaderPreferencesService(preferences: prefs),
+        readerPreferencesService: ReaderPreferencesService(
+          preferences: prefs,
+          database: database,
+        ),
         readingRecordService: ReadingRecordService(database: database),
-        bookshelfService: BookshelfService(preferences: prefs),
+        bookshelfService: BookshelfService(
+          preferences: prefs,
+          database: database,
+        ),
       );
 
       await database.upsertReadingRecord(
@@ -68,6 +74,7 @@ void main() {
 
       final snapshot = await ReaderPreferencesService(
         preferences: prefs,
+        database: database,
       ).loadTocSnapshot(
         sourceId: 'source_a',
         detailUrl: 'https://example.com/book/1',
@@ -79,10 +86,15 @@ void main() {
       expect(record?.bookTitle, '展示标题');
       expect(record?.coverUrl, 'https://example.com/cover.jpg');
 
-      final bookshelf = await BookshelfService(preferences: prefs).getAll();
+      final bookshelf =
+          await BookshelfService(
+            preferences: prefs,
+            database: database,
+          ).getAll();
       expect(bookshelf, hasLength(1));
       expect(bookshelf.first.title, '展示标题');
       expect(bookshelf.first.coverUrl, 'https://example.com/cover.jpg');
+      expect(prefs.getString('bookshelf.books'), isNull);
     },
   );
 }

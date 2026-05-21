@@ -28,6 +28,11 @@ Future<void> main(List<String> args) async {
       arguments: ['run', 'tool/check_architecture_guardrails.dart'],
     ),
     const _SuiteStep(
+      name: 'Storage Governance Guard',
+      executable: 'dart',
+      arguments: ['run', 'tool/check_storage_governance_guard.dart'],
+    ),
+    const _SuiteStep(
       name: 'Route Inventory',
       executable: 'dart',
       arguments: ['run', 'tool/check_route_inventory.dart'],
@@ -78,6 +83,17 @@ Future<void> main(List<String> args) async {
         'test/features/reader/application/reader_source_switch_coordinator_test.dart',
         'test/features/reader/presentation/reader_runtime_controller_test.dart',
         'test/features/source/presentation/source_page_script_tab_test.dart',
+      ],
+    ),
+    _SuiteStep(
+      name: 'Storage Migration Regression',
+      executable: flutterCmd,
+      arguments: const [
+        'test',
+        'test/data/datasources/local/app_database_reading_record_migration_test.dart',
+        'test/data/datasources/local/app_database_chapter_cache_test.dart',
+        'test/data/datasources/local/app_database_reading_progress_migration_test.dart',
+        'test/app/startup/managed_asset_path_migration_service_test.dart',
       ],
     ),
   ];

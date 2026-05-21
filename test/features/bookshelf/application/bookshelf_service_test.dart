@@ -1,16 +1,25 @@
+import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('BookshelfService', () {
+    late AppDatabase database;
+
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      database = AppDatabase(executor: NativeDatabase.memory());
+    });
+
+    tearDown(() async {
+      await database.close();
     });
 
     test('upsert inserts and contains returns true', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       final book = BookshelfBook(
         bookId: 'book_1',
         sourceId: 'src_1',
@@ -33,7 +42,7 @@ void main() {
     });
 
     test('upsert same key replaces old item and keeps one record', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       final first = BookshelfBook(
         bookId: 'book_1',
         sourceId: 'src_1',
@@ -58,7 +67,7 @@ void main() {
     });
 
     test('remove deletes item', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       final book = BookshelfBook(
         bookId: 'book_1',
         sourceId: 'src_1',
@@ -78,7 +87,7 @@ void main() {
     });
 
     test('emits collection changes for add and remove operations', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       final book = BookshelfBook(
         bookId: 'book_1',
         sourceId: 'src_1',
@@ -106,7 +115,7 @@ void main() {
     });
 
     test('persists bookshelf sort mode', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
 
       expect(await service.loadSortMode(), BookshelfService.defaultSortMode);
 
@@ -123,7 +132,7 @@ void main() {
     });
 
     test('persists bookshelf grid preferences', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
 
       expect(
         await service.loadGridAdaptiveColumns(),
@@ -178,7 +187,7 @@ void main() {
     });
 
     test('renameTag renames across books and deduplicates tags', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       await service.setBookTags(
         sourceId: 'src_1',
         detailUrl: 'detail_1',
@@ -205,7 +214,7 @@ void main() {
     });
 
     test('deleteTag removes target tag and clears empty book tags', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       await service.setBookTags(
         sourceId: 'src_1',
         detailUrl: 'detail_1',
@@ -226,7 +235,7 @@ void main() {
     });
 
     test('setBookTags preserves multiple book entries', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       await service.setBookTags(
         sourceId: 'src_1',
         detailUrl: 'detail_1',
@@ -255,7 +264,7 @@ void main() {
     });
 
     test('renameCategory returns affected book count', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       await service.upsert(
         BookshelfBook(
           bookId: 'book_1',
@@ -300,7 +309,7 @@ void main() {
     });
 
     test('deleteCategory returns affected book count', () async {
-      final service = BookshelfService();
+      final service = BookshelfService(database: database);
       await service.upsert(
         BookshelfBook(
           bookId: 'book_1',
@@ -344,7 +353,7 @@ void main() {
     test(
       'renameTag returns success when only tag order contains target',
       () async {
-        final service = BookshelfService();
+        final service = BookshelfService(database: database);
         await service.saveTagOrder(const ['在读']);
 
         final affectedCount = await service.renameTag(
@@ -360,7 +369,7 @@ void main() {
     test(
       'deleteCategory returns success when only category order contains target',
       () async {
-        final service = BookshelfService();
+        final service = BookshelfService(database: database);
         await service.saveCategoryOrder(const ['玄幻']);
 
         final affectedCount = await service.deleteCategory('玄幻');
@@ -373,7 +382,7 @@ void main() {
     test(
       'replace swaps old entry and migrates tags to new source entry',
       () async {
-        final service = BookshelfService();
+        final service = BookshelfService(database: database);
         await service.upsert(
           BookshelfBook(
             bookId: 'book_old',
@@ -423,6 +432,109 @@ void main() {
           tagMap['src_new::https://example.com/new'],
           orderedEquals(const ['在读', '玄幻']),
         );
+      },
+    );
+
+    test(
+      'migrates legacy bookshelf snapshot into database and reads db first',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'bookshelf.books':
+              '[{"bookId":"book_1","sourceId":"src_1","title":"凡人修仙传","detailUrl":"https://example.com/detail/1","addedAt":"2026-02-12T12:00:00.000Z","author":"忘语","category":"仙侠"}]',
+          'bookshelf.book_tags':
+              '{"src_1::https://example.com/detail/1":["在读","收藏"]}',
+          'bookshelf.tag_metadata.v1':
+              '[{"name":"在读","colorValue":4284906148},{"name":"收藏","colorValue":4282271554}]',
+          'bookshelf.tag_order': '["在读","收藏"]',
+          'bookshelf.category_metadata.v1':
+              '[{"name":"仙侠","colorValue":4284906148}]',
+          'bookshelf.category_order': '["仙侠"]',
+          'bookshelf.base_filter_order': '["all","reading"]',
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final service = BookshelfService(
+          preferences: prefs,
+          database: database,
+        );
+
+        await service.migrateLegacySnapshotToDatabase();
+
+        final all = await service.getAll();
+        final tagMap = await service.getTagMap();
+        final tagOrder = await service.getTagOrder();
+        final categoryOrder = await service.getCategoryOrder();
+        final baseFilterOrder = await service.getBaseFilterOrder();
+
+        expect(all, hasLength(1));
+        expect(all.single.title, '凡人修仙传');
+        expect(all.single.author, '忘语');
+        expect(all.single.category, '仙侠');
+        expect(
+          tagMap['src_1::https://example.com/detail/1'],
+          orderedEquals(const ['在读', '收藏']),
+        );
+        expect(tagOrder, orderedEquals(const ['在读', '收藏']));
+        expect(categoryOrder, orderedEquals(const ['仙侠']));
+        expect(baseFilterOrder, orderedEquals(const ['all', 'reading']));
+        expect(await database.listBookshelfBooks(), hasLength(1));
+        expect(await database.listBookshelfTagAssignments(), hasLength(2));
+        expect(await database.listBookshelfTagMetadata(), hasLength(2));
+        expect(await database.listBookshelfCategoryMetadata(), hasLength(1));
+        expect(await database.listBookshelfBaseFilterOrders(), hasLength(2));
+        expect(prefs.getString('bookshelf.books'), isNull);
+        expect(prefs.getString('bookshelf.book_tags'), isNull);
+        expect(prefs.getString('bookshelf.tag_order'), isNull);
+        expect(prefs.getString('bookshelf.tag_metadata.v1'), isNull);
+        expect(prefs.getString('bookshelf.category_order'), isNull);
+        expect(prefs.getString('bookshelf.category_metadata.v1'), isNull);
+        expect(prefs.getString('bookshelf.base_filter_order'), isNull);
+      },
+    );
+
+    test(
+      'database-backed writes no longer persist legacy prefs keys',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final service = BookshelfService(
+          preferences: prefs,
+          database: database,
+        );
+
+        await service.upsert(
+          BookshelfBook(
+            bookId: 'book_1',
+            sourceId: 'src_1',
+            title: '测试',
+            detailUrl: 'detail_1',
+            addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+          ),
+        );
+        await service.setBookTags(
+          sourceId: 'src_1',
+          detailUrl: 'detail_1',
+          tags: const ['在读'],
+        );
+        await service.saveTagOrder(const ['在读']);
+        await service.saveCategoryItems(const [
+          BookshelfTaxonomyItem(name: '玄幻', colorValue: 0xFF6750A4),
+        ]);
+        await service.saveCategoryOrder(const ['玄幻']);
+        await service.setBookCategory(
+          sourceId: 'src_1',
+          detailUrl: 'detail_1',
+          category: '玄幻',
+        );
+        await service.saveBaseFilterOrder(const ['all', 'reading']);
+
+        expect(prefs.getString('bookshelf.books'), isNull);
+        expect(prefs.getString('bookshelf.book_tags'), isNull);
+        expect(prefs.getString('bookshelf.tag_order'), isNull);
+        expect(prefs.getString('bookshelf.tag_metadata.v1'), isNull);
+        expect(prefs.getString('bookshelf.category_order'), isNull);
+        expect(prefs.getString('bookshelf.category_metadata.v1'), isNull);
+        expect(prefs.getString('bookshelf.base_filter_order'), isNull);
+        expect(await database.listBookshelfBooks(), hasLength(1));
+        expect(await database.listBookshelfTagAssignments(), hasLength(1));
       },
     );
   });

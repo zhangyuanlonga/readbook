@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_logical_position.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_progress.dart';
@@ -291,6 +293,9 @@ void main() {
       expect(restored.chapterPositionRatio, 0.63);
       expect(restored.logicalPosition, isNotNull);
       expect(restored.logicalPosition!.blockIndex, 4);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('reader.progress.book_1'), isFalse);
     });
 
     test('migrates reading progress to a new book identity', () async {
@@ -343,6 +348,26 @@ void main() {
       final restored = await service.loadProgress('book_legacy');
 
       expect(restored, isNull);
+    });
+
+    test('migrates legacy progress payload from SharedPreferences to database', () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.progress.book_legacy':
+            '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z","chapterPositionRatio":0.4}',
+      });
+
+      final service = await _createService();
+      final restored = await service.loadProgress('book_legacy');
+
+      expect(restored, isNotNull);
+      expect(restored!.chapterPositionRatio, 0.4);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('reader.progress.book_legacy'), isFalse);
+
+      final restoredAgain = await service.loadProgress('book_legacy');
+      expect(restoredAgain, isNotNull);
+      expect(restoredAgain!.chapterTitle, '第一章');
     });
 
     test('ignores legacy single background image key', () async {
@@ -407,7 +432,9 @@ void main() {
 Future<ReaderPreferencesService> _createService() async {
   final documentsDir = await Directory.systemTemp.createTemp('reader_docs_');
   final supportDir = await Directory.systemTemp.createTemp('reader_support_');
+  final database = AppDatabase(executor: NativeDatabase.memory());
   addTearDown(() async {
+    await database.close();
     if (documentsDir.existsSync()) {
       await documentsDir.delete(recursive: true);
     }
@@ -420,5 +447,6 @@ Future<ReaderPreferencesService> _createService() async {
       documentsDirectoryProvider: () async => documentsDir,
       supportDirectoryProvider: () async => supportDir,
     ),
+    database: database,
   );
 }

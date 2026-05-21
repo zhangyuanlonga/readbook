@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/storage/managed_asset_store.dart';
+import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
@@ -11,14 +12,17 @@ class ReaderPreferencesService {
   ReaderPreferencesService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
+    AppDatabase? database,
   }) : _preferencesFuture =
            preferences == null
                ? SharedPreferences.getInstance()
                : Future.value(preferences),
-       _assetStore = assetStore ?? ManagedAssetStore();
+       _assetStore = assetStore ?? ManagedAssetStore(),
+       _database = database ?? AppDatabase.instance;
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
+  final AppDatabase _database;
 
   static const String _fontSizeKey = 'reader.settings.fontSize';
   static const String _lineHeightKey = 'reader.settings.lineHeight';
@@ -694,12 +698,11 @@ class ReaderPreferencesService {
       return;
     }
 
+    await _database.upsertReadingProgress(nextProgress);
     final prefs = await _preferencesFuture;
-    await prefs.setString(
-      '$_progressPrefix${nextProgress.bookId}',
-      jsonEncode(nextProgress.toJson()),
-    );
+    await prefs.remove('$_progressPrefix${nextProgress.bookId}');
     if (removePrevious && normalizedPreviousBookId != nextProgress.bookId) {
+      await _database.deleteReadingProgress(normalizedPreviousBookId);
       await prefs.remove('$_progressPrefix$normalizedPreviousBookId');
     }
   }
@@ -777,12 +780,18 @@ class ReaderPreferencesService {
   }
 
   Future<ReadingProgress?> loadProgress(String bookId) async {
-    if (bookId.trim().isEmpty) {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
       return null;
     }
 
+    final stored = await _database.getReadingProgressByBookId(normalizedBookId);
+    if (stored != null) {
+      return stored;
+    }
+
     final prefs = await _preferencesFuture;
-    final raw = prefs.getString('$_progressPrefix${bookId.trim()}');
+    final raw = prefs.getString('$_progressPrefix$normalizedBookId');
     if (raw == null || raw.trim().isEmpty) {
       return null;
     }
@@ -793,20 +802,21 @@ class ReaderPreferencesService {
         return null;
       }
 
-      return ReadingProgress.fromJson(
+      final progress = ReadingProgress.fromJson(
         decoded.map((key, value) => MapEntry(key.toString(), value)),
       );
+      await _database.upsertReadingProgress(progress);
+      await prefs.remove('$_progressPrefix$normalizedBookId');
+      return progress;
     } on FormatException {
       return null;
     }
   }
 
   Future<void> saveProgress(ReadingProgress progress) async {
+    await _database.upsertReadingProgress(progress);
     final prefs = await _preferencesFuture;
-    await prefs.setString(
-      '$_progressPrefix${progress.bookId}',
-      jsonEncode(progress.toJson()),
-    );
+    await prefs.remove('$_progressPrefix${progress.bookId}');
   }
 
   Future<void> deleteProgress(String bookId) async {
@@ -815,13 +825,18 @@ class ReaderPreferencesService {
       return;
     }
 
+    await _database.deleteReadingProgress(normalizedBookId);
     final prefs = await _preferencesFuture;
     await prefs.remove('$_progressPrefix$normalizedBookId');
   }
 
   Future<List<ReadingProgress>> loadAllProgresses() async {
+    final databaseItems = await _database.listReadingProgresses();
     final prefs = await _preferencesFuture;
-    final results = <ReadingProgress>[];
+    final results = <String, ReadingProgress>{
+      for (final item in databaseItems) item.bookId.trim(): item,
+    };
+    final migratedLegacyKeys = <String>[];
     for (final key in prefs.getKeys()) {
       if (!key.startsWith(_progressPrefix)) {
         continue;
@@ -835,19 +850,24 @@ class ReaderPreferencesService {
         if (decoded is! Map) {
           continue;
         }
-        results.add(
-          ReadingProgress.fromJson(
-            decoded.map(
-              (nestedKey, value) => MapEntry(nestedKey.toString(), value),
-            ),
+        final progress = ReadingProgress.fromJson(
+          decoded.map(
+            (nestedKey, value) => MapEntry(nestedKey.toString(), value),
           ),
         );
+        results[progress.bookId.trim()] = progress;
+        migratedLegacyKeys.add(key);
+        await _database.upsertReadingProgress(progress);
       } on FormatException {
         continue;
       }
     }
-    results.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return List<ReadingProgress>.unmodifiable(results);
+    for (final key in migratedLegacyKeys) {
+      await prefs.remove(key);
+    }
+    final sorted = results.values.toList(growable: false)
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return List<ReadingProgress>.unmodifiable(sorted);
   }
 
   Future<ReaderTocSnapshot?> loadTocSnapshot({

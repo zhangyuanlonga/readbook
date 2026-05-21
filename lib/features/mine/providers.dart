@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/composition/app_providers.dart' as app_providers;
 import '../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../core/app_update/app_update_service.dart';
+import '../../core/auth/auth_session_secret_store.dart';
 import '../../core/auth/auth_session_store.dart';
 import '../../core/media/image_selection_service.dart';
 import '../../core/membership/membership_service.dart';
@@ -52,7 +53,15 @@ final bookmarksLocalReaderEntryGuardServiceProvider =
     });
 
 final mineAuthSessionStoreProvider = Provider<AuthSessionStore>((ref) {
-  return AuthSessionStore();
+  return AuthSessionStore(
+    secretStore: ref.watch(mineAuthSessionSecretStoreProvider),
+  );
+});
+
+final mineAuthSessionSecretStoreProvider = Provider<AuthSessionSecretStore>((
+  ref,
+) {
+  return FlutterSecureAuthSessionSecretStore();
 });
 
 final mineUpdateServiceProvider = Provider<AppUpdateService>((ref) {

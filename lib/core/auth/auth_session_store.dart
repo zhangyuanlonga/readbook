@@ -1,47 +1,84 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_session.dart';
+import 'auth_session_secret_store.dart';
+import 'auth_session_storage_keys.dart';
 
 class AuthSessionStore {
-  AuthSessionStore({SharedPreferences? preferences})
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences);
-
-  static const String _accessTokenKey = 'auth.access_token';
-  static const String _refreshTokenKey = 'auth.refresh_token';
-  static const String _accessExpiresAtKey = 'auth.access_expires_at';
-  static const String _refreshExpiresAtKey = 'auth.refresh_expires_at';
-  static const String _userIdKey = 'auth.user_id';
-  static const String _usernameKey = 'auth.username';
-  static const String _accountKey = 'auth.account';
-  static const String _displayNameKey = 'auth.display_name';
+  AuthSessionStore({
+    SharedPreferences? preferences,
+    AuthSessionSecretStore? secretStore,
+    this.enableLegacyCredentialFallback = true,
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _secretStore = secretStore ?? FlutterSecureAuthSessionSecretStore();
 
   final Future<SharedPreferences> _preferencesFuture;
+  final AuthSessionSecretStore _secretStore;
+  final bool enableLegacyCredentialFallback;
 
   Future<AuthSession?> getSession() async {
     final prefs = await _preferencesFuture;
-    return readSession(prefs);
+    final secrets = await _readSecretsWithMigration(prefs);
+    if (!secrets.hasAccessToken) {
+      return null;
+    }
+    final displaySession = readDisplaySession(prefs);
+    return AuthSession(
+      accessToken: secrets.accessToken!.trim(),
+      refreshToken: secrets.refreshToken,
+      accessExpiresAt: secrets.accessExpiresAt,
+      refreshExpiresAt: secrets.refreshExpiresAt,
+      userId: displaySession?.userId,
+      username: displaySession?.username,
+      account: displaySession?.account,
+      displayName: displaySession?.displayName,
+    );
   }
 
   static AuthSession? readSession(SharedPreferences prefs) {
-    final accessToken = (prefs.getString(_accessTokenKey) ?? '').trim();
+    final accessToken =
+        (prefs.getString(authAccessTokenStorageKey) ?? '').trim();
     if (accessToken.isEmpty) {
       return null;
     }
-    final userId = (prefs.getString(_userIdKey) ?? '').trim();
-    final username = (prefs.getString(_usernameKey) ?? '').trim();
-    final account = (prefs.getString(_accountKey) ?? '').trim();
-    final displayName = (prefs.getString(_displayNameKey) ?? '').trim();
-    final refreshToken = (prefs.getString(_refreshTokenKey) ?? '').trim();
-    final accessExpiresAt = _parseTime(prefs.getString(_accessExpiresAtKey));
-    final refreshExpiresAt = _parseTime(prefs.getString(_refreshExpiresAtKey));
+    final displaySession = readDisplaySession(prefs);
+    final refreshToken =
+        (prefs.getString(authRefreshTokenStorageKey) ?? '').trim();
+    final accessExpiresAt = _parseTime(
+      prefs.getString(authAccessExpiresAtStorageKey),
+    );
+    final refreshExpiresAt = _parseTime(
+      prefs.getString(authRefreshExpiresAtStorageKey),
+    );
     return AuthSession(
       accessToken: accessToken,
       refreshToken: refreshToken.isEmpty ? null : refreshToken,
       accessExpiresAt: accessExpiresAt,
       refreshExpiresAt: refreshExpiresAt,
+      userId: displaySession?.userId,
+      username: displaySession?.username,
+      account: displaySession?.account,
+      displayName: displaySession?.displayName,
+    );
+  }
+
+  static AuthSession? readDisplaySession(SharedPreferences prefs) {
+    final userId = (prefs.getString(authUserIdStorageKey) ?? '').trim();
+    final username = (prefs.getString(authUsernameStorageKey) ?? '').trim();
+    final account = (prefs.getString(authAccountStorageKey) ?? '').trim();
+    final displayName =
+        (prefs.getString(authDisplayNameStorageKey) ?? '').trim();
+    if (userId.isEmpty &&
+        username.isEmpty &&
+        account.isEmpty &&
+        displayName.isEmpty) {
+      return null;
+    }
+    return AuthSession(
+      accessToken: '',
       userId: userId.isEmpty ? null : userId,
       username: username.isEmpty ? null : username,
       account: account.isEmpty ? null : account,
@@ -51,92 +88,120 @@ class AuthSessionStore {
 
   Future<String?> getAccessToken() async {
     final prefs = await _preferencesFuture;
-    final accessToken = (prefs.getString(_accessTokenKey) ?? '').trim();
+    final secrets = await _readSecretsWithMigration(prefs);
+    final accessToken = secrets.accessToken?.trim() ?? '';
     return accessToken.isEmpty ? null : accessToken;
   }
 
   Future<String?> getRefreshToken() async {
     final prefs = await _preferencesFuture;
-    final refreshToken = (prefs.getString(_refreshTokenKey) ?? '').trim();
+    final secrets = await _readSecretsWithMigration(prefs);
+    final refreshToken = secrets.refreshToken?.trim() ?? '';
     return refreshToken.isEmpty ? null : refreshToken;
   }
 
   Future<String?> getUserId() async {
     final prefs = await _preferencesFuture;
-    final userId = (prefs.getString(_userIdKey) ?? '').trim();
+    final userId = (prefs.getString(authUserIdStorageKey) ?? '').trim();
     return userId.isEmpty ? null : userId;
   }
 
   Future<void> saveSession(AuthSession session) async {
     final prefs = await _preferencesFuture;
-    final accessToken = session.accessToken.trim();
-    if (accessToken.isEmpty) {
-      await prefs.remove(_accessTokenKey);
-    } else {
-      await prefs.setString(_accessTokenKey, accessToken);
-    }
+    await _secretStore.writeSecrets(
+      AuthSessionSecrets(
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        accessExpiresAt: session.accessExpiresAt,
+        refreshExpiresAt: session.refreshExpiresAt,
+      ),
+    );
 
     final userId = session.userId?.trim() ?? '';
     if (userId.isEmpty) {
-      await prefs.remove(_userIdKey);
+      await prefs.remove(authUserIdStorageKey);
     } else {
-      await prefs.setString(_userIdKey, userId);
+      await prefs.setString(authUserIdStorageKey, userId);
     }
 
     final username = session.loginIdentity?.trim() ?? '';
     if (username.isEmpty) {
-      await prefs.remove(_usernameKey);
+      await prefs.remove(authUsernameStorageKey);
     } else {
-      await prefs.setString(_usernameKey, username);
+      await prefs.setString(authUsernameStorageKey, username);
     }
 
     final account = session.account?.trim() ?? '';
     if (account.isEmpty) {
-      await prefs.remove(_accountKey);
+      await prefs.remove(authAccountStorageKey);
     } else {
-      await prefs.setString(_accountKey, account);
+      await prefs.setString(authAccountStorageKey, account);
     }
 
     final displayName = session.displayName?.trim() ?? '';
     if (displayName.isEmpty) {
-      await prefs.remove(_displayNameKey);
+      await prefs.remove(authDisplayNameStorageKey);
     } else {
-      await prefs.setString(_displayNameKey, displayName);
+      await prefs.setString(authDisplayNameStorageKey, displayName);
     }
 
-    final refreshToken = session.refreshToken?.trim() ?? '';
-    if (refreshToken.isEmpty) {
-      await prefs.remove(_refreshTokenKey);
-    } else {
-      await prefs.setString(_refreshTokenKey, refreshToken);
-    }
-
-    final accessExpiresAt = session.accessExpiresAt?.toUtc().toIso8601String();
-    if (accessExpiresAt == null || accessExpiresAt.isEmpty) {
-      await prefs.remove(_accessExpiresAtKey);
-    } else {
-      await prefs.setString(_accessExpiresAtKey, accessExpiresAt);
-    }
-
-    final refreshExpiresAt =
-        session.refreshExpiresAt?.toUtc().toIso8601String();
-    if (refreshExpiresAt == null || refreshExpiresAt.isEmpty) {
-      await prefs.remove(_refreshExpiresAtKey);
-    } else {
-      await prefs.setString(_refreshExpiresAtKey, refreshExpiresAt);
-    }
+    await _clearLegacyCredentialKeys(prefs);
   }
 
   Future<void> clear() async {
     final prefs = await _preferencesFuture;
-    await prefs.remove(_accessTokenKey);
-    await prefs.remove(_userIdKey);
-    await prefs.remove(_usernameKey);
-    await prefs.remove(_accountKey);
-    await prefs.remove(_displayNameKey);
-    await prefs.remove(_refreshTokenKey);
-    await prefs.remove(_accessExpiresAtKey);
-    await prefs.remove(_refreshExpiresAtKey);
+    await _secretStore.clear();
+    await prefs.remove(authUserIdStorageKey);
+    await prefs.remove(authUsernameStorageKey);
+    await prefs.remove(authAccountStorageKey);
+    await prefs.remove(authDisplayNameStorageKey);
+    await _clearLegacyCredentialKeys(prefs);
+  }
+
+  Future<void> _clearLegacyCredentialKeys(SharedPreferences prefs) async {
+    await prefs.remove(authAccessTokenStorageKey);
+    await prefs.remove(authRefreshTokenStorageKey);
+    await prefs.remove(authAccessExpiresAtStorageKey);
+    await prefs.remove(authRefreshExpiresAtStorageKey);
+  }
+
+  AuthSessionSecrets _readLegacySecrets(SharedPreferences prefs) {
+    final accessToken =
+        (prefs.getString(authAccessTokenStorageKey) ?? '').trim();
+    final refreshToken =
+        (prefs.getString(authRefreshTokenStorageKey) ?? '').trim();
+    return AuthSessionSecrets(
+      accessToken: accessToken.isEmpty ? null : accessToken,
+      refreshToken: refreshToken.isEmpty ? null : refreshToken,
+      accessExpiresAt: _parseTime(
+        prefs.getString(authAccessExpiresAtStorageKey),
+      ),
+      refreshExpiresAt: _parseTime(
+        prefs.getString(authRefreshExpiresAtStorageKey),
+      ),
+    );
+  }
+
+  Future<AuthSessionSecrets> _readSecretsWithMigration(
+    SharedPreferences prefs,
+  ) async {
+    final secureSecrets = await _secretStore.readSecrets();
+    if (!enableLegacyCredentialFallback) {
+      return secureSecrets;
+    }
+    final legacySecrets = _readLegacySecrets(prefs);
+    if (!legacySecrets.hasAnyValue) {
+      return secureSecrets;
+    }
+
+    final mergedSecrets = secureSecrets.mergeMissing(legacySecrets);
+    if (mergedSecrets.hasAccessToken) {
+      await _secretStore.writeSecrets(mergedSecrets);
+      await _clearLegacyCredentialKeys(prefs);
+      return mergedSecrets;
+    }
+
+    return secureSecrets;
   }
 
   static DateTime? _parseTime(String? raw) {

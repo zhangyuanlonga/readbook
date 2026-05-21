@@ -8,6 +8,8 @@ import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../test_utils/fake_auth_session_secret_store.dart';
+
 void main() {
   group('AnalyticsService', () {
     test('sends visit payload with bearer token when logged in', () async {
@@ -44,7 +46,10 @@ void main() {
       final service = AnalyticsService(
         baseUrl: 'http://${server.address.host}:${server.port}',
         identityService: _FakeDeviceIdentityService(),
-        sessionStore: AuthSessionStore(preferences: prefs),
+        sessionStore: AuthSessionStore(
+          preferences: prefs,
+          secretStore: FakeAuthSessionSecretStore(),
+        ),
       );
 
       await service.trackVisit(
@@ -94,7 +99,10 @@ void main() {
       final service = AnalyticsService(
         baseUrl: 'http://${server.address.host}:${server.port}',
         identityService: _FakeDeviceIdentityService(),
-        sessionStore: AuthSessionStore(preferences: prefs),
+        sessionStore: AuthSessionStore(
+          preferences: prefs,
+          secretStore: FakeAuthSessionSecretStore(),
+        ),
       );
 
       await service.trackVisit(occurredAt: DateTime.utc(2026, 3, 15, 8));

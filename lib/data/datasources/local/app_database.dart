@@ -5,13 +5,17 @@ import 'package:drift/drift.dart';
 
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
+import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/reader_document.dart';
+import '../../../domain/entities/reader_logical_position.dart';
 import '../../../domain/entities/reading_book_status.dart';
+import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
+import '../../../domain/entities/source_health.dart';
 import 'app_database_connection.dart';
 
 part 'app_database.g.dart';
@@ -210,6 +214,134 @@ class StoredReadingBookStatuses extends Table {
   Set<Column<Object>> get primaryKey => {bookId};
 }
 
+class StoredReadingProgresses extends Table {
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get chapterId => text()();
+  TextColumn get chapterUrl => text()();
+  TextColumn get chapterTitle => text()();
+  IntColumn get chapterIndex => integer()();
+  RealColumn get chapterPositionRatio =>
+      real().withDefault(const Constant(0))();
+  TextColumn get logicalPositionJson => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  String get tableName => 'reading_progresses';
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookId};
+}
+
+class StoredRemoteAccessSnapshots extends Table {
+  TextColumn get userId => text()();
+  BoolColumn get showSourceEntry =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get hasMembership =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get hasThemeCustom =>
+      boolean().withDefault(const Constant(false))();
+  IntColumn get sourceImportLimit =>
+      integer().withDefault(const Constant(10))();
+  DateTimeColumn get cachedAt => dateTime()();
+
+  @override
+  String get tableName => 'remote_access_snapshots';
+
+  @override
+  Set<Column<Object>> get primaryKey => {userId};
+}
+
+class StoredSourceHealthSnapshots extends Table {
+  TextColumn get sourceId => text()();
+  TextColumn get payloadJson => text()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'source_health_snapshots';
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceId};
+}
+
+class StoredBookshelfBooks extends Table {
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get bookId => text()();
+  TextColumn get title => text()();
+  TextColumn get author => text().nullable()();
+  TextColumn get category => text().nullable()();
+  TextColumn get coverUrl => text().nullable()();
+  TextColumn get latestChapter => text().nullable()();
+  DateTimeColumn get addedAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'bookshelf_books';
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceId, detailUrl};
+}
+
+class StoredBookshelfTagAssignments extends Table {
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get tagName => text()();
+  IntColumn get position => integer().withDefault(const Constant(0))();
+
+  @override
+  String get tableName => 'bookshelf_tag_assignments';
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceId, detailUrl, tagName};
+}
+
+class StoredBookshelfTagMetadata extends Table {
+  TextColumn get name => text()();
+  IntColumn get colorValue => integer()();
+  IntColumn get position => integer().withDefault(const Constant(0))();
+
+  @override
+  String get tableName => 'bookshelf_tag_metadata';
+
+  @override
+  Set<Column<Object>> get primaryKey => {name};
+}
+
+class StoredBookshelfCategoryMetadata extends Table {
+  TextColumn get name => text()();
+  IntColumn get colorValue => integer()();
+  IntColumn get position => integer().withDefault(const Constant(0))();
+
+  @override
+  String get tableName => 'bookshelf_category_metadata';
+
+  @override
+  Set<Column<Object>> get primaryKey => {name};
+}
+
+class StoredBookshelfBaseFilterOrders extends Table {
+  TextColumn get filterKey => text()();
+  IntColumn get position => integer().withDefault(const Constant(0))();
+
+  @override
+  String get tableName => 'bookshelf_base_filter_orders';
+
+  @override
+  Set<Column<Object>> get primaryKey => {filterKey};
+}
+
+class BookshelfTaxonomySnapshotItem {
+  const BookshelfTaxonomySnapshotItem({
+    required this.name,
+    required this.colorValue,
+  });
+
+  final String name;
+  final int colorValue;
+}
+
 class SearchSourceHits extends Table {
   TextColumn get titleNorm => text()();
   TextColumn get authorNorm => text()();
@@ -363,6 +495,14 @@ class SearchSourceHitUpsert {
     StoredReadingRecordDays,
     StoredReadingRecordSessions,
     StoredReadingBookStatuses,
+    StoredReadingProgresses,
+    StoredRemoteAccessSnapshots,
+    StoredSourceHealthSnapshots,
+    StoredBookshelfBooks,
+    StoredBookshelfTagAssignments,
+    StoredBookshelfTagMetadata,
+    StoredBookshelfCategoryMetadata,
+    StoredBookshelfBaseFilterOrders,
     SearchSourceHits,
     StoredSyncProfiles,
     StoredSyncScopeStates,
@@ -380,7 +520,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 27;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration {
@@ -481,6 +621,20 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 21) {
           await migrator.createTable(storedReadingBookStatuses);
+        }
+        if (from < 28) {
+          await migrator.createTable(storedReadingProgresses);
+        }
+        if (from < 29) {
+          await migrator.createTable(storedRemoteAccessSnapshots);
+          await migrator.createTable(storedSourceHealthSnapshots);
+        }
+        if (from < 30) {
+          await migrator.createTable(storedBookshelfBooks);
+          await migrator.createTable(storedBookshelfTagAssignments);
+          await migrator.createTable(storedBookshelfTagMetadata);
+          await migrator.createTable(storedBookshelfCategoryMetadata);
+          await migrator.createTable(storedBookshelfBaseFilterOrders);
         }
         if (from < 22) {
           await _addColumnIfMissing(
@@ -615,6 +769,14 @@ class AppDatabase extends _$AppDatabase {
           'ON local_chapters(book_id, chapter_index)',
       'CREATE INDEX IF NOT EXISTS idx_bookmarks_book_chapter_start '
           'ON bookmarks(book_id, chapter_index, start_offset)',
+      'CREATE INDEX IF NOT EXISTS idx_reading_progresses_updated_at '
+          'ON reading_progresses(updated_at)',
+      'CREATE INDEX IF NOT EXISTS idx_source_health_snapshots_updated_at '
+          'ON source_health_snapshots(updated_at)',
+      'CREATE INDEX IF NOT EXISTS idx_bookshelf_books_added_at '
+          'ON bookshelf_books(added_at)',
+      'CREATE INDEX IF NOT EXISTS idx_bookshelf_tag_assignments_book '
+          'ON bookshelf_tag_assignments(source_id, detail_url, position)',
     ];
     for (final statement in statements) {
       await customStatement(statement);
@@ -2576,6 +2738,337 @@ class AppDatabase extends _$AppDatabase {
       ..where((table) => table.bookId.equals(normalizedBookId))).go();
   }
 
+  Future<ReadingProgress?> getReadingProgressByBookId(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedReadingProgresses)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapRowToReadingProgress(row);
+  }
+
+  Future<List<ReadingProgress>> listReadingProgresses() async {
+    final rows =
+        await (select(storedReadingProgresses)
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
+    return rows
+        .map<ReadingProgress>(_mapRowToReadingProgress)
+        .toList(growable: false);
+  }
+
+  Future<void> upsertReadingProgress(ReadingProgress progress) async {
+    final normalizedBookId = progress.bookId.trim();
+    final normalizedSourceId = progress.sourceId.trim();
+    final normalizedDetailUrl = progress.detailUrl.trim();
+    final normalizedChapterId = progress.chapterId.trim();
+    final normalizedChapterUrl = progress.chapterUrl.trim();
+    final normalizedChapterTitle = progress.chapterTitle.trim();
+    if (normalizedBookId.isEmpty ||
+        normalizedSourceId.isEmpty ||
+        normalizedDetailUrl.isEmpty ||
+        normalizedChapterId.isEmpty ||
+        normalizedChapterUrl.isEmpty ||
+        normalizedChapterTitle.isEmpty) {
+      return;
+    }
+
+    await into(storedReadingProgresses).insert(
+      StoredReadingProgressesCompanion(
+        bookId: Value(normalizedBookId),
+        sourceId: Value(normalizedSourceId),
+        detailUrl: Value(normalizedDetailUrl),
+        chapterId: Value(normalizedChapterId),
+        chapterUrl: Value(normalizedChapterUrl),
+        chapterTitle: Value(normalizedChapterTitle),
+        chapterIndex: Value(progress.chapterIndex),
+        chapterPositionRatio: Value(progress.chapterPositionRatio),
+        logicalPositionJson: Value(
+          progress.logicalPosition == null
+              ? null
+              : jsonEncode(progress.logicalPosition!.toJson()),
+        ),
+        updatedAt: Value(progress.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<void> deleteReadingProgress(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+
+    await (delete(storedReadingProgresses)
+      ..where((table) => table.bookId.equals(normalizedBookId))).go();
+  }
+
+  Future<Map<String, SourceHealthSnapshot>> listSourceHealthSnapshots() async {
+    final rows = await select(storedSourceHealthSnapshots).get();
+    final result = <String, SourceHealthSnapshot>{};
+    for (final row in rows) {
+      final snapshot = _mapRowToSourceHealthSnapshot(row);
+      if (snapshot == null) {
+        continue;
+      }
+      result[snapshot.sourceId.trim()] = snapshot;
+    }
+    return result;
+  }
+
+  Future<void> replaceSourceHealthSnapshots(
+    Map<String, SourceHealthSnapshot> snapshots,
+  ) async {
+    await transaction(() async {
+      await delete(storedSourceHealthSnapshots).go();
+      if (snapshots.isEmpty) {
+        return;
+      }
+      await batch((batch) {
+        for (final entry in snapshots.entries) {
+          final sourceId = entry.key.trim();
+          if (sourceId.isEmpty) {
+            continue;
+          }
+          batch.insert(
+            storedSourceHealthSnapshots,
+            StoredSourceHealthSnapshotsCompanion(
+              sourceId: Value(sourceId),
+              payloadJson: Value(jsonEncode(entry.value.toJson())),
+              updatedAt: Value(DateTime.now().toUtc()),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
+      });
+    });
+  }
+
+  Future<StoredRemoteAccessSnapshot?> getRemoteAccessSnapshot(String userId) {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      return Future<StoredRemoteAccessSnapshot?>.value(null);
+    }
+    return (select(storedRemoteAccessSnapshots)
+          ..where((table) => table.userId.equals(normalizedUserId))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<void> upsertRemoteAccessSnapshot({
+    required String userId,
+    required bool showSourceEntry,
+    required bool hasMembership,
+    required bool hasThemeCustom,
+    required int sourceImportLimit,
+    required DateTime cachedAt,
+  }) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      return;
+    }
+    await into(storedRemoteAccessSnapshots).insert(
+      StoredRemoteAccessSnapshotsCompanion(
+        userId: Value(normalizedUserId),
+        showSourceEntry: Value(showSourceEntry),
+        hasMembership: Value(hasMembership),
+        hasThemeCustom: Value(hasThemeCustom),
+        sourceImportLimit: Value(sourceImportLimit),
+        cachedAt: Value(cachedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<void> deleteRemoteAccessSnapshot(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      return;
+    }
+    await (delete(storedRemoteAccessSnapshots)
+      ..where((table) => table.userId.equals(normalizedUserId))).go();
+  }
+
+  Future<List<StoredBookshelfBook>> listBookshelfBooks() {
+    return (select(storedBookshelfBooks)
+      ..orderBy([(table) => OrderingTerm.desc(table.addedAt)])).get();
+  }
+
+  Future<List<StoredBookshelfTagAssignment>> listBookshelfTagAssignments() {
+    return (select(storedBookshelfTagAssignments)..orderBy([
+      (table) => OrderingTerm.asc(table.sourceId),
+      (table) => OrderingTerm.asc(table.detailUrl),
+      (table) => OrderingTerm.asc(table.position),
+    ])).get();
+  }
+
+  Future<List<StoredBookshelfTagMetadataData>> listBookshelfTagMetadata() {
+    return (select(storedBookshelfTagMetadata)
+      ..orderBy([(table) => OrderingTerm.asc(table.position)])).get();
+  }
+
+  Future<List<StoredBookshelfCategoryMetadataData>>
+  listBookshelfCategoryMetadata() {
+    return (select(storedBookshelfCategoryMetadata)
+      ..orderBy([(table) => OrderingTerm.asc(table.position)])).get();
+  }
+
+  Future<List<StoredBookshelfBaseFilterOrder>> listBookshelfBaseFilterOrders() {
+    return (select(storedBookshelfBaseFilterOrders)
+      ..orderBy([(table) => OrderingTerm.asc(table.position)])).get();
+  }
+
+  Future<void> replaceBookshelfSnapshot({
+    required List<BookshelfBook> books,
+    required Map<String, List<String>> tagMap,
+    required List<BookshelfTaxonomySnapshotItem> tagItems,
+    required List<BookshelfTaxonomySnapshotItem> categoryItems,
+    required List<String> baseFilterOrder,
+  }) async {
+    await transaction(() async {
+      await delete(storedBookshelfBooks).go();
+      await delete(storedBookshelfTagAssignments).go();
+      await delete(storedBookshelfTagMetadata).go();
+      await delete(storedBookshelfCategoryMetadata).go();
+      await delete(storedBookshelfBaseFilterOrders).go();
+
+      if (books.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(
+            storedBookshelfBooks,
+            books
+                .map(
+                  (book) => StoredBookshelfBooksCompanion.insert(
+                    sourceId: book.sourceId.trim(),
+                    detailUrl: book.detailUrl.trim(),
+                    bookId: book.bookId.trim(),
+                    title: book.title.trim(),
+                    author: Value(_nullableBookshelfString(book.author)),
+                    category: Value(_nullableBookshelfString(book.category)),
+                    coverUrl: Value(_nullableBookshelfString(book.coverUrl)),
+                    latestChapter: Value(
+                      _nullableBookshelfString(book.latestChapter),
+                    ),
+                    addedAt: book.addedAt,
+                    updatedAt: Value(DateTime.now().toUtc()),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        });
+      }
+
+      final tagAssignments = <StoredBookshelfTagAssignmentsCompanion>[];
+      for (final entry in tagMap.entries) {
+        final split = _splitBookshelfEntryKey(entry.key);
+        if (split == null) {
+          continue;
+        }
+        for (var index = 0; index < entry.value.length; index += 1) {
+          final tagName = entry.value[index].trim();
+          if (tagName.isEmpty) {
+            continue;
+          }
+          tagAssignments.add(
+            StoredBookshelfTagAssignmentsCompanion.insert(
+              sourceId: split.$1,
+              detailUrl: split.$2,
+              tagName: tagName,
+              position: Value(index),
+            ),
+          );
+        }
+      }
+      if (tagAssignments.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(storedBookshelfTagAssignments, tagAssignments);
+        });
+      }
+
+      if (tagItems.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(
+            storedBookshelfTagMetadata,
+            tagItems
+                .asMap()
+                .entries
+                .map(
+                  (entry) => StoredBookshelfTagMetadataCompanion.insert(
+                    name: entry.value.name.trim(),
+                    colorValue: entry.value.colorValue,
+                    position: Value(entry.key),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        });
+      }
+
+      if (categoryItems.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(
+            storedBookshelfCategoryMetadata,
+            categoryItems
+                .asMap()
+                .entries
+                .map(
+                  (entry) => StoredBookshelfCategoryMetadataCompanion.insert(
+                    name: entry.value.name.trim(),
+                    colorValue: entry.value.colorValue,
+                    position: Value(entry.key),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        });
+      }
+
+      if (baseFilterOrder.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(
+            storedBookshelfBaseFilterOrders,
+            baseFilterOrder
+                .asMap()
+                .entries
+                .map(
+                  (entry) => StoredBookshelfBaseFilterOrdersCompanion.insert(
+                    filterKey: entry.value.trim(),
+                    position: Value(entry.key),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        });
+      }
+    });
+  }
+
+  String? _nullableBookshelfString(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  (String, String)? _splitBookshelfEntryKey(String rawKey) {
+    final separator = rawKey.indexOf('::');
+    if (separator <= 0 || separator >= rawKey.length - 2) {
+      return null;
+    }
+    final sourceId = rawKey.substring(0, separator).trim();
+    final detailUrl = rawKey.substring(separator + 2).trim();
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
+      return null;
+    }
+    return (sourceId, detailUrl);
+  }
+
   Stream<int> watchTotalReadingMillis() {
     final sumExpression = storedReadingRecords.totalReadMillis.sum();
     final query = selectOnly(storedReadingRecords)..addColumns([sumExpression]);
@@ -2790,6 +3283,54 @@ class AppDatabase extends _$AppDatabase {
       ),
       updatedAt: row.updatedAt,
     );
+  }
+
+  ReadingProgress _mapRowToReadingProgress(StoredReadingProgressesData row) {
+    ReaderLogicalPosition? logicalPosition;
+    final rawLogicalPosition = row.logicalPositionJson?.trim();
+    if (rawLogicalPosition != null && rawLogicalPosition.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawLogicalPosition);
+        if (decoded is Map) {
+          logicalPosition = ReaderLogicalPosition.fromJson(
+            decoded.map((key, value) => MapEntry(key.toString(), value)),
+          );
+        }
+      } catch (_) {
+        logicalPosition = null;
+      }
+    }
+
+    return ReadingProgress(
+      bookId: row.bookId,
+      sourceId: row.sourceId,
+      detailUrl: row.detailUrl,
+      chapterId: row.chapterId,
+      chapterUrl: row.chapterUrl,
+      chapterTitle: row.chapterTitle,
+      chapterIndex: row.chapterIndex,
+      updatedAt: row.updatedAt,
+      chapterPositionRatio: row.chapterPositionRatio.clamp(0.0, 1.0),
+      logicalPosition: logicalPosition,
+    );
+  }
+
+  SourceHealthSnapshot? _mapRowToSourceHealthSnapshot(
+    StoredSourceHealthSnapshot row,
+  ) {
+    final raw = row.payloadJson.trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      return SourceHealthSnapshot.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
   }
 
   List<String> _decodeStringList(String? raw) {

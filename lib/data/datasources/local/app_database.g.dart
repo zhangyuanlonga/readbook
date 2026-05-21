@@ -6768,6 +6768,3170 @@ class StoredReadingBookStatusesCompanion
   }
 }
 
+class $StoredReadingProgressesTable extends StoredReadingProgresses
+    with TableInfo<$StoredReadingProgressesTable, StoredReadingProgressesData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredReadingProgressesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIdMeta = const VerificationMeta(
+    'chapterId',
+  );
+  @override
+  late final GeneratedColumn<String> chapterId = GeneratedColumn<String>(
+    'chapter_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterUrlMeta = const VerificationMeta(
+    'chapterUrl',
+  );
+  @override
+  late final GeneratedColumn<String> chapterUrl = GeneratedColumn<String>(
+    'chapter_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterTitleMeta = const VerificationMeta(
+    'chapterTitle',
+  );
+  @override
+  late final GeneratedColumn<String> chapterTitle = GeneratedColumn<String>(
+    'chapter_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIndexMeta = const VerificationMeta(
+    'chapterIndex',
+  );
+  @override
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+    'chapter_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterPositionRatioMeta =
+      const VerificationMeta('chapterPositionRatio');
+  @override
+  late final GeneratedColumn<double> chapterPositionRatio =
+      GeneratedColumn<double>(
+        'chapter_position_ratio',
+        aliasedName,
+        false,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _logicalPositionJsonMeta =
+      const VerificationMeta('logicalPositionJson');
+  @override
+  late final GeneratedColumn<String> logicalPositionJson =
+      GeneratedColumn<String>(
+        'logical_position_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    bookId,
+    sourceId,
+    detailUrl,
+    chapterId,
+    chapterUrl,
+    chapterTitle,
+    chapterIndex,
+    chapterPositionRatio,
+    logicalPositionJson,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reading_progresses';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReadingProgressesData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('chapter_id')) {
+      context.handle(
+        _chapterIdMeta,
+        chapterId.isAcceptableOrUnknown(data['chapter_id']!, _chapterIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterIdMeta);
+    }
+    if (data.containsKey('chapter_url')) {
+      context.handle(
+        _chapterUrlMeta,
+        chapterUrl.isAcceptableOrUnknown(data['chapter_url']!, _chapterUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterUrlMeta);
+    }
+    if (data.containsKey('chapter_title')) {
+      context.handle(
+        _chapterTitleMeta,
+        chapterTitle.isAcceptableOrUnknown(
+          data['chapter_title']!,
+          _chapterTitleMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterTitleMeta);
+    }
+    if (data.containsKey('chapter_index')) {
+      context.handle(
+        _chapterIndexMeta,
+        chapterIndex.isAcceptableOrUnknown(
+          data['chapter_index']!,
+          _chapterIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterIndexMeta);
+    }
+    if (data.containsKey('chapter_position_ratio')) {
+      context.handle(
+        _chapterPositionRatioMeta,
+        chapterPositionRatio.isAcceptableOrUnknown(
+          data['chapter_position_ratio']!,
+          _chapterPositionRatioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('logical_position_json')) {
+      context.handle(
+        _logicalPositionJsonMeta,
+        logicalPositionJson.isAcceptableOrUnknown(
+          data['logical_position_json']!,
+          _logicalPositionJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bookId};
+  @override
+  StoredReadingProgressesData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReadingProgressesData(
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      chapterId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chapter_id'],
+          )!,
+      chapterUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chapter_url'],
+          )!,
+      chapterTitle:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chapter_title'],
+          )!,
+      chapterIndex:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}chapter_index'],
+          )!,
+      chapterPositionRatio:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}chapter_position_ratio'],
+          )!,
+      logicalPositionJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}logical_position_json'],
+      ),
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredReadingProgressesTable createAlias(String alias) {
+    return $StoredReadingProgressesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReadingProgressesData extends DataClass
+    implements Insertable<StoredReadingProgressesData> {
+  final String bookId;
+  final String sourceId;
+  final String detailUrl;
+  final String chapterId;
+  final String chapterUrl;
+  final String chapterTitle;
+  final int chapterIndex;
+  final double chapterPositionRatio;
+  final String? logicalPositionJson;
+  final DateTime updatedAt;
+  const StoredReadingProgressesData({
+    required this.bookId,
+    required this.sourceId,
+    required this.detailUrl,
+    required this.chapterId,
+    required this.chapterUrl,
+    required this.chapterTitle,
+    required this.chapterIndex,
+    required this.chapterPositionRatio,
+    this.logicalPositionJson,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['chapter_id'] = Variable<String>(chapterId);
+    map['chapter_url'] = Variable<String>(chapterUrl);
+    map['chapter_title'] = Variable<String>(chapterTitle);
+    map['chapter_index'] = Variable<int>(chapterIndex);
+    map['chapter_position_ratio'] = Variable<double>(chapterPositionRatio);
+    if (!nullToAbsent || logicalPositionJson != null) {
+      map['logical_position_json'] = Variable<String>(logicalPositionJson);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredReadingProgressesCompanion toCompanion(bool nullToAbsent) {
+    return StoredReadingProgressesCompanion(
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      chapterId: Value(chapterId),
+      chapterUrl: Value(chapterUrl),
+      chapterTitle: Value(chapterTitle),
+      chapterIndex: Value(chapterIndex),
+      chapterPositionRatio: Value(chapterPositionRatio),
+      logicalPositionJson:
+          logicalPositionJson == null && nullToAbsent
+              ? const Value.absent()
+              : Value(logicalPositionJson),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredReadingProgressesData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReadingProgressesData(
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      chapterId: serializer.fromJson<String>(json['chapterId']),
+      chapterUrl: serializer.fromJson<String>(json['chapterUrl']),
+      chapterTitle: serializer.fromJson<String>(json['chapterTitle']),
+      chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
+      chapterPositionRatio: serializer.fromJson<double>(
+        json['chapterPositionRatio'],
+      ),
+      logicalPositionJson: serializer.fromJson<String?>(
+        json['logicalPositionJson'],
+      ),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'chapterId': serializer.toJson<String>(chapterId),
+      'chapterUrl': serializer.toJson<String>(chapterUrl),
+      'chapterTitle': serializer.toJson<String>(chapterTitle),
+      'chapterIndex': serializer.toJson<int>(chapterIndex),
+      'chapterPositionRatio': serializer.toJson<double>(chapterPositionRatio),
+      'logicalPositionJson': serializer.toJson<String?>(logicalPositionJson),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredReadingProgressesData copyWith({
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? chapterId,
+    String? chapterUrl,
+    String? chapterTitle,
+    int? chapterIndex,
+    double? chapterPositionRatio,
+    Value<String?> logicalPositionJson = const Value.absent(),
+    DateTime? updatedAt,
+  }) => StoredReadingProgressesData(
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    chapterId: chapterId ?? this.chapterId,
+    chapterUrl: chapterUrl ?? this.chapterUrl,
+    chapterTitle: chapterTitle ?? this.chapterTitle,
+    chapterIndex: chapterIndex ?? this.chapterIndex,
+    chapterPositionRatio: chapterPositionRatio ?? this.chapterPositionRatio,
+    logicalPositionJson:
+        logicalPositionJson.present
+            ? logicalPositionJson.value
+            : this.logicalPositionJson,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredReadingProgressesData copyWithCompanion(
+    StoredReadingProgressesCompanion data,
+  ) {
+    return StoredReadingProgressesData(
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      chapterId: data.chapterId.present ? data.chapterId.value : this.chapterId,
+      chapterUrl:
+          data.chapterUrl.present ? data.chapterUrl.value : this.chapterUrl,
+      chapterTitle:
+          data.chapterTitle.present
+              ? data.chapterTitle.value
+              : this.chapterTitle,
+      chapterIndex:
+          data.chapterIndex.present
+              ? data.chapterIndex.value
+              : this.chapterIndex,
+      chapterPositionRatio:
+          data.chapterPositionRatio.present
+              ? data.chapterPositionRatio.value
+              : this.chapterPositionRatio,
+      logicalPositionJson:
+          data.logicalPositionJson.present
+              ? data.logicalPositionJson.value
+              : this.logicalPositionJson,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingProgressesData(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('chapterId: $chapterId, ')
+          ..write('chapterUrl: $chapterUrl, ')
+          ..write('chapterTitle: $chapterTitle, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('chapterPositionRatio: $chapterPositionRatio, ')
+          ..write('logicalPositionJson: $logicalPositionJson, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    bookId,
+    sourceId,
+    detailUrl,
+    chapterId,
+    chapterUrl,
+    chapterTitle,
+    chapterIndex,
+    chapterPositionRatio,
+    logicalPositionJson,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReadingProgressesData &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.chapterId == this.chapterId &&
+          other.chapterUrl == this.chapterUrl &&
+          other.chapterTitle == this.chapterTitle &&
+          other.chapterIndex == this.chapterIndex &&
+          other.chapterPositionRatio == this.chapterPositionRatio &&
+          other.logicalPositionJson == this.logicalPositionJson &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredReadingProgressesCompanion
+    extends UpdateCompanion<StoredReadingProgressesData> {
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> chapterId;
+  final Value<String> chapterUrl;
+  final Value<String> chapterTitle;
+  final Value<int> chapterIndex;
+  final Value<double> chapterPositionRatio;
+  final Value<String?> logicalPositionJson;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredReadingProgressesCompanion({
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.chapterId = const Value.absent(),
+    this.chapterUrl = const Value.absent(),
+    this.chapterTitle = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.chapterPositionRatio = const Value.absent(),
+    this.logicalPositionJson = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredReadingProgressesCompanion.insert({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String chapterId,
+    required String chapterUrl,
+    required String chapterTitle,
+    required int chapterIndex,
+    this.chapterPositionRatio = const Value.absent(),
+    this.logicalPositionJson = const Value.absent(),
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       chapterId = Value(chapterId),
+       chapterUrl = Value(chapterUrl),
+       chapterTitle = Value(chapterTitle),
+       chapterIndex = Value(chapterIndex),
+       updatedAt = Value(updatedAt);
+  static Insertable<StoredReadingProgressesData> custom({
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? chapterId,
+    Expression<String>? chapterUrl,
+    Expression<String>? chapterTitle,
+    Expression<int>? chapterIndex,
+    Expression<double>? chapterPositionRatio,
+    Expression<String>? logicalPositionJson,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (chapterId != null) 'chapter_id': chapterId,
+      if (chapterUrl != null) 'chapter_url': chapterUrl,
+      if (chapterTitle != null) 'chapter_title': chapterTitle,
+      if (chapterIndex != null) 'chapter_index': chapterIndex,
+      if (chapterPositionRatio != null)
+        'chapter_position_ratio': chapterPositionRatio,
+      if (logicalPositionJson != null)
+        'logical_position_json': logicalPositionJson,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredReadingProgressesCompanion copyWith({
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? chapterId,
+    Value<String>? chapterUrl,
+    Value<String>? chapterTitle,
+    Value<int>? chapterIndex,
+    Value<double>? chapterPositionRatio,
+    Value<String?>? logicalPositionJson,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredReadingProgressesCompanion(
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      chapterId: chapterId ?? this.chapterId,
+      chapterUrl: chapterUrl ?? this.chapterUrl,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      chapterPositionRatio: chapterPositionRatio ?? this.chapterPositionRatio,
+      logicalPositionJson: logicalPositionJson ?? this.logicalPositionJson,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (chapterId.present) {
+      map['chapter_id'] = Variable<String>(chapterId.value);
+    }
+    if (chapterUrl.present) {
+      map['chapter_url'] = Variable<String>(chapterUrl.value);
+    }
+    if (chapterTitle.present) {
+      map['chapter_title'] = Variable<String>(chapterTitle.value);
+    }
+    if (chapterIndex.present) {
+      map['chapter_index'] = Variable<int>(chapterIndex.value);
+    }
+    if (chapterPositionRatio.present) {
+      map['chapter_position_ratio'] = Variable<double>(
+        chapterPositionRatio.value,
+      );
+    }
+    if (logicalPositionJson.present) {
+      map['logical_position_json'] = Variable<String>(
+        logicalPositionJson.value,
+      );
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingProgressesCompanion(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('chapterId: $chapterId, ')
+          ..write('chapterUrl: $chapterUrl, ')
+          ..write('chapterTitle: $chapterTitle, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('chapterPositionRatio: $chapterPositionRatio, ')
+          ..write('logicalPositionJson: $logicalPositionJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
+    with
+        TableInfo<
+          $StoredRemoteAccessSnapshotsTable,
+          StoredRemoteAccessSnapshot
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredRemoteAccessSnapshotsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _showSourceEntryMeta = const VerificationMeta(
+    'showSourceEntry',
+  );
+  @override
+  late final GeneratedColumn<bool> showSourceEntry = GeneratedColumn<bool>(
+    'show_source_entry',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("show_source_entry" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _hasMembershipMeta = const VerificationMeta(
+    'hasMembership',
+  );
+  @override
+  late final GeneratedColumn<bool> hasMembership = GeneratedColumn<bool>(
+    'has_membership',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_membership" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _hasThemeCustomMeta = const VerificationMeta(
+    'hasThemeCustom',
+  );
+  @override
+  late final GeneratedColumn<bool> hasThemeCustom = GeneratedColumn<bool>(
+    'has_theme_custom',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_theme_custom" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _sourceImportLimitMeta = const VerificationMeta(
+    'sourceImportLimit',
+  );
+  @override
+  late final GeneratedColumn<int> sourceImportLimit = GeneratedColumn<int>(
+    'source_import_limit',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(10),
+  );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+    'cached_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    userId,
+    showSourceEntry,
+    hasMembership,
+    hasThemeCustom,
+    sourceImportLimit,
+    cachedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'remote_access_snapshots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredRemoteAccessSnapshot> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('show_source_entry')) {
+      context.handle(
+        _showSourceEntryMeta,
+        showSourceEntry.isAcceptableOrUnknown(
+          data['show_source_entry']!,
+          _showSourceEntryMeta,
+        ),
+      );
+    }
+    if (data.containsKey('has_membership')) {
+      context.handle(
+        _hasMembershipMeta,
+        hasMembership.isAcceptableOrUnknown(
+          data['has_membership']!,
+          _hasMembershipMeta,
+        ),
+      );
+    }
+    if (data.containsKey('has_theme_custom')) {
+      context.handle(
+        _hasThemeCustomMeta,
+        hasThemeCustom.isAcceptableOrUnknown(
+          data['has_theme_custom']!,
+          _hasThemeCustomMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_import_limit')) {
+      context.handle(
+        _sourceImportLimitMeta,
+        sourceImportLimit.isAcceptableOrUnknown(
+          data['source_import_limit']!,
+          _sourceImportLimitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {userId};
+  @override
+  StoredRemoteAccessSnapshot map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredRemoteAccessSnapshot(
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
+      showSourceEntry:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}show_source_entry'],
+          )!,
+      hasMembership:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}has_membership'],
+          )!,
+      hasThemeCustom:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}has_theme_custom'],
+          )!,
+      sourceImportLimit:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}source_import_limit'],
+          )!,
+      cachedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}cached_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredRemoteAccessSnapshotsTable createAlias(String alias) {
+    return $StoredRemoteAccessSnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredRemoteAccessSnapshot extends DataClass
+    implements Insertable<StoredRemoteAccessSnapshot> {
+  final String userId;
+  final bool showSourceEntry;
+  final bool hasMembership;
+  final bool hasThemeCustom;
+  final int sourceImportLimit;
+  final DateTime cachedAt;
+  const StoredRemoteAccessSnapshot({
+    required this.userId,
+    required this.showSourceEntry,
+    required this.hasMembership,
+    required this.hasThemeCustom,
+    required this.sourceImportLimit,
+    required this.cachedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
+    map['show_source_entry'] = Variable<bool>(showSourceEntry);
+    map['has_membership'] = Variable<bool>(hasMembership);
+    map['has_theme_custom'] = Variable<bool>(hasThemeCustom);
+    map['source_import_limit'] = Variable<int>(sourceImportLimit);
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    return map;
+  }
+
+  StoredRemoteAccessSnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return StoredRemoteAccessSnapshotsCompanion(
+      userId: Value(userId),
+      showSourceEntry: Value(showSourceEntry),
+      hasMembership: Value(hasMembership),
+      hasThemeCustom: Value(hasThemeCustom),
+      sourceImportLimit: Value(sourceImportLimit),
+      cachedAt: Value(cachedAt),
+    );
+  }
+
+  factory StoredRemoteAccessSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredRemoteAccessSnapshot(
+      userId: serializer.fromJson<String>(json['userId']),
+      showSourceEntry: serializer.fromJson<bool>(json['showSourceEntry']),
+      hasMembership: serializer.fromJson<bool>(json['hasMembership']),
+      hasThemeCustom: serializer.fromJson<bool>(json['hasThemeCustom']),
+      sourceImportLimit: serializer.fromJson<int>(json['sourceImportLimit']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
+      'showSourceEntry': serializer.toJson<bool>(showSourceEntry),
+      'hasMembership': serializer.toJson<bool>(hasMembership),
+      'hasThemeCustom': serializer.toJson<bool>(hasThemeCustom),
+      'sourceImportLimit': serializer.toJson<int>(sourceImportLimit),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+    };
+  }
+
+  StoredRemoteAccessSnapshot copyWith({
+    String? userId,
+    bool? showSourceEntry,
+    bool? hasMembership,
+    bool? hasThemeCustom,
+    int? sourceImportLimit,
+    DateTime? cachedAt,
+  }) => StoredRemoteAccessSnapshot(
+    userId: userId ?? this.userId,
+    showSourceEntry: showSourceEntry ?? this.showSourceEntry,
+    hasMembership: hasMembership ?? this.hasMembership,
+    hasThemeCustom: hasThemeCustom ?? this.hasThemeCustom,
+    sourceImportLimit: sourceImportLimit ?? this.sourceImportLimit,
+    cachedAt: cachedAt ?? this.cachedAt,
+  );
+  StoredRemoteAccessSnapshot copyWithCompanion(
+    StoredRemoteAccessSnapshotsCompanion data,
+  ) {
+    return StoredRemoteAccessSnapshot(
+      userId: data.userId.present ? data.userId.value : this.userId,
+      showSourceEntry:
+          data.showSourceEntry.present
+              ? data.showSourceEntry.value
+              : this.showSourceEntry,
+      hasMembership:
+          data.hasMembership.present
+              ? data.hasMembership.value
+              : this.hasMembership,
+      hasThemeCustom:
+          data.hasThemeCustom.present
+              ? data.hasThemeCustom.value
+              : this.hasThemeCustom,
+      sourceImportLimit:
+          data.sourceImportLimit.present
+              ? data.sourceImportLimit.value
+              : this.sourceImportLimit,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredRemoteAccessSnapshot(')
+          ..write('userId: $userId, ')
+          ..write('showSourceEntry: $showSourceEntry, ')
+          ..write('hasMembership: $hasMembership, ')
+          ..write('hasThemeCustom: $hasThemeCustom, ')
+          ..write('sourceImportLimit: $sourceImportLimit, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    userId,
+    showSourceEntry,
+    hasMembership,
+    hasThemeCustom,
+    sourceImportLimit,
+    cachedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredRemoteAccessSnapshot &&
+          other.userId == this.userId &&
+          other.showSourceEntry == this.showSourceEntry &&
+          other.hasMembership == this.hasMembership &&
+          other.hasThemeCustom == this.hasThemeCustom &&
+          other.sourceImportLimit == this.sourceImportLimit &&
+          other.cachedAt == this.cachedAt);
+}
+
+class StoredRemoteAccessSnapshotsCompanion
+    extends UpdateCompanion<StoredRemoteAccessSnapshot> {
+  final Value<String> userId;
+  final Value<bool> showSourceEntry;
+  final Value<bool> hasMembership;
+  final Value<bool> hasThemeCustom;
+  final Value<int> sourceImportLimit;
+  final Value<DateTime> cachedAt;
+  final Value<int> rowid;
+  const StoredRemoteAccessSnapshotsCompanion({
+    this.userId = const Value.absent(),
+    this.showSourceEntry = const Value.absent(),
+    this.hasMembership = const Value.absent(),
+    this.hasThemeCustom = const Value.absent(),
+    this.sourceImportLimit = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredRemoteAccessSnapshotsCompanion.insert({
+    required String userId,
+    this.showSourceEntry = const Value.absent(),
+    this.hasMembership = const Value.absent(),
+    this.hasThemeCustom = const Value.absent(),
+    this.sourceImportLimit = const Value.absent(),
+    required DateTime cachedAt,
+    this.rowid = const Value.absent(),
+  }) : userId = Value(userId),
+       cachedAt = Value(cachedAt);
+  static Insertable<StoredRemoteAccessSnapshot> custom({
+    Expression<String>? userId,
+    Expression<bool>? showSourceEntry,
+    Expression<bool>? hasMembership,
+    Expression<bool>? hasThemeCustom,
+    Expression<int>? sourceImportLimit,
+    Expression<DateTime>? cachedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
+      if (showSourceEntry != null) 'show_source_entry': showSourceEntry,
+      if (hasMembership != null) 'has_membership': hasMembership,
+      if (hasThemeCustom != null) 'has_theme_custom': hasThemeCustom,
+      if (sourceImportLimit != null) 'source_import_limit': sourceImportLimit,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredRemoteAccessSnapshotsCompanion copyWith({
+    Value<String>? userId,
+    Value<bool>? showSourceEntry,
+    Value<bool>? hasMembership,
+    Value<bool>? hasThemeCustom,
+    Value<int>? sourceImportLimit,
+    Value<DateTime>? cachedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredRemoteAccessSnapshotsCompanion(
+      userId: userId ?? this.userId,
+      showSourceEntry: showSourceEntry ?? this.showSourceEntry,
+      hasMembership: hasMembership ?? this.hasMembership,
+      hasThemeCustom: hasThemeCustom ?? this.hasThemeCustom,
+      sourceImportLimit: sourceImportLimit ?? this.sourceImportLimit,
+      cachedAt: cachedAt ?? this.cachedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (showSourceEntry.present) {
+      map['show_source_entry'] = Variable<bool>(showSourceEntry.value);
+    }
+    if (hasMembership.present) {
+      map['has_membership'] = Variable<bool>(hasMembership.value);
+    }
+    if (hasThemeCustom.present) {
+      map['has_theme_custom'] = Variable<bool>(hasThemeCustom.value);
+    }
+    if (sourceImportLimit.present) {
+      map['source_import_limit'] = Variable<int>(sourceImportLimit.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredRemoteAccessSnapshotsCompanion(')
+          ..write('userId: $userId, ')
+          ..write('showSourceEntry: $showSourceEntry, ')
+          ..write('hasMembership: $hasMembership, ')
+          ..write('hasThemeCustom: $hasThemeCustom, ')
+          ..write('sourceImportLimit: $sourceImportLimit, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredSourceHealthSnapshotsTable extends StoredSourceHealthSnapshots
+    with
+        TableInfo<
+          $StoredSourceHealthSnapshotsTable,
+          StoredSourceHealthSnapshot
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredSourceHealthSnapshotsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [sourceId, payloadJson, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'source_health_snapshots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredSourceHealthSnapshot> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceId};
+  @override
+  StoredSourceHealthSnapshot map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredSourceHealthSnapshot(
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      payloadJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}payload_json'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredSourceHealthSnapshotsTable createAlias(String alias) {
+    return $StoredSourceHealthSnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredSourceHealthSnapshot extends DataClass
+    implements Insertable<StoredSourceHealthSnapshot> {
+  final String sourceId;
+  final String payloadJson;
+  final DateTime updatedAt;
+  const StoredSourceHealthSnapshot({
+    required this.sourceId,
+    required this.payloadJson,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_id'] = Variable<String>(sourceId);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredSourceHealthSnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return StoredSourceHealthSnapshotsCompanion(
+      sourceId: Value(sourceId),
+      payloadJson: Value(payloadJson),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredSourceHealthSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredSourceHealthSnapshot(
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceId': serializer.toJson<String>(sourceId),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredSourceHealthSnapshot copyWith({
+    String? sourceId,
+    String? payloadJson,
+    DateTime? updatedAt,
+  }) => StoredSourceHealthSnapshot(
+    sourceId: sourceId ?? this.sourceId,
+    payloadJson: payloadJson ?? this.payloadJson,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredSourceHealthSnapshot copyWithCompanion(
+    StoredSourceHealthSnapshotsCompanion data,
+  ) {
+    return StoredSourceHealthSnapshot(
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      payloadJson:
+          data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSourceHealthSnapshot(')
+          ..write('sourceId: $sourceId, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceId, payloadJson, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredSourceHealthSnapshot &&
+          other.sourceId == this.sourceId &&
+          other.payloadJson == this.payloadJson &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredSourceHealthSnapshotsCompanion
+    extends UpdateCompanion<StoredSourceHealthSnapshot> {
+  final Value<String> sourceId;
+  final Value<String> payloadJson;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredSourceHealthSnapshotsCompanion({
+    this.sourceId = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredSourceHealthSnapshotsCompanion.insert({
+    required String sourceId,
+    required String payloadJson,
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : sourceId = Value(sourceId),
+       payloadJson = Value(payloadJson);
+  static Insertable<StoredSourceHealthSnapshot> custom({
+    Expression<String>? sourceId,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceId != null) 'source_id': sourceId,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredSourceHealthSnapshotsCompanion copyWith({
+    Value<String>? sourceId,
+    Value<String>? payloadJson,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredSourceHealthSnapshotsCompanion(
+      sourceId: sourceId ?? this.sourceId,
+      payloadJson: payloadJson ?? this.payloadJson,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredSourceHealthSnapshotsCompanion(')
+          ..write('sourceId: $sourceId, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredBookshelfBooksTable extends StoredBookshelfBooks
+    with TableInfo<$StoredBookshelfBooksTable, StoredBookshelfBook> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookshelfBooksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _authorMeta = const VerificationMeta('author');
+  @override
+  late final GeneratedColumn<String> author = GeneratedColumn<String>(
+    'author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverUrlMeta = const VerificationMeta(
+    'coverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrl = GeneratedColumn<String>(
+    'cover_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latestChapterMeta = const VerificationMeta(
+    'latestChapter',
+  );
+  @override
+  late final GeneratedColumn<String> latestChapter = GeneratedColumn<String>(
+    'latest_chapter',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
+    'added_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    sourceId,
+    detailUrl,
+    bookId,
+    title,
+    author,
+    category,
+    coverUrl,
+    latestChapter,
+    addedAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bookshelf_books';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookshelfBook> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('author')) {
+      context.handle(
+        _authorMeta,
+        author.isAcceptableOrUnknown(data['author']!, _authorMeta),
+      );
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
+    if (data.containsKey('cover_url')) {
+      context.handle(
+        _coverUrlMeta,
+        coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
+      );
+    }
+    if (data.containsKey('latest_chapter')) {
+      context.handle(
+        _latestChapterMeta,
+        latestChapter.isAcceptableOrUnknown(
+          data['latest_chapter']!,
+          _latestChapterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addedAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceId, detailUrl};
+  @override
+  StoredBookshelfBook map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookshelfBook(
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      title:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}title'],
+          )!,
+      author: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author'],
+      ),
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      ),
+      coverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url'],
+      ),
+      latestChapter: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}latest_chapter'],
+      ),
+      addedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}added_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookshelfBooksTable createAlias(String alias) {
+    return $StoredBookshelfBooksTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookshelfBook extends DataClass
+    implements Insertable<StoredBookshelfBook> {
+  final String sourceId;
+  final String detailUrl;
+  final String bookId;
+  final String title;
+  final String? author;
+  final String? category;
+  final String? coverUrl;
+  final String? latestChapter;
+  final DateTime addedAt;
+  final DateTime updatedAt;
+  const StoredBookshelfBook({
+    required this.sourceId,
+    required this.detailUrl,
+    required this.bookId,
+    required this.title,
+    this.author,
+    this.category,
+    this.coverUrl,
+    this.latestChapter,
+    required this.addedAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['book_id'] = Variable<String>(bookId);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || author != null) {
+      map['author'] = Variable<String>(author);
+    }
+    if (!nullToAbsent || category != null) {
+      map['category'] = Variable<String>(category);
+    }
+    if (!nullToAbsent || coverUrl != null) {
+      map['cover_url'] = Variable<String>(coverUrl);
+    }
+    if (!nullToAbsent || latestChapter != null) {
+      map['latest_chapter'] = Variable<String>(latestChapter);
+    }
+    map['added_at'] = Variable<DateTime>(addedAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredBookshelfBooksCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookshelfBooksCompanion(
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      bookId: Value(bookId),
+      title: Value(title),
+      author:
+          author == null && nullToAbsent ? const Value.absent() : Value(author),
+      category:
+          category == null && nullToAbsent
+              ? const Value.absent()
+              : Value(category),
+      coverUrl:
+          coverUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverUrl),
+      latestChapter:
+          latestChapter == null && nullToAbsent
+              ? const Value.absent()
+              : Value(latestChapter),
+      addedAt: Value(addedAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredBookshelfBook.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookshelfBook(
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      title: serializer.fromJson<String>(json['title']),
+      author: serializer.fromJson<String?>(json['author']),
+      category: serializer.fromJson<String?>(json['category']),
+      coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      latestChapter: serializer.fromJson<String?>(json['latestChapter']),
+      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'bookId': serializer.toJson<String>(bookId),
+      'title': serializer.toJson<String>(title),
+      'author': serializer.toJson<String?>(author),
+      'category': serializer.toJson<String?>(category),
+      'coverUrl': serializer.toJson<String?>(coverUrl),
+      'latestChapter': serializer.toJson<String?>(latestChapter),
+      'addedAt': serializer.toJson<DateTime>(addedAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredBookshelfBook copyWith({
+    String? sourceId,
+    String? detailUrl,
+    String? bookId,
+    String? title,
+    Value<String?> author = const Value.absent(),
+    Value<String?> category = const Value.absent(),
+    Value<String?> coverUrl = const Value.absent(),
+    Value<String?> latestChapter = const Value.absent(),
+    DateTime? addedAt,
+    DateTime? updatedAt,
+  }) => StoredBookshelfBook(
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    bookId: bookId ?? this.bookId,
+    title: title ?? this.title,
+    author: author.present ? author.value : this.author,
+    category: category.present ? category.value : this.category,
+    coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    latestChapter:
+        latestChapter.present ? latestChapter.value : this.latestChapter,
+    addedAt: addedAt ?? this.addedAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredBookshelfBook copyWithCompanion(StoredBookshelfBooksCompanion data) {
+    return StoredBookshelfBook(
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      title: data.title.present ? data.title.value : this.title,
+      author: data.author.present ? data.author.value : this.author,
+      category: data.category.present ? data.category.value : this.category,
+      coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      latestChapter:
+          data.latestChapter.present
+              ? data.latestChapter.value
+              : this.latestChapter,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfBook(')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookId: $bookId, ')
+          ..write('title: $title, ')
+          ..write('author: $author, ')
+          ..write('category: $category, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('latestChapter: $latestChapter, ')
+          ..write('addedAt: $addedAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    sourceId,
+    detailUrl,
+    bookId,
+    title,
+    author,
+    category,
+    coverUrl,
+    latestChapter,
+    addedAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookshelfBook &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.bookId == this.bookId &&
+          other.title == this.title &&
+          other.author == this.author &&
+          other.category == this.category &&
+          other.coverUrl == this.coverUrl &&
+          other.latestChapter == this.latestChapter &&
+          other.addedAt == this.addedAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredBookshelfBooksCompanion
+    extends UpdateCompanion<StoredBookshelfBook> {
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> bookId;
+  final Value<String> title;
+  final Value<String?> author;
+  final Value<String?> category;
+  final Value<String?> coverUrl;
+  final Value<String?> latestChapter;
+  final Value<DateTime> addedAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredBookshelfBooksCompanion({
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.author = const Value.absent(),
+    this.category = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.latestChapter = const Value.absent(),
+    this.addedAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookshelfBooksCompanion.insert({
+    required String sourceId,
+    required String detailUrl,
+    required String bookId,
+    required String title,
+    this.author = const Value.absent(),
+    this.category = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.latestChapter = const Value.absent(),
+    required DateTime addedAt,
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       bookId = Value(bookId),
+       title = Value(title),
+       addedAt = Value(addedAt);
+  static Insertable<StoredBookshelfBook> custom({
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? bookId,
+    Expression<String>? title,
+    Expression<String>? author,
+    Expression<String>? category,
+    Expression<String>? coverUrl,
+    Expression<String>? latestChapter,
+    Expression<DateTime>? addedAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (bookId != null) 'book_id': bookId,
+      if (title != null) 'title': title,
+      if (author != null) 'author': author,
+      if (category != null) 'category': category,
+      if (coverUrl != null) 'cover_url': coverUrl,
+      if (latestChapter != null) 'latest_chapter': latestChapter,
+      if (addedAt != null) 'added_at': addedAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookshelfBooksCompanion copyWith({
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? bookId,
+    Value<String>? title,
+    Value<String?>? author,
+    Value<String?>? category,
+    Value<String?>? coverUrl,
+    Value<String?>? latestChapter,
+    Value<DateTime>? addedAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredBookshelfBooksCompanion(
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      bookId: bookId ?? this.bookId,
+      title: title ?? this.title,
+      author: author ?? this.author,
+      category: category ?? this.category,
+      coverUrl: coverUrl ?? this.coverUrl,
+      latestChapter: latestChapter ?? this.latestChapter,
+      addedAt: addedAt ?? this.addedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (author.present) {
+      map['author'] = Variable<String>(author.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (coverUrl.present) {
+      map['cover_url'] = Variable<String>(coverUrl.value);
+    }
+    if (latestChapter.present) {
+      map['latest_chapter'] = Variable<String>(latestChapter.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<DateTime>(addedAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfBooksCompanion(')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookId: $bookId, ')
+          ..write('title: $title, ')
+          ..write('author: $author, ')
+          ..write('category: $category, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('latestChapter: $latestChapter, ')
+          ..write('addedAt: $addedAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredBookshelfTagAssignmentsTable extends StoredBookshelfTagAssignments
+    with
+        TableInfo<
+          $StoredBookshelfTagAssignmentsTable,
+          StoredBookshelfTagAssignment
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookshelfTagAssignmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tagNameMeta = const VerificationMeta(
+    'tagName',
+  );
+  @override
+  late final GeneratedColumn<String> tagName = GeneratedColumn<String>(
+    'tag_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    sourceId,
+    detailUrl,
+    tagName,
+    position,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bookshelf_tag_assignments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookshelfTagAssignment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('tag_name')) {
+      context.handle(
+        _tagNameMeta,
+        tagName.isAcceptableOrUnknown(data['tag_name']!, _tagNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tagNameMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceId, detailUrl, tagName};
+  @override
+  StoredBookshelfTagAssignment map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookshelfTagAssignment(
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      tagName:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}tag_name'],
+          )!,
+      position:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}position'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookshelfTagAssignmentsTable createAlias(String alias) {
+    return $StoredBookshelfTagAssignmentsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookshelfTagAssignment extends DataClass
+    implements Insertable<StoredBookshelfTagAssignment> {
+  final String sourceId;
+  final String detailUrl;
+  final String tagName;
+  final int position;
+  const StoredBookshelfTagAssignment({
+    required this.sourceId,
+    required this.detailUrl,
+    required this.tagName,
+    required this.position,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['tag_name'] = Variable<String>(tagName);
+    map['position'] = Variable<int>(position);
+    return map;
+  }
+
+  StoredBookshelfTagAssignmentsCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookshelfTagAssignmentsCompanion(
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      tagName: Value(tagName),
+      position: Value(position),
+    );
+  }
+
+  factory StoredBookshelfTagAssignment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookshelfTagAssignment(
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      tagName: serializer.fromJson<String>(json['tagName']),
+      position: serializer.fromJson<int>(json['position']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'tagName': serializer.toJson<String>(tagName),
+      'position': serializer.toJson<int>(position),
+    };
+  }
+
+  StoredBookshelfTagAssignment copyWith({
+    String? sourceId,
+    String? detailUrl,
+    String? tagName,
+    int? position,
+  }) => StoredBookshelfTagAssignment(
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    tagName: tagName ?? this.tagName,
+    position: position ?? this.position,
+  );
+  StoredBookshelfTagAssignment copyWithCompanion(
+    StoredBookshelfTagAssignmentsCompanion data,
+  ) {
+    return StoredBookshelfTagAssignment(
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      tagName: data.tagName.present ? data.tagName.value : this.tagName,
+      position: data.position.present ? data.position.value : this.position,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfTagAssignment(')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('tagName: $tagName, ')
+          ..write('position: $position')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceId, detailUrl, tagName, position);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookshelfTagAssignment &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.tagName == this.tagName &&
+          other.position == this.position);
+}
+
+class StoredBookshelfTagAssignmentsCompanion
+    extends UpdateCompanion<StoredBookshelfTagAssignment> {
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> tagName;
+  final Value<int> position;
+  final Value<int> rowid;
+  const StoredBookshelfTagAssignmentsCompanion({
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.tagName = const Value.absent(),
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookshelfTagAssignmentsCompanion.insert({
+    required String sourceId,
+    required String detailUrl,
+    required String tagName,
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       tagName = Value(tagName);
+  static Insertable<StoredBookshelfTagAssignment> custom({
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? tagName,
+    Expression<int>? position,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (tagName != null) 'tag_name': tagName,
+      if (position != null) 'position': position,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookshelfTagAssignmentsCompanion copyWith({
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? tagName,
+    Value<int>? position,
+    Value<int>? rowid,
+  }) {
+    return StoredBookshelfTagAssignmentsCompanion(
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      tagName: tagName ?? this.tagName,
+      position: position ?? this.position,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (tagName.present) {
+      map['tag_name'] = Variable<String>(tagName.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfTagAssignmentsCompanion(')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('tagName: $tagName, ')
+          ..write('position: $position, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredBookshelfTagMetadataTable extends StoredBookshelfTagMetadata
+    with
+        TableInfo<
+          $StoredBookshelfTagMetadataTable,
+          StoredBookshelfTagMetadataData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookshelfTagMetadataTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _colorValueMeta = const VerificationMeta(
+    'colorValue',
+  );
+  @override
+  late final GeneratedColumn<int> colorValue = GeneratedColumn<int>(
+    'color_value',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [name, colorValue, position];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bookshelf_tag_metadata';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookshelfTagMetadataData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('color_value')) {
+      context.handle(
+        _colorValueMeta,
+        colorValue.isAcceptableOrUnknown(data['color_value']!, _colorValueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_colorValueMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {name};
+  @override
+  StoredBookshelfTagMetadataData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookshelfTagMetadataData(
+      name:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}name'],
+          )!,
+      colorValue:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}color_value'],
+          )!,
+      position:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}position'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookshelfTagMetadataTable createAlias(String alias) {
+    return $StoredBookshelfTagMetadataTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookshelfTagMetadataData extends DataClass
+    implements Insertable<StoredBookshelfTagMetadataData> {
+  final String name;
+  final int colorValue;
+  final int position;
+  const StoredBookshelfTagMetadataData({
+    required this.name,
+    required this.colorValue,
+    required this.position,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['name'] = Variable<String>(name);
+    map['color_value'] = Variable<int>(colorValue);
+    map['position'] = Variable<int>(position);
+    return map;
+  }
+
+  StoredBookshelfTagMetadataCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookshelfTagMetadataCompanion(
+      name: Value(name),
+      colorValue: Value(colorValue),
+      position: Value(position),
+    );
+  }
+
+  factory StoredBookshelfTagMetadataData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookshelfTagMetadataData(
+      name: serializer.fromJson<String>(json['name']),
+      colorValue: serializer.fromJson<int>(json['colorValue']),
+      position: serializer.fromJson<int>(json['position']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'name': serializer.toJson<String>(name),
+      'colorValue': serializer.toJson<int>(colorValue),
+      'position': serializer.toJson<int>(position),
+    };
+  }
+
+  StoredBookshelfTagMetadataData copyWith({
+    String? name,
+    int? colorValue,
+    int? position,
+  }) => StoredBookshelfTagMetadataData(
+    name: name ?? this.name,
+    colorValue: colorValue ?? this.colorValue,
+    position: position ?? this.position,
+  );
+  StoredBookshelfTagMetadataData copyWithCompanion(
+    StoredBookshelfTagMetadataCompanion data,
+  ) {
+    return StoredBookshelfTagMetadataData(
+      name: data.name.present ? data.name.value : this.name,
+      colorValue:
+          data.colorValue.present ? data.colorValue.value : this.colorValue,
+      position: data.position.present ? data.position.value : this.position,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfTagMetadataData(')
+          ..write('name: $name, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('position: $position')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(name, colorValue, position);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookshelfTagMetadataData &&
+          other.name == this.name &&
+          other.colorValue == this.colorValue &&
+          other.position == this.position);
+}
+
+class StoredBookshelfTagMetadataCompanion
+    extends UpdateCompanion<StoredBookshelfTagMetadataData> {
+  final Value<String> name;
+  final Value<int> colorValue;
+  final Value<int> position;
+  final Value<int> rowid;
+  const StoredBookshelfTagMetadataCompanion({
+    this.name = const Value.absent(),
+    this.colorValue = const Value.absent(),
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookshelfTagMetadataCompanion.insert({
+    required String name,
+    required int colorValue,
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : name = Value(name),
+       colorValue = Value(colorValue);
+  static Insertable<StoredBookshelfTagMetadataData> custom({
+    Expression<String>? name,
+    Expression<int>? colorValue,
+    Expression<int>? position,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (name != null) 'name': name,
+      if (colorValue != null) 'color_value': colorValue,
+      if (position != null) 'position': position,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookshelfTagMetadataCompanion copyWith({
+    Value<String>? name,
+    Value<int>? colorValue,
+    Value<int>? position,
+    Value<int>? rowid,
+  }) {
+    return StoredBookshelfTagMetadataCompanion(
+      name: name ?? this.name,
+      colorValue: colorValue ?? this.colorValue,
+      position: position ?? this.position,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (colorValue.present) {
+      map['color_value'] = Variable<int>(colorValue.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfTagMetadataCompanion(')
+          ..write('name: $name, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('position: $position, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredBookshelfCategoryMetadataTable
+    extends StoredBookshelfCategoryMetadata
+    with
+        TableInfo<
+          $StoredBookshelfCategoryMetadataTable,
+          StoredBookshelfCategoryMetadataData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookshelfCategoryMetadataTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _colorValueMeta = const VerificationMeta(
+    'colorValue',
+  );
+  @override
+  late final GeneratedColumn<int> colorValue = GeneratedColumn<int>(
+    'color_value',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [name, colorValue, position];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bookshelf_category_metadata';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookshelfCategoryMetadataData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('color_value')) {
+      context.handle(
+        _colorValueMeta,
+        colorValue.isAcceptableOrUnknown(data['color_value']!, _colorValueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_colorValueMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {name};
+  @override
+  StoredBookshelfCategoryMetadataData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookshelfCategoryMetadataData(
+      name:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}name'],
+          )!,
+      colorValue:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}color_value'],
+          )!,
+      position:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}position'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookshelfCategoryMetadataTable createAlias(String alias) {
+    return $StoredBookshelfCategoryMetadataTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookshelfCategoryMetadataData extends DataClass
+    implements Insertable<StoredBookshelfCategoryMetadataData> {
+  final String name;
+  final int colorValue;
+  final int position;
+  const StoredBookshelfCategoryMetadataData({
+    required this.name,
+    required this.colorValue,
+    required this.position,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['name'] = Variable<String>(name);
+    map['color_value'] = Variable<int>(colorValue);
+    map['position'] = Variable<int>(position);
+    return map;
+  }
+
+  StoredBookshelfCategoryMetadataCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookshelfCategoryMetadataCompanion(
+      name: Value(name),
+      colorValue: Value(colorValue),
+      position: Value(position),
+    );
+  }
+
+  factory StoredBookshelfCategoryMetadataData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookshelfCategoryMetadataData(
+      name: serializer.fromJson<String>(json['name']),
+      colorValue: serializer.fromJson<int>(json['colorValue']),
+      position: serializer.fromJson<int>(json['position']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'name': serializer.toJson<String>(name),
+      'colorValue': serializer.toJson<int>(colorValue),
+      'position': serializer.toJson<int>(position),
+    };
+  }
+
+  StoredBookshelfCategoryMetadataData copyWith({
+    String? name,
+    int? colorValue,
+    int? position,
+  }) => StoredBookshelfCategoryMetadataData(
+    name: name ?? this.name,
+    colorValue: colorValue ?? this.colorValue,
+    position: position ?? this.position,
+  );
+  StoredBookshelfCategoryMetadataData copyWithCompanion(
+    StoredBookshelfCategoryMetadataCompanion data,
+  ) {
+    return StoredBookshelfCategoryMetadataData(
+      name: data.name.present ? data.name.value : this.name,
+      colorValue:
+          data.colorValue.present ? data.colorValue.value : this.colorValue,
+      position: data.position.present ? data.position.value : this.position,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfCategoryMetadataData(')
+          ..write('name: $name, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('position: $position')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(name, colorValue, position);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookshelfCategoryMetadataData &&
+          other.name == this.name &&
+          other.colorValue == this.colorValue &&
+          other.position == this.position);
+}
+
+class StoredBookshelfCategoryMetadataCompanion
+    extends UpdateCompanion<StoredBookshelfCategoryMetadataData> {
+  final Value<String> name;
+  final Value<int> colorValue;
+  final Value<int> position;
+  final Value<int> rowid;
+  const StoredBookshelfCategoryMetadataCompanion({
+    this.name = const Value.absent(),
+    this.colorValue = const Value.absent(),
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookshelfCategoryMetadataCompanion.insert({
+    required String name,
+    required int colorValue,
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : name = Value(name),
+       colorValue = Value(colorValue);
+  static Insertable<StoredBookshelfCategoryMetadataData> custom({
+    Expression<String>? name,
+    Expression<int>? colorValue,
+    Expression<int>? position,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (name != null) 'name': name,
+      if (colorValue != null) 'color_value': colorValue,
+      if (position != null) 'position': position,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookshelfCategoryMetadataCompanion copyWith({
+    Value<String>? name,
+    Value<int>? colorValue,
+    Value<int>? position,
+    Value<int>? rowid,
+  }) {
+    return StoredBookshelfCategoryMetadataCompanion(
+      name: name ?? this.name,
+      colorValue: colorValue ?? this.colorValue,
+      position: position ?? this.position,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (colorValue.present) {
+      map['color_value'] = Variable<int>(colorValue.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfCategoryMetadataCompanion(')
+          ..write('name: $name, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('position: $position, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredBookshelfBaseFilterOrdersTable
+    extends StoredBookshelfBaseFilterOrders
+    with
+        TableInfo<
+          $StoredBookshelfBaseFilterOrdersTable,
+          StoredBookshelfBaseFilterOrder
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookshelfBaseFilterOrdersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _filterKeyMeta = const VerificationMeta(
+    'filterKey',
+  );
+  @override
+  late final GeneratedColumn<String> filterKey = GeneratedColumn<String>(
+    'filter_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [filterKey, position];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bookshelf_base_filter_orders';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookshelfBaseFilterOrder> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('filter_key')) {
+      context.handle(
+        _filterKeyMeta,
+        filterKey.isAcceptableOrUnknown(data['filter_key']!, _filterKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_filterKeyMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {filterKey};
+  @override
+  StoredBookshelfBaseFilterOrder map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookshelfBaseFilterOrder(
+      filterKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}filter_key'],
+          )!,
+      position:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}position'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookshelfBaseFilterOrdersTable createAlias(String alias) {
+    return $StoredBookshelfBaseFilterOrdersTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookshelfBaseFilterOrder extends DataClass
+    implements Insertable<StoredBookshelfBaseFilterOrder> {
+  final String filterKey;
+  final int position;
+  const StoredBookshelfBaseFilterOrder({
+    required this.filterKey,
+    required this.position,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['filter_key'] = Variable<String>(filterKey);
+    map['position'] = Variable<int>(position);
+    return map;
+  }
+
+  StoredBookshelfBaseFilterOrdersCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookshelfBaseFilterOrdersCompanion(
+      filterKey: Value(filterKey),
+      position: Value(position),
+    );
+  }
+
+  factory StoredBookshelfBaseFilterOrder.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookshelfBaseFilterOrder(
+      filterKey: serializer.fromJson<String>(json['filterKey']),
+      position: serializer.fromJson<int>(json['position']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'filterKey': serializer.toJson<String>(filterKey),
+      'position': serializer.toJson<int>(position),
+    };
+  }
+
+  StoredBookshelfBaseFilterOrder copyWith({String? filterKey, int? position}) =>
+      StoredBookshelfBaseFilterOrder(
+        filterKey: filterKey ?? this.filterKey,
+        position: position ?? this.position,
+      );
+  StoredBookshelfBaseFilterOrder copyWithCompanion(
+    StoredBookshelfBaseFilterOrdersCompanion data,
+  ) {
+    return StoredBookshelfBaseFilterOrder(
+      filterKey: data.filterKey.present ? data.filterKey.value : this.filterKey,
+      position: data.position.present ? data.position.value : this.position,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfBaseFilterOrder(')
+          ..write('filterKey: $filterKey, ')
+          ..write('position: $position')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(filterKey, position);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookshelfBaseFilterOrder &&
+          other.filterKey == this.filterKey &&
+          other.position == this.position);
+}
+
+class StoredBookshelfBaseFilterOrdersCompanion
+    extends UpdateCompanion<StoredBookshelfBaseFilterOrder> {
+  final Value<String> filterKey;
+  final Value<int> position;
+  final Value<int> rowid;
+  const StoredBookshelfBaseFilterOrdersCompanion({
+    this.filterKey = const Value.absent(),
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookshelfBaseFilterOrdersCompanion.insert({
+    required String filterKey,
+    this.position = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : filterKey = Value(filterKey);
+  static Insertable<StoredBookshelfBaseFilterOrder> custom({
+    Expression<String>? filterKey,
+    Expression<int>? position,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (filterKey != null) 'filter_key': filterKey,
+      if (position != null) 'position': position,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookshelfBaseFilterOrdersCompanion copyWith({
+    Value<String>? filterKey,
+    Value<int>? position,
+    Value<int>? rowid,
+  }) {
+    return StoredBookshelfBaseFilterOrdersCompanion(
+      filterKey: filterKey ?? this.filterKey,
+      position: position ?? this.position,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (filterKey.present) {
+      map['filter_key'] = Variable<String>(filterKey.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookshelfBaseFilterOrdersCompanion(')
+          ..write('filterKey: $filterKey, ')
+          ..write('position: $position, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SearchSourceHitsTable extends SearchSourceHits
     with TableInfo<$SearchSourceHitsTable, SearchSourceHit> {
   @override
@@ -10153,6 +13317,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $StoredReadingRecordSessionsTable(this);
   late final $StoredReadingBookStatusesTable storedReadingBookStatuses =
       $StoredReadingBookStatusesTable(this);
+  late final $StoredReadingProgressesTable storedReadingProgresses =
+      $StoredReadingProgressesTable(this);
+  late final $StoredRemoteAccessSnapshotsTable storedRemoteAccessSnapshots =
+      $StoredRemoteAccessSnapshotsTable(this);
+  late final $StoredSourceHealthSnapshotsTable storedSourceHealthSnapshots =
+      $StoredSourceHealthSnapshotsTable(this);
+  late final $StoredBookshelfBooksTable storedBookshelfBooks =
+      $StoredBookshelfBooksTable(this);
+  late final $StoredBookshelfTagAssignmentsTable storedBookshelfTagAssignments =
+      $StoredBookshelfTagAssignmentsTable(this);
+  late final $StoredBookshelfTagMetadataTable storedBookshelfTagMetadata =
+      $StoredBookshelfTagMetadataTable(this);
+  late final $StoredBookshelfCategoryMetadataTable
+  storedBookshelfCategoryMetadata = $StoredBookshelfCategoryMetadataTable(this);
+  late final $StoredBookshelfBaseFilterOrdersTable
+  storedBookshelfBaseFilterOrders = $StoredBookshelfBaseFilterOrdersTable(this);
   late final $SearchSourceHitsTable searchSourceHits = $SearchSourceHitsTable(
     this,
   );
@@ -10177,6 +13357,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedReadingRecordDays,
     storedReadingRecordSessions,
     storedReadingBookStatuses,
+    storedReadingProgresses,
+    storedRemoteAccessSnapshots,
+    storedSourceHealthSnapshots,
+    storedBookshelfBooks,
+    storedBookshelfTagAssignments,
+    storedBookshelfTagMetadata,
+    storedBookshelfCategoryMetadata,
+    storedBookshelfBaseFilterOrders,
     searchSourceHits,
     storedSyncProfiles,
     storedSyncScopeStates,
@@ -13501,6 +16689,1859 @@ typedef $$StoredReadingBookStatusesTableProcessedTableManager =
       StoredReadingBookStatuse,
       PrefetchHooks Function()
     >;
+typedef $$StoredReadingProgressesTableCreateCompanionBuilder =
+    StoredReadingProgressesCompanion Function({
+      required String bookId,
+      required String sourceId,
+      required String detailUrl,
+      required String chapterId,
+      required String chapterUrl,
+      required String chapterTitle,
+      required int chapterIndex,
+      Value<double> chapterPositionRatio,
+      Value<String?> logicalPositionJson,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredReadingProgressesTableUpdateCompanionBuilder =
+    StoredReadingProgressesCompanion Function({
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> chapterId,
+      Value<String> chapterUrl,
+      Value<String> chapterTitle,
+      Value<int> chapterIndex,
+      Value<double> chapterPositionRatio,
+      Value<String?> logicalPositionJson,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredReadingProgressesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredReadingProgressesTable> {
+  $$StoredReadingProgressesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get chapterPositionRatio => $composableBuilder(
+    column: $table.chapterPositionRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get logicalPositionJson => $composableBuilder(
+    column: $table.logicalPositionJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredReadingProgressesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredReadingProgressesTable> {
+  $$StoredReadingProgressesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get chapterPositionRatio => $composableBuilder(
+    column: $table.chapterPositionRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get logicalPositionJson => $composableBuilder(
+    column: $table.logicalPositionJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredReadingProgressesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredReadingProgressesTable> {
+  $$StoredReadingProgressesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get chapterId =>
+      $composableBuilder(column: $table.chapterId, builder: (column) => column);
+
+  GeneratedColumn<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get chapterPositionRatio => $composableBuilder(
+    column: $table.chapterPositionRatio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get logicalPositionJson => $composableBuilder(
+    column: $table.logicalPositionJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredReadingProgressesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredReadingProgressesTable,
+          StoredReadingProgressesData,
+          $$StoredReadingProgressesTableFilterComposer,
+          $$StoredReadingProgressesTableOrderingComposer,
+          $$StoredReadingProgressesTableAnnotationComposer,
+          $$StoredReadingProgressesTableCreateCompanionBuilder,
+          $$StoredReadingProgressesTableUpdateCompanionBuilder,
+          (
+            StoredReadingProgressesData,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredReadingProgressesTable,
+              StoredReadingProgressesData
+            >,
+          ),
+          StoredReadingProgressesData,
+          PrefetchHooks Function()
+        > {
+  $$StoredReadingProgressesTableTableManager(
+    _$AppDatabase db,
+    $StoredReadingProgressesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredReadingProgressesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredReadingProgressesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredReadingProgressesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> chapterId = const Value.absent(),
+                Value<String> chapterUrl = const Value.absent(),
+                Value<String> chapterTitle = const Value.absent(),
+                Value<int> chapterIndex = const Value.absent(),
+                Value<double> chapterPositionRatio = const Value.absent(),
+                Value<String?> logicalPositionJson = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingProgressesCompanion(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                chapterId: chapterId,
+                chapterUrl: chapterUrl,
+                chapterTitle: chapterTitle,
+                chapterIndex: chapterIndex,
+                chapterPositionRatio: chapterPositionRatio,
+                logicalPositionJson: logicalPositionJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bookId,
+                required String sourceId,
+                required String detailUrl,
+                required String chapterId,
+                required String chapterUrl,
+                required String chapterTitle,
+                required int chapterIndex,
+                Value<double> chapterPositionRatio = const Value.absent(),
+                Value<String?> logicalPositionJson = const Value.absent(),
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingProgressesCompanion.insert(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                chapterId: chapterId,
+                chapterUrl: chapterUrl,
+                chapterTitle: chapterTitle,
+                chapterIndex: chapterIndex,
+                chapterPositionRatio: chapterPositionRatio,
+                logicalPositionJson: logicalPositionJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredReadingProgressesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredReadingProgressesTable,
+      StoredReadingProgressesData,
+      $$StoredReadingProgressesTableFilterComposer,
+      $$StoredReadingProgressesTableOrderingComposer,
+      $$StoredReadingProgressesTableAnnotationComposer,
+      $$StoredReadingProgressesTableCreateCompanionBuilder,
+      $$StoredReadingProgressesTableUpdateCompanionBuilder,
+      (
+        StoredReadingProgressesData,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredReadingProgressesTable,
+          StoredReadingProgressesData
+        >,
+      ),
+      StoredReadingProgressesData,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredRemoteAccessSnapshotsTableCreateCompanionBuilder =
+    StoredRemoteAccessSnapshotsCompanion Function({
+      required String userId,
+      Value<bool> showSourceEntry,
+      Value<bool> hasMembership,
+      Value<bool> hasThemeCustom,
+      Value<int> sourceImportLimit,
+      required DateTime cachedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredRemoteAccessSnapshotsTableUpdateCompanionBuilder =
+    StoredRemoteAccessSnapshotsCompanion Function({
+      Value<String> userId,
+      Value<bool> showSourceEntry,
+      Value<bool> hasMembership,
+      Value<bool> hasThemeCustom,
+      Value<int> sourceImportLimit,
+      Value<DateTime> cachedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredRemoteAccessSnapshotsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredRemoteAccessSnapshotsTable> {
+  $$StoredRemoteAccessSnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showSourceEntry => $composableBuilder(
+    column: $table.showSourceEntry,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasMembership => $composableBuilder(
+    column: $table.hasMembership,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasThemeCustom => $composableBuilder(
+    column: $table.hasThemeCustom,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceImportLimit => $composableBuilder(
+    column: $table.sourceImportLimit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredRemoteAccessSnapshotsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredRemoteAccessSnapshotsTable> {
+  $$StoredRemoteAccessSnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get showSourceEntry => $composableBuilder(
+    column: $table.showSourceEntry,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasMembership => $composableBuilder(
+    column: $table.hasMembership,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasThemeCustom => $composableBuilder(
+    column: $table.hasThemeCustom,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceImportLimit => $composableBuilder(
+    column: $table.sourceImportLimit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredRemoteAccessSnapshotsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredRemoteAccessSnapshotsTable> {
+  $$StoredRemoteAccessSnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<bool> get showSourceEntry => $composableBuilder(
+    column: $table.showSourceEntry,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get hasMembership => $composableBuilder(
+    column: $table.hasMembership,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get hasThemeCustom => $composableBuilder(
+    column: $table.hasThemeCustom,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceImportLimit => $composableBuilder(
+    column: $table.sourceImportLimit,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$StoredRemoteAccessSnapshotsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredRemoteAccessSnapshotsTable,
+          StoredRemoteAccessSnapshot,
+          $$StoredRemoteAccessSnapshotsTableFilterComposer,
+          $$StoredRemoteAccessSnapshotsTableOrderingComposer,
+          $$StoredRemoteAccessSnapshotsTableAnnotationComposer,
+          $$StoredRemoteAccessSnapshotsTableCreateCompanionBuilder,
+          $$StoredRemoteAccessSnapshotsTableUpdateCompanionBuilder,
+          (
+            StoredRemoteAccessSnapshot,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredRemoteAccessSnapshotsTable,
+              StoredRemoteAccessSnapshot
+            >,
+          ),
+          StoredRemoteAccessSnapshot,
+          PrefetchHooks Function()
+        > {
+  $$StoredRemoteAccessSnapshotsTableTableManager(
+    _$AppDatabase db,
+    $StoredRemoteAccessSnapshotsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredRemoteAccessSnapshotsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredRemoteAccessSnapshotsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredRemoteAccessSnapshotsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> userId = const Value.absent(),
+                Value<bool> showSourceEntry = const Value.absent(),
+                Value<bool> hasMembership = const Value.absent(),
+                Value<bool> hasThemeCustom = const Value.absent(),
+                Value<int> sourceImportLimit = const Value.absent(),
+                Value<DateTime> cachedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredRemoteAccessSnapshotsCompanion(
+                userId: userId,
+                showSourceEntry: showSourceEntry,
+                hasMembership: hasMembership,
+                hasThemeCustom: hasThemeCustom,
+                sourceImportLimit: sourceImportLimit,
+                cachedAt: cachedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String userId,
+                Value<bool> showSourceEntry = const Value.absent(),
+                Value<bool> hasMembership = const Value.absent(),
+                Value<bool> hasThemeCustom = const Value.absent(),
+                Value<int> sourceImportLimit = const Value.absent(),
+                required DateTime cachedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredRemoteAccessSnapshotsCompanion.insert(
+                userId: userId,
+                showSourceEntry: showSourceEntry,
+                hasMembership: hasMembership,
+                hasThemeCustom: hasThemeCustom,
+                sourceImportLimit: sourceImportLimit,
+                cachedAt: cachedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredRemoteAccessSnapshotsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredRemoteAccessSnapshotsTable,
+      StoredRemoteAccessSnapshot,
+      $$StoredRemoteAccessSnapshotsTableFilterComposer,
+      $$StoredRemoteAccessSnapshotsTableOrderingComposer,
+      $$StoredRemoteAccessSnapshotsTableAnnotationComposer,
+      $$StoredRemoteAccessSnapshotsTableCreateCompanionBuilder,
+      $$StoredRemoteAccessSnapshotsTableUpdateCompanionBuilder,
+      (
+        StoredRemoteAccessSnapshot,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredRemoteAccessSnapshotsTable,
+          StoredRemoteAccessSnapshot
+        >,
+      ),
+      StoredRemoteAccessSnapshot,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredSourceHealthSnapshotsTableCreateCompanionBuilder =
+    StoredSourceHealthSnapshotsCompanion Function({
+      required String sourceId,
+      required String payloadJson,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredSourceHealthSnapshotsTableUpdateCompanionBuilder =
+    StoredSourceHealthSnapshotsCompanion Function({
+      Value<String> sourceId,
+      Value<String> payloadJson,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredSourceHealthSnapshotsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredSourceHealthSnapshotsTable> {
+  $$StoredSourceHealthSnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredSourceHealthSnapshotsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredSourceHealthSnapshotsTable> {
+  $$StoredSourceHealthSnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredSourceHealthSnapshotsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredSourceHealthSnapshotsTable> {
+  $$StoredSourceHealthSnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredSourceHealthSnapshotsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredSourceHealthSnapshotsTable,
+          StoredSourceHealthSnapshot,
+          $$StoredSourceHealthSnapshotsTableFilterComposer,
+          $$StoredSourceHealthSnapshotsTableOrderingComposer,
+          $$StoredSourceHealthSnapshotsTableAnnotationComposer,
+          $$StoredSourceHealthSnapshotsTableCreateCompanionBuilder,
+          $$StoredSourceHealthSnapshotsTableUpdateCompanionBuilder,
+          (
+            StoredSourceHealthSnapshot,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredSourceHealthSnapshotsTable,
+              StoredSourceHealthSnapshot
+            >,
+          ),
+          StoredSourceHealthSnapshot,
+          PrefetchHooks Function()
+        > {
+  $$StoredSourceHealthSnapshotsTableTableManager(
+    _$AppDatabase db,
+    $StoredSourceHealthSnapshotsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredSourceHealthSnapshotsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredSourceHealthSnapshotsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredSourceHealthSnapshotsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceId = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSourceHealthSnapshotsCompanion(
+                sourceId: sourceId,
+                payloadJson: payloadJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceId,
+                required String payloadJson,
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredSourceHealthSnapshotsCompanion.insert(
+                sourceId: sourceId,
+                payloadJson: payloadJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredSourceHealthSnapshotsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredSourceHealthSnapshotsTable,
+      StoredSourceHealthSnapshot,
+      $$StoredSourceHealthSnapshotsTableFilterComposer,
+      $$StoredSourceHealthSnapshotsTableOrderingComposer,
+      $$StoredSourceHealthSnapshotsTableAnnotationComposer,
+      $$StoredSourceHealthSnapshotsTableCreateCompanionBuilder,
+      $$StoredSourceHealthSnapshotsTableUpdateCompanionBuilder,
+      (
+        StoredSourceHealthSnapshot,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredSourceHealthSnapshotsTable,
+          StoredSourceHealthSnapshot
+        >,
+      ),
+      StoredSourceHealthSnapshot,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredBookshelfBooksTableCreateCompanionBuilder =
+    StoredBookshelfBooksCompanion Function({
+      required String sourceId,
+      required String detailUrl,
+      required String bookId,
+      required String title,
+      Value<String?> author,
+      Value<String?> category,
+      Value<String?> coverUrl,
+      Value<String?> latestChapter,
+      required DateTime addedAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredBookshelfBooksTableUpdateCompanionBuilder =
+    StoredBookshelfBooksCompanion Function({
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> bookId,
+      Value<String> title,
+      Value<String?> author,
+      Value<String?> category,
+      Value<String?> coverUrl,
+      Value<String?> latestChapter,
+      Value<DateTime> addedAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredBookshelfBooksTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfBooksTable> {
+  $$StoredBookshelfBooksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get latestChapter => $composableBuilder(
+    column: $table.latestChapter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookshelfBooksTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfBooksTable> {
+  $$StoredBookshelfBooksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get latestChapter => $composableBuilder(
+    column: $table.latestChapter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookshelfBooksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfBooksTable> {
+  $$StoredBookshelfBooksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get author =>
+      $composableBuilder(column: $table.author, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get coverUrl =>
+      $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get latestChapter => $composableBuilder(
+    column: $table.latestChapter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredBookshelfBooksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookshelfBooksTable,
+          StoredBookshelfBook,
+          $$StoredBookshelfBooksTableFilterComposer,
+          $$StoredBookshelfBooksTableOrderingComposer,
+          $$StoredBookshelfBooksTableAnnotationComposer,
+          $$StoredBookshelfBooksTableCreateCompanionBuilder,
+          $$StoredBookshelfBooksTableUpdateCompanionBuilder,
+          (
+            StoredBookshelfBook,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookshelfBooksTable,
+              StoredBookshelfBook
+            >,
+          ),
+          StoredBookshelfBook,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookshelfBooksTableTableManager(
+    _$AppDatabase db,
+    $StoredBookshelfBooksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredBookshelfBooksTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredBookshelfBooksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookshelfBooksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> author = const Value.absent(),
+                Value<String?> category = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> latestChapter = const Value.absent(),
+                Value<DateTime> addedAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfBooksCompanion(
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookId: bookId,
+                title: title,
+                author: author,
+                category: category,
+                coverUrl: coverUrl,
+                latestChapter: latestChapter,
+                addedAt: addedAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceId,
+                required String detailUrl,
+                required String bookId,
+                required String title,
+                Value<String?> author = const Value.absent(),
+                Value<String?> category = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> latestChapter = const Value.absent(),
+                required DateTime addedAt,
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfBooksCompanion.insert(
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookId: bookId,
+                title: title,
+                author: author,
+                category: category,
+                coverUrl: coverUrl,
+                latestChapter: latestChapter,
+                addedAt: addedAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookshelfBooksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookshelfBooksTable,
+      StoredBookshelfBook,
+      $$StoredBookshelfBooksTableFilterComposer,
+      $$StoredBookshelfBooksTableOrderingComposer,
+      $$StoredBookshelfBooksTableAnnotationComposer,
+      $$StoredBookshelfBooksTableCreateCompanionBuilder,
+      $$StoredBookshelfBooksTableUpdateCompanionBuilder,
+      (
+        StoredBookshelfBook,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredBookshelfBooksTable,
+          StoredBookshelfBook
+        >,
+      ),
+      StoredBookshelfBook,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredBookshelfTagAssignmentsTableCreateCompanionBuilder =
+    StoredBookshelfTagAssignmentsCompanion Function({
+      required String sourceId,
+      required String detailUrl,
+      required String tagName,
+      Value<int> position,
+      Value<int> rowid,
+    });
+typedef $$StoredBookshelfTagAssignmentsTableUpdateCompanionBuilder =
+    StoredBookshelfTagAssignmentsCompanion Function({
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> tagName,
+      Value<int> position,
+      Value<int> rowid,
+    });
+
+class $$StoredBookshelfTagAssignmentsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfTagAssignmentsTable> {
+  $$StoredBookshelfTagAssignmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagName => $composableBuilder(
+    column: $table.tagName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookshelfTagAssignmentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfTagAssignmentsTable> {
+  $$StoredBookshelfTagAssignmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagName => $composableBuilder(
+    column: $table.tagName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookshelfTagAssignmentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfTagAssignmentsTable> {
+  $$StoredBookshelfTagAssignmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get tagName =>
+      $composableBuilder(column: $table.tagName, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+}
+
+class $$StoredBookshelfTagAssignmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookshelfTagAssignmentsTable,
+          StoredBookshelfTagAssignment,
+          $$StoredBookshelfTagAssignmentsTableFilterComposer,
+          $$StoredBookshelfTagAssignmentsTableOrderingComposer,
+          $$StoredBookshelfTagAssignmentsTableAnnotationComposer,
+          $$StoredBookshelfTagAssignmentsTableCreateCompanionBuilder,
+          $$StoredBookshelfTagAssignmentsTableUpdateCompanionBuilder,
+          (
+            StoredBookshelfTagAssignment,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookshelfTagAssignmentsTable,
+              StoredBookshelfTagAssignment
+            >,
+          ),
+          StoredBookshelfTagAssignment,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookshelfTagAssignmentsTableTableManager(
+    _$AppDatabase db,
+    $StoredBookshelfTagAssignmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredBookshelfTagAssignmentsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredBookshelfTagAssignmentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookshelfTagAssignmentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> tagName = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfTagAssignmentsCompanion(
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                tagName: tagName,
+                position: position,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceId,
+                required String detailUrl,
+                required String tagName,
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfTagAssignmentsCompanion.insert(
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                tagName: tagName,
+                position: position,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookshelfTagAssignmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookshelfTagAssignmentsTable,
+      StoredBookshelfTagAssignment,
+      $$StoredBookshelfTagAssignmentsTableFilterComposer,
+      $$StoredBookshelfTagAssignmentsTableOrderingComposer,
+      $$StoredBookshelfTagAssignmentsTableAnnotationComposer,
+      $$StoredBookshelfTagAssignmentsTableCreateCompanionBuilder,
+      $$StoredBookshelfTagAssignmentsTableUpdateCompanionBuilder,
+      (
+        StoredBookshelfTagAssignment,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredBookshelfTagAssignmentsTable,
+          StoredBookshelfTagAssignment
+        >,
+      ),
+      StoredBookshelfTagAssignment,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredBookshelfTagMetadataTableCreateCompanionBuilder =
+    StoredBookshelfTagMetadataCompanion Function({
+      required String name,
+      required int colorValue,
+      Value<int> position,
+      Value<int> rowid,
+    });
+typedef $$StoredBookshelfTagMetadataTableUpdateCompanionBuilder =
+    StoredBookshelfTagMetadataCompanion Function({
+      Value<String> name,
+      Value<int> colorValue,
+      Value<int> position,
+      Value<int> rowid,
+    });
+
+class $$StoredBookshelfTagMetadataTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfTagMetadataTable> {
+  $$StoredBookshelfTagMetadataTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookshelfTagMetadataTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfTagMetadataTable> {
+  $$StoredBookshelfTagMetadataTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookshelfTagMetadataTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfTagMetadataTable> {
+  $$StoredBookshelfTagMetadataTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+}
+
+class $$StoredBookshelfTagMetadataTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookshelfTagMetadataTable,
+          StoredBookshelfTagMetadataData,
+          $$StoredBookshelfTagMetadataTableFilterComposer,
+          $$StoredBookshelfTagMetadataTableOrderingComposer,
+          $$StoredBookshelfTagMetadataTableAnnotationComposer,
+          $$StoredBookshelfTagMetadataTableCreateCompanionBuilder,
+          $$StoredBookshelfTagMetadataTableUpdateCompanionBuilder,
+          (
+            StoredBookshelfTagMetadataData,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookshelfTagMetadataTable,
+              StoredBookshelfTagMetadataData
+            >,
+          ),
+          StoredBookshelfTagMetadataData,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookshelfTagMetadataTableTableManager(
+    _$AppDatabase db,
+    $StoredBookshelfTagMetadataTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredBookshelfTagMetadataTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredBookshelfTagMetadataTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookshelfTagMetadataTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> name = const Value.absent(),
+                Value<int> colorValue = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfTagMetadataCompanion(
+                name: name,
+                colorValue: colorValue,
+                position: position,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String name,
+                required int colorValue,
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfTagMetadataCompanion.insert(
+                name: name,
+                colorValue: colorValue,
+                position: position,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookshelfTagMetadataTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookshelfTagMetadataTable,
+      StoredBookshelfTagMetadataData,
+      $$StoredBookshelfTagMetadataTableFilterComposer,
+      $$StoredBookshelfTagMetadataTableOrderingComposer,
+      $$StoredBookshelfTagMetadataTableAnnotationComposer,
+      $$StoredBookshelfTagMetadataTableCreateCompanionBuilder,
+      $$StoredBookshelfTagMetadataTableUpdateCompanionBuilder,
+      (
+        StoredBookshelfTagMetadataData,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredBookshelfTagMetadataTable,
+          StoredBookshelfTagMetadataData
+        >,
+      ),
+      StoredBookshelfTagMetadataData,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredBookshelfCategoryMetadataTableCreateCompanionBuilder =
+    StoredBookshelfCategoryMetadataCompanion Function({
+      required String name,
+      required int colorValue,
+      Value<int> position,
+      Value<int> rowid,
+    });
+typedef $$StoredBookshelfCategoryMetadataTableUpdateCompanionBuilder =
+    StoredBookshelfCategoryMetadataCompanion Function({
+      Value<String> name,
+      Value<int> colorValue,
+      Value<int> position,
+      Value<int> rowid,
+    });
+
+class $$StoredBookshelfCategoryMetadataTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfCategoryMetadataTable> {
+  $$StoredBookshelfCategoryMetadataTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookshelfCategoryMetadataTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfCategoryMetadataTable> {
+  $$StoredBookshelfCategoryMetadataTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookshelfCategoryMetadataTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfCategoryMetadataTable> {
+  $$StoredBookshelfCategoryMetadataTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+}
+
+class $$StoredBookshelfCategoryMetadataTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookshelfCategoryMetadataTable,
+          StoredBookshelfCategoryMetadataData,
+          $$StoredBookshelfCategoryMetadataTableFilterComposer,
+          $$StoredBookshelfCategoryMetadataTableOrderingComposer,
+          $$StoredBookshelfCategoryMetadataTableAnnotationComposer,
+          $$StoredBookshelfCategoryMetadataTableCreateCompanionBuilder,
+          $$StoredBookshelfCategoryMetadataTableUpdateCompanionBuilder,
+          (
+            StoredBookshelfCategoryMetadataData,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookshelfCategoryMetadataTable,
+              StoredBookshelfCategoryMetadataData
+            >,
+          ),
+          StoredBookshelfCategoryMetadataData,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookshelfCategoryMetadataTableTableManager(
+    _$AppDatabase db,
+    $StoredBookshelfCategoryMetadataTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredBookshelfCategoryMetadataTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredBookshelfCategoryMetadataTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookshelfCategoryMetadataTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> name = const Value.absent(),
+                Value<int> colorValue = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfCategoryMetadataCompanion(
+                name: name,
+                colorValue: colorValue,
+                position: position,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String name,
+                required int colorValue,
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfCategoryMetadataCompanion.insert(
+                name: name,
+                colorValue: colorValue,
+                position: position,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookshelfCategoryMetadataTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookshelfCategoryMetadataTable,
+      StoredBookshelfCategoryMetadataData,
+      $$StoredBookshelfCategoryMetadataTableFilterComposer,
+      $$StoredBookshelfCategoryMetadataTableOrderingComposer,
+      $$StoredBookshelfCategoryMetadataTableAnnotationComposer,
+      $$StoredBookshelfCategoryMetadataTableCreateCompanionBuilder,
+      $$StoredBookshelfCategoryMetadataTableUpdateCompanionBuilder,
+      (
+        StoredBookshelfCategoryMetadataData,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredBookshelfCategoryMetadataTable,
+          StoredBookshelfCategoryMetadataData
+        >,
+      ),
+      StoredBookshelfCategoryMetadataData,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredBookshelfBaseFilterOrdersTableCreateCompanionBuilder =
+    StoredBookshelfBaseFilterOrdersCompanion Function({
+      required String filterKey,
+      Value<int> position,
+      Value<int> rowid,
+    });
+typedef $$StoredBookshelfBaseFilterOrdersTableUpdateCompanionBuilder =
+    StoredBookshelfBaseFilterOrdersCompanion Function({
+      Value<String> filterKey,
+      Value<int> position,
+      Value<int> rowid,
+    });
+
+class $$StoredBookshelfBaseFilterOrdersTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfBaseFilterOrdersTable> {
+  $$StoredBookshelfBaseFilterOrdersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get filterKey => $composableBuilder(
+    column: $table.filterKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookshelfBaseFilterOrdersTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfBaseFilterOrdersTable> {
+  $$StoredBookshelfBaseFilterOrdersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get filterKey => $composableBuilder(
+    column: $table.filterKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookshelfBaseFilterOrdersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookshelfBaseFilterOrdersTable> {
+  $$StoredBookshelfBaseFilterOrdersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get filterKey =>
+      $composableBuilder(column: $table.filterKey, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+}
+
+class $$StoredBookshelfBaseFilterOrdersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookshelfBaseFilterOrdersTable,
+          StoredBookshelfBaseFilterOrder,
+          $$StoredBookshelfBaseFilterOrdersTableFilterComposer,
+          $$StoredBookshelfBaseFilterOrdersTableOrderingComposer,
+          $$StoredBookshelfBaseFilterOrdersTableAnnotationComposer,
+          $$StoredBookshelfBaseFilterOrdersTableCreateCompanionBuilder,
+          $$StoredBookshelfBaseFilterOrdersTableUpdateCompanionBuilder,
+          (
+            StoredBookshelfBaseFilterOrder,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookshelfBaseFilterOrdersTable,
+              StoredBookshelfBaseFilterOrder
+            >,
+          ),
+          StoredBookshelfBaseFilterOrder,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookshelfBaseFilterOrdersTableTableManager(
+    _$AppDatabase db,
+    $StoredBookshelfBaseFilterOrdersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredBookshelfBaseFilterOrdersTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredBookshelfBaseFilterOrdersTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookshelfBaseFilterOrdersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> filterKey = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfBaseFilterOrdersCompanion(
+                filterKey: filterKey,
+                position: position,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String filterKey,
+                Value<int> position = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookshelfBaseFilterOrdersCompanion.insert(
+                filterKey: filterKey,
+                position: position,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookshelfBaseFilterOrdersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookshelfBaseFilterOrdersTable,
+      StoredBookshelfBaseFilterOrder,
+      $$StoredBookshelfBaseFilterOrdersTableFilterComposer,
+      $$StoredBookshelfBaseFilterOrdersTableOrderingComposer,
+      $$StoredBookshelfBaseFilterOrdersTableAnnotationComposer,
+      $$StoredBookshelfBaseFilterOrdersTableCreateCompanionBuilder,
+      $$StoredBookshelfBaseFilterOrdersTableUpdateCompanionBuilder,
+      (
+        StoredBookshelfBaseFilterOrder,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredBookshelfBaseFilterOrdersTable,
+          StoredBookshelfBaseFilterOrder
+        >,
+      ),
+      StoredBookshelfBaseFilterOrder,
+      PrefetchHooks Function()
+    >;
 typedef $$SearchSourceHitsTableCreateCompanionBuilder =
     SearchSourceHitsCompanion Function({
       required String titleNorm,
@@ -15225,6 +20266,49 @@ class $AppDatabaseManager {
       $$StoredReadingBookStatusesTableTableManager(
         _db,
         _db.storedReadingBookStatuses,
+      );
+  $$StoredReadingProgressesTableTableManager get storedReadingProgresses =>
+      $$StoredReadingProgressesTableTableManager(
+        _db,
+        _db.storedReadingProgresses,
+      );
+  $$StoredRemoteAccessSnapshotsTableTableManager
+  get storedRemoteAccessSnapshots =>
+      $$StoredRemoteAccessSnapshotsTableTableManager(
+        _db,
+        _db.storedRemoteAccessSnapshots,
+      );
+  $$StoredSourceHealthSnapshotsTableTableManager
+  get storedSourceHealthSnapshots =>
+      $$StoredSourceHealthSnapshotsTableTableManager(
+        _db,
+        _db.storedSourceHealthSnapshots,
+      );
+  $$StoredBookshelfBooksTableTableManager get storedBookshelfBooks =>
+      $$StoredBookshelfBooksTableTableManager(_db, _db.storedBookshelfBooks);
+  $$StoredBookshelfTagAssignmentsTableTableManager
+  get storedBookshelfTagAssignments =>
+      $$StoredBookshelfTagAssignmentsTableTableManager(
+        _db,
+        _db.storedBookshelfTagAssignments,
+      );
+  $$StoredBookshelfTagMetadataTableTableManager
+  get storedBookshelfTagMetadata =>
+      $$StoredBookshelfTagMetadataTableTableManager(
+        _db,
+        _db.storedBookshelfTagMetadata,
+      );
+  $$StoredBookshelfCategoryMetadataTableTableManager
+  get storedBookshelfCategoryMetadata =>
+      $$StoredBookshelfCategoryMetadataTableTableManager(
+        _db,
+        _db.storedBookshelfCategoryMetadata,
+      );
+  $$StoredBookshelfBaseFilterOrdersTableTableManager
+  get storedBookshelfBaseFilterOrders =>
+      $$StoredBookshelfBaseFilterOrdersTableTableManager(
+        _db,
+        _db.storedBookshelfBaseFilterOrders,
       );
   $$SearchSourceHitsTableTableManager get searchSourceHits =>
       $$SearchSourceHitsTableTableManager(_db, _db.searchSourceHits);

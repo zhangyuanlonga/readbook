@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 
 enum BookshelfTaxonomyKind { tag, category }
@@ -117,13 +118,15 @@ class BookshelfCollectionChange {
 }
 
 class BookshelfService {
-  BookshelfService({SharedPreferences? preferences})
+  BookshelfService({SharedPreferences? preferences, AppDatabase? database})
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _database = database ?? AppDatabase.instance;
 
   final Future<SharedPreferences> _preferencesFuture;
+  final AppDatabase _database;
 
   static const String _storageKey = 'bookshelf.books';
   static const String _tagStorageKey = 'bookshelf.book_tags';
@@ -231,6 +234,45 @@ class BookshelfService {
       _collectionChangeController.stream;
 
   Future<List<BookshelfBook>> getAll() async {
+    final storedBooks = await _database.listBookshelfBooks();
+    if (storedBooks.isNotEmpty) {
+      return storedBooks
+          .map(
+            (item) => BookshelfBook(
+              bookId: item.bookId,
+              sourceId: item.sourceId,
+              title: item.title,
+              detailUrl: item.detailUrl,
+              addedAt: item.addedAt,
+              author: item.author,
+              category: item.category,
+              coverUrl: item.coverUrl,
+              latestChapter: item.latestChapter,
+            ),
+          )
+          .toList(growable: false);
+    }
+
+    await migrateLegacySnapshotToDatabase();
+    final migratedBooks = await _database.listBookshelfBooks();
+    if (migratedBooks.isNotEmpty) {
+      return migratedBooks
+          .map(
+            (item) => BookshelfBook(
+              bookId: item.bookId,
+              sourceId: item.sourceId,
+              title: item.title,
+              detailUrl: item.detailUrl,
+              addedAt: item.addedAt,
+              author: item.author,
+              category: item.category,
+              coverUrl: item.coverUrl,
+              latestChapter: item.latestChapter,
+            ),
+          )
+          .toList(growable: false);
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_storageKey);
     if (raw == null || raw.trim().isEmpty) {
@@ -757,6 +799,20 @@ class BookshelfService {
   }
 
   Future<Map<String, List<String>>> getTagMap() async {
+    final storedAssignments = await _database.listBookshelfTagAssignments();
+    if (storedAssignments.isNotEmpty) {
+      final result = <String, List<String>>{};
+      for (final item in storedAssignments) {
+        final key = _bookKey(
+          sourceId: item.sourceId,
+          detailUrl: item.detailUrl,
+        );
+        final tags = result.putIfAbsent(key, () => <String>[]);
+        tags.add(item.tagName);
+      }
+      return result;
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_tagStorageKey);
     if (raw == null || raw.trim().isEmpty) {
@@ -773,6 +829,11 @@ class BookshelfService {
   }
 
   Future<List<String>> getTagOrder() async {
+    final stored = await _database.listBookshelfTagMetadata();
+    if (stored.isNotEmpty) {
+      return stored.map((item) => item.name).toList(growable: false);
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_tagOrderStorageKey);
     if (raw == null || raw.trim().isEmpty) {
@@ -791,6 +852,18 @@ class BookshelfService {
   }
 
   Future<List<BookshelfTaxonomyItem>> getTagItems() async {
+    final stored = await _database.listBookshelfTagMetadata();
+    if (stored.isNotEmpty) {
+      return stored
+          .map(
+            (item) => BookshelfTaxonomyItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false);
+    }
+
     return _loadTaxonomyItems(
       metadataKey: _tagMetadataStorageKey,
       orderKey: _tagOrderStorageKey,
@@ -798,28 +871,45 @@ class BookshelfService {
   }
 
   Future<void> saveTagItems(List<BookshelfTaxonomyItem> items) async {
-    await _saveTaxonomyItems(
+    await _saveTagItemsToDatabase(items);
+    await _clearLegacyTaxonomyPrefs(
       metadataKey: _tagMetadataStorageKey,
       orderKey: _tagOrderStorageKey,
-      items: items,
-      kind: BookshelfTaxonomyKind.tag,
+    );
+    _emitTaxonomyChange(
+      const BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.tag,
+        action: BookshelfTaxonomyAction.metadataChanged,
+      ),
     );
   }
 
   Future<void> saveTagOrder(List<String> orderedTags) async {
-    final prefs = await _preferencesFuture;
-    final normalized = _normalizeTags(orderedTags);
-    if (normalized.isEmpty) {
-      await prefs.remove(_tagOrderStorageKey);
-      _emitTaxonomyChange(
-        const BookshelfTaxonomyChange(
-          kind: BookshelfTaxonomyKind.tag,
-          action: BookshelfTaxonomyAction.orderChanged,
-        ),
-      );
-      return;
-    }
-    await prefs.setString(_tagOrderStorageKey, jsonEncode(normalized));
+    final current = await getTagItems();
+    final currentByName = <String, BookshelfTaxonomyItem>{
+      for (final item in current) item.name: item,
+    };
+    final normalizedOrder = _normalizeTags(orderedTags);
+    final remaining = current
+        .where((item) => !normalizedOrder.contains(item.name))
+        .map((item) => item.name)
+        .toList(growable: false);
+    final orderedNames = <String>[...normalizedOrder, ...remaining];
+    final next = orderedNames
+        .map(
+          (name) =>
+              currentByName[name] ??
+              BookshelfTaxonomyItem(
+                name: name,
+                colorValue: BookshelfTaxonomyItem.defaultColorForName(name),
+              ),
+        )
+        .toList(growable: false);
+    await _saveTagItemsToDatabase(next);
+    await _clearLegacyTaxonomyPrefs(
+      metadataKey: _tagMetadataStorageKey,
+      orderKey: _tagOrderStorageKey,
+    );
     _emitTaxonomyChange(
       const BookshelfTaxonomyChange(
         kind: BookshelfTaxonomyKind.tag,
@@ -842,6 +932,11 @@ class BookshelfService {
   }
 
   Future<List<String>> getBaseFilterOrder() async {
+    final stored = await _database.listBookshelfBaseFilterOrders();
+    if (stored.isNotEmpty) {
+      return stored.map((item) => item.filterKey).toList(growable: false);
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_baseFilterOrderStorageKey);
     if (raw == null || raw.trim().isEmpty) {
@@ -874,6 +969,11 @@ class BookshelfService {
   }
 
   Future<List<String>> getCategoryOrder() async {
+    final stored = await _database.listBookshelfCategoryMetadata();
+    if (stored.isNotEmpty) {
+      return stored.map((item) => item.name).toList(growable: false);
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_categoryOrderStorageKey);
     if (raw == null || raw.trim().isEmpty) {
@@ -892,6 +992,18 @@ class BookshelfService {
   }
 
   Future<List<BookshelfTaxonomyItem>> getCategoryItems() async {
+    final stored = await _database.listBookshelfCategoryMetadata();
+    if (stored.isNotEmpty) {
+      return stored
+          .map(
+            (item) => BookshelfTaxonomyItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false);
+    }
+
     return _loadTaxonomyItems(
       metadataKey: _categoryMetadataStorageKey,
       orderKey: _categoryOrderStorageKey,
@@ -899,28 +1011,45 @@ class BookshelfService {
   }
 
   Future<void> saveCategoryItems(List<BookshelfTaxonomyItem> items) async {
-    await _saveTaxonomyItems(
+    await _saveCategoryItemsToDatabase(items);
+    await _clearLegacyTaxonomyPrefs(
       metadataKey: _categoryMetadataStorageKey,
       orderKey: _categoryOrderStorageKey,
-      items: items,
-      kind: BookshelfTaxonomyKind.category,
+    );
+    _emitTaxonomyChange(
+      const BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.category,
+        action: BookshelfTaxonomyAction.metadataChanged,
+      ),
     );
   }
 
   Future<void> saveCategoryOrder(List<String> orderedCategories) async {
-    final prefs = await _preferencesFuture;
-    final normalized = _normalizeTags(orderedCategories);
-    if (normalized.isEmpty) {
-      await prefs.remove(_categoryOrderStorageKey);
-      _emitTaxonomyChange(
-        const BookshelfTaxonomyChange(
-          kind: BookshelfTaxonomyKind.category,
-          action: BookshelfTaxonomyAction.orderChanged,
-        ),
-      );
-      return;
-    }
-    await prefs.setString(_categoryOrderStorageKey, jsonEncode(normalized));
+    final current = await getCategoryItems();
+    final currentByName = <String, BookshelfTaxonomyItem>{
+      for (final item in current) item.name: item,
+    };
+    final normalizedOrder = _normalizeTags(orderedCategories);
+    final remaining = current
+        .where((item) => !normalizedOrder.contains(item.name))
+        .map((item) => item.name)
+        .toList(growable: false);
+    final orderedNames = <String>[...normalizedOrder, ...remaining];
+    final next = orderedNames
+        .map(
+          (name) =>
+              currentByName[name] ??
+              BookshelfTaxonomyItem(
+                name: name,
+                colorValue: BookshelfTaxonomyItem.defaultColorForName(name),
+              ),
+        )
+        .toList(growable: false);
+    await _saveCategoryItemsToDatabase(next);
+    await _clearLegacyTaxonomyPrefs(
+      metadataKey: _categoryMetadataStorageKey,
+      orderKey: _categoryOrderStorageKey,
+    );
     _emitTaxonomyChange(
       const BookshelfTaxonomyChange(
         kind: BookshelfTaxonomyKind.category,
@@ -1083,13 +1212,10 @@ class BookshelfService {
   }
 
   Future<void> saveBaseFilterOrder(List<String> orderedFilters) async {
-    final prefs = await _preferencesFuture;
     final normalized = _normalizeTags(orderedFilters);
-    if (normalized.isEmpty) {
-      await prefs.remove(_baseFilterOrderStorageKey);
-      return;
-    }
-    await prefs.setString(_baseFilterOrderStorageKey, jsonEncode(normalized));
+    await _saveBaseFilterOrderToDatabase(normalized);
+    final prefs = await _preferencesFuture;
+    await prefs.remove(_baseFilterOrderStorageKey);
   }
 
   Future<Map<String, String>?> loadViewSelection() async {
@@ -1257,22 +1383,84 @@ class BookshelfService {
   }
 
   Future<void> _save(List<BookshelfBook> books) async {
-    final prefs = await _preferencesFuture;
-    final payload = books
-        .map((item) => Map<String, Object?>.from(item.toJson()))
+    final normalized = books
+        .map(
+          (item) => item.copyWith(
+            bookId: item.bookId.trim(),
+            sourceId: item.sourceId.trim(),
+            title: item.title.trim(),
+            detailUrl: item.detailUrl.trim(),
+            author: item.author?.trim(),
+            category: item.category?.trim(),
+            coverUrl: item.coverUrl?.trim(),
+            latestChapter: item.latestChapter?.trim(),
+          ),
+        )
+        .where(
+          (item) =>
+              item.bookId.isNotEmpty &&
+              item.sourceId.isNotEmpty &&
+              item.title.isNotEmpty &&
+              item.detailUrl.isNotEmpty,
+        )
         .toList(growable: false);
-    final encoded = await Isolate.run<String>(
-      () => _encodeBookshelfBookJsonMaps(payload),
+    final tagMap = await getTagMap();
+    final tagItems = await getTagItems();
+    final categoryItems = await getCategoryItems();
+    final baseFilterOrder = await getBaseFilterOrder();
+    await _database.replaceBookshelfSnapshot(
+      books: normalized,
+      tagMap: tagMap,
+      tagItems: tagItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      categoryItems: categoryItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      baseFilterOrder: baseFilterOrder,
     );
-    await prefs.setString(_storageKey, encoded);
+    final prefs = await _preferencesFuture;
+    await prefs.remove(_storageKey);
   }
 
   Future<void> _saveTagMap(Map<String, List<String>> map) async {
-    final prefs = await _preferencesFuture;
-    final encoded = await Isolate.run<String>(
-      () => _encodeBookshelfTagMap(map),
+    final books = await getAll();
+    final tagItems = await getTagItems();
+    final categoryItems = await getCategoryItems();
+    final baseFilterOrder = await getBaseFilterOrder();
+    await _database.replaceBookshelfSnapshot(
+      books: books,
+      tagMap: map,
+      tagItems: tagItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      categoryItems: categoryItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      baseFilterOrder: baseFilterOrder,
     );
-    await prefs.setString(_tagStorageKey, encoded);
+    final prefs = await _preferencesFuture;
+    await prefs.remove(_tagStorageKey);
   }
 
   Future<List<BookshelfTaxonomyItem>> _loadTaxonomyItems({
@@ -1328,7 +1516,6 @@ class BookshelfService {
     required List<BookshelfTaxonomyItem> items,
     required BookshelfTaxonomyKind kind,
   }) async {
-    final prefs = await _preferencesFuture;
     final normalized = <BookshelfTaxonomyItem>[];
     final seen = <String>{};
     for (final item in items) {
@@ -1340,21 +1527,15 @@ class BookshelfService {
       normalized.add(item.copyWith(name: name));
     }
 
-    if (normalized.isEmpty) {
-      await prefs.remove(metadataKey);
-      await prefs.remove(orderKey);
+    if (kind == BookshelfTaxonomyKind.tag) {
+      await _saveTagItemsToDatabase(normalized);
     } else {
-      await prefs.setString(
-        metadataKey,
-        jsonEncode(
-          normalized.map((item) => item.toJson()).toList(growable: false),
-        ),
-      );
-      await prefs.setString(
-        orderKey,
-        jsonEncode(normalized.map((item) => item.name).toList(growable: false)),
-      );
+      await _saveCategoryItemsToDatabase(normalized);
     }
+    await _clearLegacyTaxonomyPrefs(
+      metadataKey: metadataKey,
+      orderKey: orderKey,
+    );
 
     _emitTaxonomyChange(
       BookshelfTaxonomyChange(
@@ -1409,6 +1590,103 @@ class BookshelfService {
         currentName: itemName,
       ),
     );
+  }
+
+  Future<void> _saveTagItemsToDatabase(
+    List<BookshelfTaxonomyItem> items,
+  ) async {
+    final books = await getAll();
+    final tagMap = await getTagMap();
+    final categoryItems = await getCategoryItems();
+    final baseFilterOrder = await getBaseFilterOrder();
+    await _database.replaceBookshelfSnapshot(
+      books: books,
+      tagMap: tagMap,
+      tagItems: items
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      categoryItems: categoryItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      baseFilterOrder: baseFilterOrder,
+    );
+  }
+
+  Future<void> _saveCategoryItemsToDatabase(
+    List<BookshelfTaxonomyItem> items,
+  ) async {
+    final books = await getAll();
+    final tagMap = await getTagMap();
+    final tagItems = await getTagItems();
+    final baseFilterOrder = await getBaseFilterOrder();
+    await _database.replaceBookshelfSnapshot(
+      books: books,
+      tagMap: tagMap,
+      tagItems: tagItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      categoryItems: items
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      baseFilterOrder: baseFilterOrder,
+    );
+  }
+
+  Future<void> _saveBaseFilterOrderToDatabase(List<String> filters) async {
+    final books = await getAll();
+    final tagMap = await getTagMap();
+    final tagItems = await getTagItems();
+    final categoryItems = await getCategoryItems();
+    await _database.replaceBookshelfSnapshot(
+      books: books,
+      tagMap: tagMap,
+      tagItems: tagItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      categoryItems: categoryItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      baseFilterOrder: filters,
+    );
+  }
+
+  Future<void> _clearLegacyTaxonomyPrefs({
+    required String metadataKey,
+    required String orderKey,
+  }) async {
+    final prefs = await _preferencesFuture;
+    await prefs.remove(metadataKey);
+    await prefs.remove(orderKey);
   }
 
   void _emitTaxonomyChange(BookshelfTaxonomyChange change) {
@@ -1496,6 +1774,168 @@ class BookshelfService {
     required double fallback,
   }) {
     return (value ?? fallback).clamp(4.0, 24.0).toDouble();
+  }
+
+  Future<void> migrateLegacySnapshotToDatabase() async {
+    final existingBooks = await _database.listBookshelfBooks();
+    final existingTags = await _database.listBookshelfTagAssignments();
+    final existingTagMetadata = await _database.listBookshelfTagMetadata();
+    final existingCategoryMetadata =
+        await _database.listBookshelfCategoryMetadata();
+    final existingBaseFilters = await _database.listBookshelfBaseFilterOrders();
+    if (existingBooks.isNotEmpty ||
+        existingTags.isNotEmpty ||
+        existingTagMetadata.isNotEmpty ||
+        existingCategoryMetadata.isNotEmpty ||
+        existingBaseFilters.isNotEmpty) {
+      return;
+    }
+
+    final prefs = await _preferencesFuture;
+    final legacyBooks = await _loadLegacyBooks(prefs);
+    final legacyTagMap = await _loadLegacyTagMap(prefs);
+    final legacyTagItems = await _loadLegacyTaxonomyItems(
+      prefs,
+      metadataKey: _tagMetadataStorageKey,
+      orderKey: _tagOrderStorageKey,
+    );
+    final legacyCategoryItems = await _loadLegacyTaxonomyItems(
+      prefs,
+      metadataKey: _categoryMetadataStorageKey,
+      orderKey: _categoryOrderStorageKey,
+    );
+    final legacyBaseFilterOrder = _loadLegacyStringList(
+      prefs,
+      _baseFilterOrderStorageKey,
+    );
+    if (legacyBooks.isEmpty &&
+        legacyTagMap.isEmpty &&
+        legacyTagItems.isEmpty &&
+        legacyCategoryItems.isEmpty &&
+        legacyBaseFilterOrder.isEmpty) {
+      return;
+    }
+
+    await _database.replaceBookshelfSnapshot(
+      books: legacyBooks,
+      tagMap: legacyTagMap,
+      tagItems: legacyTagItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      categoryItems: legacyCategoryItems
+          .map(
+            (item) => BookshelfTaxonomySnapshotItem(
+              name: item.name,
+              colorValue: item.colorValue,
+            ),
+          )
+          .toList(growable: false),
+      baseFilterOrder: legacyBaseFilterOrder,
+    );
+    await prefs.remove(_storageKey);
+    await prefs.remove(_tagStorageKey);
+    await prefs.remove(_tagOrderStorageKey);
+    await prefs.remove(_tagMetadataStorageKey);
+    await prefs.remove(_categoryOrderStorageKey);
+    await prefs.remove(_categoryMetadataStorageKey);
+    await prefs.remove(_baseFilterOrderStorageKey);
+  }
+
+  Future<List<BookshelfBook>> _loadLegacyBooks(SharedPreferences prefs) async {
+    final raw = prefs.getString(_storageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <BookshelfBook>[];
+    }
+
+    try {
+      final decoded = await Isolate.run<List<Map<String, Object?>>?>(
+        () => _decodeBookshelfBookJsonMaps(raw),
+      );
+      if (decoded == null) {
+        return const <BookshelfBook>[];
+      }
+
+      final items = decoded
+          .map((item) => BookshelfBook.fromJson(item))
+          .toList(growable: false);
+      return items.reversed.toList(growable: false);
+    } on FormatException {
+      return const <BookshelfBook>[];
+    }
+  }
+
+  Future<Map<String, List<String>>> _loadLegacyTagMap(
+    SharedPreferences prefs,
+  ) async {
+    final raw = prefs.getString(_tagStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String, List<String>>{};
+    }
+
+    try {
+      return await Isolate.run<Map<String, List<String>>>(
+        () => _decodeBookshelfTagMap(raw),
+      );
+    } catch (_) {
+      return const <String, List<String>>{};
+    }
+  }
+
+  Future<List<BookshelfTaxonomyItem>> _loadLegacyTaxonomyItems(
+    SharedPreferences prefs, {
+    required String metadataKey,
+    required String orderKey,
+  }) async {
+    final raw = prefs.getString(metadataKey);
+    final byName = <String, BookshelfTaxonomyItem>{};
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final item in decoded) {
+            final parsed = BookshelfTaxonomyItem.fromJson(item);
+            if (parsed == null) {
+              continue;
+            }
+            byName[parsed.name] = parsed;
+          }
+        }
+      } catch (_) {
+        // Fall back to order payload below.
+      }
+    }
+    for (final name in _loadLegacyStringList(prefs, orderKey)) {
+      byName.putIfAbsent(
+        name,
+        () => BookshelfTaxonomyItem(
+          name: name,
+          colorValue: BookshelfTaxonomyItem.defaultColorForName(name),
+        ),
+      );
+    }
+    return List<BookshelfTaxonomyItem>.unmodifiable(byName.values);
+  }
+
+  List<String> _loadLegacyStringList(SharedPreferences prefs, String key) {
+    final raw = prefs.getString(key);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <String>[];
+      }
+      return _normalizeTags(decoded.map((value) => '$value'));
+    } catch (_) {
+      return const <String>[];
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -25,10 +26,10 @@ class CoverGalleryService {
 
   static const Uuid _uuid = Uuid();
   static const String _galleriesKey = 'coverGallery.galleries';
+  static const String _indexFileName = 'index.json';
 
   Future<List<CoverGalleryIndexItem>> loadGalleryIndex() async {
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_galleriesKey);
+    final raw = await _loadPersistedGalleriesRaw();
     if (raw == null || raw.trim().isEmpty) {
       return const <CoverGalleryIndexItem>[];
     }
@@ -62,8 +63,7 @@ class CoverGalleryService {
   }
 
   Future<List<CoverGallery>> loadGalleries() async {
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_galleriesKey);
+    final raw = await _loadPersistedGalleriesRaw();
     if (raw == null || raw.trim().isEmpty) {
       return const <CoverGallery>[];
     }
@@ -110,11 +110,11 @@ class CoverGalleryService {
   Future<void> saveGalleries(List<CoverGallery> galleries) async {
     final prefs = await _preferencesFuture;
     if (galleries.isEmpty) {
+      await _deleteIndexFile();
       await prefs.remove(_galleriesKey);
       return;
     }
-    await prefs.setString(
-      _galleriesKey,
+    await _writeIndexFile(
       jsonEncode(
         await Future.wait(
           galleries.map((item) async {
@@ -129,6 +129,7 @@ class CoverGalleryService {
         ),
       ),
     );
+    await prefs.remove(_galleriesKey);
   }
 
   Future<CoverGallery> createGallery({String name = '未命名图集'}) async {
@@ -283,6 +284,44 @@ class CoverGalleryService {
       ManagedAssetType.coverGalleryImage,
       collectionId: galleryId,
     );
+  }
+
+  Future<File> _indexFile() async {
+    final documents = await getApplicationDocumentsDirectory();
+    final root = Directory(p.join(documents.path, 'cover_galleries'));
+    if (!await root.exists()) {
+      await root.create(recursive: true);
+    }
+    return File(p.join(root.path, _indexFileName));
+  }
+
+  Future<String?> _loadPersistedGalleriesRaw() async {
+    final indexFile = await _indexFile();
+    if (await indexFile.exists()) {
+      final raw = await indexFile.readAsString();
+      return raw.trim().isEmpty ? null : raw;
+    }
+
+    final prefs = await _preferencesFuture;
+    final legacyRaw = prefs.getString(_galleriesKey);
+    if (legacyRaw == null || legacyRaw.trim().isEmpty) {
+      return null;
+    }
+    await _writeIndexFile(legacyRaw);
+    await prefs.remove(_galleriesKey);
+    return legacyRaw;
+  }
+
+  Future<void> _writeIndexFile(String raw) async {
+    final indexFile = await _indexFile();
+    await indexFile.writeAsString(raw, flush: true);
+  }
+
+  Future<void> _deleteIndexFile() async {
+    final indexFile = await _indexFile();
+    if (await indexFile.exists()) {
+      await indexFile.delete();
+    }
   }
 
   String _normalizeFileExtension(String fileName) {

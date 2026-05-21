@@ -1,5 +1,7 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_detail_action_service.dart';
@@ -7,13 +9,23 @@ import 'package:shuxiang_reading_next/features/book/application/book_metadata_pr
 import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 
 void main() {
+  late AppDatabase database;
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    database = AppDatabase(executor: NativeDatabase.memory());
+  });
+
+  tearDown(() async {
+    await database.close();
   });
 
   test('toggleBookshelf upserts and removes bookshelf record', () async {
     final prefs = await SharedPreferences.getInstance();
-    final bookshelfService = BookshelfService(preferences: prefs);
+    final bookshelfService = BookshelfService(
+      preferences: prefs,
+      database: database,
+    );
     final service = BookDetailActionService(bookshelfService: bookshelfService);
     const detail = BookDetail(
       id: 'book_1',
@@ -37,6 +49,7 @@ void main() {
 
     expect(added.isInBookshelf, isTrue);
     expect((await bookshelfService.getAll()).single.title, '展示标题');
+    expect(prefs.getString('bookshelf.books'), isNull);
 
     final removed = await service.toggleBookshelf(
       wasInBookshelf: true,
@@ -50,7 +63,10 @@ void main() {
 
   test('saveOrganization persists category and tags', () async {
     final prefs = await SharedPreferences.getInstance();
-    final bookshelfService = BookshelfService(preferences: prefs);
+    final bookshelfService = BookshelfService(
+      preferences: prefs,
+      database: database,
+    );
     final service = BookDetailActionService(bookshelfService: bookshelfService);
     const detail = BookDetail(
       id: 'book_1',
@@ -82,5 +98,7 @@ void main() {
       tags['source_a::https://example.com/book/1'],
       orderedEquals(const ['在读', '收藏']),
     );
+    expect(prefs.getString('bookshelf.book_tags'), isNull);
+    expect(prefs.getString('bookshelf.category_order'), isNull);
   });
 }

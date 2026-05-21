@@ -52,6 +52,7 @@ class AdvancedThemeService {
 
   static const Uuid _uuid = Uuid();
   static const String _themesKey = 'app.advancedThemes';
+  static const String _themeIndexFileName = 'index.json';
 
   static String? readActiveThemeId(SharedPreferences prefs) {
     final raw = prefs.getString(_activeThemeIdKey)?.trim();
@@ -80,8 +81,7 @@ class AdvancedThemeService {
   }
 
   Future<List<AppAdvancedTheme>> loadThemes() async {
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_themesKey);
+    final raw = await _loadPersistedThemesRaw();
     if (raw == null || raw.trim().isEmpty) {
       _cachedThemesRaw = null;
       _cachedThemes = const <AppAdvancedTheme>[];
@@ -134,8 +134,7 @@ class AdvancedThemeService {
   }
 
   Future<List<AdvancedThemeSummary>> loadThemeSummaries() async {
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_themesKey);
+    final raw = await _loadPersistedThemesRaw();
     if (raw == null || raw.trim().isEmpty) {
       _cachedThemesRaw = null;
       _cachedThemeSummaries = const <AdvancedThemeSummary>[];
@@ -179,6 +178,7 @@ class AdvancedThemeService {
   Future<void> saveThemes(List<AppAdvancedTheme> themes) async {
     final prefs = await _preferencesFuture;
     if (themes.isEmpty) {
+      await _deleteThemeIndexFile();
       await prefs.remove(_themesKey);
       _cachedThemesRaw = null;
       _cachedThemes = const <AppAdvancedTheme>[];
@@ -195,7 +195,8 @@ class AdvancedThemeService {
       );
     }
     final encoded = jsonEncode(persistedThemes);
-    await prefs.setString(_themesKey, encoded);
+    await _writeThemeIndexFile(encoded);
+    await prefs.remove(_themesKey);
     final cachedThemes = List<AppAdvancedTheme>.from(themes)
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     _cachedThemesRaw = encoded;
@@ -359,8 +360,7 @@ class AdvancedThemeService {
     if (summaries.isEmpty) {
       return const <AdvancedThemeSummary>[];
     }
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_themesKey);
+    final raw = await _loadPersistedThemesRaw();
     if (raw == null || raw.trim().isEmpty) {
       return summaries;
     }
@@ -1465,6 +1465,46 @@ class AdvancedThemeService {
   Future<Directory> _themeDirectory(String themeId) async {
     final documents = await getApplicationDocumentsDirectory();
     return Directory(p.join(documents.path, 'advanced_themes', themeId));
+  }
+
+  Future<File> _themeIndexFile() async {
+    final documents = await getApplicationDocumentsDirectory();
+    final root = Directory(p.join(documents.path, 'advanced_themes'));
+    if (!await root.exists()) {
+      await root.create(recursive: true);
+    }
+    return File(p.join(root.path, _themeIndexFileName));
+  }
+
+  Future<String?> _loadPersistedThemesRaw() async {
+    final indexFile = await _themeIndexFile();
+    if (await indexFile.exists()) {
+      final raw = await indexFile.readAsString();
+      final normalized = raw.trim();
+      return normalized.isEmpty ? null : raw;
+    }
+
+    final prefs = await _preferencesFuture;
+    final legacyRaw = prefs.getString(_themesKey);
+    if (legacyRaw == null || legacyRaw.trim().isEmpty) {
+      return null;
+    }
+
+    await _writeThemeIndexFile(legacyRaw);
+    await prefs.remove(_themesKey);
+    return legacyRaw;
+  }
+
+  Future<void> _writeThemeIndexFile(String raw) async {
+    final indexFile = await _themeIndexFile();
+    await indexFile.writeAsString(raw, flush: true);
+  }
+
+  Future<void> _deleteThemeIndexFile() async {
+    final indexFile = await _themeIndexFile();
+    if (await indexFile.exists()) {
+      await indexFile.delete();
+    }
   }
 
   Future<String?> _duplicateWallpaper({

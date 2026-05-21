@@ -7,6 +7,8 @@ import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:shuxiang_reading_next/core/feedback/feedback_service.dart';
 import 'package:shuxiang_reading_next/core/network/api_client.dart';
 
+import '../../test_utils/fake_auth_session_secret_store.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -21,7 +23,10 @@ void main() {
         client: client,
         baseUrl: 'http://localhost:8080',
         identityService: _FakeDeviceIdentityService(),
-        sessionStore: AuthSessionStore(preferences: prefs),
+        sessionStore: AuthSessionStore(
+          preferences: prefs,
+          secretStore: FakeAuthSessionSecretStore(),
+        ),
       );
 
       final page = await service.fetchFeedbackList(
@@ -56,7 +61,10 @@ void main() {
         client: client,
         baseUrl: 'http://localhost:8080',
         identityService: _FakeDeviceIdentityService(),
-        sessionStore: AuthSessionStore(preferences: prefs),
+        sessionStore: AuthSessionStore(
+          preferences: prefs,
+          secretStore: FakeAuthSessionSecretStore(),
+        ),
       );
 
       final item = await service.fetchFeedbackDetail('feedback_42');

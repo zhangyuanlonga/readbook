@@ -29,6 +29,7 @@ void main() {
     final supportDir = await Directory.systemTemp.createTemp(
       'theme_test_support_',
     );
+    _latestPathProviderDocumentsDir = documentsDir;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, (call) async {
           if (call.method == 'getApplicationDocumentsDirectory') {
@@ -40,6 +41,7 @@ void main() {
           return null;
         });
     addTearDown(() async {
+      _latestPathProviderDocumentsDir = null;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(pathProviderChannel, null);
       if (documentsDir.existsSync()) {
@@ -197,6 +199,64 @@ void main() {
       '/tmp/reader_light.jpg',
     );
     expect(themes.first.darkConfig.readerWallpaperPath, '/tmp/reader_dark.jpg');
+  });
+
+  test('persists themes into advanced_themes index file instead of SharedPreferences', () async {
+    final assetStore = await _createAssetStore();
+    final prefs = await SharedPreferences.getInstance();
+    final service = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    final theme = AppAdvancedTheme(
+      id: 'theme_index_file',
+      name: '索引文件主题',
+      createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
+    );
+
+    await service.saveTheme(theme);
+
+    expect(prefs.containsKey('app.advancedThemes'), isFalse);
+
+    final documentsDir = await _pathProviderDocumentsDir();
+    final indexFile = File('${documentsDir.path}/advanced_themes/index.json');
+    expect(await indexFile.exists(), isTrue);
+    final raw = await indexFile.readAsString();
+    expect(raw, contains('theme_index_file'));
+  });
+
+  test('migrates legacy SharedPreferences theme payload into index file', () async {
+    final assetStore = await _createAssetStore();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'app.advancedThemes',
+      jsonEncode(<Map<String, dynamic>>[
+        AppAdvancedTheme(
+          id: 'legacy_theme',
+          name: '旧主题',
+          createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+          lightConfig: AppAdvancedThemeModeConfig(),
+          darkConfig: AppAdvancedThemeModeConfig(),
+        ).toJson(),
+      ]),
+    );
+
+    final service = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    final themes = await service.loadThemes();
+
+    expect(themes, hasLength(1));
+    expect(themes.first.id, 'legacy_theme');
+    expect(prefs.containsKey('app.advancedThemes'), isFalse);
+    final documentsDir = await _pathProviderDocumentsDir();
+    final indexFile = File('${documentsDir.path}/advanced_themes/index.json');
+    expect(await indexFile.exists(), isTrue);
   });
 
   test('persists launch image gallery binding in theme payload', () async {
@@ -887,6 +947,16 @@ Future<ManagedAssetStore> _createAssetStore() async {
     documentsDirectoryProvider: () async => documentsDir,
     supportDirectoryProvider: () async => supportDir,
   );
+}
+
+Directory? _latestPathProviderDocumentsDir;
+
+Future<Directory> _pathProviderDocumentsDir() async {
+  final directory = _latestPathProviderDocumentsDir;
+  if (directory == null) {
+    throw StateError('Missing path provider documents test directory.');
+  }
+  return directory;
 }
 
 Future<File> _createTempFile({

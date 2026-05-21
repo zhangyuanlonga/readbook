@@ -2,20 +2,31 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/source_health.dart';
 
 class SourceHealthPersistenceService {
-  SourceHealthPersistenceService({SharedPreferences? preferences})
+  SourceHealthPersistenceService({
+    SharedPreferences? preferences,
+    AppDatabase? database,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _database = database ?? AppDatabase.instance;
 
   static const String _storageKey = 'source.health.snapshots.v1';
 
   final Future<SharedPreferences> _preferencesFuture;
+  final AppDatabase _database;
 
   Future<Map<String, SourceHealthSnapshot>> loadSnapshots() async {
+    final stored = await _database.listSourceHealthSnapshots();
+    if (stored.isNotEmpty) {
+      return stored;
+    }
+
     final prefs = await _preferencesFuture;
     final raw = (prefs.getString(_storageKey) ?? '').trim();
     if (raw.isEmpty) {
@@ -40,6 +51,8 @@ class SourceHealthPersistenceService {
           ),
         );
       }
+      await _database.replaceSourceHealthSnapshots(snapshots);
+      await prefs.remove(_storageKey);
       return snapshots;
     } catch (_) {
       return <String, SourceHealthSnapshot>{};
@@ -49,15 +62,8 @@ class SourceHealthPersistenceService {
   Future<void> saveSnapshots(
     Map<String, SourceHealthSnapshot> snapshots,
   ) async {
+    await _database.replaceSourceHealthSnapshots(snapshots);
     final prefs = await _preferencesFuture;
-    if (snapshots.isEmpty) {
-      await prefs.remove(_storageKey);
-      return;
-    }
-
-    final payload = <String, Object?>{
-      for (final entry in snapshots.entries) entry.key: entry.value.toJson(),
-    };
-    await prefs.setString(_storageKey, jsonEncode(payload));
+    await prefs.remove(_storageKey);
   }
 }

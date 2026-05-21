@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../data/datasources/local/app_database.dart';
 import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_features.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
@@ -71,21 +72,38 @@ class RemoteAccessSnapshot {
 }
 
 class RemoteAccessSnapshotService {
-  RemoteAccessSnapshotService({SharedPreferences? preferences})
+  RemoteAccessSnapshotService({
+    SharedPreferences? preferences,
+    AppDatabase? database,
+  })
     : _preferencesFuture =
           preferences == null
               ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+              : Future.value(preferences),
+      _database = database ?? AppDatabase.instance;
 
   static const Duration defaultTtl = Duration(hours: 12);
 
   final Future<SharedPreferences> _preferencesFuture;
+  final AppDatabase _database;
 
   Future<RemoteAccessSnapshot?> load(String userId) async {
     final normalizedUserId = userId.trim();
     if (normalizedUserId.isEmpty) {
       return null;
     }
+
+    final stored = await _database.getRemoteAccessSnapshot(normalizedUserId);
+    if (stored != null) {
+      return RemoteAccessSnapshot(
+        showSourceEntry: stored.showSourceEntry,
+        hasMembership: stored.hasMembership,
+        hasThemeCustom: stored.hasThemeCustom,
+        sourceImportLimit: stored.sourceImportLimit,
+        cachedAt: stored.cachedAt,
+      );
+    }
+
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_storageKey(normalizedUserId))?.trim();
     if (raw == null || raw.isEmpty) {
@@ -96,7 +114,17 @@ class RemoteAccessSnapshotService {
       if (decoded is! Map<String, dynamic>) {
         return null;
       }
-      return RemoteAccessSnapshot.fromJson(decoded);
+      final snapshot = RemoteAccessSnapshot.fromJson(decoded);
+      await _database.upsertRemoteAccessSnapshot(
+        userId: normalizedUserId,
+        showSourceEntry: snapshot.showSourceEntry,
+        hasMembership: snapshot.hasMembership,
+        hasThemeCustom: snapshot.hasThemeCustom,
+        sourceImportLimit: snapshot.sourceImportLimit,
+        cachedAt: snapshot.cachedAt,
+      );
+      await prefs.remove(_storageKey(normalizedUserId));
+      return snapshot;
     } catch (_) {
       await prefs.remove(_storageKey(normalizedUserId));
       return null;
@@ -108,11 +136,16 @@ class RemoteAccessSnapshotService {
     if (normalizedUserId.isEmpty) {
       return;
     }
-    final prefs = await _preferencesFuture;
-    await prefs.setString(
-      _storageKey(normalizedUserId),
-      jsonEncode(snapshot.toJson()),
+    await _database.upsertRemoteAccessSnapshot(
+      userId: normalizedUserId,
+      showSourceEntry: snapshot.showSourceEntry,
+      hasMembership: snapshot.hasMembership,
+      hasThemeCustom: snapshot.hasThemeCustom,
+      sourceImportLimit: snapshot.sourceImportLimit,
+      cachedAt: snapshot.cachedAt,
     );
+    final prefs = await _preferencesFuture;
+    await prefs.remove(_storageKey(normalizedUserId));
   }
 
   Future<void> clear(String userId) async {
@@ -120,6 +153,7 @@ class RemoteAccessSnapshotService {
     if (normalizedUserId.isEmpty) {
       return;
     }
+    await _database.deleteRemoteAccessSnapshot(normalizedUserId);
     final prefs = await _preferencesFuture;
     await prefs.remove(_storageKey(normalizedUserId));
   }

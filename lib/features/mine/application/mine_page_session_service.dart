@@ -38,7 +38,7 @@ class MinePageSessionPriming {
   static AuthSession? _primedSession;
 
   static void prime(SharedPreferences prefs) {
-    _primedSession = AuthSessionStore.readSession(prefs);
+    _primedSession = AuthSessionStore.readDisplaySession(prefs);
   }
 
   static AuthSession? take() {
