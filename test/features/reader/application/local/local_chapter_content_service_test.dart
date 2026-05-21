@@ -464,7 +464,7 @@ $chapter2
       );
 
       final parser = PdfLocalBookParser(
-        extractor: _FakePdfTextExtractor(
+        extractor: _LocalChapterContentFakePdfTextExtractor(
           document: const LocalPdfDocument(pageCount: 1),
           pageTexts: const <int, String>{1: '第1章 开始\n第一页内容。'},
         ),
@@ -495,7 +495,7 @@ $chapter2
         ),
       );
       await repository.updateChapterContent(
-        chapterId: chapter.id,
+        chapterId: 'local_pdf_lazy_1_0',
         content: chapter.content,
         imageUrls: chapter.imageUrls,
         document: chapter.document,
@@ -633,6 +633,27 @@ $chapter2
       expect(fakeIndexService.ensureIndexedCallCount, 0);
     });
   });
+}
+
+class _LocalChapterContentFakePdfTextExtractor implements LocalPdfTextExtractor {
+  const _LocalChapterContentFakePdfTextExtractor({
+    required this.document,
+    required this.pageTexts,
+  });
+
+  final LocalPdfDocument document;
+  final Map<int, String> pageTexts;
+
+  @override
+  Future<String> extractPageText({
+    required LocalPdfDocument document,
+    required int pageNumber,
+  }) async {
+    return pageTexts[pageNumber] ?? '';
+  }
+
+  @override
+  Future<LocalPdfDocument> open(String path) async => document;
 }
 
 class _TrackingLocalBookIndexService extends LocalBookIndexService {

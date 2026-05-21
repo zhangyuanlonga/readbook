@@ -74,9 +74,6 @@ class AppShellNavigationState {
 
   int get configurableVisibleCount {
     var count = 0;
-    if (showHome) {
-      count += 1;
-    }
     if (showBookshelf) {
       count += 1;
     }
@@ -91,7 +88,7 @@ class AppShellNavigationState {
 
   bool isTabVisible(AppShellTab tab) {
     return switch (tab) {
-      AppShellTab.home => showHome,
+      AppShellTab.home => true,
       AppShellTab.bookshelf => showBookshelf,
       AppShellTab.discover => showDiscover,
       AppShellTab.stats => showStats,
@@ -185,14 +182,15 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> setTabVisible(AppShellTab tab, bool visible) async {
-    if (tab == AppShellTab.mine ||
+    if (tab == AppShellTab.home ||
+        tab == AppShellTab.mine ||
         (tab == AppShellTab.discover && !_isDiscoverEnabled)) {
       return;
     }
 
     final previous = state;
     final changed = switch (tab) {
-      AppShellTab.home => state.copyWith(showHome: visible),
+      AppShellTab.home => state,
       AppShellTab.bookshelf => state.copyWith(showBookshelf: visible),
       AppShellTab.discover => state.copyWith(showDiscover: visible),
       AppShellTab.stats => state.copyWith(showStats: visible),

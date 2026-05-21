@@ -313,45 +313,7 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
     required MinePageVisibilityState visibilityState,
   }) {
-    final quickCards = <Widget>[
-      if (visibilityState.isVisible(MinePageItemId.sync))
-        _buildQuickCard(
-          context,
-          palette: palette,
-          icon: Icons.sync_rounded,
-          label: '同步',
-          tagText: 'VIP',
-          onTap: _handleSyncTap,
-        ),
-      if (visibilityState.isVisible(MinePageItemId.inspiration))
-        _buildQuickCard(
-          context,
-          palette: palette,
-          icon: Icons.auto_awesome_outlined,
-          label: '灵感',
-          onTap: _pushMineRouteAction('/bookmarks'),
-        ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildMembershipQuickCard(context, palette: palette),
-        if (quickCards.isNotEmpty) ...[
-          SizedBox(height: _quickAccessInnerGapFor(context)),
-          if (quickCards.length == 1)
-            quickCards.single
-          else
-            Row(
-              children: [
-                Expanded(child: quickCards[0]),
-                SizedBox(width: _quickAccessInnerGapFor(context)),
-                Expanded(child: quickCards[1]),
-              ],
-            ),
-        ],
-      ],
-    );
+    return const SizedBox.shrink();
   }
 
   List<_MineActionItem> _buildAppearanceActions(
@@ -475,6 +437,34 @@ extension on _MinePageState {
     required MinePageVisibilityState visibilityState,
   }) {
     final actions = <_MineActionItem>[];
+    if (visibilityState.isVisible(MinePageItemId.membershipCenter)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.workspace_premium_outlined,
+          label: '高级会员',
+          onTap: _openMembershipCenter,
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.sync)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.sync_rounded,
+          label: '同步',
+          tagText: 'VIP',
+          onTap: _handleSyncTap,
+        ),
+      );
+    }
+    if (visibilityState.isVisible(MinePageItemId.inspiration)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.auto_awesome_outlined,
+          label: '灵感',
+          onTap: _pushMineRouteAction('/bookmarks'),
+        ),
+      );
+    }
     if (visibilityState.isVisible(MinePageItemId.tagManagement)) {
       actions.add(
         _MineActionItem(
@@ -547,164 +537,6 @@ extension on _MinePageState {
       );
     }
     return actions;
-  }
-
-  Widget _buildMembershipQuickCard(
-    BuildContext context, {
-    required _MineResolvedPalette palette,
-  }) {
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: _openMembershipCenter,
-        child: Container(
-          padding: _quickCardPaddingFor(context),
-          decoration: BoxDecoration(
-            color: palette.cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: resolveAppBorderColor(
-                Theme.of(context).colorScheme,
-                baseColor: palette.cardBorderColor,
-                containerColor: palette.cardColor,
-                tone: AppBorderTone.subtle,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: metrics.isMediumUpWindow ? 34 : 36,
-                height: metrics.isMediumUpWindow ? 34 : 36,
-                decoration: BoxDecoration(
-                  color: palette.primaryColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.workspace_premium_outlined,
-                  size: 19,
-                  color: palette.primaryColor,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '高级会员',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: palette.cardTextColor,
-                  ),
-                ),
-              ),
-              Text(
-                '查看',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: palette.primaryColor,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: palette.primaryColor,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickCard(
-    BuildContext context, {
-    required _MineResolvedPalette palette,
-    required IconData icon,
-    required String label,
-    String? tagText,
-    required VoidCallback onTap,
-  }) {
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: _quickCardPaddingFor(context),
-          decoration: BoxDecoration(
-            color: palette.cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: resolveAppBorderColor(
-                Theme.of(context).colorScheme,
-                baseColor: palette.cardBorderColor,
-                containerColor: palette.cardColor,
-                tone: AppBorderTone.subtle,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: metrics.isMediumUpWindow ? 34 : 36,
-                height: metrics.isMediumUpWindow ? 34 : 36,
-                decoration: BoxDecoration(
-                  color: palette.primaryColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 19, color: palette.primaryColor),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        label,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: palette.cardTextColor,
-                        ),
-                      ),
-                    ),
-                    if (tagText != null && tagText.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: palette.noticeAccentColor.withValues(
-                            alpha: 0.14,
-                          ),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          tagText,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: palette.noticeAccentColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildProfileCard(

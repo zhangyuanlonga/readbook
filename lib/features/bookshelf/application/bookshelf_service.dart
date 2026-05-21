@@ -1976,11 +1976,3 @@ Map<String, List<String>> _decodeBookshelfTagMap(String raw) {
   }
   return result;
 }
-
-String _encodeBookshelfBookJsonMaps(List<Map<String, Object?>> payload) {
-  return jsonEncode(payload);
-}
-
-String _encodeBookshelfTagMap(Map<String, List<String>> map) {
-  return jsonEncode(map);
-}

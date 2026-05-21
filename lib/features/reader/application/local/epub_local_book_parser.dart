@@ -1417,39 +1417,6 @@ class EpubLocalBookParser implements LocalBookParser {
     return null;
   }
 
-  Future<String?> _materializeCoverPath({
-    required _EpubMetadata metadata,
-    required Map<String, ArchiveFile> archiveFileIndex,
-    required Directory assetRootDir,
-  }) async {
-    final archivePath = metadata.coverArchivePath?.trim() ?? '';
-    if (archivePath.isEmpty) {
-      return null;
-    }
-
-    final archiveEntry = _findArchiveFile(archiveFileIndex, archivePath);
-    if (archiveEntry == null) {
-      return null;
-    }
-    final lowerName = archivePath.toLowerCase();
-    final extension = p.posix.extension(lowerName);
-    if (!_supportedImageExtensions.contains(extension)) {
-      return null;
-    }
-
-    final targetFile = File(
-      p.join(assetRootDir.path, _safeAssetRelativePath(archivePath)),
-    );
-    if (!await targetFile.parent.exists()) {
-      await targetFile.parent.create(recursive: true);
-    }
-    await targetFile.writeAsBytes(
-      _readArchiveEntryBytes(archiveEntry),
-      flush: true,
-    );
-    return targetFile.path;
-  }
-
   Future<String?> _materializeCoverPathFromBackground({
     required Map<String, Object?> payload,
     required Directory assetRootDir,

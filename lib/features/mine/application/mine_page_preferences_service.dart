@@ -70,19 +70,17 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   MinePageItemDefinition(
     id: MinePageItemId.membershipCenter,
     title: '高级会员',
-    sectionTitle: '顶部区域',
-    subtitle: '会员入口，暂不支持隐藏',
-    configurable: false,
+    sectionTitle: '数据',
   ),
   MinePageItemDefinition(
     id: MinePageItemId.sync,
     title: '同步',
-    sectionTitle: '顶部区域',
+    sectionTitle: '数据',
   ),
   MinePageItemDefinition(
     id: MinePageItemId.inspiration,
     title: '灵感',
-    sectionTitle: '顶部区域',
+    sectionTitle: '数据',
   ),
   MinePageItemDefinition(
     id: MinePageItemId.appAppearance,
