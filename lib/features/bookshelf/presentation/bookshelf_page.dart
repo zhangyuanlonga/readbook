@@ -957,15 +957,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final center = CircularThemeRevealOverlay.getCenterFromContext(
       sourceContext,
     );
+    const route = '/search?entry=bookshelf_top';
     if (overlay == null) {
-      await context.push('/search');
+      await context.push(route);
       return;
     }
     await overlay.startTransition(
       center: center,
       reverse: false,
       onThemeChange: () {
-        context.push('/search');
+        context.push(route);
       },
     );
   }

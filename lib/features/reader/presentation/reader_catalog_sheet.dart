@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -39,6 +40,9 @@ class ReaderCatalogSheetResult {
   final ReaderCatalogSheetSelection? selection;
   final Bookmark? bookmark;
 }
+
+const double _kReaderCatalogInitialSheetSize = 0.8;
+const double _kReaderCatalogExpandedSheetSize = 1.0;
 
 Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required BuildContext context,
@@ -192,11 +196,12 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
     BuildContext context, {
     required TextEditingController controller,
     required String hintText,
+    EdgeInsetsGeometry padding = const EdgeInsets.fromLTRB(16, 12, 16, 10),
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      padding: padding,
       child: SizedBox(
         height: 48,
         child: TextField(
@@ -263,7 +268,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       });
     }
 
-    Future<void> openCatalogMoreActions() async {
+    Future<void> openCatalogMoreActions({
+      ScrollController? listController,
+    }) async {
+      final effectiveController = listController ?? scrollController;
       final action = await showAdaptiveActionSurface<String>(
         context: context,
         maxWidth: 420,
@@ -300,7 +308,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
             ((currentDisplayIndex - 2).clamp(0, chapters.length - 1) *
                     itemExtent)
                 .toDouble();
-        scrollController.animateTo(
+        effectiveController.animateTo(
           target,
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
@@ -313,8 +321,8 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
           catalogDescending = !catalogDescending;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (scrollController.hasClients) {
-            scrollController.jumpTo(0);
+          if (effectiveController.hasClients) {
+            effectiveController.jumpTo(0);
           }
         });
       }
@@ -467,123 +475,537 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
 
       return Padding(
         padding: EdgeInsets.fromLTRB(sheetHorizontal, 0, sheetHorizontal, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ValueListenableBuilder<String>(
+          valueListenable: bookmarkSearchNotifier,
+          builder: (context, keyword, _) {
+            final filteredBookmarks = _filterBookmarksForKeyword(
+              bookmarks: bookmarks,
+              chapters: chapters,
+              keyword: keyword,
+            );
+            final bookmarkGroups = _groupBookmarksForSheet(
+              filteredBookmarks,
+              chapters,
+            );
+            if (isBookmarkLoading) {
+              return Row(
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '正在加载灵感...',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              );
+            }
+            if (bookmarkErrorText.isNotEmpty) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      bookmarkErrorText,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.error,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed:
+                        () => unawaited(loadBookmarks(setModalState, context)),
+                    child: const Text('重试'),
+                  ),
+                ],
+              );
+            }
+            if (bookmarks.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Text(
+                  '当前书籍还没有灵感。',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              );
+            }
+            if (bookmarkGroups.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Text(
+                  '未找到匹配灵感。',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              );
+            }
+            return ListView.separated(
+              itemCount: bookmarkGroups.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final group = bookmarkGroups[index];
+                return _BookmarkGroupSection(
+                  title: group.title,
+                  items: group.bookmarks,
+                  timeLabel: _formatBookmarkTime,
+                  onTap:
+                      (bookmark) => Navigator.of(
+                        context,
+                      ).pop(ReaderCatalogSheetResult.bookmark(bookmark)),
+                  onDelete: (bookmark) async {
+                    final modalContext = context;
+                    await bookmarkRepository.removeBookmark(bookmark.id);
+                    if (!modalContext.mounted) {
+                      return;
+                    }
+                    await loadBookmarks(setModalState, modalContext);
+                    if (!modalContext.mounted) {
+                      return;
+                    }
+                    await refreshChapterBookmarks();
+                  },
+                );
+              },
+            );
+          },
+        ),
+      );
+    }
+
+    void handleTabChange(int index, {ScrollController? listController}) {
+      if (activeTabIndex == index) {
+        return;
+      }
+      setModalState(() {
+        activeTabIndex = index;
+      });
+      if (index == 1) {
+        unawaited(ensureBookmarksLoaded(setModalState, context));
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (listController != null && listController.hasClients) {
+          listController.jumpTo(0);
+        }
+      });
+    }
+
+    Widget buildSharedSearchBar(
+      BuildContext context, {
+      ScrollController? listController,
+    }) {
+      final isCatalogTabActive = activeTabIndex == 0;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: Row(
           children: [
-            buildSearchBar(
-              context,
-              controller: bookmarkSearchController,
-              hintText: '搜索灵感',
-            ),
-            const SizedBox(height: 8),
             Expanded(
-              child: ValueListenableBuilder<String>(
-                valueListenable: bookmarkSearchNotifier,
-                builder: (context, keyword, _) {
-                  final filteredBookmarks = _filterBookmarksForKeyword(
-                    bookmarks: bookmarks,
-                    chapters: chapters,
-                    keyword: keyword,
-                  );
-                  final bookmarkGroups = _groupBookmarksForSheet(
-                    filteredBookmarks,
-                    chapters,
-                  );
-                  if (isBookmarkLoading) {
-                    return Row(
-                      children: [
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '正在加载灵感...',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  if (bookmarkErrorText.isNotEmpty) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            bookmarkErrorText,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.error,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed:
-                              () => unawaited(
-                                loadBookmarks(setModalState, context),
-                              ),
-                          child: const Text('重试'),
-                        ),
-                      ],
-                    );
-                  }
-                  if (bookmarks.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Text(
-                        '当前书籍还没有灵感。',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    );
-                  }
-                  if (bookmarkGroups.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Text(
-                        '未找到匹配灵感。',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: bookmarkGroups.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final group = bookmarkGroups[index];
-                      return _BookmarkGroupSection(
-                        title: group.title,
-                        items: group.bookmarks,
-                        timeLabel: _formatBookmarkTime,
-                        onTap:
-                            (bookmark) => Navigator.of(
-                              context,
-                            ).pop(ReaderCatalogSheetResult.bookmark(bookmark)),
-                        onDelete: (bookmark) async {
-                          final modalContext = context;
-                          await bookmarkRepository.removeBookmark(bookmark.id);
-                          if (!modalContext.mounted) {
-                            return;
-                          }
-                          await loadBookmarks(setModalState, modalContext);
-                          if (!modalContext.mounted) {
-                            return;
-                          }
-                          await refreshChapterBookmarks();
-                        },
-                      );
-                    },
-                  );
-                },
+              child: buildSearchBar(
+                context,
+                controller:
+                    isCatalogTabActive
+                        ? searchController
+                        : bookmarkSearchController,
+                hintText: isCatalogTabActive ? '搜索目录' : '搜索灵感',
+                padding: EdgeInsets.zero,
               ),
             ),
+            if (isCatalogTabActive) ...[
+              const SizedBox(width: 8),
+              Material(
+                color: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap:
+                      () => openCatalogMoreActions(
+                        listController: listController,
+                      ),
+                  child: Ink(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.more_horiz_rounded,
+                      size: 20,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       );
+    }
+
+    List<Widget> buildCatalogSearchResultChildren({
+      required List<ReaderCatalogSearchEntry> tocEntries,
+      required List<ReaderCatalogSearchEntry> contentEntries,
+      required ValueChanged<ReaderCatalogSearchEntry> onEntryTap,
+    }) {
+      final children = <Widget>[];
+
+      void appendSection(String title, List<ReaderCatalogSearchEntry> entries) {
+        if (entries.isEmpty) {
+          return;
+        }
+        if (children.isNotEmpty) {
+          children.add(const SizedBox(height: 8));
+        }
+        children.add(
+          _CatalogSearchSectionHeader(title: title, count: entries.length),
+        );
+        children.add(const SizedBox(height: 6));
+        for (final entry in entries) {
+          children.add(
+            _CatalogSearchEntryTile(
+              entry: entry,
+              onTap: () => onEntryTap(entry),
+            ),
+          );
+          children.add(const SizedBox(height: 8));
+        }
+      }
+
+      appendSection('目录匹配', tocEntries);
+      appendSection('当前章节正文', contentEntries);
+      return children;
+    }
+
+    Widget buildCenteredMobileState({
+      required Widget child,
+      EdgeInsetsGeometry padding = const EdgeInsets.symmetric(horizontal: 24),
+    }) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: Padding(padding: padding, child: child)),
+      );
+    }
+
+    Widget buildMobileTabSwitcher(
+      BuildContext context, {
+      required ScrollController listController,
+    }) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: Row(
+            children: [
+              Expanded(
+                child: _ReaderCatalogMobileTabButton(
+                  tab: _buildCountTab(
+                    context,
+                    label: '目录',
+                    countText: chapters.length.toString(),
+                  ),
+                  selected: activeTabIndex == 0,
+                  selectedColor: colorScheme.primaryContainer,
+                  onTap:
+                      () => handleTabChange(0, listController: listController),
+                ),
+              ),
+              Expanded(
+                child: _ReaderCatalogMobileTabButton(
+                  tab: _buildCountTab(
+                    context,
+                    label: '灵感',
+                    countText: bookmarks.length.toString(),
+                  ),
+                  selected: activeTabIndex == 1,
+                  selectedColor: colorScheme.primaryContainer,
+                  onTap:
+                      () => handleTabChange(1, listController: listController),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    List<Widget> buildMobileCatalogSlivers(
+      BuildContext context, {
+      required ScrollController listController,
+    }) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              sheetHorizontal,
+              MediaQuery.paddingOf(context).top + 8,
+              sheetHorizontal,
+              8,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const AdaptiveSheetDragHandle(),
+                const SizedBox(height: 10),
+                buildMobileTabSwitcher(context, listController: listController),
+                buildSharedSearchBar(context, listController: listController),
+              ],
+            ),
+          ),
+        ),
+        if (activeTabIndex == 0)
+          ValueListenableBuilder<_ReaderCatalogSearchState>(
+            valueListenable: catalogSearchNotifier,
+            builder: (context, searchState, _) {
+              final isSearching = searchState.keyword.isNotEmpty;
+              final orderedIndexes = orderedChapterIndexes();
+              final tocSearchEntries =
+                  catalogDescending
+                      ? ([...searchState.tocEntries]..sort(
+                        (a, b) => b.chapterIndex.compareTo(a.chapterIndex),
+                      ))
+                      : searchState.tocEntries;
+              final contentSearchEntries =
+                  catalogDescending
+                      ? ([...searchState.contentEntries]..sort(
+                        (a, b) => b.chapterIndex.compareTo(a.chapterIndex),
+                      ))
+                      : searchState.contentEntries;
+
+              if (isSearching && searchState.isLoading) {
+                return buildCenteredMobileState(
+                  child: const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              }
+              if (isSearching && searchState.entries.isEmpty) {
+                return buildCenteredMobileState(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '未找到匹配内容',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        supportsContentSearch
+                            ? '当前仅支持搜索目录标题与本章正文。'
+                            : '当前模式仅支持搜索目录标题。',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (isSearching) {
+                final children = buildCatalogSearchResultChildren(
+                  tocEntries: tocSearchEntries,
+                  contentEntries: contentSearchEntries,
+                  onEntryTap: (entry) {
+                    final targetChapterIndex =
+                        resolveCatalogSearchEntryTargetIndex(entry);
+                    if (targetChapterIndex == null) {
+                      showMessage('该分卷下暂无可读章节。');
+                      return;
+                    }
+                    Navigator.of(context).pop(
+                      ReaderCatalogSheetResult.selection(
+                        ReaderCatalogSheetSelection(
+                          chapterIndex: targetChapterIndex,
+                          scrollRatio: entry.scrollRatio,
+                          logicalPosition: entry.logicalPosition,
+                        ),
+                      ),
+                    );
+                  },
+                );
+                return SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    10,
+                    12,
+                    MediaQuery.paddingOf(context).bottom + 12,
+                  ),
+                  sliver: SliverList.list(children: children),
+                );
+              }
+              return SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  10,
+                  12,
+                  MediaQuery.paddingOf(context).bottom + 12,
+                ),
+                sliver: SliverFixedExtentList(
+                  itemExtent: itemExtent,
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final chapterIndex = orderedIndexes[index];
+                    final chapter = chapters[chapterIndex];
+                    final selected = chapterIndex == currentChapterIndex;
+                    return _ReaderCatalogChapterTile(
+                      chapter: chapter,
+                      selected: selected,
+                      enabled: _isReadableChapter(chapter),
+                      onTap:
+                          _isReadableChapter(chapter)
+                              ? () => Navigator.of(context).pop(
+                                ReaderCatalogSheetResult.selection(
+                                  ReaderCatalogSheetSelection(
+                                    chapterIndex: chapterIndex,
+                                  ),
+                                ),
+                              )
+                              : null,
+                    );
+                  }, childCount: orderedIndexes.length),
+                ),
+              );
+            },
+          )
+        else ...[
+          ValueListenableBuilder<String>(
+            valueListenable: bookmarkSearchNotifier,
+            builder: (context, keyword, _) {
+              final filteredBookmarks = _filterBookmarksForKeyword(
+                bookmarks: bookmarks,
+                chapters: chapters,
+                keyword: keyword,
+              );
+              final bookmarkGroups = _groupBookmarksForSheet(
+                filteredBookmarks,
+                chapters,
+              );
+              if (isBookmarkLoading) {
+                return buildCenteredMobileState(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '正在加载灵感...',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (bookmarkErrorText.isNotEmpty) {
+                return buildCenteredMobileState(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          bookmarkErrorText,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.error,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed:
+                            () => unawaited(
+                              loadBookmarks(setModalState, context),
+                            ),
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (bookmarks.isEmpty) {
+                return buildCenteredMobileState(
+                  child: Text(
+                    '当前书籍还没有灵感。',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
+              if (bookmarkGroups.isEmpty) {
+                return buildCenteredMobileState(
+                  child: Text(
+                    '未找到匹配灵感。',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
+              return SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  sheetHorizontal,
+                  0,
+                  sheetHorizontal,
+                  MediaQuery.paddingOf(context).bottom + 12,
+                ),
+                sliver: SliverList.separated(
+                  itemCount: bookmarkGroups.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final group = bookmarkGroups[index];
+                    return _BookmarkGroupSection(
+                      title: group.title,
+                      items: group.bookmarks,
+                      timeLabel: _formatBookmarkTime,
+                      onTap:
+                          (bookmark) => Navigator.of(
+                            context,
+                          ).pop(ReaderCatalogSheetResult.bookmark(bookmark)),
+                      onDelete: (bookmark) async {
+                        final modalContext = context;
+                        await bookmarkRepository.removeBookmark(bookmark.id);
+                        if (!modalContext.mounted) {
+                          return;
+                        }
+                        await loadBookmarks(setModalState, modalContext);
+                        if (!modalContext.mounted) {
+                          return;
+                        }
+                        await refreshChapterBookmarks();
+                      },
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ];
     }
 
     final bookmarkCountLabel = bookmarks.length.toString();
@@ -594,29 +1016,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
           Padding(
             padding: EdgeInsets.fromLTRB(
               sheetHorizontal,
-              4,
-              sheetHorizontal,
               8,
-            ),
-            child: _ReaderCatalogHeaderCard(
-              bookTitle: bookTitle,
-              bookAuthor: bookAuthor,
-              resolvedCover:
-                  resolvedCover ??
-                  resolveBookCover(
-                    realCoverUrl: bookCoverUrl,
-                    customCoverPath: customCoverPath,
-                    bookId: currentBookId,
-                  ),
-              supportsContentSearch: supportsContentSearch,
-              searchController: searchController,
-              onMoreActions: openCatalogMoreActions,
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              sheetHorizontal,
-              0,
               sheetHorizontal,
               2,
             ),
@@ -648,17 +1048,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
-                  onTap: (index) {
-                    if (activeTabIndex == index) {
-                      return;
-                    }
-                    setModalState(() {
-                      activeTabIndex = index;
-                    });
-                    if (index == 1) {
-                      unawaited(ensureBookmarksLoaded(setModalState, context));
-                    }
-                  },
+                  onTap: (index) => handleTabChange(index),
                   tabs: [
                     _buildCountTab(
                       context,
@@ -675,165 +1065,22 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               ),
             ),
           ),
-          Divider(
-            height: 1,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              sheetHorizontal,
+              0,
+              sheetHorizontal,
+              4,
+            ),
+            child: buildSharedSearchBar(
+              context,
+              listController: scrollController,
+            ),
           ),
           Expanded(
             child: activeTabIndex == 0 ? buildCatalogTab() : buildBookmarkTab(),
           ),
         ],
-      ),
-    );
-
-    final mobileContent = Material(
-      color: readerModalTheme.colorScheme.surface,
-      child: DefaultTabController(
-        length: 2,
-        child: Column(
-          children: [
-            SafeArea(
-              bottom: false,
-              child: Material(
-                color: readerModalTheme.colorScheme.surface,
-                child: SizedBox(
-                  height: 56,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        tooltip: '返回',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.28,
-                                ),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(3),
-                              child: TabBar(
-                                isScrollable: true,
-                                labelColor: colorScheme.primary,
-                                unselectedLabelColor:
-                                    colorScheme.onSurfaceVariant,
-                                dividerColor: Colors.transparent,
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                indicator: BoxDecoration(
-                                  color: colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                splashBorderRadius: BorderRadius.circular(12),
-                                labelStyle: textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                                unselectedLabelStyle: textTheme.labelLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
-                                onTap: (index) {
-                                  if (activeTabIndex == index) {
-                                    return;
-                                  }
-                                  setModalState(() {
-                                    activeTabIndex = index;
-                                  });
-                                  if (index == 1) {
-                                    unawaited(
-                                      ensureBookmarksLoaded(
-                                        setModalState,
-                                        context,
-                                      ),
-                                    );
-                                  }
-                                },
-                                tabs: [
-                                  _buildCountTab(
-                                    context,
-                                    label: '目录',
-                                    countText: chapters.length.toString(),
-                                  ),
-                                  _buildCountTab(
-                                    context,
-                                    label: '灵感',
-                                    countText: bookmarkCountLabel,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: '更多',
-                        onSelected: (value) {
-                          if (value != 'sort') {
-                            return;
-                          }
-                          setModalState(() {
-                            catalogDescending = !catalogDescending;
-                          });
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (scrollController.hasClients) {
-                              scrollController.jumpTo(0);
-                            }
-                          });
-                        },
-                        itemBuilder:
-                            (context) => [
-                              PopupMenuItem<String>(
-                                value: 'sort',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      catalogDescending
-                                          ? Icons.arrow_upward_rounded
-                                          : Icons.arrow_downward_rounded,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(catalogDescending ? '正序显示' : '倒序显示'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Divider(
-              height: 1,
-              color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  Column(
-                    children: [
-                      buildSearchBar(
-                        context,
-                        controller: searchController,
-                        hintText: '搜索目录',
-                      ),
-                      Expanded(child: buildCatalogTab()),
-                    ],
-                  ),
-                  buildBookmarkTab(),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
 
@@ -878,7 +1125,83 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
 
     return Theme(
       data: readerModalTheme,
-      child: SizedBox.expand(child: mobileContent),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: DraggableScrollableSheet(
+          initialChildSize: _kReaderCatalogInitialSheetSize,
+          minChildSize: 0,
+          maxChildSize: _kReaderCatalogExpandedSheetSize,
+          snap: true,
+          snapSizes: const [
+            _kReaderCatalogInitialSheetSize,
+            _kReaderCatalogExpandedSheetSize,
+          ],
+          expand: false,
+          shouldCloseOnMinExtent: true,
+          builder: (context, draggableController) {
+            return ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: readerModalTheme.colorScheme.surface.withValues(
+                      alpha: 0.9,
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    border: Border.all(
+                      color: readerModalTheme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.32),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16),
+                        blurRadius: 30,
+                        offset: const Offset(0, -6),
+                      ),
+                    ],
+                  ),
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification is ScrollStartNotification ||
+                          notification is UserScrollNotification) {
+                        scrollThumbVisible.value = true;
+                      } else if (notification is ScrollEndNotification) {
+                        scrollThumbVisible.value = false;
+                      }
+                      return false;
+                    },
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: scrollThumbVisible,
+                      builder: (context, visible, _) {
+                        return Scrollbar(
+                          controller: draggableController,
+                          thumbVisibility: visible,
+                          child: CustomScrollView(
+                            controller: draggableController,
+                            slivers: buildMobileCatalogSlivers(
+                              context,
+                              listController: draggableController,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -918,13 +1241,15 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       },
     );
   } else {
-    routeResult = showGeneralDialog<ReaderCatalogSheetResult>(
-      context: routeContext,
-      barrierDismissible: true,
-      barrierLabel: barrierLabel,
+    routeResult = showModalBottomSheet<ReaderCatalogSheetResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: false,
+      backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.18),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (context, animation, secondaryAnimation) {
+      isDismissible: true,
+      enableDrag: false,
+      builder: (context) {
         return StatefulBuilder(
           builder:
               (context, setModalState) => buildCatalogSurface(
@@ -932,22 +1257,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                 setModalState,
                 isDesktopSurface: false,
               ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.06),
-              end: Offset.zero,
-            ).animate(curved),
-            child: child,
-          ),
         );
       },
     );
@@ -969,28 +1278,67 @@ Tab _buildCountTab(
   final colorScheme = Theme.of(context).colorScheme;
   final textTheme = Theme.of(context).textTheme;
   return Tab(
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label),
-        const SizedBox(width: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(999),
+    child: SizedBox(
+      height: 46,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              countText,
+              style: textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          child: Text(
-            countText,
-            style: textTheme.labelSmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+        ],
+      ),
+    ),
+  );
+}
+
+class _ReaderCatalogMobileTabButton extends StatelessWidget {
+  const _ReaderCatalogMobileTabButton({
+    required this.tab,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  final Tab tab;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? selectedColor : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: SizedBox(
+          height: 50,
+          child: Opacity(
+            opacity: selected ? 1 : 0.86,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Center(child: tab.child ?? const SizedBox.shrink()),
             ),
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 bool _isReadableChapter(Chapter chapter) {
@@ -1163,197 +1511,6 @@ class _CatalogSearchResultList extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ReaderCatalogHeaderCard extends StatelessWidget {
-  const _ReaderCatalogHeaderCard({
-    required this.bookTitle,
-    required this.bookAuthor,
-    required this.resolvedCover,
-    required this.supportsContentSearch,
-    required this.searchController,
-    required this.onMoreActions,
-  });
-
-  final String bookTitle;
-  final String? bookAuthor;
-  final ResolvedBookCover resolvedCover;
-  final bool supportsContentSearch;
-  final TextEditingController searchController;
-  final VoidCallback onMoreActions;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final normalizedTitle = bookTitle.trim().isEmpty ? '未命名书籍' : bookTitle;
-    final normalizedAuthor = (bookAuthor ?? '').trim();
-    final compactTitle = _compactCatalogBookTitle(normalizedTitle);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final actionWidth = (constraints.maxWidth * 0.28).clamp(104.0, 148.0);
-        return Container(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                colorScheme.surfaceContainerHigh,
-                colorScheme.surfaceContainerLow,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.25),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: ResolvedBookCoverView(
-                  cover: resolvedCover,
-                  title: normalizedTitle,
-                  author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
-                  width: 44,
-                  height: 60,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 68,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          compactTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            height: 1.15,
-                            fontSize: ((textTheme.bodyLarge?.fontSize ?? 16) -
-                                    4.5)
-                                .clamp(10.5, 12.0),
-                          ),
-                        ),
-                      ),
-                      Text(
-                        normalizedAuthor.isEmpty ? ' ' : normalizedAuthor,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: actionWidth,
-                child: SizedBox(
-                  height: 68,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: searchController,
-                        style: textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          height: 1.1,
-                        ),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          filled: true,
-                          fillColor: colorScheme.surface.withValues(
-                            alpha: 0.92,
-                          ),
-                          hintText: '请搜索',
-                          hintStyle: textTheme.bodySmall?.copyWith(
-                            fontSize: 11,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.search_rounded,
-                            size: 14,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth: 26,
-                            minHeight: 26,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: colorScheme.primary.withValues(alpha: 0.9),
-                              width: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: IconButton(
-                          tooltip: '更多',
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(36, 36),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            padding: EdgeInsets.zero,
-                          ),
-                          onPressed: onMoreActions,
-                          icon: Icon(
-                            Icons.more_horiz_rounded,
-                            size: 20,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-String _compactCatalogBookTitle(String title) {
-  final trimmed = title.trim();
-  if (trimmed.characters.length <= 8) {
-    return trimmed;
-  }
-  return '${trimmed.characters.take(8).toString()}...';
 }
 
 class _ReaderCatalogChapterTile extends StatelessWidget {

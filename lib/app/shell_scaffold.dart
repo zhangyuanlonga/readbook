@@ -44,8 +44,8 @@ class ShellScaffold extends ConsumerStatefulWidget {
 class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     with SingleTickerProviderStateMixin {
   static const double _kSwipeVelocityThreshold = 420;
-  static const bool _kEnableMobileTabSwitchAnimation = false;
-  static const Duration _kTabSwitchDuration = Duration(milliseconds: 320);
+  static const bool _kEnableMobileTabSwitchAnimation = true;
+  static const Duration _kTabSwitchDuration = Duration(milliseconds: 240);
 
   late int _currentOrderIndex;
   bool _isForward = true;
@@ -176,6 +176,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final shouldAnimateSwitch =
         enableTabSwipe &&
         _kEnableMobileTabSwitchAnimation &&
+        currentTab != AppShellTab.mine &&
         !disableAnimations;
 
     final switchedChild =
@@ -187,9 +188,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 final slideProgress = _tabSlideCurve.value;
                 final fadeProgress = _tabFadeCurve.value;
                 final scaleProgress = _tabScaleCurve.value;
-                final dx = (_isForward ? 28.0 : -28.0) * (1 - slideProgress);
-                final opacity = lerpDouble(0.78, 1.0, fadeProgress)!;
-                final scale = lerpDouble(0.985, 1.0, scaleProgress)!;
+                final dx = (_isForward ? 12.0 : -12.0) * (1 - slideProgress);
+                final opacity = lerpDouble(0.84, 1.0, fadeProgress)!;
+                final scale = lerpDouble(0.996, 1.0, scaleProgress)!;
                 return Transform.translate(
                   offset: Offset(dx, 0),
                   child: Opacity(

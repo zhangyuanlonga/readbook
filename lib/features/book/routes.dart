@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router_transitions.dart';
@@ -20,8 +21,10 @@ final List<RouteBase> bookRoutes = <RouteBase>[
 
       return buildFadeSlideTransitionPage(
         state: state,
-        transitionDuration: const Duration(milliseconds: 260),
-        reverseTransitionDuration: const Duration(milliseconds: 200),
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 240),
+        beginOffset: const Offset(0, 0.03),
+        beginOpacity: 0.78,
         child: BookDetailPage(
           bookId: bookId,
           sourceId: sourceId,

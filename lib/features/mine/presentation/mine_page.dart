@@ -494,89 +494,127 @@ class _MinePageState extends ConsumerState<MinePage> {
     EdgeInsetsGeometry? padding,
     Widget? trailing,
   }) {
-    if (_layoutMode == _MineLayoutMode.list) {
-      return _buildActionListSection(
-        context,
-        palette: palette,
-        title: title,
-        actions: actions,
-        padding: padding,
-        trailing: trailing,
-      );
-    }
-
-    return _buildSectionCardShell(
-      context,
-      padding: padding ?? _actionSectionPaddingFor(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing,
-            ],
-          ),
-          const SizedBox(height: 10),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = AppLayout.mineActionGridColumnsForWidth(
-                constraints.maxWidth,
-              );
-              final denseGrid = columns >= 4;
-              final crossSpacing = denseGrid ? 8.0 : 10.0;
-              final runSpacing = denseGrid ? 8.0 : 10.0;
-              final tileHeight = switch (columns) {
-                >= 4 => 82.0,
-                3 => 88.0,
-                _ => 96.0,
-              };
-              final totalCrossSpacing = crossSpacing * (columns - 1);
-              final tileWidth =
-                  (constraints.maxWidth - totalCrossSpacing) / columns;
-
-              return Wrap(
-                spacing: crossSpacing,
-                runSpacing: runSpacing,
+    final layout = _layoutMode;
+    final sectionKey = ValueKey<String>('mine_section_${title}_$layout');
+    final sectionChild =
+        layout == _MineLayoutMode.list
+            ? _buildActionListSection(
+              context,
+              palette: palette,
+              title: title,
+              actions: actions,
+              padding: padding,
+              trailing: trailing,
+            )
+            : _buildSectionCardShell(
+              context,
+              padding: padding ?? _actionSectionPaddingFor(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var index = 0; index < actions.length; index++)
-                    SizedBox(
-                      width: tileWidth,
-                      height: tileHeight,
-                      child: _buildGridEntrance(
-                        section: title,
-                        index: index,
-                        child: _buildActionTile(
-                          context,
-                          item: actions[index],
-                          denseGrid: denseGrid,
-                          borderColor: resolveAppBorderColor(
-                            Theme.of(context).colorScheme,
-                            baseColor: palette.cardBorderColor,
-                            containerColor: palette.cardColor,
-                            tone:
-                                denseGrid
-                                    ? AppBorderTone.subtle
-                                    : AppBorderTone.defaultTone,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
-                          palette: palette,
                         ),
                       ),
-                    ),
+                      if (trailing != null) trailing,
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns = AppLayout.mineActionGridColumnsForWidth(
+                        constraints.maxWidth,
+                      );
+                      final denseGrid = columns >= 4;
+                      final crossSpacing = denseGrid ? 8.0 : 10.0;
+                      final runSpacing = denseGrid ? 8.0 : 10.0;
+                      final tileHeight = switch (columns) {
+                        >= 4 => 82.0,
+                        3 => 88.0,
+                        _ => 96.0,
+                      };
+                      final totalCrossSpacing = crossSpacing * (columns - 1);
+                      final tileWidth =
+                          (constraints.maxWidth - totalCrossSpacing) / columns;
+
+                      return Wrap(
+                        spacing: crossSpacing,
+                        runSpacing: runSpacing,
+                        children: [
+                          for (var index = 0; index < actions.length; index++)
+                            SizedBox(
+                              width: tileWidth,
+                              height: tileHeight,
+                              child: _buildGridEntrance(
+                                section: title,
+                                index: index,
+                                child: _buildActionTile(
+                                  context,
+                                  item: actions[index],
+                                  denseGrid: denseGrid,
+                                  borderColor: resolveAppBorderColor(
+                                    Theme.of(context).colorScheme,
+                                    baseColor: palette.cardBorderColor,
+                                    containerColor: palette.cardColor,
+                                    tone:
+                                        denseGrid
+                                            ? AppBorderTone.subtle
+                                            : AppBorderTone.defaultTone,
+                                  ),
+                                  palette: palette,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
                 ],
-              );
-            },
+              ),
+            );
+
+    final incomingIsGrid = layout == _MineLayoutMode.grid;
+    return AppAnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      reverseDuration: const Duration(milliseconds: 200),
+      transitionBuilder: (child, animation) {
+        final fade = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        final isIncoming = child.key == sectionKey;
+        final beginScale =
+            incomingIsGrid
+                ? (isIncoming ? 0.94 : 1.0)
+                : (isIncoming ? 1.03 : 1.0);
+        final beginOffset =
+            incomingIsGrid ? const Offset(0, 0.03) : const Offset(0, -0.02);
+        return FadeTransition(
+          opacity: fade,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: beginOffset,
+              end: Offset.zero,
+            ).animate(fade),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: beginScale, end: 1).animate(fade),
+              child: child,
+            ),
           ),
-        ],
-      ),
+        );
+      },
+      child: KeyedSubtree(key: sectionKey, child: sectionChild),
     );
   }
 
@@ -906,11 +944,7 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Widget _buildPageEntrance({required int index, required Widget child}) {
-    return AppFadeSlideTransition(
-      key: ValueKey<String>('mine_page_entry_$index'),
-      delay: Duration(milliseconds: (index * 56).clamp(0, 280).toInt()),
-      child: child,
-    );
+    return child;
   }
 
   Widget _buildGridEntrance({

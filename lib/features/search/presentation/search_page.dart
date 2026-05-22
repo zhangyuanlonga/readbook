@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -40,13 +41,16 @@ import 'widgets/search_progress_card.dart';
 import 'widgets/search_report_summary.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
-  const SearchPage({super.key, this.hideTopSearchBar = false});
+  const SearchPage({super.key, this.hideTopSearchBar = false, this.entry});
 
   final bool hideTopSearchBar;
+  final String? entry;
 
   @override
   ConsumerState<SearchPage> createState() => _SearchPageState();
 }
+
+enum _SearchMoreAction { serverSources, togglePrecise, clearSourceFilter }
 
 class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
@@ -103,12 +107,26 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   // Search history
   List<String> _searchHistory = const <String>[];
 
+  String get _serverSourceMenuLabel {
+    if (_isLoadingServerSourceCount && _availableServerSourceCount == 0) {
+      return '服务器源加载中';
+    }
+    if (_availableServerSourceCount == 0) {
+      return '无可用服务器源';
+    }
+    if (_selectedServerSourceIds.isEmpty) {
+      return '服务器源：全部 $_availableServerSourceCount 个';
+    }
+    return '服务器源：已选 ${_selectedServerSourceIds.length} 个';
+  }
+
   @override
   void initState() {
     super.initState();
     _serverOnlineSearchService = ref.read(serverOnlineSearchServiceProvider);
-    _bookPresentationQueryService =
-        ref.read(searchBookPresentationQueryServiceProvider);
+    _bookPresentationQueryService = ref.read(
+      searchBookPresentationQueryServiceProvider,
+    );
     _historyService = ref.read(searchHistoryServiceProvider);
     _searchSystemSettingsService = ref.read(
       searchSystemSettingsServiceProvider,
@@ -216,30 +234,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                 child: SearchInputCard(
                                   isSearching: _isSearching,
                                   searchContentMode: _searchContentMode,
-                                  serverOnlineSearchEnabled: true,
-                                  isPreciseBookMatch: _isPreciseBookMatch,
-                                  selectedSourceCount:
-                                      _selectedServerSourceIds.length,
-                                  availableSourceCount:
-                                      _availableServerSourceCount,
-                                  isLoadingSourceCount:
-                                      _isLoadingServerSourceCount,
                                   modeActiveBackgroundColor:
                                       palette.primaryColor,
                                   modeActiveForegroundColor:
                                       palette.buttonTextColor,
-                                  optionActiveBackgroundColor:
-                                      palette.primaryContainerColor,
-                                  optionActiveForegroundColor:
-                                      palette.textPrimaryColor,
-                                  onClearResults: _clearResults,
                                   onContentModeChanged: _onContentModeChanged,
-                                  onPreciseMatchChanged: _onPreciseMatchChanged,
-                                  onOpenSourceFilter:
-                                      () => unawaited(
-                                        _showActiveSourceFilterSheet(),
-                                      ),
-                                  onClearSourceFilter: _clearActiveSourceFilter,
                                 ),
                               ),
                             ),
@@ -415,7 +414,28 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   // ── Navigation ──
 
-  void _handleBackNavigation() {
+  Future<void> _handleBackNavigation() async {
+    final entry = widget.entry?.trim().toLowerCase();
+    if (entry == 'dock' && context.canPop()) {
+      final overlay = CircularThemeRevealOverlay.of(context);
+      if (overlay != null) {
+        final mediaQuery = MediaQuery.of(context);
+        final bottomInset = mediaQuery.viewPadding.bottom;
+        final size = mediaQuery.size;
+        final dockSearchCenter = Offset(
+          size.width - 48,
+          size.height - (bottomInset + 40),
+        );
+        await overlay.startTransition(
+          center: dockSearchCenter,
+          reverse: true,
+          onThemeChange: () {
+            context.pop();
+          },
+        );
+        return;
+      }
+    }
     if (context.canPop()) {
       context.pop();
       return;
@@ -437,53 +457,112 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
     return Padding(
       padding: EdgeInsets.only(right: metrics.contentGap + 2),
-      child: Hero(
-        tag: kSearchEntryHeroTag,
-        createRectTween:
-            (begin, end) => MaterialRectCenterArcTween(begin: begin, end: end),
-        child: Material(
-          color: Colors.transparent,
-          child: AdaptiveSearchBar(
-            controller: _keywordController,
-            focusNode: _searchFocusNode,
-            hintText: hintText,
-            onChanged: (_) {},
-            onSubmitted: (_) => _runSearch(),
-            onClear: _keywordController.clear,
-            height: metrics.controlHeight,
-            borderRadius: metrics.cardRadius,
-            backgroundColor: palette.searchFieldBackgroundColor,
-            foregroundColor: palette.textPrimaryColor,
-            secondaryColor: palette.textSecondaryColor,
-            outlineColor:
-                resolveAppBorderSide(
-                  theme.colorScheme,
-                  baseColor: palette.outlineColor,
-                  containerColor: palette.searchFieldBackgroundColor,
-                  tone: AppBorderTone.strong,
-                  width: 1.2,
-                ).color,
-            suffixBuilder: (context, value) {
-              if (_isSearching) {
-                return IconButton(
-                  tooltip: '取消搜索',
-                  onPressed: _runSearch,
-                  icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                  visualDensity: VisualDensity.compact,
-                );
-              }
-              if (value.text.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              return IconButton(
-                tooltip: '清空输入',
-                onPressed: _keywordController.clear,
-                icon: const Icon(Icons.close_rounded, size: 18),
-                visualDensity: VisualDensity.compact,
-              );
-            },
+      child: Row(
+        children: [
+          Expanded(
+            child: Hero(
+              tag: kSearchEntryHeroTag,
+              createRectTween:
+                  (begin, end) =>
+                      MaterialRectCenterArcTween(begin: begin, end: end),
+              child: Material(
+                color: Colors.transparent,
+                child: AdaptiveSearchBar(
+                  controller: _keywordController,
+                  focusNode: _searchFocusNode,
+                  hintText: hintText,
+                  onChanged: (_) {},
+                  onSubmitted: (_) => _runSearch(),
+                  onClear: _keywordController.clear,
+                  height: metrics.controlHeight,
+                  borderRadius: metrics.cardRadius,
+                  backgroundColor: palette.searchFieldBackgroundColor,
+                  foregroundColor: palette.textPrimaryColor,
+                  secondaryColor: palette.textSecondaryColor,
+                  outlineColor:
+                      resolveAppBorderSide(
+                        theme.colorScheme,
+                        baseColor: palette.outlineColor,
+                        containerColor: palette.searchFieldBackgroundColor,
+                        tone: AppBorderTone.strong,
+                        width: 1.2,
+                      ).color,
+                  suffixBuilder: (context, value) {
+                    if (_isSearching) {
+                      return IconButton(
+                        tooltip: '取消搜索',
+                        onPressed: _runSearch,
+                        icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                        visualDensity: VisualDensity.compact,
+                      );
+                    }
+                    if (value.text.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return IconButton(
+                      tooltip: '清空输入',
+                      onPressed: _keywordController.clear,
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      visualDensity: VisualDensity.compact,
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(width: 4),
+          PopupMenuButton<_SearchMoreAction>(
+            tooltip: '更多选项',
+            enabled: !_isSearching,
+            icon: const Icon(Icons.more_vert_rounded, size: 20),
+            onSelected: (action) {
+              switch (action) {
+                case _SearchMoreAction.serverSources:
+                  unawaited(_showActiveSourceFilterSheet());
+                case _SearchMoreAction.togglePrecise:
+                  _onPreciseMatchChanged(!_isPreciseBookMatch);
+                case _SearchMoreAction.clearSourceFilter:
+                  _clearActiveSourceFilter();
+              }
+            },
+            itemBuilder:
+                (menuContext) => [
+                  PopupMenuItem<_SearchMoreAction>(
+                    value: _SearchMoreAction.serverSources,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('服务器源'),
+                        const SizedBox(height: 2),
+                        Text(
+                          _serverSourceMenuLabel,
+                          style: Theme.of(
+                            menuContext,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(
+                                  menuContext,
+                                ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  CheckedPopupMenuItem<_SearchMoreAction>(
+                    value: _SearchMoreAction.togglePrecise,
+                    checked: _isPreciseBookMatch,
+                    child: const Text('精准'),
+                  ),
+                  if (_selectedServerSourceIds.isNotEmpty)
+                    const PopupMenuDivider(),
+                  if (_selectedServerSourceIds.isNotEmpty)
+                    const PopupMenuItem<_SearchMoreAction>(
+                      value: _SearchMoreAction.clearSourceFilter,
+                      child: Text('清空服务器源筛选'),
+                    ),
+                ],
+          ),
+        ],
       ),
     );
   }
@@ -517,11 +596,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         force: true,
       );
     }
-  }
-
-  void _clearResults() {
-    _keywordController.clear();
-    _clearSearchOutput();
   }
 
   void _clearActiveSourceFilter() {
@@ -1161,9 +1235,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
         cancellationToken: token,
         onProgress: (progress) {
-          if (!mounted ||
-              token.isCancelled ||
-              sessionId != _searchSessionId) {
+          if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
             return;
           }
           _updateProgressReportThrottled(
