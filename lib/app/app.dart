@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'composition/app_providers.dart' as app_providers;
 import 'platform/app_platform_capabilities.dart';
@@ -111,7 +112,7 @@ class App extends ConsumerWidget {
 
         return _MobileKeyboardInsetStabilizer(
           textScale: textScale,
-          child: responsiveChild,
+          child: CircularThemeRevealOverlay(child: responsiveChild),
         );
       },
     );
@@ -934,7 +935,9 @@ class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
     }
     final imageProvider =
         _imageProvider ??
-        (StartupArtworkStore.isPriming ? null : const AssetImage(_fallbackStartupArtwork));
+        (StartupArtworkStore.isPriming
+            ? null
+            : const AssetImage(_fallbackStartupArtwork));
     return ColoredBox(
       color: const Color(0xFFF6F8FB),
       child: SizedBox.expand(

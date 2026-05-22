@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -471,12 +472,45 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     return ref.read(advancedThemeServiceProvider).loadThemeById(themeId);
   }
 
+  String _editorRoute([String? themeId]) {
+    return themeId == null || themeId.trim().isEmpty
+        ? '/appearance/advanced-themes/editor'
+        : '/appearance/advanced-themes/editor?id=$themeId';
+  }
+
   Future<void> _openEditor([String? themeId]) async {
-    final result = await context.push<String>(
-      themeId == null || themeId.trim().isEmpty
-          ? '/appearance/advanced-themes/editor'
-          : '/appearance/advanced-themes/editor?id=$themeId',
+    final result = await context.push<String>(_editorRoute(themeId));
+    await _load();
+    if (!mounted || result == null || result.trim().isEmpty) {
+      return;
+    }
+    _showMessage(result);
+  }
+
+  Future<void> _openEditorWithReveal(
+    BuildContext sourceContext, [
+    String? themeId,
+  ]) async {
+    final overlay = CircularThemeRevealOverlay.of(sourceContext);
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
     );
+    Future<String?>? navigationFuture;
+
+    if (overlay == null) {
+      await _openEditor(themeId);
+      return;
+    }
+
+    await overlay.startTransition(
+      center: center,
+      reverse: false,
+      onThemeChange: () {
+        navigationFuture = context.push<String>(_editorRoute(themeId));
+      },
+    );
+
+    final result = await navigationFuture;
     await _load();
     if (!mounted || result == null || result.trim().isEmpty) {
       return;
@@ -1054,9 +1088,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _ThemeImportPackageKind.official =>
         _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
             ? await service.importThemeBundleZipBytes(bytes)
-            : throw const FormatException(
-              '已不再支持导入 JSON 主题文件，请使用 ZIP 主题包。',
-            ),
+            : throw const FormatException('已不再支持导入 JSON 主题文件，请使用 ZIP 主题包。'),
     };
     if (markRevision) {
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
@@ -2674,12 +2706,17 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
-                          fontSize: math.max(
-                            11,
-                            (Theme.of(context).textTheme.bodySmall?.fontSize ??
-                                    12) -
-                                (shouldUseCompactCategoryLabel ? 1 : 0),
-                          ).toDouble(),
+                          fontSize:
+                              math
+                                  .max(
+                                    11,
+                                    (Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.fontSize ??
+                                            12) -
+                                        (shouldUseCompactCategoryLabel ? 1 : 0),
+                                  )
+                                  .toDouble(),
                         ),
                       ),
                     ),
@@ -2721,166 +2758,171 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final isSelected = _selectedThemeIds.contains(theme.id);
     final showSelectedState = _isSelectionMode && isSelected;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap:
-          _isSaving
-              ? null
-              : _isSelectionMode
-              ? () => _toggleThemeSelection(theme.id)
-              : _floatingEditEnabled
-              ? () => _openEditorDialog(theme.id)
-              : () => _openEditor(theme.id),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        decoration: BoxDecoration(
-          color:
-              showSelectedState
-                  ? colorScheme.primary.withValues(alpha: 0.12)
-                  : isActive
-                  ? colorScheme.primary.withValues(alpha: 0.08)
-                  : colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color:
-                showSelectedState
-                    ? colorScheme.primary.withValues(alpha: 0.72)
-                    : isActive
-                    ? colorScheme.primary.withValues(alpha: 0.55)
-                    : colorScheme.outlineVariant.withValues(alpha: 0.45),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (_isSelectionMode) ...[
-                  Checkbox(
-                    value: isSelected,
-                    onChanged:
-                        _isSaving
-                            ? null
-                            : (_) => _toggleThemeSelection(theme.id),
-                    visualDensity: const VisualDensity(
-                      horizontal: -4,
-                      vertical: -4,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return Builder(
+      builder:
+          (cardContext) => InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap:
+                _isSaving
+                    ? null
+                    : _isSelectionMode
+                    ? () => _toggleThemeSelection(theme.id)
+                    : _floatingEditEnabled
+                    ? () => _openEditorDialog(theme.id)
+                    : () => _openEditorWithReveal(cardContext, theme.id),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color:
+                    showSelectedState
+                        ? colorScheme.primary.withValues(alpha: 0.12)
+                        : isActive
+                        ? colorScheme.primary.withValues(alpha: 0.08)
+                        : colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color:
+                      showSelectedState
+                          ? colorScheme.primary.withValues(alpha: 0.72)
+                          : isActive
+                          ? colorScheme.primary.withValues(alpha: 0.55)
+                          : colorScheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              theme.name,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
+                      if (_isSelectionMode) ...[
+                        Checkbox(
+                          value: isSelected,
+                          onChanged:
+                              _isSaving
+                                  ? null
+                                  : (_) => _toggleThemeSelection(theme.id),
+                          visualDensity: const VisualDensity(
+                            horizontal: -4,
+                            vertical: -4,
                           ),
-                          if (isActive) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '当前生效',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onPrimary,
-                                  fontWeight: FontWeight.w700,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    theme.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                if (isActive) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '当前生效',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.onPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if ((theme.category?.trim().isNotEmpty ?? false))
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  theme.category!.trim(),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
-                        ],
+                        ),
                       ),
-                      if ((theme.category?.trim().isNotEmpty ?? false))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            theme.category!.trim(),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                      if (!_isSelectionMode)
+                        PopupMenuButton<_AdvancedThemeAction>(
+                          enabled: !_isSaving,
+                          onSelected: (action) {
+                            switch (action) {
+                              case _AdvancedThemeAction.edit:
+                                _openEditor(theme.id);
+                              case _AdvancedThemeAction.duplicate:
+                                unawaited(_duplicateTheme(theme.id));
+                              case _AdvancedThemeAction.exportZip:
+                                unawaited(_exportThemeBundle(theme.id));
+                              case _AdvancedThemeAction.delete:
+                                unawaited(_handleDeleteThemeById(theme.id));
+                            }
+                          },
+                          itemBuilder:
+                              (context) => const [
+                                PopupMenuItem(
+                                  value: _AdvancedThemeAction.edit,
+                                  child: Text('编辑'),
+                                ),
+                                PopupMenuItem(
+                                  value: _AdvancedThemeAction.duplicate,
+                                  child: Text('复制'),
+                                ),
+                                PopupMenuItem(
+                                  value: _AdvancedThemeAction.exportZip,
+                                  child: Text('导出 ZIP'),
+                                ),
+                                PopupMenuItem(
+                                  value: _AdvancedThemeAction.delete,
+                                  child: Text('删除'),
+                                ),
+                              ],
                         ),
                     ],
                   ),
-                ),
-                if (!_isSelectionMode)
-                  PopupMenuButton<_AdvancedThemeAction>(
-                    enabled: !_isSaving,
-                    onSelected: (action) {
-                      switch (action) {
-                        case _AdvancedThemeAction.edit:
-                          _openEditor(theme.id);
-                        case _AdvancedThemeAction.duplicate:
-                          unawaited(_duplicateTheme(theme.id));
-                        case _AdvancedThemeAction.exportZip:
-                          unawaited(_exportThemeBundle(theme.id));
-                        case _AdvancedThemeAction.delete:
-                          unawaited(_handleDeleteThemeById(theme.id));
-                      }
-                    },
-                    itemBuilder:
-                        (context) => const [
-                          PopupMenuItem(
-                            value: _AdvancedThemeAction.edit,
-                            child: Text('编辑'),
-                          ),
-                          PopupMenuItem(
-                            value: _AdvancedThemeAction.duplicate,
-                            child: Text('复制'),
-                          ),
-                          PopupMenuItem(
-                            value: _AdvancedThemeAction.exportZip,
-                            child: Text('导出 ZIP'),
-                          ),
-                          PopupMenuItem(
-                            value: _AdvancedThemeAction.delete,
-                            child: Text('删除'),
-                          ),
-                        ],
-                  ),
-              ],
-            ),
-            if (!compact) ...[
-              const SizedBox(height: 10),
-              _buildDualModePreviewStrip(context, theme),
-            ],
-            if (!_isSelectionMode && !compact) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed:
-                      _isSaving
-                          ? null
-                          : isActive
-                          ? _disableActiveTheme
-                          : () => unawaited(_applyThemeById(theme.id)),
-                  child: Text(isActive ? '停用主题' : '应用主题'),
-                ),
+                  if (!compact) ...[
+                    const SizedBox(height: 10),
+                    _buildDualModePreviewStrip(context, theme),
+                  ],
+                  if (!_isSelectionMode && !compact) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed:
+                            _isSaving
+                                ? null
+                                : isActive
+                                ? _disableActiveTheme
+                                : () => unawaited(_applyThemeById(theme.id)),
+                        child: Text(isActive ? '停用主题' : '应用主题'),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ],
-        ),
-      ),
+            ),
+          ),
     );
   }
 

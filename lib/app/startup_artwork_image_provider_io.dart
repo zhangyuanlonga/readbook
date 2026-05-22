@@ -7,5 +7,8 @@ ImageProvider? resolveStartupArtworkFileProvider(String? imagePath) {
   if (normalized.isEmpty) {
     return null;
   }
+  if (normalized.startsWith('assets/')) {
+    return AssetImage(normalized);
+  }
   return FileImage(File(normalized));
 }

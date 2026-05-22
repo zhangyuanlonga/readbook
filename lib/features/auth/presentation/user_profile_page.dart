@@ -894,7 +894,7 @@ class _EditProfileSurfaceState extends State<_EditProfileSurface> {
         ),
         const SizedBox(height: 10),
         Text(
-          '可修改当前账号的显示名、账号和联系方式。',
+          '可修改当前账号的显示名、联系方式和密码，账号本身不可修改。',
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
@@ -902,7 +902,11 @@ class _EditProfileSurfaceState extends State<_EditProfileSurface> {
         const SizedBox(height: 16),
         TextField(
           controller: _accountController,
-          decoration: const InputDecoration(labelText: '账号', hintText: '请输入账号'),
+          readOnly: true,
+          decoration: const InputDecoration(
+            labelText: '账号',
+            helperText: '账号创建后不可修改',
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -1014,7 +1018,6 @@ class _EditProfileSurfaceState extends State<_EditProfileSurface> {
     }
     Navigator.of(context).pop(
       UserProfileUpdateInput(
-        account: account,
         displayName: displayName.isEmpty ? account : displayName,
         phone: _phoneController.text.trim(),
         email: _emailController.text.trim(),

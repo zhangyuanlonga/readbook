@@ -56,7 +56,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   final DockThemePalette? themePalette;
   final bool showSearchButton;
   final ValueChanged<int> onDestinationSelected;
-  final VoidCallback onSearchPressed;
+  final ValueChanged<BuildContext> onSearchPressed;
 
   static double contentBottomInset(
     BuildContext context, {
@@ -341,7 +341,7 @@ class _SearchIconButton extends StatelessWidget {
   final _Md3DockPalette palette;
   final bool frostedEffect;
   final AppNavigationComponentTokens navigationTokens;
-  final VoidCallback onPressed;
+  final ValueChanged<BuildContext> onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -399,7 +399,7 @@ class _SearchIconButton extends StatelessWidget {
             label: '搜索',
             child: InkWell(
               borderRadius: BorderRadius.circular(radius),
-              onTap: onPressed,
+              onTap: () => onPressed(context),
               child: clippedSearchSurface,
             ),
           ),

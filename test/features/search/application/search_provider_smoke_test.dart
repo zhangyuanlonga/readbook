@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_presentation_query_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_history_service.dart';
-import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
+import 'package:shuxiang_reading_next/features/search/application/server_online_search_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/search/providers.dart';
 
@@ -15,7 +15,10 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    expect(container.read(searchServiceProvider), isA<SearchService>());
+    expect(
+      container.read(serverOnlineSearchServiceProvider),
+      isA<ServerOnlineSearchService>(),
+    );
     expect(
       container.read(searchHistoryServiceProvider),
       isA<SearchHistoryService>(),

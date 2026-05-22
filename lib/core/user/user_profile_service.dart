@@ -7,14 +7,12 @@ import 'user_profile.dart';
 
 class UserProfileUpdateInput {
   const UserProfileUpdateInput({
-    required this.account,
     required this.displayName,
     required this.phone,
     required this.email,
     required this.password,
   });
 
-  final String account;
   final String displayName;
   final String phone;
   final String email;
@@ -49,7 +47,6 @@ class UserProfileService {
   }) async {
     _ensureBaseUrl();
     final payload = <String, dynamic>{
-      'account': input.account.trim(),
       'display_name': input.displayName.trim(),
       'phone': input.phone.trim(),
       'email': input.email.trim(),

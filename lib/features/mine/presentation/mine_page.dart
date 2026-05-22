@@ -109,11 +109,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     return _isListMode ? metrics.contentGap * 0.75 : metrics.contentGap * 0.45;
   }
 
-  double _quickAccessInnerGapFor(BuildContext context) {
-    final metrics = AppAdaptiveMetrics.of(context);
-    return _isListMode ? metrics.contentGap * 0.7 : metrics.contentGap;
-  }
-
   EdgeInsets _profileCardPaddingFor(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
     return _isListMode
@@ -128,23 +123,6 @@ class _MinePageState extends ConsumerState<MinePage> {
           metrics.cardPadding,
           metrics.cardPadding + 2,
           metrics.cardPadding,
-        );
-  }
-
-  EdgeInsets _quickCardPaddingFor(BuildContext context) {
-    final metrics = AppAdaptiveMetrics.of(context);
-    return _isListMode
-        ? EdgeInsets.fromLTRB(
-          metrics.cardPadding * 0.8,
-          metrics.contentGap * 0.85,
-          metrics.cardPadding * 0.8,
-          metrics.contentGap * 0.85,
-        )
-        : EdgeInsets.fromLTRB(
-          metrics.cardPadding,
-          metrics.cardPadding * 0.8,
-          metrics.cardPadding,
-          metrics.cardPadding * 0.8,
         );
   }
 
@@ -423,7 +401,6 @@ class _MinePageState extends ConsumerState<MinePage> {
       },
     );
   }
-
 
   Future<void> _handleAdvancedThemeTap() async {
     if (_hasThemeCustom) {

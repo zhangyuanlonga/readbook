@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter, lerpDouble;
 
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,6 +54,27 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   late final Animation<double> _tabSlideCurve;
   late final Animation<double> _tabFadeCurve;
   late final Animation<double> _tabScaleCurve;
+
+  Future<void> _openSearchWithReveal(
+    BuildContext sourceContext, {
+    String route = '/search?entry=dock',
+  }) async {
+    final overlay = CircularThemeRevealOverlay.of(sourceContext);
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
+    );
+    if (overlay == null) {
+      await sourceContext.push(route);
+      return;
+    }
+    await overlay.startTransition(
+      center: center,
+      reverse: false,
+      onThemeChange: () {
+        sourceContext.push(route);
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -471,8 +494,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           showSearchButton: showSearchButton,
           onDestinationSelected:
               (index) => _goToDestination(context, destinations[index]),
-          onSearchPressed: () {
-            context.push('/search?entry=dock');
+          onSearchPressed: (buttonContext) {
+            unawaited(
+              _openSearchWithReveal(buttonContext, route: '/search?entry=dock'),
+            );
           },
         );
     }

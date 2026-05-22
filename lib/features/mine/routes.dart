@@ -71,9 +71,12 @@ final List<RouteBase> mineRoutes = <RouteBase>[
   GoRoute(
     path: '/appearance/advanced-themes/editor',
     name: 'advanced-theme-editor',
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final themeId = state.uri.queryParameters['id'];
-      return AdvancedThemeEditorPage(themeId: themeId);
+      return NoTransitionPage<void>(
+        key: state.pageKey,
+        child: AdvancedThemeEditorPage(themeId: themeId),
+      );
     },
   ),
   GoRoute(
