@@ -820,7 +820,7 @@ extension on _MinePageState {
       return '登录后可同步阅读进度、书架和个性设置。';
     }
     if (_hasMembership) {
-      return '高级权益已生效，可继续同步阅读进度并管理个性化设置。';
+      return '高级权益已生效，可尽情使用会员功能';
     }
     return '阅读进度、书架与个性设置会随账号持续同步。';
   }

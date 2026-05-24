@@ -182,6 +182,7 @@ extension on _BookshelfPageState {
       return;
     }
 
+    var draftUseGridView = _useGridView;
     var draftAdaptive = _gridAdaptiveColumns;
     var draftColumns = _gridColumnCount;
     var draftCrossSpacing = _gridCrossSpacing;
@@ -215,880 +216,894 @@ extension on _BookshelfPageState {
       isScrollControlled: true,
       builder: (sheetContext) {
         final bottomInset = _bookshelfBottomSafeInset(sheetContext);
-        return DefaultTabController(
-          initialIndex: _useGridView ? 1 : 0,
-          length: _BookshelfSettingsTab.values.length,
-          child: StatefulBuilder(
-            builder: (sheetContext, setSheetState) {
-              final theme = Theme.of(sheetContext);
-              final colorScheme = theme.colorScheme;
-              final tabs = _BookshelfSettingsTab.values;
-
-              Future<void> persistGridSettings() async {
-                try {
-                  await _bookshelfService.saveGridAdaptiveColumns(
-                    draftAdaptive,
-                  );
-                  await _bookshelfService.saveGridColumnCount(draftColumns);
-                  await _bookshelfService.saveGridCrossSpacing(
-                    draftCrossSpacing,
-                  );
-                  await _bookshelfService.saveGridMainSpacing(draftMainSpacing);
-                  await _bookshelfService.saveGridVisualStyle(
-                    _gridVisualStyleStorageValue(draftGridVisualStyle),
-                  );
-                  await _bookshelfService.saveGridShowTitle(draftShowTitle);
-                  await _bookshelfService.saveGridTitleCenter(
-                    draftGridTitleCenter,
-                  );
-                  await _bookshelfService.saveGridTitleMaxLines(
-                    draftGridTitleMaxLines,
-                  );
-                  await _bookshelfService.saveGridCoverShadow(
-                    draftGridCoverShadow,
-                  );
-                  await _bookshelfService.saveGridShowAuthor(draftShowAuthor);
-                  await _bookshelfService.saveGridShowLatestChapter(
-                    draftShowLatestChapter,
-                  );
-                  await _bookshelfService.saveGridShowProgressBar(
-                    draftShowProgressBar,
-                  );
-                  await _bookshelfService.saveGridShowSourceBadge(
-                    draftShowSourceBadge,
-                  );
-                  await _bookshelfService.saveGridShowTaxonomyBadges(
-                    draftShowTaxonomyBadges,
-                  );
-                  await _bookshelfService.saveGridAlwaysShowSearchBar(
-                    draftGridAlwaysShowSearchBar,
-                  );
-                  await _bookshelfService.saveGridPinSearchBar(
-                    draftGridPinSearchBar,
-                  );
-                  await _bookshelfService.saveGridQuickFilterContent(
-                    _searchQuickFilterContentStorageValue(
-                      draftGridQuickFilterContent,
-                    ),
-                  );
-                } catch (_) {
-                  if (!mounted) {
-                    return;
-                  }
-                  _showMessage('书架设置保存失败，请重试。');
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final theme = Theme.of(sheetContext);
+            final colorScheme = theme.colorScheme;
+            Future<void> persistGridSettings() async {
+              try {
+                await _bookshelfService.saveGridAdaptiveColumns(draftAdaptive);
+                await _bookshelfService.saveGridColumnCount(draftColumns);
+                await _bookshelfService.saveGridCrossSpacing(draftCrossSpacing);
+                await _bookshelfService.saveGridMainSpacing(draftMainSpacing);
+                await _bookshelfService.saveGridVisualStyle(
+                  _gridVisualStyleStorageValue(draftGridVisualStyle),
+                );
+                await _bookshelfService.saveGridShowTitle(draftShowTitle);
+                await _bookshelfService.saveGridTitleCenter(
+                  draftGridTitleCenter,
+                );
+                await _bookshelfService.saveGridTitleMaxLines(
+                  draftGridTitleMaxLines,
+                );
+                await _bookshelfService.saveGridCoverShadow(
+                  draftGridCoverShadow,
+                );
+                await _bookshelfService.saveGridShowAuthor(draftShowAuthor);
+                await _bookshelfService.saveGridShowLatestChapter(
+                  draftShowLatestChapter,
+                );
+                await _bookshelfService.saveGridShowProgressBar(
+                  draftShowProgressBar,
+                );
+                await _bookshelfService.saveGridShowSourceBadge(
+                  draftShowSourceBadge,
+                );
+                await _bookshelfService.saveGridShowTaxonomyBadges(
+                  draftShowTaxonomyBadges,
+                );
+                await _bookshelfService.saveGridAlwaysShowSearchBar(
+                  draftGridAlwaysShowSearchBar,
+                );
+                await _bookshelfService.saveGridPinSearchBar(
+                  draftGridPinSearchBar,
+                );
+                await _bookshelfService.saveGridQuickFilterContent(
+                  _searchQuickFilterContentStorageValue(
+                    draftGridQuickFilterContent,
+                  ),
+                );
+              } catch (_) {
+                if (!mounted) {
+                  return;
                 }
+                _showMessage('书架设置保存失败，请重试。');
               }
+            }
 
-              Future<void> persistListSettings() async {
-                try {
-                  await _bookshelfService.saveListShowTitle(draftListShowTitle);
-                  await _bookshelfService.saveListShowAuthor(
-                    draftListShowAuthor,
-                  );
-                  await _bookshelfService.saveListShowLatestChapter(
-                    draftListShowLatestChapter,
-                  );
-                  await _bookshelfService.saveListShowProgressBar(
-                    draftListShowProgressBar,
-                  );
-                  await _bookshelfService.saveListShowSourceBadge(
-                    draftListShowSourceBadge,
-                  );
-                  await _bookshelfService.saveListShowTaxonomyBadges(
-                    draftListShowTaxonomyBadges,
-                  );
-                  await _bookshelfService.saveListCompactMode(
-                    draftListCompactMode,
-                  );
-                  await _bookshelfService.saveListShowRecentReadTime(
-                    draftListShowRecentReadTime,
-                  );
-                  await _bookshelfService.saveListAlwaysShowSearchBar(
-                    draftListAlwaysShowSearchBar,
-                  );
-                  await _bookshelfService.saveListPinSearchBar(
-                    draftListPinSearchBar,
-                  );
-                  await _bookshelfService.saveListQuickFilterContent(
-                    _searchQuickFilterContentStorageValue(
-                      draftListQuickFilterContent,
-                    ),
-                  );
-                } catch (_) {
-                  if (!mounted) {
-                    return;
-                  }
-                  _showMessage('书架设置保存失败，请重试。');
+            Future<void> persistListSettings() async {
+              try {
+                await _bookshelfService.saveListShowTitle(draftListShowTitle);
+                await _bookshelfService.saveListShowAuthor(draftListShowAuthor);
+                await _bookshelfService.saveListShowLatestChapter(
+                  draftListShowLatestChapter,
+                );
+                await _bookshelfService.saveListShowProgressBar(
+                  draftListShowProgressBar,
+                );
+                await _bookshelfService.saveListShowSourceBadge(
+                  draftListShowSourceBadge,
+                );
+                await _bookshelfService.saveListShowTaxonomyBadges(
+                  draftListShowTaxonomyBadges,
+                );
+                await _bookshelfService.saveListCompactMode(
+                  draftListCompactMode,
+                );
+                await _bookshelfService.saveListShowRecentReadTime(
+                  draftListShowRecentReadTime,
+                );
+                await _bookshelfService.saveListAlwaysShowSearchBar(
+                  draftListAlwaysShowSearchBar,
+                );
+                await _bookshelfService.saveListPinSearchBar(
+                  draftListPinSearchBar,
+                );
+                await _bookshelfService.saveListQuickFilterContent(
+                  _searchQuickFilterContentStorageValue(
+                    draftListQuickFilterContent,
+                  ),
+                );
+              } catch (_) {
+                if (!mounted) {
+                  return;
                 }
+                _showMessage('书架设置保存失败，请重试。');
               }
+            }
 
-              Future<void> setBookshelfViewMode(bool useGridView) async {
-                await _setBookshelfViewMode(useGridView);
-              }
+            Future<void> setBookshelfViewMode(bool useGridView) async {
+              setSheetState(() {
+                draftUseGridView = useGridView;
+              });
+              await _setBookshelfViewMode(useGridView);
+            }
 
-              Widget buildGroupHeader(String title) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 5),
-                  child: Text(
-                    title,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.1,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                );
-              }
-
-              Widget buildCompactSwitchTile({
-                required bool value,
-                required String title,
-                String? subtitle,
-                required ValueChanged<bool>? onChanged,
-              }) {
-                return SwitchListTile.adaptive(
-                  value: value,
-                  dense: false,
-                  visualDensity: const VisualDensity(
-                    horizontal: -1,
-                    vertical: -1,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  title: Text(
-                    title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle:
-                      subtitle == null
-                          ? null
-                          : Text(
-                            subtitle,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 12.5,
-                              color: colorScheme.onSurfaceVariant,
-                              height: 1.3,
-                            ),
-                          ),
-                  onChanged: onChanged,
-                );
-              }
-
-              Widget buildSearchSettings({
-                required bool alwaysShowSearchBar,
-                required bool pinSearchBar,
-                required _BookshelfSearchQuickFilterContent quickFilterContent,
-                required ValueChanged<bool> onAlwaysShowChanged,
-                required ValueChanged<bool> onPinChanged,
-                required ValueChanged<_BookshelfSearchQuickFilterContent>
-                onQuickFilterChanged,
-              }) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    buildGroupHeader('搜索设置'),
-                    buildCompactSwitchTile(
-                      value: alwaysShowSearchBar,
-                      title: '搜索框状态',
-                      subtitle:
-                          alwaysShowSearchBar
-                              ? '当前显示搜索框，关闭后会隐藏搜索入口。'
-                              : '当前隐藏搜索框，开启后会直接显示搜索框。',
-                      onChanged: onAlwaysShowChanged,
-                    ),
-                    buildCompactSwitchTile(
-                      value: pinSearchBar,
-                      title: '搜索框吸顶',
-                      subtitle: '滚动时将快捷筛选和搜索入口固定在顶部。',
-                      onChanged: onPinChanged,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '快捷筛选内容',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          DropdownButtonHideUnderline(
-                            child: DropdownButton<
-                              _BookshelfSearchQuickFilterContent
-                            >(
-                              value: quickFilterContent,
-                              isDense: true,
-                              borderRadius: BorderRadius.circular(14),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                              onChanged:
-                                  (value) =>
-                                      value == null
-                                          ? null
-                                          : onQuickFilterChanged(value),
-                              items: [
-                                for (final option
-                                    in _BookshelfSearchQuickFilterContent
-                                        .values)
-                                  DropdownMenuItem<
-                                    _BookshelfSearchQuickFilterContent
-                                  >(
-                                    value: option,
-                                    child: Text(
-                                      _searchQuickFilterContentLabel(option),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              Widget buildGridSettings() {
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                  children: [
-                    buildCompactSwitchTile(
-                      value: draftAdaptive,
-                      title: '自适应列数',
-                      subtitle: '根据当前宽度自动决定 2-6 列。',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftAdaptive = value;
-                        });
-                        _updateBookshelfState(() {
-                          _gridAdaptiveColumns = value;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    BookshelfStepperSettingRow(
-                      title: '网格列数',
-                      subtitle:
-                          draftAdaptive ? '已启用自适应列数，固定列数暂不可用' : '手动指定固定列数。',
-                      valueLabel: '$draftColumns',
-                      enabled: !draftAdaptive,
-                      onDecrease:
-                          draftAdaptive || draftColumns <= 2
-                              ? null
-                              : () {
-                                final next = draftColumns - 1;
-                                setSheetState(() {
-                                  draftColumns = next;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridColumnCount = next;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                      onIncrease:
-                          draftAdaptive || draftColumns >= 6
-                              ? null
-                              : () {
-                                final next = draftColumns + 1;
-                                setSheetState(() {
-                                  draftColumns = next;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridColumnCount = next;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                    ),
-                    BookshelfStepperSettingRow(
-                      title: '列间距',
-                      subtitle: '控制卡片之间的左右间距。',
-                      valueLabel: draftCrossSpacing.toStringAsFixed(0),
-                      onDecrease:
-                          draftCrossSpacing <= 4
-                              ? null
-                              : () {
-                                final next = (draftCrossSpacing - 2).clamp(
-                                  4.0,
-                                  24.0,
-                                );
-                                setSheetState(() {
-                                  draftCrossSpacing = next;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridCrossSpacing = next;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                      onIncrease:
-                          draftCrossSpacing >= 24
-                              ? null
-                              : () {
-                                final next = (draftCrossSpacing + 2).clamp(
-                                  4.0,
-                                  24.0,
-                                );
-                                setSheetState(() {
-                                  draftCrossSpacing = next;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridCrossSpacing = next;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                    ),
-                    BookshelfStepperSettingRow(
-                      title: '行间距',
-                      subtitle: '控制卡片之间的上下间距。',
-                      valueLabel: draftMainSpacing.toStringAsFixed(0),
-                      onDecrease:
-                          draftMainSpacing <= 4
-                              ? null
-                              : () {
-                                final next = (draftMainSpacing - 2).clamp(
-                                  4.0,
-                                  24.0,
-                                );
-                                setSheetState(() {
-                                  draftMainSpacing = next;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridMainSpacing = next;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                      onIncrease:
-                          draftMainSpacing >= 24
-                              ? null
-                              : () {
-                                final next = (draftMainSpacing + 2).clamp(
-                                  4.0,
-                                  24.0,
-                                );
-                                setSheetState(() {
-                                  draftMainSpacing = next;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridMainSpacing = next;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '网格样式',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          DropdownButtonHideUnderline(
-                            child: DropdownButton<_BookshelfGridVisualStyle>(
-                              value: draftGridVisualStyle,
-                              isDense: true,
-                              borderRadius: BorderRadius.circular(14),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                              onChanged: (value) {
-                                if (value == null) {
-                                  return;
-                                }
-                                setSheetState(() {
-                                  draftGridVisualStyle = value;
-                                });
-                                _updateBookshelfLayoutPreservingScroll(() {
-                                  _updateBookshelfState(() {
-                                    _gridVisualStyle = value;
-                                  });
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                              items: [
-                                for (final option
-                                    in _BookshelfGridVisualStyle.values)
-                                  DropdownMenuItem<_BookshelfGridVisualStyle>(
-                                    value: option,
-                                    child: Text(_gridVisualStyleLabel(option)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    buildGroupHeader('文字信息'),
-                    BookshelfStepperSettingRow(
-                      title: '书名行数',
-                      subtitle: '控制网格模式下书名最多显示几行。',
-                      valueLabel: '$draftGridTitleMaxLines',
-                      enabled: draftShowTitle,
-                      onDecrease:
-                          !draftShowTitle || draftGridTitleMaxLines <= 1
-                              ? null
-                              : () {
-                                final next = draftGridTitleMaxLines - 1;
-                                setSheetState(() {
-                                  draftGridTitleMaxLines = next;
-                                });
-                                _updateBookshelfLayoutPreservingScroll(() {
-                                  _updateBookshelfState(() {
-                                    _gridTitleMaxLines = next;
-                                  });
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                      onIncrease:
-                          !draftShowTitle || draftGridTitleMaxLines >= 3
-                              ? null
-                              : () {
-                                final next = draftGridTitleMaxLines + 1;
-                                setSheetState(() {
-                                  draftGridTitleMaxLines = next;
-                                });
-                                _updateBookshelfLayoutPreservingScroll(() {
-                                  _updateBookshelfState(() {
-                                    _gridTitleMaxLines = next;
-                                  });
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                    ),
-                    buildCompactSwitchTile(
-                      value: draftGridTitleCenter,
-                      title: '书名居中',
-                      subtitle: '借鉴 MD3 的标题居中样式，只影响网格书名。',
-                      onChanged:
-                          !draftShowTitle
-                              ? null
-                              : (value) {
-                                setSheetState(() {
-                                  draftGridTitleCenter = value;
-                                });
-                                _updateBookshelfState(() {
-                                  _gridTitleCenter = value;
-                                });
-                                unawaited(persistGridSettings());
-                              },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftShowTitle,
-                      title: '隐藏书籍名称',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftShowTitle = next;
-                        });
-                        _updateBookshelfState(() {
-                          _gridShowTitle = next;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftShowAuthor,
-                      title: '隐藏作者名称',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftShowAuthor = next;
-                        });
-                        _updateBookshelfState(() {
-                          _gridShowAuthor = next;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftShowLatestChapter,
-                      title: '隐藏最新章节',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftShowLatestChapter = next;
-                        });
-                        _updateBookshelfState(() {
-                          _gridShowLatestChapter = next;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftShowSourceBadge,
-                      title: '隐藏来源标识',
-                      subtitle: '隐藏封面右上角的在线/本地标识。',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftShowSourceBadge = next;
-                        });
-                        _updateBookshelfState(() {
-                          _gridShowSourceBadge = next;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: draftShowTaxonomyBadges,
-                      title: '显示分类和标签',
-                      subtitle: '在网格书籍下方显示彩色分类和标签。',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftShowTaxonomyBadges = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _gridShowTaxonomyBadges = value;
-                          });
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildSearchSettings(
-                      alwaysShowSearchBar: draftGridAlwaysShowSearchBar,
-                      pinSearchBar: draftGridPinSearchBar,
-                      quickFilterContent: draftGridQuickFilterContent,
-                      onAlwaysShowChanged: (value) {
-                        setSheetState(() {
-                          draftGridAlwaysShowSearchBar = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _gridAlwaysShowSearchBar = value;
-                            if (!value && _useGridView) {
-                              _closeBookshelfSearch(clearKeyword: true);
-                            }
-                          });
-                        });
-                        if (!value && _useGridView) {
-                          _syncSelectionWithBooks();
-                        }
-                        unawaited(persistGridSettings());
-                      },
-                      onPinChanged: (value) {
-                        setSheetState(() {
-                          draftGridPinSearchBar = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _gridPinSearchBar = value;
-                          });
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                      onQuickFilterChanged: (value) {
-                        setSheetState(() {
-                          draftGridQuickFilterContent = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _gridQuickFilterContent = value;
-                          });
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildGroupHeader('封面设置'),
-                    buildCompactSwitchTile(
-                      value: draftGridCoverShadow,
-                      title: '封面阴影',
-                      subtitle: '开启后网格封面会保留轻微投影。',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftGridCoverShadow = value;
-                        });
-                        _updateBookshelfState(() {
-                          _gridCoverShadow = value;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftShowProgressBar,
-                      title: '隐藏进度条',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftShowProgressBar = next;
-                        });
-                        _updateBookshelfState(() {
-                          _gridShowProgressBar = next;
-                        });
-                        unawaited(persistGridSettings());
-                      },
-                    ),
-                  ],
-                );
-              }
-
-              Widget buildListSettings() {
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                  children: [
-                    buildCompactSwitchTile(
-                      value: draftListCompactMode,
-                      title: '紧凑列表',
-                      subtitle: '缩小封面和行距，提高列表信息密度。',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftListCompactMode = value;
-                        });
-                        _updateBookshelfState(() {
-                          _listCompactMode = value;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftListShowTitle,
-                      title: '隐藏书籍名称',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftListShowTitle = next;
-                        });
-                        _updateBookshelfState(() {
-                          _listShowTitle = next;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftListShowAuthor,
-                      title: '隐藏作者名称',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftListShowAuthor = next;
-                        });
-                        _updateBookshelfState(() {
-                          _listShowAuthor = next;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftListShowLatestChapter,
-                      title: '隐藏最新章节',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftListShowLatestChapter = next;
-                        });
-                        _updateBookshelfState(() {
-                          _listShowLatestChapter = next;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftListShowSourceBadge,
-                      title: '隐藏来源标识',
-                      subtitle: '隐藏封面右上角的在线/本地标识。',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftListShowSourceBadge = next;
-                        });
-                        _updateBookshelfState(() {
-                          _listShowSourceBadge = next;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: draftListShowTaxonomyBadges,
-                      title: '显示分类和标签',
-                      subtitle: '在列表书籍信息中显示彩色分类和标签。',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftListShowTaxonomyBadges = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _listShowTaxonomyBadges = value;
-                          });
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: draftListShowRecentReadTime,
-                      title: '显示最近阅读时间',
-                      subtitle: '有阅读记录的书籍会在列表中显示最近阅读时间。',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          draftListShowRecentReadTime = value;
-                        });
-                        _updateBookshelfState(() {
-                          _listShowRecentReadTime = value;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildSearchSettings(
-                      alwaysShowSearchBar: draftListAlwaysShowSearchBar,
-                      pinSearchBar: draftListPinSearchBar,
-                      quickFilterContent: draftListQuickFilterContent,
-                      onAlwaysShowChanged: (value) {
-                        setSheetState(() {
-                          draftListAlwaysShowSearchBar = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _listAlwaysShowSearchBar = value;
-                            if (!value && !_useGridView) {
-                              _closeBookshelfSearch(clearKeyword: true);
-                            }
-                          });
-                        });
-                        if (!value && !_useGridView) {
-                          _syncSelectionWithBooks();
-                        }
-                        unawaited(persistListSettings());
-                      },
-                      onPinChanged: (value) {
-                        setSheetState(() {
-                          draftListPinSearchBar = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _listPinSearchBar = value;
-                          });
-                        });
-                        unawaited(persistListSettings());
-                      },
-                      onQuickFilterChanged: (value) {
-                        setSheetState(() {
-                          draftListQuickFilterContent = value;
-                        });
-                        _updateBookshelfLayoutPreservingScroll(() {
-                          _updateBookshelfState(() {
-                            _listQuickFilterContent = value;
-                          });
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildCompactSwitchTile(
-                      value: !draftListShowProgressBar,
-                      title: '隐藏进度条',
-                      onChanged: (value) {
-                        final next = !value;
-                        setSheetState(() {
-                          draftListShowProgressBar = next;
-                        });
-                        _updateBookshelfState(() {
-                          _listShowProgressBar = next;
-                        });
-                        unawaited(persistListSettings());
-                      },
-                    ),
-                    buildGroupHeader('封面设置'),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: _resolvedPalette(sheetContext).surfaceColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _resolvedPalette(
-                              sheetContext,
-                            ).cardBorderColor.withValues(alpha: 0.55),
-                          ),
-                        ),
-                        child: Text(
-                          '当前暂未提供额外封面设置。',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
+            Widget buildGroupHeader(String title) {
               return Padding(
-                padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
-                child: SizedBox(
-                  height: MediaQuery.sizeOf(sheetContext).height * 0.66,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 3, 12, 7),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '书架设置',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 17,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: _resolvedPalette(sheetContext).surfaceColor,
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: TabBar(
-                          dividerColor: Colors.transparent,
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          labelStyle: theme.textTheme.labelMedium?.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          unselectedLabelStyle: theme.textTheme.labelMedium
-                              ?.copyWith(fontSize: 14),
-                          labelPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                          ),
-                          tabAlignment: TabAlignment.fill,
-                          onTap:
-                              (index) =>
-                                  unawaited(setBookshelfViewMode(index == 1)),
-                          tabs: [
-                            for (final tab in tabs)
-                              Tab(text: _bookshelfSettingsTabLabel(tab)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Expanded(
-                        child: TabBarView(
-                          children: [buildListSettings(), buildGridSettings()],
-                        ),
-                      ),
-                    ],
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 5),
+                child: Text(
+                  title,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                    color: colorScheme.onSurface,
                   ),
                 ),
               );
-            },
-          ),
+            }
+
+            Widget buildCompactSwitchTile({
+              required bool value,
+              required String title,
+              String? subtitle,
+              required ValueChanged<bool>? onChanged,
+            }) {
+              return SwitchListTile.adaptive(
+                value: value,
+                dense: false,
+                visualDensity: const VisualDensity(
+                  horizontal: -1,
+                  vertical: -1,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                title: Text(
+                  title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle:
+                    subtitle == null
+                        ? null
+                        : Text(
+                          subtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 12.5,
+                            color: colorScheme.onSurfaceVariant,
+                            height: 1.3,
+                          ),
+                        ),
+                onChanged: onChanged,
+              );
+            }
+
+            Widget buildSearchSettings({
+              required bool alwaysShowSearchBar,
+              required bool pinSearchBar,
+              required _BookshelfSearchQuickFilterContent quickFilterContent,
+              required ValueChanged<bool> onAlwaysShowChanged,
+              required ValueChanged<bool> onPinChanged,
+              required ValueChanged<_BookshelfSearchQuickFilterContent>
+              onQuickFilterChanged,
+            }) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  buildGroupHeader('搜索设置'),
+                  buildCompactSwitchTile(
+                    value: alwaysShowSearchBar,
+                    title: '搜索框状态',
+                    subtitle:
+                        alwaysShowSearchBar
+                            ? '当前显示搜索框，关闭后会隐藏搜索入口。'
+                            : '当前隐藏搜索框，开启后会直接显示搜索框。',
+                    onChanged: onAlwaysShowChanged,
+                  ),
+                  buildCompactSwitchTile(
+                    value: pinSearchBar,
+                    title: '搜索框吸顶',
+                    subtitle: '滚动时将快捷筛选和搜索入口固定在顶部。',
+                    onChanged: onPinChanged,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '快捷筛选内容',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<
+                            _BookshelfSearchQuickFilterContent
+                          >(
+                            value: quickFilterContent,
+                            isDense: true,
+                            borderRadius: BorderRadius.circular(14),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                            onChanged:
+                                (value) =>
+                                    value == null
+                                        ? null
+                                        : onQuickFilterChanged(value),
+                            items: [
+                              for (final option
+                                  in _BookshelfSearchQuickFilterContent.values)
+                                DropdownMenuItem<
+                                  _BookshelfSearchQuickFilterContent
+                                >(
+                                  value: option,
+                                  child: Text(
+                                    _searchQuickFilterContentLabel(option),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            Widget buildGridSettings() {
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                children: [
+                  buildCompactSwitchTile(
+                    value: draftAdaptive,
+                    title: '自适应列数',
+                    subtitle: '根据当前宽度自动决定 2-6 列。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftAdaptive = value;
+                      });
+                      _updateBookshelfState(() {
+                        _gridAdaptiveColumns = value;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  BookshelfStepperSettingRow(
+                    title: '网格列数',
+                    subtitle: draftAdaptive ? '已启用自适应列数，固定列数暂不可用' : '手动指定固定列数。',
+                    valueLabel: '$draftColumns',
+                    enabled: !draftAdaptive,
+                    onDecrease:
+                        draftAdaptive || draftColumns <= 2
+                            ? null
+                            : () {
+                              final next = draftColumns - 1;
+                              setSheetState(() {
+                                draftColumns = next;
+                              });
+                              _updateBookshelfState(() {
+                                _gridColumnCount = next;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                    onIncrease:
+                        draftAdaptive || draftColumns >= 6
+                            ? null
+                            : () {
+                              final next = draftColumns + 1;
+                              setSheetState(() {
+                                draftColumns = next;
+                              });
+                              _updateBookshelfState(() {
+                                _gridColumnCount = next;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                  ),
+                  BookshelfStepperSettingRow(
+                    title: '列间距',
+                    subtitle: '控制卡片之间的左右间距。',
+                    valueLabel: draftCrossSpacing.toStringAsFixed(0),
+                    onDecrease:
+                        draftCrossSpacing <= 4
+                            ? null
+                            : () {
+                              final next = (draftCrossSpacing - 2).clamp(
+                                4.0,
+                                24.0,
+                              );
+                              setSheetState(() {
+                                draftCrossSpacing = next;
+                              });
+                              _updateBookshelfState(() {
+                                _gridCrossSpacing = next;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                    onIncrease:
+                        draftCrossSpacing >= 24
+                            ? null
+                            : () {
+                              final next = (draftCrossSpacing + 2).clamp(
+                                4.0,
+                                24.0,
+                              );
+                              setSheetState(() {
+                                draftCrossSpacing = next;
+                              });
+                              _updateBookshelfState(() {
+                                _gridCrossSpacing = next;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                  ),
+                  BookshelfStepperSettingRow(
+                    title: '行间距',
+                    subtitle: '控制卡片之间的上下间距。',
+                    valueLabel: draftMainSpacing.toStringAsFixed(0),
+                    onDecrease:
+                        draftMainSpacing <= 4
+                            ? null
+                            : () {
+                              final next = (draftMainSpacing - 2).clamp(
+                                4.0,
+                                24.0,
+                              );
+                              setSheetState(() {
+                                draftMainSpacing = next;
+                              });
+                              _updateBookshelfState(() {
+                                _gridMainSpacing = next;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                    onIncrease:
+                        draftMainSpacing >= 24
+                            ? null
+                            : () {
+                              final next = (draftMainSpacing + 2).clamp(
+                                4.0,
+                                24.0,
+                              );
+                              setSheetState(() {
+                                draftMainSpacing = next;
+                              });
+                              _updateBookshelfState(() {
+                                _gridMainSpacing = next;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '网格样式',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<_BookshelfGridVisualStyle>(
+                            value: draftGridVisualStyle,
+                            isDense: true,
+                            borderRadius: BorderRadius.circular(14),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                            onChanged: (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setSheetState(() {
+                                draftGridVisualStyle = value;
+                              });
+                              _updateBookshelfLayoutPreservingScroll(() {
+                                _updateBookshelfState(() {
+                                  _gridVisualStyle = value;
+                                });
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                            items: [
+                              for (final option
+                                  in _BookshelfGridVisualStyle.values)
+                                DropdownMenuItem<_BookshelfGridVisualStyle>(
+                                  value: option,
+                                  child: Text(_gridVisualStyleLabel(option)),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  buildGroupHeader('文字信息'),
+                  BookshelfStepperSettingRow(
+                    title: '书名行数',
+                    subtitle: '控制网格模式下书名最多显示几行。',
+                    valueLabel: '$draftGridTitleMaxLines',
+                    enabled: draftShowTitle,
+                    onDecrease:
+                        !draftShowTitle || draftGridTitleMaxLines <= 1
+                            ? null
+                            : () {
+                              final next = draftGridTitleMaxLines - 1;
+                              setSheetState(() {
+                                draftGridTitleMaxLines = next;
+                              });
+                              _updateBookshelfLayoutPreservingScroll(() {
+                                _updateBookshelfState(() {
+                                  _gridTitleMaxLines = next;
+                                });
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                    onIncrease:
+                        !draftShowTitle || draftGridTitleMaxLines >= 3
+                            ? null
+                            : () {
+                              final next = draftGridTitleMaxLines + 1;
+                              setSheetState(() {
+                                draftGridTitleMaxLines = next;
+                              });
+                              _updateBookshelfLayoutPreservingScroll(() {
+                                _updateBookshelfState(() {
+                                  _gridTitleMaxLines = next;
+                                });
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                  ),
+                  buildCompactSwitchTile(
+                    value: draftGridTitleCenter,
+                    title: '书名居中',
+                    subtitle: '借鉴 MD3 的标题居中样式，只影响网格书名。',
+                    onChanged:
+                        !draftShowTitle
+                            ? null
+                            : (value) {
+                              setSheetState(() {
+                                draftGridTitleCenter = value;
+                              });
+                              _updateBookshelfState(() {
+                                _gridTitleCenter = value;
+                              });
+                              unawaited(persistGridSettings());
+                            },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftShowTitle,
+                    title: '隐藏书籍名称',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftShowTitle = next;
+                      });
+                      _updateBookshelfState(() {
+                        _gridShowTitle = next;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftShowAuthor,
+                    title: '隐藏作者名称',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftShowAuthor = next;
+                      });
+                      _updateBookshelfState(() {
+                        _gridShowAuthor = next;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftShowLatestChapter,
+                    title: '隐藏最新章节',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftShowLatestChapter = next;
+                      });
+                      _updateBookshelfState(() {
+                        _gridShowLatestChapter = next;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftShowSourceBadge,
+                    title: '隐藏来源标识',
+                    subtitle: '隐藏封面右上角的在线/本地标识。',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftShowSourceBadge = next;
+                      });
+                      _updateBookshelfState(() {
+                        _gridShowSourceBadge = next;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: draftShowTaxonomyBadges,
+                    title: '显示分类和标签',
+                    subtitle: '在网格书籍下方显示彩色分类和标签。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftShowTaxonomyBadges = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _gridShowTaxonomyBadges = value;
+                        });
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildSearchSettings(
+                    alwaysShowSearchBar: draftGridAlwaysShowSearchBar,
+                    pinSearchBar: draftGridPinSearchBar,
+                    quickFilterContent: draftGridQuickFilterContent,
+                    onAlwaysShowChanged: (value) {
+                      setSheetState(() {
+                        draftGridAlwaysShowSearchBar = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _gridAlwaysShowSearchBar = value;
+                          if (!value && _useGridView) {
+                            _closeBookshelfSearch(clearKeyword: true);
+                          }
+                        });
+                      });
+                      if (!value && _useGridView) {
+                        _syncSelectionWithBooks();
+                      }
+                      unawaited(persistGridSettings());
+                    },
+                    onPinChanged: (value) {
+                      setSheetState(() {
+                        draftGridPinSearchBar = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _gridPinSearchBar = value;
+                        });
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                    onQuickFilterChanged: (value) {
+                      setSheetState(() {
+                        draftGridQuickFilterContent = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _gridQuickFilterContent = value;
+                        });
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildGroupHeader('封面设置'),
+                  buildCompactSwitchTile(
+                    value: draftGridCoverShadow,
+                    title: '封面阴影',
+                    subtitle: '开启后网格封面会保留轻微投影。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftGridCoverShadow = value;
+                      });
+                      _updateBookshelfState(() {
+                        _gridCoverShadow = value;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftShowProgressBar,
+                    title: '隐藏进度条',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftShowProgressBar = next;
+                      });
+                      _updateBookshelfState(() {
+                        _gridShowProgressBar = next;
+                      });
+                      unawaited(persistGridSettings());
+                    },
+                  ),
+                ],
+              );
+            }
+
+            Widget buildListSettings() {
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                children: [
+                  buildCompactSwitchTile(
+                    value: draftListCompactMode,
+                    title: '紧凑列表',
+                    subtitle: '缩小封面和行距，提高列表信息密度。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftListCompactMode = value;
+                      });
+                      _updateBookshelfState(() {
+                        _listCompactMode = value;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftListShowTitle,
+                    title: '隐藏书籍名称',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftListShowTitle = next;
+                      });
+                      _updateBookshelfState(() {
+                        _listShowTitle = next;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftListShowAuthor,
+                    title: '隐藏作者名称',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftListShowAuthor = next;
+                      });
+                      _updateBookshelfState(() {
+                        _listShowAuthor = next;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftListShowLatestChapter,
+                    title: '隐藏最新章节',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftListShowLatestChapter = next;
+                      });
+                      _updateBookshelfState(() {
+                        _listShowLatestChapter = next;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftListShowSourceBadge,
+                    title: '隐藏来源标识',
+                    subtitle: '隐藏封面右上角的在线/本地标识。',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftListShowSourceBadge = next;
+                      });
+                      _updateBookshelfState(() {
+                        _listShowSourceBadge = next;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: draftListShowTaxonomyBadges,
+                    title: '显示分类和标签',
+                    subtitle: '在列表书籍信息中显示彩色分类和标签。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftListShowTaxonomyBadges = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _listShowTaxonomyBadges = value;
+                        });
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: draftListShowRecentReadTime,
+                    title: '显示最近阅读时间',
+                    subtitle: '有阅读记录的书籍会在列表中显示最近阅读时间。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftListShowRecentReadTime = value;
+                      });
+                      _updateBookshelfState(() {
+                        _listShowRecentReadTime = value;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildSearchSettings(
+                    alwaysShowSearchBar: draftListAlwaysShowSearchBar,
+                    pinSearchBar: draftListPinSearchBar,
+                    quickFilterContent: draftListQuickFilterContent,
+                    onAlwaysShowChanged: (value) {
+                      setSheetState(() {
+                        draftListAlwaysShowSearchBar = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _listAlwaysShowSearchBar = value;
+                          if (!value && !_useGridView) {
+                            _closeBookshelfSearch(clearKeyword: true);
+                          }
+                        });
+                      });
+                      if (!value && !_useGridView) {
+                        _syncSelectionWithBooks();
+                      }
+                      unawaited(persistListSettings());
+                    },
+                    onPinChanged: (value) {
+                      setSheetState(() {
+                        draftListPinSearchBar = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _listPinSearchBar = value;
+                        });
+                      });
+                      unawaited(persistListSettings());
+                    },
+                    onQuickFilterChanged: (value) {
+                      setSheetState(() {
+                        draftListQuickFilterContent = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _listQuickFilterContent = value;
+                        });
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
+                    value: !draftListShowProgressBar,
+                    title: '隐藏进度条',
+                    onChanged: (value) {
+                      final next = !value;
+                      setSheetState(() {
+                        draftListShowProgressBar = next;
+                      });
+                      _updateBookshelfState(() {
+                        _listShowProgressBar = next;
+                      });
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildGroupHeader('封面设置'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _resolvedPalette(sheetContext).surfaceColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _resolvedPalette(
+                            sheetContext,
+                          ).cardBorderColor.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      child: Text(
+                        '当前暂未提供额外封面设置。',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
+              child: SizedBox(
+                height: MediaQuery.sizeOf(sheetContext).height * 0.72,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 3, 4, 7),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '书架设置',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 17,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '关闭',
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: _resolvedPalette(sheetContext).surfaceColor,
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(
+                          color: _resolvedPalette(
+                            sheetContext,
+                          ).cardBorderColor.withValues(alpha: 0.42),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _BookshelfSettingsModeButton(
+                              label: '列表',
+                              icon: Icons.view_list_rounded,
+                              selected: !draftUseGridView,
+                              onTap:
+                                  () => unawaited(setBookshelfViewMode(false)),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: _BookshelfSettingsModeButton(
+                              label: '网格',
+                              icon: Icons.grid_view_rounded,
+                              selected: draftUseGridView,
+                              onTap:
+                                  () => unawaited(setBookshelfViewMode(true)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _resolvedPalette(sheetContext).surfaceColor,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: _resolvedPalette(
+                              sheetContext,
+                            ).cardBorderColor.withValues(alpha: 0.42),
+                          ),
+                        ),
+                        child:
+                            draftUseGridView
+                                ? buildGridSettings()
+                                : buildListSettings(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1253,131 +1268,197 @@ extension on _BookshelfPageState {
             final colorScheme = Theme.of(sheetContext).colorScheme;
             final textTheme = Theme.of(sheetContext).textTheme;
             final palette = _resolvedPalette(sheetContext);
+            final compactTheme = Theme.of(
+              sheetContext,
+            ).copyWith(visualDensity: VisualDensity.compact);
 
-            Widget buildSectionTitle(String title) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                child: Row(
+            Widget buildSectionHeader({
+              required String title,
+              VoidCallback? onManage,
+            }) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (onManage != null)
+                    TextButton.icon(
+                      onPressed: onManage,
+                      icon: const Icon(Icons.tune_rounded, size: 16),
+                      label: const Text('管理'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 30),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                ],
+              );
+            }
+
+            Widget buildFilterChip({
+              required String value,
+              required String label,
+              required String countText,
+              required bool selected,
+              IconData? icon,
+              Color? accentColor,
+            }) {
+              final color = accentColor ?? colorScheme.primary;
+              final avatarColor =
+                  selected ? color : colorScheme.onSurfaceVariant;
+              return FilterChip(
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                avatar:
+                    icon == null
+                        ? null
+                        : Icon(icon, size: 16, color: avatarColor),
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 132),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
-                    if (title == '分类' || title == '标签')
-                      IconButton(
-                        tooltip: '新增$title',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () {
-                          _dismissBookshelfBottomSheet(
-                            sheetContext,
-                            title == '分类'
-                                ? 'manage_category::__new__'
-                                : 'manage_tag::__new__',
-                          );
-                        },
-                        icon: const Icon(Icons.add_circle_outline_rounded),
+                    const SizedBox(width: 6),
+                    Text(
+                      countText,
+                      style: textTheme.labelSmall?.copyWith(
+                        color:
+                            selected
+                                ? colorScheme.onSecondaryContainer
+                                : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
+                  ],
+                ),
+                selected: selected,
+                selectedColor:
+                    accentColor == null
+                        ? palette.primaryContainerColor.withValues(alpha: 0.52)
+                        : color.withValues(alpha: 0.16),
+                checkmarkColor: color,
+                side: BorderSide(
+                  color:
+                      selected
+                          ? color.withValues(alpha: 0.72)
+                          : colorScheme.outlineVariant.withValues(alpha: 0.72),
+                ),
+                onSelected:
+                    (_) => _dismissBookshelfBottomSheet(sheetContext, value),
+              );
+            }
+
+            Widget buildSection({
+              required String title,
+              required List<Widget> chips,
+              VoidCallback? onManage,
+              Widget? footer,
+            }) {
+              if (chips.isEmpty && footer == null) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildSectionHeader(title: title, onManage: onManage),
+                    const SizedBox(height: 6),
+                    if (chips.isNotEmpty)
+                      Wrap(spacing: 6, runSpacing: 6, children: chips),
+                    if (footer != null) ...[const SizedBox(height: 4), footer],
                   ],
                 ),
               );
             }
 
-            Widget buildOptionTile({
-              required String value,
-              required String label,
-              required String countText,
-              required bool selected,
-              VoidCallback? onTap,
-              IconData? icon,
-              String? subtitle,
-              Color? accentColor,
-              VoidCallback? onManage,
+            Widget buildExpandButton({
+              required bool expanded,
+              required String expandLabel,
+              required String collapseLabel,
+              required VoidCallback onPressed,
             }) {
-              final leadingColor =
-                  selected
-                      ? colorScheme.primary
-                      : accentColor ?? colorScheme.onSurfaceVariant;
-              return Material(
-                color:
-                    selected
-                        ? palette.primaryContainerColor.withValues(alpha: 0.42)
-                        : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
+              return TextButton.icon(
+                onPressed: onPressed,
+                icon: Icon(
+                  expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 18,
+                ),
+                label: Text(expanded ? collapseLabel : expandLabel),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              );
+            }
+
+            Widget buildCurrentViewSummary() {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: palette.primaryContainerColor.withValues(alpha: 0.28),
                   borderRadius: BorderRadius.circular(12),
-                  onTap:
-                      onTap ??
-                      () => _dismissBookshelfBottomSheet(sheetContext, value),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                    child: Row(
-                      children: [
-                        if (icon != null) ...[
-                          Icon(icon, size: 18, color: leadingColor),
-                          const SizedBox(width: 10),
-                        ],
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodyMedium?.copyWith(
-                                  color:
-                                      selected
-                                          ? palette.textPrimaryColor
-                                          : colorScheme.onSurface,
-                                  fontWeight:
-                                      selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                ),
-                              ),
-                              if (subtitle != null && subtitle.isNotEmpty) ...[
-                                const SizedBox(height: 3),
-                                Text(
-                                  subtitle,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          countText,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        if (onManage != null) ...[
-                          IconButton(
-                            tooltip: '编辑',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: onManage,
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                          ),
-                          const SizedBox(width: 2),
-                        ],
-                        if (selected)
-                          Icon(
-                            Icons.check_rounded,
-                            size: 18,
-                            color: colorScheme.primary,
-                          ),
-                      ],
-                    ),
+                  border: Border.all(
+                    color: palette.primaryColor.withValues(alpha: 0.18),
                   ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.filter_alt_rounded,
+                      size: 17,
+                      color: palette.primaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '当前视图：${_activeFilterLabel()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: palette.textPrimaryColor,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_filteredBooks.length} 本',
+                      style: textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            Widget buildEmptyHint(String text) {
+              return Text(
+                text,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
               );
             }
@@ -1399,22 +1480,114 @@ extension on _BookshelfPageState {
             final effectiveVisibleCategories =
                 searchKeyword.trim().isNotEmpty || expandCategories
                     ? visibleCategories
-                    : visibleCategories.take(6).toList(growable: false);
+                    : visibleCategories.take(10).toList(growable: false);
             final effectiveVisibleTags =
                 searchKeyword.trim().isNotEmpty || expandTags
                     ? visibleTags
-                    : visibleTags.take(6).toList(growable: false);
+                    : visibleTags.take(10).toList(growable: false);
+            final defaultChips = <Widget>[
+              buildFilterChip(
+                value: 'all',
+                label: '全部',
+                countText: '${baseFilterBookCount[_BookshelfFilter.all] ?? 0}',
+                selected:
+                    !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == _BookshelfFilter.all,
+                icon: Icons.collections_bookmark_outlined,
+              ),
+              buildFilterChip(
+                value: 'local',
+                label: '本地',
+                countText:
+                    '${baseFilterBookCount[_BookshelfFilter.local] ?? 0}',
+                selected:
+                    !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == _BookshelfFilter.local,
+                icon: Icons.folder_outlined,
+              ),
+              buildFilterChip(
+                value: 'novel',
+                label: '小说',
+                countText:
+                    '${baseFilterBookCount[_BookshelfFilter.novel] ?? 0}',
+                selected:
+                    !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == _BookshelfFilter.novel,
+                icon: Icons.menu_book_outlined,
+              ),
+              buildFilterChip(
+                value: 'manga',
+                label: '漫画',
+                countText:
+                    '${baseFilterBookCount[_BookshelfFilter.manga] ?? 0}',
+                selected:
+                    !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == _BookshelfFilter.manga,
+                icon: Icons.photo_library_outlined,
+              ),
+            ];
+            final categoryChips = <Widget>[
+              if (matchesKeyword('未分类'))
+                buildFilterChip(
+                  value: 'category::__uncategorized__',
+                  label: '未分类',
+                  countText: '$uncategorizedCount',
+                  selected: _activeView.isUncategorized,
+                  icon: Icons.folder_off_outlined,
+                ),
+              ...effectiveVisibleCategories.map((category) {
+                final item = _categoryItem(category);
+                return buildFilterChip(
+                  value: 'category::$category',
+                  label: category,
+                  countText: '${categoryBookCount[category] ?? 0}',
+                  selected:
+                      _activeView.isCategory &&
+                      _activeView.category == category,
+                  icon: Icons.folder_copy_outlined,
+                  accentColor: Color(item.colorValue),
+                );
+              }),
+            ];
+            final tagChips = <Widget>[
+              if (matchesKeyword('未打标签'))
+                buildFilterChip(
+                  value: 'tag::__untagged__',
+                  label: '未打标签',
+                  countText:
+                      '${_books.where((book) => _tagsOfBook(book).isEmpty).length}',
+                  selected: _activeView.isTag && _activeView.tag == '',
+                  icon: Icons.sell_outlined,
+                ),
+              ...effectiveVisibleTags.map((tag) {
+                final item = _tagItem(tag);
+                return buildFilterChip(
+                  value: 'tag::$tag',
+                  label: tag,
+                  countText: '${tagBookCount[tag] ?? 0}',
+                  selected: _activeView.isTag && _activeView.tag == tag,
+                  icon: Icons.sell_outlined,
+                  accentColor: Color(item.colorValue),
+                );
+              }),
+            ];
 
             return Padding(
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                      child: TextField(
+              padding: EdgeInsets.fromLTRB(12, 4, 12, 10 + bottomInset),
+              child: Theme(
+                data: compactTheme,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxHeight),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      buildCurrentViewSummary(),
+                      const SizedBox(height: 8),
+                      TextField(
                         decoration: InputDecoration(
                           isDense: true,
                           hintText: '搜索分类或标签',
@@ -1423,7 +1596,7 @@ extension on _BookshelfPageState {
                             size: 18,
                           ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         onChanged: (value) {
@@ -1432,150 +1605,59 @@ extension on _BookshelfPageState {
                           });
                         },
                       ),
-                    ),
-                    buildSectionTitle('默认'),
-                    buildOptionTile(
-                      value: 'all',
-                      label: '书架',
-                      countText:
-                          '${baseFilterBookCount[_BookshelfFilter.all] ?? 0}',
-                      selected:
-                          !_activeView.isTag &&
-                          !_activeView.isCategory &&
-                          _activeView.filter == _BookshelfFilter.all,
-                      icon: Icons.collections_bookmark_outlined,
-                    ),
-                    buildOptionTile(
-                      value: 'local',
-                      label: '本地',
-                      countText:
-                          '${baseFilterBookCount[_BookshelfFilter.local] ?? 0}',
-                      selected:
-                          !_activeView.isTag &&
-                          !_activeView.isCategory &&
-                          _activeView.filter == _BookshelfFilter.local,
-                      icon: Icons.folder_outlined,
-                    ),
-                    buildOptionTile(
-                      value: 'novel',
-                      label: '小说',
-                      countText:
-                          '${baseFilterBookCount[_BookshelfFilter.novel] ?? 0}',
-                      selected:
-                          !_activeView.isTag &&
-                          !_activeView.isCategory &&
-                          _activeView.filter == _BookshelfFilter.novel,
-                      icon: Icons.menu_book_outlined,
-                    ),
-                    buildOptionTile(
-                      value: 'manga',
-                      label: '漫画',
-                      countText:
-                          '${baseFilterBookCount[_BookshelfFilter.manga] ?? 0}',
-                      selected:
-                          !_activeView.isTag &&
-                          !_activeView.isCategory &&
-                          _activeView.filter == _BookshelfFilter.manga,
-                      icon: Icons.photo_library_outlined,
-                    ),
-                    buildSectionTitle('分类'),
-                    if (matchesKeyword('未分类'))
-                      buildOptionTile(
-                        value: 'category::__uncategorized__',
-                        label: '未分类',
-                        countText: '$uncategorizedCount',
-                        selected: _activeView.isUncategorized,
-                        icon: Icons.folder_off_outlined,
-                      ),
-                    ...effectiveVisibleCategories.map((category) {
-                      final item = _categoryItem(category);
-                      return buildOptionTile(
-                        value: 'category::$category',
-                        label: category,
-                        countText: '${categoryBookCount[category] ?? 0}',
-                        selected:
-                            _activeView.isCategory &&
-                            _activeView.category == category,
-                        icon: Icons.folder_copy_outlined,
-                        accentColor: Color(item.colorValue),
+                      buildSection(title: '快捷入口', chips: defaultChips),
+                      buildSection(
+                        title: '分类',
+                        chips: categoryChips,
                         onManage:
                             () => _dismissBookshelfBottomSheet(
                               sheetContext,
-                              'manage_category::$category',
+                              'manage_category::__new__',
                             ),
-                      );
-                    }),
-                    if (searchKeyword.trim().isEmpty &&
-                        visibleCategories.length > 6)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            onPressed: () {
-                              setSheetState(() {
-                                expandCategories = !expandCategories;
-                              });
-                            },
-                            icon: Icon(
-                              expandCategories
-                                  ? Icons.expand_less_rounded
-                                  : Icons.expand_more_rounded,
-                            ),
-                            label: Text(expandCategories ? '收起分类' : '展开全部分类'),
-                          ),
-                        ),
+                        footer:
+                            searchKeyword.trim().isEmpty &&
+                                    visibleCategories.length > 10
+                                ? buildExpandButton(
+                                  expanded: expandCategories,
+                                  expandLabel: '展开全部分类',
+                                  collapseLabel: '收起分类',
+                                  onPressed: () {
+                                    setSheetState(() {
+                                      expandCategories = !expandCategories;
+                                    });
+                                  },
+                                )
+                                : categoryChips.isEmpty
+                                ? buildEmptyHint('暂无分类，点击右上角管理可新建。')
+                                : null,
                       ),
-                    if (visibleTags.isNotEmpty || matchesKeyword('未打标签')) ...[
-                      buildSectionTitle('标签'),
-                      if (matchesKeyword('未打标签'))
-                        buildOptionTile(
-                          value: 'tag::__untagged__',
-                          label: '未打标签',
-                          countText:
-                              '${_books.where((book) => _tagsOfBook(book).isEmpty).length}',
-                          selected: _activeView.isTag && _activeView.tag == '',
-                          icon: Icons.sell_outlined,
-                        ),
-                      ...effectiveVisibleTags.map((tag) {
-                        final item = _tagItem(tag);
-                        return buildOptionTile(
-                          value: 'tag::$tag',
-                          label: tag,
-                          countText: '${tagBookCount[tag] ?? 0}',
-                          selected: _activeView.isTag && _activeView.tag == tag,
-                          icon: Icons.sell_outlined,
-                          accentColor: Color(item.colorValue),
-                          onManage:
-                              () => _dismissBookshelfBottomSheet(
-                                sheetContext,
-                                'manage_tag::$tag',
-                              ),
-                        );
-                      }),
-                      if (searchKeyword.trim().isEmpty &&
-                          visibleTags.length > 6)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: () {
-                                setSheetState(() {
-                                  expandTags = !expandTags;
-                                });
-                              },
-                              icon: Icon(
-                                expandTags
-                                    ? Icons.expand_less_rounded
-                                    : Icons.expand_more_rounded,
-                              ),
-                              label: Text(expandTags ? '收起标签' : '展开全部标签'),
+                      buildSection(
+                        title: '标签',
+                        chips: tagChips,
+                        onManage:
+                            () => _dismissBookshelfBottomSheet(
+                              sheetContext,
+                              'manage_tag::__new__',
                             ),
-                          ),
-                        ),
+                        footer:
+                            searchKeyword.trim().isEmpty &&
+                                    visibleTags.length > 10
+                                ? buildExpandButton(
+                                  expanded: expandTags,
+                                  expandLabel: '展开全部标签',
+                                  collapseLabel: '收起标签',
+                                  onPressed: () {
+                                    setSheetState(() {
+                                      expandTags = !expandTags;
+                                    });
+                                  },
+                                )
+                                : tagChips.isEmpty
+                                ? buildEmptyHint('暂无标签，点击右上角管理可新建。')
+                                : null,
+                      ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1602,6 +1684,10 @@ extension on _BookshelfPageState {
       return;
     }
 
+    if (selected == 'tag::__untagged__') {
+      _activateView(const _BookshelfViewSelection.tag(''));
+      return;
+    }
     if (selected.startsWith('tag::')) {
       final tag = selected.substring(5).trim();
       if (tag.isNotEmpty) {
@@ -1712,6 +1798,63 @@ extension on _BookshelfPageState {
     } catch (_) {
       _showMessage(isTag ? '标签保存失败，请重试。' : '分类保存失败，请重试。');
     }
+  }
+}
+
+class _BookshelfSettingsModeButton extends StatelessWidget {
+  const _BookshelfSettingsModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color:
+          selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.92)
+              : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: selected ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color:
+                    selected
+                        ? colorScheme.onPrimaryContainer
+                        : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color:
+                      selected
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

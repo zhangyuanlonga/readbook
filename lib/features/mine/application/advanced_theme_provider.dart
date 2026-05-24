@@ -78,13 +78,16 @@ class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {
     final normalized = themeId?.trim();
     final nextValue =
         normalized == null || normalized.isEmpty ? null : normalized;
+    final service = ref.read(advancedThemeServiceProvider);
+    await service.saveActiveThemeId(nextValue);
+    await ref
+        .read(activeThemeAppearanceSnapshotProvider.notifier)
+        .reloadFromStorage();
     _primedActiveThemeId = nextValue;
     _hasPrimedValue = true;
     if (state != nextValue) {
       state = nextValue;
     }
-    final service = ref.read(advancedThemeServiceProvider);
-    await service.saveActiveThemeId(nextValue);
   }
 
   Future<void> disable() => setActiveThemeId(null);
@@ -132,6 +135,8 @@ class ActiveThemeAppearanceSnapshotNotifier
     }
     state = snapshot;
   }
+
+  Future<void> reloadFromStorage() => _load();
 }
 
 class AdvancedThemeRevisionNotifier extends Notifier<int> {

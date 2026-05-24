@@ -507,7 +507,7 @@ extension on _AppearancePageState {
       context,
       icon: Icons.auto_awesome_outlined,
       title: '高级主题',
-      subtitle: '高级主题会覆盖页面背景、弹窗背景、卡片、文字和部分组件样式。',
+      subtitle: '高级主题会覆盖应用基础主题',
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => context.push('/appearance/advanced-themes'),
@@ -528,7 +528,8 @@ extension on _AppearancePageState {
                     child: Text(
                       activeAdvancedTheme.when(
                         data:
-                            (theme) => theme == null ? '未启用' : '当前：${theme.name}',
+                            (theme) =>
+                                theme == null ? '未启用' : '当前：${theme.name}',
                         loading: () => '读取中',
                         error: (_, _) => '未启用',
                       ),
@@ -691,9 +692,9 @@ extension on _AppearancePageState {
           const SizedBox(width: 6),
           Text(
             themeSemanticFieldSpecFor(preview.id).label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -799,7 +800,7 @@ extension on _AppearancePageState {
       context,
       icon: Icons.text_fields_outlined,
       title: '应用界面字体',
-      subtitle: '仅影响书架、发现、我的等外部页面，阅读器保持独立设置。',
+      subtitle: '仅影响非阅读器页面',
       child: Column(
         children: [
           _buildFontFamilyTile(context, fontSettings),
@@ -1237,7 +1238,7 @@ extension on _AppearancePageState {
       context,
       icon: Icons.dock_outlined,
       title: '导航样式',
-      subtitle: '手机切换主导航风格，平板保持侧边栏。',
+      subtitle: '切换自己喜欢的主导航风格吧',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

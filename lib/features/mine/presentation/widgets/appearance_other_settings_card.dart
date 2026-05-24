@@ -86,7 +86,7 @@ class _AppearanceOtherSettingsCardState
             context,
             icon: Icons.view_list_outlined,
             title: '我的页面显示内容',
-            subtitle: '自定义我的页面中显示的功能项',
+            subtitle: '自定义我的页面中显示的功能入口',
             trailingText: '$visibleCount 项显示中',
             onTap: _openMinePageDisplaySheet,
           ),

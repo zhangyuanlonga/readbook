@@ -369,8 +369,6 @@ extension on _BookDetailPageState {
       ].where((item) => item.trim().isNotEmpty).toSet().toList(growable: false)
       ..sort();
 
-    var createTagDraft = '';
-    var createCategoryDraft = '';
     var createTagColor = BookshelfTaxonomyItem.defaultColorForName('新标签');
     var createCategoryColor = BookshelfTaxonomyItem.defaultColorForName('新分类');
     final tagColorByName = <String, int>{
@@ -381,331 +379,697 @@ extension on _BookDetailPageState {
     };
     String? tagErrorText;
     String? categoryErrorText;
+    var tagSearchDraft = '';
+    final tagSearchController = TextEditingController();
+    void disposeAfterSurfaceExit(TextEditingController controller) {
+      unawaited(
+        Future<void>.delayed(
+          const Duration(milliseconds: 450),
+          controller.dispose,
+        ),
+      );
+    }
 
     if (!mounted) {
       return;
     }
 
-    final result = await showAdaptiveActionSurface<bool>(
-      context: context,
-      maxWidth: 720,
-      maxHeightFactor: 0.88,
-      padding: EdgeInsets.zero,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final theme = Theme.of(context);
-            const colorChoices = <int>[
-              0xFF6750A4,
-              0xFF386A20,
-              0xFF006A6A,
-              0xFF006D3B,
-              0xFF984061,
-              0xFF8C5000,
-              0xFF00658F,
-              0xFF7D5260,
-            ];
+    bool? result;
+    try {
+      result = await showAdaptiveActionSurface<bool>(
+        context: context,
+        maxWidth: 640,
+        maxHeightFactor: 0.92,
+        padding: EdgeInsets.zero,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              final theme = Theme.of(context);
+              final compactTheme = theme.copyWith(
+                visualDensity: VisualDensity.compact,
+              );
 
-            Widget buildColorPicker({
-              required int selectedColor,
-              required ValueChanged<int> onChanged,
-            }) {
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final value in colorChoices)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () => onChanged(value),
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Color(value),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            width: selectedColor == value ? 3 : 1,
-                            color:
-                                selectedColor == value
-                                    ? theme.colorScheme.onSurface
-                                    : theme.colorScheme.outlineVariant,
+              Widget buildSectionCard({
+                required IconData icon,
+                required String title,
+                required Widget child,
+                Widget? trailing,
+              }) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.7,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            icon,
+                            size: 18,
+                            color: theme.colorScheme.primary,
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          Text(
+                            title,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (trailing != null) ...[const Spacer(), trailing],
+                        ],
                       ),
-                    ),
-                ],
-              );
-            }
-
-            Widget buildNamedChip({
-              required String label,
-              required bool selected,
-              required int colorValue,
-              required ValueChanged<bool> onSelected,
-            }) {
-              final color = Color(colorValue);
-              return FilterChip(
-                avatar: Icon(
-                  selected ? Icons.check_rounded : Icons.circle,
-                  size: 14,
-                  color: color,
-                ),
-                label: Text(label),
-                selected: selected,
-                selectedColor: color.withValues(alpha: 0.16),
-                checkmarkColor: color,
-                side: BorderSide(color: color.withValues(alpha: 0.3)),
-                onSelected: onSelected,
-              );
-            }
-
-            void addTagInline() {
-              final value = createTagDraft.trim();
-              if (value.isEmpty) {
-                setSheetState(() {
-                  tagErrorText = '请输入标签名称';
-                });
-                return;
+                      const SizedBox(height: 8),
+                      child,
+                    ],
+                  ),
+                );
               }
-              if (availableTags.contains(value)) {
-                if (!selectedTags.contains(value)) {
-                  setSheetState(() {
-                    selectedTags = <String>[...selectedTags, value];
-                    createTagDraft = '';
-                    tagErrorText = null;
-                  });
+
+              String formatHex(int colorValue) {
+                final normalized = colorValue & 0xFFFFFFFF;
+                return '#${normalized.toRadixString(16).padLeft(8, '0').toUpperCase()}';
+              }
+
+              int? parseHexColor(String raw) {
+                var value = raw.trim();
+                if (value.isEmpty) {
+                  return null;
                 }
-                return;
+                if (value.startsWith('#')) {
+                  value = value.substring(1);
+                }
+                if (value.length == 6) {
+                  value = 'FF$value';
+                }
+                if (value.length != 8) {
+                  return null;
+                }
+                return int.tryParse(value, radix: 16);
               }
-              tagColorByName[value] = createTagColor;
-              setSheetState(() {
-                availableTags = <String>[...availableTags, value]..sort();
-                selectedTags = <String>[...selectedTags, value];
-                createTagDraft = '';
-                createTagColor = BookshelfTaxonomyItem.defaultColorForName(
-                  '新标签',
-                );
-                tagErrorText = null;
-              });
-            }
 
-            void addCategoryInline() {
-              final value = createCategoryDraft.trim();
-              if (value.isEmpty) {
-                setSheetState(() {
-                  categoryErrorText = '请输入分类名称';
-                });
-                return;
-              }
-              if (!availableCategories.contains(value)) {
-                categoryColorByName[value] = createCategoryColor;
-                setSheetState(() {
-                  availableCategories = <String>[...availableCategories, value]
-                    ..sort();
-                });
-              }
-              setSheetState(() {
-                selectedCategory = value;
-                createCategoryDraft = '';
-                createCategoryColor = BookshelfTaxonomyItem.defaultColorForName(
-                  '新分类',
+              Future<({String name, int colorValue})?> showManageTaxonomySheet({
+                required bool isTag,
+              }) async {
+                final title = isTag ? '管理标签' : '管理分类';
+                final nameLabel = isTag ? '标签名称' : '分类名称';
+                final nameController = TextEditingController();
+                var draftColor = isTag ? createTagColor : createCategoryColor;
+                var errorText = isTag ? tagErrorText : categoryErrorText;
+                final hexController = TextEditingController(
+                  text: formatHex(draftColor),
                 );
-                categoryErrorText = null;
-              });
-            }
+                final colorScheme = theme.colorScheme;
+                final desktopLike = AppLayout.isDesktopLike(
+                  context,
+                  platform: theme.platform,
+                );
+                final panelRadius = BorderRadius.vertical(
+                  top: const Radius.circular(28),
+                  bottom: desktopLike ? const Radius.circular(28) : Radius.zero,
+                );
 
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + MediaQuery.viewInsetsOf(context).bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '归类',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      detail.title,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '分类',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('未分类'),
-                          selected: selectedCategory == null,
-                          onSelected: (_) {
-                            setSheetState(() {
-                              selectedCategory = null;
-                            });
-                          },
-                        ),
-                        ...availableCategories.map(
-                          (category) => ChoiceChip(
-                            avatar: Icon(
-                              Icons.folder_rounded,
-                              size: 14,
-                              color: Color(
-                                categoryColorByName[category] ??
-                                    BookshelfTaxonomyItem.defaultColorForName(
-                                      category,
+                final created = await showAdaptiveRawSurface<
+                  ({String name, int colorValue})
+                >(
+                  context: context,
+                  showDragHandle: false,
+                  mobileBackgroundColor: Colors.transparent,
+                  builder: (dialogContext) {
+                    return StatefulBuilder(
+                      builder: (context, setDialogState) {
+                        final compactDialogTheme = theme.copyWith(
+                          visualDensity: VisualDensity.compact,
+                        );
+
+                        void updateDraftColor(int value) {
+                          setDialogState(() {
+                            draftColor = value;
+                            hexController.text = formatHex(value);
+                          });
+                        }
+
+                        return Theme(
+                          data: compactDialogTheme,
+                          child: Material(
+                            color: colorScheme.surfaceContainerHigh,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: panelRadius,
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                12,
+                                16,
+                                14,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (!desktopLike) ...[
+                                    const AdaptiveSheetDragHandle(),
+                                    const SizedBox(height: 8),
+                                  ],
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          title,
+                                          style: theme.textTheme.titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                      FilledButton.tonalIcon(
+                                        onPressed: () {
+                                          final name =
+                                              nameController.text.trim();
+                                          if (name.isEmpty) {
+                                            setDialogState(() {
+                                              errorText = '请输入$nameLabel';
+                                            });
+                                            return;
+                                          }
+                                          Navigator.of(dialogContext).pop((
+                                            name: name,
+                                            colorValue: draftColor,
+                                          ));
+                                        },
+                                        icon: const Icon(Icons.check_rounded),
+                                        label: const Text('完成'),
+                                        style: FilledButton.styleFrom(
+                                          minimumSize: const Size(0, 36),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: nameController,
+                                    autofocus: true,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      prefixIcon: Icon(
+                                        isTag
+                                            ? Icons.sell_rounded
+                                            : Icons.folder_rounded,
+                                      ),
+                                      labelText: nameLabel,
+                                      hintText: isTag ? '例如：热血' : '例如：科幻',
+                                      errorText: errorText,
                                     ),
+                                    onChanged: (value) {
+                                      if (errorText != null) {
+                                        setDialogState(() {
+                                          errorText = null;
+                                        });
+                                      }
+                                    },
+                                    onSubmitted: (_) {
+                                      final name = nameController.text.trim();
+                                      if (name.isEmpty) {
+                                        setDialogState(() {
+                                          errorText = '请输入$nameLabel';
+                                        });
+                                        return;
+                                      }
+                                      Navigator.of(dialogContext).pop((
+                                        name: name,
+                                        colorValue: draftColor,
+                                      ));
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: hexController,
+                                    keyboardType: TextInputType.text,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[#0-9a-fA-F]'),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      final parsed = parseHexColor(value);
+                                      if (parsed == null) {
+                                        return;
+                                      }
+                                      setDialogState(() {
+                                        draftColor = parsed;
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      prefixIcon: const Icon(
+                                        Icons.tag_rounded,
+                                        size: 18,
+                                      ),
+                                      hintText: '#RRGGBB / #AARRGGBB',
+                                      filled: true,
+                                      fillColor: colorScheme.surface.withValues(
+                                        alpha: 0.72,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ColorPicker(
+                                    pickerColor: Color(draftColor),
+                                    onColorChanged:
+                                        (color) =>
+                                            updateDraftColor(color.toARGB32()),
+                                    enableAlpha: true,
+                                    displayThumbColor: true,
+                                    portraitOnly: true,
+                                    paletteType: PaletteType.hsvWithHue,
+                                    colorPickerWidth: 320,
+                                    pickerAreaHeightPercent: 0.52,
+                                    pickerAreaBorderRadius:
+                                        const BorderRadius.all(
+                                          Radius.circular(12),
+                                        ),
+                                    labelTypes: const [],
+                                    hexInputController: hexController,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: Color(draftColor),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: colorScheme.outline
+                                                .withValues(alpha: 0.38),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          formatHex(draftColor),
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed:
+                                            () =>
+                                                Navigator.of(
+                                                  dialogContext,
+                                                ).pop(),
+                                        child: const Text('取消'),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            label: Text(category),
-                            selected: selectedCategory == category,
-                            onSelected: (_) {
-                              setSheetState(() {
-                                selectedCategory = category;
-                              });
-                            },
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      decoration: InputDecoration(
-                        labelText: '新增分类',
-                        errorText: categoryErrorText,
-                        suffixIcon: IconButton(
-                          onPressed: addCategoryInline,
-                          icon: const Icon(Icons.check_rounded),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        createCategoryDraft = value;
-                        if (categoryErrorText != null) {
-                          setSheetState(() {
-                            categoryErrorText = null;
-                          });
-                        }
+                        );
                       },
-                      onSubmitted: (_) => addCategoryInline(),
-                    ),
-                    const SizedBox(height: 8),
-                    buildColorPicker(
-                      selectedColor: createCategoryColor,
-                      onChanged: (value) {
-                        setSheetState(() {
-                          createCategoryColor = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      '标签',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: availableTags
-                          .map(
-                            (tag) => buildNamedChip(
-                              label: tag,
-                              selected: selectedTags.contains(tag),
-                              colorValue:
-                                  tagColorByName[tag] ??
-                                  BookshelfTaxonomyItem.defaultColorForName(
-                                    tag,
-                                  ),
-                              onSelected: (selected) {
-                                setSheetState(() {
-                                  if (selected) {
-                                    selectedTags = <String>[
-                                      ...selectedTags,
-                                      tag,
-                                    ];
-                                  } else {
-                                    selectedTags = selectedTags
-                                        .where((item) => item != tag)
-                                        .toList(growable: false);
-                                  }
-                                });
-                              },
-                            ),
+                    );
+                  },
+                );
+                disposeAfterSurfaceExit(nameController);
+                disposeAfterSurfaceExit(hexController);
+                return created;
+              }
+
+              Widget buildCategoryChip(String category) {
+                final selected = selectedCategory == category;
+                final colorValue =
+                    categoryColorByName[category] ??
+                    BookshelfTaxonomyItem.defaultColorForName(category);
+                final color = Color(colorValue);
+                return ChoiceChip(
+                  avatar: Icon(
+                    selected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 16,
+                    color:
+                        selected ? color : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  label: Text(category),
+                  selected: selected,
+                  selectedColor: color.withValues(alpha: 0.16),
+                  side: BorderSide(color: color.withValues(alpha: 0.35)),
+                  onSelected: (_) {
+                    setSheetState(() {
+                      selectedCategory = category;
+                    });
+                  },
+                );
+              }
+
+              Widget buildTagChip({
+                required String label,
+                required bool selected,
+                required int colorValue,
+                required ValueChanged<bool> onSelected,
+              }) {
+                final color = Color(colorValue);
+                return FilterChip(
+                  avatar: Icon(
+                    selected ? Icons.check_rounded : Icons.sell_outlined,
+                    size: 16,
+                    color:
+                        selected ? color : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  label: Text(label),
+                  selected: selected,
+                  selectedColor: color.withValues(alpha: 0.16),
+                  checkmarkColor: color,
+                  side: BorderSide(color: color.withValues(alpha: 0.3)),
+                  onSelected: onSelected,
+                );
+              }
+
+              Future<void> openManageCategory() async {
+                final created = await showManageTaxonomySheet(isTag: false);
+                if (created == null) {
+                  return;
+                }
+                setSheetState(() {
+                  categoryColorByName[created.name] = created.colorValue;
+                  if (!availableCategories.contains(created.name)) {
+                    availableCategories = <String>[
+                      ...availableCategories,
+                      created.name,
+                    ]..sort();
+                  }
+                  selectedCategory = created.name;
+                  createCategoryColor =
+                      BookshelfTaxonomyItem.defaultColorForName('新分类');
+                  categoryErrorText = null;
+                });
+              }
+
+              Future<void> openManageTag() async {
+                final created = await showManageTaxonomySheet(isTag: true);
+                if (created == null) {
+                  return;
+                }
+                setSheetState(() {
+                  tagColorByName[created.name] = created.colorValue;
+                  if (!availableTags.contains(created.name)) {
+                    availableTags = <String>[...availableTags, created.name]
+                      ..sort();
+                  }
+                  selectedTags = <String>{
+                    ...selectedTags,
+                    created.name,
+                  }.toList(growable: false);
+                  createTagColor = BookshelfTaxonomyItem.defaultColorForName(
+                    '新标签',
+                  );
+                  tagErrorText = null;
+                  tagSearchDraft = '';
+                  tagSearchController.clear();
+                });
+              }
+
+              final normalizedTagSearch = tagSearchDraft.trim().toLowerCase();
+              final visibleTags =
+                  normalizedTagSearch.isEmpty
+                      ? availableTags
+                      : availableTags
+                          .where(
+                            (tag) =>
+                                tag.toLowerCase().contains(normalizedTagSearch),
                           )
-                          .toList(growable: false),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      decoration: InputDecoration(
-                        labelText: '新增标签',
-                        errorText: tagErrorText,
-                        suffixIcon: IconButton(
-                          onPressed: addTagInline,
-                          icon: const Icon(Icons.check_rounded),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        createTagDraft = value;
-                        if (tagErrorText != null) {
-                          setSheetState(() {
-                            tagErrorText = null;
-                          });
-                        }
-                      },
-                      onSubmitted: (_) => addTagInline(),
-                    ),
-                    const SizedBox(height: 8),
-                    buildColorPicker(
-                      selectedColor: createTagColor,
-                      onChanged: (value) {
-                        setSheetState(() {
-                          createTagColor = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
+                          .toList(growable: false);
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  10,
+                  12,
+                  12 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Theme(
+                  data: compactTheme,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: const Text('取消'),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '编辑分类和标签',
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    detail.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        buildSectionCard(
+                          icon: Icons.folder_rounded,
+                          title: '分类（单选）',
+                          trailing: TextButton.icon(
+                            onPressed: () => unawaited(openManageCategory()),
+                            icon: const Icon(Icons.tune_rounded, size: 18),
+                            label: const Text('管理分类'),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 32),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  ChoiceChip(
+                                    avatar: Icon(
+                                      selectedCategory == null
+                                          ? Icons.radio_button_checked_rounded
+                                          : Icons
+                                              .radio_button_unchecked_rounded,
+                                      size: 16,
+                                    ),
+                                    label: const Text('未分类'),
+                                    selected: selectedCategory == null,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                    onSelected: (_) {
+                                      setSheetState(() {
+                                        selectedCategory = null;
+                                      });
+                                    },
+                                  ),
+                                  ...availableCategories.map(buildCategoryChip),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: const Text('保存'),
+                        const SizedBox(height: 10),
+                        buildSectionCard(
+                          icon: Icons.sell_rounded,
+                          title: '标签（多选）',
+                          trailing: TextButton.icon(
+                            onPressed: () => unawaited(openManageTag()),
+                            icon: const Icon(Icons.tune_rounded, size: 18),
+                            label: const Text('管理标签'),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 32),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
                           ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                controller: tagSearchController,
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  prefixIcon: const Icon(Icons.search_rounded),
+                                  labelText: '搜索标签',
+                                  errorText: tagErrorText,
+                                  suffixIcon:
+                                      tagSearchDraft.trim().isEmpty
+                                          ? null
+                                          : IconButton(
+                                            tooltip: '清除搜索',
+                                            onPressed: () {
+                                              setSheetState(() {
+                                                tagSearchDraft = '';
+                                                tagSearchController.clear();
+                                                tagErrorText = null;
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                            ),
+                                          ),
+                                ),
+                                onChanged: (value) {
+                                  setSheetState(() {
+                                    tagSearchDraft = value;
+                                    if (tagErrorText != null) {
+                                      tagErrorText = null;
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  FilterChip(
+                                    avatar: Icon(
+                                      selectedTags.isEmpty
+                                          ? Icons.check_rounded
+                                          : Icons.sell_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text('未打标签'),
+                                    selected: selectedTags.isEmpty,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                    onSelected: (_) {
+                                      setSheetState(() {
+                                        selectedTags = const <String>[];
+                                      });
+                                    },
+                                  ),
+                                  ...visibleTags.map(
+                                    (tag) => buildTagChip(
+                                      label: tag,
+                                      selected: selectedTags.contains(tag),
+                                      colorValue:
+                                          tagColorByName[tag] ??
+                                          BookshelfTaxonomyItem.defaultColorForName(
+                                            tag,
+                                          ),
+                                      onSelected: (selected) {
+                                        setSheetState(() {
+                                          if (selected) {
+                                            selectedTags = <String>{
+                                              ...selectedTags,
+                                              tag,
+                                            }.toList(growable: false);
+                                          } else {
+                                            selectedTags = selectedTags
+                                                .where((item) => item != tag)
+                                                .toList(growable: false);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (visibleTags.isEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  normalizedTagSearch.isEmpty
+                                      ? '暂无标签，点击右上角管理标签可新建。'
+                                      : '没有匹配标签，点击右上角管理标签可新建。',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed:
+                                    () => Navigator.of(context).pop(false),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 38),
+                                ),
+                                child: const Text('取消'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed:
+                                    () => Navigator.of(context).pop(true),
+                                icon: const Icon(Icons.check_rounded),
+                                label: const Text('保存'),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size(0, 38),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      disposeAfterSurfaceExit(tagSearchController);
+    }
 
     if (result != true || !mounted) {
       return;

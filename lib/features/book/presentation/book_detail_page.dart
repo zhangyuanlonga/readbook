@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -292,7 +293,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _readingRecordService = dependencies.readingRecordService;
     _localBookIndexService = dependencies.localBookIndexService;
     _readRouteService = dependencies.readRouteService;
-    _bookDetailService = widget.bookDetailService ?? dependencies.bookDetailService;
+    _bookDetailService =
+        widget.bookDetailService ?? dependencies.bookDetailService;
     _contentProviderRegistry = ContentProviderRegistry(
       providers: [
         LocalContentProvider(
@@ -385,9 +387,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     if (!mounted) {
       return;
     }
-    final offset = _detailScrollController.hasClients
-        ? _detailScrollController.offset
-        : 0.0;
+    final offset =
+        _detailScrollController.hasClients
+            ? _detailScrollController.offset
+            : 0.0;
     if ((offset - _detailScrollOffset).abs() < 0.5) {
       return;
     }

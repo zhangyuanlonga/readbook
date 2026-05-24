@@ -15,7 +15,6 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
-import '../../../app/motion/app_motion.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/tasks/app_task_manager.dart';
@@ -192,8 +191,6 @@ class _BookshelfViewSelection {
   int get hashCode => Object.hash(kind, filter, tag, category);
 }
 
-enum _BookshelfSettingsTab { list, grid }
-
 class _BookshelfProgressDisplay {
   const _BookshelfProgressDisplay({
     required this.progressValue,
@@ -219,6 +216,300 @@ class _BookshelfProgressDisplay {
   @override
   int get hashCode =>
       Object.hash(progressValue, summaryText, trailingLabel, hasProgress);
+}
+
+class _BookshelfAnimatedProgressSection extends StatefulWidget {
+  const _BookshelfAnimatedProgressSection({
+    super.key,
+    required this.progressDisplay,
+    required this.summaryStyle,
+    required this.trailingStyle,
+    required this.fillColor,
+    required this.backgroundColor,
+    this.showSummaryText = true,
+    this.showBar = true,
+    this.minHeight = 3,
+    this.spacing = 6,
+  });
+
+  final _BookshelfProgressDisplay progressDisplay;
+  final TextStyle? summaryStyle;
+  final TextStyle? trailingStyle;
+  final Color fillColor;
+  final Color backgroundColor;
+  final bool showSummaryText;
+  final bool showBar;
+  final double minHeight;
+  final double spacing;
+
+  @override
+  State<_BookshelfAnimatedProgressSection> createState() =>
+      _BookshelfAnimatedProgressSectionState();
+}
+
+class _BookshelfAnimatedProgressSectionState
+    extends State<_BookshelfAnimatedProgressSection>
+    with TickerProviderStateMixin {
+  static const Duration _kInitialDuration = Duration(milliseconds: 320);
+  static const Duration _kUpdateDuration = Duration(milliseconds: 260);
+  static const Duration _kSweepDuration = Duration(milliseconds: 520);
+  static const Duration _kCompletionFlashDuration = Duration(milliseconds: 360);
+
+  late final AnimationController _progressController;
+  late final AnimationController _sweepController;
+  late final AnimationController _completionFlashController;
+  late Animation<double> _progressAnimation;
+  bool _hasPlayedInitialAnimation = false;
+
+  double get _targetValue =>
+      widget.progressDisplay.progressValue.clamp(0.0, 1.0).toDouble();
+
+  double get _currentAnimatedValue => _progressAnimation.value;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressController = AnimationController(vsync: this);
+    _sweepController = AnimationController(
+      vsync: this,
+      duration: _kSweepDuration,
+    );
+    _completionFlashController = AnimationController(
+      vsync: this,
+      duration: _kCompletionFlashDuration,
+    );
+    _configureProgressAnimation(0, 0);
+    _startProgressAnimation(
+      from: 0,
+      to: _targetValue,
+      duration: _kInitialDuration,
+      playSweep: _targetValue > 0,
+      triggerCompletion: _targetValue >= 0.999,
+    );
+    _hasPlayedInitialAnimation = true;
+  }
+
+  @override
+  void didUpdateWidget(covariant _BookshelfAnimatedProgressSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextTarget = _targetValue;
+    final previousTarget =
+        oldWidget.progressDisplay.progressValue.clamp(0.0, 1.0).toDouble();
+    if ((nextTarget - previousTarget).abs() < 0.0001) {
+      return;
+    }
+    final from = _currentAnimatedValue;
+    _startProgressAnimation(
+      from: from,
+      to: nextTarget,
+      duration:
+          _hasPlayedInitialAnimation ? _kUpdateDuration : _kInitialDuration,
+      playSweep: nextTarget > from,
+      triggerCompletion: previousTarget < 0.999 && nextTarget >= 0.999,
+    );
+    _hasPlayedInitialAnimation = true;
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    _sweepController.dispose();
+    _completionFlashController.dispose();
+    super.dispose();
+  }
+
+  void _configureProgressAnimation(double begin, double end) {
+    _progressAnimation = Tween<double>(begin: begin, end: end).animate(
+      CurvedAnimation(parent: _progressController, curve: Curves.easeOutCubic),
+    );
+  }
+
+  void _startProgressAnimation({
+    required double from,
+    required double to,
+    required Duration duration,
+    required bool playSweep,
+    required bool triggerCompletion,
+  }) {
+    _progressController.duration = duration;
+    _configureProgressAnimation(from, to);
+    _progressController.forward(from: 0);
+    if (playSweep) {
+      _sweepController.forward(from: 0);
+    }
+    if (triggerCompletion) {
+      _completionFlashController.forward(from: 0);
+      unawaited(HapticFeedback.mediumImpact());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[
+        _progressController,
+        _sweepController,
+        _completionFlashController,
+      ]),
+      builder: (context, _) {
+        final animatedValue = _progressAnimation.value.clamp(0.0, 1.0);
+        final animatedPercent = (animatedValue * 100).round().clamp(0, 100);
+        final flashStrength = Curves.easeOut.transform(
+          math.sin(_completionFlashController.value * math.pi),
+        );
+        final fillColor =
+            Color.lerp(
+              widget.fillColor,
+              Color.alphaBlend(
+                Colors.white.withValues(alpha: 0.32),
+                widget.fillColor,
+              ),
+              flashStrength,
+            )!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (widget.showSummaryText)
+                  Expanded(
+                    child: Text(
+                      widget.progressDisplay.summaryText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: widget.summaryStyle,
+                    ),
+                  )
+                else
+                  const Spacer(),
+                const SizedBox(width: 8),
+                Text('$animatedPercent%', style: widget.trailingStyle),
+              ],
+            ),
+            if (widget.showBar) ...[
+              SizedBox(height: widget.spacing),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(widget.minHeight * 2),
+                child: _BookshelfAnimatedProgressBar(
+                  value: animatedValue,
+                  minHeight: widget.minHeight,
+                  backgroundColor: widget.backgroundColor,
+                  fillColor: fillColor,
+                  sweepProgress: _sweepController.value,
+                  completionFlashStrength: flashStrength,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BookshelfAnimatedProgressBar extends StatelessWidget {
+  const _BookshelfAnimatedProgressBar({
+    required this.value,
+    required this.minHeight,
+    required this.backgroundColor,
+    required this.fillColor,
+    required this.sweepProgress,
+    required this.completionFlashStrength,
+  });
+
+  final double value;
+  final double minHeight;
+  final Color backgroundColor;
+  final Color fillColor;
+  final double sweepProgress;
+  final double completionFlashStrength;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: minHeight,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(minHeight * 2),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: value.clamp(0.0, 1.0),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final highlightWidth = math.max(minHeight * 7, width * 0.22);
+                  final sweepOffset =
+                      (width + highlightWidth) * sweepProgress - highlightWidth;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient:
+                              value >= 0.999
+                                  ? null
+                                  : LinearGradient(
+                                    colors: [
+                                      fillColor.withValues(alpha: 0.84),
+                                      fillColor,
+                                    ],
+                                  ),
+                          color: value >= 0.999 ? fillColor : null,
+                          borderRadius: BorderRadius.circular(minHeight * 2),
+                          boxShadow:
+                              completionFlashStrength > 0
+                                  ? [
+                                    BoxShadow(
+                                      color: fillColor.withValues(
+                                        alpha: 0.22 * completionFlashStrength,
+                                      ),
+                                      blurRadius: 8,
+                                      spreadRadius: 0.5,
+                                    ),
+                                  ]
+                                  : null,
+                        ),
+                      ),
+                      if (sweepProgress > 0 && sweepProgress < 1 && width > 0)
+                        Transform.translate(
+                          offset: Offset(sweepOffset, 0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              width: highlightWidth,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.white.withValues(alpha: 0.0),
+                                    Colors.white.withValues(alpha: 0.34),
+                                    Colors.transparent,
+                                  ],
+                                  stops: const [0, 0.18, 0.55, 1],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BookshelfBookCardState {
@@ -1395,7 +1686,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridVisualStyle == _BookshelfGridVisualStyle.overlayTitle) {
       return 0;
     }
-    var extraHeight = 12.0;
+    var extraHeight = 16.0;
     final hasMetaInfo =
         _gridShowTitle ||
         _gridShowAuthor ||
@@ -1415,7 +1706,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
     if (_gridShowTaxonomyBadges &&
         (_bookTagsByKey.isNotEmpty || _bookCategoriesByKey.isNotEmpty)) {
-      extraHeight += 22;
+      extraHeight += 24;
     }
     if (_gridShowProgressBar) {
       extraHeight +=
@@ -1431,29 +1722,50 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     BookshelfBook book, {
     required bool compact,
     int maxTags = 2,
+    bool singleLine = false,
   }) {
     final category = _categoryOfBook(book);
     final tags = _tagsOfBook(book).take(maxTags).toList(growable: false);
     if ((category == null || category.isEmpty) && tags.isEmpty) {
       return const SizedBox.shrink();
     }
+    final children = [
+      if (category != null && category.isNotEmpty)
+        _buildTaxonomyPill(
+          item: _categoryItem(category),
+          icon: Icons.folder_rounded,
+          compact: compact,
+        ),
+      for (final tag in tags)
+        _buildTaxonomyPill(
+          item: _tagItem(tag),
+          icon: Icons.sell_rounded,
+          compact: compact,
+        ),
+    ];
+    if (singleLine) {
+      return SizedBox(
+        height: compact ? 22 : 26,
+        child: ClipRect(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Row(
+              children: [
+                for (var index = 0; index < children.length; index++) ...[
+                  if (index > 0) SizedBox(width: compact ? 4 : 6),
+                  children[index],
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Wrap(
       spacing: compact ? 4 : 6,
       runSpacing: compact ? 4 : 5,
-      children: [
-        if (category != null && category.isNotEmpty)
-          _buildTaxonomyPill(
-            item: _categoryItem(category),
-            icon: Icons.folder_rounded,
-            compact: compact,
-          ),
-        for (final tag in tags)
-          _buildTaxonomyPill(
-            item: _tagItem(tag),
-            icon: Icons.sell_rounded,
-            compact: compact,
-          ),
-      ],
+      children: children,
     );
   }
 
@@ -1847,7 +2159,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               ? 4
                               : 0,
                     ),
-                    _buildBookTaxonomyStrip(book, compact: true, maxTags: 1),
+                    _buildBookTaxonomyStrip(
+                      book,
+                      compact: true,
+                      maxTags: 1,
+                      singleLine: true,
+                    ),
                   ],
                   if (!coverOnly && !overlayTitle && _gridShowProgressBar) ...[
                     SizedBox(
@@ -1858,13 +2175,25 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               ? 4
                               : 0,
                     ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: _buildAnimatedBookshelfProgressBar(
-                        value: progressDisplay.progressValue,
-                        minHeight: 3,
-                        backgroundColor: palette.elevatedSurfaceColor,
+                    _BookshelfAnimatedProgressSection(
+                      key: ValueKey<String>('grid_progress_$bookKey'),
+                      progressDisplay: progressDisplay,
+                      summaryStyle: null,
+                      trailingStyle: Theme.of(
+                        context,
+                      ).textTheme.labelSmall?.copyWith(
+                        color:
+                            progressDisplay.hasProgress
+                                ? palette.primaryColor
+                                : palette.textSecondaryColor,
+                        fontWeight: FontWeight.w700,
                       ),
+                      fillColor: palette.primaryColor,
+                      backgroundColor: palette.elevatedSurfaceColor,
+                      showSummaryText: false,
+                      showBar: true,
+                      minHeight: 3,
+                      spacing: 4,
                     ),
                   ],
                   const Spacer(),
@@ -2158,11 +2487,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ),
                         ],
                         SizedBox(height: _listCompactMode ? 3 : 4),
-                        Text(
-                          progressDisplay.summaryText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
+                        _BookshelfAnimatedProgressSection(
+                          key: ValueKey<String>('list_progress_$bookKey'),
+                          progressDisplay: progressDisplay,
+                          summaryStyle: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(
                             color:
@@ -2174,18 +2502,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                     ? FontWeight.w600
                                     : FontWeight.w500,
                           ),
-                        ),
-                        if (_listShowProgressBar) ...[
-                          SizedBox(height: _listCompactMode ? 5 : 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: _buildAnimatedBookshelfProgressBar(
-                              value: progressDisplay.progressValue,
-                              minHeight: 3,
-                              backgroundColor: palette.elevatedSurfaceColor,
-                            ),
+                          trailingStyle: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            color:
+                                progressDisplay.hasProgress
+                                    ? palette.primaryColor
+                                    : palette.textSecondaryColor,
+                            fontWeight: FontWeight.w700,
                           ),
-                        ],
+                          fillColor: palette.primaryColor,
+                          backgroundColor: palette.elevatedSurfaceColor,
+                          showSummaryText: true,
+                          showBar: _listShowProgressBar,
+                          minHeight: 3,
+                          spacing: _listCompactMode ? 5 : 8,
+                        ),
                       ],
                     ),
                   ),
@@ -2195,26 +2527,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildAnimatedBookshelfProgressBar({
-    required double value,
-    required double minHeight,
-    required Color backgroundColor,
-  }) {
-    final clampedValue = value.clamp(0.0, 1.0).toDouble();
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(end: clampedValue),
-      duration: AppMotion.durationOf(context, AppMotion.medium),
-      curve: AppMotion.standard,
-      builder: (context, animatedValue, _) {
-        return LinearProgressIndicator(
-          value: animatedValue,
-          minHeight: minHeight,
-          backgroundColor: backgroundColor,
-        );
-      },
     );
   }
 
@@ -2583,10 +2895,24 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   int _compareBookshelfBooksByProgress(BookshelfBook a, BookshelfBook b) {
+    final keyA = _bookKey(a);
+    final keyB = _bookKey(b);
     final progressA =
-        _progressByBookKey[_bookKey(a)]?.chapterPositionRatio ?? 0;
+        _progressDisplayByBookKey[keyA]?.progressValue ??
+        _resolveBookshelfProgressDisplay(
+          a,
+          progress: _progressByBookKey[keyA],
+          localBook: _bookshelfLocalBook(a),
+          cachedChapterCount: _cachedChapterCountByBookKey[keyA],
+        ).progressValue;
     final progressB =
-        _progressByBookKey[_bookKey(b)]?.chapterPositionRatio ?? 0;
+        _progressDisplayByBookKey[keyB]?.progressValue ??
+        _resolveBookshelfProgressDisplay(
+          b,
+          progress: _progressByBookKey[keyB],
+          localBook: _bookshelfLocalBook(b),
+          cachedChapterCount: _cachedChapterCountByBookKey[keyB],
+        ).progressValue;
     final compare = progressB.compareTo(progressA);
     if (compare != 0) {
       return compare;
@@ -4017,13 +4343,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     };
   }
 
-  String _bookshelfSettingsTabLabel(_BookshelfSettingsTab tab) {
-    return switch (tab) {
-      _BookshelfSettingsTab.list => '列表',
-      _BookshelfSettingsTab.grid => '网格',
-    };
-  }
-
   _BookshelfSearchQuickFilterContent _searchQuickFilterContentFromStorageValue(
     String value,
   ) {
@@ -4252,20 +4571,29 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     LocalBook? localBook,
     int? cachedChapterCount,
   }) {
-    if (progress == null) {
-      return const _BookshelfProgressDisplay(
-        progressValue: 0,
-        summaryText: '阅读进度: 未开始',
-        trailingLabel: '未开始',
-        hasProgress: false,
-      );
-    }
-
     final totalChapters = _resolveApproximateChapterCount(
       book,
       localBook: localBook,
       cachedChapterCount: cachedChapterCount,
     );
+    if (progress == null) {
+      if (totalChapters != null && totalChapters > 0) {
+        final normalizedTotal = totalChapters.clamp(1, 999999);
+        return _BookshelfProgressDisplay(
+          progressValue: 0,
+          summaryText: '已读 0 / $normalizedTotal 章 · 剩余 $normalizedTotal 章',
+          trailingLabel: '0%',
+          hasProgress: false,
+        );
+      }
+      return const _BookshelfProgressDisplay(
+        progressValue: 0,
+        summaryText: '阅读进度: 未开始',
+        trailingLabel: '0%',
+        hasProgress: false,
+      );
+    }
+
     final currentChapterNo = (progress.chapterIndex + 1).clamp(1, 999999);
     if (totalChapters != null && totalChapters > 0) {
       final normalizedTotal = totalChapters.clamp(1, 999999);
@@ -4273,23 +4601,42 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         0,
         normalizedTotal - 1,
       );
-      final overallProgress =
-          (normalizedIndex + progress.chapterPositionRatio.clamp(0.0, 1.0)) /
-          normalizedTotal;
-      final percentage = (overallProgress.clamp(0.0, 1.0) * 100).round();
+      final chapterProgress = progress.chapterPositionRatio.clamp(0.0, 1.0);
+      var overallProgress =
+          (normalizedIndex + chapterProgress) / normalizedTotal;
+      if (normalizedIndex == normalizedTotal - 1 && chapterProgress >= 0.995) {
+        overallProgress = 1;
+      }
+      final clampedOverallProgress = overallProgress.clamp(0.0, 1.0);
+      final percentage = (clampedOverallProgress * 100).round();
+      final normalizedChapterNo = (normalizedIndex + 1).clamp(
+        1,
+        normalizedTotal,
+      );
+      final remainingChapters = math.max(
+        0,
+        normalizedTotal - normalizedChapterNo,
+      );
       return _BookshelfProgressDisplay(
-        progressValue: overallProgress.clamp(0.0, 1.0),
-        summaryText: '阅读进度: 第 $currentChapterNo / $normalizedTotal 章',
+        progressValue: clampedOverallProgress,
+        summaryText:
+            clampedOverallProgress >= 0.999
+                ? '已读 $normalizedTotal / $normalizedTotal 章 · 已读完'
+                : '读到第 $normalizedChapterNo / $normalizedTotal 章 · 剩余 $remainingChapters 章',
         trailingLabel: '$percentage%',
-        hasProgress: true,
+        hasProgress: clampedOverallProgress > 0,
       );
     }
 
+    final fallbackProgress = progress.chapterPositionRatio.clamp(0.0, 1.0);
     return _BookshelfProgressDisplay(
-      progressValue: progress.chapterPositionRatio.clamp(0.0, 1.0),
-      summaryText: '阅读进度: 读到第 $currentChapterNo 章',
-      trailingLabel: '第$currentChapterNo章',
-      hasProgress: true,
+      progressValue: fallbackProgress,
+      summaryText:
+          fallbackProgress >= 0.999
+              ? '已读完 · 第 $currentChapterNo 章'
+              : '读到第 $currentChapterNo 章',
+      trailingLabel: '${(fallbackProgress * 100).round()}%',
+      hasProgress: fallbackProgress > 0,
     );
   }
 
@@ -4669,6 +5016,43 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return '$month-$day';
   }
 
+  Future<void> _refreshBookProgressAfterReaderExit(BookshelfBook book) async {
+    final normalizedBookId = book.bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+    final latestProgress = await _readerPreferencesService.loadProgress(
+      normalizedBookId,
+    );
+    if (!mounted) {
+      return;
+    }
+    final bookKey = _bookKey(book);
+    final matchedProgress =
+        latestProgress != null && _isProgressMatchingBook(latestProgress, book)
+            ? latestProgress
+            : null;
+    final previousProgress = _progressByBookKey[bookKey];
+    if (previousProgress == matchedProgress) {
+      return;
+    }
+    setState(() {
+      final nextMap = Map<String, ReadingProgress>.from(_progressByBookKey);
+      if (matchedProgress == null) {
+        nextMap.remove(bookKey);
+      } else {
+        nextMap[bookKey] = matchedProgress;
+      }
+      _progressByBookKey = nextMap;
+      _derivedBookshelfFingerprint = null;
+    });
+    _updateBookCardState(
+      book,
+      progress: matchedProgress,
+      clearProgress: matchedProgress == null,
+    );
+  }
+
   Future<void> _openFromBookshelf(
     BookshelfBook book, {
     ReadingProgress? progress,
@@ -4789,7 +5173,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               'tapToPushMs': openStopwatch.elapsedMilliseconds,
             },
           );
-          context.push(route);
+          await context.push(route);
+          if (!mounted) {
+            return;
+          }
+          await _refreshBookProgressAfterReaderExit(book);
           if (plan.feedbackMessage != null) {
             _showMessage(plan.feedbackMessage!);
           }
