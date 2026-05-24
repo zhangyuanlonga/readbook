@@ -93,14 +93,6 @@
 - **数据存储**：SQLite/Drift，表 `reading_records`、`reading_record_days`、`reading_record_sessions`
 - **交互细节**：继续阅读卡片使用封面组件 `ResolvedBookCover`；点击后通过 GoRouter 跳转阅读器。
 
-### 排行预览
-- **业务描述**：用户在首页查看热门/趋势等排行预览，用于发现可阅读内容或跳转详情。
-- **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/home/presentation/home_page.dart` + `_buildRankingPreviewSection()`
-- **核心逻辑**：当前主要在首页页面内组装展示；排行数据来源待分析。
-- **关键方法**：`_buildRankingPreviewSection()`、`_buildSectionHeader()`、`_openRecord()`
-- **数据存储**：待分析，代码中未看到独立排行持久化表。
-- **交互细节**：使用 `AppAnimatedSwitcher`、`AppFadeSlideTransition` 切换排行维度和内容。
-
 ### 搜索入口与在线搜索
 - **业务描述**：用户从底部 Dock、书架顶部或路由进入搜索页，输入关键词搜索小说/漫画，筛选服务器源，查看进度和结果，点击结果进入书籍详情。
 - **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/search/presentation/search_page.dart` + `SearchPage`、`_buildSearchBar()`、`_runSearch()`；入口路由在 `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/search/routes.dart`

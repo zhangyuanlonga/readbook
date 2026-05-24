@@ -505,6 +505,36 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     _startAutoReadSession(showMessage: true);
   }
 
+  Future<void> _openAutoReadFromOverlay() async {
+    if (_isAutoReadSessionEnabled) {
+      _stopAutoReadSession(showMessage: true);
+      return;
+    }
+
+    if (!_supportsAutoRead) {
+      _showMessage('当前内容暂不支持自动阅读。');
+      return;
+    }
+
+    final configured = await _preferencesService.loadAutoReadConfigured();
+    if (!mounted) {
+      return;
+    }
+    if (!configured) {
+      await _preferencesService.saveAutoReadConfigured(true);
+      if (!mounted) {
+        return;
+      }
+      await _showSettingsSheet(
+        initialTab: _ReaderSettingsTab.reading,
+        initialSettingsGroupKey: 'auto_read',
+      );
+      return;
+    }
+
+    await _toggleAutoReadSession();
+  }
+
   void _startAutoReadSession({bool showMessage = false}) {
     if (!mounted || !_supportsAutoRead) {
       return;

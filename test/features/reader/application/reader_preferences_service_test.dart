@@ -35,6 +35,10 @@ void main() {
         pageTurnMode: ReaderPageTurnMode.tapAndSwipe,
         autoReadEnabled: true,
         autoReadSpeed: 66,
+        autoReadMode: ReaderAutoReadMode.page,
+        autoReadSpeedLevel: 6,
+        autoReadPauseMode: ReaderAutoReadPauseMode.chapterEnd,
+        autoReadEndBehavior: ReaderAutoReadEndBehavior.loopBook,
         backgroundStyle: ReaderBackgroundStyle.paper,
         pageTurnStepRatio: 0.72,
         fontWeightLevel: ReaderFontWeightLevel.medium,
@@ -104,6 +108,10 @@ void main() {
       expect(restored.pageTurnMode, ReaderPageTurnMode.tapAndSwipe);
       expect(restored.autoReadEnabled, isTrue);
       expect(restored.autoReadSpeed, 66);
+      expect(restored.autoReadMode, ReaderAutoReadMode.page);
+      expect(restored.autoReadSpeedLevel, 6);
+      expect(restored.autoReadPauseMode, ReaderAutoReadPauseMode.chapterEnd);
+      expect(restored.autoReadEndBehavior, ReaderAutoReadEndBehavior.loopBook);
       expect(restored.backgroundStyle, ReaderBackgroundStyle.paper);
       expect(restored.pageTurnStepRatio, 0.72);
       expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);
@@ -159,6 +167,16 @@ void main() {
       expect(restored.showChapterHeader, isTrue);
       expect(restored.chapterHeaderHorizontalOffset, closeTo(0.42, 0.0001));
       expect(restored.chapterHeaderVerticalOffset, 24);
+    });
+
+    test('tracks whether auto read has been configured', () async {
+      final service = await _createService();
+
+      expect(await service.loadAutoReadConfigured(), isFalse);
+
+      await service.saveAutoReadConfigured(true);
+
+      expect(await service.loadAutoReadConfigured(), isTrue);
     });
 
     test('ignores legacy layout fields when loading settings', () async {
@@ -350,25 +368,28 @@ void main() {
       expect(restored, isNull);
     });
 
-    test('migrates legacy progress payload from SharedPreferences to database', () async {
-      SharedPreferences.setMockInitialValues({
-        'reader.progress.book_legacy':
-            '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z","chapterPositionRatio":0.4}',
-      });
+    test(
+      'migrates legacy progress payload from SharedPreferences to database',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'reader.progress.book_legacy':
+              '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z","chapterPositionRatio":0.4}',
+        });
 
-      final service = await _createService();
-      final restored = await service.loadProgress('book_legacy');
+        final service = await _createService();
+        final restored = await service.loadProgress('book_legacy');
 
-      expect(restored, isNotNull);
-      expect(restored!.chapterPositionRatio, 0.4);
+        expect(restored, isNotNull);
+        expect(restored!.chapterPositionRatio, 0.4);
 
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.containsKey('reader.progress.book_legacy'), isFalse);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.containsKey('reader.progress.book_legacy'), isFalse);
 
-      final restoredAgain = await service.loadProgress('book_legacy');
-      expect(restoredAgain, isNotNull);
-      expect(restoredAgain!.chapterTitle, '第一章');
-    });
+        final restoredAgain = await service.loadProgress('book_legacy');
+        expect(restoredAgain, isNotNull);
+        expect(restoredAgain!.chapterTitle, '第一章');
+      },
+    );
 
     test('ignores legacy single background image key', () async {
       SharedPreferences.setMockInitialValues({

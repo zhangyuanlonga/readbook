@@ -44,6 +44,15 @@ class ReaderPreferencesService {
       'reader.settings.volumeKeyPageEnabled';
   static const String _autoReadEnabledKey = 'reader.settings.autoReadEnabled';
   static const String _autoReadSpeedKey = 'reader.settings.autoReadSpeed';
+  static const String _autoReadModeKey = 'reader.settings.autoReadMode';
+  static const String _autoReadSpeedLevelKey =
+      'reader.settings.autoReadSpeedLevel';
+  static const String _autoReadPauseModeKey =
+      'reader.settings.autoReadPauseMode';
+  static const String _autoReadEndBehaviorKey =
+      'reader.settings.autoReadEndBehavior';
+  static const String _autoReadConfiguredKey =
+      'reader.settings.autoReadConfigured.v1';
   static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
   static const String _backgroundToneKey = 'reader.settings.backgroundTone';
   static const String _pageTurnStepRatioKey =
@@ -171,6 +180,22 @@ class ReaderPreferencesService {
       orElse: () => ReaderPageTurnMode.tapAndSwipe,
     );
 
+    final autoReadModeName = prefs.getString(_autoReadModeKey);
+    final autoReadMode = ReaderAutoReadMode.values.firstWhere(
+      (item) => item.name == autoReadModeName,
+      orElse: () => ReaderAutoReadMode.scroll,
+    );
+    final autoReadPauseModeName = prefs.getString(_autoReadPauseModeKey);
+    final autoReadPauseMode = ReaderAutoReadPauseMode.values.firstWhere(
+      (item) => item.name == autoReadPauseModeName,
+      orElse: () => ReaderAutoReadPauseMode.none,
+    );
+    final autoReadEndBehaviorName = prefs.getString(_autoReadEndBehaviorKey);
+    final autoReadEndBehavior = ReaderAutoReadEndBehavior.values.firstWhere(
+      (item) => item.name == autoReadEndBehaviorName,
+      orElse: () => ReaderAutoReadEndBehavior.stop,
+    );
+
     final backgroundName = prefs.getString(_backgroundStyleKey);
     final backgroundStyle = ReaderBackgroundStyle.values.firstWhere(
       (item) => item.name == backgroundName,
@@ -247,6 +272,14 @@ class ReaderPreferencesService {
     );
 
     final persistedCustomFontPath = prefs.getString(_customFontPathKey);
+    final autoReadSpeed =
+        (prefs.getDouble(_autoReadSpeedKey) ??
+                ReaderSettings.defaultAutoReadSpeed)
+            .clamp(
+              ReaderSettings.minAutoReadSpeed,
+              ReaderSettings.maxAutoReadSpeed,
+            )
+            .toDouble();
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
       lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
@@ -270,14 +303,18 @@ class ReaderPreferencesService {
       pageTurnMode: pageTurnMode,
       volumeKeyPageEnabled: prefs.getBool(_volumeKeyPageEnabledKey) ?? true,
       autoReadEnabled: prefs.getBool(_autoReadEnabledKey) ?? false,
-      autoReadSpeed:
-          (prefs.getDouble(_autoReadSpeedKey) ??
-                  ReaderSettings.defaultAutoReadSpeed)
+      autoReadSpeed: autoReadSpeed,
+      autoReadMode: autoReadMode,
+      autoReadSpeedLevel:
+          (prefs.getInt(_autoReadSpeedLevelKey) ??
+                  ReaderSettings.autoReadSpeedLevelFromSpeed(autoReadSpeed))
               .clamp(
-                ReaderSettings.minAutoReadSpeed,
-                ReaderSettings.maxAutoReadSpeed,
+                ReaderSettings.minAutoReadSpeedLevel,
+                ReaderSettings.maxAutoReadSpeedLevel,
               )
-              .toDouble(),
+              .toInt(),
+      autoReadPauseMode: autoReadPauseMode,
+      autoReadEndBehavior: autoReadEndBehavior,
       backgroundStyle: backgroundStyle,
       backgroundTone: backgroundTone,
       pageTurnStepRatio: (prefs.getDouble(_pageTurnStepRatioKey) ?? 0.88).clamp(
@@ -476,6 +513,16 @@ class ReaderPreferencesService {
     );
     await prefs.setBool(_autoReadEnabledKey, settings.autoReadEnabled);
     await prefs.setDouble(_autoReadSpeedKey, settings.autoReadSpeed);
+    await prefs.setString(_autoReadModeKey, settings.autoReadMode.name);
+    await prefs.setInt(_autoReadSpeedLevelKey, settings.autoReadSpeedLevel);
+    await prefs.setString(
+      _autoReadPauseModeKey,
+      settings.autoReadPauseMode.name,
+    );
+    await prefs.setString(
+      _autoReadEndBehaviorKey,
+      settings.autoReadEndBehavior.name,
+    );
     await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);
     await prefs.setString(_backgroundToneKey, settings.backgroundTone.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);
@@ -658,6 +705,16 @@ class ReaderPreferencesService {
         bodyTextDecorationColorValue,
       );
     }
+  }
+
+  Future<bool> loadAutoReadConfigured() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_autoReadConfiguredKey) ?? false;
+  }
+
+  Future<void> saveAutoReadConfigured(bool configured) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_autoReadConfiguredKey, configured);
   }
 
   Future<List<String>> loadCustomBackgroundImages() async {

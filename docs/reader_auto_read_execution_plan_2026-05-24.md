@@ -123,32 +123,32 @@
 
 ## 5. Phase 1：数据模型与偏好扩展
 
-- [ ] Phase 1 阶段完成
+- [x] Phase 1 阶段完成
 
 ### 5.1 任务
 
-- [ ] 新增 `ReaderAutoReadMode`：`scroll`、`page`。
-- [ ] 新增 `ReaderAutoReadPauseMode`：`none`、`chapterEnd`、`paragraphEnd`。
-- [ ] 新增 `ReaderAutoReadEndBehavior`：`stop`、`loopBook`、`nextBook`。
-- [ ] 将速度从 px/s 口径抽象为 1-10 档展示值。
-- [ ] 保留内部兼容：旧 `autoReadSpeed` 自动映射到速度档位。
-- [ ] 新增首次使用标记：如 `reader.settings.autoReadConfigured.v1`。
-- [ ] 扩展 `ReaderSettings.toJson()` 与 `ReaderSettings.fromJson()`。
-- [ ] 扩展 `ReaderSettings.copyWith()`。
-- [ ] 扩展 `ReaderPreferencesService.loadSettings()` 和 `saveSettings()`。
-- [ ] 为非法枚举值提供默认降级。
+- [x] 新增 `ReaderAutoReadMode`：`scroll`、`page`。
+- [x] 新增 `ReaderAutoReadPauseMode`：`none`、`chapterEnd`、`paragraphEnd`。
+- [x] 新增 `ReaderAutoReadEndBehavior`：`stop`、`loopBook`、`nextBook`。
+- [x] 将速度从 px/s 口径抽象为 1-10 档展示值。
+- [x] 保留内部兼容：旧 `autoReadSpeed` 自动映射到速度档位。
+- [x] 新增首次使用标记：如 `reader.settings.autoReadConfigured.v1`。
+- [x] 扩展 `ReaderSettings.toJson()` 与 `ReaderSettings.fromJson()`。
+- [x] 扩展 `ReaderSettings.copyWith()`。
+- [x] 扩展 `ReaderPreferencesService.loadSettings()` 和 `saveSettings()`。
+- [x] 为非法枚举值提供默认降级。
 
 ### 5.2 验收标准
 
-- [ ] 老用户升级后不丢失现有自动阅读速度。
-- [ ] 新增字段有默认值且不会破坏旧 JSON。
-- [ ] 自动阅读设置可跨重启恢复。
+- [x] 老用户升级后不丢失现有自动阅读速度。
+- [x] 新增字段有默认值且不会破坏旧 JSON。
+- [x] 自动阅读设置可跨重启恢复。
 
 ### 5.3 测试
 
-- [ ] 更新 `test/domain/entities/reader_settings_test.dart`。
-- [ ] 更新 `test/features/reader/application/reader_preferences_service_test.dart`。
-- [ ] 补充旧配置迁移到新速度档位的测试。
+- [x] 更新 `test/domain/entities/reader_settings_test.dart`。
+- [x] 更新 `test/features/reader/application/reader_preferences_service_test.dart`。
+- [x] 补充旧配置迁移到新速度档位的测试。
 
 ## 6. Phase 2：底部导航与入口改造
 
@@ -156,30 +156,35 @@
 
 ### 6.1 任务
 
-- [ ] 在 `_buildBottomOverlay()` 中移除「设置」入口。
-- [ ] 在「目录」和「界面」之间新增「自动」入口。
-- [ ] 自动入口图标建议使用 `Icons.play_circle_outline_rounded`、暂停态使用 `Icons.pause_circle_filled_rounded`。
-- [ ] 自动入口未开启时显示普通态。
-- [ ] 自动阅读运行中显示主题色或高亮背景。
+- [x] 在 `_buildBottomOverlay()` 中移除「设置」入口。
+- [x] 在「目录」和「界面」之间新增「自动」入口。
+- [x] 自动入口图标建议使用 `Icons.play_circle_outline_rounded`、暂停态使用 `Icons.pause_circle_filled_rounded`。
+- [x] 自动入口未开启时显示普通态。
+- [x] 自动阅读运行中显示主题色或高亮背景。
 - [ ] 自动阅读暂停时显示暂停图标与半透明强调态。
-- [ ] 自动阅读不支持时置灰，并提示“当前内容暂不支持自动阅读”。
-- [ ] 点击自动入口时调用新的入口编排方法，不直接裸调 `_toggleAutoReadSession()`。
+- [x] 自动阅读不支持时置灰，并提示“当前内容暂不支持自动阅读”。
+- [x] 点击自动入口时调用新的入口编排方法，不直接裸调 `_toggleAutoReadSession()`。
 
 ### 6.2 建议入口方法
 
-- [ ] 新增 `_openAutoReadFromOverlay()`。
-- [ ] 如果未配置过，打开自动阅读设置面板。
-- [ ] 如果已配置且未开启，直接启动。
+- [x] 新增 `_openAutoReadFromOverlay()`。
+- [x] 如果未配置过，打开自动阅读设置面板。
+- [x] 如果已配置且未开启，直接启动。
 - [ ] 如果运行中，点击后暂停。
 - [ ] 如果暂停中，点击后继续。
-- [ ] 如果长按自动入口，可直接打开自动阅读设置面板。
+- [x] 如果长按自动入口，可直接打开自动阅读设置面板。
 
 ### 6.3 验收标准
 
-- [ ] 底部栏不再出现「设置」。
-- [ ] 「自动」准确位于「目录」与「界面」之间。
-- [ ] 四个入口在小屏幕上不拥挤、不换行、不遮挡。
+- [x] 底部栏不再出现「设置」。
+- [x] 「自动」准确位于「目录」与「界面」之间。
+- [x] 四个入口在小屏幕上不拥挤、不换行、不遮挡。
 - [ ] 图标和文字状态能区分未开启、运行中、暂停中。
+
+### 6.4 当前执行备注
+
+- [x] 已完成底部入口结构改造和首次使用设置入口。
+- [x] 当前自动阅读运行中点击仍沿用现有停止行为，暂停/继续语义留到 Phase 4 状态机执行。
 
 ## 7. Phase 3：自动阅读设置面板
 

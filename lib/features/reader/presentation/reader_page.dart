@@ -3744,11 +3744,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
     const middleLabel = '界面';
     const middleIcon = Icons.palette_outlined;
-    const trailingLabel = '设置';
     final isDarkMode = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
     final dayNightLabel = isDarkMode ? '日间' : '夜间';
     final dayNightIcon =
         isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
+    final autoReadIcon =
+        _isAutoReadSessionEnabled
+            ? Icons.pause_circle_filled_rounded
+            : Icons.play_circle_outline_rounded;
 
     return Positioned(
       left: 0,
@@ -3814,6 +3817,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ),
                                 Expanded(
                                   child: _buildToolbarAction(
+                                    icon: autoReadIcon,
+                                    label: '自动',
+                                    onTap: _openAutoReadFromOverlay,
+                                    onLongPress:
+                                        () => _showSettingsSheet(
+                                          initialTab:
+                                              _ReaderSettingsTab.reading,
+                                          initialSettingsGroupKey: 'auto_read',
+                                        ),
+                                    colors: colors,
+                                    active: _isAutoReadSessionEnabled,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _buildToolbarAction(
                                     icon: middleIcon,
                                     label: middleLabel,
                                     onTap:
@@ -3831,18 +3849,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     onTap: _toggleDayNightMode,
                                     colors: colors,
                                     active: isDarkMode,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildToolbarAction(
-                                    icon: Icons.tune,
-                                    label: trailingLabel,
-                                    onTap:
-                                        () => _showSettingsSheet(
-                                          initialTab:
-                                              _ReaderSettingsTab.reading,
-                                        ),
-                                    colors: colors,
                                   ),
                                 ),
                               ],
@@ -3998,6 +4004,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String label,
     required Future<void> Function() onTap,
     required _ReaderThemeColors colors,
+    Future<void> Function()? onLongPress,
     bool active = false,
   }) {
     return Material(
@@ -4012,6 +4019,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _showMessage('操作失败，请稍后重试。');
           }
         },
+        onLongPress:
+            onLongPress == null
+                ? null
+                : () async {
+                  try {
+                    await onLongPress();
+                  } catch (_) {
+                    _showMessage('操作失败，请稍后重试。');
+                  }
+                },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
@@ -4643,9 +4660,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _showSettingsSheet({
     _ReaderSettingsTab initialTab = _ReaderSettingsTab.reading,
-  }) => _ReaderPageSettingsSheetExtension(
-    this,
-  )._showSettingsSheet(initialTab: initialTab);
+    String? initialSettingsGroupKey,
+    bool startAutoReadAfterApplyInitially = false,
+  }) => _ReaderPageSettingsSheetExtension(this)._showSettingsSheet(
+    initialTab: initialTab,
+    initialSettingsGroupKey: initialSettingsGroupKey,
+    startAutoReadAfterApplyInitially: startAutoReadAfterApplyInitially,
+  );
   double _letterSpacingSliderValue(ReaderSettings settings) {
     return ((settings.letterSpacing * 100) + 50).clamp(0, 100).toDouble();
   }

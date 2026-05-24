@@ -3,6 +3,8 @@ part of 'reader_page.dart';
 extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
   Future<void> _showSettingsSheet({
     _ReaderSettingsTab initialTab = _ReaderSettingsTab.reading,
+    String? initialSettingsGroupKey,
+    bool startAutoReadAfterApplyInitially = false,
   }) async {
     _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
@@ -16,10 +18,10 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
       draft = draft.copyWith(pageTurnMode: ReaderPageTurnMode.tapAndSwipe);
     }
     var availableCustomFonts = List<ReaderCustomFontEntry>.from(_customFonts);
-    var startAutoReadAfterApply = false;
+    var startAutoReadAfterApply = startAutoReadAfterApplyInitially;
     var isPersistingDraft = false;
     final showInterfaceSettings = initialTab == _ReaderSettingsTab.interface;
-    String? activeSettingsGroupKey;
+    String? activeSettingsGroupKey = initialSettingsGroupKey;
     Timer? persistDraftTimer;
     Timer? sliderInteractionTimer;
     var isSliderInteracting = false;

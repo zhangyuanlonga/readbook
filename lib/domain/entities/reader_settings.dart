@@ -60,6 +60,12 @@ enum ReaderBodyMarginPreset { compact, standard, relaxed, immersive }
 
 enum ReaderChapterHeaderMode { start, center, hidden }
 
+enum ReaderAutoReadMode { scroll, page }
+
+enum ReaderAutoReadPauseMode { none, chapterEnd, paragraphEnd }
+
+enum ReaderAutoReadEndBehavior { stop, loopBook, nextBook }
+
 class ReaderBodyMarginValues {
   const ReaderBodyMarginValues({
     required this.top,
@@ -91,6 +97,10 @@ class ReaderSettings {
     this.volumeKeyPageEnabled = true,
     this.autoReadEnabled = false,
     this.autoReadSpeed = defaultAutoReadSpeed,
+    this.autoReadMode = ReaderAutoReadMode.scroll,
+    this.autoReadSpeedLevel = defaultAutoReadSpeedLevel,
+    this.autoReadPauseMode = ReaderAutoReadPauseMode.none,
+    this.autoReadEndBehavior = ReaderAutoReadEndBehavior.stop,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
     this.backgroundTone = ReaderBackgroundTone.surface,
     this.pageTurnStepRatio = 0.88,
@@ -157,6 +167,9 @@ class ReaderSettings {
   static const double minAutoReadSpeed = 20;
   static const double maxAutoReadSpeed = 120;
   static const double defaultAutoReadSpeed = 48;
+  static const int minAutoReadSpeedLevel = 1;
+  static const int maxAutoReadSpeedLevel = 10;
+  static const int defaultAutoReadSpeedLevel = 4;
   static const double minLetterSpacing = -0.5;
   static const double maxLetterSpacing = 0.5;
   static const double defaultLetterSpacing = 0.1;
@@ -179,6 +192,30 @@ class ReaderSettings {
   static const double minChapterHeaderSpacing = 0;
   static const double maxChapterHeaderSpacing = 80;
 
+  static int autoReadSpeedLevelFromSpeed(double speed) {
+    final normalized = ((speed.clamp(minAutoReadSpeed, maxAutoReadSpeed) -
+                minAutoReadSpeed) /
+            (maxAutoReadSpeed - minAutoReadSpeed))
+        .clamp(0.0, 1.0);
+    return (normalized * (maxAutoReadSpeedLevel - minAutoReadSpeedLevel) +
+            minAutoReadSpeedLevel)
+        .round()
+        .clamp(minAutoReadSpeedLevel, maxAutoReadSpeedLevel)
+        .toInt();
+  }
+
+  static double autoReadSpeedForLevel(int level) {
+    final normalized = ((level.clamp(
+                  minAutoReadSpeedLevel,
+                  maxAutoReadSpeedLevel,
+                ) -
+                minAutoReadSpeedLevel) /
+            (maxAutoReadSpeedLevel - minAutoReadSpeedLevel))
+        .clamp(0.0, 1.0);
+    return minAutoReadSpeed +
+        normalized * (maxAutoReadSpeed - minAutoReadSpeed);
+  }
+
   final double fontSize;
   final double lineHeight;
   final double horizontalPadding;
@@ -194,6 +231,10 @@ class ReaderSettings {
   final bool volumeKeyPageEnabled;
   final bool autoReadEnabled;
   final double autoReadSpeed;
+  final ReaderAutoReadMode autoReadMode;
+  final int autoReadSpeedLevel;
+  final ReaderAutoReadPauseMode autoReadPauseMode;
+  final ReaderAutoReadEndBehavior autoReadEndBehavior;
   final ReaderBackgroundStyle backgroundStyle;
   final ReaderBackgroundTone backgroundTone;
   final double pageTurnStepRatio;
@@ -312,6 +353,10 @@ class ReaderSettings {
     bool? volumeKeyPageEnabled,
     bool? autoReadEnabled,
     double? autoReadSpeed,
+    ReaderAutoReadMode? autoReadMode,
+    int? autoReadSpeedLevel,
+    ReaderAutoReadPauseMode? autoReadPauseMode,
+    ReaderAutoReadEndBehavior? autoReadEndBehavior,
     ReaderBackgroundStyle? backgroundStyle,
     ReaderBackgroundTone? backgroundTone,
     double? pageTurnStepRatio,
@@ -400,6 +445,13 @@ class ReaderSettings {
     final nextHorizontalPadding =
         horizontalPadding ??
         ((nextBodyMarginLeft + nextBodyMarginRight) / 2).toDouble();
+    final nextAutoReadSpeed =
+        autoReadSpeed ??
+        (autoReadSpeedLevel == null
+            ? this.autoReadSpeed
+            : autoReadSpeedForLevel(autoReadSpeedLevel));
+    final nextAutoReadSpeedLevel =
+        autoReadSpeedLevel ?? autoReadSpeedLevelFromSpeed(nextAutoReadSpeed);
 
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -429,9 +481,16 @@ class ReaderSettings {
       volumeKeyPageEnabled: volumeKeyPageEnabled ?? this.volumeKeyPageEnabled,
       autoReadEnabled: autoReadEnabled ?? this.autoReadEnabled,
       autoReadSpeed:
-          (autoReadSpeed ?? this.autoReadSpeed)
+          nextAutoReadSpeed
               .clamp(minAutoReadSpeed, maxAutoReadSpeed)
               .toDouble(),
+      autoReadMode: autoReadMode ?? this.autoReadMode,
+      autoReadSpeedLevel:
+          nextAutoReadSpeedLevel
+              .clamp(minAutoReadSpeedLevel, maxAutoReadSpeedLevel)
+              .toInt(),
+      autoReadPauseMode: autoReadPauseMode ?? this.autoReadPauseMode,
+      autoReadEndBehavior: autoReadEndBehavior ?? this.autoReadEndBehavior,
       backgroundStyle: backgroundStyle ?? this.backgroundStyle,
       backgroundTone: backgroundTone ?? this.backgroundTone,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
@@ -608,6 +667,10 @@ class ReaderSettings {
       'volumeKeyPageEnabled': volumeKeyPageEnabled,
       'autoReadEnabled': autoReadEnabled,
       'autoReadSpeed': autoReadSpeed,
+      'autoReadMode': autoReadMode.name,
+      'autoReadSpeedLevel': autoReadSpeedLevel,
+      'autoReadPauseMode': autoReadPauseMode.name,
+      'autoReadEndBehavior': autoReadEndBehavior.name,
       'backgroundStyle': backgroundStyle.name,
       'backgroundTone': backgroundTone.name,
       'pageTurnStepRatio': pageTurnStepRatio,
@@ -676,6 +739,24 @@ class ReaderSettings {
     final pageTurnMode = ReaderPageTurnMode.values.firstWhere(
       (item) => item.name == pageTurnModeName,
       orElse: () => ReaderPageTurnMode.tapAndSwipe,
+    );
+
+    final autoReadModeName = json['autoReadMode']?.toString();
+    final autoReadMode = ReaderAutoReadMode.values.firstWhere(
+      (item) => item.name == autoReadModeName,
+      orElse: () => ReaderAutoReadMode.scroll,
+    );
+
+    final autoReadPauseModeName = json['autoReadPauseMode']?.toString();
+    final autoReadPauseMode = ReaderAutoReadPauseMode.values.firstWhere(
+      (item) => item.name == autoReadPauseModeName,
+      orElse: () => ReaderAutoReadPauseMode.none,
+    );
+
+    final autoReadEndBehaviorName = json['autoReadEndBehavior']?.toString();
+    final autoReadEndBehavior = ReaderAutoReadEndBehavior.values.firstWhere(
+      (item) => item.name == autoReadEndBehaviorName,
+      orElse: () => ReaderAutoReadEndBehavior.stop,
     );
 
     final backgroundName = json['backgroundStyle']?.toString();
@@ -753,6 +834,10 @@ class ReaderSettings {
                 const ReaderSettings().bodyMarginRight)
             .clamp(minLayoutMargin, maxLayoutMargin)
             .toDouble();
+    final autoReadSpeed =
+        (_asDouble(json['autoReadSpeed']) ?? defaultAutoReadSpeed)
+            .clamp(minAutoReadSpeed, maxAutoReadSpeed)
+            .toDouble();
 
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
@@ -766,8 +851,7 @@ class ReaderSettings {
           (_asDouble(json['paragraphIndent']) ?? 2)
               .clamp(minParagraphIndent, maxParagraphIndent)
               .toDouble(),
-      textFullJustifyEnabled:
-          _asBool(json['textFullJustifyEnabled']) ?? true,
+      textFullJustifyEnabled: _asBool(json['textFullJustifyEnabled']) ?? true,
       textBottomJustifyEnabled:
           _asBool(json['textBottomJustifyEnabled']) ?? false,
       letterSpacing:
@@ -780,10 +864,15 @@ class ReaderSettings {
       pageTurnMode: pageTurnMode,
       volumeKeyPageEnabled: _asBool(json['volumeKeyPageEnabled']) ?? false,
       autoReadEnabled: _asBool(json['autoReadEnabled']) ?? false,
-      autoReadSpeed:
-          (_asDouble(json['autoReadSpeed']) ?? defaultAutoReadSpeed)
-              .clamp(minAutoReadSpeed, maxAutoReadSpeed)
-              .toDouble(),
+      autoReadSpeed: autoReadSpeed,
+      autoReadMode: autoReadMode,
+      autoReadSpeedLevel:
+          (_asInt(json['autoReadSpeedLevel']) ??
+                  autoReadSpeedLevelFromSpeed(autoReadSpeed))
+              .clamp(minAutoReadSpeedLevel, maxAutoReadSpeedLevel)
+              .toInt(),
+      autoReadPauseMode: autoReadPauseMode,
+      autoReadEndBehavior: autoReadEndBehavior,
       backgroundStyle: backgroundStyle,
       backgroundTone: backgroundTone,
       pageTurnStepRatio:

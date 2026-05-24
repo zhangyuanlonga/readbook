@@ -59,7 +59,6 @@ class _HomePageState extends ConsumerState<HomePage>
   HomeEngagementState _engagementState = const HomeEngagementState();
   bool _isEngagementLoading = true;
   bool _isSubmittingCheckIn = false;
-  _RankingDimension _selectedRankingDimension = _RankingDimension.hot;
 
   @override
   bool get wantKeepAlive => true;
@@ -139,7 +138,7 @@ class _HomePageState extends ConsumerState<HomePage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               AppFadeSlideTransition(
-                                child: _buildReadingSummarySection(),
+                                child: _buildCheckInSummarySection(),
                               ),
                               SizedBox(height: metrics.sectionGap),
                               AppFadeSlideTransition(
@@ -159,15 +158,7 @@ class _HomePageState extends ConsumerState<HomePage>
                               SizedBox(height: metrics.sectionGap),
                               AppFadeSlideTransition(
                                 delay: const Duration(milliseconds: 112),
-                                child: _buildSectionHeader(
-                                  context,
-                                  title: '排行',
-                                ),
-                              ),
-                              SizedBox(height: metrics.contentGap),
-                              AppFadeSlideTransition(
-                                delay: const Duration(milliseconds: 140),
-                                child: _buildRankingPreviewSection(context),
+                                child: _buildReadingGoalSection(),
                               ),
                             ],
                           ),
@@ -208,16 +199,6 @@ class _HomePageState extends ConsumerState<HomePage>
                   AppFadeSlideTransition(
                     delay: const Duration(milliseconds: 84),
                     child: _buildContinueReadingSectionBlock(),
-                  ),
-                  SizedBox(height: metrics.sectionGap),
-                  AppFadeSlideTransition(
-                    delay: const Duration(milliseconds: 112),
-                    child: _buildSectionHeader(context, title: '排行'),
-                  ),
-                  SizedBox(height: metrics.contentGap),
-                  AppFadeSlideTransition(
-                    delay: const Duration(milliseconds: 140),
-                    child: _buildRankingPreviewSection(context),
                   ),
                 ],
               ),
@@ -277,6 +258,38 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Widget _buildReadingSummarySection() {
+    return _buildReadingSummaryStream(
+      builder:
+          (summary, records) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCheckInCard(summary),
+              SizedBox(height: AppAdaptiveMetrics.of(context).sectionGap),
+              _buildGoalCard(summary, records),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildCheckInSummarySection() {
+    return _buildReadingSummaryStream(
+      builder: (summary, _) => _buildCheckInCard(summary),
+    );
+  }
+
+  Widget _buildReadingGoalSection() {
+    return _buildReadingSummaryStream(
+      builder: (summary, records) => _buildGoalCard(summary, records),
+    );
+  }
+
+  Widget _buildReadingSummaryStream({
+    required Widget Function(
+      _HomeReadingSummary summary,
+      List<ReadingRecord> records,
+    )
+    builder,
+  }) {
     return StreamBuilder<List<ReadingRecord>>(
       stream: _readingRecordService.watchLatestRecords(),
       builder: (context, recordsSnapshot) {
@@ -291,16 +304,11 @@ class _HomePageState extends ConsumerState<HomePage>
               dailyRecords: dailyRecords,
             );
             return AppAnimatedSwitcher(
-              child: Column(
+              child: KeyedSubtree(
                 key: ValueKey<String>(
                   'home_summary_${records.length}_${dailyRecords.length}',
                 ),
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCheckInCard(summary),
-                  SizedBox(height: AppAdaptiveMetrics.of(context).sectionGap),
-                  _buildGoalCard(summary, records),
-                ],
+                child: builder(summary, records),
               ),
             );
           },
@@ -743,58 +751,6 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Widget _buildRankingPreviewSection(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final items = _rankingItemsFor(_selectedRankingDimension);
-
-    return _buildSurface(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final dimension in _RankingDimension.values) ...[
-                    _RankingChip(
-                      label: dimension.label,
-                      selected: dimension == _selectedRankingDimension,
-                      onTap: () {
-                        setState(() {
-                          _selectedRankingDimension = dimension;
-                        });
-                      },
-                    ),
-                    if (dimension != _RankingDimension.values.last)
-                      const SizedBox(width: 8),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            for (var index = 0; index < items.length; index++)
-              _RankingListTile(
-                rank: index + 1,
-                title: items[index].title,
-                subtitle: items[index].subtitle,
-                trailing: items[index].trailing,
-                badgeColor:
-                    index == 0
-                        ? const Color(0xFFFFC95B)
-                        : (index == 1
-                            ? const Color(0xFFD8DFEA)
-                            : const Color(0xFFE9EEF6)),
-                textColor: colorScheme.onSurface,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSectionHeader(
     BuildContext context, {
     required String title,
@@ -1106,75 +1062,6 @@ class _HomePageState extends ConsumerState<HomePage>
     return '$totalMinutes 分钟';
   }
 
-  List<_RankingItemData> _rankingItemsFor(_RankingDimension dimension) {
-    return switch (dimension) {
-      _RankingDimension.hot => const <_RankingItemData>[
-        _RankingItemData(
-          title: '诡秘之主',
-          subtitle: '24 小时热度上升最快',
-          trailing: '热度 98',
-        ),
-        _RankingItemData(
-          title: '道诡异仙',
-          subtitle: '今日讨论度持续走高',
-          trailing: '热度 94',
-        ),
-        _RankingItemData(
-          title: '宿命之环',
-          subtitle: '最近新增收藏表现活跃',
-          trailing: '热度 91',
-        ),
-      ],
-      _RankingDimension.checkIn => const <_RankingItemData>[
-        _RankingItemData(
-          title: '晨读俱乐部',
-          subtitle: '今日打卡人数最多',
-          trailing: '1,286 人',
-        ),
-        _RankingItemData(title: '晚安书房', subtitle: '七日打卡完成率最高', trailing: '92%'),
-        _RankingItemData(
-          title: '周末读书会',
-          subtitle: '本周新增打卡人数增长快',
-          trailing: '+218',
-        ),
-      ],
-      _RankingDimension.duration => const <_RankingItemData>[
-        _RankingItemData(
-          title: '今日时长冠军',
-          subtitle: '连续阅读最久的作品',
-          trailing: '6 小时',
-        ),
-        _RankingItemData(
-          title: '地煞七十二变',
-          subtitle: '读者平均停留时长很高',
-          trailing: '4.8 小时',
-        ),
-        _RankingItemData(
-          title: '赤心巡天',
-          subtitle: '周内累计阅读时长稳定',
-          trailing: '4.2 小时',
-        ),
-      ],
-      _RankingDimension.streak => const <_RankingItemData>[
-        _RankingItemData(
-          title: '三十日连读榜首',
-          subtitle: '连续阅读天数最高',
-          trailing: '30 天',
-        ),
-        _RankingItemData(
-          title: '深夜书桌',
-          subtitle: '近两周连续阅读表现稳定',
-          trailing: '18 天',
-        ),
-        _RankingItemData(
-          title: '清晨阅读者',
-          subtitle: '最近七天每天都有阅读',
-          trailing: '7 天',
-        ),
-      ],
-    };
-  }
-
   Future<void> _openRecord(ReadingRecord record) async {
     final progress = await _preferencesService.loadProgress(record.bookId);
     if (!mounted) {
@@ -1247,29 +1134,6 @@ class _HomeReadingSummary {
   final int activeDays;
 }
 
-enum _RankingDimension {
-  hot('热读榜'),
-  checkIn('打卡榜'),
-  duration('时长榜'),
-  streak('连读榜');
-
-  const _RankingDimension(this.label);
-
-  final String label;
-}
-
-class _RankingItemData {
-  const _RankingItemData({
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-  });
-
-  final String title;
-  final String subtitle;
-  final String trailing;
-}
-
 class _MetricPill extends StatelessWidget {
   const _MetricPill({required this.label, required this.value});
 
@@ -1308,124 +1172,6 @@ class _MetricPill extends StatelessWidget {
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RankingChip extends StatelessWidget {
-  const _RankingChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color:
-                selected
-                    ? colorScheme.onSurface
-                    : colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: selected ? colorScheme.surface : colorScheme.onSurface,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RankingListTile extends StatelessWidget {
-  const _RankingListTile({
-    required this.rank,
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-    required this.badgeColor,
-    required this.textColor,
-  });
-
-  final int rank;
-  final String title;
-  final String subtitle;
-  final String trailing;
-  final Color badgeColor;
-  final Color textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorScheme.surface.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.22),
-          ),
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 2,
-          ),
-          leading: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: badgeColor,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '$rank',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF2A2A2A),
-              ),
-            ),
-          ),
-          title: Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            ),
-          ),
-          subtitle: Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          trailing: Text(
-            trailing,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: colorScheme.primary,
-            ),
-          ),
-        ),
       ),
     );
   }
