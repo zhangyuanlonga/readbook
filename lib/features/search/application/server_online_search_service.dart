@@ -12,7 +12,8 @@ import '../../../core/network/api_config.dart';
 import '../../../core/network/interceptors.dart';
 import '../../../domain/entities/book.dart';
 import 'server_gateway_identity.dart';
-import 'search_service.dart';
+import 'search_models.dart';
+import 'search_report_assembler.dart';
 
 class ServerOnlineSearchService {
   ServerOnlineSearchService({

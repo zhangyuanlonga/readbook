@@ -85,7 +85,7 @@ class FeatureDisabledPages {
         title: '发现暂未启用',
         message: _messageFromCapability(
           capability,
-          '发现页依赖在线书源和脚本运行时，已移出全平台首版范围。当前版本优先打磨本地阅读体验。',
+          '发现页将由服务器书源网关提供，当前版本优先打磨本地阅读和搜索体验。',
         ),
         icon: Icons.explore_off_outlined,
       );
@@ -95,7 +95,7 @@ class FeatureDisabledPages {
         title: '在线搜索暂未启用',
         message: _messageFromCapability(
           capability,
-          '全平台首版先聚焦本地书库和本地阅读。在线搜索依赖书源运行时，后续会随书源专题恢复。',
+          '在线搜索将由服务器书源网关提供。当前环境暂未开放该能力，可继续使用本地书库和本地阅读。',
         ),
         icon: Icons.search_off_rounded,
       );
@@ -119,25 +119,6 @@ class FeatureDisabledPages {
           '当前平台未开放 WebDAV 同步能力，因此不会产生同步历史。首版可继续使用本地阅读记录和书签。',
         ),
         icon: Icons.history_toggle_off_rounded,
-      );
-
-  static FeatureDisabledPage onlineBookDetail({
-    AppCapabilityState? capability,
-  }) => FeatureDisabledPage(
-    title: '在线详情暂未启用',
-    message: _messageFromCapability(
-      capability,
-      '全平台首版先交付本地阅读闭环。在线详情、目录刷新和章节读取会随书源专题恢复。',
-    ),
-  );
-
-  static FeatureDisabledPage onlineChapter({AppCapabilityState? capability}) =>
-      FeatureDisabledPage(
-        title: '在线章节暂未启用',
-        message: _messageFromCapability(
-          capability,
-          '当前全平台首版只保证本地阅读。在线章节读取、换源和章节缓存会随书源专题恢复。',
-        ),
       );
 
   static String _messageFromCapability(

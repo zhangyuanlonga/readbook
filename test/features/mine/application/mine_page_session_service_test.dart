@@ -63,10 +63,10 @@ void main() {
 
       final snapshot = await service.loadSession(refreshRemote: true);
       expect(snapshot.session?.userId, 'user_1');
-      expect(snapshot.showSourceEntry, isTrue);
+      expect(snapshot.serverSourceGatewayEnabled, isTrue);
       expect(snapshot.hasMembership, isTrue);
       expect(snapshot.hasThemeCustom, isTrue);
-      expect(snapshot.sourceImportLimit, 88);
+      expect(snapshot.serverSourceGatewayLimit, 88);
       expect(snapshot.isRemoteAccessResolved, isTrue);
       expect(snapshot.shouldRefreshRemoteAccess, isFalse);
     },
@@ -116,8 +116,8 @@ void main() {
 
     expect(refreshed.hasThemeCustom, isTrue);
     expect(cached.hasThemeCustom, isTrue);
-    expect(cached.showSourceEntry, isTrue);
-    expect(cached.sourceImportLimit, 88);
+    expect(cached.serverSourceGatewayEnabled, isTrue);
+    expect(cached.serverSourceGatewayLimit, 88);
     expect(cached.isRemoteAccessResolved, isTrue);
     expect(cached.shouldRefreshRemoteAccess, isFalse);
     expect(featureService.fetchCount, 1);

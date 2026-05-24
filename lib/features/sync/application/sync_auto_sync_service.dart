@@ -52,8 +52,6 @@ class SyncAutoSyncService {
   bool _supportsAutoSync(SyncScope scope) {
     return switch (scope) {
       SyncScope.authSession ||
-      SyncScope.sourceLoginState ||
-      SyncScope.bookCustomState ||
       SyncScope.discoverCacheSnapshots ||
       SyncScope.searchSourceHits ||
       SyncScope.chapterCaches ||

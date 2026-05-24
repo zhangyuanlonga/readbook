@@ -43,15 +43,6 @@
                     android:mimeType="application/x-zip-compressed" />
                 <data
                     android:scheme="content"
-                    android:mimeType="application/javascript" />
-                <data
-                    android:scheme="content"
-                    android:mimeType="text/javascript" />
-                <data
-                    android:scheme="content"
-                    android:mimeType="application/x-javascript" />
-                <data
-                    android:scheme="content"
                     android:mimeType="text/markdown" />
                 <data
                     android:scheme="content"
@@ -151,15 +142,6 @@
                     android:mimeType="application/x-zip-compressed" />
                 <data
                     android:scheme="file"
-                    android:mimeType="application/javascript" />
-                <data
-                    android:scheme="file"
-                    android:mimeType="text/javascript" />
-                <data
-                    android:scheme="file"
-                    android:mimeType="application/x-javascript" />
-                <data
-                    android:scheme="file"
                     android:mimeType="text/plain" />
                 <data
                     android:scheme="file"
@@ -171,9 +153,6 @@
                 <data android:mimeType="application/json" />
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/x-zip-compressed" />
-                <data android:mimeType="application/javascript" />
-                <data android:mimeType="text/javascript" />
-                <data android:mimeType="application/x-javascript" />
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/x-markdown" />
                 <data android:mimeType="text/html" />
@@ -197,9 +176,6 @@
                 <data android:mimeType="application/json" />
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/x-zip-compressed" />
-                <data android:mimeType="application/javascript" />
-                <data android:mimeType="text/javascript" />
-                <data android:mimeType="application/x-javascript" />
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/x-markdown" />
                 <data android:mimeType="text/html" />

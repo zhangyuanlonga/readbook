@@ -31,8 +31,8 @@ void main() {
       final snapshot = await service.load('user_1');
 
       expect(snapshot, isNotNull);
-      expect(snapshot!.showSourceEntry, isTrue);
-      expect(snapshot.sourceImportLimit, 42);
+      expect(snapshot!.serverSourceGatewayEnabled, isTrue);
+      expect(snapshot.serverSourceGatewayLimit, 42);
       expect(prefs.containsKey('remote.access.snapshot.v1.user_1'), isFalse);
 
       final stored = await database.getRemoteAccessSnapshot('user_1');

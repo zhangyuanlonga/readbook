@@ -22,7 +22,7 @@ void main() {
             onDestinationSelected: (index) {
               selectedIndex = index;
             },
-            onSearchPressed: () {
+            onSearchPressed: (_) {
               searchPressed = true;
             },
           ),
@@ -33,7 +33,7 @@ void main() {
     await tester.tap(find.text('发现'));
     await tester.pumpAndSettle();
 
-    expect(selectedIndex, 1);
+    expect(selectedIndex, 2);
 
     await tester.tap(find.byTooltip('搜索'));
     await tester.pumpAndSettle();
@@ -52,7 +52,7 @@ void main() {
             showLabels: false,
             activeIconGallery: null,
             onDestinationSelected: (_) {},
-            onSearchPressed: () {},
+            onSearchPressed: (_) {},
           ),
         ),
       ),

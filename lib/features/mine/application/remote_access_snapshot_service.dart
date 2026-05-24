@@ -9,17 +9,17 @@ import '../../../core/mobile_features/mobile_feature_module.dart';
 
 class RemoteAccessSnapshot {
   const RemoteAccessSnapshot({
-    required this.showSourceEntry,
+    required this.serverSourceGatewayEnabled,
     required this.hasMembership,
     required this.hasThemeCustom,
-    required this.sourceImportLimit,
+    required this.serverSourceGatewayLimit,
     required this.cachedAt,
   });
 
-  final bool showSourceEntry;
+  final bool serverSourceGatewayEnabled;
   final bool hasMembership;
   final bool hasThemeCustom;
-  final int sourceImportLimit;
+  final int serverSourceGatewayLimit;
   final DateTime cachedAt;
 
   bool isFresh({
@@ -30,30 +30,33 @@ class RemoteAccessSnapshot {
   }
 
   RemoteAccessSnapshot copyWith({
-    bool? showSourceEntry,
+    bool? serverSourceGatewayEnabled,
     bool? hasMembership,
     bool? hasThemeCustom,
-    int? sourceImportLimit,
+    int? serverSourceGatewayLimit,
     DateTime? cachedAt,
   }) {
     return RemoteAccessSnapshot(
-      showSourceEntry: showSourceEntry ?? this.showSourceEntry,
+      serverSourceGatewayEnabled:
+          serverSourceGatewayEnabled ?? this.serverSourceGatewayEnabled,
       hasMembership: hasMembership ?? this.hasMembership,
       hasThemeCustom: hasThemeCustom ?? this.hasThemeCustom,
-      sourceImportLimit: sourceImportLimit ?? this.sourceImportLimit,
+      serverSourceGatewayLimit:
+          serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
       cachedAt: cachedAt ?? this.cachedAt,
     );
   }
 
   factory RemoteAccessSnapshot.fromJson(Map<String, dynamic> json) {
+    final rawLimit =
+        json['serverSourceGatewayLimit'] ?? json['sourceImportLimit'];
     return RemoteAccessSnapshot(
-      showSourceEntry: json['showSourceEntry'] == true,
+      serverSourceGatewayEnabled:
+          json['serverSourceGatewayEnabled'] == true ||
+          json['showSourceEntry'] == true,
       hasMembership: json['hasMembership'] == true,
       hasThemeCustom: json['hasThemeCustom'] == true,
-      sourceImportLimit:
-          json['sourceImportLimit'] is int
-              ? json['sourceImportLimit'] as int
-              : 10,
+      serverSourceGatewayLimit: rawLimit is int ? rawLimit : 10,
       cachedAt:
           DateTime.tryParse(json['cachedAt']?.toString() ?? '')?.toUtc() ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -62,10 +65,10 @@ class RemoteAccessSnapshot {
 
   Map<String, Object> toJson() {
     return <String, Object>{
-      'showSourceEntry': showSourceEntry,
+      'serverSourceGatewayEnabled': serverSourceGatewayEnabled,
       'hasMembership': hasMembership,
       'hasThemeCustom': hasThemeCustom,
-      'sourceImportLimit': sourceImportLimit,
+      'serverSourceGatewayLimit': serverSourceGatewayLimit,
       'cachedAt': cachedAt.toUtc().toIso8601String(),
     };
   }
@@ -75,12 +78,11 @@ class RemoteAccessSnapshotService {
   RemoteAccessSnapshotService({
     SharedPreferences? preferences,
     AppDatabase? database,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _database = database ?? AppDatabase.instance;
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _database = database ?? AppDatabase.instance;
 
   static const Duration defaultTtl = Duration(hours: 12);
 
@@ -96,10 +98,10 @@ class RemoteAccessSnapshotService {
     final stored = await _database.getRemoteAccessSnapshot(normalizedUserId);
     if (stored != null) {
       return RemoteAccessSnapshot(
-        showSourceEntry: stored.showSourceEntry,
+        serverSourceGatewayEnabled: stored.serverSourceGatewayEnabled,
         hasMembership: stored.hasMembership,
         hasThemeCustom: stored.hasThemeCustom,
-        sourceImportLimit: stored.sourceImportLimit,
+        serverSourceGatewayLimit: stored.serverSourceGatewayLimit,
         cachedAt: stored.cachedAt,
       );
     }
@@ -117,10 +119,10 @@ class RemoteAccessSnapshotService {
       final snapshot = RemoteAccessSnapshot.fromJson(decoded);
       await _database.upsertRemoteAccessSnapshot(
         userId: normalizedUserId,
-        showSourceEntry: snapshot.showSourceEntry,
+        serverSourceGatewayEnabled: snapshot.serverSourceGatewayEnabled,
         hasMembership: snapshot.hasMembership,
         hasThemeCustom: snapshot.hasThemeCustom,
-        sourceImportLimit: snapshot.sourceImportLimit,
+        serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
         cachedAt: snapshot.cachedAt,
       );
       await prefs.remove(_storageKey(normalizedUserId));
@@ -138,10 +140,10 @@ class RemoteAccessSnapshotService {
     }
     await _database.upsertRemoteAccessSnapshot(
       userId: normalizedUserId,
-      showSourceEntry: snapshot.showSourceEntry,
+      serverSourceGatewayEnabled: snapshot.serverSourceGatewayEnabled,
       hasMembership: snapshot.hasMembership,
       hasThemeCustom: snapshot.hasThemeCustom,
-      sourceImportLimit: snapshot.sourceImportLimit,
+      serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
       cachedAt: snapshot.cachedAt,
     );
     final prefs = await _preferencesFuture;
@@ -195,13 +197,17 @@ class RemoteAccessSnapshotService {
     required List<MobileFeatureModule> modules,
   }) async {
     final existing = await load(userId);
-    final sourceEntry = _findModule(modules, 'source_entry');
-    final sourceImport = _findModule(modules, 'source_import');
+    final gatewayEntry =
+        _findModule(modules, 'server_source_gateway') ??
+        _findModule(modules, 'source_entry');
+    final gatewayQuota =
+        _findModule(modules, 'server_source_gateway_limit') ??
+        _findModule(modules, 'source_import');
     await save(
       userId,
       (existing ?? _defaultSnapshot()).copyWith(
-        showSourceEntry: sourceEntry?.visible == true,
-        sourceImportLimit: sourceImport?.quotaLimit ?? 10,
+        serverSourceGatewayEnabled: gatewayEntry?.visible == true,
+        serverSourceGatewayLimit: gatewayQuota?.quotaLimit ?? 10,
         cachedAt: DateTime.now().toUtc(),
       ),
     );
@@ -211,16 +217,20 @@ class RemoteAccessSnapshotService {
     required List<MobileFeatureModule> modules,
     required MembershipEntitlement entitlement,
   }) {
-    final sourceEntry = _findModule(modules, 'source_entry');
-    final sourceImport = _findModule(modules, 'source_import');
+    final gatewayEntry =
+        _findModule(modules, 'server_source_gateway') ??
+        _findModule(modules, 'source_entry');
+    final gatewayQuota =
+        _findModule(modules, 'server_source_gateway_limit') ??
+        _findModule(modules, 'source_import');
     return RemoteAccessSnapshot(
-      showSourceEntry: sourceEntry?.visible == true,
+      serverSourceGatewayEnabled: gatewayEntry?.visible == true,
       hasMembership: entitlement.isActive,
       hasThemeCustom: MembershipFeatures.hasFeature(
         entitlement,
         MembershipFeatures.themeCustom,
       ),
-      sourceImportLimit: sourceImport?.quotaLimit ?? 10,
+      serverSourceGatewayLimit: gatewayQuota?.quotaLimit ?? 10,
       cachedAt: DateTime.now().toUtc(),
     );
   }
@@ -241,10 +251,10 @@ class RemoteAccessSnapshotService {
 
   RemoteAccessSnapshot _defaultSnapshot() {
     return RemoteAccessSnapshot(
-      showSourceEntry: false,
+      serverSourceGatewayEnabled: false,
       hasMembership: false,
       hasThemeCustom: false,
-      sourceImportLimit: 10,
+      serverSourceGatewayLimit: 10,
       cachedAt: DateTime.now().toUtc(),
     );
   }

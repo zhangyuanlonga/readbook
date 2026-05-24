@@ -10,10 +10,7 @@ class UrlOption {
     this.body,
     this.contentType,
     this.retry,
-    this.webView = false,
-    this.webViewDelay,
     this.enabledCookieJar,
-    this.webJs,
     this.sourceRegex,
   });
 
@@ -23,10 +20,7 @@ class UrlOption {
   final Object? body;
   final String? contentType;
   final int? retry;
-  final bool webView;
-  final Duration? webViewDelay;
   final bool? enabledCookieJar;
-  final String? webJs;
   final String? sourceRegex;
 
   factory UrlOption.fromMap(Map<String, dynamic> options) {
@@ -47,20 +41,10 @@ class UrlOption {
       options['contentType'] ?? options['content-type'] ?? options['type'],
     );
     final retry = _asNullableInt(options['retry']);
-    final webView =
-        _asNullableBool(options['webView'] ?? options['webview']) ?? false;
-    final webViewDelayMs = _asNullableInt(
-      options['webViewDelay'] ??
-          options['webviewDelay'] ??
-          options['web_view_delay'],
-    );
     final enabledCookieJar = _asNullableBool(
       options['enabledCookieJar'] ??
           options['enabledcookiejar'] ??
           options['enabled_cookie_jar'],
-    );
-    final webJs = _asNullableString(
-      options['webJs'] ?? options['webjs'] ?? options['js'],
     );
     final sourceRegex = _asNullableString(
       options['sourceRegex'] ?? options['source_regex'],
@@ -75,13 +59,7 @@ class UrlOption {
       body: _normalizeBodyTemplate(options['body']),
       contentType: contentType,
       retry: retry,
-      webView: webView,
-      webViewDelay:
-          webViewDelayMs == null || webViewDelayMs < 0
-              ? null
-              : Duration(milliseconds: webViewDelayMs),
       enabledCookieJar: enabledCookieJar,
-      webJs: webJs,
       sourceRegex: sourceRegex,
     );
   }

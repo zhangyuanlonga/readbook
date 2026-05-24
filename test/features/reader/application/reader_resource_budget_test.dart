@@ -35,7 +35,7 @@ void main() {
 
       expect(budget.forwardPreloadChapterCount, 0);
       expect(budget.chapterDownloadConcurrency, 0);
-      expect(budget.webViewConcurrency, 0);
+      expect(budget.paginationWarmupConcurrency, 0);
     });
 
     test('device tier resolver grades low battery and recent devices', () {

@@ -1,4 +1,10 @@
-part of 'search_service.dart';
+import 'dart:isolate';
+import 'dart:math';
+
+import '../../../core/logging/app_logger.dart';
+import '../../../domain/entities/book.dart';
+import 'search_hit_cache_service.dart';
+import 'search_models.dart';
 
 Future<SearchExecutionReport> buildSearchExecutionReportWithExistingAggregator({
   required String keyword,

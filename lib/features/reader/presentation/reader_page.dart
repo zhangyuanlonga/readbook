@@ -24,7 +24,6 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion.dart';
 import '../../../app/motion/app_motion_widgets.dart';
-import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
@@ -64,9 +63,8 @@ import '../../mine/application/reader_background_service.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_health_service.dart';
-import '../../source/application/source_runtime_facade.dart';
-import '../../source/application/source_runtime_task_conflict_service.dart';
-import '../../source/application/source_runtime_scheduler_service.dart';
+import '../../source/application/remote_content_task_conflict_service.dart';
+import '../../source/application/remote_content_task_scheduler_service.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
@@ -279,7 +277,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderFeedbackService();
   final ReaderThemeModeService _readerThemeModeService =
       const ReaderThemeModeService();
-  late final bool _supportsSourceRuntime;
   final ReaderRuntimeController _readerRuntimeController =
       const ReaderRuntimeController();
   final ReaderPageLifecycleDelegate _lifecycleDelegate =
@@ -306,9 +303,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderSourceSwitchController _sourceSwitchController =
       const ReaderSourceSwitchController();
   late final SourceHealthService _sourceHealthService;
-  late final SourceRuntimeFacade _sourceRuntimeFacade;
-  late final SourceRuntimeTaskConflictService _taskConflictService;
-  late final SourceRuntimeSchedulerService _taskScheduler;
+  late final RemoteContentTaskConflictService _taskConflictService;
+  late final RemoteContentTaskSchedulerService _taskScheduler;
   final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
       const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
@@ -665,7 +661,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               contentCapabilities: _contentCapabilities,
               hasInlineImageParagraphs:
                   _currentChapterHasInlineImageParagraphs(),
-              supportsSourceRuntime: _supportsSourceRuntime,
             )
             .canUsePagedText;
     return _readerModeResolver.resolve(
@@ -1112,7 +1107,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         contentMode: _currentContentMode,
         contentCapabilities: _contentCapabilities,
         hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),
-        supportsSourceRuntime: _supportsSourceRuntime,
       );
 
   bool get _supportsAutoRead => _readerModeCapabilities.canAutoRead;
@@ -3526,7 +3520,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       child: Hero(
                                         tag: widget.heroTag!.trim(),
                                         child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                           child: SizedBox(
                                             width: 24,
                                             height: 34,
@@ -3644,14 +3640,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String _currentSourceNameForTopOverlay() {
-    final sourceId = (_sourceId ?? '').trim();
-    if (sourceId.isEmpty || LocalReaderIdentity.isLocalSourceId(sourceId)) {
-      return '';
-    }
-    final registered = _sourceRuntimeFacade.registeredScriptSourceById(
-      sourceId,
-    );
-    return registered?.runtime.name.trim() ?? '';
+    return '';
   }
 
   Future<void> _showTopMoreActions(_ReaderThemeColors colors) async {
@@ -4086,7 +4075,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           when message.contains('正文') && message.contains('缺少') =>
         '书源缺少正文解析配置，无法读取该章节。',
       ErrorCode.validation => '书源配置不完整，无法继续阅读。',
-      ErrorCode.ruleParse => '书源脚本语法错误，正文解析失败。',
+      ErrorCode.ruleParse => '服务器书源解析规则异常，正文加载失败。',
       ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
         '正文解析未命中，当前章节暂无可读内容。',
       ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
@@ -4277,7 +4266,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     _taskConflictService.cancelBackgroundWorkFor(
       conflictKey: conflictKey,
-      byScene: SourceRuntimeConflictScene.reader,
+      byScene: RemoteContentConflictScene.reader,
     );
   }
 

@@ -110,7 +110,7 @@
 - **交互细节**：Dock 入口使用 `CircularThemeRevealOverlay`；搜索页对进度 UI 做 1500ms 节流，滚动时延迟刷新；返回动画按入口区分淡入缩放或零时长进入。
 
 ### 发现页占位
-- **业务描述**：底部发现入口当前展示“服务器发现开发中”，本地脚本发现能力已停止入口投放。
+- **业务描述**：底部发现入口当前展示“服务器发现开发中”，客户端发现页暂不承载本地规则运行能力。
 - **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/discover/routes.dart` + `discoverShellBranch`、`FeatureDisabledPage`
 - **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/app/widgets/feature_disabled_page.dart` + `FeatureDisabledPage`
 - **关键方法**：待分析，当前为静态占位页面。
@@ -318,12 +318,12 @@
 - **交互细节**：无直接交互；启动时 `ManagedAssetPathMigrationService` 执行迁移。
 
 ### 服务器书源、搜索与内容网关
-- **业务描述**：本地脚本书源能力已移除，搜索、详情、阅读内容主要转向服务器书源/网关；旧脚本源调用会返回“能力已移除”错误。
+- **业务描述**：搜索、详情、目录、正文和换源统一走服务器书源/内容网关；历史旧脚本源数据由兼容 guard 拦截并提示用户重新加入服务器书源版本。
 - **UI 位置**：搜索页、详情页、阅读器间接调用。
-- **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/source/application/source_runtime_facade.dart` + `SourceRuntimeFacade`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/search/application/server_book_gateway_service.dart`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/server_gateway_content_provider.dart`
-- **关键方法**：`reloadScriptSources()`、`search()`、`content()`
+- **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/search/application/server_online_search_service.dart` + `ServerOnlineSearchService`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/search/application/server_book_gateway_service.dart` + `ServerBookGatewayService`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/server_gateway_content_provider.dart` + `ServerGatewayContentProvider`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/removed_script_source_guard.dart`
+- **关键方法**：`search()`、`loadDetail()`、`loadChapterContent()`、`isRemovedScriptSourceId()`
 - **数据存储**：接口/服务器；源健康快照存 SQLite/Drift 表 `source_health_snapshots`
-- **交互细节**：源任务冲突和调度由 `SourceRuntimeTaskConflictService`、`SourceRuntimeSchedulerService` 管理，UI 侧展示运行时反馈卡片。
+- **交互细节**：远程内容任务冲突和调度由 `RemoteContentTaskConflictService`、`RemoteContentTaskSchedulerService` 管理；换源候选可展示健康状态 badge。
 
 ### 认证、会员与用户资料
 - **业务描述**：用户登录、保存会话、读取用户资料、同步会员权益和远程访问能力。

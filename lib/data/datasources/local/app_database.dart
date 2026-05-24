@@ -256,14 +256,14 @@ class StoredTocSnapshots extends Table {
 
 class StoredRemoteAccessSnapshots extends Table {
   TextColumn get userId => text()();
-  BoolColumn get showSourceEntry =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get serverSourceGatewayEnabled =>
+      boolean().named('show_source_entry').withDefault(const Constant(false))();
   BoolColumn get hasMembership =>
       boolean().withDefault(const Constant(false))();
   BoolColumn get hasThemeCustom =>
       boolean().withDefault(const Constant(false))();
-  IntColumn get sourceImportLimit =>
-      integer().withDefault(const Constant(10))();
+  IntColumn get serverSourceGatewayLimit =>
+      integer().named('source_import_limit').withDefault(const Constant(10))();
   DateTimeColumn get cachedAt => dateTime()();
 
   @override
@@ -878,13 +878,14 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<bool> _tableExists(String tableName) async {
-    final rows = await customSelect(
-      'SELECT name FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-      variables: <Variable<Object>>[
-        const Variable<String>('table'),
-        Variable<String>(tableName),
-      ],
-    ).get();
+    final rows =
+        await customSelect(
+          'SELECT name FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+          variables: <Variable<Object>>[
+            const Variable<String>('table'),
+            Variable<String>(tableName),
+          ],
+        ).get();
     return rows.isNotEmpty;
   }
 
@@ -2292,9 +2293,9 @@ class AppDatabase extends _$AppDatabase {
       return null;
     }
     final row =
-        await (select(storedTocSnapshots)
-              ..where((table) => table.storageKey.equals(normalizedKey)))
-            .getSingleOrNull();
+        await (select(storedTocSnapshots)..where(
+          (table) => table.storageKey.equals(normalizedKey),
+        )).getSingleOrNull();
     if (row == null) {
       return null;
     }
@@ -2306,9 +2307,7 @@ class AppDatabase extends _$AppDatabase {
                   .whereType<Map>()
                   .map(
                     (item) => Chapter.fromJson(
-                      item.map(
-                        (key, value) => MapEntry(key.toString(), value),
-                      ),
+                      item.map((key, value) => MapEntry(key.toString(), value)),
                     ),
                   )
                   .toList(growable: false)
@@ -2385,7 +2384,9 @@ class AppDatabase extends _$AppDatabase {
         normalizedBookId,
         chapter.content,
         jsonEncode(chapter.imageUrls),
-        chapter.document == null ? null : jsonEncode(chapter.document!.toJson()),
+        chapter.document == null
+            ? null
+            : jsonEncode(chapter.document!.toJson()),
         chapter.createdAt.toIso8601String(),
         chapter.updatedAt.toIso8601String(),
       ],
@@ -2407,15 +2408,16 @@ class AppDatabase extends _$AppDatabase {
     LocalChapter chapter, {
     bool includeDocument = true,
   }) async {
-    final rows = await customSelect(
-      '''
+    final rows =
+        await customSelect(
+          '''
       SELECT content, image_urls_json, document_json, created_at, updated_at
       FROM ${_quoteIdentifier(_localChapterBodiesTableName)}
       WHERE chapter_id = ?
       LIMIT 1
       ''',
-      variables: <Variable<Object>>[Variable<String>(chapter.id)],
-    ).get();
+          variables: <Variable<Object>>[Variable<String>(chapter.id)],
+        ).get();
     if (rows.isEmpty) {
       return chapter;
     }
@@ -3169,10 +3171,10 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> upsertRemoteAccessSnapshot({
     required String userId,
-    required bool showSourceEntry,
+    required bool serverSourceGatewayEnabled,
     required bool hasMembership,
     required bool hasThemeCustom,
-    required int sourceImportLimit,
+    required int serverSourceGatewayLimit,
     required DateTime cachedAt,
   }) async {
     final normalizedUserId = userId.trim();
@@ -3182,10 +3184,10 @@ class AppDatabase extends _$AppDatabase {
     await into(storedRemoteAccessSnapshots).insert(
       StoredRemoteAccessSnapshotsCompanion(
         userId: Value(normalizedUserId),
-        showSourceEntry: Value(showSourceEntry),
+        serverSourceGatewayEnabled: Value(serverSourceGatewayEnabled),
         hasMembership: Value(hasMembership),
         hasThemeCustom: Value(hasThemeCustom),
-        sourceImportLimit: Value(sourceImportLimit),
+        serverSourceGatewayLimit: Value(serverSourceGatewayLimit),
         cachedAt: Value(cachedAt),
       ),
       mode: InsertMode.insertOrReplace,

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import '../../../core/logging/app_logger.dart';
 
-enum SourceRuntimeSchedulerScene {
+enum RemoteContentTaskScene {
   bookshelfBackground,
   detail,
   reader,
@@ -12,55 +12,55 @@ enum SourceRuntimeSchedulerScene {
   sourceCheck,
 }
 
-enum SourceRuntimeTaskPriority {
+enum RemoteContentTaskPriority {
   backgroundRefresh,
   diagnostic,
   foregroundInteractive,
   foregroundCritical,
 }
 
-enum SourceRuntimeTaskDisposition { run, queue, reuse, cancel }
+enum RemoteContentTaskDisposition { run, queue, reuse, cancel }
 
-class SourceRuntimeSchedulerService {
-  SourceRuntimeSchedulerService({AppLogger? logger})
+class RemoteContentTaskSchedulerService {
+  RemoteContentTaskSchedulerService({AppLogger? logger})
     : _logger = logger ?? AppLogger.instance;
 
-  static final SourceRuntimeSchedulerService instance =
-      SourceRuntimeSchedulerService();
+  static final RemoteContentTaskSchedulerService instance =
+      RemoteContentTaskSchedulerService();
 
   final AppLogger _logger;
   final Map<String, int> _backgroundEpochByKey = <String, int>{};
   final List<_ActiveScheduledTask> _activeTasks = <_ActiveScheduledTask>[];
 
-  SourceRuntimeTaskPriority priorityOf(SourceRuntimeSchedulerScene scene) {
+  RemoteContentTaskPriority priorityOf(RemoteContentTaskScene scene) {
     return switch (scene) {
-      SourceRuntimeSchedulerScene.bookshelfBackground =>
-        SourceRuntimeTaskPriority.backgroundRefresh,
-      SourceRuntimeSchedulerScene.sourceCheck =>
-        SourceRuntimeTaskPriority.diagnostic,
-      SourceRuntimeSchedulerScene.detail ||
-      SourceRuntimeSchedulerScene.discover ||
-      SourceRuntimeSchedulerScene.search =>
-        SourceRuntimeTaskPriority.foregroundInteractive,
-      SourceRuntimeSchedulerScene.browserInteractive ||
-      SourceRuntimeSchedulerScene.reader =>
-        SourceRuntimeTaskPriority.foregroundCritical,
+      RemoteContentTaskScene.bookshelfBackground =>
+        RemoteContentTaskPriority.backgroundRefresh,
+      RemoteContentTaskScene.sourceCheck =>
+        RemoteContentTaskPriority.diagnostic,
+      RemoteContentTaskScene.detail ||
+      RemoteContentTaskScene.discover ||
+      RemoteContentTaskScene
+          .search => RemoteContentTaskPriority.foregroundInteractive,
+      RemoteContentTaskScene.browserInteractive ||
+      RemoteContentTaskScene
+          .reader => RemoteContentTaskPriority.foregroundCritical,
     };
   }
 
-  SourceRuntimeTaskDisposition resolveForegroundDisposition({
-    required SourceRuntimeSchedulerScene requestingScene,
-    required SourceRuntimeSchedulerScene conflictingScene,
+  RemoteContentTaskDisposition resolveForegroundDisposition({
+    required RemoteContentTaskScene requestingScene,
+    required RemoteContentTaskScene conflictingScene,
   }) {
     final requestingPriority = priorityOf(requestingScene);
     final conflictingPriority = priorityOf(conflictingScene);
     if (requestingPriority.index > conflictingPriority.index) {
-      return SourceRuntimeTaskDisposition.cancel;
+      return RemoteContentTaskDisposition.cancel;
     }
     if (requestingPriority == conflictingPriority) {
-      return SourceRuntimeTaskDisposition.queue;
+      return RemoteContentTaskDisposition.queue;
     }
-    return SourceRuntimeTaskDisposition.run;
+    return RemoteContentTaskDisposition.run;
   }
 
   String conflictKeyForSource(String sourceId) {
@@ -87,8 +87,8 @@ class SourceRuntimeSchedulerService {
     return normalizedSourceId;
   }
 
-  Future<SourceRuntimeTaskLease?> acquire({
-    required SourceRuntimeSchedulerScene scene,
+  Future<RemoteContentTaskLease?> acquire({
+    required RemoteContentTaskScene scene,
     required Iterable<String> conflictKeys,
     bool cancelIfBlockedByHigherPriority = false,
   }) async {
@@ -151,7 +151,9 @@ class SourceRuntimeSchedulerService {
       }
 
       final blockingConflicts = conflicts
-          .where((task) => !task.released && task.priority.index >= priority.index)
+          .where(
+            (task) => !task.released && task.priority.index >= priority.index,
+          )
           .toList(growable: false);
 
       if (blockingConflicts.isEmpty && lowerPriorityConflicts.isNotEmpty) {
@@ -166,7 +168,7 @@ class SourceRuntimeSchedulerService {
 
       if (cancelIfBlockedByHigherPriority) {
         _logger.info(
-          'Skipped source runtime task lease acquisition',
+          'Skipped remote content task lease acquisition',
           context: <String, Object?>{
             'scene': scene.name,
             'priority': priority.name,
@@ -206,7 +208,7 @@ class SourceRuntimeSchedulerService {
 
   void cancelLowerPriorityWorkFor({
     required String conflictKey,
-    required SourceRuntimeSchedulerScene byScene,
+    required RemoteContentTaskScene byScene,
   }) {
     final normalized = conflictKey.trim();
     if (normalized.isEmpty) {
@@ -215,7 +217,7 @@ class SourceRuntimeSchedulerService {
     final nextEpoch = (_backgroundEpochByKey[normalized] ?? 0) + 1;
     _backgroundEpochByKey[normalized] = nextEpoch;
     _logger.info(
-      'Cancelled lower-priority background source task',
+      'Cancelled lower-priority background remote content task',
       context: <String, Object?>{
         'conflictKey': normalized,
         'byScene': byScene.name,
@@ -241,7 +243,7 @@ class SourceRuntimeSchedulerService {
 
   bool _canReuseWith(
     _ActiveScheduledTask task,
-    SourceRuntimeSchedulerScene scene,
+    RemoteContentTaskScene scene,
     List<String> normalizedKeys,
   ) {
     if (!_isReusableScene(scene) || !_isReusableScene(task.scene)) {
@@ -253,14 +255,14 @@ class SourceRuntimeSchedulerService {
     return task.conflictKeys.every(normalizedKeys.contains);
   }
 
-  bool _isReusableScene(SourceRuntimeSchedulerScene scene) {
-    return scene == SourceRuntimeSchedulerScene.detail ||
-        scene == SourceRuntimeSchedulerScene.reader;
+  bool _isReusableScene(RemoteContentTaskScene scene) {
+    return scene == RemoteContentTaskScene.detail ||
+        scene == RemoteContentTaskScene.reader;
   }
 
-  SourceRuntimeTaskLease _acquireFreshLease({
-    required SourceRuntimeSchedulerScene scene,
-    required SourceRuntimeTaskPriority priority,
+  RemoteContentTaskLease _acquireFreshLease({
+    required RemoteContentTaskScene scene,
+    required RemoteContentTaskPriority priority,
     required List<String> normalizedKeys,
   }) {
     final task = _ActiveScheduledTask(
@@ -270,15 +272,15 @@ class SourceRuntimeSchedulerService {
     );
     _activeTasks.add(task);
     _logger.info(
-      'Acquired source runtime task lease',
+      'Acquired remote content task lease',
       context: <String, Object?>{
         'scene': scene.name,
         'priority': priority.name,
-        'disposition': SourceRuntimeTaskDisposition.run.name,
+        'disposition': RemoteContentTaskDisposition.run.name,
         'conflictKeys': normalizedKeys.join(','),
       },
     );
-    return SourceRuntimeTaskLease._(
+    return RemoteContentTaskLease._(
       onRelease: () {
         if (task.released) {
           return;
@@ -286,7 +288,7 @@ class SourceRuntimeSchedulerService {
         task.releaseHolder();
         _purgeReleasedTasks();
         _logger.info(
-          'Released source runtime task lease',
+          'Released remote content task lease',
           context: <String, Object?>{
             'scene': scene.name,
             'priority': priority.name,
@@ -297,24 +299,24 @@ class SourceRuntimeSchedulerService {
     );
   }
 
-  SourceRuntimeTaskLease _acquireReuseLease({
+  RemoteContentTaskLease _acquireReuseLease({
     required _ActiveScheduledTask task,
-    required SourceRuntimeSchedulerScene scene,
-    required SourceRuntimeTaskPriority priority,
+    required RemoteContentTaskScene scene,
+    required RemoteContentTaskPriority priority,
     required List<String> normalizedKeys,
   }) {
     task.acquireHolder();
     _logger.info(
-      'Reused source runtime task lease',
+      'Reused remote content task lease',
       context: <String, Object?>{
         'scene': scene.name,
         'priority': priority.name,
-        'disposition': SourceRuntimeTaskDisposition.reuse.name,
+        'disposition': RemoteContentTaskDisposition.reuse.name,
         'conflictKeys': normalizedKeys.join(','),
         'ownerScene': task.scene.name,
       },
     );
-    return SourceRuntimeTaskLease._(
+    return RemoteContentTaskLease._(
       onRelease: () {
         if (task.released) {
           return;
@@ -322,7 +324,7 @@ class SourceRuntimeSchedulerService {
         task.releaseHolder();
         _purgeReleasedTasks();
         _logger.info(
-          'Released source runtime task lease',
+          'Released remote content task lease',
           context: <String, Object?>{
             'scene': scene.name,
             'priority': priority.name,
@@ -334,8 +336,8 @@ class SourceRuntimeSchedulerService {
   }
 }
 
-class SourceRuntimeTaskLease {
-  SourceRuntimeTaskLease._({required void Function() onRelease})
+class RemoteContentTaskLease {
+  RemoteContentTaskLease._({required void Function() onRelease})
     : _onRelease = onRelease;
 
   final void Function() _onRelease;
@@ -357,8 +359,8 @@ class _ActiveScheduledTask {
     required this.conflictKeys,
   }) : _holderCount = 1;
 
-  final SourceRuntimeSchedulerScene scene;
-  final SourceRuntimeTaskPriority priority;
+  final RemoteContentTaskScene scene;
+  final RemoteContentTaskPriority priority;
   final List<String> conflictKeys;
   final Completer<void> done = Completer<void>();
   bool released = false;

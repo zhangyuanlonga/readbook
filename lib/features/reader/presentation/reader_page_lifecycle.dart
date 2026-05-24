@@ -20,7 +20,6 @@ class _ReaderPageDependencyBinder {
     state._switchSourceSearchService = dependencies.switchSourceSearchService;
     state._searchHitCacheService = dependencies.searchHitCacheService;
     state._sourceHealthService = dependencies.sourceHealthService;
-    state._sourceRuntimeFacade = dependencies.sourceRuntimeFacade;
     state._taskConflictService = dependencies.taskConflictService;
     state._taskScheduler = dependencies.taskScheduler;
     state._bookmarkRepository = dependencies.bookmarkRepository;
@@ -41,8 +40,6 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       readerFeatureDependenciesFactoryProvider,
     );
     const _ReaderPageDependencyBinder().bind(this, dependenciesFactory());
-    _supportsSourceRuntime =
-        ref.read(appPlatformCapabilitiesProvider).supportsSourceRuntime;
     _appThemeMode = ref.read(appThemeModeProvider);
     _activeAdvancedTheme = ref.read(activeAdvancedThemeProvider).valueOrNull;
     _coverGalleries = ref.read(coverGalleriesProvider).valueOrNull ?? const [];
@@ -143,14 +140,6 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _cancelActiveSwitchSourceSearch();
     _readerSessionController.cancelAll();
     _flushProgressSave();
-    final sourceId = (_sourceId ?? '').trim();
-    if (sourceId.isNotEmpty) {
-      _sourceRuntimeFacade.clearReadingFlow(
-        sourceId: sourceId,
-        detailUrl: (_detailUrl ?? '').trim(),
-        title: _bookTitle.trim(),
-      );
-    }
     _commitReadingRecordSession(
       endRatio: _activeReadingRecordSession?.furthestPositionRatio,
     );

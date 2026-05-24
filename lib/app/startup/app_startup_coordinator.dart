@@ -20,11 +20,9 @@ class AppStartupCoordinator {
     required StartupUpdateDialogPresenter showUpdateDialog,
     AppLogger? logger,
     AppUpdateService? appUpdateService,
-    Future<void> Function()? warmupLocalDatabase,
     StartupTaskGateService? taskGateService,
     Duration? startupMinDuration,
     Duration? startupDeferredTasksDelay,
-    Duration? startupWarmupDelay,
   }) : _sendHeartbeat = sendHeartbeat,
        _sendVisitEvent = sendVisitEvent,
        _showStartupAnnouncementIfNeeded = showStartupAnnouncementIfNeeded,
@@ -32,21 +30,16 @@ class AppStartupCoordinator {
        _showUpdateDialog = showUpdateDialog,
        _logger = logger ?? AppLogger.instance,
        _appUpdateService = appUpdateService ?? AppUpdateService(),
-       _warmupLocalDatabaseOverride = warmupLocalDatabase,
        _taskGateService = taskGateService ?? StartupTaskGateService(),
        _startupMinDuration = startupMinDuration ?? _defaultStartupMinDuration,
        _startupDeferredTasksDelay =
-           startupDeferredTasksDelay ?? _defaultStartupDeferredTasksDelay,
-       _startupWarmupDelay = startupWarmupDelay ?? _defaultStartupWarmupDelay;
+           startupDeferredTasksDelay ?? _defaultStartupDeferredTasksDelay;
 
   static const Duration _defaultStartupMinDuration = Duration(
     milliseconds: 250,
   );
   static const Duration _defaultStartupDeferredTasksDelay = Duration(
     milliseconds: 1800,
-  );
-  static const Duration _defaultStartupWarmupDelay = Duration(
-    milliseconds: 3200,
   );
   static const Duration _startupTaskGap = Duration(milliseconds: 320);
   static const Duration _startupAnnouncementDelay = Duration(milliseconds: 480);
@@ -58,18 +51,15 @@ class AppStartupCoordinator {
   final StartupUpdateDialogPresenter _showUpdateDialog;
   final AppLogger _logger;
   final AppUpdateService _appUpdateService;
-  final Future<void> Function()? _warmupLocalDatabaseOverride;
   final StartupTaskGateService _taskGateService;
   final Duration _startupMinDuration;
   final Duration _startupDeferredTasksDelay;
-  final Duration _startupWarmupDelay;
 
   final Stopwatch _startupStopwatch = Stopwatch()..start();
   final Completer<void> _startupFirstFrameCompleter = Completer<void>();
 
   Timer? _startupDelayTimer;
   Timer? _startupDeferredTasksTimer;
-  Timer? _startupWarmupTimer;
   bool _startupDeferredTasksScheduled = false;
   bool _isStartupUpdateInFlight = false;
   bool _hasCheckedStartupUpdate = false;
@@ -125,7 +115,6 @@ class AppStartupCoordinator {
       context: <String, Object?>{'elapsedMs': elapsedMilliseconds},
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scheduleWarmupLocalDatabase(isMounted: isMounted);
       scheduleDeferredTasks(isMounted: isMounted);
     });
   }
@@ -144,32 +133,6 @@ class AppStartupCoordinator {
   void dispose() {
     _startupDelayTimer?.cancel();
     _startupDeferredTasksTimer?.cancel();
-    _startupWarmupTimer?.cancel();
-  }
-
-  void _scheduleWarmupLocalDatabase({required bool Function() isMounted}) {
-    _startupWarmupTimer?.cancel();
-    _startupWarmupTimer = Timer(_startupWarmupDelay, () {
-      if (!isMounted()) {
-        return;
-      }
-      unawaited(_warmupLocalDatabase());
-    });
-  }
-
-  Future<void> _warmupLocalDatabase() async {
-    final warmupLocalDatabase = _warmupLocalDatabaseOverride;
-    if (warmupLocalDatabase != null) {
-      await warmupLocalDatabase();
-      return;
-    }
-    _logger.info(
-      'Startup warmup local database skipped',
-      context: <String, Object?>{
-        'reason': 'script_source_runtime_removed',
-        'elapsedMs': elapsedMilliseconds,
-      },
-    );
   }
 
   Future<void> _checkStartupUpdateIfNeeded({

@@ -27,7 +27,7 @@ private data class ExternalImportSpec(
 
 class MainActivity : FlutterActivity() {
     private companion object {
-        private const val SOURCE_IMPORT_CHANNEL_NAME = "com.jiangyan.selune/source_import_intent"
+        private const val SOURCE_IMPORT_CHANNEL_NAME = "com.jiangyan.selune/external_import_intent"
         private const val METHOD_GET_INITIAL_IMPORT_PAYLOAD = "getInitialImportPayload"
         private const val METHOD_ON_IMPORT_PAYLOAD = "onImportPayload"
         private const val METHOD_CACHE_EXTERNAL_FILE_FROM_URI = "cacheExternalFileFromUri"
@@ -39,18 +39,8 @@ class MainActivity : FlutterActivity() {
         private const val METHOD_RESET_READER_BRIGHTNESS = "resetReaderBrightness"
         private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
-        private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
         private const val PAYLOAD_TYPE_ADVANCED_THEME = "advancedTheme"
         private const val PAYLOAD_TYPE_FONT = "font"
-        private val SCRIPT_SOURCE_IMPORT_SPEC = ExternalImportSpec(
-            type = PAYLOAD_TYPE_SCRIPT_SOURCE,
-            extensions = linkedSetOf("js", "mjs"),
-            mimeTypeToExtension = linkedMapOf(
-                "application/javascript" to "js",
-                "text/javascript" to "js",
-                "application/x-javascript" to "js",
-            )
-        )
         private val LOCAL_BOOK_IMPORT_SPEC = ExternalImportSpec(
             type = PAYLOAD_TYPE_LOCAL_BOOK,
             extensions = linkedSetOf(
@@ -102,7 +92,6 @@ class MainActivity : FlutterActivity() {
             FONT_IMPORT_SPEC,
             ADVANCED_THEME_IMPORT_SPEC,
             LOCAL_BOOK_IMPORT_SPEC,
-            SCRIPT_SOURCE_IMPORT_SPEC,
         )
     }
 
@@ -357,12 +346,6 @@ class MainActivity : FlutterActivity() {
                 "label" to label,
                 "mimeType" to (mimeType ?: ""),
             )
-            PAYLOAD_TYPE_SCRIPT_SOURCE -> mapOf(
-                "type" to PAYLOAD_TYPE_SCRIPT_SOURCE,
-                "uri" to uri.toString(),
-                "label" to label,
-                "mimeType" to (mimeType ?: ""),
-            )
             PAYLOAD_TYPE_FONT -> mapOf(
                 "type" to PAYLOAD_TYPE_FONT,
                 "uri" to uri.toString(),
@@ -477,7 +460,6 @@ class MainActivity : FlutterActivity() {
         mimeType: String?
     ): String? {
         val specs = when (type?.trim()) {
-            PAYLOAD_TYPE_SCRIPT_SOURCE -> listOf(SCRIPT_SOURCE_IMPORT_SPEC)
             PAYLOAD_TYPE_LOCAL_BOOK -> listOf(LOCAL_BOOK_IMPORT_SPEC)
             PAYLOAD_TYPE_ADVANCED_THEME -> listOf(ADVANCED_THEME_IMPORT_SPEC)
             PAYLOAD_TYPE_FONT -> listOf(FONT_IMPORT_SPEC)

@@ -44,20 +44,6 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>书源文件</string>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>LSHandlerRank</key>
-			<string>Alternate</string>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>public.json</string>
-				<string>public.plain-text</string>
-				<string>public.text</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeName</key>
 			<string>高级主题文件</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>

@@ -906,7 +906,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     }
     _cancelBackgroundRefreshConflictForCurrentBook();
     final lease = await _taskScheduler.acquire(
-      scene: SourceRuntimeSchedulerScene.reader,
+      scene: RemoteContentTaskScene.reader,
       conflictKeys: _currentConflictKeys(),
     );
     if (lease == null) {

@@ -1,7 +1,7 @@
 import '../../../core/logging/app_logger.dart';
-import 'source_runtime_scheduler_service.dart';
+import 'remote_content_task_scheduler_service.dart';
 
-enum SourceRuntimeConflictScene {
+enum RemoteContentConflictScene {
   bookshelfBackground,
   detail,
   reader,
@@ -10,14 +10,14 @@ enum SourceRuntimeConflictScene {
   sourceCheck,
 }
 
-class SourceRuntimeTaskConflictService {
-  SourceRuntimeTaskConflictService({AppLogger? logger})
-    : _scheduler = SourceRuntimeSchedulerService(logger: logger);
+class RemoteContentTaskConflictService {
+  RemoteContentTaskConflictService({AppLogger? logger})
+    : _scheduler = RemoteContentTaskSchedulerService(logger: logger);
 
-  static final SourceRuntimeTaskConflictService instance =
-      SourceRuntimeTaskConflictService();
+  static final RemoteContentTaskConflictService instance =
+      RemoteContentTaskConflictService();
 
-  final SourceRuntimeSchedulerService _scheduler;
+  final RemoteContentTaskSchedulerService _scheduler;
 
   String conflictKeyForSource(String sourceId) {
     return _scheduler.conflictKeyForSource(sourceId);
@@ -51,7 +51,7 @@ class SourceRuntimeTaskConflictService {
 
   void cancelBackgroundWorkFor({
     required String conflictKey,
-    required SourceRuntimeConflictScene byScene,
+    required RemoteContentConflictScene byScene,
   }) {
     _scheduler.cancelLowerPriorityWorkFor(
       conflictKey: conflictKey,
@@ -63,19 +63,16 @@ class SourceRuntimeTaskConflictService {
     _scheduler.clearAll();
   }
 
-  SourceRuntimeSchedulerScene _toSchedulerScene(
-    SourceRuntimeConflictScene scene,
-  ) {
+  RemoteContentTaskScene _toSchedulerScene(RemoteContentConflictScene scene) {
     return switch (scene) {
-      SourceRuntimeConflictScene.bookshelfBackground =>
-        SourceRuntimeSchedulerScene.bookshelfBackground,
-      SourceRuntimeConflictScene.detail => SourceRuntimeSchedulerScene.detail,
-      SourceRuntimeConflictScene.reader => SourceRuntimeSchedulerScene.reader,
-      SourceRuntimeConflictScene.discover =>
-        SourceRuntimeSchedulerScene.discover,
-      SourceRuntimeConflictScene.search => SourceRuntimeSchedulerScene.search,
-      SourceRuntimeConflictScene.sourceCheck =>
-        SourceRuntimeSchedulerScene.sourceCheck,
+      RemoteContentConflictScene.bookshelfBackground =>
+        RemoteContentTaskScene.bookshelfBackground,
+      RemoteContentConflictScene.detail => RemoteContentTaskScene.detail,
+      RemoteContentConflictScene.reader => RemoteContentTaskScene.reader,
+      RemoteContentConflictScene.discover => RemoteContentTaskScene.discover,
+      RemoteContentConflictScene.search => RemoteContentTaskScene.search,
+      RemoteContentConflictScene.sourceCheck =>
+        RemoteContentTaskScene.sourceCheck,
     };
   }
 }

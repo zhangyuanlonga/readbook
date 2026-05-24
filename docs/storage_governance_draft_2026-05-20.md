@@ -212,15 +212,13 @@
 - `reading_record_days`
 - `reading_record_sessions`
 - `bookmarks`
-- `script_sources`
 - `book_metadata_overrides`
 - `search_source_hits`
+- `source_health_snapshots`（保留为服务器书源网关健康缓存，非本地 JS 运行时状态）
 - `sync_profiles`
 
 建议后续重点评估是否表化的内容：
 
-- 书源登录状态聚合数据
-- 书籍自定义状态聚合数据
 - 复杂书架视图快照
 - 主题/图集索引元数据
 
@@ -264,7 +262,6 @@
 - 启动图集全集
 - 部分复杂阅读快照
 - 部分复杂书架聚合配置
-- 部分来源登录状态或业务状态聚合对象
 
 这类数据继续放在 `SharedPreferences`，风险主要有：
 
@@ -426,4 +423,3 @@
 
 2. `storage_migration_execution_plan_2026-05-xx.md`
    用于明确迁移顺序、负责人、测试项、回滚策略
-

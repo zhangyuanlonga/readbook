@@ -1,5 +1,5 @@
 name: shuxiang_reading_next
-description: Flutter reading app compatible with Legado source rules.
+description: Flutter reading app focused on local books and server source gateway reading.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -40,7 +40,6 @@ dependencies:
   pdf_text_extract: ^0.0.1
   dart_mobi: ^1.0.2
   xml: ^6.5.0
-  json_path: ^0.7.4
   drift: ^2.25.1
   path: ^1.9.1
   logger: ^2.5.0

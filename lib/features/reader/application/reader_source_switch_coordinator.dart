@@ -1,5 +1,4 @@
 import '../../../domain/entities/bookshelf_book.dart';
-import '../../../runtime/sources/source_registry.dart';
 import 'switch_source_shared.dart';
 
 class ReaderSwitchSourceRequestValidationResult {
@@ -152,49 +151,13 @@ class ReaderSourceSwitchCoordinator {
     return orderedCandidates.take(tryLimit).toList(growable: false);
   }
 
-  ReaderSwitchSourceScopePlan buildSwitchSourceScope({
-    required List<RegisteredSource> sources,
-    required String currentSourceId,
+  ReaderSwitchSourceScopePlan buildServerGatewaySwitchScope({
     required bool fallbackIsMangaType,
   }) {
-    RegisteredSource? currentSource;
-    for (final source in sources) {
-      if (source.runtime.id == currentSourceId) {
-        currentSource = source;
-        break;
-      }
-    }
-
-    final isMangaType =
-        inferRuntimeMangaSource(currentSource) ?? fallbackIsMangaType;
-    final sourceIds = sources
-        .where(
-          (source) =>
-              source.runtime.id != currentSourceId &&
-              (inferRuntimeMangaSource(source) ?? false) == isMangaType,
-        )
-        .map((source) => source.runtime.id)
-        .toList(growable: false);
-
     return ReaderSwitchSourceScopePlan(
-      sourceIds: sourceIds,
-      isMangaType: isMangaType,
+      sourceIds: const <String>[],
+      isMangaType: fallbackIsMangaType,
     );
-  }
-
-  bool? inferRuntimeMangaSource(RegisteredSource? source) {
-    if (source == null) {
-      return null;
-    }
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-    return capabilities.contains('manga') ||
-        capabilities.contains('comic') ||
-        capabilities.contains('manhua') ||
-        capabilities.contains('manhwa');
   }
 
   ReaderBookshelfMigrationCheckPlan planBookshelfMigrationCheck({

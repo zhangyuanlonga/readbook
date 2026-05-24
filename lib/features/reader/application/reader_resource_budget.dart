@@ -123,7 +123,7 @@ class ReaderResourceBudget {
     required this.forwardPreloadChapterCount,
     required this.backwardPreloadChapterCount,
     required this.chapterDownloadConcurrency,
-    required this.webViewConcurrency,
+    required this.paginationWarmupConcurrency,
     required this.mangaCacheExtent,
     required this.paginationMemoryEntries,
     required this.imageDecodeScale,
@@ -133,7 +133,7 @@ class ReaderResourceBudget {
   final int forwardPreloadChapterCount;
   final int backwardPreloadChapterCount;
   final int chapterDownloadConcurrency;
-  final int webViewConcurrency;
+  final int paginationWarmupConcurrency;
   final double mangaCacheExtent;
   final int paginationMemoryEntries;
   final double imageDecodeScale;
@@ -174,7 +174,7 @@ class ReaderResourceBudgetResolver {
               : constrained
               ? 1
               : 2,
-      webViewConcurrency:
+      paginationWarmupConcurrency:
           offline
               ? 0
               : constrained

@@ -14,20 +14,20 @@ class MinePageSessionSnapshot {
   const MinePageSessionSnapshot({
     required this.session,
     required this.localAvatarPath,
-    required this.showSourceEntry,
+    required this.serverSourceGatewayEnabled,
     required this.hasMembership,
     required this.hasThemeCustom,
-    required this.sourceImportLimit,
+    required this.serverSourceGatewayLimit,
     required this.isRemoteAccessResolved,
     required this.shouldRefreshRemoteAccess,
   });
 
   final AuthSession? session;
   final String? localAvatarPath;
-  final bool showSourceEntry;
+  final bool serverSourceGatewayEnabled;
   final bool hasMembership;
   final bool hasThemeCustom;
-  final int sourceImportLimit;
+  final int serverSourceGatewayLimit;
   final bool isRemoteAccessResolved;
   final bool shouldRefreshRemoteAccess;
 }
@@ -70,10 +70,10 @@ class MinePageSessionService {
       return const MinePageSessionSnapshot(
         session: null,
         localAvatarPath: null,
-        showSourceEntry: false,
+        serverSourceGatewayEnabled: false,
         hasMembership: false,
         hasThemeCustom: false,
-        sourceImportLimit: 10,
+        serverSourceGatewayLimit: 10,
         isRemoteAccessResolved: true,
         shouldRefreshRemoteAccess: false,
       );
@@ -222,10 +222,11 @@ class MinePageSessionService {
     return MinePageSessionSnapshot(
       session: session,
       localAvatarPath: localAvatarPath,
-      showSourceEntry: remoteSnapshot?.showSourceEntry ?? false,
+      serverSourceGatewayEnabled:
+          remoteSnapshot?.serverSourceGatewayEnabled ?? false,
       hasMembership: remoteSnapshot?.hasMembership ?? false,
       hasThemeCustom: remoteSnapshot?.hasThemeCustom ?? false,
-      sourceImportLimit: remoteSnapshot?.sourceImportLimit ?? 10,
+      serverSourceGatewayLimit: remoteSnapshot?.serverSourceGatewayLimit ?? 10,
       isRemoteAccessResolved: remoteSnapshot != null,
       shouldRefreshRemoteAccess:
           remoteSnapshot == null || !remoteSnapshot.isFresh(),

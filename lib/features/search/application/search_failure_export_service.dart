@@ -6,8 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
-import '../../../runtime/sources/source_registry.dart';
-import 'search_service.dart';
+import 'search_models.dart';
 
 typedef SearchExportDirectoryResolver = Future<Directory> Function();
 typedef SearchExportFallbackDirectoryResolver = Future<Directory> Function();
@@ -46,7 +45,7 @@ class SearchFailureExportService {
 
   Future<SearchFailureExportResult> exportFailedSources({
     required SearchExecutionReport report,
-    required Iterable<RegisteredSource> sources,
+    required Iterable<SearchSourceSnapshot> sources,
     required SearchContentMode contentMode,
     String? preferredFilePath,
   }) async {
@@ -58,8 +57,8 @@ class SearchFailureExportService {
       );
     }
 
-    final sourceById = <String, RegisteredSource>{
-      for (final source in sources) source.runtime.id: source,
+    final sourceById = <String, SearchSourceSnapshot>{
+      for (final source in sources) source.id: source,
     };
 
     final now = _now();
@@ -68,25 +67,7 @@ class SearchFailureExportService {
     final items = report.failures
         .map((failure) {
           final source = sourceById[failure.sourceId];
-          final normalizedSource =
-              source == null
-                  ? null
-                  : <String, dynamic>{
-                    'id': source.runtime.id,
-                    'name': source.runtime.name,
-                    'group': source.runtime.group,
-                    'revision': source.runtime.revision,
-                    'manifest': <String, dynamic>{
-                      'name': source.definition.manifest.name,
-                      'group': source.definition.manifest.group,
-                      'author': source.definition.manifest.author,
-                      'description': source.definition.manifest.description,
-                      'homepage': source.definition.manifest.homepage,
-                      'domains': source.definition.manifest.domains,
-                      'capabilities': source.definition.manifest.capabilities
-                          .toList(growable: false),
-                    },
-                  };
+          final normalizedSource = source?.toJson();
 
           return <String, dynamic>{
             'sourceId': failure.sourceId,
@@ -119,7 +100,7 @@ class SearchFailureExportService {
         'failedSourceCount': report.failedSourceCount,
         'bookCount': report.books.length,
       },
-      'note': 'source 为当前运行时已注册书源快照。',
+      'note': 'source 为搜索服务返回的服务器书源快照。',
       'failures': items,
     };
 

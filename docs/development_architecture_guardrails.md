@@ -66,8 +66,6 @@ app
   ├─ composition / shell / theme / top-level router
 core
   ├─ cross-feature infrastructure
-runtime
-  ├─ script source runtime and host bridge
 domain
   ├─ shared pure models + shared repository contracts
 data
@@ -93,12 +91,6 @@ shared
 - 如网络、日志、错误、设备、缓存、认证、系统能力封装
 - 可放无业务语义的平台能力封装和文件/媒体/设备适配
 - 不放具体业务页面逻辑
-
-`lib/runtime/`
-
-- 只放脚本源运行时、宿主桥、执行容器
-- 不放阅读页 UI 逻辑
-- 不放书架、书签、主题之类业务页面状态
 
 `lib/domain/`
 
@@ -170,11 +162,10 @@ lib/features/<feature>/
 ### 4.1 允许的依赖
 
 ```text
-app -> features / core / runtime / shared
+app -> features / core / shared
 features/presentation -> feature/application + app-level UI tokens + shared + domain
-features/application -> core + runtime + domain
+features/application -> core + domain
 data -> core + domain
-runtime -> core + domain
 core -> pure infra only
 domain -> pure dart only
 ```
@@ -188,7 +179,6 @@ domain -> pure dart only
 - `presentation -> MethodChannel/EventChannel`
 - `domain -> data`
 - `core -> features`
-- `runtime -> features/presentation`
 - `app -> feature 具体 service 细节编排`
 
 ### 4.3 一条判断规则
@@ -225,8 +215,6 @@ domain -> pure dart only
 - `supportsImagePicking`
 - `supportsReaderBrightnessBridge`
 - `supportsReaderVolumeKeyBridge`
-- `supportsSourceRuntime`
-- `supportsInteractiveWebView`
 - `supportsWebDavSync`
 
 规则：
@@ -235,7 +223,7 @@ domain -> pure dart only
 - `kIsWeb`、`defaultTargetPlatform`、`Platform.isXxx` 不得在页面中反复出现；已有历史代码逐步收口，新代码默认不允许新增。
 - 如果只是 UI 样式差异，优先走自适应断点和主题 token；如果是能力差异，必须走 capability。
 - feature 想隐藏、降级或替换入口时，必须通过 capability 或 feature-level access service，不允许在多个 widget 中各自写一份判断。
-- 书源运行时属于延期能力，首版默认 `APP_ENABLE_SOURCE_RUNTIME=false`；所有换源、在线搜索、WebView 登录和脚本调试入口必须先经过 `supportsSourceRuntime` / `supportsInteractiveWebView`。局域网网页调试服务已从项目移除，不再新增入口或服务端口。
+- 本地脚本书源运行时已移除；在线搜索、详情、目录、正文与换源只允许通过服务器书源网关和 feature-level access service 暴露，不再新增 WebView 登录、脚本调试入口或本地 JS 执行能力。局域网网页调试服务已从项目移除，不再新增入口或服务端口。
 - WebDAV 同步属于 P1+ 能力，首版默认 `APP_ENABLE_WEBDAV_SYNC=false`；同步设置、同步历史和后台同步任务必须先经过 `supportsWebDavSync`，不允许默认进入可点击但必失败的页面。
 - 文件导入、缓存清理、诊断导出等常用业务必须按 `supportsLocalFileImport` 与 `supportsManagedFileStorage` 做禁用、占位或文案降级；不支持平台仍需保留本地阅读、书签、阅读记录和外观设置的可用路径。
 
@@ -249,7 +237,7 @@ domain -> pure dart only
 - 文件系统读写
 - 原生 SQLite
 - Web-only storage
-- WebView / JS runtime
+- WebView / JS runtime（本地脚本书源能力已移除，新代码不得重新引入）
 - 平台插件专属 API
 
 推荐结构：
@@ -499,7 +487,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 
 - 新增 `GoRoute` 必须同步更新 `docs/global_page_route_inventory_2026-05-12.md`，并标记加载等级。
 - 新增或调整页面阶段任务必须同步更新 `docs/global_page_lazy_loading_execution_plan_2026-05-12.md`。
-- 主导航页面不得在 `initState` / 首帧路径里初始化低频管理页服务、书源运行时、同步服务、图库扫描、缓存统计、反馈列表。
+- 主导航页面不得在 `initState` / 首帧路径里初始化低频管理页服务、服务器书源网关任务、同步服务、图库扫描、缓存统计、反馈列表。
 - 页面首屏只允许读取“当前页面可见内容”需要的最小数据；标签、分类、封面补齐、远端状态、缓存统计、编辑器资源都必须延后。
 - Feature-gated 页面在 capability 关闭时不得创建真实业务页面或重依赖，只能返回统一 disabled/placeholder。
 - 首屏后的补充任务必须可取消或可过期，至少要有 `mounted`、route active、ticket/epoch 之类的保护。
@@ -507,7 +495,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 
 验收口径：
 
-- 冷启动进入 `/home` 或 `/bookshelf`，不应触发书源、同步、图库扫描、缓存统计。
+- 冷启动进入 `/home` 或 `/bookshelf`，不应触发服务器书源网关请求、同步、图库扫描、缓存统计。
 - 打开 `/mine`，不应预加载外观编辑器、图集、缓存管理、反馈列表。
 - 直接访问书源、搜索、同步等受限路由，能力关闭时必须可显示轻量占位，不允许白屏或崩溃。
 
@@ -683,7 +671,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - Web 编译边界：`flutter analyze` + `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
 - 数据库/条件导入：`flutter analyze` + 当前端测试 + Web 或 native build 基线。
 - Web 首屏验证必须使用本地 Flutter Web 资源；`flutter run -d chrome` 和 Web 产物构建默认带 `--no-web-resources-cdn`，避免 CanvasKit / Roboto 依赖外网导致白屏。
-- Web 首屏还必须检查插件注册日志；native/mobile 优先插件如编码检测、PDF、WebView、JS runtime 不得在 Web 注册阶段抛错，必要时用 Web stub 或条件依赖把能力降级到 application 层。
+- Web 首屏还必须检查插件注册日志；native/mobile 优先插件如编码检测、PDF 不得在 Web 注册阶段抛错，必要时用 Web stub 或条件依赖把能力降级到 application 层。本地 WebView / JS runtime 已移除，不得作为 Web 首屏依赖重新引入。
 - 桌面 UI 改动至少验证一个真实桌面端 run 日志，RenderFlex overflow 视为失败，不能只依赖 widget smoke。
 
 必须在 PR 或执行记录中写清：

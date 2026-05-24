@@ -16,9 +16,8 @@ import '../reader/application/reading_record_service.dart';
 import '../reader/application/reader_entry_route_resolver.dart';
 import '../search/application/search_hit_cache_service.dart';
 import '../search/application/search_service.dart';
-import '../source/application/source_runtime_facade.dart';
-import '../source/application/source_runtime_scheduler_service.dart';
-import '../source/application/source_runtime_task_conflict_service.dart';
+import '../source/application/remote_content_task_scheduler_service.dart';
+import '../source/application/remote_content_task_conflict_service.dart';
 import 'application/book_detail_service.dart';
 import 'application/book_detail_read_route_service.dart';
 import 'application/book_detail_action_service.dart';
@@ -80,14 +79,8 @@ final bookLocalBookRepositoryProvider = Provider<LocalBookRepository>((ref) {
   return ref.watch(app_providers.localBookRepositoryProvider);
 });
 
-final bookSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
-  return ref.watch(app_providers.appSourceRuntimeFacadeProvider);
-});
-
 final bookDetailServiceProvider = Provider<BookDetailService>((ref) {
-  return BookDetailService(
-    sourceRuntimeFacade: ref.watch(bookSourceRuntimeFacadeProvider),
-  );
+  return BookDetailService();
 });
 
 final bookDetailBookshelfServiceProvider = Provider<BookshelfService>((ref) {
@@ -97,9 +90,7 @@ final bookDetailBookshelfServiceProvider = Provider<BookshelfService>((ref) {
 final bookDetailSwitchSourceSearchServiceProvider = Provider<SearchService>((
   ref,
 ) {
-  return SearchService(
-    sourceRuntimeFacade: ref.watch(bookSourceRuntimeFacadeProvider),
-  );
+  return SearchService();
 });
 
 final bookDetailSearchHitCacheServiceProvider = Provider<SearchHitCacheService>(
@@ -113,15 +104,15 @@ final bookDetailReaderEntryRouteResolverProvider =
       return const ReaderEntryRouteResolver();
     });
 
-final bookDetailReadRouteServiceProvider = Provider<BookDetailReadRouteService>((
-  ref,
-) {
-  return BookDetailReadRouteService(
-    readerEntryRouteResolver: ref.watch(
-      bookDetailReaderEntryRouteResolverProvider,
-    ),
-  );
-});
+final bookDetailReadRouteServiceProvider = Provider<BookDetailReadRouteService>(
+  (ref) {
+    return BookDetailReadRouteService(
+      readerEntryRouteResolver: ref.watch(
+        bookDetailReaderEntryRouteResolverProvider,
+      ),
+    );
+  },
+);
 
 final bookDetailReaderSystemSettingsServiceProvider =
     Provider<ReaderSystemSettingsService>((ref) {
@@ -212,16 +203,19 @@ final bookPresentationSyncServiceProvider =
       );
     });
 
-final bookDetailActionServiceProvider = Provider<BookDetailActionService>((ref) {
+final bookDetailActionServiceProvider = Provider<BookDetailActionService>((
+  ref,
+) {
   return BookDetailActionService(
     bookshelfService: ref.watch(bookDetailBookshelfServiceProvider),
   );
 });
 
-final bookDetailCatalogServiceProvider =
-    Provider<BookDetailCatalogService>((ref) {
-      return const BookDetailCatalogService();
-    });
+final bookDetailCatalogServiceProvider = Provider<BookDetailCatalogService>((
+  ref,
+) {
+  return const BookDetailCatalogService();
+});
 
 final bookDetailMetadataFlowServiceProvider =
     Provider<BookDetailMetadataFlowService>((ref) {
@@ -235,16 +229,16 @@ final bookDetailMetadataFlowServiceProvider =
     });
 
 final bookTaskConflictServiceProvider =
-    Provider<SourceRuntimeTaskConflictService>((ref) {
+    Provider<RemoteContentTaskConflictService>((ref) {
       return ref.watch(
-        app_providers.appSourceRuntimeTaskConflictServiceProvider,
+        app_providers.appRemoteContentTaskConflictServiceProvider,
       );
     });
 
-final bookTaskSchedulerProvider = Provider<SourceRuntimeSchedulerService>((
+final bookTaskSchedulerProvider = Provider<RemoteContentTaskSchedulerService>((
   ref,
 ) {
-  return ref.watch(app_providers.appSourceRuntimeSchedulerServiceProvider);
+  return ref.watch(app_providers.appRemoteContentTaskSchedulerServiceProvider);
 });
 
 final bookLocalMetadataServiceProvider = Provider<BookLocalMetadataService>((

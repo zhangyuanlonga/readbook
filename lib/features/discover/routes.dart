@@ -11,7 +11,7 @@ final StatefulShellBranch discoverShellBranch = StatefulShellBranch(
       builder:
           (context, state) => const FeatureDisabledPage(
             title: '服务器发现开发中',
-            message: '发现页将切换到服务器实现。当前本地脚本书源发现能力已停止入口投放，待服务器能力完成后再开放。',
+            message: '发现页将切换到服务器书源网关实现。当前版本先保留本地阅读和搜索能力，待服务器发现能力完成后再开放。',
             icon: Icons.travel_explore_rounded,
           ),
     ),

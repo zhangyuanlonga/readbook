@@ -174,7 +174,7 @@
 | `CoverImageDiskCache.clearAll()` | 封面缓存文件 | 否 | 可控 |
 | `CoverImageDiskCache.compact()` | 封面缓存文件 | 否 | 可控 |
 | `BottomNavIconGalleryService` / `CoverGalleryService` / `LaunchImageGalleryService` / `AdvancedThemeService` 删除目录 | 仅删除对应用户资产目录 | 否 | 删除的是用户主动删除对象，不属于缓存清理 |
-| `SourceRuntimeSchedulerService.clearAll()` | 内存调度状态 | 否 | 非持久化 |
+| `RemoteContentTaskSchedulerService.clearAll()` | 内存调度状态 | 否 | 非持久化 |
 
 结论：
 

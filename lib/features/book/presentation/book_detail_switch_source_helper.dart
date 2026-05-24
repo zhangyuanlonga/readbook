@@ -10,8 +10,6 @@ import '../../reader/application/switch_source_shared.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_health_service.dart';
-import '../../source/application/source_runtime_facade.dart';
-import '../../../runtime/sources/source_registry.dart';
 
 class BookDetailSwitchSourceScope {
   const BookDetailSwitchSourceScope({
@@ -30,26 +28,21 @@ class BookDetailSwitchSourceHelper {
     required SearchService switchSourceSearchService,
     required SearchHitCacheService searchHitCacheService,
     required SourceSwitchScoreService switchSourceScoreService,
-    SourceRuntimeFacade? sourceRuntimeFacade,
   }) : _switchSourceSearchService = switchSourceSearchService,
        _searchHitCacheService = searchHitCacheService,
        _switchSourceScoreService = switchSourceScoreService,
-       _sourceHealthService = SourceHealthService.instance,
-       _sourceRuntimeFacade =
-           sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+       _sourceHealthService = SourceHealthService.instance;
 
   final SearchService _switchSourceSearchService;
   final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService;
   final SourceHealthService _sourceHealthService;
-  final SourceRuntimeFacade _sourceRuntimeFacade;
 
   static const int _candidateLimit = 24;
   static const int _lagTolerance = 20;
   static const int _scoreStep = 6;
   static const int _hitCountCap = 12;
   static const int _hitCountWeight = 3;
-  static const Duration _scopeLoadTimeout = Duration(milliseconds: 1600);
   static const Duration _hitCountLoadTimeout = Duration(milliseconds: 1200);
   static final RegExp _chapterPattern = RegExp(r'第?\s*(\d{1,5})\s*章');
   static final RegExp _chapterEnglishPattern = RegExp(
@@ -59,90 +52,11 @@ class BookDetailSwitchSourceHelper {
   Future<BookDetailSwitchSourceScope> buildScope({
     required String currentSourceId,
   }) async {
-    List<RegisteredSource> sources;
-    try {
-      sources = _sourceRuntimeFacade.registeredScriptSources(enabledOnly: true);
-      if (sources.isEmpty) {
-        final report = await _sourceRuntimeFacade.reloadScriptSources().timeout(
-          _scopeLoadTimeout,
-        );
-        sources = report.loaded;
-      }
-    } catch (_) {
-      return const BookDetailSwitchSourceScope(
-        sourceIds: <String>[],
-        contentMode: SearchContentMode.novel,
-        allowUnscopedSearch: true,
-      );
-    }
-    if (sources.isEmpty) {
-      return const BookDetailSwitchSourceScope(
-        sourceIds: <String>[],
-        contentMode: SearchContentMode.novel,
-        allowUnscopedSearch: true,
-      );
-    }
-
-    RegisteredSource? currentSource;
-    for (final source in sources) {
-      if (source.runtime.id == currentSourceId) {
-        currentSource = source;
-        break;
-      }
-    }
-
-    if (currentSource == null) {
-      final fallbackSourceIds = sources
-          .where((source) => source.runtime.id != currentSourceId)
-          .map((source) => source.runtime.id)
-          .toList(growable: false);
-      if (fallbackSourceIds.isEmpty) {
-        return const BookDetailSwitchSourceScope(
-          sourceIds: <String>[],
-          contentMode: SearchContentMode.novel,
-          allowUnscopedSearch: true,
-        );
-      }
-      return BookDetailSwitchSourceScope(
-        sourceIds: fallbackSourceIds,
-        contentMode: SearchContentMode.novel,
-      );
-    }
-
-    final isMangaType = _isMangaSource(currentSource);
-    final sourceIds = sources
-        .where(
-          (source) =>
-              source.runtime.id != currentSourceId &&
-              _isMangaSource(source) == isMangaType,
-        )
-        .map((source) => source.runtime.id)
-        .toList(growable: false);
-    if (sourceIds.isEmpty) {
-      return BookDetailSwitchSourceScope(
-        sourceIds: const <String>[],
-        contentMode:
-            isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
-        allowUnscopedSearch: true,
-      );
-    }
-    return BookDetailSwitchSourceScope(
-      sourceIds: sourceIds,
-      contentMode:
-          isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
+    return const BookDetailSwitchSourceScope(
+      sourceIds: <String>[],
+      contentMode: SearchContentMode.novel,
+      allowUnscopedSearch: true,
     );
-  }
-
-  bool _isMangaSource(RegisteredSource source) {
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-    return capabilities.contains('manga') ||
-        capabilities.contains('comic') ||
-        capabilities.contains('manhua') ||
-        capabilities.contains('manhwa');
   }
 
   Future<String?> resolveSearchKeyword({

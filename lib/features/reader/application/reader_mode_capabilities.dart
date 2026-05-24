@@ -32,12 +32,9 @@ class ReaderModeCapabilitiesResolver {
     required ReaderContentMode contentMode,
     required ContentCapabilities contentCapabilities,
     required bool hasInlineImageParagraphs,
-    bool supportsSourceRuntime = true,
   }) {
-    final canUseSourceRuntimeActions =
-        supportsSourceRuntime && contentCapabilities.canSwitchSource;
-    final canCacheChapter =
-        supportsSourceRuntime && contentCapabilities.canCacheChapter;
+    final canSwitchSource = contentCapabilities.canSwitchSource;
+    final canCacheChapter = contentCapabilities.canCacheChapter;
     switch (contentMode) {
       case ReaderContentMode.text:
         return ReaderModeCapabilities(
@@ -45,7 +42,7 @@ class ReaderModeCapabilitiesResolver {
           canUsePagedText: true,
           supportsCatalogContentSearch: true,
           primaryBottomAction: ReaderPrimaryBottomAction.interfacePanel,
-          canSwitchSource: canUseSourceRuntimeActions,
+          canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,
           interfaceSettingsTitle: '界面',
           readingSettingsTitle: '设置',
@@ -56,7 +53,7 @@ class ReaderModeCapabilitiesResolver {
           canUsePagedText: false,
           supportsCatalogContentSearch: false,
           primaryBottomAction: ReaderPrimaryBottomAction.positionPanel,
-          canSwitchSource: canUseSourceRuntimeActions,
+          canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,
           interfaceSettingsTitle: '漫画界面',
           readingSettingsTitle: '漫画设置',
@@ -67,7 +64,7 @@ class ReaderModeCapabilitiesResolver {
           canUsePagedText: false,
           supportsCatalogContentSearch: false,
           primaryBottomAction: ReaderPrimaryBottomAction.interfacePanel,
-          canSwitchSource: canUseSourceRuntimeActions,
+          canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,
           interfaceSettingsTitle: '听书界面',
           readingSettingsTitle: '听书设置',

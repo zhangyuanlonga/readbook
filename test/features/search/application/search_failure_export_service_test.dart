@@ -6,9 +6,6 @@ import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
 import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_failure_export_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
-import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
-import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
-    as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -29,29 +26,15 @@ void main() {
         now: () => DateTime(2026, 2, 23, 9, 30, 12),
       );
 
-      final source = RegisteredSource(
-        runtime: const SourceRuntimeInfo(
-          id: 'src_1',
-          name: '测试源',
-          group: '默认分组',
-          revision: 'script-1',
-        ),
-        definition: RuntimeSourceDefinition(
-          manifest: const RuntimeSourceManifest(
-            name: '测试源',
-            group: '默认分组',
-            author: 'tester',
-            description: 'desc',
-            homepage: 'https://example.com',
-            domains: <String>['example.com'],
-          ),
-          search: (_, __) async => const <runtime_models.Book>[],
-          detail: (_, book) async => book,
-          chapters: (_, __) async => const <runtime_models.Chapter>[],
-          content:
-              (_, __, ___) async =>
-                  const runtime_models.Content(title: '', content: ''),
-        ),
+      const source = SearchSourceSnapshot(
+        id: 'src_1',
+        name: '测试源',
+        group: '默认分组',
+        revision: 'script-1',
+        manifest: <String, Object?>{
+          'homepage': 'https://example.com',
+          'domains': <String>['example.com'],
+        },
       );
 
       final report = SearchExecutionReport(
@@ -75,7 +58,7 @@ void main() {
 
       final result = await service.exportFailedSources(
         report: report,
-        sources: <RegisteredSource>[source],
+        sources: <SearchSourceSnapshot>[source],
         contentMode: SearchContentMode.novel,
       );
 
@@ -147,7 +130,7 @@ void main() {
 
         final result = await service.exportFailedSources(
           report: report,
-          sources: const <RegisteredSource>[],
+          sources: const <SearchSourceSnapshot>[],
           contentMode: SearchContentMode.novel,
         );
 
@@ -193,7 +176,7 @@ void main() {
 
       final result = await service.exportFailedSources(
         report: report,
-        sources: const <RegisteredSource>[],
+        sources: const <SearchSourceSnapshot>[],
         contentMode: SearchContentMode.novel,
         preferredFilePath: targetFilePath,
       );
@@ -238,7 +221,7 @@ void main() {
 
         final result = await service.exportFailedSources(
           report: report,
-          sources: const <RegisteredSource>[],
+          sources: const <SearchSourceSnapshot>[],
           contentMode: SearchContentMode.novel,
         );
 
@@ -280,7 +263,7 @@ void main() {
       await expectLater(
         () => service.exportFailedSources(
           report: report,
-          sources: const <RegisteredSource>[],
+          sources: const <SearchSourceSnapshot>[],
           contentMode: SearchContentMode.novel,
         ),
         throwsA(

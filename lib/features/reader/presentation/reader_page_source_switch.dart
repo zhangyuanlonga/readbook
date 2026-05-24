@@ -35,10 +35,6 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     ReaderSwitchSourceScopePlan scope;
     try {
       scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
-      if (scope.sourceIds.isEmpty) {
-        _showMessage('暂无可切换的同类型书源。');
-        return;
-      }
     } on AppException catch (error) {
       _showMessage('查找可切换书源失败：${error.briefMessage}');
       return;
@@ -114,7 +110,6 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     return _sourceSwitchController.buildSwitchSourceScope(
       currentSourceId: currentSourceId,
       isMangaChapter: _isMangaChapter,
-      sourceRuntimeFacade: _sourceRuntimeFacade,
     );
   }
 
@@ -503,9 +498,6 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       final scope = await _buildSwitchSourceScope(
         currentSourceId: currentSourceId,
       );
-      if (scope.sourceIds.isEmpty) {
-        return false;
-      }
 
       final scoreStore = await _loadSwitchSourceScoreStoreSafely();
       final hitCountBySource = await _loadSwitchSourceHitCountsSafely(
@@ -661,14 +653,6 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
 
       final targetIndex = switchTarget.targetChapterIndex;
       final targetChapter = chapters[targetIndex];
-      final previousSourceId = (_sourceId ?? '').trim();
-      if (previousSourceId.isNotEmpty) {
-        _sourceRuntimeFacade.clearReadingFlow(
-          sourceId: previousSourceId,
-          detailUrl: (_detailUrl ?? '').trim(),
-          title: _bookTitle.trim(),
-        );
-      }
 
       setState(() {
         _activeBookId = candidate.book.id.trim();

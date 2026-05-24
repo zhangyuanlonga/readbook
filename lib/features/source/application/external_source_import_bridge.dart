@@ -51,7 +51,7 @@ class ExternalImportBridge {
   static final ExternalImportBridge instance = ExternalImportBridge._();
 
   static const MethodChannel _channel = MethodChannel(
-    'com.jiangyan.selune/source_import_intent',
+    'com.jiangyan.selune/external_import_intent',
   );
   static const String _methodGetInitialImportPayload =
       'getInitialImportPayload';

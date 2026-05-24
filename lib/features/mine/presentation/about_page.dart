@@ -35,7 +35,7 @@ class AboutPage extends ConsumerStatefulWidget {
     'GoRouter',
     'Dio',
     'Drift + SQLite',
-    'html / json_path',
+    'html',
   ];
   static final Uri _officialSiteUri = Uri.parse('https://www.sxyd.lltask.top');
   static final Uri _updatesPageUri = Uri.parse(

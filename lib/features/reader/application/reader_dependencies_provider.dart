@@ -13,9 +13,8 @@ import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../search/providers.dart' as search_providers;
 import '../../source/application/source_health_service.dart';
-import '../../source/application/source_runtime_facade.dart';
-import '../../source/application/source_runtime_scheduler_service.dart';
-import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../../source/application/remote_content_task_scheduler_service.dart';
+import '../../source/application/remote_content_task_conflict_service.dart';
 import '../../book/application/local_book_detail_service.dart';
 import 'content_provider.dart';
 import 'local_content_provider.dart';
@@ -53,7 +52,6 @@ class ReaderFeatureDependencies {
     required this.switchSourceSearchService,
     required this.searchHitCacheService,
     required this.sourceHealthService,
-    required this.sourceRuntimeFacade,
     required this.taskConflictService,
     required this.taskScheduler,
     required this.bookmarkRepository,
@@ -82,9 +80,8 @@ class ReaderFeatureDependencies {
   final SearchService switchSourceSearchService;
   final SearchHitCacheService searchHitCacheService;
   final SourceHealthService sourceHealthService;
-  final SourceRuntimeFacade sourceRuntimeFacade;
-  final SourceRuntimeTaskConflictService taskConflictService;
-  final SourceRuntimeSchedulerService taskScheduler;
+  final RemoteContentTaskConflictService taskConflictService;
+  final RemoteContentTaskSchedulerService taskScheduler;
   final BookmarkRepository bookmarkRepository;
   final BookMetadataOverrideRepository bookMetadataOverrideRepository;
   final LocalBookRepository localBookRepository;
@@ -177,23 +174,16 @@ final readerFeatureDependenciesFactoryProvider =
           readingRecordService: readingRecordService,
           imageSelectionService: ImageSelectionService(),
           bookshelfService: bookshelfService,
-          switchSourceSearchService: SearchService(
-            sourceRuntimeFacade: ref.watch(
-              app_providers.appSourceRuntimeFacadeProvider,
-            ),
-          ),
+          switchSourceSearchService: SearchService(),
           searchHitCacheService: SearchHitCacheService(),
           sourceHealthService: ref.watch(
             app_providers.appSourceHealthServiceProvider,
           ),
-          sourceRuntimeFacade: ref.watch(
-            app_providers.appSourceRuntimeFacadeProvider,
-          ),
           taskConflictService: ref.watch(
-            app_providers.appSourceRuntimeTaskConflictServiceProvider,
+            app_providers.appRemoteContentTaskConflictServiceProvider,
           ),
           taskScheduler: ref.watch(
-            app_providers.appSourceRuntimeSchedulerServiceProvider,
+            app_providers.appRemoteContentTaskSchedulerServiceProvider,
           ),
           bookmarkRepository: bookmarkRepository,
           bookMetadataOverrideRepository: bookMetadataOverrideRepository,

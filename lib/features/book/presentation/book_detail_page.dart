@@ -61,9 +61,8 @@ import '../../search/application/search_service.dart';
 import '../../search/providers.dart' as search_providers;
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
-import '../../source/application/source_runtime_facade.dart';
-import '../../source/application/source_runtime_task_conflict_service.dart';
-import '../../source/application/source_runtime_scheduler_service.dart';
+import '../../source/application/remote_content_task_conflict_service.dart';
+import '../../source/application/remote_content_task_scheduler_service.dart';
 import '../application/book_detail_service.dart';
 import '../application/book_detail_action_service.dart';
 import '../application/book_detail_catalog_service.dart';
@@ -241,7 +240,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final BookDetailActionService _actionService;
   late final BookDetailCatalogService _catalogService;
   late final BookDetailService _bookDetailService;
-  late final SourceRuntimeFacade _sourceRuntimeFacade;
   final AppLogger _logger = AppLogger.instance;
   final Stopwatch _detailOpenStopwatch = Stopwatch()..start();
   final BookDisplayStateResolver _bookMetadataPresentationResolver =
@@ -252,8 +250,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final ReadingRecordService _readingRecordService;
   late final LocalBookIndexService _localBookIndexService;
   late final BookDetailReadRouteService _readRouteService;
-  late final SourceRuntimeTaskConflictService _taskConflictService;
-  late final SourceRuntimeSchedulerService _taskScheduler;
+  late final RemoteContentTaskConflictService _taskConflictService;
+  late final RemoteContentTaskSchedulerService _taskScheduler;
   final TextEditingController _editTitleController = TextEditingController();
   final TextEditingController _editAuthorController = TextEditingController();
   final TextEditingController _editIntroController = TextEditingController();
@@ -283,7 +281,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _metadataFlowService = dependencies.metadataFlowService;
     _actionService = dependencies.actionService;
     _catalogService = dependencies.catalogService;
-    _sourceRuntimeFacade = ref.read(bookSourceRuntimeFacadeProvider);
     _taskConflictService = ref.read(bookTaskConflictServiceProvider);
     _taskScheduler = ref.read(bookTaskSchedulerProvider);
     _searchHitCacheService = dependencies.searchHitCacheService;
@@ -323,14 +320,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       switchSourceSearchService: _switchSourceSearchService,
       searchHitCacheService: _searchHitCacheService,
       switchSourceScoreService: _switchSourceScoreService,
-      sourceRuntimeFacade: _sourceRuntimeFacade,
     );
     _activeSourceId = _normalizeRouteParam(widget.sourceId);
     _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
     _activeBookId = widget.bookId.trim();
     _detailScrollController.addListener(_handleDetailScrollChanged);
     _cancelBackgroundRefreshConflictForCurrentBook(
-      byScene: SourceRuntimeConflictScene.detail,
+      byScene: RemoteContentConflictScene.detail,
     );
     _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
@@ -370,14 +366,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _editTitleController.dispose();
     _editAuthorController.dispose();
     _editIntroController.dispose();
-    final sourceId = (_activeSourceId ?? '').trim();
-    if (sourceId.isNotEmpty) {
-      _sourceRuntimeFacade.clearReadingFlow(
-        sourceId: sourceId,
-        detailUrl: (_activeDetailUrl ?? '').trim(),
-        title: (_displayTitle ?? '').trim(),
-      );
-    }
     _presentationStateNotifier.dispose();
     _auxiliaryStateNotifier.dispose();
     super.dispose();
@@ -1847,14 +1835,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final previousReadableChapter = _firstReadableChapter(
       previousResult?.chapters,
     );
-    final normalizedPreviousSourceId = (previousSourceId ?? '').trim();
-    if (normalizedPreviousSourceId.isNotEmpty) {
-      _sourceRuntimeFacade.clearReadingFlow(
-        sourceId: normalizedPreviousSourceId,
-        detailUrl: (previousDetailUrl ?? '').trim(),
-        title: (previousTitle ?? '').trim(),
-      );
-    }
 
     _activeSourceId = candidate.book.sourceId.trim();
     _activeDetailUrl = candidate.book.detailUrl.trim();
@@ -2061,7 +2041,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return;
     }
     _cancelBackgroundRefreshConflictForCurrentBook(
-      byScene: SourceRuntimeConflictScene.reader,
+      byScene: RemoteContentConflictScene.reader,
     );
     final route = _readRouteService.buildChapterRoute(
       bookId: _activeBookId,
@@ -2099,10 +2079,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return false;
     }
     _cancelBackgroundRefreshConflictForCurrentBook(
-      byScene: SourceRuntimeConflictScene.detail,
+      byScene: RemoteContentConflictScene.detail,
     );
     final lease = await _taskScheduler.acquire(
-      scene: SourceRuntimeSchedulerScene.detail,
+      scene: RemoteContentTaskScene.detail,
       conflictKeys: _currentConflictKeys(),
     );
     if (lease == null) {
@@ -2254,7 +2234,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   void _cancelBackgroundRefreshConflictForCurrentBook({
-    required SourceRuntimeConflictScene byScene,
+    required RemoteContentConflictScene byScene,
   }) {
     final sourceId = (_activeSourceId ?? '').trim();
     final detailUrl = (_activeDetailUrl ?? '').trim();
@@ -2813,7 +2793,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return switch (error.code) {
       ErrorCode.network => '网络请求失败，请检查网络或更换书源后重试。',
       ErrorCode.validation => '书源配置不完整，暂时无法加载详情。',
-      ErrorCode.ruleParse => '书源脚本语法错误，无法解析详情。',
+      ErrorCode.ruleParse => '服务器书源解析规则异常，无法加载详情。',
       ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书源或稍后重试。',
       ErrorCode.decode => '响应解析失败，可能是编码或格式不兼容。',
       ErrorCode.unknownSource => '书源不存在或已被删除。',
@@ -2834,7 +2814,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return switch (error.code) {
       ErrorCode.network => '目录加载失败（网络异常），已展示详情。可稍后刷新目录重试。',
       ErrorCode.validation => '书源配置不完整，目录暂不可用。',
-      ErrorCode.ruleParse => '书源脚本语法错误，目录暂不可用。',
+      ErrorCode.ruleParse => '服务器书源解析规则异常，目录暂不可用。',
       ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
       ErrorCode.decode => '目录解析失败，目录暂不可用。',
       ErrorCode.unknownSource => '书源不存在，目录暂不可用。',

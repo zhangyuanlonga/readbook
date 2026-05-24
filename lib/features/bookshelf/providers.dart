@@ -16,7 +16,7 @@ import '../reader/application/reader_preferences_service.dart';
 import '../reader/application/reader_entry_route_resolver.dart';
 import '../reader/application/reader_system_settings_service.dart';
 import '../reader/application/reading_record_service.dart';
-import '../source/application/source_runtime_task_conflict_service.dart';
+import '../source/application/remote_content_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
 import 'application/bookshelf_flow_coordinator.dart';
 import 'application/bookshelf_page_route_service.dart';
@@ -112,9 +112,6 @@ final bookshelfLoggerProvider = Provider<AppLogger>((ref) {
 
 final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
   return BookDetailService(
-    sourceRuntimeFacade: ref.watch(
-      app_providers.appSourceRuntimeFacadeProvider,
-    ),
     sourceHealthService: ref.watch(
       app_providers.appSourceHealthServiceProvider,
     ),
@@ -246,22 +243,22 @@ final bookshelfMetadataOverrideRepositoryProvider =
     });
 
 final bookshelfTaskConflictServiceProvider =
-    Provider<SourceRuntimeTaskConflictService>((ref) {
+    Provider<RemoteContentTaskConflictService>((ref) {
       return ref.watch(
-        app_providers.appSourceRuntimeTaskConflictServiceProvider,
+        app_providers.appRemoteContentTaskConflictServiceProvider,
       );
     });
 
 final bookshelfPresentationQueryServiceProvider =
     Provider<BookshelfPresentationQueryService>((ref) {
-  return BookshelfPresentationQueryService(
-    database: ref.watch(app_providers.appDatabaseProvider),
-    bookPresentationQueryService: ref.watch(
-      app_providers.bookPresentationQueryServiceProvider,
-    ),
-    localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
-  );
-});
+      return BookshelfPresentationQueryService(
+        database: ref.watch(app_providers.appDatabaseProvider),
+        bookPresentationQueryService: ref.watch(
+          app_providers.bookPresentationQueryServiceProvider,
+        ),
+        localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+      );
+    });
 
 typedef BookshelfExternalImportCoordinatorFactory =
     BookshelfExternalImportCoordinator Function();

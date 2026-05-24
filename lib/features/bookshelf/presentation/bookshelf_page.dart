@@ -60,7 +60,7 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
-import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../../source/application/remote_content_task_conflict_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
 
@@ -617,7 +617,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final CustomCoverStorageService _customCoverStorageService;
   late final AnnouncementService _announcementService;
   late final AnnouncementReadStateService _announcementReadStateService;
-  late final SourceRuntimeTaskConflictService _taskConflictService;
+  late final RemoteContentTaskConflictService _taskConflictService;
   StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
   StreamSubscription<BookshelfCollectionChange>? _collectionChangeSub;
   StreamSubscription<List<LocalBook>>? _localBooksChangeSub;
@@ -4113,7 +4113,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required String sourceId,
     required String detailUrl,
     required String bookId,
-    required SourceRuntimeConflictScene byScene,
+    required RemoteContentConflictScene byScene,
   }) {
     final conflictKey = _bookConflictKey(
       sourceId: sourceId,
@@ -5062,7 +5062,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       bookId: book.bookId,
-      byScene: SourceRuntimeConflictScene.reader,
+      byScene: RemoteContentConflictScene.reader,
     );
     if (_openingBookId != null) {
       return;
@@ -5210,7 +5210,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       bookId: book.bookId,
-      byScene: SourceRuntimeConflictScene.reader,
+      byScene: RemoteContentConflictScene.reader,
     );
     final route = _pageRouteService.resolveReaderFallbackRoute(book);
     context.push(route);
@@ -5242,7 +5242,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       sourceId: book.sourceId,
       detailUrl: book.detailUrl,
       bookId: book.bookId,
-      byScene: SourceRuntimeConflictScene.detail,
+      byScene: RemoteContentConflictScene.detail,
     );
     if (_isBatchDeleting || _isBatchUpdatingCovers) {
       return;

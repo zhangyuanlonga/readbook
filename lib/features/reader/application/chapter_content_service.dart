@@ -7,12 +7,11 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/reader_document.dart';
-import '../../../runtime/sources/source_result_models.dart' as runtime_models;
-import 'removed_script_source_guard.dart';
+import '../../search/application/server_book_gateway_service.dart';
+import '../../search/application/server_gateway_identity.dart';
 import '../../source/application/source_health_service.dart';
-import '../../source/application/source_runtime_task_gate_service.dart';
-import '../../source/application/source_runtime_facade.dart';
 import 'content_text_cleaner.dart';
+import 'removed_script_source_guard.dart';
 
 class ChapterContentResult {
   factory ChapterContentResult({
@@ -76,7 +75,8 @@ class ChapterContentResult {
 
   bool get isImageContent => document.isPureImageDocument;
   bool get hasAudioContent =>
-      (audioUrl?.isNotEmpty ?? false) || (audioManifestUrl?.isNotEmpty ?? false);
+      (audioUrl?.isNotEmpty ?? false) ||
+      (audioManifestUrl?.isNotEmpty ?? false);
 
   static String? _normalizeOptionalTextStatic(String? value) {
     final normalized = value?.trim();
@@ -90,25 +90,21 @@ class ChapterContentResult {
 class ChapterContentService {
   ChapterContentService({
     AppDatabase? database,
-    SourceRuntimeFacade? sourceRuntimeFacade,
     SourceHealthService? sourceHealthService,
-    SourceRuntimeTaskGateService? taskGateService,
+    ServerBookGatewayService? serverGatewayService,
     ContentTextCleaner? cleaner,
     AppLogger? logger,
   }) : _database = database ?? AppDatabase.instance,
-       _sourceRuntimeFacade =
-           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _sourceHealthService =
            sourceHealthService ?? SourceHealthService.instance,
-       _taskGateService =
-           taskGateService ?? SourceRuntimeTaskGateService.instance,
+       _serverGatewayService =
+           serverGatewayService ?? ServerBookGatewayService(),
        _cleaner = cleaner ?? const ContentTextCleaner(),
        _logger = logger ?? AppLogger.instance;
 
   final AppDatabase _database;
-  final SourceRuntimeFacade? _sourceRuntimeFacade;
   final SourceHealthService _sourceHealthService;
-  final SourceRuntimeTaskGateService _taskGateService;
+  final ServerBookGatewayService _serverGatewayService;
   final ContentTextCleaner _cleaner;
   final AppLogger _logger;
 
@@ -149,7 +145,7 @@ class ChapterContentService {
     if (cached != null) {
       final decoded = _decodeCachedPayload(cached);
       _logger.info(
-        'Runtime content cache hit',
+        'Chapter content cache hit',
         context: <String, Object?>{
           'chain': 'content',
           'step': 'content',
@@ -175,7 +171,7 @@ class ChapterContentService {
         _chapterCache[cacheKey] = persistedContent;
         final decoded = _decodeCachedPayload(persistedContent);
         _logger.info(
-          'Runtime content cache hit',
+          'Chapter content cache hit',
           context: <String, Object?>{
             'chain': 'content',
             'step': 'content',
@@ -205,19 +201,28 @@ class ChapterContentService {
       );
     }
 
-    return _loadFromScriptRuntime(
+    if (isServerGatewaySourceId(normalizedSourceId)) {
+      return _loadFromServerGateway(
+        sourceId: normalizedSourceId,
+        chapterUrl: normalizedChapterUrl,
+        bookId: normalizedBookId,
+        bookTitle: bookTitle?.trim(),
+        detailUrl: detailUrl?.trim(),
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        cacheKey: cacheKey,
+      );
+    }
+
+    throw AppException(
+      code: ErrorCode.unknownSource,
+      stage: ErrorStage.content,
       sourceId: normalizedSourceId,
-      chapterUrl: normalizedChapterUrl,
-      bookId: normalizedBookId,
-      bookTitle: bookTitle?.trim(),
-      detailUrl: detailUrl?.trim(),
-      chapterIndex: chapterIndex,
-      chapterTitle: chapterTitle,
-      cacheKey: cacheKey,
+      briefMessage: '当前书籍不属于服务器书源正文链路。',
     );
   }
 
-  Future<ChapterContentResult> _loadFromScriptRuntime({
+  Future<ChapterContentResult> _loadFromServerGateway({
     required String sourceId,
     required String chapterUrl,
     required String bookId,
@@ -227,107 +232,46 @@ class ChapterContentService {
     required String? chapterTitle,
     required String cacheKey,
   }) async {
-    final facade = _sourceRuntimeFacade;
-    final registered =
-        facade == null
-            ? null
-            : await facade.ensureRegisteredScriptSourceById(sourceId);
-    if (facade == null || registered == null) {
-      _sourceHealthService.markContentFailure(
-        sourceId: sourceId,
-        message: '未找到书源：$sourceId',
-      );
-      throw UnknownSourceException(
-        briefMessage: '未找到书源：$sourceId',
-        sourceId: sourceId,
-        stage: ErrorStage.content,
-      );
-    }
-
-    final runtimeBook = runtime_models.Book(
-      title: bookTitle?.isNotEmpty == true ? bookTitle! : '',
-      author: '',
-      detailUrl: detailUrl?.isNotEmpty == true ? detailUrl! : '',
-      sourceId: sourceId,
-    );
-    final runtimeChapter = runtime_models.Chapter(
-      title:
-          chapterTitle?.trim().isNotEmpty == true
-              ? chapterTitle!.trim()
-              : '未命名章节',
-      url: chapterUrl,
-      index: chapterIndex ?? 0,
-      sourceId: sourceId,
-    );
-
     try {
       final startedAt = DateTime.now();
-      final content = await _taskGateService.run<runtime_models.Content>(
-        source: registered,
-        taskKind: SourceRuntimeTaskKind.content,
-        action:
-            () => facade.content(
-              sourceId: sourceId,
-              book: runtimeBook,
-              chapter: runtimeChapter,
-            ),
+      final content = await _serverGatewayService.loadContent(
+        sourceId: sourceId,
+        bookId: bookId,
+        detailUrl: detailUrl ?? '',
+        chapterUrl: chapterUrl,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
       );
-
-      final normalizedImages = content.images
+      final rawContent = content.content.trim();
+      final normalizedImages = content.imageUrls
           .map((item) => item.trim())
           .where((item) => item.isNotEmpty)
           .toList(growable: false);
-
-      if (normalizedImages.isNotEmpty) {
-        final payload = _encodeImageCachePayload(
-          normalizedImages,
-          imageHeaders: const <String, String>{},
-        );
-        _chapterCache[cacheKey] = payload;
-        await _persistChapterCache(
-          cacheKey: cacheKey,
-          bookId: bookId,
-          sourceId: sourceId,
-          chapterIndex: chapterIndex,
-          chapterTitle: chapterTitle,
-          chapterUrl: chapterUrl,
-          content: payload,
-        );
-        _sourceHealthService.markContentSuccess(sourceId: sourceId);
-        _logger.info(
-          'Runtime content success',
-          context: <String, Object?>{
-            'chain': 'content',
-            'step': 'content',
-            'sourceId': sourceId,
-            'sourceName': registered.runtime.name,
-            'bookId': bookId,
-            'chapterUrl': chapterUrl,
-            'chapterIndex': chapterIndex,
-            'cacheHit': false,
-            'isImageContent': true,
-            'imageCount': normalizedImages.length,
-            'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
-          },
-        );
-        return ChapterContentResult(
-          content: '',
-          fromCache: false,
-          imageUrls: normalizedImages,
-          displayChapterTitle: _normalizeOptionalText(content.title),
-        );
-      }
-
-      final normalizedContent = _cleaner.clean(content.content.trim());
-      if (normalizedContent.isEmpty) {
-        throw RuleMatchEmptyException(
-          briefMessage: '正文解析为空，请检查书源配置。',
+      final normalizedContent =
+          normalizedImages.isEmpty ? _cleaner.clean(rawContent) : rawContent;
+      final hasAudioContent =
+          (content.audioUrl?.trim().isNotEmpty ?? false) ||
+          (content.audioManifestUrl?.trim().isNotEmpty ?? false) ||
+          content.contentType.trim().toLowerCase() == 'audio';
+      if (normalizedContent.isEmpty &&
+          normalizedImages.isEmpty &&
+          !hasAudioContent) {
+        throw AppException(
+          code: ErrorCode.ruleMatchEmpty,
           stage: ErrorStage.content,
           sourceId: sourceId,
+          briefMessage: '服务器正文解析为空，请换源或稍后重试。',
         );
       }
 
-      _chapterCache[cacheKey] = normalizedContent;
+      final cachePayload =
+          normalizedImages.isNotEmpty
+              ? _encodeImageCachePayload(
+                normalizedImages,
+                imageHeaders: content.imageHeaders,
+              )
+              : normalizedContent;
+      _chapterCache[cacheKey] = cachePayload;
       await _persistChapterCache(
         cacheKey: cacheKey,
         bookId: bookId,
@@ -335,77 +279,40 @@ class ChapterContentService {
         chapterIndex: chapterIndex,
         chapterTitle: chapterTitle,
         chapterUrl: chapterUrl,
-        content: normalizedContent,
+        content: cachePayload,
       );
       _sourceHealthService.markContentSuccess(sourceId: sourceId);
       _logger.info(
-        'Runtime content success',
+        'Server gateway content success',
         context: <String, Object?>{
           'chain': 'content',
-          'step': 'content',
+          'step': 'server_gateway_content',
           'sourceId': sourceId,
-          'sourceName': registered.runtime.name,
           'bookId': bookId,
+          'bookTitle': bookTitle,
           'chapterUrl': chapterUrl,
           'chapterIndex': chapterIndex,
-          'cacheHit': false,
-          'isImageContent': false,
-          'contentLength': normalizedContent.length,
+          'cacheHit': content.cacheHit,
+          'isImageContent': normalizedImages.isNotEmpty,
           'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
         },
       );
-
       return ChapterContentResult(
         content: normalizedContent,
-        fromCache: false,
-        displayChapterTitle: _normalizeOptionalText(content.title),
+        fromCache: content.cacheHit,
+        imageUrls: normalizedImages,
+        imageHeaders: content.imageHeaders,
+        contentType: content.contentType,
+        audioUrl: content.audioUrl,
+        audioManifestUrl: content.audioManifestUrl,
+        audioHeaders: content.audioHeaders,
+        displayChapterTitle: chapterTitle,
       );
     } on AppException catch (error) {
       _sourceHealthService.markContentFailure(
         sourceId: sourceId,
         message: error.briefMessage,
         error: error,
-      );
-      _logger.warn(
-        'Runtime content failed',
-        context: <String, Object?>{
-          'chain': 'content',
-          'step': 'content',
-          'sourceId': sourceId,
-          'sourceName': registered.runtime.name,
-          'bookId': bookId,
-          'chapterUrl': chapterUrl,
-          'chapterIndex': chapterIndex,
-          'code': error.code.name,
-          'stage': error.stage.name,
-          'message': error.briefMessage,
-        },
-      );
-      rethrow;
-    } catch (error) {
-      _sourceHealthService.markContentFailure(
-        sourceId: sourceId,
-        message: error.toString(),
-        error: error,
-      );
-      _logger.error(
-        'Runtime content crashed',
-        exception: AppException(
-          code: ErrorCode.unknown,
-          stage: ErrorStage.content,
-          sourceId: sourceId,
-          briefMessage: error.toString(),
-          cause: error,
-        ),
-        context: <String, Object?>{
-          'chain': 'content',
-          'step': 'content',
-          'sourceId': sourceId,
-          'sourceName': registered.runtime.name,
-          'bookId': bookId,
-          'chapterUrl': chapterUrl,
-          'chapterIndex': chapterIndex,
-        },
       );
       rethrow;
     }
@@ -444,14 +351,6 @@ class ChapterContentService {
         },
       );
     }
-  }
-
-  String? _normalizeOptionalText(String? value) {
-    final normalized = value?.trim();
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-    return normalized;
   }
 
   String _encodeImageCachePayload(

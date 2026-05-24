@@ -41,8 +41,6 @@ enum SyncScope {
   readerSystemSettings,
   sourceSwitchScores,
   authSession,
-  sourceLoginState,
-  bookCustomState,
   discoverCacheSnapshots,
   searchSourceHits,
   chapterCaches,
@@ -86,8 +84,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.readerSystemSettings => '其他 - 阅读系统设置',
     SyncScope.sourceSwitchScores => '其他 - 换源评分偏好',
     SyncScope.authSession => '排除 - 账号登录态',
-    SyncScope.sourceLoginState => '排除 - 书源登录态',
-    SyncScope.bookCustomState => '排除 - 书源图书自定义状态',
     SyncScope.discoverCacheSnapshots => '排除 - Discover 缓存快照',
     SyncScope.searchSourceHits => '排除 - 搜索命中缓存',
     SyncScope.chapterCaches => '排除 - 章节缓存',
@@ -132,8 +128,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.readerSystemSettings => 'reader_system_settings.json',
     SyncScope.sourceSwitchScores => 'source_switch_scores.json',
     SyncScope.authSession => 'auth_session.json',
-    SyncScope.sourceLoginState => 'source_login_state.json',
-    SyncScope.bookCustomState => 'book_custom_state.json',
     SyncScope.discoverCacheSnapshots => 'discover_cache_snapshots.json',
     SyncScope.searchSourceHits => 'search_source_hits.json',
     SyncScope.chapterCaches => 'chapter_caches.json',
@@ -176,8 +170,6 @@ extension SyncScopeMetadata on SyncScope {
     SyncScope.readerSystemSettings ||
     SyncScope.sourceSwitchScores => SyncScopeCategory.deferred,
     SyncScope.authSession ||
-    SyncScope.sourceLoginState ||
-    SyncScope.bookCustomState ||
     SyncScope.discoverCacheSnapshots ||
     SyncScope.searchSourceHits ||
     SyncScope.chapterCaches ||

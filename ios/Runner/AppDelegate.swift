@@ -12,7 +12,7 @@ private struct ExternalImportSpec {
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private let sourceImportChannelName = "com.jiangyan.selune/source_import_intent"
+  private let sourceImportChannelName = "com.jiangyan.selune/external_import_intent"
   private let methodGetInitialImportPayload = "getInitialImportPayload"
   private let methodOnImportPayload = "onImportPayload"
   private let methodCacheExternalFileFromUri = "cacheExternalFileFromUri"
@@ -24,7 +24,6 @@ private struct ExternalImportSpec {
   private let methodResetReaderBrightness = "resetReaderBrightness"
   private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
-  private let payloadTypeScriptSource = "scriptSource"
   private let payloadTypeAdvancedTheme = "advancedTheme"
   private let payloadTypeFont = "font"
   private let readerVolumeBaseline: Float = 0.5
@@ -42,16 +41,6 @@ private struct ExternalImportSpec {
   private var suppressObservedVolumeChange = false
   private var lastObservedOutputVolume = AVAudioSession.sharedInstance().outputVolume
   private var previousReaderBrightness: CGFloat?
-
-  private lazy var scriptSourceImportSpec = ExternalImportSpec(
-    type: payloadTypeScriptSource,
-    extensions: ["js", "mjs"],
-    mimeTypeToExtension: [
-      "application/javascript": "js",
-      "text/javascript": "js",
-      "application/x-javascript": "js",
-    ]
-  )
 
   private lazy var localBookImportSpec = ExternalImportSpec(
     type: payloadTypeLocalBook,
@@ -96,7 +85,6 @@ private struct ExternalImportSpec {
     fontImportSpec,
     advancedThemeImportSpec,
     localBookImportSpec,
-    scriptSourceImportSpec,
   ]
 
   private func logSourceImport(_ message: String) {
@@ -411,13 +399,6 @@ private struct ExternalImportSpec {
         "label": label,
         "mimeType": mimeType ?? "",
       ]
-    case payloadTypeScriptSource:
-      return [
-        "type": payloadTypeScriptSource,
-        "uri": url.absoluteString,
-        "label": label,
-        "mimeType": mimeType ?? "",
-      ]
     case payloadTypeFont:
       return [
         "type": payloadTypeFont,
@@ -567,8 +548,6 @@ private struct ExternalImportSpec {
   ) -> String? {
     let specs: [ExternalImportSpec]
     switch type?.trimmingCharacters(in: .whitespacesAndNewlines) {
-    case payloadTypeScriptSource:
-      specs = [scriptSourceImportSpec]
     case payloadTypeLocalBook:
       specs = [localBookImportSpec]
     case payloadTypeAdvancedTheme:

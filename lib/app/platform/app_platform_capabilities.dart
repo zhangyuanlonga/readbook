@@ -14,15 +14,10 @@ class AppPlatformCapabilities {
     required this.imagePicking,
     required this.readerBrightnessBridge,
     required this.readerVolumeKeyBridge,
-    required this.sourceRuntime,
-    required this.interactiveWebView,
     required this.webDavSync,
   });
 
-  factory AppPlatformCapabilities.current({
-    bool? sourceRuntimeEnabled,
-    bool? webDavSyncEnabled,
-  }) {
+  factory AppPlatformCapabilities.current({bool? webDavSyncEnabled}) {
     final platform = defaultTargetPlatform;
     final isMobile =
         platform == TargetPlatform.android || platform == TargetPlatform.iOS;
@@ -70,16 +65,6 @@ class AppPlatformCapabilities {
       label: '阅读器音量键桥接',
       unsupportedReason: '音量键桥接仅在 Android/iOS 原生端启用。',
     );
-    final sourceRuntime = _capability(
-      supported: false,
-      label: '书源运行时',
-      unsupportedReason: '本地脚本书源运行时已移除。',
-    );
-    final interactiveWebView = _capability(
-      supported: false,
-      label: '交互式 WebView',
-      unsupportedReason: '本地脚本书源交互式 WebView 已移除。',
-    );
     final webDavSync = _runtimeCapability(
       enabled: resolvedWebDavSyncEnabled,
       supportedPlatform: supportsNativeFileSystem,
@@ -98,8 +83,6 @@ class AppPlatformCapabilities {
       imagePicking: imagePicking,
       readerBrightnessBridge: readerBrightnessBridge,
       readerVolumeKeyBridge: readerVolumeKeyBridge,
-      sourceRuntime: sourceRuntime,
-      interactiveWebView: interactiveWebView,
       webDavSync: webDavSync,
     );
   }
@@ -113,8 +96,6 @@ class AppPlatformCapabilities {
   final AppCapabilityState imagePicking;
   final AppCapabilityState readerBrightnessBridge;
   final AppCapabilityState readerVolumeKeyBridge;
-  final AppCapabilityState sourceRuntime;
-  final AppCapabilityState interactiveWebView;
   final AppCapabilityState webDavSync;
 
   bool get supportsLocalFileImport => localFileImport.isSupported;
@@ -124,8 +105,6 @@ class AppPlatformCapabilities {
   bool get supportsImagePicking => imagePicking.isSupported;
   bool get supportsReaderBrightnessBridge => readerBrightnessBridge.isSupported;
   bool get supportsReaderVolumeKeyBridge => readerVolumeKeyBridge.isSupported;
-  bool get supportsSourceRuntime => sourceRuntime.isSupported;
-  bool get supportsInteractiveWebView => interactiveWebView.isSupported;
   bool get supportsWebDavSync => webDavSync.isSupported;
 
   bool get supportsLocalReading =>

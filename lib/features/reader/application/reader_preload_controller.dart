@@ -93,7 +93,7 @@ class ReaderPreloadController {
     return switch (type) {
       ReaderPreloadTaskType.content => budget.chapterDownloadConcurrency,
       ReaderPreloadTaskType.pagination =>
-        budget.webViewConcurrency <= 0 ? 0 : 1,
+        budget.paginationWarmupConcurrency <= 0 ? 0 : 1,
       ReaderPreloadTaskType.image =>
         budget.chapterDownloadConcurrency <= 0
             ? 0

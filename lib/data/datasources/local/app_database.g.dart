@@ -8028,21 +8028,21 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _showSourceEntryMeta = const VerificationMeta(
-    'showSourceEntry',
-  );
+  static const VerificationMeta _serverSourceGatewayEnabledMeta =
+      const VerificationMeta('serverSourceGatewayEnabled');
   @override
-  late final GeneratedColumn<bool> showSourceEntry = GeneratedColumn<bool>(
-    'show_source_entry',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("show_source_entry" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
+  late final GeneratedColumn<bool> serverSourceGatewayEnabled =
+      GeneratedColumn<bool>(
+        'show_source_entry',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("show_source_entry" IN (0, 1))',
+        ),
+        defaultValue: const Constant(false),
+      );
   static const VerificationMeta _hasMembershipMeta = const VerificationMeta(
     'hasMembership',
   );
@@ -8073,18 +8073,18 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _sourceImportLimitMeta = const VerificationMeta(
-    'sourceImportLimit',
-  );
+  static const VerificationMeta _serverSourceGatewayLimitMeta =
+      const VerificationMeta('serverSourceGatewayLimit');
   @override
-  late final GeneratedColumn<int> sourceImportLimit = GeneratedColumn<int>(
-    'source_import_limit',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(10),
-  );
+  late final GeneratedColumn<int> serverSourceGatewayLimit =
+      GeneratedColumn<int>(
+        'source_import_limit',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(10),
+      );
   static const VerificationMeta _cachedAtMeta = const VerificationMeta(
     'cachedAt',
   );
@@ -8099,10 +8099,10 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
   @override
   List<GeneratedColumn> get $columns => [
     userId,
-    showSourceEntry,
+    serverSourceGatewayEnabled,
     hasMembership,
     hasThemeCustom,
-    sourceImportLimit,
+    serverSourceGatewayLimit,
     cachedAt,
   ];
   @override
@@ -8127,10 +8127,10 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     }
     if (data.containsKey('show_source_entry')) {
       context.handle(
-        _showSourceEntryMeta,
-        showSourceEntry.isAcceptableOrUnknown(
+        _serverSourceGatewayEnabledMeta,
+        serverSourceGatewayEnabled.isAcceptableOrUnknown(
           data['show_source_entry']!,
-          _showSourceEntryMeta,
+          _serverSourceGatewayEnabledMeta,
         ),
       );
     }
@@ -8154,10 +8154,10 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     }
     if (data.containsKey('source_import_limit')) {
       context.handle(
-        _sourceImportLimitMeta,
-        sourceImportLimit.isAcceptableOrUnknown(
+        _serverSourceGatewayLimitMeta,
+        serverSourceGatewayLimit.isAcceptableOrUnknown(
           data['source_import_limit']!,
-          _sourceImportLimitMeta,
+          _serverSourceGatewayLimitMeta,
         ),
       );
     }
@@ -8186,7 +8186,7 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
             DriftSqlType.string,
             data['${effectivePrefix}user_id'],
           )!,
-      showSourceEntry:
+      serverSourceGatewayEnabled:
           attachedDatabase.typeMapping.read(
             DriftSqlType.bool,
             data['${effectivePrefix}show_source_entry'],
@@ -8201,7 +8201,7 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
             DriftSqlType.bool,
             data['${effectivePrefix}has_theme_custom'],
           )!,
-      sourceImportLimit:
+      serverSourceGatewayLimit:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
             data['${effectivePrefix}source_import_limit'],
@@ -8223,27 +8223,27 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
 class StoredRemoteAccessSnapshot extends DataClass
     implements Insertable<StoredRemoteAccessSnapshot> {
   final String userId;
-  final bool showSourceEntry;
+  final bool serverSourceGatewayEnabled;
   final bool hasMembership;
   final bool hasThemeCustom;
-  final int sourceImportLimit;
+  final int serverSourceGatewayLimit;
   final DateTime cachedAt;
   const StoredRemoteAccessSnapshot({
     required this.userId,
-    required this.showSourceEntry,
+    required this.serverSourceGatewayEnabled,
     required this.hasMembership,
     required this.hasThemeCustom,
-    required this.sourceImportLimit,
+    required this.serverSourceGatewayLimit,
     required this.cachedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['user_id'] = Variable<String>(userId);
-    map['show_source_entry'] = Variable<bool>(showSourceEntry);
+    map['show_source_entry'] = Variable<bool>(serverSourceGatewayEnabled);
     map['has_membership'] = Variable<bool>(hasMembership);
     map['has_theme_custom'] = Variable<bool>(hasThemeCustom);
-    map['source_import_limit'] = Variable<int>(sourceImportLimit);
+    map['source_import_limit'] = Variable<int>(serverSourceGatewayLimit);
     map['cached_at'] = Variable<DateTime>(cachedAt);
     return map;
   }
@@ -8251,10 +8251,10 @@ class StoredRemoteAccessSnapshot extends DataClass
   StoredRemoteAccessSnapshotsCompanion toCompanion(bool nullToAbsent) {
     return StoredRemoteAccessSnapshotsCompanion(
       userId: Value(userId),
-      showSourceEntry: Value(showSourceEntry),
+      serverSourceGatewayEnabled: Value(serverSourceGatewayEnabled),
       hasMembership: Value(hasMembership),
       hasThemeCustom: Value(hasThemeCustom),
-      sourceImportLimit: Value(sourceImportLimit),
+      serverSourceGatewayLimit: Value(serverSourceGatewayLimit),
       cachedAt: Value(cachedAt),
     );
   }
@@ -8266,10 +8266,14 @@ class StoredRemoteAccessSnapshot extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return StoredRemoteAccessSnapshot(
       userId: serializer.fromJson<String>(json['userId']),
-      showSourceEntry: serializer.fromJson<bool>(json['showSourceEntry']),
+      serverSourceGatewayEnabled: serializer.fromJson<bool>(
+        json['serverSourceGatewayEnabled'],
+      ),
       hasMembership: serializer.fromJson<bool>(json['hasMembership']),
       hasThemeCustom: serializer.fromJson<bool>(json['hasThemeCustom']),
-      sourceImportLimit: serializer.fromJson<int>(json['sourceImportLimit']),
+      serverSourceGatewayLimit: serializer.fromJson<int>(
+        json['serverSourceGatewayLimit'],
+      ),
       cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
     );
   }
@@ -8278,27 +8282,33 @@ class StoredRemoteAccessSnapshot extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'userId': serializer.toJson<String>(userId),
-      'showSourceEntry': serializer.toJson<bool>(showSourceEntry),
+      'serverSourceGatewayEnabled': serializer.toJson<bool>(
+        serverSourceGatewayEnabled,
+      ),
       'hasMembership': serializer.toJson<bool>(hasMembership),
       'hasThemeCustom': serializer.toJson<bool>(hasThemeCustom),
-      'sourceImportLimit': serializer.toJson<int>(sourceImportLimit),
+      'serverSourceGatewayLimit': serializer.toJson<int>(
+        serverSourceGatewayLimit,
+      ),
       'cachedAt': serializer.toJson<DateTime>(cachedAt),
     };
   }
 
   StoredRemoteAccessSnapshot copyWith({
     String? userId,
-    bool? showSourceEntry,
+    bool? serverSourceGatewayEnabled,
     bool? hasMembership,
     bool? hasThemeCustom,
-    int? sourceImportLimit,
+    int? serverSourceGatewayLimit,
     DateTime? cachedAt,
   }) => StoredRemoteAccessSnapshot(
     userId: userId ?? this.userId,
-    showSourceEntry: showSourceEntry ?? this.showSourceEntry,
+    serverSourceGatewayEnabled:
+        serverSourceGatewayEnabled ?? this.serverSourceGatewayEnabled,
     hasMembership: hasMembership ?? this.hasMembership,
     hasThemeCustom: hasThemeCustom ?? this.hasThemeCustom,
-    sourceImportLimit: sourceImportLimit ?? this.sourceImportLimit,
+    serverSourceGatewayLimit:
+        serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
     cachedAt: cachedAt ?? this.cachedAt,
   );
   StoredRemoteAccessSnapshot copyWithCompanion(
@@ -8306,10 +8316,10 @@ class StoredRemoteAccessSnapshot extends DataClass
   ) {
     return StoredRemoteAccessSnapshot(
       userId: data.userId.present ? data.userId.value : this.userId,
-      showSourceEntry:
-          data.showSourceEntry.present
-              ? data.showSourceEntry.value
-              : this.showSourceEntry,
+      serverSourceGatewayEnabled:
+          data.serverSourceGatewayEnabled.present
+              ? data.serverSourceGatewayEnabled.value
+              : this.serverSourceGatewayEnabled,
       hasMembership:
           data.hasMembership.present
               ? data.hasMembership.value
@@ -8318,10 +8328,10 @@ class StoredRemoteAccessSnapshot extends DataClass
           data.hasThemeCustom.present
               ? data.hasThemeCustom.value
               : this.hasThemeCustom,
-      sourceImportLimit:
-          data.sourceImportLimit.present
-              ? data.sourceImportLimit.value
-              : this.sourceImportLimit,
+      serverSourceGatewayLimit:
+          data.serverSourceGatewayLimit.present
+              ? data.serverSourceGatewayLimit.value
+              : this.serverSourceGatewayLimit,
       cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
     );
   }
@@ -8330,10 +8340,10 @@ class StoredRemoteAccessSnapshot extends DataClass
   String toString() {
     return (StringBuffer('StoredRemoteAccessSnapshot(')
           ..write('userId: $userId, ')
-          ..write('showSourceEntry: $showSourceEntry, ')
+          ..write('serverSourceGatewayEnabled: $serverSourceGatewayEnabled, ')
           ..write('hasMembership: $hasMembership, ')
           ..write('hasThemeCustom: $hasThemeCustom, ')
-          ..write('sourceImportLimit: $sourceImportLimit, ')
+          ..write('serverSourceGatewayLimit: $serverSourceGatewayLimit, ')
           ..write('cachedAt: $cachedAt')
           ..write(')'))
         .toString();
@@ -8342,10 +8352,10 @@ class StoredRemoteAccessSnapshot extends DataClass
   @override
   int get hashCode => Object.hash(
     userId,
-    showSourceEntry,
+    serverSourceGatewayEnabled,
     hasMembership,
     hasThemeCustom,
-    sourceImportLimit,
+    serverSourceGatewayLimit,
     cachedAt,
   );
   @override
@@ -8353,56 +8363,58 @@ class StoredRemoteAccessSnapshot extends DataClass
       identical(this, other) ||
       (other is StoredRemoteAccessSnapshot &&
           other.userId == this.userId &&
-          other.showSourceEntry == this.showSourceEntry &&
+          other.serverSourceGatewayEnabled == this.serverSourceGatewayEnabled &&
           other.hasMembership == this.hasMembership &&
           other.hasThemeCustom == this.hasThemeCustom &&
-          other.sourceImportLimit == this.sourceImportLimit &&
+          other.serverSourceGatewayLimit == this.serverSourceGatewayLimit &&
           other.cachedAt == this.cachedAt);
 }
 
 class StoredRemoteAccessSnapshotsCompanion
     extends UpdateCompanion<StoredRemoteAccessSnapshot> {
   final Value<String> userId;
-  final Value<bool> showSourceEntry;
+  final Value<bool> serverSourceGatewayEnabled;
   final Value<bool> hasMembership;
   final Value<bool> hasThemeCustom;
-  final Value<int> sourceImportLimit;
+  final Value<int> serverSourceGatewayLimit;
   final Value<DateTime> cachedAt;
   final Value<int> rowid;
   const StoredRemoteAccessSnapshotsCompanion({
     this.userId = const Value.absent(),
-    this.showSourceEntry = const Value.absent(),
+    this.serverSourceGatewayEnabled = const Value.absent(),
     this.hasMembership = const Value.absent(),
     this.hasThemeCustom = const Value.absent(),
-    this.sourceImportLimit = const Value.absent(),
+    this.serverSourceGatewayLimit = const Value.absent(),
     this.cachedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   StoredRemoteAccessSnapshotsCompanion.insert({
     required String userId,
-    this.showSourceEntry = const Value.absent(),
+    this.serverSourceGatewayEnabled = const Value.absent(),
     this.hasMembership = const Value.absent(),
     this.hasThemeCustom = const Value.absent(),
-    this.sourceImportLimit = const Value.absent(),
+    this.serverSourceGatewayLimit = const Value.absent(),
     required DateTime cachedAt,
     this.rowid = const Value.absent(),
   }) : userId = Value(userId),
        cachedAt = Value(cachedAt);
   static Insertable<StoredRemoteAccessSnapshot> custom({
     Expression<String>? userId,
-    Expression<bool>? showSourceEntry,
+    Expression<bool>? serverSourceGatewayEnabled,
     Expression<bool>? hasMembership,
     Expression<bool>? hasThemeCustom,
-    Expression<int>? sourceImportLimit,
+    Expression<int>? serverSourceGatewayLimit,
     Expression<DateTime>? cachedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (userId != null) 'user_id': userId,
-      if (showSourceEntry != null) 'show_source_entry': showSourceEntry,
+      if (serverSourceGatewayEnabled != null)
+        'show_source_entry': serverSourceGatewayEnabled,
       if (hasMembership != null) 'has_membership': hasMembership,
       if (hasThemeCustom != null) 'has_theme_custom': hasThemeCustom,
-      if (sourceImportLimit != null) 'source_import_limit': sourceImportLimit,
+      if (serverSourceGatewayLimit != null)
+        'source_import_limit': serverSourceGatewayLimit,
       if (cachedAt != null) 'cached_at': cachedAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -8410,19 +8422,21 @@ class StoredRemoteAccessSnapshotsCompanion
 
   StoredRemoteAccessSnapshotsCompanion copyWith({
     Value<String>? userId,
-    Value<bool>? showSourceEntry,
+    Value<bool>? serverSourceGatewayEnabled,
     Value<bool>? hasMembership,
     Value<bool>? hasThemeCustom,
-    Value<int>? sourceImportLimit,
+    Value<int>? serverSourceGatewayLimit,
     Value<DateTime>? cachedAt,
     Value<int>? rowid,
   }) {
     return StoredRemoteAccessSnapshotsCompanion(
       userId: userId ?? this.userId,
-      showSourceEntry: showSourceEntry ?? this.showSourceEntry,
+      serverSourceGatewayEnabled:
+          serverSourceGatewayEnabled ?? this.serverSourceGatewayEnabled,
       hasMembership: hasMembership ?? this.hasMembership,
       hasThemeCustom: hasThemeCustom ?? this.hasThemeCustom,
-      sourceImportLimit: sourceImportLimit ?? this.sourceImportLimit,
+      serverSourceGatewayLimit:
+          serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
       cachedAt: cachedAt ?? this.cachedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -8434,8 +8448,10 @@ class StoredRemoteAccessSnapshotsCompanion
     if (userId.present) {
       map['user_id'] = Variable<String>(userId.value);
     }
-    if (showSourceEntry.present) {
-      map['show_source_entry'] = Variable<bool>(showSourceEntry.value);
+    if (serverSourceGatewayEnabled.present) {
+      map['show_source_entry'] = Variable<bool>(
+        serverSourceGatewayEnabled.value,
+      );
     }
     if (hasMembership.present) {
       map['has_membership'] = Variable<bool>(hasMembership.value);
@@ -8443,8 +8459,10 @@ class StoredRemoteAccessSnapshotsCompanion
     if (hasThemeCustom.present) {
       map['has_theme_custom'] = Variable<bool>(hasThemeCustom.value);
     }
-    if (sourceImportLimit.present) {
-      map['source_import_limit'] = Variable<int>(sourceImportLimit.value);
+    if (serverSourceGatewayLimit.present) {
+      map['source_import_limit'] = Variable<int>(
+        serverSourceGatewayLimit.value,
+      );
     }
     if (cachedAt.present) {
       map['cached_at'] = Variable<DateTime>(cachedAt.value);
@@ -8459,10 +8477,10 @@ class StoredRemoteAccessSnapshotsCompanion
   String toString() {
     return (StringBuffer('StoredRemoteAccessSnapshotsCompanion(')
           ..write('userId: $userId, ')
-          ..write('showSourceEntry: $showSourceEntry, ')
+          ..write('serverSourceGatewayEnabled: $serverSourceGatewayEnabled, ')
           ..write('hasMembership: $hasMembership, ')
           ..write('hasThemeCustom: $hasThemeCustom, ')
-          ..write('sourceImportLimit: $sourceImportLimit, ')
+          ..write('serverSourceGatewayLimit: $serverSourceGatewayLimit, ')
           ..write('cachedAt: $cachedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -17908,20 +17926,20 @@ typedef $$StoredTocSnapshotsTableProcessedTableManager =
 typedef $$StoredRemoteAccessSnapshotsTableCreateCompanionBuilder =
     StoredRemoteAccessSnapshotsCompanion Function({
       required String userId,
-      Value<bool> showSourceEntry,
+      Value<bool> serverSourceGatewayEnabled,
       Value<bool> hasMembership,
       Value<bool> hasThemeCustom,
-      Value<int> sourceImportLimit,
+      Value<int> serverSourceGatewayLimit,
       required DateTime cachedAt,
       Value<int> rowid,
     });
 typedef $$StoredRemoteAccessSnapshotsTableUpdateCompanionBuilder =
     StoredRemoteAccessSnapshotsCompanion Function({
       Value<String> userId,
-      Value<bool> showSourceEntry,
+      Value<bool> serverSourceGatewayEnabled,
       Value<bool> hasMembership,
       Value<bool> hasThemeCustom,
-      Value<int> sourceImportLimit,
+      Value<int> serverSourceGatewayLimit,
       Value<DateTime> cachedAt,
       Value<int> rowid,
     });
@@ -17940,8 +17958,8 @@ class $$StoredRemoteAccessSnapshotsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<bool> get showSourceEntry => $composableBuilder(
-    column: $table.showSourceEntry,
+  ColumnFilters<bool> get serverSourceGatewayEnabled => $composableBuilder(
+    column: $table.serverSourceGatewayEnabled,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17955,8 +17973,8 @@ class $$StoredRemoteAccessSnapshotsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get sourceImportLimit => $composableBuilder(
-    column: $table.sourceImportLimit,
+  ColumnFilters<int> get serverSourceGatewayLimit => $composableBuilder(
+    column: $table.serverSourceGatewayLimit,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17980,8 +17998,8 @@ class $$StoredRemoteAccessSnapshotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get showSourceEntry => $composableBuilder(
-    column: $table.showSourceEntry,
+  ColumnOrderings<bool> get serverSourceGatewayEnabled => $composableBuilder(
+    column: $table.serverSourceGatewayEnabled,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -17995,8 +18013,8 @@ class $$StoredRemoteAccessSnapshotsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get sourceImportLimit => $composableBuilder(
-    column: $table.sourceImportLimit,
+  ColumnOrderings<int> get serverSourceGatewayLimit => $composableBuilder(
+    column: $table.serverSourceGatewayLimit,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -18018,8 +18036,8 @@ class $$StoredRemoteAccessSnapshotsTableAnnotationComposer
   GeneratedColumn<String> get userId =>
       $composableBuilder(column: $table.userId, builder: (column) => column);
 
-  GeneratedColumn<bool> get showSourceEntry => $composableBuilder(
-    column: $table.showSourceEntry,
+  GeneratedColumn<bool> get serverSourceGatewayEnabled => $composableBuilder(
+    column: $table.serverSourceGatewayEnabled,
     builder: (column) => column,
   );
 
@@ -18033,8 +18051,8 @@ class $$StoredRemoteAccessSnapshotsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get sourceImportLimit => $composableBuilder(
-    column: $table.sourceImportLimit,
+  GeneratedColumn<int> get serverSourceGatewayLimit => $composableBuilder(
+    column: $table.serverSourceGatewayLimit,
     builder: (column) => column,
   );
 
@@ -18089,36 +18107,36 @@ class $$StoredRemoteAccessSnapshotsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> userId = const Value.absent(),
-                Value<bool> showSourceEntry = const Value.absent(),
+                Value<bool> serverSourceGatewayEnabled = const Value.absent(),
                 Value<bool> hasMembership = const Value.absent(),
                 Value<bool> hasThemeCustom = const Value.absent(),
-                Value<int> sourceImportLimit = const Value.absent(),
+                Value<int> serverSourceGatewayLimit = const Value.absent(),
                 Value<DateTime> cachedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => StoredRemoteAccessSnapshotsCompanion(
                 userId: userId,
-                showSourceEntry: showSourceEntry,
+                serverSourceGatewayEnabled: serverSourceGatewayEnabled,
                 hasMembership: hasMembership,
                 hasThemeCustom: hasThemeCustom,
-                sourceImportLimit: sourceImportLimit,
+                serverSourceGatewayLimit: serverSourceGatewayLimit,
                 cachedAt: cachedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String userId,
-                Value<bool> showSourceEntry = const Value.absent(),
+                Value<bool> serverSourceGatewayEnabled = const Value.absent(),
                 Value<bool> hasMembership = const Value.absent(),
                 Value<bool> hasThemeCustom = const Value.absent(),
-                Value<int> sourceImportLimit = const Value.absent(),
+                Value<int> serverSourceGatewayLimit = const Value.absent(),
                 required DateTime cachedAt,
                 Value<int> rowid = const Value.absent(),
               }) => StoredRemoteAccessSnapshotsCompanion.insert(
                 userId: userId,
-                showSourceEntry: showSourceEntry,
+                serverSourceGatewayEnabled: serverSourceGatewayEnabled,
                 hasMembership: hasMembership,
                 hasThemeCustom: hasThemeCustom,
-                sourceImportLimit: sourceImportLimit,
+                serverSourceGatewayLimit: serverSourceGatewayLimit,
                 cachedAt: cachedAt,
                 rowid: rowid,
               ),

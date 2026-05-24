@@ -12,9 +12,8 @@ import '../../domain/repositories/local_book_repository.dart';
 import '../../features/source/application/external_source_import_bridge.dart';
 import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
-import '../../features/source/application/source_runtime_facade.dart';
-import '../../features/source/application/source_runtime_scheduler_service.dart';
-import '../../features/source/application/source_runtime_task_conflict_service.dart';
+import '../../features/source/application/remote_content_task_scheduler_service.dart';
+import '../../features/source/application/remote_content_task_conflict_service.dart';
 import '../lifecycle/app_lifecycle_coordinator.dart';
 import '../platform/app_platform_capabilities.dart';
 import '../startup/app_announcement_coordinator.dart';
@@ -41,22 +40,18 @@ final localBookRepositoryProvider = Provider<LocalBookRepository>((ref) {
   return LocalBookRepositoryImpl(ref.watch(appDatabaseProvider));
 });
 
-final appSourceRuntimeFacadeProvider = Provider<SourceRuntimeFacade>((ref) {
-  return SourceRuntimeFacade();
-});
-
 final appSourceHealthServiceProvider = Provider<SourceHealthService>((ref) {
   return SourceHealthService.instance;
 });
 
-final appSourceRuntimeSchedulerServiceProvider =
-    Provider<SourceRuntimeSchedulerService>((ref) {
-      return SourceRuntimeSchedulerService.instance;
+final appRemoteContentTaskSchedulerServiceProvider =
+    Provider<RemoteContentTaskSchedulerService>((ref) {
+      return RemoteContentTaskSchedulerService.instance;
     });
 
-final appSourceRuntimeTaskConflictServiceProvider =
-    Provider<SourceRuntimeTaskConflictService>((ref) {
-      return SourceRuntimeTaskConflictService.instance;
+final appRemoteContentTaskConflictServiceProvider =
+    Provider<RemoteContentTaskConflictService>((ref) {
+      return RemoteContentTaskConflictService.instance;
     });
 
 final appExternalImportBridgeProvider = Provider<ExternalImportBridge>((ref) {
