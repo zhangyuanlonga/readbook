@@ -420,14 +420,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     await _showMembershipPrompt('高级主题为会员专属功能，开通后可用。');
   }
 
-  void _handleSyncTap() {
-    if (_hasMembership) {
-      unawaited(_pushMineRoute('/sync'));
-      return;
-    }
-    unawaited(_showMembershipPrompt('多端同步为会员计划功能，当前正在开发中。'));
-  }
-
   Future<void> _openMembershipCenter() async {
     await _pushMineRoute('/membership');
     await _refreshMine();

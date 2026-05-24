@@ -446,16 +446,6 @@ extension on _MinePageState {
         ),
       );
     }
-    if (visibilityState.isVisible(MinePageItemId.sync)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.sync_rounded,
-          label: '同步',
-          tagText: 'VIP',
-          onTap: _handleSyncTap,
-        ),
-      );
-    }
     if (visibilityState.isVisible(MinePageItemId.inspiration)) {
       actions.add(
         _MineActionItem(
@@ -817,12 +807,12 @@ extension on _MinePageState {
 
   String _buildProfileSignature() {
     if (_userId == null) {
-      return '登录后可同步阅读进度、书架和个性设置。';
+      return '登录后可管理账号资料和会员权益。';
     }
     if (_hasMembership) {
       return '高级权益已生效，可尽情使用会员功能';
     }
-    return '阅读进度、书架与个性设置会随账号持续同步。';
+    return '账号已登录，可继续管理个人资料和权益。';
   }
 
   String _buildProfileStatusLabel() {

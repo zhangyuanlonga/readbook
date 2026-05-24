@@ -304,7 +304,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     final hasScrollClients = _scrollController.hasClients;
     final position = hasScrollClients ? _scrollController.position : null;
     return _autoReadCoordinator.canRunNow(
-      isAutoReadSessionEnabled: _isAutoReadSessionEnabled,
+      isAutoReadSessionEnabled:
+          _autoReadSessionState == ReaderAutoReadSessionState.running,
       isMangaChapter: _isMangaChapter,
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
       isReaderVisible: _isReaderRuntimeVisible,
@@ -420,6 +421,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
     _autoReadResumeTimer = Timer(_ReaderPageState._kAutoReadResumeDelay, () {
+      if (_autoReadSessionState == ReaderAutoReadSessionState.paused &&
+          !_isAutoReadPausedByRuntime) {
+        return;
+      }
+      _isAutoReadPausedByRuntime = false;
+      _autoReadSessionState = ReaderAutoReadSessionState.running;
       _reconcileAutoRead();
     });
   }
@@ -495,7 +502,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   Future<void> _tryAutoReadAdvanceChapter() async {
     if (!_autoReadCoordinator.shouldTryAdvanceChapter(
-      isAutoReadSessionEnabled: _isAutoReadSessionEnabled,
+      isAutoReadSessionEnabled:
+          _autoReadSessionState == ReaderAutoReadSessionState.running,
       isAutoReadAdvancingChapter: _isAutoReadAdvancingChapter,
       isMangaChapter: _isMangaChapter,
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
@@ -546,6 +554,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
     _isAutoReadPausedByRuntime = true;
+    _autoReadSessionState = ReaderAutoReadSessionState.paused;
     _stopAutoRead();
   }
 

@@ -357,7 +357,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
 
     if (!wasActive) {
       if (_isAutoReadSessionEnabled) {
-        _stopAutoReadSession(showMessage: true);
+        _pauseAutoReadSession(showMessage: true);
       }
       _hideOverlayControls(resumeAutoRead: false);
     }

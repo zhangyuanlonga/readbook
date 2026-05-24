@@ -56,12 +56,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       description: '畅享完整阅读能力，解锁所有高级会员功能，获得更自由的使用体验。',
     ),
     _MembershipFeatureItem(
-      icon: Icons.cloud_sync_outlined,
-      title: '多设备同步',
-      description: '支持跨端同步，在手机、平板、电脑之间无缝延续阅读进度、书架与主题设置。',
-      note: '需配置云存储服务（WebDAV / OneDrive 等）',
-    ),
-    _MembershipFeatureItem(
       icon: Icons.sell_outlined,
       title: '标签与分类无限制',
       description: '自由管理书架标签与分类，不受数量限制，构建更清晰的个人整理体系。',
@@ -1881,10 +1875,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         return '自定义主题';
       case 'online_service':
         return '在线服务';
-      case 'cloud_backup':
-      case 'cloud_sync':
-      case 'sync':
-        return '云端同步';
       case 'advanced_rule':
         return '高级规则';
       case 'backup_restore':

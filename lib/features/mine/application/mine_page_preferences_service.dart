@@ -22,7 +22,6 @@ extension MinePageStartupDestinationX on MinePageStartupDestination {
 enum MinePageItemId {
   profileCard,
   membershipCenter,
-  sync,
   inspiration,
   appAppearance,
   advancedTheme,
@@ -70,11 +69,6 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   MinePageItemDefinition(
     id: MinePageItemId.membershipCenter,
     title: '高级会员',
-    sectionTitle: '数据',
-  ),
-  MinePageItemDefinition(
-    id: MinePageItemId.sync,
-    title: '同步',
     sectionTitle: '数据',
   ),
   MinePageItemDefinition(

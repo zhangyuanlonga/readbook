@@ -13,18 +13,16 @@ void main() {
     await service.saveVisibilityState(
       MinePageVisibilityState(
         hiddenItemIds: const [
-          MinePageItemId.sync,
           MinePageItemId.checkUpdate,
-          MinePageItemId.membershipCenter,
+          MinePageItemId.inspiration,
         ],
       ),
     );
 
     final state = await service.loadVisibilityState();
 
-    expect(state.isVisible(MinePageItemId.sync), isFalse);
     expect(state.isVisible(MinePageItemId.checkUpdate), isFalse);
-    expect(state.isVisible(MinePageItemId.membershipCenter), isTrue);
+    expect(state.isVisible(MinePageItemId.inspiration), isFalse);
   });
 
   test('visibility state ignores unknown hidden item ids', () {
@@ -35,8 +33,7 @@ void main() {
     return SharedPreferences.getInstance().then((prefs) {
       final state = MinePagePreferencesService.readVisibilityState(prefs);
 
-      expect(state.isVisible(MinePageItemId.sync), isFalse);
-      expect(state.hiddenItemIds, hasLength(1));
+      expect(state.hiddenItemIds, isEmpty);
     });
   });
 

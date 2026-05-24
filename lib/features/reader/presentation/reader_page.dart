@@ -174,6 +174,14 @@ enum _ReaderInteractionState { idle, dragging, animating, settling }
 
 enum _ReaderTopMoreAction { cacheChapter, switchSource, toggleBookshelf }
 
+enum ReaderAutoReadSessionState {
+  off,
+  running,
+  paused,
+  chapterPaused,
+  finished,
+}
+
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({
     super.key,
@@ -428,6 +436,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
   bool _isAutoReadPausedByRuntime = false;
+  ReaderAutoReadSessionState _autoReadSessionState =
+      ReaderAutoReadSessionState.off;
   bool _isReaderRuntimeVisible = true;
   bool _isAutoReadAdvancingChapter = false;
   bool _isScrollStepAnimating = false;
@@ -1861,7 +1871,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null &&
         _isAutoReadSessionEnabled) {
-      _stopAutoReadSession();
+      _pauseAutoReadSession();
     }
 
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
@@ -3749,9 +3759,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final dayNightIcon =
         isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
     final autoReadIcon =
-        _isAutoReadSessionEnabled
+        _autoReadSessionState == ReaderAutoReadSessionState.running
             ? Icons.pause_circle_filled_rounded
             : Icons.play_circle_outline_rounded;
+    final autoReadLabel = switch (_autoReadSessionState) {
+      ReaderAutoReadSessionState.running => '暂停',
+      ReaderAutoReadSessionState.paused => '继续',
+      ReaderAutoReadSessionState.chapterPaused => '继续',
+      ReaderAutoReadSessionState.finished => '自动',
+      ReaderAutoReadSessionState.off => '自动',
+    };
 
     return Positioned(
       left: 0,
@@ -3818,7 +3835,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 Expanded(
                                   child: _buildToolbarAction(
                                     icon: autoReadIcon,
-                                    label: '自动',
+                                    label: autoReadLabel,
                                     onTap: _openAutoReadFromOverlay,
                                     onLongPress:
                                         () => _showSettingsSheet(
@@ -3827,7 +3844,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                           initialSettingsGroupKey: 'auto_read',
                                         ),
                                     colors: colors,
-                                    active: _isAutoReadSessionEnabled,
+                                    active:
+                                        _autoReadSessionState !=
+                                        ReaderAutoReadSessionState.off,
                                   ),
                                 ),
                                 Expanded(

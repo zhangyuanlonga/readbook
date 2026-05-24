@@ -16,7 +16,7 @@
 - `SharedPreferences` 仍存在 19 处 JSON 聚合写入，是后续 `Phase 3` 的主要高风险迁移对象
 - 用户资产主目录已基本收口到 `ManagedAssetStore`，主要落在 `Documents` / `Support`
 - 缓存目录已存在明确对象，但“缓存预算 / 统一注册表 / 启动期清理边界”仍未完全制度化
-- 敏感信息当前已收口到 `sync_secret_store.dart` 与 `auth.*` 凭证安全存储
+- 敏感信息当前已收口到 `auth.*` 凭证安全存储；历史 WebDAV 同步 secret 代码已移除
 
 ## 2. SharedPreferences 盘点
 
@@ -186,11 +186,11 @@
 
 | 模块 | 当前存储位置 | key / 模式 | 是否敏感 | 建议目标位置 | 风险等级 |
 |---|---|---|---|---|---|
-| 同步 secret | `flutter_secure_storage` | `secretRef` 动态 key | 是 | 保持安全存储 | 低 |
+| 历史同步 secret | 已移除代码入口 | 旧 `secretRef` 动态 key 仅可能存在于历史安装数据 | 是 | 不再新增；后续如做数据库清理再统一迁移/删除 | 低 |
 
 说明：
 
-- 当前已确认 [sync_secret_store.dart](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/data/local/sync_secret_store.dart) 与认证凭证存储共同使用安全存储
+- WebDAV 同步模块已移除，客户端不再新增同步 secret；历史安装中残留的旧安全存储 key 暂不主动清理
 - `auth.*` 已完成“安全凭证进 `flutter_secure_storage`，展示字段保留轻量缓存”的拆分
 
 ## 7. 风险归类

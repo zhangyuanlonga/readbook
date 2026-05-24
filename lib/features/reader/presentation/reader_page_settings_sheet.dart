@@ -3500,6 +3500,41 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           buildCompactSettingsCard([
                             buildCompactSectionTitle('自动阅读'),
                             const SizedBox(height: 10),
+                            buildCompactSectionTitle('翻页方式'),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('自动滚动'),
+                                  selected:
+                                      draft.autoReadMode ==
+                                      ReaderAutoReadMode.scroll,
+                                  onSelected: (_) {
+                                    setModalState(() {
+                                      draft = draft.copyWith(
+                                        autoReadMode: ReaderAutoReadMode.scroll,
+                                      );
+                                    });
+                                  },
+                                ),
+                                ChoiceChip(
+                                  label: const Text('自动翻页'),
+                                  selected:
+                                      draft.autoReadMode ==
+                                      ReaderAutoReadMode.page,
+                                  onSelected: (_) {
+                                    setModalState(() {
+                                      draft = draft.copyWith(
+                                        autoReadMode: ReaderAutoReadMode.page,
+                                      );
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            buildSectionDivider(),
                             Row(
                               children: [
                                 Expanded(
@@ -3523,7 +3558,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '速度 ${draft.autoReadSpeed.round()} px/s',
+                              '速度 ${draft.autoReadSpeedLevel} 档 · ${draft.autoReadSpeed.round()} px/s',
                               style: Theme.of(
                                 context,
                               ).textTheme.bodySmall?.copyWith(
@@ -3534,22 +3569,81 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               ),
                             ),
                             buildPreviewAwareSlider(
-                              min: ReaderSettings.minAutoReadSpeed,
-                              max: ReaderSettings.maxAutoReadSpeed,
-                              divisions: 20,
-                              label: '${draft.autoReadSpeed.round()}',
-                              value:
-                                  draft.autoReadSpeed
-                                      .clamp(
-                                        ReaderSettings.minAutoReadSpeed,
-                                        ReaderSettings.maxAutoReadSpeed,
-                                      )
+                              min:
+                                  ReaderSettings.minAutoReadSpeedLevel
                                       .toDouble(),
+                              max:
+                                  ReaderSettings.maxAutoReadSpeedLevel
+                                      .toDouble(),
+                              divisions:
+                                  ReaderSettings.maxAutoReadSpeedLevel -
+                                  ReaderSettings.minAutoReadSpeedLevel,
+                              label: '${draft.autoReadSpeedLevel}',
+                              value: draft.autoReadSpeedLevel.toDouble(),
                               onChanged: (value) {
                                 setModalState(() {
-                                  draft = draft.copyWith(autoReadSpeed: value);
+                                  draft = draft.copyWith(
+                                    autoReadSpeedLevel: value.round(),
+                                  );
                                 });
                               },
+                            ),
+                            buildSectionDivider(),
+                            buildCompactSectionTitle('停顿模式'),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final mode
+                                    in ReaderAutoReadPauseMode.values)
+                                  ChoiceChip(
+                                    label: Text(switch (mode) {
+                                      ReaderAutoReadPauseMode.none => '不停顿',
+                                      ReaderAutoReadPauseMode.chapterEnd =>
+                                        '章节结束',
+                                      ReaderAutoReadPauseMode.paragraphEnd =>
+                                        '段落结束',
+                                    }),
+                                    selected: draft.autoReadPauseMode == mode,
+                                    onSelected: (_) {
+                                      setModalState(() {
+                                        draft = draft.copyWith(
+                                          autoReadPauseMode: mode,
+                                        );
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                            buildSectionDivider(),
+                            buildCompactSectionTitle('结束后'),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final behavior
+                                    in ReaderAutoReadEndBehavior.values)
+                                  ChoiceChip(
+                                    label: Text(switch (behavior) {
+                                      ReaderAutoReadEndBehavior.stop => '停止',
+                                      ReaderAutoReadEndBehavior.loopBook =>
+                                        '循环本书',
+                                      ReaderAutoReadEndBehavior.nextBook =>
+                                        '下一本书',
+                                    }),
+                                    selected:
+                                        draft.autoReadEndBehavior == behavior,
+                                    onSelected: (_) {
+                                      setModalState(() {
+                                        draft = draft.copyWith(
+                                          autoReadEndBehavior: behavior,
+                                        );
+                                      });
+                                    },
+                                  ),
+                              ],
                             ),
                           ]),
                         ],
@@ -3833,6 +3927,9 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     _syncContinuousTextFlowAfterSettingsApplied();
     _clearSelectionState();
     await _persistResolvedReaderSettingsLayers(appliedResult);
+    if (activeSettingsGroupKey == 'auto_read') {
+      await _preferencesService.saveAutoReadConfigured(true);
+    }
 
     if (shouldEnableAutoRead && mounted) {
       await _toggleAutoReadSession();

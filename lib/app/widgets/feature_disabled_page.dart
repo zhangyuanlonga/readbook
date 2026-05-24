@@ -100,27 +100,6 @@ class FeatureDisabledPages {
         icon: Icons.search_off_rounded,
       );
 
-  static FeatureDisabledPage webDavSync({
-    AppCapabilityState? capability,
-  }) => FeatureDisabledPage(
-    title: '同步功能暂未启用',
-    message: _messageFromCapability(
-      capability,
-      '首版全平台先保证本地阅读和常用业务闭环。WebDAV 同步已放入 P1+，默认不参与首版验收；可继续使用本地书架、书签、阅读记录和外观设置。',
-    ),
-    icon: Icons.sync_disabled_rounded,
-  );
-
-  static FeatureDisabledPage syncHistory({AppCapabilityState? capability}) =>
-      FeatureDisabledPage(
-        title: '同步历史暂不可用',
-        message: _messageFromCapability(
-          capability,
-          '当前平台未开放 WebDAV 同步能力，因此不会产生同步历史。首版可继续使用本地阅读记录和书签。',
-        ),
-        icon: Icons.history_toggle_off_rounded,
-      );
-
   static String _messageFromCapability(
     AppCapabilityState? capability,
     String fallback,

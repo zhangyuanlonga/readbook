@@ -208,6 +208,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
       if (_isAutoReadPausedByRuntime) {
         _isAutoReadPausedByRuntime = false;
+        _autoReadSessionState = ReaderAutoReadSessionState.running;
         _scheduleAutoReadResume();
       }
     }

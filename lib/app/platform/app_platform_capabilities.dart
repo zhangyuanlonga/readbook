@@ -14,10 +14,9 @@ class AppPlatformCapabilities {
     required this.imagePicking,
     required this.readerBrightnessBridge,
     required this.readerVolumeKeyBridge,
-    required this.webDavSync,
   });
 
-  factory AppPlatformCapabilities.current({bool? webDavSyncEnabled}) {
+  factory AppPlatformCapabilities.current() {
     final platform = defaultTargetPlatform;
     final isMobile =
         platform == TargetPlatform.android || platform == TargetPlatform.iOS;
@@ -26,9 +25,6 @@ class AppPlatformCapabilities {
         platform == TargetPlatform.windows ||
         platform == TargetPlatform.linux;
     final supportsNativeFileSystem = !kIsWeb;
-    final resolvedWebDavSyncEnabled =
-        webDavSyncEnabled ??
-        (_hasWebDavSyncEnabledDefine ? _webDavSyncEnabledByDefine : isMobile);
 
     final localFileImport = _capability(
       supported: supportsNativeFileSystem,
@@ -65,14 +61,6 @@ class AppPlatformCapabilities {
       label: '阅读器音量键桥接',
       unsupportedReason: '音量键桥接仅在 Android/iOS 原生端启用。',
     );
-    final webDavSync = _runtimeCapability(
-      enabled: resolvedWebDavSyncEnabled,
-      supportedPlatform: supportsNativeFileSystem,
-      label: 'WebDAV 同步',
-      disabledReason: 'WebDAV 同步当前未启用，需要开启同步能力后使用。',
-      unsupportedReason: '当前平台暂不支持 WebDAV 同步所需的本地文件能力。',
-    );
-
     return AppPlatformCapabilities(
       platform: platform,
       isWeb: kIsWeb,
@@ -83,7 +71,6 @@ class AppPlatformCapabilities {
       imagePicking: imagePicking,
       readerBrightnessBridge: readerBrightnessBridge,
       readerVolumeKeyBridge: readerVolumeKeyBridge,
-      webDavSync: webDavSync,
     );
   }
 
@@ -96,7 +83,6 @@ class AppPlatformCapabilities {
   final AppCapabilityState imagePicking;
   final AppCapabilityState readerBrightnessBridge;
   final AppCapabilityState readerVolumeKeyBridge;
-  final AppCapabilityState webDavSync;
 
   bool get supportsLocalFileImport => localFileImport.isSupported;
   bool get supportsManagedFileStorage => managedFileStorage.isSupported;
@@ -105,7 +91,6 @@ class AppPlatformCapabilities {
   bool get supportsImagePicking => imagePicking.isSupported;
   bool get supportsReaderBrightnessBridge => readerBrightnessBridge.isSupported;
   bool get supportsReaderVolumeKeyBridge => readerVolumeKeyBridge.isSupported;
-  bool get supportsWebDavSync => webDavSync.isSupported;
 
   bool get supportsLocalReading =>
       supportsLocalFileImport &&
@@ -122,38 +107,6 @@ AppCapabilityState _capability({
       ? AppCapabilityState.supported(label: label)
       : AppCapabilityState.unsupported(label: label, reason: unsupportedReason);
 }
-
-AppCapabilityState _runtimeCapability({
-  required bool enabled,
-  required bool supportedPlatform,
-  required String label,
-  required String disabledReason,
-  required String unsupportedReason,
-}) {
-  if (enabled && supportedPlatform) {
-    return AppCapabilityState.supported(label: label);
-  }
-  if (!enabled && supportedPlatform) {
-    return AppCapabilityState.needsSetup(
-      label: label,
-      reason: disabledReason,
-      setupActionLabel: '开启能力',
-    );
-  }
-  return AppCapabilityState.unsupported(
-    label: label,
-    reason: unsupportedReason,
-  );
-}
-
-const bool _webDavSyncEnabledByDefine = bool.fromEnvironment(
-  'APP_ENABLE_WEBDAV_SYNC',
-  defaultValue: false,
-);
-
-const bool _hasWebDavSyncEnabledDefine = bool.hasEnvironment(
-  'APP_ENABLE_WEBDAV_SYNC',
-);
 
 final appPlatformCapabilitiesProvider = Provider<AppPlatformCapabilities>((
   ref,

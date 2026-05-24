@@ -20,7 +20,6 @@
 | 阅读器翻页 | 阅读器 | `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_text_paged_view.dart` / `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/paged_animation/` |
 | 阅读设置 | 阅读器 | `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_settings_sheet.dart` → `_showSettingsSheet()` |
 | 书签笔记 | 阅读器 | `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_selection.dart` → `_saveSelectionBookmark()` |
-| WebDAV 同步 | 基础设施 | `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/application/sync_stage4_service.dart` → `run()` |
 | 本地数据库 | 基础设施 | `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/data/datasources/local/app_database.dart` → `AppDatabase` |
 
 ## 常用修改场景
@@ -69,11 +68,6 @@
 - UI：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_selection.dart`
 - 仓储：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/data/repositories/bookmark_repository_impl.dart`
 - 数据表：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/data/datasources/local/app_database.dart` 中的 `StoredBookmarks`
-
-### 我要改 WebDAV 同步范围或同步策略
-- UI：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/presentation/pages/sync_settings_page.dart`
-- 配置：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/application/sync_profile_service.dart`
-- 执行：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/application/sync_stage4_service.dart`
 
 ## 1. 首页
 
@@ -324,14 +318,6 @@
 - **关键方法**：`getSession()`、`saveSession()`、`clear()`
 - **数据存储**：访问/刷新 Token 存安全存储 `FlutterSecureAuthSessionSecretStore`；用户展示信息存 SharedPreferences；远程访问快照存 SQLite/Drift 表 `remote_access_snapshots`
 - **交互细节**：登录事件通过 `AuthEventBus` 广播，启动/页面协调器监听。
-
-### WebDAV 同步
-- **业务描述**：用户配置 WebDAV 同步档案，选择同步范围，手动或自动同步阅读进度、书签、阅读状态、元数据、主题、阅读历史、书架集合和分类标签。
-- **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/presentation/pages/sync_settings_page.dart`、`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/presentation/pages/sync_history_page.dart`
-- **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/application/sync_profile_service.dart` + `SyncProfileService`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/sync/application/sync_stage4_service.dart` + `SyncStage4Service`
-- **关键方法**：`saveProfile()`、`run()`、`_syncReadingProgress()`
-- **数据存储**：SQLite/Drift 表 `sync_profiles`、`sync_scope_states`、`sync_jobs`、`sync_conflicts`；WebDAV 远端文件；密码存 `SyncSecretStore`
-- **交互细节**：同步任务写入 job 状态，历史页可读取成功/失败记录；冲突模型已定义。
 
 ### 公告、反馈、错误中心与日志
 - **业务描述**：应用展示公告，用户提交反馈，开发者查看错误中心和诊断日志。

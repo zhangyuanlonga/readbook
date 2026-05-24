@@ -215,7 +215,6 @@ domain -> pure dart only
 - `supportsImagePicking`
 - `supportsReaderBrightnessBridge`
 - `supportsReaderVolumeKeyBridge`
-- `supportsWebDavSync`
 
 规则：
 
@@ -224,7 +223,7 @@ domain -> pure dart only
 - 如果只是 UI 样式差异，优先走自适应断点和主题 token；如果是能力差异，必须走 capability。
 - feature 想隐藏、降级或替换入口时，必须通过 capability 或 feature-level access service，不允许在多个 widget 中各自写一份判断。
 - 本地脚本书源运行时已移除；在线搜索、详情、目录、正文与换源只允许通过服务器书源网关和 feature-level access service 暴露，不再新增 WebView 登录、脚本调试入口或本地 JS 执行能力。局域网网页调试服务已从项目移除，不再新增入口或服务端口。
-- WebDAV 同步属于 P1+ 能力，首版默认 `APP_ENABLE_WEBDAV_SYNC=false`；同步设置、同步历史和后台同步任务必须先经过 `supportsWebDavSync`，不允许默认进入可点击但必失败的页面。
+- WebDAV 同步功能已从客户端入口和 `features/sync` 模块移除；新代码不得重新添加同步设置、同步历史、后台同步任务或 `APP_ENABLE_WEBDAV_SYNC` 能力开关。
 - 文件导入、缓存清理、诊断导出等常用业务必须按 `supportsLocalFileImport` 与 `supportsManagedFileStorage` 做禁用、占位或文案降级；不支持平台仍需保留本地阅读、书签、阅读记录和外观设置的可用路径。
 
 ### 5.3 条件导入强制规则
