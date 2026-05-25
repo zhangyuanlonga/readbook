@@ -95,7 +95,11 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
   }
 
   Future<void> _openCatalogSheetFromOverlay() async {
+    _suspendOverlayAutoHide();
     await _showCatalogSheet();
+    if (mounted) {
+      _resumeOverlayAutoHide();
+    }
   }
 
   Future<void> _executeNavigationRequest(

@@ -43,6 +43,7 @@ class ServerOnlineSearchService {
   final String _baseUrl;
 
   static const int _rawSearchPageSize = 100;
+  static const int _maxSearchConcurrency = 12;
 
   static String _contentTypeParam(SearchContentMode mode) {
     return switch (mode) {
@@ -58,6 +59,7 @@ class ServerOnlineSearchService {
     Iterable<String>? sourceIds,
     bool preciseMatch = false,
     bool aggregateByTitleAuthor = true,
+    int? maxConcurrentSources,
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
   }) async {
@@ -71,6 +73,7 @@ class ServerOnlineSearchService {
       sourceIds: sourceIds,
       preciseMatch: preciseMatch,
       aggregateByTitleAuthor: aggregateByTitleAuthor,
+      maxConcurrentSources: maxConcurrentSources,
       cancellationToken: cancellationToken,
       onProgress: onProgress,
     );
@@ -82,10 +85,12 @@ class ServerOnlineSearchService {
     Iterable<String>? sourceIds,
     required bool preciseMatch,
     required bool aggregateByTitleAuthor,
+    int? maxConcurrentSources,
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
   }) async {
     final selectedSourceIds = _normalizedList(sourceIds);
+    final concurrency = _normalizedConcurrency(maxConcurrentSources);
     final payload = <String, Object?>{
       'keyword': keyword,
       'contentType': _contentTypeParam(contentMode),
@@ -102,7 +107,11 @@ class ServerOnlineSearchService {
         'preferHealthySources': false,
         'skipCoolingDownSources': false,
         'timeoutMs': 10000,
-        'concurrency': {'total': 12, 'perHost': 2},
+        if (concurrency != null)
+          'concurrency': {
+            'total': concurrency,
+            'perHost': _perHostConcurrencyFor(concurrency),
+          },
       },
     };
 
@@ -135,11 +144,13 @@ class ServerOnlineSearchService {
     Iterable<String>? sourceIds,
     required bool preciseMatch,
     required bool aggregateByTitleAuthor,
+    int? maxConcurrentSources,
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
   }) async {
     final normalizedKeyword = keyword.trim();
     final selectedSourceIds = _normalizedList(sourceIds);
+    final concurrency = _normalizedConcurrency(maxConcurrentSources);
     final queryParameters = <String, String>{
       'keyword': normalizedKeyword,
       'contentType': _contentTypeParam(contentMode),
@@ -154,7 +165,9 @@ class ServerOnlineSearchService {
       'timeoutMs': '10000',
       'preferHealthySources': 'false',
       'skipCoolingDownSources': 'false',
-      'concurrency': '12',
+      if (concurrency != null) 'concurrency': '$concurrency',
+      if (concurrency != null)
+        'perHostConcurrency': '${_perHostConcurrencyFor(concurrency)}',
     };
     final url = _resolveUrl(
       'v1/books/search/stream',
@@ -266,6 +279,7 @@ class ServerOnlineSearchService {
           sourceIds: sourceIds,
           preciseMatch: preciseMatch,
           aggregateByTitleAuthor: aggregateByTitleAuthor,
+          maxConcurrentSources: maxConcurrentSources,
           cancellationToken: cancellationToken,
           onProgress: onProgress,
         );
@@ -362,6 +376,19 @@ List<String> _normalizedList(Iterable<String>? values) {
           .toSet()
           .toList(growable: false) ??
       const <String>[];
+}
+
+int? _normalizedConcurrency(int? value) {
+  if (value == null) {
+    return null;
+  }
+  return value
+      .clamp(1, ServerOnlineSearchService._maxSearchConcurrency)
+      .toInt();
+}
+
+int _perHostConcurrencyFor(int totalConcurrency) {
+  return totalConcurrency <= 4 ? 1 : 2;
 }
 
 class ServerSearchSourceSummary {

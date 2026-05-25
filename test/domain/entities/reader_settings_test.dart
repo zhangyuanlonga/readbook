@@ -47,5 +47,28 @@ void main() {
 
       expect(settings.autoReadSpeedLevel, ReaderSettings.maxAutoReadSpeedLevel);
     });
+
+    test('restores tap zone actions and falls back on invalid payload', () {
+      final settings = ReaderSettings.fromJson(const <String, dynamic>{
+        'tapZoneActions': <String>[
+          'catalog',
+          'none',
+          'bookmark',
+          'previousPage',
+          'toggleToolbar',
+          'nextPage',
+          'previousPage',
+          'autoRead',
+          'nightMode',
+        ],
+      });
+      final fallback = ReaderSettings.fromJson(const <String, dynamic>{
+        'tapZoneActions': <String>['catalog'],
+      });
+
+      expect(settings.tapZoneActions[0], ReaderTapZoneAction.catalog);
+      expect(settings.tapZoneActions[8], ReaderTapZoneAction.nightMode);
+      expect(fallback.tapZoneActions, ReaderSettings.defaultTapZoneActions);
+    });
   });
 }

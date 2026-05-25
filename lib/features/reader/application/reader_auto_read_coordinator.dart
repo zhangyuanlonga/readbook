@@ -39,6 +39,36 @@ class ReaderAutoReadCoordinator {
     return scrollOffset < maxScrollExtent - edgeTolerance;
   }
 
+  bool canRunPagedNow({
+    required bool isAutoReadSessionEnabled,
+    required bool isMangaChapter,
+    required bool isPagedTextReaderEnabled,
+    required bool isReaderVisible,
+    required bool isLowBattery,
+    required bool showOverlayControls,
+    required bool isBootstrapping,
+    required bool isLoadingContent,
+    required bool hasError,
+    required bool hasTextContent,
+    required bool isPaginating,
+    required bool isAnimating,
+    required int pageCount,
+  }) {
+    return isAutoReadSessionEnabled &&
+        !isMangaChapter &&
+        isPagedTextReaderEnabled &&
+        isReaderVisible &&
+        !isLowBattery &&
+        !showOverlayControls &&
+        !isBootstrapping &&
+        !isLoadingContent &&
+        !hasError &&
+        hasTextContent &&
+        !isPaginating &&
+        !isAnimating &&
+        pageCount > 0;
+  }
+
   bool isAtChapterEnd({
     required bool hasScrollClients,
     required double maxScrollExtent,
@@ -78,6 +108,38 @@ class ReaderAutoReadCoordinator {
         !isLoadingContent &&
         !hasError &&
         isAtChapterEnd;
+  }
+
+  Duration resolvePagedHoldDuration({required int speedLevel}) {
+    final level =
+        speedLevel
+            .clamp(
+              ReaderSettings.minAutoReadSpeedLevel,
+              ReaderSettings.maxAutoReadSpeedLevel,
+            )
+            .toInt();
+    final normalized =
+        (level - ReaderSettings.minAutoReadSpeedLevel) /
+        (ReaderSettings.maxAutoReadSpeedLevel -
+            ReaderSettings.minAutoReadSpeedLevel);
+    final seconds = 12.0 - normalized * 8.0;
+    return Duration(milliseconds: (seconds * 1000).round());
+  }
+
+  Duration paragraphPauseDuration({required int speedLevel}) {
+    final level =
+        speedLevel
+            .clamp(
+              ReaderSettings.minAutoReadSpeedLevel,
+              ReaderSettings.maxAutoReadSpeedLevel,
+            )
+            .toInt();
+    final normalized =
+        (level - ReaderSettings.minAutoReadSpeedLevel) /
+        (ReaderSettings.maxAutoReadSpeedLevel -
+            ReaderSettings.minAutoReadSpeedLevel);
+    final milliseconds = 1400.0 - normalized * 700.0;
+    return Duration(milliseconds: milliseconds.round());
   }
 
   double resolveStepTargetOffset({

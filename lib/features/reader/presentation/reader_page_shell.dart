@@ -62,7 +62,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return KeyEventResult.ignored;
     }
     if (_isAutoReadSessionEnabled) {
-      _stopAutoReadSession(showMessage: true);
+      _pauseAutoReadSession(showMessage: true);
       return KeyEventResult.handled;
     }
 
@@ -127,22 +127,34 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (event.repeatCount > 0) {
       return;
     }
-    if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession(showMessage: true);
-      return;
+    final shouldResumeAutoRead =
+        _isAutoReadSessionEnabled &&
+        _autoReadSessionState == ReaderAutoReadSessionState.running;
+    if (shouldResumeAutoRead) {
+      _pauseAutoReadSession(showMessage: false);
     }
 
     if (event.direction == ReaderVolumeKeyDirection.up) {
       await _turnReaderByDirection(forward: false);
-      return;
+    } else {
+      await _turnReaderByDirection(forward: true);
     }
-    await _turnReaderByDirection(forward: true);
+
+    if (shouldResumeAutoRead &&
+        mounted &&
+        _isAutoReadSessionEnabled &&
+        _autoReadSessionState == ReaderAutoReadSessionState.paused) {
+      _resumeAutoReadSession(showMessage: false);
+    }
   }
 
   Future<void> _turnReaderByDirection({
     required bool forward,
     bool includeMangaPaged = true,
   }) async {
+    if (_showOverlayControls) {
+      _hideOverlayControls(resumeAutoRead: false);
+    }
     switch (_currentViewportKind) {
       case ReaderModeViewportKind.imagePaged:
         if (includeMangaPaged) {
@@ -269,7 +281,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   void _markBackNavigationTriggered() {
     _lastBackNavigationAt = DateTime.now();
-    _suppressNextReaderTap = true;
+    _readerTapHandledByChild = true;
   }
 
   Widget _buildOverlayScrim() {
@@ -284,7 +296,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
             ignoring: opacity <= 0.001,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: _hideOverlayControls,
+              onTap: () => _hideOverlayControls(manual: true),
               child: ColoredBox(color: Colors.black.withValues(alpha: opacity)),
             ),
           );
@@ -353,11 +365,13 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   void _hideOverlayControls({
     bool resumeAutoRead = true,
     bool syncSystemUi = true,
+    bool manual = false,
   }) {
     if (!_showOverlayControls || !mounted) {
       return;
     }
 
+    _cancelOverlayAutoHideTimer();
     if (syncSystemUi) {
       _setOverlayControlsVisibility(false);
     } else {
@@ -375,6 +389,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   void _setOverlayControlsVisibility(bool visible) {
     if (!mounted || _showOverlayControls == visible) {
+      if (visible) {
+        _scheduleOverlayAutoHide();
+      }
       return;
     }
 
@@ -386,6 +403,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     });
     if (visible) {
       _pauseAutoReadForRuntime();
+      _scheduleOverlayAutoHide();
+      _maybeShowToolbarHint();
+    } else {
+      _cancelOverlayAutoHideTimer();
     }
     unawaited(_syncVolumeKeyPageInterception());
     if (visible) {
@@ -393,6 +414,86 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     } else {
       _overlayControlsController.reverse();
     }
+  }
+
+  void _scheduleOverlayAutoHide() {
+    _overlayAutoHideTimer?.cancel();
+    if (!_showOverlayControls || _isOverlayAutoHideSuspended) {
+      return;
+    }
+    _overlayAutoHideTimer = Timer(
+      _ReaderPageState._kOverlayControlsAutoHideDelay,
+      () {
+        _overlayAutoHideTimer = null;
+        if (!mounted || !_showOverlayControls || _isOverlayAutoHideSuspended) {
+          return;
+        }
+        _hideOverlayControls(resumeAutoRead: true);
+      },
+    );
+  }
+
+  void _cancelOverlayAutoHideTimer() {
+    _overlayAutoHideTimer?.cancel();
+    _overlayAutoHideTimer = null;
+  }
+
+  void _suspendOverlayAutoHide() {
+    _isOverlayAutoHideSuspended = true;
+    _cancelOverlayAutoHideTimer();
+  }
+
+  void _resumeOverlayAutoHide() {
+    if (!_isOverlayAutoHideSuspended) {
+      return;
+    }
+    _isOverlayAutoHideSuspended = false;
+    _scheduleOverlayAutoHide();
+  }
+
+  void _touchOverlayControls() {
+    if (!_showOverlayControls) {
+      return;
+    }
+    _scheduleOverlayAutoHide();
+  }
+
+  void _maybeShowToolbarHint() {
+    if (_hasShownToolbarHint) {
+      return;
+    }
+    _hasShownToolbarHint = true;
+    unawaited(_preferencesService.saveToolbarHintShown(true));
+    _showMessage(
+      '轻触中间区域显示/隐藏工具栏',
+      duration: _ReaderPageState._kReaderSnackActionDuration,
+      dedupeKey: 'reader_toolbar_hint',
+    );
+  }
+
+  Future<void> _maybePromptTapZoneGuide() async {
+    if (_hasShownTapZoneGuide || !mounted || _isMangaChapter) {
+      return;
+    }
+    _hasShownTapZoneGuide = true;
+    await _preferencesService.saveTapZoneGuideShown(true);
+    if (!mounted) {
+      return;
+    }
+    _showReaderSnackBar(
+      text: '可自定义正文点击分区，默认保持当前翻页习惯。',
+      duration: _ReaderPageState._kReaderSnackActionDuration,
+      dedupeKey: 'reader_tap_zone_guide',
+      actionLabel: '现在设置',
+      onActionPressed: () {
+        unawaited(
+          _showSettingsSheet(
+            initialTab: _ReaderSettingsTab.interface,
+            initialSettingsGroupKey: 'interaction',
+          ),
+        );
+      },
+    );
   }
 
   void _syncSystemUiVisibility({bool force = false, bool? visible}) {
@@ -438,28 +539,13 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     final topGuard = max(0.0, gestureInsets.top);
     final bottomGuard = max(0.0, gestureInsets.bottom);
 
-    final centerLeft = max(size.width * 0.32, leftGuard + 12);
-    final centerRight = min(size.width * 0.68, size.width - rightGuard - 12);
-    final centerTop = max(size.height * 0.2, topGuard + 8);
-    final centerBottom = min(size.height * 0.8, size.height - bottomGuard - 8);
-
-    final isCenterTap =
-        localPosition.dx >= centerLeft &&
-        localPosition.dx <= centerRight &&
-        localPosition.dy >= centerTop &&
-        localPosition.dy <= centerBottom;
-
-    if (_isAutoReadSessionEnabled) {
-      _stopAutoReadSession(showMessage: true);
+    if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
+      unawaited(_continueAutoReadAfterChapterPause());
       return;
     }
 
-    if (isCenterTap) {
-      final nextShow = !_showOverlayControls;
-      _setOverlayControlsVisibility(nextShow);
-      if (!nextShow) {
-        _scheduleAutoReadResume();
-      }
+    if (_isAutoReadSessionEnabled) {
+      _pauseAutoReadSession(showMessage: true);
       return;
     }
 
@@ -477,14 +563,83 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         localPosition.dx >= size.width - rightGuard) {
       return;
     }
+    final action = _resolveTapZoneAction(
+      localPosition: localPosition,
+      size: size,
+      leftGuard: leftGuard,
+      rightGuard: rightGuard,
+      topGuard: topGuard,
+      bottomGuard: bottomGuard,
+    );
+    _performTapZoneAction(action);
+  }
 
-    if (localPosition.dx < centerLeft) {
-      unawaited(_turnReaderByDirection(forward: false));
+  ReaderTapZoneAction _resolveTapZoneAction({
+    required Offset localPosition,
+    required Size size,
+    required double leftGuard,
+    required double rightGuard,
+    required double topGuard,
+    required double bottomGuard,
+  }) {
+    final usableWidth = max(1.0, size.width - leftGuard - rightGuard);
+    final usableHeight = max(1.0, size.height - topGuard - bottomGuard);
+    final normalizedDx = ((localPosition.dx - leftGuard) / usableWidth).clamp(
+      0.0,
+      0.999999,
+    );
+    final normalizedDy = ((localPosition.dy - topGuard) / usableHeight).clamp(
+      0.0,
+      0.999999,
+    );
+    final column = (normalizedDx * 3).floor().clamp(0, 2);
+    final row = (normalizedDy * 3).floor().clamp(0, 2);
+    final index = row * 3 + column;
+    return _settings.tapZoneActions[index];
+  }
+
+  Future<void> _handleReaderLongPress() async {
+    if (_isAutoReadSessionEnabled) {
+      _pauseAutoReadSession(showMessage: true);
+    }
+    if (_isMangaViewport) {
+      await _openMangaPositionSheet();
       return;
     }
+    _hideOverlayControls(resumeAutoRead: false);
+  }
 
-    if (localPosition.dx > centerRight) {
-      unawaited(_turnReaderByDirection(forward: true));
+  void _performTapZoneAction(ReaderTapZoneAction action) {
+    switch (action) {
+      case ReaderTapZoneAction.previousPage:
+        unawaited(_turnReaderByDirection(forward: false));
+        return;
+      case ReaderTapZoneAction.nextPage:
+        unawaited(_turnReaderByDirection(forward: true));
+        return;
+      case ReaderTapZoneAction.toggleToolbar:
+        final nextShow = !_showOverlayControls;
+        _setOverlayControlsVisibility(nextShow);
+        if (!nextShow) {
+          _scheduleAutoReadResume();
+        } else {
+          _touchOverlayControls();
+        }
+        return;
+      case ReaderTapZoneAction.catalog:
+        unawaited(_openCatalogSheetFromOverlay());
+        return;
+      case ReaderTapZoneAction.autoRead:
+        unawaited(_openAutoReadFromOverlay());
+        return;
+      case ReaderTapZoneAction.bookmark:
+        unawaited(_showCatalogSheet());
+        return;
+      case ReaderTapZoneAction.nightMode:
+        unawaited(_toggleDayNightMode());
+        return;
+      case ReaderTapZoneAction.none:
+        return;
     }
   }
 
@@ -495,6 +650,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
     if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
       _resumeAutoReadSession(showMessage: true);
+      return;
+    }
+    if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
+      unawaited(_continueAutoReadAfterChapterPause());
       return;
     }
 
@@ -516,6 +675,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
     if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
       _resumeAutoReadSession(showMessage: true);
+      return;
+    }
+    if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
+      unawaited(_continueAutoReadAfterChapterPause());
       return;
     }
 
@@ -554,7 +717,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     final targetPageTurnMode =
         _settings.autoReadMode == ReaderAutoReadMode.scroll
             ? ReaderPageTurnMode.scroll
-            : _settings.pageTurnMode;
+            : (_settings.pageTurnMode.usesScrollLayout
+                ? ReaderPageTurnMode.tapAndSwipe
+                : _settings.pageTurnMode);
     _applyReaderSettingsWithModeRestore(
       nextSettings: _settings.copyWith(
         pageTurnMode: targetPageTurnMode,
@@ -574,7 +739,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   void _pauseAutoReadSession({bool showMessage = false}) {
     if (!_isAutoReadSessionEnabled ||
-        _autoReadSessionState != ReaderAutoReadSessionState.running) {
+        (_autoReadSessionState != ReaderAutoReadSessionState.running &&
+            _autoReadSessionState !=
+                ReaderAutoReadSessionState.chapterPaused)) {
       return;
     }
     _autoReadSessionState = ReaderAutoReadSessionState.paused;
@@ -608,9 +775,11 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     _isAutoReadAdvancingChapter = false;
+    _isAutoReadHandlingBoundary = false;
     _isAutoReadPausedByRuntime = false;
     _autoReadSessionState = ReaderAutoReadSessionState.off;
     _autoReadResumeTimer?.cancel();
+    _stopPagedAutoRead();
     _stopAutoRead();
 
     if (mounted) {

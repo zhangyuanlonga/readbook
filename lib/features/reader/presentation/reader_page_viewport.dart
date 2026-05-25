@@ -38,6 +38,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
                   clipBehavior: Clip.hardEdge,
                   children: [
                     _buildChapterLoadingIndicator(colors),
+                    _buildAutoReadStatusOverlay(colors),
                     _buildOverlayScrim(),
                     _buildTopOverlay(colors),
                     _buildBottomOverlay(colors),

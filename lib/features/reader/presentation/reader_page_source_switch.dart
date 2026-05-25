@@ -4,104 +4,114 @@ part of 'reader_page.dart';
 
 extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
   Future<void> _showSwitchSourceSheet() async {
-    final validation = _sourceSwitchCoordinator.validateManualSwitchRequest(
-      isSwitchSourceLoading: _isSwitchSourceLoading,
-      canSwitchSource: _canSwitchSource,
-      sourceId: _sourceId,
-      detailUrl: _detailUrl,
-    );
-    if (!validation.canProceed) {
-      final message = (validation.message ?? '').trim();
-      if (message.isNotEmpty) {
-        _showMessage(message);
+    _suspendOverlayAutoHide();
+    try {
+      final validation = _sourceSwitchCoordinator.validateManualSwitchRequest(
+        isSwitchSourceLoading: _isSwitchSourceLoading,
+        canSwitchSource: _canSwitchSource,
+        sourceId: _sourceId,
+        detailUrl: _detailUrl,
+      );
+      if (!validation.canProceed) {
+        final message = (validation.message ?? '').trim();
+        if (message.isNotEmpty) {
+          _showMessage(message);
+        }
+        return;
       }
-      return;
-    }
-    final currentSourceId = validation.currentSourceId!;
-    final currentDetailUrl = validation.currentDetailUrl!;
+      final currentSourceId = validation.currentSourceId!;
+      final currentDetailUrl = validation.currentDetailUrl!;
 
-    final keyword = await _resolveSwitchSourceSearchKeyword(
-      currentSourceId: currentSourceId,
-      currentDetailUrl: currentDetailUrl,
-    );
-    if (!mounted) {
-      return;
-    }
-    if (keyword == null) {
-      _showMessage('当前书名为空或仍在加载，暂时无法换源。');
-      return;
-    }
+      final keyword = await _resolveSwitchSourceSearchKeyword(
+        currentSourceId: currentSourceId,
+        currentDetailUrl: currentDetailUrl,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (keyword == null) {
+        _showMessage('当前书名为空或仍在加载，暂时无法换源。');
+        return;
+      }
 
-    ReaderSwitchSourceScopePlan scope;
-    try {
-      scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
-    } on AppException catch (error) {
-      _showMessage('查找可切换书源失败：${error.briefMessage}');
-      return;
-    } catch (_) {
-      _showMessage('查找可切换书源失败，请稍后重试。');
-      return;
-    }
+      ReaderSwitchSourceScopePlan scope;
+      try {
+        scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
+      } on AppException catch (error) {
+        _showMessage('查找可切换书源失败：${error.briefMessage}');
+        return;
+      } catch (_) {
+        _showMessage('查找可切换书源失败，请稍后重试。');
+        return;
+      }
 
-    final scoreStore = await _loadSwitchSourceScoreStoreSafely();
+      final scoreStore = await _loadSwitchSourceScoreStoreSafely();
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted) {
+        return;
+      }
 
-    const scoreRankingEnabled = true;
-    final lookupStateNotifier = ValueNotifier<SwitchSourceLookupState>(
-      SwitchSourceLookupState.loading(
-        sourceCount: scope.sourceIds.length,
-        scoreRankingEnabled: scoreRankingEnabled,
-      ),
-    );
-    final cancellationToken = SearchCancellationToken();
-    _cancelActiveSwitchSourceSearch();
-    _activeSwitchSourceCancellationToken = cancellationToken;
-
-    setState(() {
-      _isSwitchSourceLoading = true;
-    });
-
-    final searchFuture = _loadSwitchSourceCandidatesProgressively(
-      keyword: keyword,
-      scope: scope,
-      currentSourceId: currentSourceId,
-      lookupStateNotifier: lookupStateNotifier,
-      cancellationToken: cancellationToken,
-      scoreStore: scoreStore,
-      scoreRankingEnabled: scoreRankingEnabled,
-    );
-
-    SwitchSourceCandidate? selected;
-    try {
-      if (mounted) {
-        selected = await _showSwitchSourceCandidateSheet(
-          lookupStateNotifier,
-          scoreStore: scoreStore,
+      const scoreRankingEnabled = true;
+      final lookupStateNotifier = ValueNotifier<SwitchSourceLookupState>(
+        SwitchSourceLookupState.loading(
+          sourceCount: scope.sourceIds.length,
           scoreRankingEnabled: scoreRankingEnabled,
-        );
-      }
-    } finally {
-      cancellationToken.cancel();
-      if (identical(_activeSwitchSourceCancellationToken, cancellationToken)) {
-        _activeSwitchSourceCancellationToken = null;
-      }
-      unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
+        ),
+      );
+      final cancellationToken = SearchCancellationToken();
+      _cancelActiveSwitchSourceSearch();
+      _activeSwitchSourceCancellationToken = cancellationToken;
+
       if (mounted) {
         setState(() {
-          _isSwitchSourceLoading = false;
+          _isSwitchSourceLoading = true;
         });
       }
-    }
 
-    if (selected == null || !mounted) {
-      _scheduleAutoReadResume();
-      return;
-    }
+      final searchFuture = _loadSwitchSourceCandidatesProgressively(
+        keyword: keyword,
+        scope: scope,
+        currentSourceId: currentSourceId,
+        lookupStateNotifier: lookupStateNotifier,
+        cancellationToken: cancellationToken,
+        scoreStore: scoreStore,
+        scoreRankingEnabled: scoreRankingEnabled,
+      );
 
-    await _applySwitchSourceCandidate(selected);
+      SwitchSourceCandidate? selected;
+      try {
+        if (mounted) {
+          selected = await _showSwitchSourceCandidateSheet(
+            lookupStateNotifier,
+            scoreStore: scoreStore,
+            scoreRankingEnabled: scoreRankingEnabled,
+          );
+        }
+      } finally {
+        cancellationToken.cancel();
+        if (identical(
+          _activeSwitchSourceCancellationToken,
+          cancellationToken,
+        )) {
+          _activeSwitchSourceCancellationToken = null;
+        }
+        unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
+        if (mounted) {
+          setState(() {
+            _isSwitchSourceLoading = false;
+          });
+        }
+      }
+
+      if (selected == null || !mounted) {
+        _scheduleAutoReadResume();
+        return;
+      }
+
+      await _applySwitchSourceCandidate(selected);
+    } finally {
+      _resumeOverlayAutoHide();
+    }
   }
 
   Future<ReaderSwitchSourceScopePlan> _buildSwitchSourceScope({

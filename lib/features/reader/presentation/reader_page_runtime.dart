@@ -301,6 +301,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   bool _canRunAutoReadNow() {
+    if (_settings.autoReadMode == ReaderAutoReadMode.page) {
+      return _canRunPagedAutoReadNow();
+    }
     final hasScrollClients = _scrollController.hasClients;
     final position = hasScrollClients ? _scrollController.position : null;
     return _autoReadCoordinator.canRunNow(
@@ -321,6 +324,25 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       hasScrollClients: hasScrollClients,
       maxScrollExtent: position?.maxScrollExtent ?? 0,
       scrollOffset: position?.pixels ?? 0,
+    );
+  }
+
+  bool _canRunPagedAutoReadNow() {
+    return _autoReadCoordinator.canRunPagedNow(
+      isAutoReadSessionEnabled:
+          _autoReadSessionState == ReaderAutoReadSessionState.running,
+      isMangaChapter: _isMangaChapter,
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      isReaderVisible: _isReaderRuntimeVisible,
+      isLowBattery: _isReaderBatteryLowForRuntime,
+      showOverlayControls: _showOverlayControls,
+      isBootstrapping: _isBootstrapping,
+      isLoadingContent: _isLoadingContent,
+      hasError: _errorText != null,
+      hasTextContent: _content.trim().isNotEmpty,
+      isPaginating: _pagedPaginationState.isPaginating,
+      isAnimating: _isPagedTransitionAnimating || _isCurlAutoTurning,
+      pageCount: _currentPagedPageCount,
     );
   }
 
@@ -403,6 +425,11 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   bool _isAutoReadAtChapterEnd() {
+    if (_settings.autoReadMode == ReaderAutoReadMode.page &&
+        _isPagedTextReaderEnabled()) {
+      final pageCount = _currentPagedPageCount;
+      return pageCount > 0 && _currentPageIndex >= pageCount - 1;
+    }
     final hasScrollClients = _scrollController.hasClients;
     final position = hasScrollClients ? _scrollController.position : null;
     return _autoReadCoordinator.isAtChapterEnd(
@@ -427,6 +454,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       }
       _isAutoReadPausedByRuntime = false;
       _autoReadSessionState = ReaderAutoReadSessionState.running;
+      if (mounted) {
+        setState(() {});
+      }
       _reconcileAutoRead();
     });
   }
@@ -450,12 +480,23 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         _startAutoReadIfNeeded();
       } else {
         _stopAutoRead();
-        unawaited(_tryAutoReadAdvanceChapter());
+        if (_settings.autoReadMode == ReaderAutoReadMode.page) {
+          _stopPagedAutoRead();
+          if (_isAutoReadAtChapterEnd()) {
+            unawaited(_handleAutoReadChapterBoundary());
+          }
+        } else {
+          unawaited(_handleAutoReadChapterBoundary());
+        }
       }
     });
   }
 
   void _startAutoReadIfNeeded() {
+    if (_settings.autoReadMode == ReaderAutoReadMode.page) {
+      _startPagedAutoReadIfNeeded();
+      return;
+    }
     if (_isAutoReadRunning || !_canRunAutoReadNow()) {
       return;
     }
@@ -496,31 +537,103 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
     if (token == _autoReadTaskToken) {
       _isAutoReadRunning = false;
-      unawaited(_tryAutoReadAdvanceChapter());
+      unawaited(_handleAutoReadChapterBoundary());
     }
   }
 
-  Future<void> _tryAutoReadAdvanceChapter() async {
-    if (!_autoReadCoordinator.shouldTryAdvanceChapter(
-      isAutoReadSessionEnabled:
-          _autoReadSessionState == ReaderAutoReadSessionState.running,
-      isAutoReadAdvancingChapter: _isAutoReadAdvancingChapter,
-      isMangaChapter: _isMangaChapter,
-      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
-      isReaderVisible: _isReaderRuntimeVisible,
-      isLowBattery: _isReaderBatteryLowForRuntime,
-      showOverlayControls: _showOverlayControls,
-      isBootstrapping: _isBootstrapping,
-      isLoadingContent: _isLoadingContent,
-      hasError: _errorText != null,
-      isAtChapterEnd: _isAutoReadAtChapterEnd(),
-    )) {
+  void _startPagedAutoReadIfNeeded() {
+    if (_autoReadPagedTimer != null || !_canRunPagedAutoReadNow()) {
+      return;
+    }
+    _schedulePagedAutoReadTurn();
+  }
+
+  void _schedulePagedAutoReadTurn() {
+    _autoReadPagedTimer?.cancel();
+    _autoReadPagedTimer = Timer(
+      _autoReadCoordinator.resolvePagedHoldDuration(
+        speedLevel: _settings.autoReadSpeedLevel,
+      ),
+      () {
+        _autoReadPagedTimer = null;
+        unawaited(_runPagedAutoReadTurn());
+      },
+    );
+  }
+
+  Future<void> _runPagedAutoReadTurn() async {
+    if (!_canRunPagedAutoReadNow()) {
+      if (_isAutoReadAtChapterEnd()) {
+        await _handleAutoReadChapterBoundary();
+      }
+      return;
+    }
+    if (_isAutoReadAtChapterEnd()) {
+      await _handleAutoReadChapterBoundary();
       return;
     }
 
+    await _turnPagedTextPage(direction: 1);
+    if (!mounted ||
+        _autoReadSessionState != ReaderAutoReadSessionState.running) {
+      return;
+    }
+    if (_settings.autoReadPauseMode == ReaderAutoReadPauseMode.paragraphEnd) {
+      await Future<void>.delayed(
+        _autoReadCoordinator.paragraphPauseDuration(
+          speedLevel: _settings.autoReadSpeedLevel,
+        ),
+      );
+    }
+    if (!mounted ||
+        _autoReadSessionState != ReaderAutoReadSessionState.running) {
+      return;
+    }
+    if (_isAutoReadAtChapterEnd()) {
+      await _handleAutoReadChapterBoundary();
+      return;
+    }
+    _schedulePagedAutoReadTurn();
+  }
+
+  void _stopPagedAutoRead() {
+    _autoReadPagedTimer?.cancel();
+    _autoReadPagedTimer = null;
+  }
+
+  Future<void> _handleAutoReadChapterBoundary() async {
+    if (!_isAutoReadSessionEnabled ||
+        _autoReadSessionState != ReaderAutoReadSessionState.running ||
+        _isAutoReadHandlingBoundary) {
+      return;
+    }
+    if (!_isAutoReadAtChapterEnd()) {
+      return;
+    }
+    _isAutoReadHandlingBoundary = true;
+    try {
+      if (_settings.autoReadPauseMode == ReaderAutoReadPauseMode.chapterEnd) {
+        _enterAutoReadChapterPaused();
+        return;
+      }
+
+      final advanced = await _tryAdvanceAutoReadToNextChapter();
+      if (advanced) {
+        return;
+      }
+      await _handleAutoReadBookFinished();
+    } finally {
+      _isAutoReadHandlingBoundary = false;
+    }
+  }
+
+  Future<bool> _tryAdvanceAutoReadToNextChapter() async {
+    if (_isAutoReadAdvancingChapter) {
+      return false;
+    }
     _isAutoReadAdvancingChapter = true;
     try {
-      await _jumpToAdjacentReadableChapter(
+      return await _jumpToAdjacentReadableChapter(
         forward: true,
         showBoundaryHint: false,
       );
@@ -529,9 +642,147 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
   }
 
+  void _enterAutoReadChapterPaused() {
+    if (!mounted || !_isAutoReadSessionEnabled) {
+      return;
+    }
+    _stopAutoRead();
+    _stopPagedAutoRead();
+    setState(() {
+      _autoReadSessionState = ReaderAutoReadSessionState.chapterPaused;
+    });
+  }
+
+  Future<void> _continueAutoReadAfterChapterPause() async {
+    if (!_isAutoReadSessionEnabled ||
+        _autoReadSessionState != ReaderAutoReadSessionState.chapterPaused) {
+      return;
+    }
+    final advanced = await _tryAdvanceAutoReadToNextChapter();
+    if (!mounted || !_isAutoReadSessionEnabled) {
+      return;
+    }
+    if (!advanced) {
+      await _handleAutoReadBookFinished();
+      return;
+    }
+    _autoReadSessionState = ReaderAutoReadSessionState.running;
+    if (mounted) {
+      setState(() {});
+    }
+    _autoReadResumeTimer?.cancel();
+    _autoReadResumeTimer = Timer(
+      _ReaderPageState._kAutoReadBoundaryResumeDelay,
+      () {
+        if (!mounted ||
+            _autoReadSessionState != ReaderAutoReadSessionState.running) {
+          return;
+        }
+        _reconcileAutoRead(restart: true);
+      },
+    );
+  }
+
+  Future<void> _handleAutoReadBookFinished() async {
+    if (!mounted || !_isAutoReadSessionEnabled) {
+      return;
+    }
+    switch (_settings.autoReadEndBehavior) {
+      case ReaderAutoReadEndBehavior.loopBook:
+        final firstChapterIndex = _chapterNavigation.findReadableChapterIndex(
+          _chapters,
+          0,
+          forward: true,
+        );
+        if (firstChapterIndex == null) {
+          _finishAutoReadSession('本书已读完。');
+          return;
+        }
+        await _jumpTo(firstChapterIndex, initialScrollRatio: 0);
+        if (!mounted || !_isAutoReadSessionEnabled) {
+          return;
+        }
+        _autoReadSessionState = ReaderAutoReadSessionState.running;
+        setState(() {});
+        _reconcileAutoRead(restart: true);
+        return;
+      case ReaderAutoReadEndBehavior.nextBook:
+        final opened = await _openNextBookshelfBookForAutoRead();
+        if (!opened) {
+          _finishAutoReadSession('未找到下一本书，已停止自动阅读。');
+        }
+        return;
+      case ReaderAutoReadEndBehavior.stop:
+        _finishAutoReadSession('本书已读完。');
+        return;
+    }
+  }
+
+  Future<bool> _openNextBookshelfBookForAutoRead() async {
+    try {
+      final books = await _bookshelfService.getAll();
+      if (books.length <= 1) {
+        return false;
+      }
+      final currentBookId = _currentBookId;
+      final currentSourceId = _sourceId?.trim() ?? '';
+      final currentDetailUrl = _detailUrl?.trim() ?? '';
+      final currentIndex = books.indexWhere((book) {
+        if (book.bookId.trim() != currentBookId) {
+          return false;
+        }
+        if (currentSourceId.isNotEmpty &&
+            book.sourceId.trim() != currentSourceId) {
+          return false;
+        }
+        if (currentDetailUrl.isNotEmpty &&
+            book.detailUrl.trim() != currentDetailUrl) {
+          return false;
+        }
+        return true;
+      });
+      if (currentIndex < 0 || currentIndex >= books.length - 1) {
+        return false;
+      }
+      final nextBook = books[currentIndex + 1];
+      final route = const ReaderEntryRouteResolver()
+          .buildRouteFromBookshelfFallback(
+            nextBook,
+            openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
+            openRouteKind: 'auto_read_next_book',
+          );
+      _stopAutoReadSession(showMessage: false);
+      if (!mounted) {
+        return false;
+      }
+      context.go(route);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _finishAutoReadSession(String message) {
+    if (!mounted || !_isAutoReadSessionEnabled) {
+      return;
+    }
+    _stopAutoRead();
+    _stopPagedAutoRead();
+    setState(() {
+      _autoReadSessionState = ReaderAutoReadSessionState.finished;
+    });
+    _showMessage(
+      message,
+      duration: _ReaderPageState._kReaderSnackActionDuration,
+      dedupeKey: 'auto_read_finished',
+    );
+    _stopAutoReadSession(showMessage: false);
+  }
+
   void _stopAutoRead() {
     _autoReadTaskToken += 1;
     _isAutoReadRunning = false;
+    _stopPagedAutoRead();
     _autoReadResumeTimer?.cancel();
     _autoReadResumeTimer = null;
     if (!_scrollController.hasClients) {

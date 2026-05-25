@@ -179,6 +179,26 @@ void main() {
       expect(await service.loadAutoReadConfigured(), isTrue);
     });
 
+    test('tracks whether toolbar hint has been shown', () async {
+      final service = await _createService();
+
+      expect(await service.loadToolbarHintShown(), isFalse);
+
+      await service.saveToolbarHintShown(true);
+
+      expect(await service.loadToolbarHintShown(), isTrue);
+    });
+
+    test('tracks whether tap zone guide has been shown', () async {
+      final service = await _createService();
+
+      expect(await service.loadTapZoneGuideShown(), isFalse);
+
+      await service.saveTapZoneGuideShown(true);
+
+      expect(await service.loadTapZoneGuideShown(), isTrue);
+    });
+
     test('ignores legacy layout fields when loading settings', () async {
       SharedPreferences.setMockInitialValues({
         'reader.settings.bodyMarginMode': 'preset',

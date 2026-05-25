@@ -77,6 +77,7 @@ import '../application/reader_content_session_resolver.dart';
 import '../application/reader_mode_capabilities.dart';
 import '../application/reader_mode_model.dart';
 import '../application/reader_mode_resolver.dart';
+import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_chapter_cache_decoder.dart';
 import '../application/reader_chapter_load_planner.dart';
@@ -405,6 +406,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ReadingProgress? _bootstrapProgress;
   Timer? _progressDebounceTimer;
   Timer? _autoReadResumeTimer;
+  Timer? _autoReadPagedTimer;
+  Timer? _overlayAutoHideTimer;
   Timer? _readerInfoClockTimer;
   Timer? _chapterLoadingIndicatorTimer;
   Timer? _blockingLoadingCardTimer;
@@ -440,6 +443,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderAutoReadSessionState.off;
   bool _isReaderRuntimeVisible = true;
   bool _isAutoReadAdvancingChapter = false;
+  bool _isAutoReadHandlingBoundary = false;
   bool _isScrollStepAnimating = false;
   _ScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const _ScrollEdgeAdvanceState();
@@ -451,7 +455,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Offset? _tapPointerDownPosition;
   DateTime? _tapPointerDownTime;
   bool _tapPointerMoved = false;
-  bool _suppressNextReaderTap = false;
+  bool _readerTapHandledByChild = false;
+  bool _isOverlayAutoHideSuspended = false;
+  bool _hasShownToolbarHint = false;
+  bool _hasShownTapZoneGuide = false;
   DateTime? _lastPointerScrollPageTurnAt;
   DateTime? _lastBackNavigationAt;
   DateTime? _readerInteractionUnlockAt;
@@ -535,12 +542,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kOverlayControlsHideDuration = Duration(
     milliseconds: 180,
   );
+  static const Duration _kOverlayControlsAutoHideDelay = Duration(seconds: 5);
   static const double _kShellOverlayTranslateDistance = 12;
   static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 760);
   static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 300);
   static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
+  static const Duration _kAutoReadBoundaryResumeDelay = Duration(
+    milliseconds: 360,
+  );
   static const Duration _kInitialReaderInteractionCooldown = Duration(
     milliseconds: 320,
   );
@@ -3068,8 +3079,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               }
             }
 
-            if (_suppressNextReaderTap) {
-              _suppressNextReaderTap = false;
+            if (_readerTapHandledByChild) {
               _resetPointerTracking();
               return;
             }
@@ -3083,10 +3093,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           },
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onLongPress:
-                _isMangaViewport
-                    ? () => unawaited(_openMangaPositionSheet())
-                    : null,
+            onLongPress: () => unawaited(_handleReaderLongPress()),
             child: child,
           ),
         );
@@ -3131,7 +3138,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (_isAutoReadSessionEnabled) {
-      _stopAutoReadSession(showMessage: true);
+      _pauseAutoReadSession(showMessage: true);
       return;
     }
 
@@ -3163,6 +3170,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _tapPointerDownPosition = null;
     _tapPointerDownTime = null;
     _tapPointerMoved = false;
+    _readerTapHandledByChild = false;
     _swipeDragStartDx = null;
     _swipeDragStartDy = null;
     _swipeDragCurrentDx = null;
@@ -3828,7 +3836,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: _buildToolbarAction(
                                     icon: Icons.list_alt_outlined,
                                     label: '目录',
-                                    onTap: _openCatalogSheetFromOverlay,
+                                    onTap: () async {
+                                      _touchOverlayControls();
+                                      await _openCatalogSheetFromOverlay();
+                                    },
                                     colors: colors,
                                   ),
                                 ),
@@ -3836,7 +3847,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: _buildToolbarAction(
                                     icon: autoReadIcon,
                                     label: autoReadLabel,
-                                    onTap: _openAutoReadFromOverlay,
+                                    onTap: () async {
+                                      _touchOverlayControls();
+                                      await _openAutoReadFromOverlay();
+                                    },
                                     onLongPress:
                                         () => _showSettingsSheet(
                                           initialTab:
@@ -3853,11 +3867,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: _buildToolbarAction(
                                     icon: middleIcon,
                                     label: middleLabel,
-                                    onTap:
-                                        () => _showSettingsSheet(
-                                          initialTab:
-                                              _ReaderSettingsTab.interface,
-                                        ),
+                                    onTap: () async {
+                                      _touchOverlayControls();
+                                      await _showSettingsSheet(
+                                        initialTab:
+                                            _ReaderSettingsTab.interface,
+                                      );
+                                    },
                                     colors: colors,
                                   ),
                                 ),
@@ -3865,7 +3881,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: _buildToolbarAction(
                                     icon: dayNightIcon,
                                     label: dayNightLabel,
-                                    onTap: _toggleDayNightMode,
+                                    onTap: () async {
+                                      _touchOverlayControls();
+                                      await _toggleDayNightMode();
+                                    },
                                     colors: colors,
                                     active: isDarkMode,
                                   ),
@@ -3881,6 +3900,126 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutoReadStatusOverlay(_ReaderThemeColors colors) {
+    if (_autoReadSessionState == ReaderAutoReadSessionState.off) {
+      return const SizedBox.shrink();
+    }
+
+    final topPadding = MediaQuery.viewPaddingOf(context).top;
+    final colorScheme = Theme.of(context).colorScheme;
+    final progress =
+        ((_settings.autoReadSpeedLevel - ReaderSettings.minAutoReadSpeedLevel) /
+                (ReaderSettings.maxAutoReadSpeedLevel -
+                    ReaderSettings.minAutoReadSpeedLevel))
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final isPaused =
+        _autoReadSessionState == ReaderAutoReadSessionState.paused ||
+        _autoReadSessionState == ReaderAutoReadSessionState.chapterPaused;
+    final indicatorOpacity = isPaused ? 0.42 : 0.86;
+
+    return IgnorePointer(
+      ignoring:
+          _autoReadSessionState != ReaderAutoReadSessionState.chapterPaused,
+      child: Stack(
+        children: [
+          Positioned(
+            top: topPadding + 8,
+            left: 24,
+            right: 24,
+            child: AnimatedOpacity(
+              duration: AppMotion.fast,
+              opacity: indicatorOpacity,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 3,
+                  value: progress,
+                  backgroundColor: colors.divider.withValues(alpha: 0.28),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (_autoReadSessionState == ReaderAutoReadSessionState.paused)
+            Center(
+              child: _buildAutoReadFloatingHint(
+                colors: colors,
+                icon: Icons.play_arrow_rounded,
+                title: '自动阅读已暂停',
+                actionLabel: '点击底部继续',
+              ),
+            ),
+          if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused)
+            Center(
+              child: GestureDetector(
+                onTap: () => unawaited(_continueAutoReadAfterChapterPause()),
+                child: _buildAutoReadFloatingHint(
+                  colors: colors,
+                  icon: Icons.play_arrow_rounded,
+                  title: '本章结束',
+                  actionLabel: '点击继续',
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAutoReadFloatingHint({
+    required _ReaderThemeColors colors,
+    required IconData icon,
+    required String title,
+    required String actionLabel,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.overlay.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.divider.withValues(alpha: 0.24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: colorScheme.primary, size: 24),
+            const SizedBox(width: 10),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colors.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  actionLabel,
+                  style: textTheme.bodySmall?.copyWith(color: colors.meta),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -3922,9 +4061,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               max: 1,
               divisions: 100,
               value: progressValue,
+              onChangeStart:
+                  _hasVisibleReaderContent
+                      ? (_) => _suspendOverlayAutoHide()
+                      : null,
               onChanged:
                   _hasVisibleReaderContent
                       ? (value) {
+                        _touchOverlayControls();
                         setState(() {
                           _bottomOverlayDraftProgressRatio = value;
                         });
@@ -3943,6 +4087,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         );
                         _syncActiveReadingRecordSessionProgress(ratio: value);
                         _scheduleProgressSave();
+                        _resumeOverlayAutoHide();
                       }
                       : null,
             ),

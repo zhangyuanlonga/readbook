@@ -214,17 +214,16 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
             final renderBox = context.findRenderObject();
             final maxWidth =
                 renderBox is RenderBox ? renderBox.size.width : 0.0;
-            final handled = _handleBookmarkTap(
-              paragraphIndex: item.paragraphIndex ?? 0,
-              paragraphText: item.text,
-              localPosition: details.localPosition,
-              maxWidth: maxWidth,
-              textStyle: textStyle,
-              textAlign: _textAlignForRenderItem(item),
+            _routeReaderChildTap(
+              _handleBookmarkTap(
+                paragraphIndex: item.paragraphIndex ?? 0,
+                paragraphText: item.text,
+                localPosition: details.localPosition,
+                maxWidth: maxWidth,
+                textStyle: textStyle,
+                textAlign: _textAlignForRenderItem(item),
+              ),
             );
-            if (handled) {
-              _suppressNextReaderTap = true;
-            }
           },
         ),
       ),
@@ -293,17 +292,16 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
             final renderBox = context.findRenderObject();
             final maxWidth =
                 renderBox is RenderBox ? renderBox.size.width : 0.0;
-            final handled = _handleBookmarkTap(
-              paragraphIndex: paragraphIndex,
-              paragraphText: paragraph,
-              localPosition: details.localPosition,
-              maxWidth: maxWidth,
-              textStyle: textStyle,
-              textAlign: _paragraphTextAlign(_settings),
+            _routeReaderChildTap(
+              _handleBookmarkTap(
+                paragraphIndex: paragraphIndex,
+                paragraphText: paragraph,
+                localPosition: details.localPosition,
+                maxWidth: maxWidth,
+                textStyle: textStyle,
+                textAlign: _paragraphTextAlign(_settings),
+              ),
             );
-            if (handled) {
-              _suppressNextReaderTap = true;
-            }
           },
         ),
       ),
@@ -939,17 +937,16 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
               final renderBox = context.findRenderObject();
               final maxWidth =
                   renderBox is RenderBox ? renderBox.size.width : 0.0;
-              final handled = _handleBookmarkTapInSlice(
-                slice: slice.slice,
-                paragraphText: paragraph,
-                localPosition: details.localPosition,
-                maxWidth: maxWidth,
-                textStyle: slice.textStyle,
-                textAlign: slice.textAlign,
+              _routeReaderChildTap(
+                _handleBookmarkTapInSlice(
+                  slice: slice.slice,
+                  paragraphText: paragraph,
+                  localPosition: details.localPosition,
+                  maxWidth: maxWidth,
+                  textStyle: slice.textStyle,
+                  textAlign: slice.textAlign,
+                ),
               );
-              if (handled) {
-                _suppressNextReaderTap = true;
-              }
             },
           ),
         ),

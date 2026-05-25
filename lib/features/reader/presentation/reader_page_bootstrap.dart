@@ -272,6 +272,9 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       final loadedVisualOverridesFuture =
           _visualOverridesService.loadOverrides();
       final progressFuture = _preferencesService.loadProgress(_currentBookId);
+      final toolbarHintShownFuture = _preferencesService.loadToolbarHintShown();
+      final tapZoneGuideShownFuture =
+          _preferencesService.loadTapZoneGuideShown();
 
       final progressLoadStopwatch = Stopwatch()..start();
       final progress = await progressFuture;
@@ -353,6 +356,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
       _persistedReaderSettings = normalizedSettings;
       _visualOverrides = loadedVisualOverrides;
+      final toolbarHintShown = await toolbarHintShownFuture;
+      final tapZoneGuideShown = await tapZoneGuideShownFuture;
+      _hasShownToolbarHint = toolbarHintShown;
+      _hasShownTapZoneGuide = tapZoneGuideShown;
       final activeTheme = _currentActiveAdvancedTheme();
       final appThemeMode = _currentAppThemeMode();
       final platformBrightness = _currentPlatformBrightness();
@@ -367,6 +374,8 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         setState(() {
           _persistedReaderSettings = normalizedSettings;
           _visualOverrides = loadedVisualOverrides;
+          _hasShownToolbarHint = toolbarHintShown;
+          _hasShownTapZoneGuide = tapZoneGuideShown;
           _settings = bootSettings;
           _customFonts = const <ReaderCustomFontEntry>[];
           _customBackgroundImages = const <String>[];
@@ -596,6 +605,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         unawaited(_syncVolumeKeyPageInterception());
         _scheduleReadingRecordSessionStart(initialRatio: _currentScrollRatio());
         _reconcileAutoRead(restart: true);
+        unawaited(_maybePromptTapZoneGuide());
       }
     }
   }

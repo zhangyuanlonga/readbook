@@ -53,6 +53,10 @@ class ReaderPreferencesService {
       'reader.settings.autoReadEndBehavior';
   static const String _autoReadConfiguredKey =
       'reader.settings.autoReadConfigured.v1';
+  static const String _toolbarHintShownKey =
+      'reader.interaction.toolbarHintShown.v1';
+  static const String _tapZoneGuideShownKey =
+      'reader.interaction.tapZoneGuideShown.v1';
   static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
   static const String _backgroundToneKey = 'reader.settings.backgroundTone';
   static const String _pageTurnStepRatioKey =
@@ -715,6 +719,26 @@ class ReaderPreferencesService {
   Future<void> saveAutoReadConfigured(bool configured) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_autoReadConfiguredKey, configured);
+  }
+
+  Future<bool> loadToolbarHintShown() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_toolbarHintShownKey) ?? false;
+  }
+
+  Future<void> saveToolbarHintShown(bool shown) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_toolbarHintShownKey, shown);
+  }
+
+  Future<bool> loadTapZoneGuideShown() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_tapZoneGuideShownKey) ?? false;
+  }
+
+  Future<void> saveTapZoneGuideShown(bool shown) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_tapZoneGuideShownKey, shown);
   }
 
   Future<List<String>> loadCustomBackgroundImages() async {

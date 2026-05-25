@@ -7,6 +7,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     bool startAutoReadAfterApplyInitially = false,
   }) async {
     _stopAutoReadSession();
+    _suspendOverlayAutoHide();
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
       _hideOverlayControls(resumeAutoRead: false, syncSystemUi: false);
@@ -1822,6 +1823,237 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         );
                       }
 
+                      String tapZoneActionLabel(ReaderTapZoneAction action) {
+                        return switch (action) {
+                          ReaderTapZoneAction.previousPage => '上一页',
+                          ReaderTapZoneAction.nextPage => '下一页',
+                          ReaderTapZoneAction.toggleToolbar => '工具栏',
+                          ReaderTapZoneAction.catalog => '目录',
+                          ReaderTapZoneAction.autoRead => '自动阅读',
+                          ReaderTapZoneAction.bookmark => '灵感',
+                          ReaderTapZoneAction.nightMode => '夜间模式',
+                          ReaderTapZoneAction.none => '无操作',
+                        };
+                      }
+
+                      IconData tapZoneActionIcon(ReaderTapZoneAction action) {
+                        return switch (action) {
+                          ReaderTapZoneAction.previousPage =>
+                            Icons.chevron_left_rounded,
+                          ReaderTapZoneAction.nextPage =>
+                            Icons.chevron_right_rounded,
+                          ReaderTapZoneAction.toggleToolbar =>
+                            Icons.tune_rounded,
+                          ReaderTapZoneAction.catalog =>
+                            Icons.list_alt_outlined,
+                          ReaderTapZoneAction.autoRead =>
+                            Icons.play_circle_outline_rounded,
+                          ReaderTapZoneAction.bookmark =>
+                            Icons.bookmark_outline_rounded,
+                          ReaderTapZoneAction.nightMode =>
+                            Icons.dark_mode_rounded,
+                          ReaderTapZoneAction.none => Icons.block_rounded,
+                        };
+                      }
+
+                      Future<void> openTapZoneEditorSheet() async {
+                        final colorScheme = Theme.of(context).colorScheme;
+                        final currentActions = List<ReaderTapZoneAction>.from(
+                          draft.tapZoneActions,
+                        );
+                        await showModalBottomSheet<void>(
+                          context: context,
+                          backgroundColor: sheetSurfaceColor,
+                          showDragHandle: true,
+                          isScrollControlled: true,
+                          builder: (sheetContext) {
+                            var localActions = List<ReaderTapZoneAction>.from(
+                              currentActions,
+                            );
+                            return StatefulBuilder(
+                              builder: (sheetContext, setZoneState) {
+                                Future<void> editCell(int index) async {
+                                  final selected = await showModalBottomSheet<
+                                    ReaderTapZoneAction
+                                  >(
+                                    context: sheetContext,
+                                    showDragHandle: true,
+                                    builder: (menuContext) {
+                                      return SafeArea(
+                                        child: ListView(
+                                          shrinkWrap: true,
+                                          children: ReaderTapZoneAction.values
+                                              .map(
+                                                (action) => ListTile(
+                                                  leading: Icon(
+                                                    tapZoneActionIcon(action),
+                                                  ),
+                                                  title: Text(
+                                                    tapZoneActionLabel(action),
+                                                  ),
+                                                  trailing:
+                                                      localActions[index] ==
+                                                              action
+                                                          ? const Icon(
+                                                            Icons.check_rounded,
+                                                          )
+                                                          : null,
+                                                  onTap:
+                                                      () => Navigator.of(
+                                                        menuContext,
+                                                      ).pop(action),
+                                                ),
+                                              )
+                                              .toList(growable: false),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                  if (selected == null) {
+                                    return;
+                                  }
+                                  setZoneState(() {
+                                    localActions[index] = selected;
+                                  });
+                                }
+
+                                return SafeArea(
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      24,
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '点击分区',
+                                          style: Theme.of(
+                                            sheetContext,
+                                          ).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '首次安装后只提示一次，后续可在这里调整 3×3 点击动作。',
+                                          style: Theme.of(
+                                            sheetContext,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        GridView.builder(
+                                          shrinkWrap: true,
+                                          itemCount: 9,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 3,
+                                                mainAxisSpacing: 8,
+                                                crossAxisSpacing: 8,
+                                                childAspectRatio: 1.18,
+                                              ),
+                                          itemBuilder: (context, index) {
+                                            final action = localActions[index];
+                                            return InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              onTap:
+                                                  () => unawaited(
+                                                    editCell(index),
+                                                  ),
+                                              child: Ink(
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      colorScheme
+                                                          .surfaceContainerLow,
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: colorScheme
+                                                        .outlineVariant
+                                                        .withValues(alpha: 0.4),
+                                                  ),
+                                                ),
+                                                padding: const EdgeInsets.all(
+                                                  10,
+                                                ),
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      tapZoneActionIcon(action),
+                                                      size: 18,
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      tapZoneActionLabel(
+                                                        action,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .labelMedium,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            OutlinedButton(
+                                              onPressed: () {
+                                                setZoneState(() {
+                                                  localActions = List<
+                                                    ReaderTapZoneAction
+                                                  >.from(
+                                                    ReaderSettings
+                                                        .defaultTapZoneActions,
+                                                  );
+                                                });
+                                              },
+                                              child: const Text('恢复默认'),
+                                            ),
+                                            const Spacer(),
+                                            FilledButton(
+                                              onPressed: () {
+                                                setModalState(() {
+                                                  draft = draft.copyWith(
+                                                    tapZoneActions:
+                                                        localActions,
+                                                  );
+                                                });
+                                                Navigator.of(
+                                                  sheetContext,
+                                                ).pop();
+                                              },
+                                              child: const Text('应用'),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      }
+
                       Widget buildInterfaceSecondaryCapsule({
                         required IconData icon,
                         required String title,
@@ -3257,6 +3489,70 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                       }
                                       : null,
                             ),
+                            buildSectionDivider(),
+                            buildCompactSectionTitle('正文点击分区'),
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              onPressed:
+                                  () => unawaited(openTapZoneEditorSheet()),
+                              icon: const Icon(
+                                Icons.grid_view_rounded,
+                                size: 16,
+                              ),
+                              label: const Text('编辑 3×3 分区'),
+                            ),
+                            const SizedBox(height: 8),
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: 9,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    mainAxisSpacing: 6,
+                                    crossAxisSpacing: 6,
+                                    childAspectRatio: 1.5,
+                                  ),
+                              itemBuilder: (context, index) {
+                                final action = draft.tapZoneActions[index];
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainerLow,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outlineVariant
+                                          .withValues(alpha: 0.36),
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(tapZoneActionIcon(action), size: 14),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        tapZoneActionLabel(action),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.labelSmall,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ]),
                         ],
                         'info' => <Widget>[
@@ -3558,7 +3854,9 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '速度 ${draft.autoReadSpeedLevel} 档 · ${draft.autoReadSpeed.round()} px/s',
+                              draft.autoReadMode == ReaderAutoReadMode.scroll
+                                  ? '速度 ${draft.autoReadSpeedLevel} 档 · ${draft.autoReadSpeed.round()} px/s'
+                                  : '速度 ${draft.autoReadSpeedLevel} 档 · ${(_autoReadCoordinator.resolvePagedHoldDuration(speedLevel: draft.autoReadSpeedLevel).inMilliseconds / 1000).toStringAsFixed(1)} 秒/页',
                               style: Theme.of(
                                 context,
                               ).textTheme.bodySmall?.copyWith(
@@ -3931,8 +4229,12 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
       await _preferencesService.saveAutoReadConfigured(true);
     }
 
-    if (shouldEnableAutoRead && mounted) {
-      await _toggleAutoReadSession();
+    try {
+      if (shouldEnableAutoRead && mounted) {
+        await _toggleAutoReadSession();
+      }
+    } finally {
+      _resumeOverlayAutoHide();
     }
   }
 

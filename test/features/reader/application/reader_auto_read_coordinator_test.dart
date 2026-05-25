@@ -146,5 +146,51 @@ void main() {
       expect(shouldAdvance, isTrue);
       expect(blocked, isFalse);
     });
+
+    test('canRunPagedNow requires paged text readiness', () {
+      final runnable = coordinator.canRunPagedNow(
+        isAutoReadSessionEnabled: true,
+        isMangaChapter: false,
+        isPagedTextReaderEnabled: true,
+        isReaderVisible: true,
+        isLowBattery: false,
+        showOverlayControls: false,
+        isBootstrapping: false,
+        isLoadingContent: false,
+        hasError: false,
+        hasTextContent: true,
+        isPaginating: false,
+        isAnimating: false,
+        pageCount: 4,
+      );
+      final blockedByAnimation = coordinator.canRunPagedNow(
+        isAutoReadSessionEnabled: true,
+        isMangaChapter: false,
+        isPagedTextReaderEnabled: true,
+        isReaderVisible: true,
+        isLowBattery: false,
+        showOverlayControls: false,
+        isBootstrapping: false,
+        isLoadingContent: false,
+        hasError: false,
+        hasTextContent: true,
+        isPaginating: false,
+        isAnimating: true,
+        pageCount: 4,
+      );
+
+      expect(runnable, isTrue);
+      expect(blockedByAnimation, isFalse);
+    });
+
+    test('resolvePagedHoldDuration maps higher speed to shorter hold', () {
+      final slow = coordinator.resolvePagedHoldDuration(speedLevel: 1);
+      final medium = coordinator.resolvePagedHoldDuration(speedLevel: 5);
+      final fast = coordinator.resolvePagedHoldDuration(speedLevel: 10);
+
+      expect(slow, const Duration(seconds: 12));
+      expect(medium, lessThan(slow));
+      expect(fast, const Duration(seconds: 4));
+    });
   });
 }

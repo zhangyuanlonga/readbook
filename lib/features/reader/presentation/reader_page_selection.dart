@@ -13,6 +13,16 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     );
   }
 
+  void _routeReaderChildTap(bool handled) {
+    if (!handled) {
+      return;
+    }
+    _readerTapHandledByChild = true;
+    if (_isAutoReadSessionEnabled) {
+      _pauseAutoReadSession(showMessage: true);
+    }
+  }
+
   void _clearSystemSelection() {
     final selectionAreaState = _selectionAreaKey.currentState;
     if (selectionAreaState == null) {

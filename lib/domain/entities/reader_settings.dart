@@ -66,6 +66,17 @@ enum ReaderAutoReadPauseMode { none, chapterEnd, paragraphEnd }
 
 enum ReaderAutoReadEndBehavior { stop, loopBook, nextBook }
 
+enum ReaderTapZoneAction {
+  previousPage,
+  nextPage,
+  toggleToolbar,
+  catalog,
+  autoRead,
+  bookmark,
+  nightMode,
+  none,
+}
+
 class ReaderBodyMarginValues {
   const ReaderBodyMarginValues({
     required this.top,
@@ -162,6 +173,7 @@ class ReaderSettings {
     this.chapterHeaderBottomSpacing = 0,
     this.pinnedChapterHeaderOffsetX = 0,
     this.pinnedChapterHeaderOffsetY = 8,
+    this.tapZoneActions = defaultTapZoneActions,
   });
 
   static const double minAutoReadSpeed = 20;
@@ -191,6 +203,18 @@ class ReaderSettings {
   static const double minChapterHeaderVerticalOffset = -50;
   static const double minChapterHeaderSpacing = 0;
   static const double maxChapterHeaderSpacing = 80;
+  static const List<ReaderTapZoneAction> defaultTapZoneActions =
+      <ReaderTapZoneAction>[
+        ReaderTapZoneAction.catalog,
+        ReaderTapZoneAction.none,
+        ReaderTapZoneAction.bookmark,
+        ReaderTapZoneAction.previousPage,
+        ReaderTapZoneAction.toggleToolbar,
+        ReaderTapZoneAction.nextPage,
+        ReaderTapZoneAction.previousPage,
+        ReaderTapZoneAction.autoRead,
+        ReaderTapZoneAction.nextPage,
+      ];
 
   static int autoReadSpeedLevelFromSpeed(double speed) {
     final normalized = ((speed.clamp(minAutoReadSpeed, maxAutoReadSpeed) -
@@ -296,6 +320,7 @@ class ReaderSettings {
   final double chapterHeaderBottomSpacing;
   final double pinnedChapterHeaderOffsetX;
   final double pinnedChapterHeaderOffsetY;
+  final List<ReaderTapZoneAction> tapZoneActions;
 
   ReaderBodyMarginValues get effectiveBodyMarginValues {
     return ReaderBodyMarginValues(
@@ -418,6 +443,7 @@ class ReaderSettings {
     double? chapterHeaderBottomSpacing,
     double? pinnedChapterHeaderOffsetX,
     double? pinnedChapterHeaderOffsetY,
+    List<ReaderTapZoneAction>? tapZoneActions,
     bool clearBackgroundImage = false,
     bool clearBodyTextColor = false,
     bool clearBodyTextDecorationColor = false,
@@ -648,7 +674,19 @@ class ReaderSettings {
           (pinnedChapterHeaderOffsetY ?? this.pinnedChapterHeaderOffsetY)
               .clamp(minPinnedHeaderOffsetY, maxPinnedHeaderOffsetY)
               .toDouble(),
+      tapZoneActions: _normalizeTapZoneActions(
+        tapZoneActions ?? this.tapZoneActions,
+      ),
     );
+  }
+
+  static List<ReaderTapZoneAction> _normalizeTapZoneActions(
+    List<ReaderTapZoneAction> actions,
+  ) {
+    if (actions.length != 9) {
+      return List<ReaderTapZoneAction>.from(defaultTapZoneActions);
+    }
+    return List<ReaderTapZoneAction>.unmodifiable(actions);
   }
 
   Map<String, dynamic> toJson() {
@@ -725,6 +763,7 @@ class ReaderSettings {
       'showChapterHeader': showChapterHeader,
       'chapterHeaderHorizontalOffset': chapterHeaderHorizontalOffset,
       'chapterHeaderVerticalOffset': chapterHeaderVerticalOffset,
+      'tapZoneActions': tapZoneActions.map((item) => item.name).toList(),
     };
   }
 
@@ -838,6 +877,7 @@ class ReaderSettings {
         (_asDouble(json['autoReadSpeed']) ?? defaultAutoReadSpeed)
             .clamp(minAutoReadSpeed, maxAutoReadSpeed)
             .toDouble();
+    final tapZoneActions = _parseTapZoneActions(json['tapZoneActions']);
 
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
@@ -1002,7 +1042,24 @@ class ReaderSettings {
                   const ReaderSettings().chapterHeaderVerticalOffset)
               .clamp(minChapterHeaderVerticalOffset, maxChapterHeaderSpacing)
               .toDouble(),
+      tapZoneActions: tapZoneActions,
     );
+  }
+
+  static List<ReaderTapZoneAction> _parseTapZoneActions(Object? value) {
+    if (value is! List) {
+      return List<ReaderTapZoneAction>.from(defaultTapZoneActions);
+    }
+    final parsed = value
+        .map((item) {
+          final name = item?.toString();
+          return ReaderTapZoneAction.values.firstWhere(
+            (action) => action.name == name,
+            orElse: () => ReaderTapZoneAction.none,
+          );
+        })
+        .toList(growable: false);
+    return _normalizeTapZoneActions(parsed);
   }
 
   static double? _asDouble(Object? value) {

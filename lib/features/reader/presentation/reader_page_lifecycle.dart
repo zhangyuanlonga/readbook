@@ -152,6 +152,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _curlTransition = const _CurlTransitionState();
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
+    _autoReadPagedTimer?.cancel();
+    _overlayAutoHideTimer?.cancel();
     _readerInfoClockTimer?.cancel();
     _chapterLoadingIndicatorTimer?.cancel();
     _blockingLoadingCardTimer?.cancel();
