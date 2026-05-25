@@ -59,6 +59,10 @@ class _MinePageState extends ConsumerState<MinePage> {
   String? _userId;
   String? _username;
   String? _localAvatarPath;
+  DateTime? _vipExpireAt;
+  String? _membershipPlanType;
+  int _totalReadingHours = 0;
+  int _readingStreakDays = 0;
   bool _isCheckingUpdate = false;
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
@@ -242,9 +246,20 @@ class _MinePageState extends ConsumerState<MinePage> {
       _hasThemeCustom = snapshot.hasThemeCustom;
       _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
       _localAvatarPath = snapshot.localAvatarPath;
+      _vipExpireAt = snapshot.vipExpireAt;
+      _membershipPlanType = snapshot.membershipPlanType;
+      _totalReadingHours = snapshot.totalReadingHours;
+      _readingStreakDays = snapshot.readingStreakDays;
     });
     if (snapshot.session == null) {
       return;
+    }
+    final shouldRefreshRemote =
+        !refreshRemote &&
+        (snapshot.shouldRefreshRemoteAccess ||
+            (snapshot.hasMembership && snapshot.vipExpireAt == null));
+    if (shouldRefreshRemote) {
+      unawaited(_reloadSession(showLoading: false, refreshRemote: true));
     }
   }
 

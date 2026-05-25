@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/images/local_file_image.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
@@ -28,6 +30,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
   AuthSession? _session;
   UserProfile? _profile;
+  String? _localAvatarPath;
   bool _isLoading = true;
   bool _isLoadingProfile = false;
   bool _isLoggingOut = false;
@@ -44,11 +47,13 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
   Future<void> _loadSession() async {
     final session = await _sessionStore.getSession();
+    final localAvatarPath = await _loadLocalAvatarPath(session?.userId);
     if (!mounted) {
       return;
     }
     setState(() {
       _session = session;
+      _localAvatarPath = localAvatarPath;
       _isLoading = false;
     });
     if (session != null) {
@@ -82,13 +87,29 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     }
   }
 
+  Future<String?> _loadLocalAvatarPath(String? userId) async {
+    final normalizedUserId = userId?.trim() ?? '';
+    if (normalizedUserId.isEmpty) {
+      return null;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final path =
+        prefs.getString('mine.profile.avatar.path.$normalizedUserId')?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    return path;
+  }
+
   Future<void> _refreshPage() async {
     final session = await _sessionStore.getSession();
+    final localAvatarPath = await _loadLocalAvatarPath(session?.userId);
     if (!mounted) {
       return;
     }
     setState(() {
       _session = session;
+      _localAvatarPath = localAvatarPath;
       if (session == null) {
         _profile = null;
       }
@@ -229,16 +250,14 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         session.userId ??
         '用户';
     final userId = profile?.userId ?? session.userId ?? '-';
-    final membershipLabel = _resolveMembershipLabel(profile);
-    final membershipHint = _resolveMembershipHint(profile);
 
     return [
       _buildProfileHero(
         context,
         displayName: displayName,
         userId: userId,
-        membershipLabel: membershipLabel,
-        membershipHint: membershipHint,
+        profile: profile,
+        localAvatarPath: _localAvatarPath,
       ),
       if (_isLoadingProfile)
         Padding(
@@ -424,15 +443,266 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     );
   }
 
+  // ==================== 会员卡片相关方法 ====================
+
+  /// 计算会员进度条相关数据
+  ({int totalDays, int enjoyedDays, int remainingDays, double progress})
+  _computeMembershipProgress(UserProfile? profile) {
+    final now = DateTime.now();
+    // 使用 created_at 作为起始时间，如果没有则用当前时间
+    final startAt = profile?.createdAt ?? now;
+    final expireAt = profile?.vipExpireAt;
+
+    if (expireAt == null || expireAt.isBefore(now)) {
+      return (totalDays: 0, enjoyedDays: 0, remainingDays: 0, progress: 0.0);
+    }
+
+    final totalDays = expireAt.difference(startAt).inDays;
+    final enjoyedDays = now.difference(startAt).inDays;
+    final remainingDays = expireAt.difference(now).inDays;
+    final progress = totalDays > 0 ? enjoyedDays / totalDays : 0.0;
+
+    return (
+      totalDays: totalDays,
+      enjoyedDays: enjoyedDays,
+      remainingDays: remainingDays,
+      progress: progress.clamp(0.0, 1.0),
+    );
+  }
+
+  /// 获取会员等级标签样式
+  ({String label, Color color, Color backgroundColor}) _getVipLevelStyle(
+    UserProfile? profile,
+  ) {
+    final level = profile?.vipLevel?.toLowerCase() ?? '';
+    switch (level) {
+      case 'vip':
+        return (
+          label: 'VIP',
+          color: const Color(0xFFB8860B),
+          backgroundColor: const Color(0xFFFFF8E7),
+        );
+      case 'svip':
+        return (
+          label: 'SVIP',
+          color: const Color(0xFF6A1B9A),
+          backgroundColor: const Color(0xFFF3E5F5),
+        );
+      case 'premium':
+        return (
+          label: '高级会员',
+          color: const Color(0xFFE65100),
+          backgroundColor: const Color(0xFFFFF3E0),
+        );
+      default:
+        return (
+          label: '会员',
+          color: const Color(0xFF2C3E50),
+          backgroundColor: const Color(0xFFECF0F1),
+        );
+    }
+  }
+
+  /// 判断是否为有效会员
+  bool _isValidVip(UserProfile? profile) {
+    final level = profile?.vipLevel?.toLowerCase() ?? '';
+    final status = profile?.vipStatus?.toLowerCase() ?? '';
+    return level != 'none' && level != '' && status == 'active';
+  }
+
+  /// 格式化天数
+  String _formatDays(int days) {
+    return '$days 天';
+  }
+
+  Widget _buildMembershipCard(UserProfile? profile, BuildContext context) {
+    final isValidVip = _isValidVip(profile);
+
+    if (!isValidVip) {
+      return _buildUpgradeCard(context);
+    }
+
+    return _buildVipStatusCard(profile, context);
+  }
+
+  Widget _buildUpgradeCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: () => context.push('/membership'),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              colorScheme.primaryContainer.withValues(alpha: 0.9),
+              colorScheme.surfaceContainerHighest,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withValues(alpha: 0.84),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.workspace_premium_rounded,
+                size: 20,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '开通会员，享阅读特权',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '去广告 · 无限书架 · 专属书单',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVipStatusCard(UserProfile? profile, BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final style = _getVipLevelStyle(profile);
+    final progress = _computeMembershipProgress(profile);
+    final expireAt = profile?.vipExpireAt;
+    final expireText =
+        expireAt != null
+            ? '${expireAt.year}-${expireAt.month.toString().padLeft(2, '0')}-${expireAt.day.toString().padLeft(2, '0')} 到期'
+            : '会员有效';
+
+    return InkWell(
+      onTap: () => context.push('/membership'),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: colorScheme.surface.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: style.backgroundColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    style.label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: style.color,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    expireText,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: progress.progress,
+                minHeight: 4,
+                backgroundColor: colorScheme.outlineVariant.withValues(
+                  alpha: 0.3,
+                ),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  style.color == const Color(0xFFB8860B)
+                      ? const Color(0xFFFFD700)
+                      : style.color,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '已享受 ${_formatDays(progress.enjoyedDays)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  '剩余 ${_formatDays(progress.remainingDays)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== 原有方法 ====================
+
   Widget _buildProfileHero(
     BuildContext context, {
     required String displayName,
     required String userId,
-    required String membershipLabel,
-    required String membershipHint,
+    required UserProfile? profile,
+    required String? localAvatarPath,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final initial = displayName.trim().isEmpty ? 'U' : displayName.trim()[0];
+    final isValidVip = _isValidVip(profile);
+    final vipLevelStyle = _getVipLevelStyle(profile);
 
     return Container(
       padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding + 2),
@@ -452,14 +722,28 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: colorScheme.surface.withValues(alpha: 0.84),
-                child: Text(
-                  initial,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: colorScheme.primary,
+              Container(
+                width: 60,
+                height: 60,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: colorScheme.surface.withValues(alpha: 0.84),
+                ),
+                child: buildLocalFileImage(
+                  imagePath: localAvatarPath,
+                  width: 60,
+                  height: 60,
+                  cacheWidth: 180,
+                  cacheHeight: 180,
+                  fallback: Center(
+                    child: Text(
+                      initial,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -468,11 +752,38 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      displayName,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (isValidVip)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: vipLevelStyle.backgroundColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              vipLevelStyle.label,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: vipLevelStyle.color,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -487,33 +798,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
             ],
           ),
           const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surface.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  membershipLabel,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  membershipHint,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildMembershipCard(profile, context),
         ],
       ),
     );
@@ -579,23 +864,6 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         ),
       ),
     );
-  }
-
-  String _resolveMembershipLabel(UserProfile? profile) {
-    final status = _describeVipStatus(profile?.vipStatus);
-    final level = _describeVipLevel(profile?.vipLevel);
-    if (level == '未开通' && status == '-') {
-      return '普通账号';
-    }
-    return '$level · $status';
-  }
-
-  String _resolveMembershipHint(UserProfile? profile) {
-    final expireAt = _formatTime(profile?.vipExpireAt);
-    if (expireAt == '-') {
-      return '当前未返回明确的会员到期时间，后续可在这里补齐更多权益说明。';
-    }
-    return '会员有效期至 $expireAt。后续可以继续把权益说明、续费入口和设备管理整合进来。';
   }
 
   String _describeVipLevel(String? raw) {

@@ -14,6 +14,8 @@ class RemoteAccessSnapshot {
     required this.hasThemeCustom,
     required this.serverSourceGatewayLimit,
     required this.cachedAt,
+    this.vipExpireAt,
+    this.membershipPlanType,
   });
 
   final bool serverSourceGatewayEnabled;
@@ -21,6 +23,8 @@ class RemoteAccessSnapshot {
   final bool hasThemeCustom;
   final int serverSourceGatewayLimit;
   final DateTime cachedAt;
+  final DateTime? vipExpireAt;
+  final String? membershipPlanType;
 
   bool isFresh({
     Duration ttl = RemoteAccessSnapshotService.defaultTtl,
@@ -35,6 +39,8 @@ class RemoteAccessSnapshot {
     bool? hasThemeCustom,
     int? serverSourceGatewayLimit,
     DateTime? cachedAt,
+    DateTime? vipExpireAt,
+    String? membershipPlanType,
   }) {
     return RemoteAccessSnapshot(
       serverSourceGatewayEnabled:
@@ -44,6 +50,8 @@ class RemoteAccessSnapshot {
       serverSourceGatewayLimit:
           serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
       cachedAt: cachedAt ?? this.cachedAt,
+      vipExpireAt: vipExpireAt ?? this.vipExpireAt,
+      membershipPlanType: membershipPlanType ?? this.membershipPlanType,
     );
   }
 
@@ -60,17 +68,29 @@ class RemoteAccessSnapshot {
       cachedAt:
           DateTime.tryParse(json['cachedAt']?.toString() ?? '')?.toUtc() ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      vipExpireAt:
+          DateTime.tryParse(json['vipExpireAt']?.toString() ?? '')?.toUtc(),
+      membershipPlanType: json['membershipPlanType']?.toString().trim(),
     );
   }
 
   Map<String, Object> toJson() {
-    return <String, Object>{
+    final data = <String, Object>{
       'serverSourceGatewayEnabled': serverSourceGatewayEnabled,
       'hasMembership': hasMembership,
       'hasThemeCustom': hasThemeCustom,
       'serverSourceGatewayLimit': serverSourceGatewayLimit,
       'cachedAt': cachedAt.toUtc().toIso8601String(),
     };
+    final expireAt = vipExpireAt;
+    if (expireAt != null) {
+      data['vipExpireAt'] = expireAt.toUtc().toIso8601String();
+    }
+    final planType = membershipPlanType?.trim() ?? '';
+    if (planType.isNotEmpty) {
+      data['membershipPlanType'] = planType;
+    }
+    return data;
   }
 }
 
@@ -97,12 +117,15 @@ class RemoteAccessSnapshotService {
 
     final stored = await _database.getRemoteAccessSnapshot(normalizedUserId);
     if (stored != null) {
+      final sidecar = await _loadMembershipSidecar(normalizedUserId);
       return RemoteAccessSnapshot(
         serverSourceGatewayEnabled: stored.serverSourceGatewayEnabled,
         hasMembership: stored.hasMembership,
         hasThemeCustom: stored.hasThemeCustom,
         serverSourceGatewayLimit: stored.serverSourceGatewayLimit,
         cachedAt: stored.cachedAt,
+        vipExpireAt: sidecar.vipExpireAt,
+        membershipPlanType: sidecar.membershipPlanType,
       );
     }
 
@@ -125,6 +148,7 @@ class RemoteAccessSnapshotService {
         serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
         cachedAt: snapshot.cachedAt,
       );
+      await _saveMembershipSidecar(normalizedUserId, snapshot);
       await prefs.remove(_storageKey(normalizedUserId));
       return snapshot;
     } catch (_) {
@@ -146,6 +170,7 @@ class RemoteAccessSnapshotService {
       serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
       cachedAt: snapshot.cachedAt,
     );
+    await _saveMembershipSidecar(normalizedUserId, snapshot);
     final prefs = await _preferencesFuture;
     await prefs.remove(_storageKey(normalizedUserId));
   }
@@ -158,6 +183,7 @@ class RemoteAccessSnapshotService {
     await _database.deleteRemoteAccessSnapshot(normalizedUserId);
     final prefs = await _preferencesFuture;
     await prefs.remove(_storageKey(normalizedUserId));
+    await prefs.remove(_membershipSidecarKey(normalizedUserId));
   }
 
   Future<void> saveFromModulesAndEntitlement({
@@ -187,6 +213,8 @@ class RemoteAccessSnapshotService {
           entitlement,
           MembershipFeatures.themeCustom,
         ),
+        vipExpireAt: entitlement.expireAt,
+        membershipPlanType: entitlement.planType,
         cachedAt: DateTime.now().toUtc(),
       ),
     );
@@ -231,11 +259,60 @@ class RemoteAccessSnapshotService {
         MembershipFeatures.themeCustom,
       ),
       serverSourceGatewayLimit: gatewayQuota?.quotaLimit ?? 10,
+      vipExpireAt: entitlement.expireAt,
+      membershipPlanType: entitlement.planType,
       cachedAt: DateTime.now().toUtc(),
     );
   }
 
   String _storageKey(String userId) => 'remote.access.snapshot.v1.$userId';
+
+  String _membershipSidecarKey(String userId) =>
+      'remote.access.membership.v1.$userId';
+
+  Future<({DateTime? vipExpireAt, String? membershipPlanType})>
+  _loadMembershipSidecar(String userId) async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_membershipSidecarKey(userId))?.trim();
+    if (raw == null || raw.isEmpty) {
+      return (vipExpireAt: null, membershipPlanType: null);
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return (vipExpireAt: null, membershipPlanType: null);
+      }
+      return (
+        vipExpireAt:
+            DateTime.tryParse(
+              decoded['vipExpireAt']?.toString() ?? '',
+            )?.toUtc(),
+        membershipPlanType: decoded['membershipPlanType']?.toString().trim(),
+      );
+    } catch (_) {
+      await prefs.remove(_membershipSidecarKey(userId));
+      return (vipExpireAt: null, membershipPlanType: null);
+    }
+  }
+
+  Future<void> _saveMembershipSidecar(
+    String userId,
+    RemoteAccessSnapshot snapshot,
+  ) async {
+    final prefs = await _preferencesFuture;
+    if (snapshot.vipExpireAt == null &&
+        (snapshot.membershipPlanType?.trim().isEmpty ?? true)) {
+      await prefs.remove(_membershipSidecarKey(userId));
+      return;
+    }
+    await prefs.setString(
+      _membershipSidecarKey(userId),
+      jsonEncode(<String, Object?>{
+        'vipExpireAt': snapshot.vipExpireAt?.toUtc().toIso8601String(),
+        'membershipPlanType': snapshot.membershipPlanType,
+      }),
+    );
+  }
 
   MobileFeatureModule? _findModule(
     List<MobileFeatureModule> modules,

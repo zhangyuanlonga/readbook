@@ -8,6 +8,7 @@ import '../../../core/auth/auth_session_store.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
+import '../../../data/datasources/local/app_database.dart';
 import 'remote_access_snapshot_service.dart';
 
 class MinePageSessionSnapshot {
@@ -20,6 +21,10 @@ class MinePageSessionSnapshot {
     required this.serverSourceGatewayLimit,
     required this.isRemoteAccessResolved,
     required this.shouldRefreshRemoteAccess,
+    required this.vipExpireAt,
+    required this.membershipPlanType,
+    required this.totalReadingHours,
+    required this.readingStreakDays,
   });
 
   final AuthSession? session;
@@ -30,6 +35,10 @@ class MinePageSessionSnapshot {
   final int serverSourceGatewayLimit;
   final bool isRemoteAccessResolved;
   final bool shouldRefreshRemoteAccess;
+  final DateTime? vipExpireAt;
+  final String? membershipPlanType;
+  final int totalReadingHours;
+  final int readingStreakDays;
 }
 
 class MinePageSessionPriming {
@@ -47,20 +56,23 @@ class MinePageSessionPriming {
 }
 
 class MinePageSessionService {
-  const MinePageSessionService({
+  MinePageSessionService({
     required AuthSessionStore authSessionStore,
     required MobileFeatureService mobileFeatureService,
     required MembershipService membershipService,
     required RemoteAccessSnapshotService remoteAccessSnapshotService,
+    AppDatabase? database,
   }) : _authSessionStore = authSessionStore,
        _mobileFeatureService = mobileFeatureService,
        _membershipService = membershipService,
-       _remoteAccessSnapshotService = remoteAccessSnapshotService;
+       _remoteAccessSnapshotService = remoteAccessSnapshotService,
+       _database = database ?? AppDatabase.instance;
 
   final AuthSessionStore _authSessionStore;
   final MobileFeatureService _mobileFeatureService;
   final MembershipService _membershipService;
   final RemoteAccessSnapshotService _remoteAccessSnapshotService;
+  final AppDatabase _database;
 
   Future<MinePageSessionSnapshot> loadSession({
     bool refreshRemote = true,
@@ -76,10 +88,15 @@ class MinePageSessionService {
         serverSourceGatewayLimit: 10,
         isRemoteAccessResolved: true,
         shouldRefreshRemoteAccess: false,
+        vipExpireAt: null,
+        membershipPlanType: null,
+        totalReadingHours: 0,
+        readingStreakDays: 0,
       );
     }
 
     final localAvatarPath = await loadLocalAvatarPath(session.userId);
+    final readingSummary = await _loadReadingSummary();
     final normalizedUserId = session.userId?.trim() ?? '';
     final cachedRemoteSnapshot =
         normalizedUserId.isEmpty
@@ -90,6 +107,9 @@ class MinePageSessionService {
         session: session,
         localAvatarPath: localAvatarPath,
         remoteSnapshot: cachedRemoteSnapshot,
+        vipExpireAt: cachedRemoteSnapshot?.vipExpireAt?.toLocal(),
+        membershipPlanType: cachedRemoteSnapshot?.membershipPlanType,
+        readingSummary: readingSummary,
       );
     }
 
@@ -111,12 +131,18 @@ class MinePageSessionService {
         session: session,
         localAvatarPath: localAvatarPath,
         remoteSnapshot: remoteSnapshot,
+        vipExpireAt: entitlement.expireAt?.toLocal(),
+        membershipPlanType: entitlement.planType,
+        readingSummary: readingSummary,
       );
     } catch (_) {
       return _buildSnapshot(
         session: session,
         localAvatarPath: localAvatarPath,
         remoteSnapshot: cachedRemoteSnapshot,
+        vipExpireAt: cachedRemoteSnapshot?.vipExpireAt?.toLocal(),
+        membershipPlanType: cachedRemoteSnapshot?.membershipPlanType,
+        readingSummary: readingSummary,
       );
     }
   }
@@ -218,6 +244,9 @@ class MinePageSessionService {
     required AuthSession session,
     required String? localAvatarPath,
     required RemoteAccessSnapshot? remoteSnapshot,
+    required DateTime? vipExpireAt,
+    required String? membershipPlanType,
+    required _MineReadingSummary readingSummary,
   }) {
     return MinePageSessionSnapshot(
       session: session,
@@ -230,6 +259,89 @@ class MinePageSessionService {
       isRemoteAccessResolved: remoteSnapshot != null,
       shouldRefreshRemoteAccess:
           remoteSnapshot == null || !remoteSnapshot.isFresh(),
+      vipExpireAt: vipExpireAt,
+      membershipPlanType: membershipPlanType,
+      totalReadingHours: readingSummary.totalReadingHours,
+      readingStreakDays: readingSummary.readingStreakDays,
     );
   }
+
+  Future<_MineReadingSummary> _loadReadingSummary() async {
+    final dailyRecords = await _database.listAllReadingRecordDays();
+    if (dailyRecords.isEmpty) {
+      return const _MineReadingSummary(
+        totalReadingHours: 0,
+        readingStreakDays: 0,
+      );
+    }
+
+    final totalMillis = dailyRecords.fold<int>(
+      0,
+      (sum, item) => sum + (item.readMillis < 0 ? 0 : item.readMillis),
+    );
+    final dateKeys = dailyRecords
+      .map((item) => item.dateKey.trim())
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .toList(growable: false)..sort();
+
+    return _MineReadingSummary(
+      totalReadingHours: Duration(milliseconds: totalMillis).inHours,
+      readingStreakDays: _calculateReadingStreakDays(dateKeys),
+    );
+  }
+
+  int _calculateReadingStreakDays(List<String> sortedDateKeys) {
+    if (sortedDateKeys.isEmpty) {
+      return 0;
+    }
+
+    final today = _dateOnly(DateTime.now());
+    final uniqueDates = sortedDateKeys
+      .map(DateTime.tryParse)
+      .whereType<DateTime>()
+      .map(_dateOnly)
+      .toSet()
+      .toList(growable: false)..sort((a, b) => b.compareTo(a));
+
+    if (uniqueDates.isEmpty) {
+      return 0;
+    }
+
+    final first = uniqueDates.first;
+    if (today.difference(first).inDays > 1) {
+      return 0;
+    }
+
+    var streak = 0;
+    var cursor = first;
+    for (final date in uniqueDates) {
+      if (_isSameDay(date, cursor)) {
+        streak += 1;
+        cursor = cursor.subtract(const Duration(days: 1));
+        continue;
+      }
+      break;
+    }
+    return streak;
+  }
+
+  DateTime _dateOnly(DateTime time) {
+    final local = time.toLocal();
+    return DateTime(local.year, local.month, local.day);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _MineReadingSummary {
+  const _MineReadingSummary({
+    required this.totalReadingHours,
+    required this.readingStreakDays,
+  });
+
+  final int totalReadingHours;
+  final int readingStreakDays;
 }

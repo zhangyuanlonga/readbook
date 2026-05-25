@@ -529,6 +529,136 @@ extension on _MinePageState {
     return actions;
   }
 
+  String _buildProfileStats() {
+    if (_userId == null) {
+      return '登录后可同步书架、阅读记录和会员权益';
+    }
+    final readingHours = _totalReadingHours;
+    final streakDays = _readingStreakDays;
+    if (readingHours <= 0 && streakDays <= 0) {
+      return '还没有阅读记录，今天开始第一段阅读吧';
+    }
+    return '已读 $readingHours 小时  ·  连续 $streakDays 天';
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildProfileMembershipRow(
+    BuildContext context,
+    _MineResolvedPalette palette,
+    Color membershipAccent,
+  ) {
+    if (_userId == null) {
+      return const SizedBox.shrink();
+    }
+
+    if (_hasMembership) {
+      return _buildMembershipProgressRow(context, palette, membershipAccent);
+    }
+
+    return _buildUpgradeRow(context, palette);
+  }
+
+  Widget _buildMembershipProgressRow(
+    BuildContext context,
+    _MineResolvedPalette palette,
+    Color membershipAccent,
+  ) {
+    final expireAt = _vipExpireAt;
+    if (expireAt == null) {
+      return const SizedBox.shrink();
+    }
+
+    final now = DateTime.now();
+    final totalDays = _membershipCycleDays(_membershipPlanType, expireAt, now);
+    final remainingDays = expireAt.difference(now).inDays.clamp(0, totalDays);
+    final progress =
+        totalDays > 0
+            ? ((totalDays - remainingDays).clamp(0, totalDays) / totalDays)
+            : 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            minHeight: 4,
+            backgroundColor: palette.cardBorderColor.withValues(alpha: 0.3),
+            valueColor: AlwaysStoppedAnimation<Color>(membershipAccent),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '会员有效期至 ${_formatDate(expireAt)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: palette.textSecondaryColor,
+                fontSize: 11,
+              ),
+            ),
+            Text(
+              '剩余 $remainingDays 天',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: membershipAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  int _membershipCycleDays(String? planType, DateTime expireAt, DateTime now) {
+    final normalized = planType?.trim().toLowerCase() ?? '';
+    if (normalized.contains('year') || normalized.contains('annual')) {
+      return 365;
+    }
+    if (normalized.contains('quarter')) {
+      return 92;
+    }
+    if (normalized.contains('month')) {
+      return 31;
+    }
+    if (normalized.contains('week')) {
+      return 7;
+    }
+    final remainingDays = expireAt.difference(now).inDays;
+    return remainingDays.clamp(1, 365).toInt();
+  }
+
+  Widget _buildUpgradeRow(BuildContext context, _MineResolvedPalette palette) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(
+            Icons.workspace_premium_rounded,
+            size: 14,
+            color: palette.primaryColor,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '开通会员，享去广告 · 无限书架 · 专属书单',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: palette.primaryColor,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileCard(
     BuildContext context, {
     required _MineResolvedPalette palette,
@@ -539,8 +669,6 @@ extension on _MinePageState {
         _userId == null
             ? '登录 / 注册'
             : ((_username?.trim().isNotEmpty ?? false) ? _username! : _userId!);
-    final signature = _buildProfileSignature();
-    final statusLabel = _buildProfileStatusLabel();
     final avatarLabel = _buildProfileAvatarLabel(displayName);
     final avatarFill = palette.iconBackgroundColor;
     const membershipAccent = Color(0xFFB68A4D);
@@ -695,63 +823,35 @@ extension on _MinePageState {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Text(
-                                  displayName,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                if (_hasMembership)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: membershipAccent.withValues(
-                                        alpha: 0.12,
-                                      ),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: membershipAccent.withValues(
-                                          alpha: 0.32,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.auto_awesome_rounded,
-                                          size: 12,
-                                          color: membershipAccent,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'PRO',
-                                          style: theme.textTheme.labelSmall
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w800,
-                                                color: membershipAccent,
-                                                letterSpacing: 0.2,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
+                            child: Text(
+                              displayName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (_userId == null) ...[
-                            const SizedBox(width: 8),
+                          if (_hasMembership)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: membershipAccent.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'PRO',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: membershipAccent,
+                                ),
+                              ),
+                            ),
+                          if (_userId == null)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -767,25 +867,27 @@ extension on _MinePageState {
                                 ),
                               ),
                               child: Text(
-                                statusLabel,
+                                '未登录',
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: palette.noticeAccentColor,
                                 ),
                               ),
                             ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        signature,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        _buildProfileStats(),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: palette.textSecondaryColor,
-                          height: 1.35,
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildProfileMembershipRow(
+                        context,
+                        palette,
+                        membershipAccent,
                       ),
                     ],
                   ),
@@ -803,23 +905,6 @@ extension on _MinePageState {
         ),
       ),
     );
-  }
-
-  String _buildProfileSignature() {
-    if (_userId == null) {
-      return '登录后可管理账号资料和会员权益。';
-    }
-    if (_hasMembership) {
-      return '高级权益已生效，可尽情使用会员功能';
-    }
-    return '账号已登录，可继续管理个人资料和权益。';
-  }
-
-  String _buildProfileStatusLabel() {
-    if (_userId == null) {
-      return '未登录';
-    }
-    return '已登录';
   }
 
   String? _buildProfileAvatarLabel(String displayName) {

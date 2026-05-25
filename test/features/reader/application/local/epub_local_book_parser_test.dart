@@ -221,7 +221,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/fixed_layout.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final book = LocalBook(
