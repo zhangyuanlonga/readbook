@@ -294,27 +294,6 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         ],
       ),
       SizedBox(height: metrics.contentGap),
-      _buildInfoCard(
-        context,
-        title: '账号状态',
-        description: '当前登录态与会员状态。',
-        rows: [
-          _ProfileRow(
-            label: '会员状态',
-            value: _describeVipStatus(profile?.vipStatus),
-          ),
-          _ProfileRow(
-            label: '会员等级',
-            value: _describeVipLevel(profile?.vipLevel),
-          ),
-          _ProfileRow(label: '会员到期', value: _formatTime(profile?.vipExpireAt)),
-          _ProfileRow(
-            label: 'Access 有效期',
-            value: _formatTime(session.accessExpiresAt),
-          ),
-        ],
-      ),
-      SizedBox(height: metrics.contentGap),
       Card(
         child: Padding(
           padding: EdgeInsets.all(metrics.cardPadding),
@@ -864,54 +843,6 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         ),
       ),
     );
-  }
-
-  String _describeVipLevel(String? raw) {
-    final normalized = _normalizeEnumValue(raw);
-    switch (normalized) {
-      case '':
-      case 'none':
-        return '未开通';
-      case 'basic':
-        return '基础会员';
-      case 'pro':
-        return '专业会员';
-      case 'vip':
-        return 'VIP';
-      case 'svip':
-        return 'SVIP';
-      case 'premium':
-        return '高级会员';
-      default:
-        return raw!.trim();
-    }
-  }
-
-  String _describeVipStatus(String? raw) {
-    final normalized = _normalizeEnumValue(raw);
-    switch (normalized) {
-      case '':
-        return '-';
-      case 'active':
-        return '生效中';
-      case 'inactive':
-        return '未开通';
-      case 'expired':
-        return '已过期';
-      case 'pending':
-        return '待生效';
-      case 'cancelled':
-      case 'canceled':
-        return '已取消';
-      case 'suspended':
-        return '已暂停';
-      default:
-        return raw!.trim();
-    }
-  }
-
-  String _normalizeEnumValue(String? raw) {
-    return raw?.trim().toLowerCase() ?? '';
   }
 
   String _formatTime(DateTime? time) {

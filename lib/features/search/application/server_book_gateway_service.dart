@@ -332,11 +332,13 @@ class ServerGatewayDetailResult {
     required this.detail,
     required this.sourceName,
     required this.cacheHit,
+    this.executionContext,
   });
 
   final BookDetail detail;
   final String sourceName;
   final bool cacheHit;
+  final String? executionContext;
 
   factory ServerGatewayDetailResult.fromEnvelopeData(
     Object? data, {
@@ -376,9 +378,11 @@ class ServerGatewayDetailResult {
         category: _optionalString(book['kind']),
         tags: _stringList(book['tags']),
         updateTime: _optionalString(book['updateTime']),
+        executionContext: _optionalString(map['executionContext']),
       ),
       sourceName: _optionalString(report['sourceName']) ?? '服务器书源',
       cacheHit: report['cacheHit'] == true,
+      executionContext: _optionalString(map['executionContext']),
     );
   }
 }
@@ -390,6 +394,7 @@ class ServerGatewayTocResult {
     this.hasMore = false,
     this.loadedCount = 0,
     this.isComplete = true,
+    this.executionContext,
   });
 
   final List<Chapter> chapters;
@@ -397,6 +402,7 @@ class ServerGatewayTocResult {
   final bool hasMore;
   final int loadedCount;
   final bool isComplete;
+  final String? executionContext;
 
   ServerGatewayTocResult copyWith({
     List<Chapter>? chapters,
@@ -404,6 +410,7 @@ class ServerGatewayTocResult {
     bool? hasMore,
     int? loadedCount,
     bool? isComplete,
+    String? executionContext,
   }) {
     return ServerGatewayTocResult(
       chapters: chapters ?? this.chapters,
@@ -411,6 +418,7 @@ class ServerGatewayTocResult {
       hasMore: hasMore ?? this.hasMore,
       loadedCount: loadedCount ?? this.loadedCount,
       isComplete: isComplete ?? this.isComplete,
+      executionContext: executionContext ?? this.executionContext,
     );
   }
 
@@ -429,6 +437,7 @@ class ServerGatewayTocResult {
       hasMore: map['hasMore'] == true,
       loadedCount: _intOrDefault(map['loadedCount'], chapters.length),
       isComplete: map['hasMore'] != true,
+      executionContext: _optionalString(map['executionContext']),
     );
   }
 }
@@ -447,6 +456,7 @@ ServerGatewayTocResult? _tocResultFromEvent(
       cacheHit: _asMap(map['sourceReport'])['cacheHit'] == true,
       loadedCount: _intOrDefault(map['loadedCount'], 0),
       isComplete: map['isComplete'] != false,
+      executionContext: _optionalString(map['executionContext']),
     );
   }
   final report = _asMap(map['sourceReport']);
@@ -459,6 +469,7 @@ ServerGatewayTocResult? _tocResultFromEvent(
     hasMore: map['hasMore'] == true,
     loadedCount: _intOrDefault(map['loadedCount'], chapters.length),
     isComplete: map['isComplete'] == true,
+    executionContext: _optionalString(map['executionContext']),
   );
 }
 
@@ -544,6 +555,7 @@ class ServerGatewayContentResult {
     this.audioUrl,
     this.audioManifestUrl,
     this.audioHeaders = const <String, String>{},
+    this.executionContext,
   });
 
   final String content;
@@ -555,6 +567,7 @@ class ServerGatewayContentResult {
   final String? audioUrl;
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;
+  final String? executionContext;
 
   factory ServerGatewayContentResult.fromEnvelopeData(Object? data) {
     final map = _asMap(data);
@@ -575,6 +588,7 @@ class ServerGatewayContentResult {
         map['audioManifestUrl'] ?? map['audio_manifest_url'],
       ),
       audioHeaders: _stringMap(map['audioHeaders'] ?? map['audio_headers']),
+      executionContext: _optionalString(map['executionContext']),
     );
   }
 }
@@ -590,6 +604,7 @@ Chapter _chapterFromJson(Object? value, String fallbackBookId) {
     chapterUrl: chapterUrl,
     index: index,
     isVolume: map['isVolume'] == true,
+    executionContext: _optionalString(map['executionContext']),
   );
 }
 

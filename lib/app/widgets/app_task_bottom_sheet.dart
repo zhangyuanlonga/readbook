@@ -176,89 +176,184 @@ class AppTaskBottomSheet extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: contentPadding,
-                    child: Column(
-                      mainAxisSize:
-                          fitContent ? MainAxisSize.min : MainAxisSize.max,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (!desktopLike) ...[
-                          const AdaptiveSheetDragHandle(),
-                          const SizedBox(height: 12),
-                        ],
-                        Stack(
-                          alignment: Alignment.centerLeft,
-                          children: [
-                            Padding(
-                              padding: EdgeInsets.only(
-                                right: trailing != null ? 44 : 0,
-                                left: leading != null ? 44 : 0,
-                              ),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: Text(
-                                  title,
-                                  textAlign: TextAlign.left,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                            ),
-                            if (leading != null)
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: leading!,
-                              ),
-                            if (trailing != null)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: trailing!,
-                              ),
-                          ],
-                        ),
-                        if (steps.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              for (
-                                var index = 0;
-                                index < steps.length;
-                                index += 1
-                              ) ...[
-                                _AppTaskStepNode(
-                                  label: steps[index].label,
-                                  active: steps[index].active,
-                                ),
-                                if (index != steps.length - 1)
-                                  Expanded(
-                                    child: CustomPaint(
-                                      painter: _DashedLinePainter(
-                                        color:
-                                            steps[index + 1].active
-                                                ? colorScheme.primary
-                                                : colorScheme.outlineVariant,
+                    child:
+                        fitContent
+                            ? SingleChildScrollView(
+                              primary: false,
+                              physics: const ClampingScrollPhysics(),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (!desktopLike) ...[
+                                    const AdaptiveSheetDragHandle(),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  Stack(
+                                    alignment: Alignment.centerLeft,
+                                    children: [
+                                      Padding(
+                                        padding: EdgeInsets.only(
+                                          right: trailing != null ? 44 : 0,
+                                          left: leading != null ? 44 : 0,
+                                        ),
+                                        child: SizedBox(
+                                          width: double.infinity,
+                                          child: Text(
+                                            title,
+                                            textAlign: TextAlign.left,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                      child: const SizedBox(
-                                        height: 1.4,
+                                      if (leading != null)
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: leading!,
+                                        ),
+                                      if (trailing != null)
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: trailing!,
+                                        ),
+                                    ],
+                                  ),
+                                  if (steps.isNotEmpty) ...[
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        for (
+                                          var index = 0;
+                                          index < steps.length;
+                                          index += 1
+                                        ) ...[
+                                          _AppTaskStepNode(
+                                            label: steps[index].label,
+                                            active: steps[index].active,
+                                          ),
+                                          if (index != steps.length - 1)
+                                            Expanded(
+                                              child: CustomPaint(
+                                                painter: _DashedLinePainter(
+                                                  color:
+                                                      steps[index + 1].active
+                                                          ? colorScheme.primary
+                                                          : colorScheme
+                                                              .outlineVariant,
+                                                ),
+                                                child: const SizedBox(
+                                                  height: 1.4,
+                                                  width: double.infinity,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                  if (header != null) ...[
+                                    const SizedBox(height: 10),
+                                    header!,
+                                  ],
+                                  const SizedBox(height: 10),
+                                  body,
+                                  if (footer != null) ...[
+                                    const SizedBox(height: 10),
+                                    footer!,
+                                  ],
+                                ],
+                              ),
+                            )
+                            : Column(
+                              mainAxisSize: MainAxisSize.max,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (!desktopLike) ...[
+                                  const AdaptiveSheetDragHandle(),
+                                  const SizedBox(height: 12),
+                                ],
+                                Stack(
+                                  alignment: Alignment.centerLeft,
+                                  children: [
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                        right: trailing != null ? 44 : 0,
+                                        left: leading != null ? 44 : 0,
+                                      ),
+                                      child: SizedBox(
                                         width: double.infinity,
+                                        child: Text(
+                                          title,
+                                          textAlign: TextAlign.left,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
                                       ),
                                     ),
+                                    if (leading != null)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: leading!,
+                                      ),
+                                    if (trailing != null)
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: trailing!,
+                                      ),
+                                  ],
+                                ),
+                                if (steps.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      for (
+                                        var index = 0;
+                                        index < steps.length;
+                                        index += 1
+                                      ) ...[
+                                        _AppTaskStepNode(
+                                          label: steps[index].label,
+                                          active: steps[index].active,
+                                        ),
+                                        if (index != steps.length - 1)
+                                          Expanded(
+                                            child: CustomPaint(
+                                              painter: _DashedLinePainter(
+                                                color:
+                                                    steps[index + 1].active
+                                                        ? colorScheme.primary
+                                                        : colorScheme
+                                                            .outlineVariant,
+                                              ),
+                                              child: const SizedBox(
+                                                height: 1.4,
+                                                width: double.infinity,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ],
                                   ),
+                                ],
+                                if (header != null) ...[
+                                  const SizedBox(height: 10),
+                                  header!,
+                                ],
+                                const SizedBox(height: 10),
+                                Expanded(child: body),
+                                if (footer != null) ...[
+                                  const SizedBox(height: 10),
+                                  footer!,
+                                ],
                               ],
-                            ],
-                          ),
-                        ],
-                        if (header != null) ...[
-                          const SizedBox(height: 10),
-                          header!,
-                        ],
-                        const SizedBox(height: 10),
-                        if (fitContent) body else Expanded(child: body),
-                        if (footer != null) ...[
-                          const SizedBox(height: 10),
-                          footer!,
-                        ],
-                      ],
-                    ),
+                            ),
                   ),
                 ),
               ),

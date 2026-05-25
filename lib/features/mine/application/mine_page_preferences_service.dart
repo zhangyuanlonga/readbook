@@ -73,7 +73,7 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   ),
   MinePageItemDefinition(
     id: MinePageItemId.inspiration,
-    title: '灵感',
+    title: '灵感笔记',
     sectionTitle: '数据',
   ),
   MinePageItemDefinition(

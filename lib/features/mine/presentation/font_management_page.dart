@@ -56,6 +56,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   Map<String, bool> _fontFileExistsByFamilyKey = const <String, bool>{};
   ReaderSettings _readerSettings = const ReaderSettings();
   StreamSubscription<IncomingExternalImportPayload>? _importSubscription;
+  String _searchKeyword = '';
 
   @override
   void initState() {
@@ -122,6 +123,23 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         });
       }
     }
+  }
+
+  List<ReaderCustomFontEntry> get _filteredFonts {
+    if (_searchKeyword.isEmpty) {
+      return _fonts;
+    }
+    return _fonts.where((font) {
+      return font.displayName.toLowerCase().contains(
+        _searchKeyword.toLowerCase(),
+      );
+    }).toList();
+  }
+
+  int get _validFontCount {
+    return _fonts
+        .where((font) => _fontFileExistsByFamilyKey[font.fontFamilyKey] == true)
+        .length;
   }
 
   Future<void> _consumePendingExternalImportPayloads() async {
@@ -314,6 +332,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       Theme.of(context).colorScheme,
       activeAdvancedTheme,
     );
+    final hasFonts = _filteredFonts.isNotEmpty;
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -344,22 +363,20 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
             ),
             actions: [
               IconButton(
+                tooltip: '搜索',
+                onPressed: _showSearchDialog,
+                icon: Icon(
+                  _searchKeyword.isNotEmpty
+                      ? Icons.search_off_rounded
+                      : Icons.search_rounded,
+                ),
+              ),
+              IconButton(
                 tooltip: '刷新',
                 onPressed: _isLoading ? null : () => unawaited(_reload()),
                 icon: const Icon(Icons.refresh_rounded),
               ),
             ],
-          ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed:
-                _isImporting
-                    ? null
-                    : () => _showImportFontSheet(
-                      localFileImport: capabilities.localFileImport,
-                      managedFileStorage: capabilities.managedFileStorage,
-                    ),
-            icon: const Icon(Icons.file_upload_outlined),
-            label: const Text('导入字体'),
           ),
           body: LayoutBuilder(
             builder: (context, _) {
@@ -385,8 +402,11 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                           72 + metrics.sectionGap + bottomSafe,
                         ),
                         children: [
-                          AppFadeSlideTransition(child: _buildHero(context)),
-                          SizedBox(height: metrics.contentGap),
+                          // 统计行（替代 Hero）
+                          if (!_isLoading && _errorText == null)
+                            _buildStatsRow(context),
+                          if (!_isLoading && _errorText == null)
+                            SizedBox(height: metrics.contentGap),
                           if (!capabilities.supportsManagedFileStorage ||
                               !capabilities.supportsLocalFileImport) ...[
                             _buildFontCapabilityNotice(context),
@@ -410,11 +430,17 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                               ),
                             )
                           else ...[
+                            // 搜索框
+                            if (hasFonts || _searchKeyword.isNotEmpty)
+                              _buildSearchBar(context),
+                            if (hasFonts || _searchKeyword.isNotEmpty)
+                              SizedBox(height: metrics.contentGap),
                             AppFadeSlideTransition(
                               delay: const Duration(milliseconds: 40),
                               child: _buildLibraryHeader(context),
                             ),
                             SizedBox(height: metrics.contentGap),
+                            // 系统默认字体
                             AppFadeSlideTransition(
                               delay: const Duration(milliseconds: 64),
                               child: Padding(
@@ -427,7 +453,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                                 ),
                               ),
                             ),
-                            ..._fonts.map(
+                            // 自定义字体列表
+                            ..._filteredFonts.map(
                               (font) => Padding(
                                 padding: EdgeInsets.only(
                                   bottom: metrics.contentGap,
@@ -439,6 +466,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                                 ),
                               ),
                             ),
+                            if (_filteredFonts.isEmpty && _fonts.isNotEmpty)
+                              _buildEmptySearchResultCard(context),
                             if (_fonts.isEmpty) _buildEmptyLibraryCard(context),
                           ],
                         ],
@@ -449,72 +478,173 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               );
             },
           ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed:
+                _isImporting
+                    ? null
+                    : () => _showImportFontSheet(
+                      localFileImport: capabilities.localFileImport,
+                      managedFileStorage: capabilities.managedFileStorage,
+                    ),
+            icon: const Icon(Icons.file_upload_outlined),
+            label: const Text('导入字体'),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHero(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Container(
-      padding: EdgeInsets.all(metrics.cardPadding + 4),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.primaryContainer,
-            colorScheme.secondaryContainer,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(metrics.cardRadius + 4),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: colorScheme.surface.withValues(alpha: 0.68),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.font_download_outlined,
-                  color: colorScheme.primary,
-                ),
+  void _showSearchDialog() {
+    if (_searchKeyword.isNotEmpty) {
+      setState(() {
+        _searchKeyword = '';
+      });
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (context) {
+        String keyword = '';
+        return AlertDialog(
+          title: const Text('搜索字体'),
+          content: TextField(
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: '输入字体名称',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '统一管理应用与阅读器字体',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
+            onChanged: (value) {
+              keyword = value;
+            },
+            onSubmitted: (value) {
+              setState(() {
+                _searchKeyword = value;
+              });
+              Navigator.pop(context);
+            },
           ),
-          SizedBox(height: metrics.contentGap),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildHeroChip(context, '已导入 ${_fonts.length} 款'),
-              _buildHeroChip(context, '支持 TTF / OTF'),
-            ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _searchKeyword = keyword;
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('搜索'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchBar(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              autofocus: false,
+              decoration: const InputDecoration(
+                hintText: '搜索字体',
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchKeyword = value;
+                });
+              },
+              controller: TextEditingController(text: _searchKeyword),
+            ),
+          ),
+          if (_searchKeyword.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.clear_rounded, size: 18),
+              onPressed: () {
+                setState(() {
+                  _searchKeyword = '';
+                });
+              },
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsRow(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final defaultCount = _getDefaultCount();
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _StatItem(
+            icon: Icons.font_download_outlined,
+            value: '${_fonts.length}',
+            label: '已导入',
+            color: colorScheme.primary,
+          ),
+          Container(
+            width: 1,
+            height: 30,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          _StatItem(
+            icon: Icons.check_circle_outline,
+            value: '$_validFontCount',
+            label: '可用',
+            color: Colors.green,
+          ),
+          Container(
+            width: 1,
+            height: 30,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          _StatItem(
+            icon: Icons.star_outline,
+            value: '$defaultCount',
+            label: '已设为默认',
+            color: Colors.orange,
           ),
         ],
       ),
     );
+  }
+
+  int _getDefaultCount() {
+    int count = 0;
+    final isReaderCustom =
+        _readerSettings.fontSource == ReaderFontSource.custom;
+    final isInterfaceCustom =
+        ref.read(appInterfaceFontSettingsProvider).fontSource ==
+        AppInterfaceFontSource.custom;
+    if (isReaderCustom) count++;
+    if (isInterfaceCustom) count++;
+    return count;
   }
 
   Widget _buildFontCapabilityNotice(BuildContext context) {
@@ -544,28 +674,6 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildHeroChip(BuildContext context, String text) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Container(
-      constraints: BoxConstraints(minHeight: metrics.chipHeight * 0.75),
-      padding: EdgeInsets.symmetric(
-        horizontal: metrics.contentGap,
-        vertical: metrics.isCompactDensity ? 4 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.74),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -609,6 +717,29 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     );
   }
 
+  Widget _buildEmptySearchResultCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '没有找到 "$_searchKeyword"',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSystemDefaultFontCard(
     BuildContext context, {
     required AppInterfaceFontSettings interfaceFontSettings,
@@ -621,95 +752,84 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         interfaceFontSettings.systemFontPreset ==
             AppInterfaceSystemFontPreset.defaultSans;
     final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '系统默认字体',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '系统内置',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'set_reader_default') {
-                      unawaited(_setReaderDefaultSystemFont());
-                    }
-                    if (value == 'set_interface_default') {
-                      unawaited(_setInterfaceDefaultSystemFont());
-                    }
-                  },
-                  itemBuilder:
-                      (context) => const [
-                        PopupMenuItem<String>(
-                          value: 'set_reader_default',
-                          child: Text('设为阅读默认'),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'set_interface_default',
-                          child: Text('设为界面默认'),
-                        ),
-                      ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(18),
+                color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Icon(
+                Icons.android_rounded,
+                color: colorScheme.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '阅读预览',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                    '系统默认字体',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '今天的阅读不只是在翻页，也是在塑造自己的语言节奏。',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(height: 1.4),
+                  const SizedBox(height: 2),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (isReaderDefault)
+                        _buildMetaChip(
+                          context,
+                          '阅读默认',
+                          color: colorScheme.primary,
+                        ),
+                      if (isInterfaceDefault)
+                        _buildMetaChip(
+                          context,
+                          '界面默认',
+                          color: colorScheme.primary,
+                        ),
+                      _buildMetaChip(
+                        context,
+                        '系统内置',
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (isReaderDefault) const _FontMetaChip(text: '阅读默认'),
-                if (isInterfaceDefault) const _FontMetaChip(text: '界面默认'),
-                const _FontMetaChip(text: '系统内置'),
-              ],
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'set_reader_default') {
+                  unawaited(_setReaderDefaultSystemFont());
+                }
+                if (value == 'set_interface_default') {
+                  unawaited(_setInterfaceDefaultSystemFont());
+                }
+              },
+              itemBuilder:
+                  (context) => const [
+                    PopupMenuItem<String>(
+                      value: 'set_reader_default',
+                      child: Text('设为阅读默认'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'set_interface_default',
+                      child: Text('设为界面默认'),
+                    ),
+                  ],
             ),
           ],
         ),
@@ -737,121 +857,138 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.text_fields_rounded,
+                color: colorScheme.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        font.displayName,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                      Expanded(
+                        child: Text(
+                          font.displayName,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      if (!isReaderDefault && !isInterfaceDefault)
+                        TextButton(
+                          onPressed: () => _setReaderDefaultCustomFont(font),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('设为阅读默认'),
+                        ),
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'set_interface_default') {
+                            unawaited(_setInterfaceDefaultCustomFont(font));
+                          } else if (value == 'rename') {
+                            unawaited(_renameFont(font));
+                          } else if (value == 'delete') {
+                            unawaited(_removeFont(font));
+                          }
+                        },
+                        itemBuilder:
+                            (context) => [
+                              const PopupMenuItem<String>(
+                                value: 'set_interface_default',
+                                child: Text('设为界面默认'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'rename',
+                                child: Text('重命名'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'delete',
+                                child: Text('删除字体'),
+                              ),
+                            ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // 文件状态
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: exists == true ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 4),
                       Text(
-                        exists == null
-                            ? '文件状态未检查'
-                            : exists
-                            ? '文件可用'
-                            : '文件已丢失',
+                        exists == true
+                            ? '可用'
+                            : (exists == false ? '文件丢失' : '状态未知'),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color:
-                              exists == null
-                                  ? colorScheme.onSurfaceVariant
-                                  : exists
-                                  ? colorScheme.onSurfaceVariant
-                                  : colorScheme.error,
+                          color: exists == true ? Colors.green : Colors.red,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _formatTimeShort(importedAt),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  tooltip: '检查文件状态',
-                  onPressed: () => unawaited(_checkFontFile(font)),
-                  icon: const Icon(Icons.fact_check_outlined),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'set_reader_default') {
-                      unawaited(_setReaderDefaultCustomFont(font));
-                    }
-                    if (value == 'set_interface_default') {
-                      unawaited(_setInterfaceDefaultCustomFont(font));
-                    }
-                    if (value == 'rename') {
-                      unawaited(_renameFont(font));
-                    }
-                    if (value == 'delete') {
-                      unawaited(_removeFont(font));
-                    }
-                  },
-                  itemBuilder:
-                      (context) => const [
-                        PopupMenuItem<String>(
-                          value: 'set_reader_default',
-                          child: Text('设为阅读默认'),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'set_interface_default',
-                          child: Text('设为界面默认'),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'rename',
-                          child: Text('重命名'),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'delete',
-                          child: Text('删除字体'),
-                        ),
-                      ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 6),
+                  // 预览行
                   Text(
-                    '阅读预览',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    '预览：今天的阅读不只是翻页，也是在塑造自己的语言节奏。',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: exists == true ? font.fontFamilyKey : null,
+                      fontSize: 12,
                       color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '今天的阅读不只是在翻页，也是在塑造自己的语言节奏。',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontFamily: exists == true ? font.fontFamilyKey : null,
-                      height: 1.4,
-                    ),
+                  const SizedBox(height: 4),
+                  // 标签
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (isReaderDefault)
+                        _buildMetaChip(
+                          context,
+                          '阅读默认',
+                          color: colorScheme.primary,
+                        ),
+                      if (isInterfaceDefault)
+                        _buildMetaChip(
+                          context,
+                          '界面默认',
+                          color: colorScheme.primary,
+                        ),
+                    ],
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (isReaderDefault) const _FontMetaChip(text: '阅读默认'),
-                if (isInterfaceDefault) const _FontMetaChip(text: '界面默认'),
-                _FontMetaChip(text: _formatTime(importedAt)),
-              ],
             ),
           ],
         ),
@@ -859,17 +996,24 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     );
   }
 
-  Future<void> _checkFontFile(ReaderCustomFontEntry font) async {
-    final exists = await localFileExists(font.filePath);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _fontFileExistsByFamilyKey = <String, bool>{
-        ..._fontFileExistsByFamilyKey,
-        font.fontFamilyKey: exists,
-      };
-    });
+  Widget _buildMetaChip(BuildContext context, String text, {Color? color}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final chipColor = color ?? colorScheme.surfaceContainerLow;
+    final textColor = color ?? colorScheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: chipColor.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 
   Future<List<ReaderCustomFontEntry>> _importFont() async {
@@ -1099,9 +1243,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   }
 
   Future<void> _removeFont(ReaderCustomFontEntry font) async {
-    final offset = _scrollController.hasClients
-        ? _scrollController.offset
-        : 0.0;
+    final offset =
+        _scrollController.hasClients ? _scrollController.offset : 0.0;
     await _fontRegistryService.removeFont(font.fontFamilyKey);
     if (!mounted) {
       return;
@@ -1250,37 +1393,60 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _formatTime(DateTime time) {
-    final local = time.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '${local.year}-$month-$day $hour:$minute';
+  String _formatTimeShort(DateTime time) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(time.year, time.month, time.day);
+
+    if (date == today) {
+      return '今天';
+    }
+    final yesterday = today.subtract(const Duration(days: 1));
+    if (date == yesterday) {
+      return '昨天';
+    }
+    final daysDiff = today.difference(date).inDays;
+    if (daysDiff < 7) {
+      const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      return weekdays[time.weekday - 1];
+    }
+    return '${time.month}月${time.day}日';
   }
 }
 
-class _FontMetaChip extends StatelessWidget {
-  const _FontMetaChip({required this.text});
+class _StatItem extends StatelessWidget {
+  const _StatItem({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
-  final String text;
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
+    return Column(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
         ),
-      ),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

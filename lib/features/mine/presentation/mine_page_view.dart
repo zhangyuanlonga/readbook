@@ -450,7 +450,7 @@ extension on _MinePageState {
       actions.add(
         _MineActionItem(
           icon: Icons.auto_awesome_outlined,
-          label: '灵感',
+          label: '灵感笔记',
           onTap: _pushMineRouteAction('/bookmarks'),
         ),
       );
@@ -490,33 +490,6 @@ extension on _MinePageState {
     required MinePageVisibilityState visibilityState,
   }) {
     final actions = <_MineActionItem>[];
-    if (visibilityState.isVisible(MinePageItemId.feedback)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.rate_review_outlined,
-          label: '问题反馈',
-          onTap: _pushMineRouteAction('/feedback'),
-        ),
-      );
-    }
-    if (visibilityState.isVisible(MinePageItemId.officialGroup)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.feedback_outlined,
-          label: '官方 Q 群',
-          onTap: _openSourceFeedback,
-        ),
-      );
-    }
-    if (visibilityState.isVisible(MinePageItemId.checkUpdate)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.system_update_alt,
-          label: '检查更新',
-          onTap: _checkUpdateFromMine,
-        ),
-      );
-    }
     if (visibilityState.isVisible(MinePageItemId.about)) {
       actions.add(
         _MineActionItem(

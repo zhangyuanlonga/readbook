@@ -13,6 +13,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     String? audioUrl,
     String? audioManifestUrl,
     Map<String, String> audioHeaders = const {},
+    String? executionContext,
     ReaderDocument? document,
     List<String>? precomputedParagraphs,
     List<List<ReaderPagedSlice>>? precomputedPagedPages,
@@ -46,6 +47,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             ? null
             : audioManifestUrl!.trim();
     _chapterAudioHeaders = Map<String, String>.unmodifiable(audioHeaders);
+    _chapterExecutionContext =
+        executionContext?.trim().isEmpty ?? true
+            ? null
+            : executionContext!.trim();
     _audioPlaybackPosition = Duration.zero;
     _audioPlaybackDuration = Duration.zero;
     _audioPlaybackSpeed = 1.0;
@@ -714,6 +719,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         audioUrl: snapshot.result.audioUrl,
         audioManifestUrl: snapshot.result.audioManifestUrl,
         audioHeaders: snapshot.result.audioHeaders,
+        executionContext: snapshot.result.executionContext,
         document: snapshot.result.document,
         precomputedParagraphs: precomputedParagraphs,
         precomputedPagedPages: precomputedPagedPages,
@@ -785,6 +791,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             contentType: null,
             sourceFilePath: null,
             totalPageCount: null,
+            executionContext: null,
             document: chapter.document,
           );
           previewRatio = _resolveDocumentRestoreRatio(
@@ -868,6 +875,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           imageHeaders: decoded.imageHeaders,
           sourceFilePath: null,
           totalPageCount: null,
+          executionContext: null,
         );
         previewRatio = _resolveDocumentRestoreRatio(progress: previewProgress);
         if (resolvedCurrentChapter != null &&

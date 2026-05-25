@@ -762,6 +762,7 @@ class _ServerSearchItem {
     required this.title,
     required this.detailUrl,
     required this.sourceHitCount,
+    this.executionContext,
     this.author,
     this.intro,
     this.coverUrl,
@@ -778,6 +779,7 @@ class _ServerSearchItem {
   final String title;
   final String detailUrl;
   final int sourceHitCount;
+  final String? executionContext;
   final String? author;
   final String? intro;
   final String? coverUrl;
@@ -799,6 +801,7 @@ class _ServerSearchItem {
       title: _requiredString(map, 'title'),
       detailUrl: _requiredString(map, 'detailUrl'),
       sourceHitCount: _intOrDefault(map['sourceHitCount'], 1),
+      executionContext: _optionalString(map['executionContext']),
       author: _optionalString(map['author']),
       intro: _optionalString(map['intro']),
       coverUrl: _optionalString(map['coverUrl']),
@@ -824,6 +827,7 @@ class _ServerSearchItem {
       category: category,
       tags: tags,
       updateTime: updateTime,
+      executionContext: executionContext,
     );
   }
 }

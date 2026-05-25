@@ -26,6 +26,7 @@ class ChapterContentResult {
     String? audioManifestUrl,
     Map<String, String> audioHeaders = const {},
     String? displayChapterTitle,
+    String? executionContext,
     ReaderDocument? document,
   }) {
     final normalizedContentType =
@@ -75,6 +76,7 @@ class ChapterContentResult {
       audioManifestUrl: _normalizeOptionalTextStatic(audioManifestUrl),
       audioHeaders: Map<String, String>.unmodifiable(audioHeaders),
       displayChapterTitle: displayChapterTitle,
+      executionContext: _normalizeOptionalTextStatic(executionContext),
       document: effectiveDocument,
     );
   }
@@ -91,6 +93,7 @@ class ChapterContentResult {
     required this.audioManifestUrl,
     required this.audioHeaders,
     required this.displayChapterTitle,
+    required this.executionContext,
     required this.document,
   });
 
@@ -105,6 +108,7 @@ class ChapterContentResult {
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;
   final String? displayChapterTitle;
+  final String? executionContext;
   final ReaderDocument document;
 
   bool get isImageContent => document.isPureImageDocument;
@@ -206,6 +210,7 @@ class ChapterContentService {
         fromCache: true,
         imageUrls: decoded.imageUrls,
         imageHeaders: decoded.imageHeaders,
+        executionContext: null,
       );
     }
 
@@ -233,6 +238,7 @@ class ChapterContentService {
           fromCache: true,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
+          executionContext: null,
         );
       }
     } catch (error) {
@@ -352,6 +358,7 @@ class ChapterContentService {
         audioManifestUrl: content.audioManifestUrl,
         audioHeaders: content.audioHeaders,
         displayChapterTitle: chapterTitle,
+        executionContext: content.executionContext,
       );
     } on AppException catch (error) {
       _sourceHealthService.markContentFailure(

@@ -86,6 +86,7 @@ void main() {
         audioUrl: null,
         audioManifestUrl: null,
         audioHeaders: const <String, String>{},
+        executionContext: null,
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -111,6 +112,7 @@ void main() {
         audioUrl: null,
         audioManifestUrl: null,
         audioHeaders: const <String, String>{},
+        executionContext: null,
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -141,6 +143,7 @@ void main() {
         audioUrl: ' https://cdn.example/chapter-1.mp3 ',
         audioManifestUrl: ' https://cdn.example/chapter-1.m3u8 ',
         audioHeaders: const <String, String>{'Referer': 'https://example.com'},
+        executionContext: '{"sourceId":"source_1"}',
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -166,6 +169,7 @@ void main() {
       expect(session.audioHeaders, const <String, String>{
         'Referer': 'https://example.com',
       });
+      expect(session.executionContext, '{"sourceId":"source_1"}');
       expect(session.chapters, hasLength(1));
       expect(session.bootstrapProgress, same(bootstrapProgress));
       expect(session.readingRecordSession, same(readingRecordSession));

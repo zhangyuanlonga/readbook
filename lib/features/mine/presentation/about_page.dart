@@ -8,8 +8,12 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../core/app_update/app_update_dialog.dart';
+import '../../../core/app_update/app_update_service.dart';
 import '../../../core/device/device_identity_service.dart';
+import '../application/mine_page_preferences_service.dart';
 import '../application/advanced_theme_provider.dart';
+import '../providers.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
@@ -18,40 +22,33 @@ class AboutPage extends ConsumerStatefulWidget {
   ConsumerState<AboutPage> createState() => _AboutPageState();
 
   static const String _appVersion = '1.1.0';
-  static const List<String> _projectFocus = [
-    '打造稳定顺手的跨平台阅读体验',
-    '强化文档导入、整理与沉浸式阅读闭环',
-    '保持可维护、可扩展的工程架构与数据安全',
-  ];
   static const List<String> _mvpScope = [
     'TXT / EPUB / PDF / Markdown / HTML 阅读',
     '书架、灵感、阅读记录与进度管理',
     '主题排版、自定义配置与基础校验',
     '错误定位、诊断与可观测反馈',
   ];
-  static const List<String> _techStack = [
-    'Flutter 3',
-    'Riverpod',
-    'GoRouter',
-    'Dio',
-    'Drift + SQLite',
-    'html',
-  ];
   static final Uri _officialSiteUri = Uri.parse('https://www.sxyd.lltask.top');
   static final Uri _updatesPageUri = Uri.parse(
     'https://www.sxyd.lltask.top/updates.html',
+  );
+  static final Uri _sourceFeedbackUri = Uri.parse(
+    'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
 }
 
 class _AboutPageState extends ConsumerState<AboutPage> {
   final DeviceIdentityService _identityService = DeviceIdentityService();
+  late final AppUpdateService _updateService;
 
   String _appVersionName = AboutPage._appVersion;
   int _appVersionCode = 0;
+  bool _isCheckingUpdate = false;
 
   @override
   void initState() {
     super.initState();
+    _updateService = ref.read(mineUpdateServiceProvider);
     _loadVersionInfo();
   }
 
@@ -117,23 +114,16 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                           );
                       final isExpanded = innerMetrics.isExpandedWindow;
                       final contentGap = innerMetrics.contentGap;
+                      final visibilityState = ref.watch(
+                        minePageVisibilityProvider,
+                      );
                       final desktopCards = <Widget>[
                         _buildIntroCard(context),
+                        _buildSupportEntryCard(
+                          context,
+                          visibilityState: visibilityState,
+                        ),
                         _buildWebsiteCard(context),
-                        _buildSectionCard(
-                          context,
-                          title: '项目当前重点',
-                          subtitle: '当前版本以个人阅读和稳定体验为主。',
-                          icon: Icons.track_changes_outlined,
-                          items: AboutPage._projectFocus,
-                        ),
-                        _buildTagCard(
-                          context,
-                          title: '技术栈',
-                          subtitle: '当前版本采用的核心方案。',
-                          icon: Icons.developer_mode_rounded,
-                          tags: AboutPage._techStack,
-                        ),
                         _buildSectionCard(
                           context,
                           title: '当前能力',
@@ -308,7 +298,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                   final useRow = AppLayout.isMediumWidth(constraints.maxWidth);
                   final items = <Widget>[
                     _buildMetricPill(context, '定位', '跨平台阅读'),
-                    _buildMetricPill(context, '文档', 'TXT / EPUB / PDF'),
                     _buildMetricPill(context, '体验', '书架与沉浸阅读'),
                   ];
 
@@ -318,8 +307,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                         Expanded(child: items[0]),
                         const SizedBox(width: 8),
                         Expanded(child: items[1]),
-                        const SizedBox(width: 8),
-                        Expanded(child: items[2]),
                       ],
                     );
                   }
@@ -403,6 +390,94 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     );
   }
 
+  Widget _buildSupportEntryCard(
+    BuildContext context, {
+    required MinePageVisibilityState visibilityState,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final entries = <({
+      IconData icon,
+      String title,
+      VoidCallback onTap,
+    })>[
+      if (visibilityState.isVisible(MinePageItemId.feedback))
+        (
+          icon: Icons.rate_review_outlined,
+          title: '问题反馈',
+          onTap: () {
+            context.push('/feedback');
+          },
+        ),
+      if (visibilityState.isVisible(MinePageItemId.officialGroup))
+        (
+          icon: Icons.feedback_outlined,
+          title: '官方 Q 群',
+          onTap: _openSourceFeedback,
+        ),
+      if (visibilityState.isVisible(MinePageItemId.checkUpdate))
+        (
+          icon: Icons.system_update_alt,
+          title: '检查更新',
+          onTap: _checkUpdateFromAbout,
+        ),
+    ];
+
+    if (entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.support_agent_rounded, size: 19, color: colorScheme.primary),
+                const SizedBox(width: 6),
+                Text(
+                  '支持',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (var index = 0; index < entries.length; index++) ...[
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+                dense: true,
+                leading: Icon(
+                  entries[index].icon,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                title: Text(
+                  entries[index].title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: entries[index].onTap,
+              ),
+              if (index < entries.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 50,
+                  endIndent: 8,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openOfficialSite() async {
     final launched = await launchUrl(
       AboutPage._officialSiteUri,
@@ -423,6 +498,49 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       return;
     }
     _showMessage('打开更新日志失败，请稍后重试。');
+  }
+
+  Future<void> _openSourceFeedback() async {
+    final launched = await launchUrl(
+      AboutPage._sourceFeedbackUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched || !mounted) {
+      return;
+    }
+    _showMessage('跳转失败，请稍后重试。');
+  }
+
+  Future<void> _checkUpdateFromAbout() async {
+    if (_isCheckingUpdate) {
+      _showMessage('正在检查更新...');
+      return;
+    }
+    setState(() {
+      _isCheckingUpdate = true;
+    });
+    try {
+      final result = await _updateService.checkUpdate();
+      if (!mounted) {
+        return;
+      }
+      final release = result.release;
+      if (!result.hasUpdate || release == null) {
+        _showMessage('已是最新版本');
+        return;
+      }
+      await AppUpdateDialog.showUpdateDialog(context, release);
+    } catch (_) {
+      if (mounted) {
+        _showMessage('检查更新失败，请稍后再试。');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+        });
+      }
+    }
   }
 
   void _showMessage(String message) {
@@ -539,55 +657,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     );
   }
 
-  Widget _buildTagCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required List<String> tags,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 19, color: colorScheme.primary),
-                const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 5),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: tags
-                  .map((tag) => _AboutTag(text: tag))
-                  .toList(growable: false),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildComplianceCard(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -623,32 +692,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AboutTag extends StatelessWidget {
-  const _AboutTag({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colorScheme.onSecondaryContainer,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );

@@ -12,6 +12,7 @@ class Book {
     this.category,
     this.tags = const <String>[],
     this.updateTime,
+    this.executionContext,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class Book {
   final String? category;
   final List<String> tags;
   final String? updateTime;
+  final String? executionContext;
 
   Book copyWith({
     String? id,
@@ -47,6 +49,8 @@ class Book {
     List<String>? tags,
     String? updateTime,
     bool clearUpdateTime = false,
+    String? executionContext,
+    bool clearExecutionContext = false,
   }) {
     return Book(
       id: id ?? this.id,
@@ -62,6 +66,10 @@ class Book {
       category: clearCategory ? null : (category ?? this.category),
       tags: tags ?? this.tags,
       updateTime: clearUpdateTime ? null : (updateTime ?? this.updateTime),
+      executionContext:
+          clearExecutionContext
+              ? null
+              : (executionContext ?? this.executionContext),
     );
   }
 
@@ -79,6 +87,7 @@ class Book {
       'category': category,
       'tags': tags,
       'updateTime': updateTime,
+      'executionContext': executionContext,
     };
   }
 
@@ -96,6 +105,7 @@ class Book {
       category: _optionalString(json['category']),
       tags: _stringList(json['tags']),
       updateTime: _optionalString(json['updateTime']),
+      executionContext: _optionalString(json['executionContext']),
     );
   }
 

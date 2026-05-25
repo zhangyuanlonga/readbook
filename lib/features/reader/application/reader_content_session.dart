@@ -27,6 +27,7 @@ class ReaderContentSession {
     this.audioUrl,
     this.audioManifestUrl,
     this.audioHeaders = const <String, String>{},
+    this.executionContext,
     this.chapters = const <Chapter>[],
     this.sessionState,
     this.bootstrapProgress,
@@ -51,6 +52,7 @@ class ReaderContentSession {
   final String? audioUrl;
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;
+  final String? executionContext;
   final List<Chapter> chapters;
   final ReaderSessionState? sessionState;
   final ReadingProgress? bootstrapProgress;
@@ -75,6 +77,7 @@ class ReaderContentSession {
     Object? audioUrl = _sentinel,
     Object? audioManifestUrl = _sentinel,
     Map<String, String>? audioHeaders,
+    Object? executionContext = _sentinel,
     List<Chapter>? chapters,
     Object? sessionState = _sentinel,
     Object? bootstrapProgress = _sentinel,
@@ -130,6 +133,10 @@ class ReaderContentSession {
               ? this.audioManifestUrl
               : audioManifestUrl as String?,
       audioHeaders: audioHeaders ?? this.audioHeaders,
+      executionContext:
+          identical(executionContext, _sentinel)
+              ? this.executionContext
+              : executionContext as String?,
       chapters: chapters ?? this.chapters,
       sessionState:
           identical(sessionState, _sentinel)

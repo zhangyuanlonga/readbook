@@ -34,6 +34,7 @@ class ReaderSessionSeed {
     this.audioUrl,
     this.audioManifestUrl,
     this.audioHeaders = const <String, String>{},
+    this.executionContext,
     this.chapters = const <Chapter>[],
   });
 
@@ -55,6 +56,7 @@ class ReaderSessionSeed {
   final String? audioUrl;
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;
+  final String? executionContext;
   final List<Chapter> chapters;
 }
 
@@ -92,6 +94,7 @@ class ReaderPresentationResolver {
           audioUrl: seed.audioUrl,
           audioManifestUrl: seed.audioManifestUrl,
           audioHeaders: seed.audioHeaders,
+          executionContext: seed.executionContext,
           chapters: seed.chapters,
         );
   }

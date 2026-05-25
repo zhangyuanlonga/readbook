@@ -402,6 +402,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _chapterAudioUrl;
   String? _chapterAudioManifestUrl;
   Map<String, String> _chapterAudioHeaders = const {};
+  String? _chapterExecutionContext;
   Duration _audioPlaybackPosition = Duration.zero;
   Duration _audioPlaybackDuration = Duration.zero;
   double _audioPlaybackSpeed = 1.0;
@@ -964,6 +965,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       audioUrl: _chapterAudioUrl,
       audioManifestUrl: _chapterAudioManifestUrl,
       audioHeaders: _chapterAudioHeaders,
+      executionContext: _chapterExecutionContext,
       document: _document,
     );
     return _contentSessionResolver.resolve(
@@ -985,6 +987,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       audioUrl: _chapterAudioUrl,
       audioManifestUrl: _chapterAudioManifestUrl,
       audioHeaders: _chapterAudioHeaders,
+      executionContext: _chapterExecutionContext,
       chapters: _chapters,
       sessionState:
           contentMode == ReaderContentMode.text
@@ -1009,6 +1012,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       audioUrl: _chapterAudioUrl,
       audioManifestUrl: _chapterAudioManifestUrl,
       audioHeaders: _chapterAudioHeaders,
+      executionContext: _chapterExecutionContext,
       document: _document,
     );
     return _presentationResolver.resolveContentSession(
@@ -1031,6 +1035,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         audioUrl: _chapterAudioUrl,
         audioManifestUrl: _chapterAudioManifestUrl,
         audioHeaders: _chapterAudioHeaders,
+        executionContext: _chapterExecutionContext,
         chapters: _chapters,
       ),
     );

@@ -44,9 +44,10 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin<HomePage> {
-  static const double _kContinueReadingCardWidth = 104;
-  static const double _kContinueReadingCardHeight = 184;
-  static const double _kContinueReadingCardCoverSize = 86;
+  static const double _kContinueReadingCardWidth = 108;
+  static const double _kContinueReadingCardHeight = 212;
+  static const double _kContinueReadingCardCoverWidth = 92;
+  static const double _kContinueReadingCardCoverHeight = 132;
 
   late final ReadingRecordService _readingRecordService;
   late final ReaderPreferencesService _preferencesService;
@@ -59,6 +60,8 @@ class _HomePageState extends ConsumerState<HomePage>
   HomeEngagementState _engagementState = const HomeEngagementState();
   bool _isEngagementLoading = true;
   bool _isSubmittingCheckIn = false;
+  bool _showCheckInSuccessTag = false;
+  bool _isCheckInButtonPressed = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -146,8 +149,6 @@ class _HomePageState extends ConsumerState<HomePage>
                                 child: _buildSectionHeader(
                                   context,
                                   title: '继续阅读',
-                                  actionLabel: '查看统计',
-                                  onAction: () => context.push('/stats'),
                                 ),
                               ),
                               SizedBox(height: metrics.contentGap),
@@ -191,8 +192,6 @@ class _HomePageState extends ConsumerState<HomePage>
                     child: _buildSectionHeader(
                       context,
                       title: '继续阅读',
-                      actionLabel: '查看统计',
-                      onAction: () => context.push('/stats'),
                     ),
                   ),
                   SizedBox(height: metrics.contentGap),
@@ -337,117 +336,259 @@ class _HomePageState extends ConsumerState<HomePage>
     final checkedInToday = _engagementState.isCheckedInOn(DateTime.now());
     final streakDays = _engagementState.streakDays();
     final weekCheckInCount = _engagementState.recentCheckInCount(7);
+    final todayReadMinutes = Duration(milliseconds: summary.todayReadMillis).inMinutes;
     final metrics = AppAdaptiveMetrics.of(context);
+    final canCheckIn =
+        !_isEngagementLoading && !_isSubmittingCheckIn && !checkedInToday;
 
     return _buildSurface(
-      child: Padding(
-        padding: EdgeInsets.all(metrics.cardPadding + 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.86),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    checkedInToday
-                        ? Icons.check_rounded
-                        : Icons.check_circle_outline_rounded,
-                    color: colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        checkedInToday ? '今日已打卡' : '今日未打卡',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: metrics.contentGap),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricPill(label: '连续打卡', value: '$streakDays 天'),
-                ),
-                SizedBox(width: metrics.contentGap),
-                Expanded(
-                  child: _MetricPill(
-                    label: '本周打卡',
-                    value: '$weekCheckInCount / 7',
-                  ),
-                ),
-                SizedBox(width: metrics.contentGap),
-                Expanded(
-                  child: _MetricPill(
-                    label: '今日阅读',
-                    value: _formatMinutes(summary.todayReadMillis),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: metrics.contentGap),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed:
-                    _isEngagementLoading ||
-                            _isSubmittingCheckIn ||
-                            checkedInToday
-                        ? null
-                        : _handleCheckInToday,
-                style: FilledButton.styleFrom(
-                  minimumSize: Size.fromHeight(
-                    metrics.isCompactDensity ? 44 : 52,
-                  ),
-                  shape: const StadiumBorder(),
-                  backgroundColor:
-                      checkedInToday
-                          ? colorScheme.surfaceContainerHighest
-                          : colorScheme.onSurface,
-                  foregroundColor:
-                      checkedInToday
-                          ? colorScheme.onSurface
-                          : colorScheme.surface,
-                ),
-                child:
-                    _isSubmittingCheckIn
-                        ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color:
-                                checkedInToday
-                                    ? colorScheme.onSurface
-                                    : colorScheme.surface,
-                          ),
-                        )
-                        : Text(
-                          checkedInToday
-                              ? '今日已打卡'
-                              : (_isEngagementLoading ? '加载中...' : '今日打卡'),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color:
+              checkedInToday
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.12)
+                  : colorScheme.surface.withValues(alpha: 0.0),
+          borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(metrics.cardPadding + 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCheckInStagger(
+                index: 0,
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer.withValues(
+                          alpha: checkedInToday ? 1 : 0.86,
                         ),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 240),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween<double>(
+                                begin: 0.8,
+                                end: 1.0,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          checkedInToday
+                              ? Icons.check_rounded
+                              : Icons.check_circle_outline_rounded,
+                          key: ValueKey<bool>(checkedInToday),
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position:
+                                      Tween<Offset>(
+                                        begin: const Offset(0, 0.12),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: Text(
+                              checkedInToday ? '今日已打卡' : '今日未打卡',
+                              key: ValueKey<bool>(checkedInToday),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            checkedInToday ? '保持节奏，继续阅读' : '阅读满 5 分钟即可打卡',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  height: 1.3,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutBack,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(
+                              begin: 0.9,
+                              end: 1,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child:
+                          _showCheckInSuccessTag
+                              ? Container(
+                                key: const ValueKey<String>('checkin_success'),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.14,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '+1 连续天',
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: colorScheme.primary,
+                                      ),
+                                ),
+                              )
+                              : const SizedBox(
+                                key: ValueKey<String>('checkin_success_empty'),
+                              ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              SizedBox(height: metrics.contentGap),
+              _buildCheckInStagger(
+                index: 1,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _AnimatedMetricPill(
+                        label: '连续打卡',
+                        value: streakDays,
+                        formatter: (value) => '$value 天',
+                      ),
+                    ),
+                    SizedBox(width: metrics.contentGap),
+                    Expanded(
+                      child: _MetricPill(
+                        label: '本周打卡',
+                        value: '$weekCheckInCount / 7',
+                      ),
+                    ),
+                    SizedBox(width: metrics.contentGap),
+                    Expanded(
+                      child: _AnimatedMetricPill(
+                        label: '今日阅读',
+                        value: todayReadMinutes,
+                        formatter: _formatCheckInReadFromMinutes,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: metrics.contentGap),
+              _buildCheckInStagger(
+                index: 2,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTapDown:
+                        canCheckIn
+                            ? (_) => setState(() {
+                              _isCheckInButtonPressed = true;
+                            })
+                            : null,
+                    onTapUp:
+                        canCheckIn
+                            ? (_) => setState(() {
+                              _isCheckInButtonPressed = false;
+                            })
+                            : null,
+                    onTapCancel:
+                        canCheckIn
+                            ? () => setState(() {
+                              _isCheckInButtonPressed = false;
+                            })
+                            : null,
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 170),
+                      curve: Curves.easeOutCubic,
+                      scale:
+                          canCheckIn && _isCheckInButtonPressed ? 0.98 : 1.0,
+                      child: FilledButton(
+                        onPressed: canCheckIn ? _handleCheckInToday : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: Size.fromHeight(
+                            metrics.isCompactDensity ? 44 : 52,
+                          ),
+                          shape: const StadiumBorder(),
+                          backgroundColor:
+                              checkedInToday
+                                  ? colorScheme.surfaceContainerHighest
+                                  : colorScheme.onSurface,
+                          foregroundColor:
+                              checkedInToday
+                                  ? colorScheme.onSurface
+                                  : colorScheme.surface,
+                        ),
+                        child:
+                            _isSubmittingCheckIn
+                                ? SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    color:
+                                        checkedInToday
+                                            ? colorScheme.onSurface
+                                            : colorScheme.surface,
+                                  ),
+                                )
+                                : Text(
+                                  checkedInToday
+                                      ? '今日已打卡'
+                                      : (_isEngagementLoading
+                                          ? '加载中...'
+                                          : '今日打卡'),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -675,17 +816,10 @@ class _HomePageState extends ConsumerState<HomePage>
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => unawaited(_openRecord(record)),
-        child: Ink(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withValues(alpha: 0.78),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.32),
-            ),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(2, 2, 2, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -703,45 +837,64 @@ class _HomePageState extends ConsumerState<HomePage>
                     sourceId: record.sourceId,
                     detailUrl: record.detailUrl,
                   );
-                  return ResolvedBookCoverView(
-                    cover: cover,
-                    title: displayState.displayTitle,
-                    author: displayState.displayAuthor,
-                    width: _kContinueReadingCardCoverSize,
-                    height: _kContinueReadingCardCoverSize,
-                    borderRadius: BorderRadius.circular(14),
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.shadow.withValues(alpha: 0.16),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ResolvedBookCoverView(
+                      cover: cover,
+                      title: displayState.displayTitle,
+                      author: displayState.displayAuthor,
+                      width: _kContinueReadingCardCoverWidth,
+                      height: _kContinueReadingCardCoverHeight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   );
                 },
               ),
               const SizedBox(height: 8),
-              Text(
-                displayState.displayTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  height: 1.15,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                displayState.displayAuthor?.trim().isNotEmpty == true
-                    ? displayState.displayAuthor!
-                    : '继续阅读',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '累计 ${_formatMinutes(record.totalReadMillis)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.primary,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayState.displayTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      displayState.displayAuthor?.trim().isNotEmpty == true
+                          ? displayState.displayAuthor!
+                          : '继续阅读',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '累计 ${_formatMinutes(record.totalReadMillis)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -895,6 +1048,27 @@ class _HomePageState extends ConsumerState<HomePage>
     return streak;
   }
 
+  Widget _buildCheckInStagger({required int index, required Widget child}) {
+    final begin = (index * 0.08).clamp(0.0, 0.24);
+    final end = (begin + 0.56).clamp(0.0, 1.0);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, value, child) {
+        final translateY = (1 - value) * 10;
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _loadEngagementState() async {
     final state = await _engagementService.loadState();
     if (!mounted) {
@@ -914,6 +1088,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     setState(() {
       _isSubmittingCheckIn = true;
+      _isCheckInButtonPressed = false;
     });
 
     try {
@@ -923,6 +1098,15 @@ class _HomePageState extends ConsumerState<HomePage>
       }
       setState(() {
         _engagementState = updated;
+        _showCheckInSuccessTag = true;
+      });
+      Future<void>.delayed(const Duration(milliseconds: 980), () {
+        if (!mounted || !_showCheckInSuccessTag) {
+          return;
+        }
+        setState(() {
+          _showCheckInSuccessTag = false;
+        });
       });
       ScaffoldMessenger.of(
         context,
@@ -1062,6 +1246,16 @@ class _HomePageState extends ConsumerState<HomePage>
     return '$totalMinutes 分钟';
   }
 
+  String _formatCheckInReadFromMinutes(int value) {
+    final totalMinutes = math.max(0, value);
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    if (hours <= 0) {
+      return '${totalMinutes}m';
+    }
+    return '${hours}h${minutes.toString().padLeft(2, '0')}m';
+  }
+
   Future<void> _openRecord(ReadingRecord record) async {
     final progress = await _preferencesService.loadProgress(record.bookId);
     if (!mounted) {
@@ -1170,6 +1364,62 @@ class _MetricPill extends StatelessWidget {
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnimatedMetricPill extends StatelessWidget {
+  const _AnimatedMetricPill({
+    required this.label,
+    required this.value,
+    required this.formatter,
+  });
+
+  final String label;
+  final int value;
+  final String Function(int value) formatter;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.contentGap,
+        vertical: metrics.isCompactDensity ? 8 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: value.toDouble()),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            builder: (context, animatedValue, _) {
+              final display = formatter(animatedValue.round());
+              return Text(
+                display,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              );
+            },
           ),
         ],
       ),

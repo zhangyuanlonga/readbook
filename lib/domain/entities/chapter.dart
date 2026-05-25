@@ -6,6 +6,7 @@ class Chapter {
     required this.chapterUrl,
     required this.index,
     this.isVolume = false,
+    this.executionContext,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class Chapter {
   final String chapterUrl;
   final int index;
   final bool isVolume;
+  final String? executionContext;
 
   Map<String, dynamic> toJson() {
     return {
@@ -23,6 +25,7 @@ class Chapter {
       'chapterUrl': chapterUrl,
       'index': index,
       'isVolume': isVolume,
+      'executionContext': executionContext,
     };
   }
 
@@ -34,6 +37,7 @@ class Chapter {
       chapterUrl: _stringAllowEmpty(json['chapterUrl']),
       index: _requiredInt(json, 'index'),
       isVolume: json['isVolume'] == true,
+      executionContext: _optionalString(json['executionContext']),
     );
   }
 
@@ -64,5 +68,10 @@ class Chapter {
 
   static String _stringAllowEmpty(Object? value) {
     return value?.toString().trim() ?? '';
+  }
+
+  static String? _optionalString(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }

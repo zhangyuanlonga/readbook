@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
@@ -21,8 +20,6 @@ import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../core/app_update/app_update_dialog.dart';
-import '../../../core/app_update/app_update_service.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -48,11 +45,6 @@ enum _ProfileAvatarAction { change, remove }
 
 class _MinePageState extends ConsumerState<MinePage> {
   static const String _layoutModeKey = 'mine.page.layoutMode';
-  static final Uri _sourceFeedbackUri = Uri.parse(
-    'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
-  );
-
-  late final AppUpdateService _updateService;
   late final ImageSelectionService _imageSelectionService;
   late final MinePageFlowCoordinator _pageFlowCoordinator;
   late final MinePageSessionService _sessionService;
@@ -63,7 +55,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   String? _membershipPlanType;
   int _totalReadingHours = 0;
   int _readingStreakDays = 0;
-  bool _isCheckingUpdate = false;
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
   bool _isRemoteAccessResolved = false;
@@ -150,7 +141,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   @override
   void initState() {
     super.initState();
-    _updateService = ref.read(mineUpdateServiceProvider);
     _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _pageFlowCoordinator = ref.read(minePageFlowCoordinatorProvider)();
     _sessionService = ref.read(minePageSessionServiceProvider);
@@ -985,49 +975,6 @@ class _MinePageState extends ConsumerState<MinePage> {
         );
       },
     );
-  }
-
-  Future<void> _openSourceFeedback() async {
-    final launched = await launchUrl(
-      _sourceFeedbackUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (launched || !mounted) {
-      return;
-    }
-    _showMessage('跳转失败，请稍后重试。');
-  }
-
-  Future<void> _checkUpdateFromMine() async {
-    if (_isCheckingUpdate) {
-      _showMessage('正在检查更新...');
-      return;
-    }
-    setState(() {
-      _isCheckingUpdate = true;
-    });
-    try {
-      final result = await _updateService.checkUpdate();
-      if (!mounted) {
-        return;
-      }
-      final release = result.release;
-      if (!result.hasUpdate || release == null) {
-        _showMessage('已是最新版本');
-        return;
-      }
-      await AppUpdateDialog.showUpdateDialog(context, release);
-    } catch (_) {
-      if (mounted) {
-        _showMessage('检查更新失败，请稍后再试。');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCheckingUpdate = false;
-        });
-      }
-    }
   }
 
   void _showMessage(String message) {

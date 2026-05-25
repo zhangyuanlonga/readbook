@@ -17,6 +17,7 @@ class BookDetailLoadResult {
     required this.chapters,
     required this.sourceName,
     required this.tocFromCache,
+    this.executionContext,
     this.tocError,
     this.catalogAvailable = true,
     this.catalogLoaded = true,
@@ -27,6 +28,7 @@ class BookDetailLoadResult {
   final List<Chapter> chapters;
   final String sourceName;
   final bool tocFromCache;
+  final String? executionContext;
   final AppException? tocError;
   final bool catalogAvailable;
   final bool catalogLoaded;
@@ -37,6 +39,7 @@ class BookDetailLoadResult {
     List<Chapter>? chapters,
     String? sourceName,
     bool? tocFromCache,
+    String? executionContext,
     Object? tocError = _bookDetailUnset,
     bool? catalogAvailable,
     bool? catalogLoaded,
@@ -47,6 +50,7 @@ class BookDetailLoadResult {
       chapters: chapters ?? this.chapters,
       sourceName: sourceName ?? this.sourceName,
       tocFromCache: tocFromCache ?? this.tocFromCache,
+      executionContext: executionContext ?? this.executionContext,
       tocError:
           identical(tocError, _bookDetailUnset)
               ? this.tocError
@@ -101,6 +105,7 @@ class BookDetailService {
       chapters: List<Chapter>.unmodifiable(cached.chapters),
       sourceName: cached.sourceName,
       tocFromCache: true,
+      executionContext: cached.executionContext,
       tocError: null,
       catalogAvailable: cached.catalogAvailable,
       catalogLoaded: cached.catalogLoaded,
@@ -117,6 +122,7 @@ class BookDetailService {
       chapters: List<Chapter>.unmodifiable(result.chapters),
       sourceName: result.sourceName,
       tocFromCache: false,
+      executionContext: result.executionContext,
       tocError: null,
       catalogAvailable: result.catalogAvailable,
       catalogLoaded: result.catalogLoaded,
@@ -296,6 +302,7 @@ class BookDetailService {
         chapters: const <Chapter>[],
         sourceName: detail.sourceName,
         tocFromCache: detail.cacheHit,
+        executionContext: detail.executionContext,
         catalogAvailable: true,
         catalogLoaded: false,
         catalogComplete: false,
@@ -316,6 +323,7 @@ class BookDetailService {
         chapters: toc.chapters,
         sourceName: detail.sourceName,
         tocFromCache: detail.cacheHit || toc.cacheHit,
+        executionContext: toc.executionContext ?? detail.executionContext,
         catalogAvailable: true,
         catalogLoaded: true,
         catalogComplete: toc.isComplete,
@@ -331,6 +339,7 @@ class BookDetailService {
         chapters: const <Chapter>[],
         sourceName: detail.sourceName,
         tocFromCache: detail.cacheHit,
+        executionContext: detail.executionContext,
         tocError: error,
         catalogAvailable: true,
         catalogLoaded: false,

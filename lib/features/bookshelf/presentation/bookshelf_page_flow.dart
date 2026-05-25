@@ -1671,16 +1671,17 @@ extension on _BookshelfPageState {
     }
 
     if (selected.startsWith('manage_tag::')) {
-      final tag = selected.substring(12).trim();
-      await _showTaxonomyEditor(kind: BookshelfTaxonomyKind.tag, name: tag);
+      if (!mounted) {
+        return;
+      }
+      await context.push('/mine/tags');
       return;
     }
     if (selected.startsWith('manage_category::')) {
-      final category = selected.substring(17).trim();
-      await _showTaxonomyEditor(
-        kind: BookshelfTaxonomyKind.category,
-        name: category,
-      );
+      if (!mounted) {
+        return;
+      }
+      await context.push('/mine/categories');
       return;
     }
 
@@ -1731,74 +1732,6 @@ extension on _BookshelfPageState {
     }
   }
 
-  Future<void> _showTaxonomyEditor({
-    required BookshelfTaxonomyKind kind,
-    required String name,
-  }) async {
-    final isTag = kind == BookshelfTaxonomyKind.tag;
-    final isNew = name == '__new__' || name.trim().isEmpty;
-    final existingItem =
-        isNew ? null : (isTag ? _tagItem(name) : _categoryItem(name));
-    final initialColor =
-        existingItem?.colorValue ??
-        BookshelfTaxonomyItem.defaultColorForName(isTag ? '新标签' : '新分类');
-
-    final result = await showAdaptiveRawSurface<_BookshelfTaxonomyEditorResult>(
-      context: context,
-      showDragHandle: false,
-      mobileBackgroundColor: Colors.transparent,
-      builder:
-          (dialogContext) => _BookshelfTaxonomyEditorDialog(
-            kind: kind,
-            isNew: isNew,
-            initialName: isNew ? '' : existingItem?.name ?? name.trim(),
-            initialColorValue: initialColor,
-          ),
-    );
-
-    if (!mounted || result == null) {
-      return;
-    }
-
-    try {
-      if (result.delete) {
-        if (isTag) {
-          await _bookshelfService.deleteTag(name);
-        } else {
-          await _bookshelfService.deleteCategory(name);
-        }
-        await _loadBookshelf(force: true);
-        _showMessage(isTag ? '标签已删除。' : '分类已删除。');
-        return;
-      }
-
-      final nextName = result.name;
-      if (isTag) {
-        if (!isNew && nextName != name.trim()) {
-          await _bookshelfService.renameTag(fromTag: name, toTag: nextName);
-        }
-        await _bookshelfService.upsertTagItem(
-          name: nextName,
-          colorValue: result.colorValue,
-        );
-      } else {
-        if (!isNew && nextName != name.trim()) {
-          await _bookshelfService.renameCategory(
-            fromCategory: name,
-            toCategory: nextName,
-          );
-        }
-        await _bookshelfService.upsertCategoryItem(
-          name: nextName,
-          colorValue: result.colorValue,
-        );
-      }
-      await _loadBookshelf(force: true);
-      _showMessage(isTag ? '标签已保存。' : '分类已保存。');
-    } catch (_) {
-      _showMessage(isTag ? '标签保存失败，请重试。' : '分类保存失败，请重试。');
-    }
-  }
 }
 
 class _BookshelfSettingsModeButton extends StatelessWidget {

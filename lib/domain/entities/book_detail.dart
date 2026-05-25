@@ -14,6 +14,7 @@ class BookDetail {
     this.category,
     this.tags = const <String>[],
     this.updateTime,
+    this.executionContext,
   });
 
   final String id;
@@ -30,6 +31,7 @@ class BookDetail {
   final String? category;
   final List<String> tags;
   final String? updateTime;
+  final String? executionContext;
 
   Map<String, dynamic> toJson() {
     return {
@@ -47,6 +49,7 @@ class BookDetail {
       'category': category,
       'tags': tags,
       'updateTime': updateTime,
+      'executionContext': executionContext,
     };
   }
 
@@ -66,6 +69,7 @@ class BookDetail {
       category: _optionalString(json['category']),
       tags: _stringList(json['tags']),
       updateTime: _optionalString(json['updateTime']),
+      executionContext: _optionalString(json['executionContext']),
     );
   }
 
