@@ -753,7 +753,7 @@ class _ReaderChromeSizeReporterState extends State<_ReaderChromeSizeReporter> {
       if (!mounted) {
         return;
       }
-      final renderBox = context.findRenderObject();
+      final renderBox = _safeFindRenderBox(context);
       if (renderBox is! RenderBox || !renderBox.hasSize) {
         return;
       }
@@ -767,5 +767,14 @@ class _ReaderChromeSizeReporterState extends State<_ReaderChromeSizeReporter> {
       widget.onSizeChanged(size);
     });
     return widget.child;
+  }
+
+  RenderBox? _safeFindRenderBox(BuildContext context) {
+    try {
+      final renderObject = context.findRenderObject();
+      return renderObject is RenderBox ? renderObject : null;
+    } catch (_) {
+      return null;
+    }
   }
 }

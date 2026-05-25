@@ -2,7 +2,7 @@
 
 更新时间：2026-05-25
 
-状态：待执行
+状态：执行完成
 
 适用范围：
 
@@ -16,6 +16,9 @@
 - [PROJECT_FEATURE_MAP.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/PROJECT_FEATURE_MAP.md)
 - [reader_auto_read_execution_plan_2026-05-24.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/reader_auto_read_execution_plan_2026-05-24.md)
 - [reader_local_content_refactor_execution_plan_2026-05-21.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/reader_local_content_refactor_execution_plan_2026-05-21.md)
+- [reader_multimodal_developer_notes_2026-05-25.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/reader_multimodal_developer_notes_2026-05-25.md)
+- [reader_multimodal_manual_regression_checklist_2026-05-25.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/reader_multimodal_manual_regression_checklist_2026-05-25.md)
+- [reader_multimodal_performance_and_rollback_baseline_2026-05-25.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/reader_multimodal_performance_and_rollback_baseline_2026-05-25.md)
 
 ## 1. 使用说明
 

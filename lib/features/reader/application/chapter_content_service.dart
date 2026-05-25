@@ -28,28 +28,54 @@ class ChapterContentResult {
     String? displayChapterTitle,
     ReaderDocument? document,
   }) {
+    final normalizedContentType =
+        _normalizeOptionalTextStatic(contentType)?.toLowerCase();
+    final normalizedImageUrls = List<String>.unmodifiable(
+      imageUrls
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false),
+    );
+    final preferImageOnlyDocument =
+        normalizedImageUrls.isNotEmpty &&
+        _shouldPreferImageOnlyDocument(normalizedContentType);
     final resolvedDocument =
         document ??
-        ReaderDocument.fromContent(content: content, imageUrls: imageUrls);
+        ReaderDocument.fromContent(
+          content: preferImageOnlyDocument ? '' : content,
+          imageUrls: normalizedImageUrls,
+        );
+    final effectiveDocument =
+        preferImageOnlyDocument && !resolvedDocument.isPureImageDocument
+            ? ReaderDocument.fromContent(
+              content: '',
+              imageUrls: normalizedImageUrls,
+            )
+            : resolvedDocument;
+    final resolvedImageUrls =
+        preferImageOnlyDocument || effectiveDocument.isPureImageDocument
+            ? List<String>.unmodifiable(
+              effectiveDocument.imageUrls.isNotEmpty
+                  ? effectiveDocument.imageUrls
+                  : normalizedImageUrls,
+            )
+            : const <String>[];
     return ChapterContentResult._(
       content:
-          resolvedDocument.isPureImageDocument
+          preferImageOnlyDocument || effectiveDocument.isPureImageDocument
               ? ''
-              : resolvedDocument.compatibilityContent,
+              : effectiveDocument.compatibilityContent,
       fromCache: fromCache,
-      imageUrls:
-          resolvedDocument.isPureImageDocument
-              ? resolvedDocument.imageUrls
-              : const <String>[],
+      imageUrls: resolvedImageUrls,
       imageHeaders: Map<String, String>.unmodifiable(imageHeaders),
-      contentType: _normalizeOptionalTextStatic(contentType),
+      contentType: normalizedContentType,
       sourceFilePath: _normalizeOptionalTextStatic(sourceFilePath),
       totalPageCount: totalPageCount,
       audioUrl: _normalizeOptionalTextStatic(audioUrl),
       audioManifestUrl: _normalizeOptionalTextStatic(audioManifestUrl),
       audioHeaders: Map<String, String>.unmodifiable(audioHeaders),
       displayChapterTitle: displayChapterTitle,
-      document: resolvedDocument,
+      document: effectiveDocument,
     );
   }
 
@@ -92,6 +118,17 @@ class ChapterContentResult {
       return null;
     }
     return normalized;
+  }
+
+  static bool _shouldPreferImageOnlyDocument(String? normalizedContentType) {
+    switch (normalizedContentType) {
+      case 'manga':
+      case 'comic-book':
+      case 'comic_book':
+      case 'comic':
+        return true;
+    }
+    return false;
   }
 }
 

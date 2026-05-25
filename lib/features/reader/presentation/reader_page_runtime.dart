@@ -363,7 +363,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   double _autoReadProgressRatio() {
-    if (!_scrollController.hasClients) {
+    if (!_hasSingleAttachedScrollPosition) {
       return 0;
     }
     final maxExtent = _scrollController.position.maxScrollExtent;

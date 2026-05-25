@@ -897,6 +897,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   TextReaderRenderer get _activeTextRenderer =>
       _isPagedTextReaderEnabled() ? _pagedTextRenderer : _scrollTextRenderer;
 
+  bool get _hasSingleAttachedScrollPosition =>
+      _scrollController.hasClients && _scrollController.positions.length == 1;
+
   ReaderRenderMetrics _currentTextRenderMetrics() {
     if (_isPagedTextReaderEnabled()) {
       return ReaderRenderMetrics(
@@ -905,13 +908,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
     }
     return ReaderRenderMetrics(
-      hasScrollClients: _scrollController.hasClients,
+      hasScrollClients: _hasSingleAttachedScrollPosition,
       maxScrollExtent:
-          _scrollController.hasClients
+          _hasSingleAttachedScrollPosition
               ? _scrollController.position.maxScrollExtent
               : 0,
       scrollOffset:
-          _scrollController.hasClients ? _scrollController.position.pixels : 0,
+          _hasSingleAttachedScrollPosition
+              ? _scrollController.position.pixels
+              : 0,
     );
   }
 
@@ -3206,7 +3211,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           },
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onLongPress: () => unawaited(_handleReaderLongPress()),
+            onLongPress:
+                _isTextPagedViewport || _isTextScrollViewport
+                    ? null
+                    : () => unawaited(_handleReaderLongPress()),
             child: child,
           ),
         );
@@ -3664,8 +3672,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     ),
                                   const SizedBox(width: 12),
                                   _buildTopActionButton(
-                                    icon: Icons.info_outline,
-                                    tooltip: '查看详情',
+                                    icon: Icons.auto_stories_rounded,
+                                    tooltip: '书籍详情',
                                     onPressed: _openDetailPage,
                                     colors: colors,
                                     emphasizeHitArea: true,
@@ -4063,11 +4071,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
           if (_autoReadSessionState == ReaderAutoReadSessionState.paused)
             Center(
-              child: _buildAutoReadFloatingHint(
-                colors: colors,
-                icon: Icons.play_arrow_rounded,
-                title: '自动阅读已暂停',
-                actionLabel: '点击底部继续',
+              child: GestureDetector(
+                onTap: () => _resumeAutoReadSession(showMessage: true),
+                onLongPress:
+                    () => _showSettingsSheet(
+                      initialTab: _ReaderSettingsTab.reading,
+                      initialSettingsGroupKey: 'auto_read',
+                    ),
+                child: _buildAutoReadFloatingHint(
+                  colors: colors,
+                  icon: Icons.play_arrow_rounded,
+                  title: '自动阅读已暂停',
+                  actionLabel: '点击继续 · 长按设置',
+                ),
               ),
             ),
           if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused)
@@ -4248,31 +4264,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     bool loading = false,
     bool emphasizeHitArea = false,
   }) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        foregroundColor: colors.text,
-        backgroundColor: Colors.transparent,
-        minimumSize: emphasizeHitArea ? const Size(44, 44) : const Size(34, 34),
-        visualDensity: VisualDensity.compact,
-        padding: emphasizeHitArea ? const EdgeInsets.all(4) : EdgeInsets.zero,
-        tapTargetSize:
-            emphasizeHitArea
-                ? MaterialTapTargetSize.padded
-                : MaterialTapTargetSize.shrinkWrap,
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _markReaderTapHandledByChild(),
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          foregroundColor: colors.text,
+          backgroundColor: Colors.transparent,
+          minimumSize:
+              emphasizeHitArea ? const Size(44, 44) : const Size(34, 34),
+          visualDensity: VisualDensity.compact,
+          padding: emphasizeHitArea ? const EdgeInsets.all(4) : EdgeInsets.zero,
+          tapTargetSize:
+              emphasizeHitArea
+                  ? MaterialTapTargetSize.padded
+                  : MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon:
+            loading
+                ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colors.text,
+                  ),
+                )
+                : Icon(icon, size: emphasizeHitArea ? 22 : 18),
       ),
-      icon:
-          loading
-              ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colors.text,
-                ),
-              )
-              : Icon(icon, size: emphasizeHitArea ? 22 : 18),
     );
   }
 
@@ -4289,6 +4310,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
+        onTapDown: (_) => _markReaderTapHandledByChild(),
         onTap: () async {
           try {
             await onTap();
@@ -5360,7 +5382,7 @@ class _ReaderSizeReporterState extends State<_ReaderSizeReporter> {
       if (!mounted) {
         return;
       }
-      final renderBox = context.findRenderObject();
+      final renderBox = _safeFindRenderBox(context);
       if (renderBox is! RenderBox || !renderBox.hasSize) {
         return;
       }
@@ -5374,6 +5396,15 @@ class _ReaderSizeReporterState extends State<_ReaderSizeReporter> {
       widget.onSizeChanged(size);
     });
     return widget.child;
+  }
+
+  RenderBox? _safeFindRenderBox(BuildContext context) {
+    try {
+      final renderObject = context.findRenderObject();
+      return renderObject is RenderBox ? renderObject : null;
+    } catch (_) {
+      return null;
+    }
   }
 }
 

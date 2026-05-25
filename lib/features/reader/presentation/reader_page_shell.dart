@@ -286,6 +286,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   void _markBackNavigationTriggered() {
     _lastBackNavigationAt = DateTime.now();
+    _markReaderTapHandledByChild();
+  }
+
+  void _markReaderTapHandledByChild() {
     _readerTapHandledByChild = true;
   }
 
@@ -550,7 +554,12 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
 
     if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession(showMessage: true);
+      if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
+        _pauseAutoReadSession(showMessage: true);
+      } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
+        _setOverlayControlsVisibility(true);
+        _touchOverlayControls();
+      }
       return;
     }
 
@@ -605,7 +614,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   Future<void> _handleReaderLongPress() async {
     if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession(showMessage: true);
+      if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
+        _pauseAutoReadSession(showMessage: true);
+      } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
+        await _showSettingsSheet(
+          initialTab: _ReaderSettingsTab.reading,
+          initialSettingsGroupKey: 'auto_read',
+        );
+        return;
+      }
     }
     if (_isMangaViewport) {
       await _openMangaPositionSheet();

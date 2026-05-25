@@ -54,6 +54,8 @@ void main() {
         imageUrls: const <String>['https://img.example/1.jpg'],
       );
 
+      expect(result.imageUrls, hasLength(1));
+      expect(result.document.isPureImageDocument, isTrue);
       expect(
         resolver.resolveFromChapterResult(result),
         ReaderContentMode.comic,

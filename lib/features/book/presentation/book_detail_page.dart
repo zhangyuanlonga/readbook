@@ -1311,7 +1311,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   Widget? _buildReadFloatingActionButton(BookDetailLoadResult result) {
     final readableChapters = _readableChapters(result.chapters);
     final fallbackRoute = _buildFallbackReadRoute(result);
-    if (readableChapters.isEmpty && fallbackRoute == null) {
+    if (readableChapters.isEmpty &&
+        fallbackRoute == null &&
+        !result.catalogAvailable) {
       return null;
     }
     final button = FloatingActionButton.extended(
@@ -1336,7 +1338,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  void _handleStartReading({Chapter? chapter, String? fallbackRoute}) {
+  Future<void> _handleStartReading({
+    Chapter? chapter,
+    String? fallbackRoute,
+  }) async {
     final now = DateTime.now();
     final previous = _lastReadActionAt;
     if (previous != null &&
@@ -1350,6 +1355,22 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _openChapter(chapter);
       return;
     }
+
+    final currentResult = _result;
+    if (currentResult != null && _canOpenCatalogForResult(currentResult)) {
+      final loadedResult = await _ensureCatalogLoaded(currentResult);
+      if (!mounted || loadedResult == null) {
+        return;
+      }
+      final readableChapters = _readableChapters(loadedResult.chapters);
+      if (readableChapters.isNotEmpty) {
+        _openChapter(readableChapters.first);
+        return;
+      }
+      _showMessage('当前目录没有可阅读的正文章节。');
+      return;
+    }
+
     final normalizedFallback = (fallbackRoute ?? '').trim();
     if (normalizedFallback.isEmpty) {
       return;

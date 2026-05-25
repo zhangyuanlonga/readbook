@@ -320,7 +320,8 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
             return AnimatedBuilder(
               animation: _scrollController,
               builder: (context, _) {
-                if (!_scrollController.hasClients || !_isTextScrollViewport) {
+                if (!_hasSingleAttachedScrollPosition ||
+                    !_isTextScrollViewport) {
                   return const SizedBox.shrink();
                 }
 
