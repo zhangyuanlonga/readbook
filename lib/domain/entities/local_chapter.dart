@@ -9,6 +9,7 @@ class LocalChapter {
     required this.content,
     this.imageUrls = const <String>[],
     this.sourceRef,
+    this.contentType,
     required this.createdAt,
     required this.updatedAt,
     this.startOffset,
@@ -23,6 +24,7 @@ class LocalChapter {
   final String content;
   final List<String> imageUrls;
   final String? sourceRef;
+  final String? contentType;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int? startOffset;
@@ -54,6 +56,8 @@ class LocalChapter {
     List<String>? imageUrls,
     String? sourceRef,
     bool clearSourceRef = false,
+    String? contentType,
+    bool clearContentType = false,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? startOffset,
@@ -71,6 +75,7 @@ class LocalChapter {
       content: content ?? this.content,
       imageUrls: imageUrls ?? this.imageUrls,
       sourceRef: clearSourceRef ? null : (sourceRef ?? this.sourceRef),
+      contentType: clearContentType ? null : (contentType ?? this.contentType),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       startOffset: clearStartOffset ? null : (startOffset ?? this.startOffset),
@@ -88,6 +93,7 @@ class LocalChapter {
       'content': content,
       'imageUrls': imageUrls,
       'sourceRef': sourceRef,
+      'contentType': contentType,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'startOffset': startOffset,
@@ -105,6 +111,7 @@ class LocalChapter {
       content: json['content']?.toString() ?? '',
       imageUrls: _optionalStringList(json['imageUrls']),
       sourceRef: _optionalString(json['sourceRef']),
+      contentType: _optionalString(json['contentType']),
       createdAt: _requiredDateTime(json, 'createdAt'),
       updatedAt: _requiredDateTime(json, 'updatedAt'),
       startOffset: _optionalInt(json['startOffset']),

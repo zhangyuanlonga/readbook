@@ -2116,6 +2116,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         bookId: _activeBookId,
         detailUrl: _activeDetailUrl!,
         fallbackTitle: _displayTitle ?? widget.title,
+        fallbackAuthor: _result?.detail.author ?? widget.author,
         forceRefresh: forceRefresh,
         includeCatalog: shouldIncludeCatalog,
       );
@@ -2213,7 +2214,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         shouldIncludeCatalog ||
         result.catalogLoaded ||
         !result.catalogAvailable ||
-        result.detail.totalChapterNum != null) {
+        result.detail.totalChapterNum != null ||
+        !_isLocalContent) {
       return;
     }
     unawaited(_load(includeCatalog: true, backgroundRefresh: true));

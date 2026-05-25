@@ -22,6 +22,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     var startAutoReadAfterApply = startAutoReadAfterApplyInitially;
     var isPersistingDraft = false;
     final showInterfaceSettings = initialTab == _ReaderSettingsTab.interface;
+    final isAudioChapter = _currentContentMode == ReaderContentMode.audio;
     String? activeSettingsGroupKey = initialSettingsGroupKey;
     Timer? persistDraftTimer;
     Timer? sliderInteractionTimer;
@@ -2989,12 +2990,16 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                   subtitle:
                                       isMangaChapter
                                           ? '阅读模式、留白、图间距与加载策略'
+                                          : isAudioChapter
+                                          ? '播放速度与本次听书行为'
                                           : '启动方式、速度与本次自动阅读行为',
                                   onTap:
                                       () => setModalState(() {
                                         activeSettingsGroupKey =
                                             isMangaChapter
                                                 ? 'manga'
+                                                : isAudioChapter
+                                                ? 'audio'
                                                 : 'auto_read';
                                       }),
                                 ),
@@ -4045,6 +4050,39 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                             ),
                           ]),
                         ],
+                        'audio' => <Widget>[
+                          buildCompactSettingsCard([
+                            buildCompactSectionTitle('听书设置'),
+                            const SizedBox(height: 10),
+                            Text(
+                              '当前内容为音频章节，自动阅读和排版类设置已隐藏。',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            buildCompactToggleRow(
+                              label: '启用音量键翻页',
+                              value: draft.volumeKeyPageEnabled,
+                              onChanged:
+                                  _platformBridgeService
+                                          .isVolumeKeyPagingSupported
+                                      ? (enabled) {
+                                        setModalState(() {
+                                          draft = draft.copyWith(
+                                            volumeKeyPageEnabled: enabled,
+                                          );
+                                        });
+                                      }
+                                      : null,
+                            ),
+                          ]),
+                        ],
                         _ => const <Widget>[],
                       };
                       final sheetTitle = switch (activeSettingsGroupKey) {
@@ -4054,6 +4092,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         'info' => '信息排版',
                         'behavior' => '阅读行为',
                         'manga' => '漫画阅读',
+                        'audio' => '听书设置',
                         'auto_read' => '自动阅读',
                         _ => showInterfaceSettings ? '界面设置' : '设置',
                       };

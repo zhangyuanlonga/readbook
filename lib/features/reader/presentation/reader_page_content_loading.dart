@@ -8,6 +8,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     List<String> imageUrls = const [],
     Map<String, String> imageHeaders = const {},
     String? contentType,
+    String? sourceFilePath,
+    int? totalPageCount,
     String? audioUrl,
     String? audioManifestUrl,
     Map<String, String> audioHeaders = const {},
@@ -33,16 +35,23 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _disposeMangaTransformControllers();
     _document = resolvedContentState.document;
     _content = resolvedContentState.content;
-    _resolvedContentType = contentType?.trim().isEmpty ?? true
-        ? null
-        : contentType!.trim();
+    _resolvedContentType =
+        contentType?.trim().isEmpty ?? true ? null : contentType!.trim();
     _chapterImageUrls = resolvedContentState.chapterImageUrls;
     _chapterImageHeaders = resolvedContentState.imageHeaders;
     _chapterAudioUrl =
         audioUrl?.trim().isEmpty ?? true ? null : audioUrl!.trim();
     _chapterAudioManifestUrl =
-        audioManifestUrl?.trim().isEmpty ?? true ? null : audioManifestUrl!.trim();
+        audioManifestUrl?.trim().isEmpty ?? true
+            ? null
+            : audioManifestUrl!.trim();
     _chapterAudioHeaders = Map<String, String>.unmodifiable(audioHeaders);
+    _audioPlaybackPosition = Duration.zero;
+    _audioPlaybackDuration = Duration.zero;
+    _audioPlaybackSpeed = 1.0;
+    _chapterSourceFilePath =
+        sourceFilePath?.trim().isEmpty ?? true ? null : sourceFilePath!.trim();
+    _chapterTotalPageCount = totalPageCount;
     _mangaImageRetryNonce.clear();
     _precachedInlineImageUrls.clear();
     _lastInlineImagePrecacheAt = null;
@@ -275,14 +284,18 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     _isScrollEdgeAdvancingChapter = true;
     try {
-      final anchorChapter = forward ? null : _findCurrentContinuousTextChapter();
+      final anchorChapter =
+          forward ? null : _findCurrentContinuousTextChapter();
       final beforeAnchorStart =
           anchorChapter == null
               ? null
-              : _measureContinuousTextChapterLayoutFlow(anchorChapter)
-                  ?.startOffset;
+              : _measureContinuousTextChapterLayoutFlow(
+                anchorChapter,
+              )?.startOffset;
       final beforeScrollOffset =
-          _scrollController.hasClients ? _scrollController.position.pixels : null;
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null;
       final chapter = await _loadContinuousTextChapterFlow(targetIndex);
       if (!mounted || chapter == null) {
         return null;
@@ -303,8 +316,9 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             return;
           }
           final afterAnchorStart =
-              _measureContinuousTextChapterLayoutFlow(anchorChapter)
-                  ?.startOffset;
+              _measureContinuousTextChapterLayoutFlow(
+                anchorChapter,
+              )?.startOffset;
           if (afterAnchorStart == null) {
             return;
           }
@@ -695,6 +709,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         imageUrls: snapshot.result.imageUrls,
         imageHeaders: snapshot.result.imageHeaders,
         contentType: snapshot.result.contentType,
+        sourceFilePath: snapshot.result.sourceFilePath,
+        totalPageCount: snapshot.result.totalPageCount,
         audioUrl: snapshot.result.audioUrl,
         audioManifestUrl: snapshot.result.audioManifestUrl,
         audioHeaders: snapshot.result.audioHeaders,
@@ -767,6 +783,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             chapter.content,
             imageUrls: chapter.imageUrls,
             contentType: null,
+            sourceFilePath: null,
+            totalPageCount: null,
             document: chapter.document,
           );
           previewRatio = _resolveDocumentRestoreRatio(
@@ -848,6 +866,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           decoded.content,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
+          sourceFilePath: null,
+          totalPageCount: null,
         );
         previewRatio = _resolveDocumentRestoreRatio(progress: previewProgress);
         if (resolvedCurrentChapter != null &&

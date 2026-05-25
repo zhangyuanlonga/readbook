@@ -104,9 +104,6 @@ class ServerOnlineSearchService {
       'pageSize': _rawSearchPageSize,
       'aggregate': {'byTitleAuthor': false, 'includeSourceHits': true},
       'options': {
-        'preferHealthySources': false,
-        'skipCoolingDownSources': false,
-        'timeoutMs': 10000,
         if (concurrency != null)
           'concurrency': {
             'total': concurrency,
@@ -162,9 +159,6 @@ class ServerOnlineSearchService {
       'page': '1',
       'pageSize': '$_rawSearchPageSize',
       'aggregateByTitleAuthor': 'false',
-      'timeoutMs': '10000',
-      'preferHealthySources': 'false',
-      'skipCoolingDownSources': 'false',
       if (concurrency != null) 'concurrency': '$concurrency',
       if (concurrency != null)
         'perHostConcurrency': '${_perHostConcurrencyFor(concurrency)}',
@@ -234,6 +228,7 @@ class ServerOnlineSearchService {
       await for (final chunk in utf8.decoder.bind(
         body.stream.cast<List<int>>(),
       )) {
+        await cancellationToken?.waitIfPaused();
         if (cancellationToken?.isCancelled ?? false) {
           cancelToken.cancel('search cancelled');
           break;
@@ -498,7 +493,10 @@ class _ServerSearchAccumulator {
                 failure.sourceName;
           }
         }
-        _processedSourceCount = _effectiveSourceCount;
+        _processedSourceCount =
+            finalResponse.reports.processedSourceCount > 0
+                ? finalResponse.reports.processedSourceCount
+                : _effectiveSourceCount;
         return currentReport();
       default:
         return null;
@@ -833,11 +831,13 @@ class _ServerSearchItem {
 class _ServerSearchReports {
   const _ServerSearchReports({
     required this.sourceCount,
+    required this.processedSourceCount,
     required this.successSourceCount,
     required this.failures,
   });
 
   final int sourceCount;
+  final int processedSourceCount;
   final int successSourceCount;
   final List<_ServerSearchFailure> failures;
 
@@ -845,6 +845,7 @@ class _ServerSearchReports {
     if (value is! Map) {
       return const _ServerSearchReports(
         sourceCount: 0,
+        processedSourceCount: 0,
         successSourceCount: 0,
         failures: <_ServerSearchFailure>[],
       );
@@ -852,6 +853,7 @@ class _ServerSearchReports {
     final map = value.map((key, value) => MapEntry(key.toString(), value));
     return _ServerSearchReports(
       sourceCount: _intOrDefault(map['sourceCount'], 0),
+      processedSourceCount: _intOrDefault(map['processedSourceCount'], 0),
       successSourceCount: _intOrDefault(map['successSourceCount'], 0),
       failures: (map['failures'] as List? ?? const <Object?>[])
           .map(_ServerSearchFailure.fromJson)

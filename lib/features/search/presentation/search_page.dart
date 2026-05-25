@@ -1708,8 +1708,6 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
                           final subtitle = <String>[
                             if ((item.group ?? '').trim().isNotEmpty)
                               item.group!.trim(),
-                            if ((item.healthStatus ?? '').trim().isNotEmpty)
-                              '健康：${item.healthStatus!.trim()}',
                           ].join(' · ');
                           return CheckboxListTile(
                             value: selected,

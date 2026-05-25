@@ -285,6 +285,22 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             _mangaPageIndex = target;
           });
           return;
+        case ReaderModeViewportKind.hybridPaged:
+          final total = _chapterImageUrls.length;
+          if (total <= 1) {
+            setState(() {
+              _mangaPageIndex = 0;
+            });
+            return;
+          }
+          final target = (normalized * (total - 1)).round().clamp(0, total - 1);
+          if (_mangaPageController.hasClients) {
+            _mangaPageController.jumpToPage(target);
+          }
+          setState(() {
+            _mangaPageIndex = target;
+          });
+          return;
         case ReaderModeViewportKind.textScroll:
         case ReaderModeViewportKind.imageScroll:
           if (!_scrollController.hasClients) {
@@ -983,6 +999,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       case ReaderModeViewportKind.textPaged:
         return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
       case ReaderModeViewportKind.imagePaged:
+      case ReaderModeViewportKind.hybridPaged:
         final total = _chapterImageUrls.length;
         if (total <= 1) {
           return 0;
@@ -1116,6 +1133,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       chapterUrl,
     );
     final logicalPosition = _currentLogicalPosition();
+    final viewportState = _currentViewportState();
 
     await _preferencesService.saveProgress(
       ReadingProgress(
@@ -1128,7 +1146,30 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         chapterIndex: currentIndex,
         updatedAt: DateTime.now(),
         chapterPositionRatio: _currentScrollRatio(),
-        logicalPosition: logicalPosition,
+        logicalPosition: logicalPosition?.copyWith(
+          pageIndex: viewportState.pageIndex,
+          totalPageCount: viewportState.pageCount,
+          viewportMode: viewportState.kind.name,
+        ),
+        positionSnapshot: ReaderPositionSnapshot(
+          viewportMode: viewportState.kind.name,
+          pageIndex: viewportState.pageIndex,
+          pageCount: viewportState.pageCount,
+          scrollOffset: viewportState.scrollOffset,
+          maxScrollExtent: viewportState.maxScrollExtent,
+          audioPositionMs:
+              _currentContentMode == ReaderContentMode.audio
+                  ? _audioPlaybackPosition.inMilliseconds
+                  : null,
+          audioDurationMs:
+              _currentContentMode == ReaderContentMode.audio
+                  ? _audioPlaybackDuration.inMilliseconds
+                  : null,
+          audioSpeed:
+              _currentContentMode == ReaderContentMode.audio
+                  ? _audioPlaybackSpeed
+                  : null,
+        ),
       ),
     );
   }

@@ -4,7 +4,7 @@ part of 'reader_page.dart';
 
 extension _ReaderPageNavigationExtension on _ReaderPageState {
   Future<bool> _ensureCatalogLoadedForOverlay() async {
-    if (_chapters.isNotEmpty) {
+    if (_chapters.isNotEmpty && _catalogComplete) {
       return true;
     }
     await _hydrateCatalogAfterVisible();
@@ -16,6 +16,9 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     bool showBoundaryHint = true,
     double? initialScrollRatio,
   }) async {
+    if (_currentContentMode == ReaderContentMode.audio) {
+      return false;
+    }
     final sessionState = _currentTextSessionState();
     final decision = _chapterFlow.resolveAdjacentChapter(
       chapters: _chapters,

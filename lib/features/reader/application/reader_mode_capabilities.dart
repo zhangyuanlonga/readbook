@@ -47,6 +47,17 @@ class ReaderModeCapabilitiesResolver {
           interfaceSettingsTitle: '界面',
           readingSettingsTitle: '设置',
         );
+      case ReaderContentMode.hybrid:
+        return ReaderModeCapabilities(
+          canAutoRead: false,
+          canUsePagedText: false,
+          supportsCatalogContentSearch: false,
+          primaryBottomAction: ReaderPrimaryBottomAction.positionPanel,
+          canSwitchSource: canSwitchSource,
+          canCacheChapter: canCacheChapter,
+          interfaceSettingsTitle: '版式界面',
+          readingSettingsTitle: '版式设置',
+        );
       case ReaderContentMode.comic:
         return ReaderModeCapabilities(
           canAutoRead: false,

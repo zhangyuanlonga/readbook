@@ -10,9 +10,18 @@ import '../application/reader_content_session.dart';
 class ReaderAudioViewModel {
   const ReaderAudioViewModel({
     required this.contentSession,
+    this.initialPosition,
+    this.onPlaybackSnapshotChanged,
   });
 
   final ReaderContentSession contentSession;
+  final Duration? initialPosition;
+  final void Function({
+    required Duration position,
+    required Duration duration,
+    required double speed,
+  })?
+  onPlaybackSnapshotChanged;
 }
 
 class ReaderAudioView extends StatefulWidget {
@@ -39,6 +48,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
   Duration _duration = Duration.zero;
   String? _errorText;
   String? _preparedUrl;
+  double _speed = 1.0;
 
   ReaderContentSession get _session => widget.model.contentSession;
 
@@ -157,9 +167,8 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                               : null,
                       onChangeEnd:
                           _isReady
-                              ? (value) => _seek(
-                                Duration(milliseconds: value.round()),
-                              )
+                              ? (value) =>
+                                  _seek(Duration(milliseconds: value.round()))
                               : null,
                     ),
                   ),
@@ -184,7 +193,9 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                     children: [
                       FilledButton.icon(
                         onPressed:
-                            (_isReady || _hasCompleted) ? _togglePlayback : null,
+                            (_isReady || _hasCompleted)
+                                ? _togglePlayback
+                                : null,
                         icon: Icon(
                           _isPlaying
                               ? Icons.pause_rounded
@@ -199,17 +210,38 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                       ),
                       OutlinedButton.icon(
                         onPressed:
-                            url == null ? null : () => _openExternal(context, url),
+                            url == null
+                                ? null
+                                : () => _openExternal(context, url),
                         icon: const Icon(Icons.open_in_new_rounded),
                         label: const Text('外部打开'),
                       ),
                       OutlinedButton.icon(
                         onPressed:
-                            url == null ? null : () => _copyToClipboard(context, url),
+                            url == null
+                                ? null
+                                : () => _copyToClipboard(context, url),
                         icon: const Icon(Icons.copy_rounded),
                         label: const Text('复制地址'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text('倍速', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [0.75, 1.0, 1.25, 1.5, 2.0]
+                        .map(
+                          (speed) => ChoiceChip(
+                            label: Text('${speed}x'),
+                            selected: (_speed - speed).abs() < 0.001,
+                            onSelected:
+                                _isReady ? (_) => _setSpeed(speed) : null,
+                          ),
+                        )
+                        .toList(growable: false),
                   ),
                   if (_errorText != null) ...[
                     const SizedBox(height: 16),
@@ -250,7 +282,12 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
   }
 
   Widget _buildStatusChip(ThemeData theme) {
-    final (label, color) = switch ((_errorText, _isPreparing, _isPlaying, _hasCompleted)) {
+    final (label, color) = switch ((
+      _errorText,
+      _isPreparing,
+      _isPlaying,
+      _hasCompleted,
+    )) {
       (String _, _, _, _) => ('播放失败', theme.colorScheme.error),
       (_, true, _, _) => ('准备中', theme.colorScheme.tertiary),
       (_, _, true, _) => ('播放中', theme.colorScheme.primary),
@@ -284,7 +321,8 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
       setState(() {
         _isPlaying = state.playing;
         _hasCompleted = state.processingState == ProcessingState.completed;
-        _isPreparing = state.processingState == ProcessingState.loading ||
+        _isPreparing =
+            state.processingState == ProcessingState.loading ||
             state.processingState == ProcessingState.buffering;
       });
     });
@@ -296,6 +334,11 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
       setState(() {
         _duration = duration;
       });
+      widget.model.onPlaybackSnapshotChanged?.call(
+        position: _position,
+        duration: duration,
+        speed: _speed,
+      );
     });
 
     _positionSubscription = _player.positionStream.listen((position) {
@@ -305,6 +348,11 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
       setState(() {
         _position = position;
       });
+      widget.model.onPlaybackSnapshotChanged?.call(
+        position: position,
+        duration: _duration,
+        speed: _speed,
+      );
     });
 
     _errorSubscription = _player.errorStream.listen((error) {
@@ -363,7 +411,12 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
         _isPreparing = false;
         _errorText = null;
         _duration = _player.duration ?? Duration.zero;
+        _speed = _player.speed;
       });
+      final initialPosition = widget.model.initialPosition;
+      if (initialPosition != null && initialPosition > Duration.zero) {
+        await _player.seek(initialPosition);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -406,6 +459,21 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
     await _player.seek(position);
   }
 
+  Future<void> _setSpeed(double speed) async {
+    await _player.setSpeed(speed);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _speed = speed;
+    });
+    widget.model.onPlaybackSnapshotChanged?.call(
+      position: _position,
+      duration: _duration,
+      speed: speed,
+    );
+  }
+
   Future<void> _openExternal(BuildContext context, String rawUrl) async {
     final uri = Uri.tryParse(rawUrl.trim());
     if (uri == null) {
@@ -426,9 +494,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
   }
 
   void _showSnackBar(BuildContext context, String text) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   String? _normalizedAudioUrl(ReaderContentSession session) {

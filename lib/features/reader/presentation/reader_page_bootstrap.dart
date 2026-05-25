@@ -503,6 +503,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       _bookCoverUrl = detailResult.detail.coverUrl;
       _bookCustomCoverPath = null;
       _chapters = detailResult.chapters;
+      _catalogComplete = detailResult.catalogComplete;
       _currentIndex = _resolveCurrentIndex(_chapters);
       await _applyPresentedBookMetadata(
         fallbackTitle: detailResult.detail.title,
@@ -690,7 +691,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     final detailUrl = (_detailUrl ?? '').trim();
     if (sourceId.isEmpty ||
         detailUrl.isEmpty ||
-        _chapters.isNotEmpty ||
+        (_chapters.isNotEmpty && _catalogComplete) ||
         !mounted) {
       return;
     }
@@ -719,6 +720,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _bookCoverUrl = detailResult.detail.coverUrl;
         _bookCustomCoverPath = null;
         _chapters = detailResult.chapters;
+        _catalogComplete = detailResult.catalogComplete;
         _currentIndex = resolvedIndex;
         _chapterId = current.id;
         _chapterUrl = current.chapterUrl;
@@ -794,6 +796,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           _bookCoverUrl = snapshot.coverUrl;
           _bookCustomCoverPath = null;
           _chapters = chapters;
+          _catalogComplete = true;
           _currentIndex = resolvedIndex;
           _chapterId = current.id;
           _chapterUrl = current.chapterUrl;
@@ -806,6 +809,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _bookCoverUrl = snapshot.coverUrl;
         _bookCustomCoverPath = null;
         _chapters = chapters;
+        _catalogComplete = true;
         _currentIndex = resolvedIndex;
         _chapterId = current.id;
         _chapterUrl = current.chapterUrl;
@@ -832,7 +836,8 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     if (sourceId.isEmpty ||
         detailUrl.isEmpty ||
         detailResult.chapters.isEmpty ||
-        detailResult.detail.title.trim().isEmpty) {
+        detailResult.detail.title.trim().isEmpty ||
+        !detailResult.catalogComplete) {
       return;
     }
 

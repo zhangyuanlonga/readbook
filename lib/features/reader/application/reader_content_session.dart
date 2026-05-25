@@ -3,7 +3,9 @@ import '../../../domain/entities/reading_progress.dart';
 import 'reader_reading_record_coordinator.dart';
 import 'reader_session_state.dart';
 
-enum ReaderContentMode { text, comic, audio }
+enum ReaderContentMode { text, hybrid, comic, audio }
+
+enum ReaderHybridSubMode { pdf, epubFixed, pictureBook, documentImage }
 
 class ReaderContentSession {
   const ReaderContentSession({
@@ -19,6 +21,9 @@ class ReaderContentSession {
     this.chapterTitle,
     this.chapterIndex,
     this.resolvedContentType,
+    this.hybridSubMode,
+    this.sourceFilePath,
+    this.totalPageCount,
     this.audioUrl,
     this.audioManifestUrl,
     this.audioHeaders = const <String, String>{},
@@ -40,6 +45,9 @@ class ReaderContentSession {
   final String? chapterTitle;
   final int? chapterIndex;
   final String? resolvedContentType;
+  final ReaderHybridSubMode? hybridSubMode;
+  final String? sourceFilePath;
+  final int? totalPageCount;
   final String? audioUrl;
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;
@@ -61,6 +69,9 @@ class ReaderContentSession {
     Object? chapterTitle = _sentinel,
     Object? chapterIndex = _sentinel,
     Object? resolvedContentType = _sentinel,
+    Object? hybridSubMode = _sentinel,
+    Object? sourceFilePath = _sentinel,
+    Object? totalPageCount = _sentinel,
     Object? audioUrl = _sentinel,
     Object? audioManifestUrl = _sentinel,
     Map<String, String>? audioHeaders,
@@ -76,24 +87,42 @@ class ReaderContentSession {
       detailUrl: detailUrl ?? this.detailUrl,
       bookTitle: bookTitle ?? this.bookTitle,
       bookAuthor:
-          identical(bookAuthor, _sentinel) ? this.bookAuthor : bookAuthor as String?,
+          identical(bookAuthor, _sentinel)
+              ? this.bookAuthor
+              : bookAuthor as String?,
       bookCoverUrl:
           identical(bookCoverUrl, _sentinel)
               ? this.bookCoverUrl
               : bookCoverUrl as String?,
       chapterId: chapterId ?? this.chapterId,
       chapterUrl:
-          identical(chapterUrl, _sentinel) ? this.chapterUrl : chapterUrl as String?,
+          identical(chapterUrl, _sentinel)
+              ? this.chapterUrl
+              : chapterUrl as String?,
       chapterTitle:
           identical(chapterTitle, _sentinel)
               ? this.chapterTitle
               : chapterTitle as String?,
       chapterIndex:
-          identical(chapterIndex, _sentinel) ? this.chapterIndex : chapterIndex as int?,
+          identical(chapterIndex, _sentinel)
+              ? this.chapterIndex
+              : chapterIndex as int?,
       resolvedContentType:
           identical(resolvedContentType, _sentinel)
               ? this.resolvedContentType
               : resolvedContentType as String?,
+      hybridSubMode:
+          identical(hybridSubMode, _sentinel)
+              ? this.hybridSubMode
+              : hybridSubMode as ReaderHybridSubMode?,
+      sourceFilePath:
+          identical(sourceFilePath, _sentinel)
+              ? this.sourceFilePath
+              : sourceFilePath as String?,
+      totalPageCount:
+          identical(totalPageCount, _sentinel)
+              ? this.totalPageCount
+              : totalPageCount as int?,
       audioUrl:
           identical(audioUrl, _sentinel) ? this.audioUrl : audioUrl as String?,
       audioManifestUrl:

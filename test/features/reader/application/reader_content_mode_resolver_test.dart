@@ -59,5 +59,19 @@ void main() {
         ReaderContentMode.comic,
       );
     });
+
+    test('resolves explicit pdf signal as hybrid mode', () {
+      final result = ChapterContentResult(
+        content: '',
+        fromCache: false,
+        contentType: 'pdf',
+      );
+
+      expect(
+        resolver.resolveFromChapterResult(result),
+        ReaderContentMode.hybrid,
+      );
+      expect(resolver.resolveHybridSubMode(result), ReaderHybridSubMode.pdf);
+    });
   });
 }

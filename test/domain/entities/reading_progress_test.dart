@@ -21,6 +21,13 @@ void main() {
           offsetInBlock: 10,
           chapterPositionRatio: 0.42,
           pageIndex: 2,
+          totalPageCount: 8,
+          viewportMode: 'textPaged',
+        ),
+        positionSnapshot: const ReaderPositionSnapshot(
+          viewportMode: 'textPaged',
+          pageIndex: 2,
+          pageCount: 8,
         ),
       );
 
@@ -33,6 +40,10 @@ void main() {
       expect(restored.logicalPosition, isNotNull);
       expect(restored.logicalPosition!.blockIndex, 3);
       expect(restored.logicalPosition!.pageIndex, 2);
+      expect(restored.logicalPosition!.totalPageCount, 8);
+      expect(restored.positionSnapshot, isNotNull);
+      expect(restored.positionSnapshot!.viewportMode, 'textPaged');
+      expect(restored.positionSnapshot!.pageCount, 8);
     });
 
     test('rejects legacy payload without chapter position ratio', () {

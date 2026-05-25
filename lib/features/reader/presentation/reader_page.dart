@@ -28,6 +28,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -121,6 +122,8 @@ import '../application/reader_system_settings_service.dart';
 import '../application/reader_theme_mode_service.dart';
 import '../application/reader_typography_resolver.dart';
 import '../application/reader_typography_metrics_resolver.dart';
+import '../application/reader_viewport_state.dart';
+import '../application/reader_viewport_state_resolver.dart';
 import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';
@@ -140,6 +143,7 @@ import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
 import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
+import 'reader_pdf_view.dart';
 import 'reader_page_lifecycle_delegate.dart';
 import 'reader_selection_state.dart';
 import 'reader_shell.dart';
@@ -298,6 +302,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderContentSessionResolver();
   final ReaderSessionStateResolver _sessionStateResolver =
       const ReaderSessionStateResolver();
+  final ReaderViewportStateResolver _viewportStateResolver =
+      const ReaderViewportStateResolver();
   late final ReaderSystemSettingsService _systemSettingsService;
   late final ReaderBackgroundService _readerBackgroundService;
   late final LocalBookStorageService _localBookStorageService;
@@ -368,6 +374,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   AppAdvancedTheme? _activeAdvancedTheme;
   List<CoverGallery> _coverGalleries = const <CoverGallery>[];
   List<Chapter> _chapters = const [];
+  bool _catalogComplete = false;
   int? _currentIndex;
 
   bool _isBootstrapping = true;
@@ -395,6 +402,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _chapterAudioUrl;
   String? _chapterAudioManifestUrl;
   Map<String, String> _chapterAudioHeaders = const {};
+  Duration _audioPlaybackPosition = Duration.zero;
+  Duration _audioPlaybackDuration = Duration.zero;
+  double _audioPlaybackSpeed = 1.0;
+  String? _chapterSourceFilePath;
+  int? _chapterTotalPageCount;
   bool _isEditingBookmarkNote = false;
   ReaderSelectionState _selectionState = const ReaderSelectionState();
   List<Bookmark> _chapterBookmarks = const [];
@@ -917,12 +929,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderSessionState? _currentTextSessionState() {
+    final viewportState = _currentViewportState();
+    final logicalPosition = _currentLogicalPosition();
     return _sessionStateResolver.resolve(
       chapterIndex: _currentIndex,
       chapterId: _chapterId,
       chapterUrl: _chapterUrl,
       chapterTitle: _chapterTitle,
-      logicalPosition: _currentLogicalPosition(),
+      logicalPosition: logicalPosition?.copyWith(
+        pageIndex: viewportState.pageIndex,
+        totalPageCount: viewportState.pageCount,
+        viewportMode: viewportState.kind.name,
+      ),
       rendererKind: _activeTextRenderer.kind,
       metrics: _currentTextRenderMetrics(),
       isAutoReading: _isAutoReadSessionEnabled,
@@ -932,6 +950,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   ReaderContentSession? _currentContentSession() {
     final contentMode = _currentContentMode;
+    final result = ChapterContentResult(
+      content: _content,
+      fromCache: _isCurrentChapterCached,
+      imageUrls: _chapterImageUrls,
+      imageHeaders: _chapterImageHeaders,
+      contentType: _resolvedContentType,
+      audioUrl: _chapterAudioUrl,
+      audioManifestUrl: _chapterAudioManifestUrl,
+      audioHeaders: _chapterAudioHeaders,
+      document: _document,
+    );
     return _contentSessionResolver.resolve(
       contentMode: contentMode,
       bookId: _activeBookId,
@@ -945,6 +974,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterTitle: _chapterTitle,
       chapterIndex: _currentIndex,
       resolvedContentType: _resolvedContentType,
+      hybridSubMode: _contentModeResolver.resolveHybridSubMode(result),
+      sourceFilePath: _resolveCurrentSourceFilePath(),
+      totalPageCount: _resolveCurrentTotalPageCount(contentMode),
       audioUrl: _chapterAudioUrl,
       audioManifestUrl: _chapterAudioManifestUrl,
       audioHeaders: _chapterAudioHeaders,
@@ -963,6 +995,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (current != null) {
       return current;
     }
+    final result = ChapterContentResult(
+      content: _content,
+      fromCache: _isCurrentChapterCached,
+      imageUrls: _chapterImageUrls,
+      imageHeaders: _chapterImageHeaders,
+      contentType: _resolvedContentType,
+      audioUrl: _chapterAudioUrl,
+      audioManifestUrl: _chapterAudioManifestUrl,
+      audioHeaders: _chapterAudioHeaders,
+      document: _document,
+    );
     return _presentationResolver.resolveContentSession(
       seed: ReaderSessionSeed(
         contentMode: _currentContentMode,
@@ -977,6 +1020,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterTitle: _chapterTitle,
         chapterIndex: _currentIndex,
         resolvedContentType: _resolvedContentType,
+        hybridSubMode: _contentModeResolver.resolveHybridSubMode(result),
+        sourceFilePath: _resolveCurrentSourceFilePath(),
+        totalPageCount: _resolveCurrentTotalPageCount(_currentContentMode),
         audioUrl: _chapterAudioUrl,
         audioManifestUrl: _chapterAudioManifestUrl,
         audioHeaders: _chapterAudioHeaders,
@@ -991,6 +1037,71 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  String? _resolveCurrentSourceFilePath() {
+    final chapterSourceFilePath = _chapterSourceFilePath?.trim();
+    if (chapterSourceFilePath != null && chapterSourceFilePath.isNotEmpty) {
+      return chapterSourceFilePath;
+    }
+    return null;
+  }
+
+  int? _resolveCurrentTotalPageCount(ReaderContentMode contentMode) {
+    if (_chapterTotalPageCount != null && _chapterTotalPageCount! > 0) {
+      return _chapterTotalPageCount;
+    }
+    switch (contentMode) {
+      case ReaderContentMode.hybrid:
+      case ReaderContentMode.comic:
+        return _chapterImageUrls.isEmpty ? null : _chapterImageUrls.length;
+      case ReaderContentMode.text:
+      case ReaderContentMode.audio:
+        return null;
+    }
+  }
+
+  ReaderViewportState _currentViewportState() {
+    final ratio = _currentScrollRatio();
+    switch (_currentViewportKind) {
+      case ReaderModeViewportKind.textPaged:
+        return _viewportStateResolver.resolve(
+          contentMode: _currentContentMode,
+          mode: _currentReaderMode,
+          chapterPositionRatio: ratio,
+          pageIndex: _currentPageIndex,
+          pageCount: _currentPagedPageCount,
+        );
+      case ReaderModeViewportKind.imagePaged:
+        return _viewportStateResolver.resolve(
+          contentMode: _currentContentMode,
+          mode: _currentReaderMode,
+          chapterPositionRatio: ratio,
+          pageIndex: _mangaPageIndex,
+          pageCount: _chapterImageUrls.length,
+        );
+      case ReaderModeViewportKind.hybridPaged:
+        return _viewportStateResolver.resolve(
+          contentMode: _currentContentMode,
+          mode: _currentReaderMode,
+          chapterPositionRatio: ratio,
+          pageIndex: _mangaPageIndex,
+          pageCount: _chapterImageUrls.length,
+        );
+      case ReaderModeViewportKind.textScroll:
+      case ReaderModeViewportKind.imageScroll:
+        return _viewportStateResolver.resolve(
+          contentMode: _currentContentMode,
+          mode: _currentReaderMode,
+          chapterPositionRatio: ratio,
+          scrollOffset:
+              _scrollController.hasClients ? _scrollController.offset : 0,
+          maxScrollExtent:
+              _scrollController.hasClients
+                  ? _scrollController.position.maxScrollExtent
+                  : 0,
+        );
+    }
+  }
+
   ReaderPresentationViewportKind get _presentationViewportKind {
     return switch (_currentViewportKind) {
       ReaderModeViewportKind.textPaged =>
@@ -1001,6 +1112,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ReaderPresentationViewportKind.mangaPaged,
       ReaderModeViewportKind.imageScroll =>
         ReaderPresentationViewportKind.mangaContinuous,
+      ReaderModeViewportKind.hybridPaged =>
+        ReaderPresentationViewportKind.mangaPaged,
     };
   }
 
@@ -5098,6 +5211,7 @@ class _ReaderSourceSnapshot {
     required this.chapterImageUrls,
     required this.chapterImageHeaders,
     required this.scrollRatio,
+    required this.catalogComplete,
   });
 
   final ReaderContentSession? contentSession;
@@ -5108,6 +5222,7 @@ class _ReaderSourceSnapshot {
   final List<String> chapterImageUrls;
   final Map<String, String> chapterImageHeaders;
   final double scrollRatio;
+  final bool catalogComplete;
 
   String get bookId => contentSession?.bookId ?? '';
   String? get sourceId => contentSession?.sourceId;

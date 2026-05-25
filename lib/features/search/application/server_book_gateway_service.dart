@@ -57,11 +57,11 @@ class ServerBookGatewayService {
           'author': fallbackAuthor,
           'coverUrl': coverUrl,
         },
-        'options': {'refresh': refresh, 'timeoutMs': 45000},
+        'options': {'refresh': refresh, 'timeoutMs': 15000},
       },
       attachAccessToken: true,
       enableRetry: false,
-      timeout: const Duration(seconds: 55),
+      timeout: const Duration(seconds: 25),
       stage: ErrorStage.detail,
       decoder:
           (data) => ServerGatewayDetailResult.fromEnvelopeData(
@@ -131,6 +131,58 @@ class ServerBookGatewayService {
       }
     } catch (_) {
       // Keep old request/response behavior as a safe fallback.
+    }
+    return loadToc(
+      sourceId: sourceId,
+      bookId: bookId,
+      detailUrl: detailUrl,
+      tocUrl: tocUrl,
+      refresh: refresh,
+    );
+  }
+
+  Future<ServerGatewayTocResult> loadTocComplete({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+    String? tocUrl,
+    bool refresh = false,
+  }) async {
+    ServerGatewayTocResult? latest;
+    try {
+      await for (final result in streamToc(
+        sourceId: sourceId,
+        bookId: bookId,
+        detailUrl: detailUrl,
+        tocUrl: tocUrl,
+        refresh: refresh,
+      )) {
+        if (result.chapters.isNotEmpty) {
+          latest = result;
+        }
+        if (result.isComplete) {
+          if (result.chapters.isNotEmpty) {
+            return result.copyWith(hasMore: false, isComplete: true);
+          }
+          final completed = latest;
+          if (completed != null) {
+            return completed.copyWith(
+              hasMore: false,
+              isComplete: true,
+              loadedCount:
+                  result.loadedCount > 0
+                      ? result.loadedCount
+                      : completed.loadedCount,
+              cacheHit: completed.cacheHit || result.cacheHit,
+            );
+          }
+        }
+      }
+    } catch (_) {
+      final partial = latest;
+      if (partial != null) {
+        return partial;
+      }
     }
     return loadToc(
       sourceId: sourceId,
@@ -345,6 +397,22 @@ class ServerGatewayTocResult {
   final bool hasMore;
   final int loadedCount;
   final bool isComplete;
+
+  ServerGatewayTocResult copyWith({
+    List<Chapter>? chapters,
+    bool? cacheHit,
+    bool? hasMore,
+    int? loadedCount,
+    bool? isComplete,
+  }) {
+    return ServerGatewayTocResult(
+      chapters: chapters ?? this.chapters,
+      cacheHit: cacheHit ?? this.cacheHit,
+      hasMore: hasMore ?? this.hasMore,
+      loadedCount: loadedCount ?? this.loadedCount,
+      isComplete: isComplete ?? this.isComplete,
+    );
+  }
 
   factory ServerGatewayTocResult.fromEnvelopeData(
     Object? data, {

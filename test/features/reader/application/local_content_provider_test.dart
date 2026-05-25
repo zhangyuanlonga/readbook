@@ -161,6 +161,38 @@ void main() {
     expect(result.document.isPureImageDocument, isTrue);
   });
 
+  test(
+    'maps single-page pure image local chapter to picture-book hybrid type',
+    () async {
+      final fakeService = _FakeLocalChapterContentService(
+        LocalChapter(
+          id: 'chapter_pb_1',
+          bookId: 'book_1',
+          chapterIndex: 3,
+          title: '绘本页',
+          content: '[[appread-image:file:///tmp/pb1.jpg]]',
+          imageUrls: const <String>['file:///tmp/pb1.jpg'],
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final provider = LocalContentProvider(
+        detailService: _FakeLocalBookDetailService(),
+        chapterContentService: fakeService,
+      );
+
+      final result = await provider.loadChapterContent(
+        sourceId: LocalReaderIdentity.localSourceId,
+        bookId: 'book_1',
+        chapterUrl: LocalReaderIdentity.buildChapterUrl('chapter_pb_1'),
+        chapterId: 'chapter_pb_1',
+        chapterIndex: 3,
+      );
+
+      expect(result.contentType, 'picture-book');
+    },
+  );
+
   test('prefers structured local chapter document when available', () async {
     final fakeService = _FakeLocalChapterContentService(
       LocalChapter(

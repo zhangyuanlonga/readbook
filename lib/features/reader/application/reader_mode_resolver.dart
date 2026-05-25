@@ -24,12 +24,28 @@ class ReaderModeResolver {
               usesScrollLayout
                   ? ReaderModeViewportKind.textScroll
                   : ReaderModeViewportKind.textPaged,
+          supportsTextSelection: true,
+          supportsZoomGesture: false,
+          supportsAutoRead: true,
           sourcePageTurnMode: settings.pageTurnMode,
           tapTurnEnabled: settings.pageTurnMode.tapEnabled,
           swipeTurnEnabled:
               !usesScrollLayout && settings.pageTurnMode.swipeEnabled,
           pageAnimationStyle:
               usesScrollLayout ? null : settings.pageAnimationStyle,
+        );
+      case ReaderContentMode.hybrid:
+        return ReaderModeModel(
+          contentKind: ReaderContentKind.document,
+          layoutMode: ReaderLayoutMode.paged,
+          viewportKind: ReaderModeViewportKind.hybridPaged,
+          supportsTextSelection: false,
+          supportsZoomGesture: true,
+          supportsAutoRead: false,
+          sourcePageTurnMode: settings.pageTurnMode,
+          tapTurnEnabled: false,
+          swipeTurnEnabled: false,
+          pageAnimationStyle: null,
         );
       case ReaderContentMode.comic:
         final isContinuous =
@@ -42,6 +58,9 @@ class ReaderModeResolver {
               isContinuous
                   ? ReaderModeViewportKind.imageScroll
                   : ReaderModeViewportKind.imagePaged,
+          supportsTextSelection: false,
+          supportsZoomGesture: true,
+          supportsAutoRead: false,
           sourcePageTurnMode: settings.pageTurnMode,
           tapTurnEnabled: false,
           swipeTurnEnabled: false,
@@ -52,6 +71,9 @@ class ReaderModeResolver {
           contentKind: ReaderContentKind.audio,
           layoutMode: ReaderLayoutMode.scroll,
           viewportKind: ReaderModeViewportKind.textScroll,
+          supportsTextSelection: false,
+          supportsZoomGesture: false,
+          supportsAutoRead: false,
           sourcePageTurnMode: settings.pageTurnMode,
           tapTurnEnabled: false,
           swipeTurnEnabled: false,

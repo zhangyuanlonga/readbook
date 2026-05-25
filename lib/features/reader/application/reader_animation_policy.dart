@@ -49,6 +49,14 @@ class ReaderAnimationPolicyResolver {
           reusesTextPageTurnAnimations: false,
           inactiveReason: '漫画模式使用独立的翻图与缩放反馈，不复用正文分页动画。',
         );
+      case ReaderContentKind.document:
+        return const ReaderAnimationPolicy(
+          usesShellOverlayAnimations: true,
+          supportsTextPageTurnAnimations: false,
+          usesMangaModeAnimations: false,
+          reusesTextPageTurnAnimations: false,
+          inactiveReason: '固定版式内容使用独立页视图，不复用正文分页动画。',
+        );
       case ReaderContentKind.audio:
         return const ReaderAnimationPolicy(
           usesShellOverlayAnimations: true,

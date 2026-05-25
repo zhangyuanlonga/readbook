@@ -47,9 +47,19 @@ void main() {
         'offsetInBlock': 12,
         'chapterPositionRatio': 0.58,
         'pageIndex': 7,
+        'totalPageCount': 20,
+        'viewportMode': 'hybridPaged',
+        'zoomScale': 1.6,
+        'panDx': 12.5,
+        'panDy': -6.25,
       });
 
       expect(position.pageIndex, 7);
+      expect(position.totalPageCount, 20);
+      expect(position.viewportMode, 'hybridPaged');
+      expect(position.zoomScale, 1.6);
+      expect(position.panDx, 12.5);
+      expect(position.panDy, -6.25);
       expect(position.copyWith(clearPageIndex: true).pageIndex, isNull);
       expect(position.toJson()['blockIndex'], 4);
     });

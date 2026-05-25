@@ -168,6 +168,91 @@ void main() {
       expect(File(coverPath).existsSync(), isTrue);
     });
 
+    test('marks fixed-layout epub chapter as hybrid content type', () async {
+      final archive =
+          Archive()
+            ..addFile(
+              ArchiveFile(
+                'META-INF/container.xml',
+                0,
+                utf8.encode('''
+<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/content.opf',
+                0,
+                utf8.encode('''
+<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <meta property="rendition:layout">pre-paginated</meta>
+    <dc:title>固定版式</dc:title>
+  </metadata>
+  <manifest>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml" properties="rendition:layout-pre-paginated"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/chapter1.xhtml',
+                0,
+                utf8.encode(
+                  '<html><head><meta name="viewport" content="width=1200,height=1600"/></head><body><img src="images/p1.jpg" /></body></html>',
+                ),
+              ),
+            )
+            ..addFile(ArchiveFile('OPS/images/p1.jpg', 3, [1, 2, 3]));
+
+      final encoded = ZipEncoder().encode(archive);
+      expect(encoded, isNotNull);
+
+      final file = File('${tempDir.path}/fixed_layout.epub');
+      await file.writeAsBytes(encoded!);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final book = LocalBook(
+        id: 'local_epub_fixed_1',
+        title: '固定版式',
+        format: LocalBookFormat.epub,
+        storagePath: file.path,
+        fileSize: await file.length(),
+        createdAt: now,
+        updatedAt: now,
+      );
+      final result = await parser.parse(book);
+      final parsedChapter = await parser.parseChapter(
+        book: book,
+        chapter: LocalChapter(
+          id: 'chapter_fixed_1',
+          bookId: book.id,
+          chapterIndex: 0,
+          title: result.chapters.first.title,
+          content: '',
+          sourceRef: result.chapters.first.sourceRef,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.chapters.first.sourceRef, contains('layout=fixed'));
+      expect(parsedChapter.contentType, 'epub-fixed');
+      expect(parsedChapter.imageUrls, isNotEmpty);
+    });
+
     test('uses spine order instead of filename order and skips nav docs', () async {
       final archive =
           Archive()

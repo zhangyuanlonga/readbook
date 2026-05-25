@@ -586,6 +586,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       chapterImageUrls: _chapterImageUrls,
       chapterImageHeaders: _chapterImageHeaders,
       scrollRatio: _currentScrollRatio(),
+      catalogComplete: _catalogComplete,
     );
 
     setState(() {
@@ -605,6 +606,12 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         fallbackTitle: candidate.book.title,
         forceRefresh: true,
       );
+      if (!detailResult.catalogComplete) {
+        if (showResultMessage) {
+          _showMessage('目标书源目录未完整加载，暂时无法安全换源。');
+        }
+        return false;
+      }
       try {
         await _preferencesService.saveTocSnapshot(
           ReaderTocSnapshot(
@@ -673,6 +680,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         _bookCoverUrl = detailResult.detail.coverUrl;
         _bookCustomCoverPath = null;
         _chapters = chapters;
+        _catalogComplete = detailResult.catalogComplete;
         _currentIndex = targetIndex;
         _chapterId = targetChapter.id;
         _chapterUrl = targetChapter.chapterUrl;
@@ -935,6 +943,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       _bookAuthor = snapshot.bookAuthor;
       _bookCoverUrl = snapshot.bookCoverUrl;
       _chapters = snapshot.chapters;
+      _catalogComplete = snapshot.catalogComplete;
       _currentIndex = snapshot.currentIndex;
       _chapterId = snapshot.chapterId;
       _chapterUrl = snapshot.chapterUrl;

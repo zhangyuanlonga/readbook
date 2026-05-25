@@ -21,18 +21,19 @@ class SearchReportSummary extends StatelessWidget {
 
     final resultText =
         isPreciseBookMatch && visibleBookCount != report.books.length
-            ? '$visibleBookCount/${ report.books.length}'
+            ? '$visibleBookCount/${report.books.length}'
             : '$visibleBookCount';
+    final processedSourceCount = report.processedSourceCount;
+    final sourceProgressText =
+        processedSourceCount > 0 && processedSourceCount < report.sourceCount
+            ? '${report.successSourceCount}/$processedSourceCount 已处理源成功'
+            : '${report.successSourceCount}/${report.sourceCount} 源成功';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(
         children: [
-          Icon(
-            Icons.menu_book_rounded,
-            size: 16,
-            color: colorScheme.primary,
-          ),
+          Icon(Icons.menu_book_rounded, size: 16, color: colorScheme.primary),
           const SizedBox(width: 6),
           Text(
             '$resultText 本结果',
@@ -50,7 +51,7 @@ class SearchReportSummary extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            '${report.successSourceCount}/${report.sourceCount} 源成功',
+            sourceProgressText,
             style: theme.textTheme.labelMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),

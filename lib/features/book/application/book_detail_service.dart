@@ -20,6 +20,7 @@ class BookDetailLoadResult {
     this.tocError,
     this.catalogAvailable = true,
     this.catalogLoaded = true,
+    this.catalogComplete = true,
   });
 
   final BookDetail detail;
@@ -29,6 +30,7 @@ class BookDetailLoadResult {
   final AppException? tocError;
   final bool catalogAvailable;
   final bool catalogLoaded;
+  final bool catalogComplete;
 
   BookDetailLoadResult copyWith({
     BookDetail? detail,
@@ -38,6 +40,7 @@ class BookDetailLoadResult {
     Object? tocError = _bookDetailUnset,
     bool? catalogAvailable,
     bool? catalogLoaded,
+    bool? catalogComplete,
   }) {
     return BookDetailLoadResult(
       detail: detail ?? this.detail,
@@ -50,6 +53,7 @@ class BookDetailLoadResult {
               : tocError as AppException?,
       catalogAvailable: catalogAvailable ?? this.catalogAvailable,
       catalogLoaded: catalogLoaded ?? this.catalogLoaded,
+      catalogComplete: catalogComplete ?? this.catalogComplete,
     );
   }
 }
@@ -100,11 +104,12 @@ class BookDetailService {
       tocError: null,
       catalogAvailable: cached.catalogAvailable,
       catalogLoaded: cached.catalogLoaded,
+      catalogComplete: cached.catalogComplete,
     );
   }
 
   void _writeDetailCache(String key, BookDetailLoadResult result) {
-    if (!result.catalogLoaded) {
+    if (!result.catalogLoaded || !result.catalogComplete) {
       return;
     }
     final snapshot = BookDetailLoadResult(
@@ -115,6 +120,7 @@ class BookDetailService {
       tocError: null,
       catalogAvailable: result.catalogAvailable,
       catalogLoaded: result.catalogLoaded,
+      catalogComplete: result.catalogComplete,
     );
     _detailCache.remove(key);
     _detailCache[key] = _TimedCacheEntry<BookDetailLoadResult>(snapshot);
@@ -292,11 +298,12 @@ class BookDetailService {
         tocFromCache: detail.cacheHit,
         catalogAvailable: true,
         catalogLoaded: false,
+        catalogComplete: false,
       );
     }
 
     try {
-      final toc = await _serverGatewayService.loadTocFirstBatch(
+      final toc = await _serverGatewayService.loadTocComplete(
         sourceId: detail.detail.sourceId,
         bookId: detail.detail.id,
         detailUrl: detail.detail.detailUrl,
@@ -311,6 +318,7 @@ class BookDetailService {
         tocFromCache: detail.cacheHit || toc.cacheHit,
         catalogAvailable: true,
         catalogLoaded: true,
+        catalogComplete: toc.isComplete,
       );
     } on AppException catch (error) {
       _sourceHealthService.markChaptersFailure(
@@ -326,6 +334,7 @@ class BookDetailService {
         tocError: error,
         catalogAvailable: true,
         catalogLoaded: false,
+        catalogComplete: false,
       );
     }
   }

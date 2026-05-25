@@ -20,6 +20,8 @@ class ChapterContentResult {
     List<String> imageUrls = const [],
     Map<String, String> imageHeaders = const {},
     String? contentType,
+    String? sourceFilePath,
+    int? totalPageCount,
     String? audioUrl,
     String? audioManifestUrl,
     Map<String, String> audioHeaders = const {},
@@ -41,6 +43,8 @@ class ChapterContentResult {
               : const <String>[],
       imageHeaders: Map<String, String>.unmodifiable(imageHeaders),
       contentType: _normalizeOptionalTextStatic(contentType),
+      sourceFilePath: _normalizeOptionalTextStatic(sourceFilePath),
+      totalPageCount: totalPageCount,
       audioUrl: _normalizeOptionalTextStatic(audioUrl),
       audioManifestUrl: _normalizeOptionalTextStatic(audioManifestUrl),
       audioHeaders: Map<String, String>.unmodifiable(audioHeaders),
@@ -55,6 +59,8 @@ class ChapterContentResult {
     required this.imageUrls,
     required this.imageHeaders,
     required this.contentType,
+    required this.sourceFilePath,
+    required this.totalPageCount,
     required this.audioUrl,
     required this.audioManifestUrl,
     required this.audioHeaders,
@@ -67,6 +73,8 @@ class ChapterContentResult {
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
   final String? contentType;
+  final String? sourceFilePath;
+  final int? totalPageCount;
   final String? audioUrl;
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;

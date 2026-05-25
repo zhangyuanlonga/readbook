@@ -19,6 +19,9 @@ void main() {
       chapterTitle: '第一章',
       chapterIndex: 0,
       resolvedContentType: 'text',
+      hybridSubMode: ReaderHybridSubMode.pdf,
+      sourceFilePath: '/tmp/book.pdf',
+      totalPageCount: 10,
       audioUrl: 'https://cdn.example/chapter-1.mp3',
       audioManifestUrl: 'https://cdn.example/chapter-1.m3u8',
       chapters: <Chapter>[
@@ -42,6 +45,11 @@ void main() {
           chapterPositionRatio: 0.3,
         ),
         visiblePosition: ReaderVisiblePosition(pageIndex: 0, pageCount: 3),
+        viewportSession: ReaderViewportSession(
+          viewportMode: 'textPaged',
+          pageIndex: 0,
+          pageCount: 3,
+        ),
         rendererKind: TextReaderRendererKind.paged,
         isAutoReading: false,
         isChapterTransitioning: false,
@@ -55,6 +63,8 @@ void main() {
       expect(updated.sourceId, baseSession.sourceId);
       expect(updated.chapterId, baseSession.chapterId);
       expect(updated.audioUrl, baseSession.audioUrl);
+      expect(updated.hybridSubMode, baseSession.hybridSubMode);
+      expect(updated.sourceFilePath, baseSession.sourceFilePath);
       expect(updated.sessionState, same(baseSession.sessionState));
     });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../application/reader_viewport_state.dart';
 import '../application/reader_auto_read_coordinator.dart';
 import '../application/reader_reading_record_coordinator.dart';
 
@@ -10,6 +11,8 @@ enum ReaderRuntimeViewportKind {
   textScroll,
   mangaPaged,
   mangaContinuous,
+  hybridPaged,
+  audio,
 }
 
 enum ReaderScrollEdgeAction { none, refreshCurrent, nextChapter }
@@ -29,16 +32,37 @@ class ReaderRuntimeController {
       case ReaderRuntimeViewportKind.textPaged:
         return captureTextProgress();
       case ReaderRuntimeViewportKind.mangaPaged:
+      case ReaderRuntimeViewportKind.hybridPaged:
         if (mangaPageCount <= 1) {
           return 0;
         }
         return (mangaPageIndex / (mangaPageCount - 1)).clamp(0.0, 1.0);
       case ReaderRuntimeViewportKind.textScroll:
       case ReaderRuntimeViewportKind.mangaContinuous:
+      case ReaderRuntimeViewportKind.audio:
         if (useContinuousTextFlow && continuousChapterRatio != null) {
           return continuousChapterRatio();
         }
         return captureTextProgress();
+    }
+  }
+
+  ReaderRuntimeViewportKind runtimeKindFromViewportState(
+    ReaderViewportState state,
+  ) {
+    switch (state.kind) {
+      case ReaderViewportStateKind.textPaged:
+        return ReaderRuntimeViewportKind.textPaged;
+      case ReaderViewportStateKind.textScroll:
+        return ReaderRuntimeViewportKind.textScroll;
+      case ReaderViewportStateKind.mangaPaged:
+        return ReaderRuntimeViewportKind.mangaPaged;
+      case ReaderViewportStateKind.mangaContinuous:
+        return ReaderRuntimeViewportKind.mangaContinuous;
+      case ReaderViewportStateKind.hybridPaged:
+        return ReaderRuntimeViewportKind.hybridPaged;
+      case ReaderViewportStateKind.audio:
+        return ReaderRuntimeViewportKind.audio;
     }
   }
 

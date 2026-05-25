@@ -28,7 +28,15 @@ void main() {
         offsetInBlock: 6,
         chapterPositionRatio: 0.24,
       ),
-      visiblePosition: ReaderVisiblePosition(scrollOffset: 120, maxScrollExtent: 800),
+      visiblePosition: ReaderVisiblePosition(
+        scrollOffset: 120,
+        maxScrollExtent: 800,
+      ),
+      viewportSession: ReaderViewportSession(
+        viewportMode: 'textScroll',
+        scrollOffset: 120,
+        maxScrollExtent: 800,
+      ),
       rendererKind: TextReaderRendererKind.scroll,
       isAutoReading: true,
       isChapterTransitioning: false,
@@ -42,6 +50,9 @@ void main() {
       chapterTitle: '第一章',
       chapterIndex: 0,
       updatedAt: DateTime(2026, 4, 7),
+      positionSnapshot: const ReaderPositionSnapshot(
+        viewportMode: 'textScroll',
+      ),
     );
     final readingRecordSession = ReaderReadingRecordSession(
       bookId: 'book_1',
@@ -69,6 +80,9 @@ void main() {
         chapterTitle: '第一章',
         chapterIndex: 0,
         resolvedContentType: null,
+        hybridSubMode: null,
+        sourceFilePath: null,
+        totalPageCount: null,
         audioUrl: null,
         audioManifestUrl: null,
         audioHeaders: const <String, String>{},
@@ -91,6 +105,9 @@ void main() {
         chapterTitle: '第一章',
         chapterIndex: 0,
         resolvedContentType: null,
+        hybridSubMode: null,
+        sourceFilePath: null,
+        totalPageCount: null,
         audioUrl: null,
         audioManifestUrl: null,
         audioHeaders: const <String, String>{},
@@ -118,11 +135,12 @@ void main() {
         chapterTitle: ' 第一章 ',
         chapterIndex: 0,
         resolvedContentType: ' audio ',
+        hybridSubMode: ReaderHybridSubMode.pdf,
+        sourceFilePath: ' /tmp/book.pdf ',
+        totalPageCount: 12,
         audioUrl: ' https://cdn.example/chapter-1.mp3 ',
         audioManifestUrl: ' https://cdn.example/chapter-1.m3u8 ',
-        audioHeaders: const <String, String>{
-          'Referer': 'https://example.com',
-        },
+        audioHeaders: const <String, String>{'Referer': 'https://example.com'},
         chapters: const <Chapter>[chapter],
         sessionState: sessionState,
         bootstrapProgress: bootstrapProgress,
@@ -140,6 +158,9 @@ void main() {
       expect(session.chapterUrl, 'https://example.com/chapter/1');
       expect(session.chapterTitle, '第一章');
       expect(session.resolvedContentType, 'audio');
+      expect(session.hybridSubMode, ReaderHybridSubMode.pdf);
+      expect(session.sourceFilePath, '/tmp/book.pdf');
+      expect(session.totalPageCount, 12);
       expect(session.audioUrl, 'https://cdn.example/chapter-1.mp3');
       expect(session.audioManifestUrl, 'https://cdn.example/chapter-1.m3u8');
       expect(session.audioHeaders, const <String, String>{

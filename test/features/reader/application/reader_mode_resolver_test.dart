@@ -95,5 +95,22 @@ void main() {
       expect(scrollMode.viewportKind, ReaderModeViewportKind.imageScroll);
       expect(scrollMode.pageAnimationStyle, isNull);
     });
+
+    test('resolves hybrid content as paged document viewport', () {
+      const settings = ReaderSettings();
+
+      final mode = resolver.resolve(
+        contentMode: ReaderContentMode.hybrid,
+        settings: settings,
+        canUsePagedText: false,
+      );
+
+      expect(mode.contentKind, ReaderContentKind.document);
+      expect(mode.layoutMode, ReaderLayoutMode.paged);
+      expect(mode.viewportKind, ReaderModeViewportKind.hybridPaged);
+      expect(mode.supportsTextSelection, isFalse);
+      expect(mode.supportsZoomGesture, isTrue);
+      expect(mode.supportsAutoRead, isFalse);
+    });
   });
 }

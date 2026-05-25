@@ -41,6 +41,13 @@ class EpubLocalBookParser implements LocalBookParser {
     '.svg',
   };
 
+  static const Set<String> _fixedLayoutMetadataSignals = <String>{
+    'pre-paginated',
+    'pre_paginated',
+    'fixed',
+    'fxl',
+  };
+
   static const List<String> _htmlCharsetCandidates = <String>[
     'utf-8',
     'utf-16be',
@@ -126,10 +133,10 @@ class EpubLocalBookParser implements LocalBookParser {
       assetRootDir: assetDir,
     );
 
-    final rawChapters =
-        (parsedIndex['chapters'] as List<Object?>? ?? const <Object?>[])
-            .whereType<Map>()
-            .toList(growable: false);
+    final rawChapters = (parsedIndex['chapters'] as List<Object?>? ??
+            const <Object?>[])
+        .whereType<Map>()
+        .toList(growable: false);
     final chapters = <LocalParsedChapter>[];
     for (final rawChapter in rawChapters) {
       final normalized = rawChapter.map(
@@ -137,11 +144,13 @@ class EpubLocalBookParser implements LocalBookParser {
       );
       chapters.add(
         LocalParsedChapter(
-          title: normalized['title']?.toString().trim().isNotEmpty == true
-              ? normalized['title']!.toString().trim()
-              : '未命名章节',
+          title:
+              normalized['title']?.toString().trim().isNotEmpty == true
+                  ? normalized['title']!.toString().trim()
+                  : '未命名章节',
           content: '',
           sourceRef: normalized['sourceRef']?.toString(),
+          contentType: normalized['contentType']?.toString(),
         ),
       );
     }
@@ -216,10 +225,14 @@ class EpubLocalBookParser implements LocalBookParser {
     String? coverArchivePath;
     final rawCoverArchivePath = metadata.coverArchivePath?.trim() ?? '';
     if (rawCoverArchivePath.isNotEmpty) {
-      final archiveEntry = _findArchiveFile(archiveFileIndex, rawCoverArchivePath);
+      final archiveEntry = _findArchiveFile(
+        archiveFileIndex,
+        rawCoverArchivePath,
+      );
       final lowerName = rawCoverArchivePath.toLowerCase();
       final extension = p.posix.extension(lowerName);
-      if (archiveEntry != null && _supportedImageExtensions.contains(extension)) {
+      if (archiveEntry != null &&
+          _supportedImageExtensions.contains(extension)) {
         coverBytes = _readArchiveEntryBytes(archiveEntry);
         coverArchivePath = rawCoverArchivePath;
       }
@@ -303,6 +316,9 @@ class EpubLocalBookParser implements LocalBookParser {
       startFragmentId: resolvedSourceRef.startFragmentId,
       endFragmentId: resolvedSourceRef.endFragmentId,
     );
+    final fixedLayoutByDocument = _documentDeclaresFixedLayout(
+      html_parser.parse(html),
+    );
     final normalized = _normalizeText(extraction.content);
     if (normalized.isEmpty && extraction.imageUrls.isEmpty) {
       throw AppException(
@@ -315,11 +331,14 @@ class EpubLocalBookParser implements LocalBookParser {
       extraction.document,
       chapterTitle: chapter.title,
     );
+    final isFixedLayout =
+        resolvedSourceRef.isFixedLayout || fixedLayoutByDocument;
     return LocalParsedChapter(
       title: chapter.title,
       content: _compatibilityContentForChapter(structuredDocument),
       imageUrls: structuredDocument.imageUrls,
       sourceRef: sourceRef,
+      contentType: isFixedLayout ? 'epub-fixed' : null,
       document: structuredDocument,
     );
   }
@@ -574,7 +593,15 @@ class EpubLocalBookParser implements LocalBookParser {
       }
 
       chapters.add(
-        _EpubChapterCandidate(archivePath: normalizedEntryPath, title: null),
+        _EpubChapterCandidate(
+          archivePath: normalizedEntryPath,
+          title: null,
+          isFixedLayout: _isFixedLayoutSpineItem(
+            itemRef: itemRef,
+            manifestItem: manifestItem,
+            packageDocument: packageDocument.document,
+          ),
+        ),
       );
     }
 
@@ -1192,7 +1219,8 @@ class EpubLocalBookParser implements LocalBookParser {
 
   String _encodeChapterSourceRef(_EpubChapterCandidate candidate) {
     if ((candidate.startFragmentId?.trim().isEmpty ?? true) &&
-        (candidate.endFragmentId?.trim().isEmpty ?? true)) {
+        (candidate.endFragmentId?.trim().isEmpty ?? true) &&
+        !candidate.isFixedLayout) {
       return candidate.archivePath;
     }
     return Uri(
@@ -1204,6 +1232,7 @@ class EpubLocalBookParser implements LocalBookParser {
           'start': candidate.startFragmentId!.trim(),
         if (candidate.endFragmentId?.trim().isNotEmpty ?? false)
           'end': candidate.endFragmentId!.trim(),
+        if (candidate.isFixedLayout) 'layout': 'fixed',
       },
     ).toString();
   }
@@ -1220,13 +1249,93 @@ class EpubLocalBookParser implements LocalBookParser {
           uri.queryParameters['start'],
         ),
         endFragmentId: _normalizeOptionalFragmentId(uri.queryParameters['end']),
+        isFixedLayout: uri.queryParameters['layout'] == 'fixed',
       );
     }
     return _ResolvedEpubChapterSourceRef(
       archivePath: _normalizeArchivePath(sourceRef),
       startFragmentId: null,
       endFragmentId: null,
+      isFixedLayout: false,
     );
+  }
+
+  bool _isFixedLayoutSpineItem({
+    required dom.Element itemRef,
+    required dom.Element manifestItem,
+    required dom.Document packageDocument,
+  }) {
+    final itemProperties =
+        _readAttribute(
+          manifestItem,
+          keys: const <String>{'properties'},
+        )?.toLowerCase() ??
+        '';
+    if (_fixedLayoutMetadataSignals.any(itemProperties.contains)) {
+      return true;
+    }
+
+    final itemRefProperties =
+        _readAttribute(
+          itemRef,
+          keys: const <String>{'properties'},
+        )?.toLowerCase() ??
+        '';
+    if (_fixedLayoutMetadataSignals.any(itemRefProperties.contains)) {
+      return true;
+    }
+
+    for (final meta in packageDocument.querySelectorAll('*')) {
+      final localName = (meta.localName ?? '').toLowerCase();
+      if (localName != 'meta') {
+        continue;
+      }
+      final property =
+          _readAttribute(
+            meta,
+            keys: const <String>{'property'},
+          )?.toLowerCase() ??
+          '';
+      final name =
+          _readAttribute(meta, keys: const <String>{'name'})?.toLowerCase() ??
+          '';
+      final value = _normalizeInlineText(meta.text).toLowerCase();
+      if ((property.contains('rendition:layout') ||
+              name.contains('rendition:layout')) &&
+          _fixedLayoutMetadataSignals.any(value.contains)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _documentDeclaresFixedLayout(dom.Document document) {
+    for (final element in document.querySelectorAll('*')) {
+      final localName = (element.localName ?? '').toLowerCase();
+      if (localName == 'meta') {
+        final name =
+            _readAttribute(
+              element,
+              keys: const <String>{'name'},
+            )?.toLowerCase() ??
+            '';
+        final property =
+            _readAttribute(
+              element,
+              keys: const <String>{'property'},
+            )?.toLowerCase() ??
+            '';
+        final value = _normalizeInlineText(element.text).toLowerCase();
+        if ((name.contains('viewport') || property.contains('viewport')) &&
+            value.isNotEmpty) {
+          return true;
+        }
+      }
+      if (localName == 'svg') {
+        return true;
+      }
+    }
+    return false;
   }
 
   String? _normalizeOptionalFragmentId(String? value) {
@@ -1892,18 +2001,21 @@ class _EpubChapterCandidate {
     required this.title,
     this.startFragmentId,
     this.endFragmentId,
+    this.isFixedLayout = false,
   });
 
   final String archivePath;
   final String? title;
   final String? startFragmentId;
   final String? endFragmentId;
+  final bool isFixedLayout;
 
   _EpubChapterCandidate copyWith({
     String? archivePath,
     Object? title = _epubCandidateSentinel,
     Object? startFragmentId = _epubCandidateSentinel,
     Object? endFragmentId = _epubCandidateSentinel,
+    bool? isFixedLayout,
   }) {
     return _EpubChapterCandidate(
       archivePath: archivePath ?? this.archivePath,
@@ -1919,6 +2031,7 @@ class _EpubChapterCandidate {
           identical(endFragmentId, _epubCandidateSentinel)
               ? this.endFragmentId
               : endFragmentId as String?,
+      isFixedLayout: isFixedLayout ?? this.isFixedLayout,
     );
   }
 }
@@ -1928,11 +2041,13 @@ class _ResolvedEpubChapterSourceRef {
     required this.archivePath,
     required this.startFragmentId,
     required this.endFragmentId,
+    required this.isFixedLayout,
   });
 
   final String archivePath;
   final String? startFragmentId;
   final String? endFragmentId;
+  final bool isFixedLayout;
 }
 
 const Object _epubCandidateSentinel = Object();

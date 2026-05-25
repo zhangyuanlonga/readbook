@@ -67,9 +67,10 @@ class ServerGatewayContentProvider extends ContentProvider {
         tocFromCache: false,
         catalogAvailable: true,
         catalogLoaded: false,
+        catalogComplete: false,
       );
     }
-    final toc = await _gatewayService.loadTocFirstBatch(
+    final toc = await _gatewayService.loadTocComplete(
       sourceId: detail.detail.sourceId,
       bookId: detail.detail.id,
       detailUrl: detail.detail.detailUrl,
@@ -83,6 +84,7 @@ class ServerGatewayContentProvider extends ContentProvider {
       tocFromCache: toc.cacheHit,
       catalogAvailable: true,
       catalogLoaded: true,
+      catalogComplete: toc.isComplete,
     );
   }
 

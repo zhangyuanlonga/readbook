@@ -16,6 +16,11 @@ void main() {
         chapterPositionRatio: 0.42,
       ),
       visiblePosition: ReaderVisiblePosition(pageIndex: 5, pageCount: 10),
+      viewportSession: ReaderViewportSession(
+        viewportMode: 'textPaged',
+        pageIndex: 5,
+        pageCount: 10,
+      ),
       rendererKind: TextReaderRendererKind.paged,
       isAutoReading: false,
       isChapterTransitioning: false,
@@ -27,12 +32,18 @@ void main() {
           scrollOffset: 320,
           maxScrollExtent: 860,
         ),
+        viewportSession: const ReaderViewportSession(
+          viewportMode: 'textScroll',
+          scrollOffset: 320,
+          maxScrollExtent: 860,
+        ),
         rendererKind: TextReaderRendererKind.scroll,
       );
 
       expect(updated.visiblePosition.scrollOffset, 320);
       expect(updated.visiblePosition.maxScrollExtent, 860);
       expect(updated.visiblePosition.pageIndex, isNull);
+      expect(updated.viewportSession.viewportMode, 'textScroll');
       expect(updated.rendererKind, TextReaderRendererKind.scroll);
     });
   });

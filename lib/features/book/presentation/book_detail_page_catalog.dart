@@ -45,7 +45,7 @@ extension on _BookDetailPageState {
   Future<BookDetailLoadResult?> _ensureCatalogLoaded(
     BookDetailLoadResult currentResult,
   ) async {
-    if (currentResult.catalogLoaded) {
+    if (currentResult.catalogLoaded && currentResult.catalogComplete) {
       return currentResult;
     }
     if (!_canOpenCatalogForResult(currentResult) || _isMissingParams) {

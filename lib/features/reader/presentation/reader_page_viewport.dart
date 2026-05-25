@@ -115,6 +115,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           () => switch (_currentViewportKind) {
             ReaderModeViewportKind.imagePaged ||
             ReaderModeViewportKind.imageScroll => _buildMangaReader(colors),
+            ReaderModeViewportKind.hybridPaged => _buildHybridReader(colors),
             ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
             ReaderModeViewportKind.textScroll => _buildReaderList(colors),
           },
@@ -140,9 +141,57 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   }
 
   Widget _buildAudioReader(_ReaderThemeColors colors) {
+    final snapshot = _bootstrapProgress?.positionSnapshot;
     return ReaderAudioView(
-      model: ReaderAudioViewModel(contentSession: _resolvedContentSession()),
+      model: ReaderAudioViewModel(
+        contentSession: _resolvedContentSession(),
+        initialPosition:
+            snapshot?.audioPositionMs == null
+                ? null
+                : Duration(milliseconds: snapshot!.audioPositionMs!),
+        onPlaybackSnapshotChanged: ({
+          required position,
+          required duration,
+          required speed,
+        }) {
+          _audioPlaybackPosition = position;
+          _audioPlaybackDuration = duration;
+          _audioPlaybackSpeed = speed;
+          _scheduleProgressSave();
+        },
+      ),
     );
+  }
+
+  Widget _buildHybridReader(_ReaderThemeColors colors) {
+    final session = _resolvedContentSession();
+    final sourceFilePath = session.sourceFilePath?.trim();
+    if (session.hybridSubMode == ReaderHybridSubMode.pdf &&
+        sourceFilePath != null &&
+        sourceFilePath.isNotEmpty) {
+      return ReaderPdfView(
+        filePath: sourceFilePath,
+        initialPage: max(
+          1,
+          (_bootstrapProgress?.positionSnapshot?.pageIndex ?? 0) + 1,
+        ),
+        onPageChanged: (pageNumber) {
+          if (!mounted) {
+            return;
+          }
+          _updateReaderState(() {
+            _mangaPageIndex = max(0, pageNumber - 1);
+            _chapterTotalPageCount ??= session.totalPageCount;
+          });
+          _syncActiveReadingRecordSessionProgress();
+          _scheduleProgressSave();
+        },
+      );
+    }
+    if (session.hybridSubMode == ReaderHybridSubMode.pictureBook) {
+      return _buildMangaReader(colors);
+    }
+    return _buildMangaReader(colors);
   }
 
   Widget _buildMangaViewport(_ReaderThemeColors colors) {

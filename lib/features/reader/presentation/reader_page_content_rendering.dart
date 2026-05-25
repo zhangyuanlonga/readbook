@@ -406,15 +406,45 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     final requestUrl = _buildMangaImageUrl(imageUrl, retryNonce);
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: ColoredBox(
-        color: colors.overlay,
-        child: _buildReaderImageWidget(
-          requestUrl: requestUrl,
-          sourceUrl: imageUrl,
-          colors: colors,
-          retryNonce: retryNonce,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => unawaited(_openInlineImagePreview(requestUrl, colors)),
+        onLongPress:
+            () => unawaited(_openInlineImagePreview(requestUrl, colors)),
+        child: ColoredBox(
+          color: colors.overlay,
+          child: _buildReaderImageWidget(
+            requestUrl: requestUrl,
+            sourceUrl: imageUrl,
+            colors: colors,
+            retryNonce: retryNonce,
+          ),
         ),
       ),
+    );
+  }
+
+  Future<void> _openInlineImagePreview(
+    String requestUrl,
+    _ReaderThemeColors colors,
+  ) async {
+    if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
+      _pauseAutoReadSession();
+    }
+    await showAdaptiveFullscreenPreview<void>(
+      context: context,
+      title: '图片预览',
+      helperText: '双指缩放，轻触关闭',
+      builder: (_) {
+        return Center(
+          child: _buildReaderImageWidget(
+            requestUrl: requestUrl,
+            sourceUrl: requestUrl,
+            colors: colors,
+            retryNonce: _mangaImageRetryNonce[requestUrl] ?? 0,
+          ),
+        );
+      },
     );
   }
 

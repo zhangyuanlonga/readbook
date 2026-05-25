@@ -30,6 +30,10 @@ class ReaderSessionStateResolver {
         rendererKind: rendererKind,
         metrics: metrics,
       ),
+      viewportSession: _resolveViewportSession(
+        rendererKind: rendererKind,
+        metrics: metrics,
+      ),
       rendererKind: rendererKind,
       isAutoReading: isAutoReading,
       isChapterTransitioning: isChapterTransitioning,
@@ -54,6 +58,28 @@ class ReaderSessionStateResolver {
     return ReaderVisiblePosition(
       scrollOffset: metrics.scrollOffset,
       maxScrollExtent: metrics.maxScrollExtent,
+    );
+  }
+
+  ReaderViewportSession _resolveViewportSession({
+    required TextReaderRendererKind rendererKind,
+    required ReaderRenderMetrics metrics,
+  }) {
+    if (rendererKind == TextReaderRendererKind.paged) {
+      final pageCount = metrics.pageCount < 0 ? 0 : metrics.pageCount;
+      final pageIndex =
+          pageCount <= 0 ? 0 : metrics.currentPageIndex.clamp(0, pageCount - 1);
+      return ReaderViewportSession(
+        viewportMode: 'textPaged',
+        pageIndex: pageIndex,
+        pageCount: pageCount,
+      );
+    }
+
+    return ReaderViewportSession(
+      viewportMode: 'textScroll',
+      scrollOffset: metrics.hasScrollClients ? metrics.scrollOffset : 0,
+      maxScrollExtent: metrics.hasScrollClients ? metrics.maxScrollExtent : 0,
     );
   }
 }

@@ -61,6 +61,7 @@ void main() {
       expect(state.currentChapterTitle, '第三章');
       expect(state.visiblePosition.pageCount, 5);
       expect(state.visiblePosition.pageIndex, 4);
+      expect(state.viewportSession.viewportMode, 'textPaged');
       expect(state.isAutoReading, isTrue);
       expect(state.rendererKind, TextReaderRendererKind.paged);
     });
@@ -85,6 +86,7 @@ void main() {
       expect(state, isNotNull);
       expect(state!.visiblePosition.scrollOffset, 128);
       expect(state.visiblePosition.maxScrollExtent, 620);
+      expect(state.viewportSession.viewportMode, 'textScroll');
       expect(state.isChapterTransitioning, isTrue);
       expect(state.rendererKind, TextReaderRendererKind.scroll);
     });

@@ -4,12 +4,15 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/local_book.dart' as local_entities;
+import '../../../domain/entities/reader_document.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 import 'local/local_chapter_content_service.dart';
+import 'local/local_book_storage_service.dart';
 import 'local/local_book_preview_service.dart';
 import 'local/local_reader_identity.dart';
 
@@ -25,6 +28,8 @@ class LocalContentProvider extends ContentProvider {
   static const String sourceName = '本地导入';
   static final ManagedFilePathResolver _pathResolver =
       ManagedFilePathResolver();
+  static final LocalBookStorageService _storageService =
+      LocalBookStorageService();
 
   final LocalBookDetailService? _detailService;
   final LocalChapterContentService? _chapterContentService;
@@ -71,6 +76,7 @@ class LocalContentProvider extends ContentProvider {
           book.indexStatus == local_entities.LocalBookIndexStatus.ready &&
           book.chapterCount > 0,
       catalogLoaded: false,
+      catalogComplete: false,
     );
   }
 
@@ -138,6 +144,7 @@ class LocalContentProvider extends ContentProvider {
               local_entities.LocalBookIndexStatus.ready &&
           result.book.chapterCount > 0,
       catalogLoaded: includeCatalog,
+      catalogComplete: includeCatalog,
     );
   }
 
@@ -190,11 +197,23 @@ class LocalContentProvider extends ContentProvider {
               chapterId: resolvedChapterId,
               chapterIndex: chapterIndex,
             );
+    final bookSnapshot = await _requireDetailService().loadBookSnapshot(
+      bookId: resolvedBookId,
+    );
+    final resolvedStoragePath =
+        bookSnapshot == null
+            ? null
+            : await _storageService.resolveStoragePath(
+              bookSnapshot.storagePath,
+            );
 
     return ChapterContentResult(
       content: chapter.content,
       fromCache: true,
       imageUrls: chapter.imageUrls,
+      contentType: chapter.contentType ?? _resolveLocalContentType(chapter),
+      sourceFilePath: resolvedStoragePath,
+      totalPageCount: _resolveLocalTotalPageCount(chapter, bookSnapshot),
       document: chapter.document,
     );
   }
@@ -250,6 +269,37 @@ class LocalContentProvider extends ContentProvider {
       intro: _resolveIntro(book.description),
       coverUrl: _resolveCoverUrl(book.coverPath),
     );
+  }
+
+  String? _resolveLocalContentType(LocalChapter chapter) {
+    final sourceRef = chapter.sourceRef?.trim().toLowerCase() ?? '';
+    if (sourceRef.startsWith('pdf:page:')) {
+      return 'pdf';
+    }
+    final document = chapter.document;
+    final inlineImageOnly =
+        chapter.imageUrls.length == 1 &&
+        (document?.isPureImageDocument == true ||
+            ReaderDocument.tryParseInlineImageParagraph(chapter.content) !=
+                null);
+    if (inlineImageOnly) {
+      return 'picture-book';
+    }
+    return null;
+  }
+
+  int? _resolveLocalTotalPageCount(
+    LocalChapter chapter,
+    local_entities.LocalBook? book,
+  ) {
+    final sourceRef = chapter.sourceRef?.trim().toLowerCase() ?? '';
+    if (sourceRef.startsWith('pdf:page:')) {
+      return book?.chapterCount;
+    }
+    if (chapter.imageUrls.isNotEmpty) {
+      return chapter.imageUrls.length;
+    }
+    return null;
   }
 
   String? _resolveCoverUrl(String? coverPath) {

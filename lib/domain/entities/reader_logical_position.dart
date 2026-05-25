@@ -7,6 +7,11 @@ class ReaderLogicalPosition {
     required this.offsetInBlock,
     required this.chapterPositionRatio,
     this.pageIndex,
+    this.totalPageCount,
+    this.viewportMode,
+    this.zoomScale,
+    this.panDx,
+    this.panDy,
   });
 
   factory ReaderLogicalPosition.fromDocument({
@@ -53,6 +58,11 @@ class ReaderLogicalPosition {
   final int offsetInBlock;
   final double chapterPositionRatio;
   final int? pageIndex;
+  final int? totalPageCount;
+  final String? viewportMode;
+  final double? zoomScale;
+  final double? panDx;
+  final double? panDy;
 
   ReaderLogicalPosition copyWith({
     int? chapterIndex,
@@ -60,7 +70,16 @@ class ReaderLogicalPosition {
     int? offsetInBlock,
     double? chapterPositionRatio,
     int? pageIndex,
+    int? totalPageCount,
+    String? viewportMode,
+    double? zoomScale,
+    double? panDx,
+    double? panDy,
     bool clearPageIndex = false,
+    bool clearTotalPageCount = false,
+    bool clearViewportMode = false,
+    bool clearZoomScale = false,
+    bool clearPanOffset = false,
   }) {
     return ReaderLogicalPosition(
       chapterIndex: chapterIndex ?? this.chapterIndex,
@@ -69,6 +88,13 @@ class ReaderLogicalPosition {
       chapterPositionRatio: (chapterPositionRatio ?? this.chapterPositionRatio)
           .clamp(0.0, 1.0),
       pageIndex: clearPageIndex ? null : (pageIndex ?? this.pageIndex),
+      totalPageCount:
+          clearTotalPageCount ? null : (totalPageCount ?? this.totalPageCount),
+      viewportMode:
+          clearViewportMode ? null : (viewportMode ?? this.viewportMode),
+      zoomScale: clearZoomScale ? null : (zoomScale ?? this.zoomScale),
+      panDx: clearPanOffset ? null : (panDx ?? this.panDx),
+      panDy: clearPanOffset ? null : (panDy ?? this.panDy),
     );
   }
 
@@ -91,6 +117,11 @@ class ReaderLogicalPosition {
       'offsetInBlock': offsetInBlock,
       'chapterPositionRatio': chapterPositionRatio,
       'pageIndex': pageIndex,
+      'totalPageCount': totalPageCount,
+      'viewportMode': viewportMode,
+      'zoomScale': zoomScale,
+      'panDx': panDx,
+      'panDy': panDy,
     };
   }
 
@@ -101,6 +132,11 @@ class ReaderLogicalPosition {
       offsetInBlock: _requiredInt(json, 'offsetInBlock'),
       chapterPositionRatio: _requiredDouble(json, 'chapterPositionRatio'),
       pageIndex: _optionalInt(json['pageIndex']),
+      totalPageCount: _optionalInt(json['totalPageCount']),
+      viewportMode: _optionalString(json['viewportMode']),
+      zoomScale: _optionalDouble(json['zoomScale']),
+      panDx: _optionalDouble(json['panDx']),
+      panDy: _optionalDouble(json['panDy']),
     );
   }
 
@@ -140,6 +176,27 @@ class ReaderLogicalPosition {
       }
     }
     throw FormatException('Missing required double field: $key');
+  }
+
+  static double? _optionalDouble(Object? value) {
+    if (value is double) {
+      return value;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  static String? _optionalString(Object? value) {
+    final normalized = value?.toString().trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
   }
 
   static int _effectiveBlockLength(ReaderBlock block) {

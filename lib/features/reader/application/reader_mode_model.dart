@@ -1,10 +1,16 @@
 import '../../../domain/entities/reader_settings.dart';
 
-enum ReaderContentKind { text, image, audio }
+enum ReaderContentKind { text, image, document, audio }
 
 enum ReaderLayoutMode { paged, scroll }
 
-enum ReaderModeViewportKind { textPaged, textScroll, imagePaged, imageScroll }
+enum ReaderModeViewportKind {
+  textPaged,
+  textScroll,
+  imagePaged,
+  imageScroll,
+  hybridPaged,
+}
 
 extension ReaderPageTurnModeX on ReaderPageTurnMode {
   bool get tapEnabled {
@@ -87,6 +93,9 @@ class ReaderModeModel {
     required this.contentKind,
     required this.layoutMode,
     required this.viewportKind,
+    required this.supportsTextSelection,
+    required this.supportsZoomGesture,
+    required this.supportsAutoRead,
     required this.sourcePageTurnMode,
     required this.tapTurnEnabled,
     required this.swipeTurnEnabled,
@@ -96,6 +105,9 @@ class ReaderModeModel {
   final ReaderContentKind contentKind;
   final ReaderLayoutMode layoutMode;
   final ReaderModeViewportKind viewportKind;
+  final bool supportsTextSelection;
+  final bool supportsZoomGesture;
+  final bool supportsAutoRead;
   final ReaderPageTurnMode sourcePageTurnMode;
   final bool tapTurnEnabled;
   final bool swipeTurnEnabled;
@@ -103,6 +115,7 @@ class ReaderModeModel {
 
   bool get isText => contentKind == ReaderContentKind.text;
   bool get isImage => contentKind == ReaderContentKind.image;
+  bool get isDocument => contentKind == ReaderContentKind.document;
   bool get isAudio => contentKind == ReaderContentKind.audio;
   bool get isPaged => layoutMode == ReaderLayoutMode.paged;
   bool get isScroll => layoutMode == ReaderLayoutMode.scroll;

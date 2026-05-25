@@ -1,5 +1,69 @@
 import 'reader_logical_position.dart';
 
+class ReaderPositionSnapshot {
+  const ReaderPositionSnapshot({
+    required this.viewportMode,
+    this.pageIndex,
+    this.pageCount,
+    this.scrollOffset,
+    this.maxScrollExtent,
+    this.zoomScale,
+    this.panDx,
+    this.panDy,
+    this.audioPositionMs,
+    this.audioDurationMs,
+    this.audioSpeed,
+  });
+
+  final String viewportMode;
+  final int? pageIndex;
+  final int? pageCount;
+  final double? scrollOffset;
+  final double? maxScrollExtent;
+  final double? zoomScale;
+  final double? panDx;
+  final double? panDy;
+  final int? audioPositionMs;
+  final int? audioDurationMs;
+  final double? audioSpeed;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'viewportMode': viewportMode,
+      'pageIndex': pageIndex,
+      'pageCount': pageCount,
+      'scrollOffset': scrollOffset,
+      'maxScrollExtent': maxScrollExtent,
+      'zoomScale': zoomScale,
+      'panDx': panDx,
+      'panDy': panDy,
+      'audioPositionMs': audioPositionMs,
+      'audioDurationMs': audioDurationMs,
+      'audioSpeed': audioSpeed,
+    };
+  }
+
+  factory ReaderPositionSnapshot.fromJson(Map<String, dynamic> json) {
+    final viewportMode = (json['viewportMode']?.toString().trim() ?? '');
+    if (viewportMode.isEmpty) {
+      throw const FormatException('Missing required field: viewportMode');
+    }
+    return ReaderPositionSnapshot(
+      viewportMode: viewportMode,
+      pageIndex: ReadingProgress._optionalInt(json['pageIndex']),
+      pageCount: ReadingProgress._optionalInt(json['pageCount']),
+      scrollOffset: ReadingProgress._asDouble(json['scrollOffset']),
+      maxScrollExtent: ReadingProgress._asDouble(json['maxScrollExtent']),
+      zoomScale: ReadingProgress._asDouble(json['zoomScale']),
+      panDx: ReadingProgress._asDouble(json['panDx']),
+      panDy: ReadingProgress._asDouble(json['panDy']),
+      audioPositionMs: ReadingProgress._optionalInt(json['audioPositionMs']),
+      audioDurationMs: ReadingProgress._optionalInt(json['audioDurationMs']),
+      audioSpeed: ReadingProgress._asDouble(json['audioSpeed']),
+    );
+  }
+}
+
 class ReadingProgress {
   const ReadingProgress({
     required this.bookId,
@@ -12,6 +76,7 @@ class ReadingProgress {
     required this.updatedAt,
     this.chapterPositionRatio = 0,
     this.logicalPosition,
+    this.positionSnapshot,
   });
 
   final String bookId;
@@ -24,6 +89,7 @@ class ReadingProgress {
   final DateTime updatedAt;
   final double chapterPositionRatio;
   final ReaderLogicalPosition? logicalPosition;
+  final ReaderPositionSnapshot? positionSnapshot;
 
   Map<String, dynamic> toJson() {
     return {
@@ -37,6 +103,8 @@ class ReadingProgress {
       'updatedAt': updatedAt.toIso8601String(),
       'chapterPositionRatio': chapterPositionRatio,
       if (logicalPosition != null) 'logicalPosition': logicalPosition!.toJson(),
+      if (positionSnapshot != null)
+        'positionSnapshot': positionSnapshot!.toJson(),
     };
   }
 
@@ -55,6 +123,7 @@ class ReadingProgress {
         'chapterPositionRatio',
       ).clamp(0.0, 1.0),
       logicalPosition: _optionalLogicalPosition(json['logicalPosition']),
+      positionSnapshot: _optionalPositionSnapshot(json['positionSnapshot']),
     );
   }
 
@@ -81,6 +150,19 @@ class ReadingProgress {
       }
     }
     throw FormatException('Missing required int field: $key');
+  }
+
+  static int? _optionalInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
   }
 
   static double? _asDouble(Object? value) {
@@ -125,6 +207,15 @@ class ReadingProgress {
       return null;
     }
     return ReaderLogicalPosition.fromJson(
+      value.map((key, nestedValue) => MapEntry(key.toString(), nestedValue)),
+    );
+  }
+
+  static ReaderPositionSnapshot? _optionalPositionSnapshot(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return ReaderPositionSnapshot.fromJson(
       value.map((key, nestedValue) => MapEntry(key.toString(), nestedValue)),
     );
   }

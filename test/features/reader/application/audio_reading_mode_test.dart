@@ -45,5 +45,18 @@ void main() {
       expect(paused.isPlaying, isFalse);
       expect(paused.isBuffering, isFalse);
     });
+
+    test('supports persisted audio progress semantics', () {
+      const state = AudioPlaybackState(
+        status: AudioPlaybackStatus.paused,
+        speed: 1.5,
+        currentPosition: Duration(minutes: 3, seconds: 12),
+        totalDuration: Duration(minutes: 24),
+      );
+
+      expect(state.currentPosition.inMilliseconds, 192000);
+      expect(state.totalDuration?.inMilliseconds, 1440000);
+      expect(state.speed, 1.5);
+    });
   });
 }

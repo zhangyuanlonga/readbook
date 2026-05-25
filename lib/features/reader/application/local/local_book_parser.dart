@@ -7,6 +7,7 @@ class LocalParsedChapter {
     required this.content,
     this.imageUrls = const <String>[],
     this.sourceRef,
+    this.contentType,
     this.startOffset,
     this.endOffset,
     this.document,
@@ -16,6 +17,7 @@ class LocalParsedChapter {
   final String content;
   final List<String> imageUrls;
   final String? sourceRef;
+  final String? contentType;
   final int? startOffset;
   final int? endOffset;
   final ReaderDocument? document;

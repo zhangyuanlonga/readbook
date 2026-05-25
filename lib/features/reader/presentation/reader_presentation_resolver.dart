@@ -28,6 +28,9 @@ class ReaderSessionSeed {
     this.chapterTitle,
     this.chapterIndex,
     this.resolvedContentType,
+    this.hybridSubMode,
+    this.sourceFilePath,
+    this.totalPageCount,
     this.audioUrl,
     this.audioManifestUrl,
     this.audioHeaders = const <String, String>{},
@@ -46,6 +49,9 @@ class ReaderSessionSeed {
   final String? chapterTitle;
   final int? chapterIndex;
   final String? resolvedContentType;
+  final ReaderHybridSubMode? hybridSubMode;
+  final String? sourceFilePath;
+  final int? totalPageCount;
   final String? audioUrl;
   final String? audioManifestUrl;
   final Map<String, String> audioHeaders;
@@ -80,6 +86,9 @@ class ReaderPresentationResolver {
           chapterTitle: seed.chapterTitle,
           chapterIndex: seed.chapterIndex,
           resolvedContentType: seed.resolvedContentType,
+          hybridSubMode: seed.hybridSubMode,
+          sourceFilePath: seed.sourceFilePath,
+          totalPageCount: seed.totalPageCount,
           audioUrl: seed.audioUrl,
           audioManifestUrl: seed.audioManifestUrl,
           audioHeaders: seed.audioHeaders,

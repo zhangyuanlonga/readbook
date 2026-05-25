@@ -161,6 +161,11 @@ extension _ReaderPageShellExtension on _ReaderPageState {
           await _turnMangaPage(forward: forward);
         }
         return;
+      case ReaderModeViewportKind.hybridPaged:
+        if (includeMangaPaged) {
+          await _turnMangaPage(forward: forward);
+        }
+        return;
       case ReaderModeViewportKind.textPaged:
         await _turnPagedTextPage(direction: forward ? 1 : -1);
         return;
@@ -630,7 +635,11 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         unawaited(_openCatalogSheetFromOverlay());
         return;
       case ReaderTapZoneAction.autoRead:
-        unawaited(_openAutoReadFromOverlay());
+        if (_supportsAutoRead) {
+          unawaited(_openAutoReadFromOverlay());
+        } else {
+          _showMessage('当前内容暂不支持自动阅读');
+        }
         return;
       case ReaderTapZoneAction.bookmark:
         unawaited(_showCatalogSheet());

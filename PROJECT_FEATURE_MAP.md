@@ -197,29 +197,37 @@
 - **数据存储**：章节缓存、阅读进度和目录快照在 SQLite/Drift；阅读设置在 SharedPreferences；本地书内容在本地文件和 SQLite。
 - **交互细节**：阅读器路由使用 220ms fade；任务 token 避免旧加载/分页任务覆盖新会话。
 
-### 文本、漫画、音频与分页渲染
-- **业务描述**：阅读器根据章节内容类型渲染文本、图片漫画或音频相关视图；文本可分页或连续滚动，漫画支持图片预加载。
-- **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_content_rendering.dart`、`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_text_paged_view.dart`、`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_manga_view.dart`、`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_audio_view.dart`
-- **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_pagination_engine.dart` + `ReaderPaginationEngine`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/text_reader_renderer.dart`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_content_mode_resolver.dart`
-- **关键方法**：`paginate()`、`_setContentFlow()`、`_scheduleInlineImagePrecache()`
-- **数据存储**：分页缓存使用 `ReaderPaginationCacheService` 内存缓存；章节内容缓存使用 SQLite/Drift 表 `chapter_caches`。
-- **交互细节**：翻页动画注册在 `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/paged_animation/`，包含 curl、cover、fade、translate、vertical。
+### 多模态渲染与分页
+- **业务描述**：阅读器当前按 `text / hybrid / comic / audio` 四类内容模式分发；文本支持分页和滚动，固定页内容承载 PDF / 固定版式 EPUB / 绘本，漫画支持连续滚动和分页，听书支持音频播放与进度恢复。
+- **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_viewport.dart`、`reader_text_paged_view.dart`、`reader_text_scroll_view.dart`、`reader_manga_view.dart`、`reader_pdf_view.dart`、`reader_audio_view.dart`
+- **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_content_mode_resolver.dart`、`reader_mode_resolver.dart`、`reader_mode_capabilities.dart`、`reader_viewport_state_resolver.dart`、`reader_pagination_engine.dart`
+- **关键方法**：`resolveFromChapterResult()`、`_setContentFlow()`、`_buildHybridReader()`、`_buildMangaViewport()`、`_scheduleInlineImagePrecache()`
+- **数据存储**：分页缓存使用 `ReaderPaginationCacheService`；固定页/漫画/音频恢复依赖 `ReadingProgress.positionSnapshot`；章节正文缓存使用 SQLite/Drift 表 `chapter_caches`
+- **交互细节**：PDF 通过 `pdfrx` 渲染；正文图片支持全屏预览；固定页与漫画共用页码型 progress 口径；翻页动画仍由 `paged_animation/` 目录下 renderer 承载
 
 ### 章节导航、目录与跳转
-- **业务描述**：用户打开目录、搜索目录、跳转章节、前后章切换、漫画位置跳转、书签位置跳转。
+- **业务描述**：用户打开目录、搜索目录、跳转章节、前后章切换、漫画/绘本/PDF 位置跳转、书签位置跳转；音频模式默认不参与正文章节跳转链路。
 - **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_navigation.dart` + `_showCatalogSheet()`、`_jumpTo()`、`_executeNavigationRequest()`；目录 UI `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_catalog_sheet.dart`
 - **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_chapter_navigation.dart`、`reader_jump_planner.dart`、`reader_catalog_search_service.dart`
-- **关键方法**：`_ensureCatalogLoadedForOverlay()`、`_jumpToAdjacentReadableChapter()`、`_openMangaPositionSheet()`
+- **关键方法**：`_ensureCatalogLoadedForOverlay()`、`_jumpToAdjacentReadableChapter()`、`_openMangaPositionSheet()`、`_restoreScrollPosition()`
 - **数据存储**：目录快照 SQLite/Drift 表 `toc_snapshots`；进度表 `reading_progresses`。
-- **交互细节**：目录/位置跳转使用 `showAdaptiveActionSurface`；漫画位置使用 `Slider` 显示百分比。
+- **交互细节**：目录/位置跳转使用 `showAdaptiveActionSurface`；漫画和页码型图片内容通过百分比定位；PDF 固定页恢复依赖页码快照。
 
 ### 阅读设置与视觉定制
-- **业务描述**：用户调整字号、行高、段距、边距、字体、亮度、主题模式、背景图、正文颜色/装饰、页眉页脚、漫画阅读方式、音量键翻页、自动阅读等。
+- **业务描述**：用户调整字号、行高、段距、边距、字体、亮度、主题模式、背景图、正文颜色/装饰、页眉页脚、漫画阅读方式、音量键翻页、自动阅读等；设置面板会按当前内容模式显隐不适用分组。
 - **UI 位置**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_settings_sheet.dart` + `_showSettingsSheet()`；设置面板分组在 `/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/presentation/reader_page_settings_panel.dart`
 - **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_preferences_service.dart` + `ReaderPreferencesService`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_settings_resolution_service.dart`
-- **关键方法**：`loadSettings()`、`_persistResolvedReaderSettingsLayers()`、`saveCustomBackgroundImages()`
+- **关键方法**：`loadSettings()`、`_persistResolvedReaderSettingsLayers()`、`saveCustomBackgroundImages()`、`_showSettingsSheet()`
 - **数据存储**：SharedPreferences 保存大量 `reader.settings.*` 键；自定义背景通过本地文件/托管资源保存。
-- **交互细节**：设置弹层使用 `showGeneralDialog`、透明遮罩和 `AppFadeSlideTransition`；滑杆交互时面板会临时降低透明度，草稿设置 220ms 防抖持久化。
+- **交互细节**：设置弹层使用 `showGeneralDialog`、透明遮罩和 `AppFadeSlideTransition`；滑杆交互时面板会临时降低透明度，草稿设置 220ms 防抖持久化；音频模式会隐藏自动阅读面板，Hybrid 模式会保留交互/界面但禁用不适用能力。
+
+### 多模态进度与恢复
+- **业务描述**：阅读器为文本、固定页、漫画、听书统一保存恢复快照；文本保留逻辑位置和比例，固定页与漫画保存页码，听书保存播放位置、总时长和倍速。
+- **UI 位置**：无独立 UI，恢复入口在阅读器启动、换源后恢复、继续阅读卡片和书架继续阅读。
+- **核心逻辑**：`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/domain/entities/reading_progress.dart` + `ReadingProgress`、`ReaderPositionSnapshot`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/domain/entities/reader_logical_position.dart`；`/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/lib/features/reader/application/reader_session_state.dart`
+- **关键方法**：`_saveProgress()`、`loadProgress()`、`_bootstrapProgressForCurrentChapter()`、`ReaderSessionStateResolver.resolve()`
+- **数据存储**：SQLite/Drift 表 `reading_progresses`；旧 `chapterPositionRatio` 仍保留兼容，新增快照通过 JSON 存入逻辑位置/位置快照结构
+- **交互细节**：文本、漫画、PDF、绘本、听书恢复路径已经统一到同一条 Reader 启动链路
 
 ### 书签、划线与笔记
 - **业务描述**：用户在阅读器内选择文本，保存“灵感”书签，添加笔记，切换高亮、加粗、下划线和波浪线，也可复制选中文本。
