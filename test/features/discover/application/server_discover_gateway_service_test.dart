@@ -25,8 +25,8 @@ void main() {
                 },
               ],
               'page': 1,
-              'pageSize': 500,
-              'total': 1,
+              'pageSize': 100,
+              'total': 128,
               'hasMore': false,
             });
       final service = ServerDiscoverGatewayService(
@@ -40,6 +40,8 @@ void main() {
       expect(client.calls.single.method, ApiMethod.get);
       expect(client.calls.single.path, 'v1/sources');
       expect(client.calls.single.queryParameters['enabled'], isTrue);
+      expect(client.calls.single.queryParameters['page'], 1);
+      expect(client.calls.single.queryParameters['pageSize'], 100);
       expect(sources, hasLength(1));
       final source = sources.single;
       expect(source.id, 'server-gateway:source_a');
@@ -48,6 +50,60 @@ void main() {
       expect(source.latencyMs, isNull);
       expect(source.executionContext, isNull);
       expect(source.categories, isEmpty);
+    });
+
+    test('loads paged source list and remote keyword search', () async {
+      final client =
+          _FakeDiscoverApiClient()
+            ..responses.addAll(<Object?>[
+              <String, Object?>{
+                'items': <Object?>[
+                  <String, Object?>{
+                    'id': 'source_a',
+                    'sourceUrl': 'https://a.example',
+                    'sourceName': '第一页书源',
+                    'enabled': true,
+                  },
+                ],
+                'page': 2,
+                'pageSize': 100,
+                'total': 201,
+                'hasMore': true,
+              },
+              <String, Object?>{
+                'items': <Object?>[
+                  <String, Object?>{
+                    'id': 'source_b',
+                    'sourceUrl': 'https://b.example',
+                    'sourceName': '远程命中书源',
+                    'enabled': true,
+                  },
+                ],
+                'page': 1,
+                'pageSize': 100,
+                'total': 1,
+                'hasMore': false,
+              },
+            ]);
+      final service = ServerDiscoverGatewayService(
+        client: client,
+        sourceHealthService: _NoopSourceHealthService(),
+      );
+
+      final page = await service.loadDiscoverSourcePage(page: 2, pageSize: 100);
+      final search = await service.searchDiscoverSources(keyword: '远程命中');
+
+      expect(page.page, 2);
+      expect(page.pageSize, 100);
+      expect(page.total, 201);
+      expect(page.hasMore, isTrue);
+      expect(page.items.single.name, '第一页书源');
+      expect(client.calls[0].queryParameters['page'], 2);
+      expect(client.calls[0].queryParameters['pageSize'], 100);
+      expect(search.items.single.name, '远程命中书源');
+      expect(client.calls[1].queryParameters['keyword'], '远程命中');
+      expect(client.calls[1].queryParameters['page'], 1);
+      expect(client.calls[1].queryParameters['pageSize'], 100);
     });
 
     test('loads source categories on demand', () async {

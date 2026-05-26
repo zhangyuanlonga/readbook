@@ -25,17 +25,44 @@ class ServerDiscoverGatewayService {
   final ApiClient _client;
   final SourceHealthService _sourceHealthService;
 
-  static const int _sourcePageSize = 500;
+  static const int defaultSourcePageSize = 100;
 
   Future<List<DiscoverSourceSummary>> loadDiscoverSources() async {
-    final sources = await _loadEnabledSources();
-    final items = sources.map(_sourceSummaryFromItem).toList(growable: false);
-    items.sort((a, b) {
-      final byStatus = a.status.index.compareTo(b.status.index);
-      if (byStatus != 0) return byStatus;
-      return a.name.compareTo(b.name);
-    });
-    return items;
+    final page = await loadDiscoverSourcePage(
+      page: 1,
+      pageSize: defaultSourcePageSize,
+    );
+    return page.items;
+  }
+
+  Future<DiscoverSourcePage> loadDiscoverSourcePage({
+    int page = 1,
+    int pageSize = defaultSourcePageSize,
+    String? keyword,
+  }) async {
+    final result = await _loadEnabledSourcesPage(
+      page: page < 1 ? 1 : page,
+      pageSize: pageSize.clamp(1, 500),
+      keyword: keyword,
+    );
+    return DiscoverSourcePage(
+      items: result.items.map(_sourceSummaryFromItem).toList(growable: false),
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+      hasMore: result.hasMore,
+    );
+  }
+
+  Future<DiscoverSourcePage> searchDiscoverSources({
+    required String keyword,
+    int pageSize = defaultSourcePageSize,
+  }) {
+    return loadDiscoverSourcePage(
+      page: 1,
+      pageSize: pageSize,
+      keyword: keyword,
+    );
   }
 
   Future<DiscoverSourceSummary> loadSourceCategories({
@@ -110,30 +137,27 @@ class ServerDiscoverGatewayService {
     }
   }
 
-  Future<List<_GatewaySourceItem>> _loadEnabledSources() async {
-    final all = <_GatewaySourceItem>[];
-    var page = 1;
-    var hasMore = true;
-    while (hasMore) {
-      final result = await _client.request<_GatewaySourcePage>(
-        method: ApiMethod.get,
-        path: 'v1/sources',
-        queryParameters: <String, dynamic>{
-          'enabled': true,
-          'page': page,
-          'pageSize': _sourcePageSize,
-        },
-        attachAccessToken: true,
-        enableRetry: false,
-        timeout: const Duration(seconds: 15),
-        stage: ErrorStage.source,
-        decoder: _GatewaySourcePage.fromEnvelopeData,
-      );
-      all.addAll(result.items.where((item) => item.enabled));
-      hasMore = result.hasMore;
-      page += 1;
-    }
-    return all;
+  Future<_GatewaySourcePage> _loadEnabledSourcesPage({
+    required int page,
+    required int pageSize,
+    String? keyword,
+  }) async {
+    final normalizedKeyword = keyword?.trim() ?? '';
+    return _client.request<_GatewaySourcePage>(
+      method: ApiMethod.get,
+      path: 'v1/sources',
+      queryParameters: <String, dynamic>{
+        'enabled': true,
+        'page': page,
+        'pageSize': pageSize,
+        if (normalizedKeyword.isNotEmpty) 'keyword': normalizedKeyword,
+      },
+      attachAccessToken: true,
+      enableRetry: false,
+      timeout: const Duration(seconds: 15),
+      stage: ErrorStage.source,
+      decoder: _GatewaySourcePage.fromEnvelopeData,
+    );
   }
 
   Future<DiscoverSourceSummary> _loadSourceSummary(
@@ -229,6 +253,22 @@ class ServerDiscoverGatewayService {
   }
 }
 
+class DiscoverSourcePage {
+  const DiscoverSourcePage({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.hasMore,
+  });
+
+  final List<DiscoverSourceSummary> items;
+  final int page;
+  final int pageSize;
+  final int total;
+  final bool hasMore;
+}
+
 DiscoverSourceStatus _statusFromHealth(String? healthStatus, int latencyMs) {
   final normalized = healthStatus?.trim().toLowerCase() ?? '';
   if (normalized == 'unavailable' || normalized == 'disabled') {
@@ -249,9 +289,18 @@ int _stableSeed(String value) {
 }
 
 class _GatewaySourcePage {
-  const _GatewaySourcePage({required this.items, required this.hasMore});
+  const _GatewaySourcePage({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.hasMore,
+  });
 
   final List<_GatewaySourceItem> items;
+  final int page;
+  final int pageSize;
+  final int total;
   final bool hasMore;
 
   factory _GatewaySourcePage.fromEnvelopeData(Object? data) {
@@ -260,6 +309,9 @@ class _GatewaySourcePage {
       items: (map['items'] as List? ?? const <Object?>[])
           .map(_GatewaySourceItem.fromJson)
           .toList(growable: false),
+      page: _intOrDefault(map['page'], 1),
+      pageSize: _intOrDefault(map['pageSize'] ?? map['page_size'], 0),
+      total: _intOrDefault(map['total'], 0),
       hasMore: map['hasMore'] == true,
     );
   }
@@ -491,4 +543,10 @@ String _stringOrEmpty(Object? value) => value?.toString().trim() ?? '';
 String? _optionalString(Object? value) {
   final text = _stringOrEmpty(value);
   return text.isEmpty ? null : text;
+}
+
+int _intOrDefault(Object? value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }

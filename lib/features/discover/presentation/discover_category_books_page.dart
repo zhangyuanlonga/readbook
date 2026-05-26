@@ -12,7 +12,9 @@ import '../../../core/network/api_client.dart';
 import '../../../domain/entities/book.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/application/cover_gallery_provider.dart';
 import '../application/discover_source_provider.dart';
 import '../domain/discover_source_summary.dart';
 
@@ -37,7 +39,7 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
       activeTheme,
     );
     final palette = resolveAdvancedThemePalette(theme.colorScheme, activeTheme);
-    final sourcesAsync = ref.watch(discoverSourceSummariesProvider);
+    final sourcesAsync = ref.watch(discoverSourcePagerProvider);
 
     return sourcesAsync.when(
       loading:
@@ -64,16 +66,14 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
               ),
             ),
           ),
-      data: (sources) {
-        final source = _findSource(sources);
-        final categoriesAsync =
-            source == null
-                ? null
-                : ref.watch(discoverSourceCategoriesProvider(source));
-        final loadedSource = categoriesAsync?.valueOrNull ?? source;
-        final category =
-            loadedSource == null ? null : _findCategory(loadedSource);
-        final title = category?.name ?? loadedSource?.name ?? '分类';
+      data: (sourceState) {
+        final source = _findSource(sourceState.items) ?? _sourceFromRoute();
+        final categoriesAsync = ref.watch(
+          discoverSourceCategoriesProvider(source),
+        );
+        final loadedSource = categoriesAsync.valueOrNull ?? source;
+        final category = _findCategory(loadedSource);
+        final title = category?.name ?? loadedSource.name;
 
         return Scaffold(
           extendBodyBehindAppBar: true,
@@ -90,9 +90,7 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
                   ),
                 ),
                 child:
-                    source == null
-                        ? _MissingCategoryState(metrics: metrics)
-                        : categoriesAsync == null || categoriesAsync.isLoading
+                    categoriesAsync.isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : categoriesAsync.hasError
                         ? _CategoryLoadFailureState(
@@ -102,7 +100,7 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
                                 discoverSourceCategoriesProvider(source),
                               ),
                         )
-                        : category == null || loadedSource == null
+                        : category == null
                         ? _MissingCategoryState(metrics: metrics)
                         : _CategoryBooksGrid(
                           source: loadedSource,
@@ -176,6 +174,18 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
       }
     }
     return null;
+  }
+
+  DiscoverSourceSummary _sourceFromRoute() {
+    final decodedSourceId = Uri.decodeComponent(sourceId);
+    return DiscoverSourceSummary(
+      id: decodedSourceId,
+      name: '分类',
+      categoryCount: 0,
+      status: DiscoverSourceStatus.available,
+      latencyMs: null,
+      categories: const <DiscoverSourceCategory>[],
+    );
   }
 
   DiscoverSourceCategory? _findCategory(DiscoverSourceSummary source) {
@@ -361,7 +371,7 @@ class _CategoryBooksGrid extends ConsumerWidget {
   }
 }
 
-class _DiscoverBookTile extends StatelessWidget {
+class _DiscoverBookTile extends ConsumerWidget {
   const _DiscoverBookTile({
     required this.source,
     required this.book,
@@ -373,7 +383,19 @@ class _DiscoverBookTile extends StatelessWidget {
   final ResolvedAdvancedThemePalette palette;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final galleries = ref.watch(coverGalleriesProvider).valueOrNull ?? const [];
+    final cover = resolveBookCover(
+      realCoverUrl: book.coverUrl,
+      activeTheme: activeTheme,
+      galleries: galleries,
+      brightness: Theme.of(context).brightness,
+      bookId: book.id,
+      sourceId: source.id,
+      detailUrl: book.detailUrl,
+    );
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -384,7 +406,22 @@ class _DiscoverBookTile extends StatelessWidget {
           children: [
             AspectRatio(
               aspectRatio: 68 / 96,
-              child: _MockBookCover(book: book, palette: palette),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final height = constraints.maxHeight;
+                  return ResolvedBookCoverView(
+                    cover: cover,
+                    title: book.name,
+                    author: book.author,
+                    width: width,
+                    height: height,
+                    borderRadius: BorderRadius.circular(12),
+                    cacheWidth: _coverDecodeSize(context, width),
+                    cacheHeight: _coverDecodeSize(context, height),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -401,6 +438,14 @@ class _DiscoverBookTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  int? _coverDecodeSize(BuildContext context, double logicalSize) {
+    if (!logicalSize.isFinite || logicalSize <= 0) {
+      return null;
+    }
+    final ratio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
+    return (logicalSize * ratio).round();
   }
 
   Future<void> _openBookDetail(BuildContext context) async {
@@ -445,66 +490,5 @@ class _DiscoverBookTile extends StatelessWidget {
         context.push(route, extra: initialBook);
       },
     );
-  }
-}
-
-class _MockBookCover extends StatelessWidget {
-  const _MockBookCover({required this.book, required this.palette});
-
-  final DiscoverCategoryBook book;
-  final ResolvedAdvancedThemePalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final colors = _coverColors(colorScheme, book.coverSeed);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: colors,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: palette.shadowColor.withValues(alpha: 0.16),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: 10,
-            right: 10,
-            bottom: 12,
-            child: Text(
-              book.name.characters.take(4).toString(),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                height: 1.12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Color> _coverColors(ColorScheme colorScheme, int seed) {
-    final palettes = <List<Color>>[
-      [const Color(0xFF355C7D), const Color(0xFF6C5B7B)],
-      [const Color(0xFF2F4858), const Color(0xFF33658A)],
-      [const Color(0xFF4B644A), const Color(0xFF7A9E7E)],
-      [const Color(0xFF5B3758), const Color(0xFFB56576)],
-      [const Color(0xFF284B63), const Color(0xFF3C6E71)],
-      [const Color(0xFF5F4B66), const Color(0xFFB565A7)],
-    ];
-    return palettes[seed % palettes.length];
   }
 }

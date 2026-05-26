@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
@@ -23,13 +25,35 @@ class DiscoverPage extends ConsumerStatefulWidget {
 
 class _DiscoverPageState extends ConsumerState<DiscoverPage> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _searchKeyword = '';
   String? _expandedSourceId;
+  Timer? _searchDebounce;
+  String _remoteSearchKeyword = '';
+  AsyncValue<List<DiscoverSourceSummary>>? _remoteSearchAsync;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients || _searchKeyword.trim().isNotEmpty) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 360) {
+      ref.read(discoverSourcePagerProvider.notifier).loadMore();
+    }
   }
 
   @override
@@ -43,7 +67,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
       activeTheme,
     );
     final palette = resolveAdvancedThemePalette(theme.colorScheme, activeTheme);
-    final sourcesAsync = ref.watch(discoverSourceSummariesProvider);
+    final sourcesAsync = ref.watch(discoverSourcePagerProvider);
     final horizontal = metrics.pagePadding;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
@@ -60,7 +84,15 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
           IconButton(
             tooltip: '刷新',
             onPressed: () {
-              ref.invalidate(discoverSourceSummariesProvider);
+              _searchDebounce?.cancel();
+              _searchController.clear();
+              setState(() {
+                _searchKeyword = '';
+                _expandedSourceId = null;
+                _remoteSearchKeyword = '';
+                _remoteSearchAsync = null;
+              });
+              ref.read(discoverSourcePagerProvider.notifier).refresh();
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -98,7 +130,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
 
   Widget _buildBody({
     required BuildContext context,
-    required AsyncValue<List<DiscoverSourceSummary>> sourcesAsync,
+    required AsyncValue<DiscoverSourcePagerState> sourcesAsync,
     required ResolvedAdvancedThemePalette palette,
     required bool isWide,
     required double horizontal,
@@ -144,10 +176,21 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
       );
     }
 
-    final sources = sourcesAsync.value ?? [];
-    final filteredSources = _filterSources(sources);
+    final pager = sourcesAsync.valueOrNull;
+    final sources = pager?.items ?? const <DiscoverSourceSummary>[];
+    final normalizedKeyword = _searchKeyword.trim();
+    final localFilteredSources = _filterSources(sources);
+    final showRemoteResults =
+        normalizedKeyword.isNotEmpty &&
+        localFilteredSources.isEmpty &&
+        _remoteSearchKeyword == normalizedKeyword;
+    final remoteSearchAsync = showRemoteResults ? _remoteSearchAsync : null;
+    final filteredSources =
+        remoteSearchAsync?.valueOrNull ?? localFilteredSources;
+    final isRemoteSearchLoading = remoteSearchAsync?.isLoading == true;
+    final remoteSearchError = remoteSearchAsync?.hasError == true;
 
-    if (sources.isEmpty) {
+    if (sources.isEmpty && normalizedKeyword.isEmpty) {
       return Center(
         child: AppEmptyStateCard(
           icon: Icons.travel_explore_rounded,
@@ -158,6 +201,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
     }
 
     return CustomScrollView(
+      controller: _scrollController,
       slivers: [
         // 顶部间距 + 搜索框
         SliverPadding(
@@ -167,7 +211,17 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
             horizontal,
             0,
           ),
-          sliver: SliverToBoxAdapter(child: _buildSearchBar(context, palette)),
+          sliver: SliverToBoxAdapter(
+            child: _buildSearchBar(
+              context,
+              palette,
+              counterText: _sourceCounterText(
+                pager: pager,
+                filteredCount: filteredSources.length,
+                isRemoteResult: remoteSearchAsync?.hasValue == true,
+              ),
+            ),
+          ),
         ),
         // 书源列表
         SliverPadding(
@@ -185,7 +239,6 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                 delay: Duration(milliseconds: (index % 10) * 18),
                 child: _SourceRow(
                   source: source,
-                  showColumns: isWide,
                   isExpanded: _expandedSourceId == source.id,
                   palette: palette,
                   onTap: () {
@@ -206,8 +259,42 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
             },
           ),
         ),
+        if (isRemoteSearchLoading)
+          const SliverPadding(
+            padding: EdgeInsets.only(top: 36),
+            sliver: SliverToBoxAdapter(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        if (remoteSearchError)
+          SliverPadding(
+            padding: const EdgeInsets.only(top: 36),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: AppEmptyStateCard(
+                  icon: Icons.cloud_off_rounded,
+                  title: '服务器搜索失败',
+                  description: '本地未找到匹配书源，远程查询暂时不可用',
+                  actionLabel: '重试',
+                  onAction: () => _startRemoteSearch(normalizedKeyword),
+                ),
+              ),
+            ),
+          ),
+        if (normalizedKeyword.isEmpty)
+          SliverToBoxAdapter(
+            child: _LoadMoreFooter(
+              state: pager,
+              onRetry:
+                  () =>
+                      ref.read(discoverSourcePagerProvider.notifier).loadMore(),
+            ),
+          ),
         // 无搜索结果提示
-        if (filteredSources.isEmpty && _searchKeyword.isNotEmpty)
+        if (filteredSources.isEmpty &&
+            normalizedKeyword.isNotEmpty &&
+            !isRemoteSearchLoading &&
+            !remoteSearchError)
           SliverPadding(
             padding: EdgeInsets.only(top: 48),
             sliver: SliverToBoxAdapter(
@@ -221,7 +308,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '没有找到 "$_searchKeyword"',
+                      '没有找到 "$normalizedKeyword"',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -237,12 +324,12 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
 
   Widget _buildSearchBar(
     BuildContext context,
-    ResolvedAdvancedThemePalette palette,
-  ) {
+    ResolvedAdvancedThemePalette palette, {
+    required String counterText,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final borderColor = palette.cardBorderColor.withValues(alpha: 0.42);
-
     return SizedBox(
       height: 48,
       child: DecoratedBox(
@@ -293,13 +380,12 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                   fontWeight: FontWeight.w600,
                 ),
                 textInputAction: TextInputAction.search,
-                onChanged: (value) {
-                  setState(() {
-                    _searchKeyword = value;
-                  });
-                },
+                onChanged: _handleSearchChanged,
+                onSubmitted: _handleSearchSubmitted,
               ),
             ),
+            const SizedBox(width: 8),
+            _SourceCountBadge(text: counterText),
             if (_searchKeyword.isNotEmpty)
               IconButton(
                 tooltip: '清空',
@@ -308,27 +394,135 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                 onPressed: () {
                   setState(() {
                     _searchKeyword = '';
+                    _remoteSearchKeyword = '';
+                    _remoteSearchAsync = null;
                     _searchController.clear();
                   });
                 },
               )
             else
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
           ],
         ),
       ),
     );
   }
 
+  void _handleSearchChanged(String value) {
+    setState(() {
+      _searchKeyword = value;
+    });
+    _scheduleRemoteSearchIfNeeded(value);
+  }
+
+  void _handleSearchSubmitted(String value) {
+    final keyword = value.trim();
+    if (keyword.isEmpty) {
+      return;
+    }
+    final localHits = _filterSources(
+      ref.read(discoverSourcePagerProvider).valueOrNull?.items ??
+          const <DiscoverSourceSummary>[],
+      keyword: keyword,
+    );
+    if (localHits.isEmpty) {
+      _startRemoteSearch(keyword);
+    }
+  }
+
+  void _scheduleRemoteSearchIfNeeded(String value) {
+    _searchDebounce?.cancel();
+    final keyword = value.trim();
+    if (keyword.isEmpty) {
+      setState(() {
+        _remoteSearchKeyword = '';
+        _remoteSearchAsync = null;
+      });
+      return;
+    }
+    final localHits = _filterSources(
+      ref.read(discoverSourcePagerProvider).valueOrNull?.items ??
+          const <DiscoverSourceSummary>[],
+      keyword: keyword,
+    );
+    if (localHits.isNotEmpty) {
+      setState(() {
+        _remoteSearchKeyword = '';
+        _remoteSearchAsync = null;
+      });
+      return;
+    }
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _startRemoteSearch(keyword),
+    );
+  }
+
+  void _startRemoteSearch(String keyword) {
+    final normalized = keyword.trim();
+    if (normalized.isEmpty || !mounted) {
+      return;
+    }
+    setState(() {
+      _remoteSearchKeyword = normalized;
+      _remoteSearchAsync = const AsyncLoading<List<DiscoverSourceSummary>>();
+    });
+    ref
+        .read(discoverSourcePagerProvider.notifier)
+        .searchRemote(normalized)
+        .then((items) {
+          if (!mounted || _searchKeyword.trim() != normalized) {
+            return;
+          }
+          setState(() {
+            _remoteSearchAsync = AsyncData(items);
+          });
+        })
+        .catchError((Object error, StackTrace stackTrace) {
+          if (!mounted || _searchKeyword.trim() != normalized) {
+            return;
+          }
+          setState(() {
+            _remoteSearchAsync = AsyncError<List<DiscoverSourceSummary>>(
+              error,
+              stackTrace,
+            );
+          });
+        });
+  }
+
   List<DiscoverSourceSummary> _filterSources(
-    List<DiscoverSourceSummary> sources,
-  ) {
-    if (_searchKeyword.isEmpty) {
+    List<DiscoverSourceSummary> sources, {
+    String? keyword,
+  }) {
+    final normalizedKeyword = (keyword ?? _searchKeyword).trim();
+    if (normalizedKeyword.isEmpty) {
       return sources;
     }
     return sources.where((source) {
-      return source.name.toLowerCase().contains(_searchKeyword.toLowerCase());
+      final needle = normalizedKeyword.toLowerCase();
+      return source.name.toLowerCase().contains(needle) ||
+          (source.sourceUrl ?? '').toLowerCase().contains(needle);
     }).toList();
+  }
+
+  String _sourceCounterText({
+    required DiscoverSourcePagerState? pager,
+    required int filteredCount,
+    required bool isRemoteResult,
+  }) {
+    if (isRemoteResult) {
+      return '远程 $filteredCount';
+    }
+    final loaded = pager?.loadedCount ?? 0;
+    final total = pager?.total ?? loaded;
+    if (_searchKeyword.trim().isNotEmpty) {
+      return '$filteredCount / 已载 $loaded';
+    }
+    if (total > loaded) {
+      return '已载 $loaded / $total';
+    }
+    return '共 $loaded 个';
   }
 
   Future<void> _openCategoryWithReveal(
@@ -356,6 +550,99 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
   }
 }
 
+class _SourceCountBadge extends StatelessWidget {
+  const _SourceCountBadge({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.12)),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onPrimaryContainer,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.state, required this.onRetry});
+
+  final DiscoverSourcePagerState? state;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = state;
+    if (current == null) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+
+    if (current.isLoadingMore) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('正在加载更多书源...', style: textStyle),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (current.loadMoreError != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
+        child: Center(
+          child: TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('加载更多失败，点击重试'),
+          ),
+        ),
+      );
+    }
+
+    if (!current.hasMore && current.items.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
+        child: Center(child: Text('已加载全部书源', style: textStyle)),
+      );
+    }
+
+    return const SizedBox(height: 24);
+  }
+}
+
 typedef _DiscoverCategoryTap =
     void Function(
       BuildContext sourceContext,
@@ -366,7 +653,6 @@ typedef _DiscoverCategoryTap =
 class _SourceRow extends ConsumerWidget {
   const _SourceRow({
     required this.source,
-    required this.showColumns,
     required this.isExpanded,
     required this.palette,
     required this.onTap,
@@ -374,7 +660,6 @@ class _SourceRow extends ConsumerWidget {
   });
 
   final DiscoverSourceSummary source;
-  final bool showColumns;
   final bool isExpanded;
   final ResolvedAdvancedThemePalette palette;
   final VoidCallback onTap;
@@ -393,7 +678,9 @@ class _SourceRow extends ConsumerWidget {
       latencyMs,
       colorScheme,
     );
-    final latencyColor = _getLatencyColor(latencyMs, colorScheme);
+    final showLoadedMeta =
+        categoriesAsync?.hasValue == true &&
+        (loadedSource.categories.isNotEmpty || latencyMs != null);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -407,7 +694,7 @@ class _SourceRow extends ConsumerWidget {
             child: InkWell(
               onTap: onTap,
               child: Container(
-                constraints: BoxConstraints(minHeight: showColumns ? 50 : 54),
+                constraints: const BoxConstraints(minHeight: 54),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
@@ -433,39 +720,10 @@ class _SourceRow extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    if (showColumns) ...[
-                      _ValueCell(
-                        label: _categoryCountText(
-                          loadedSource,
-                          categoriesAsync,
-                        ),
-                        width: 72,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      _ValueCell(
-                        label: _latencyText(latencyMs),
-                        width: 74,
-                        alignEnd: true,
-                        color: latencyColor,
-                      ),
-                    ] else
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _MetaText(
-                            text: _categoryCountText(
-                              loadedSource,
-                              categoriesAsync,
-                            ),
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 10),
-                          _MetaText(
-                            text: _latencyText(latencyMs),
-                            color: latencyColor,
-                          ),
-                        ],
-                      ),
+                    if (showLoadedMeta) ...[
+                      const SizedBox(width: 10),
+                      _SourceRowLoadedMeta(source: loadedSource),
+                    ],
                     const SizedBox(width: 6),
                     AnimatedRotation(
                       turns: isExpanded ? 0.25 : 0,
@@ -514,19 +772,6 @@ class _SourceRow extends ConsumerWidget {
     };
   }
 
-  Color _getLatencyColor(int? latencyMs, ColorScheme colorScheme) {
-    if (latencyMs == null || latencyMs <= 0) {
-      return colorScheme.onSurfaceVariant;
-    }
-    if (latencyMs < 500) {
-      return Colors.green;
-    }
-    if (latencyMs < 1500) {
-      return Colors.orange;
-    }
-    return colorScheme.error;
-  }
-
   static String _statusLabel(DiscoverSourceStatus status) {
     return switch (status) {
       DiscoverSourceStatus.available => '可用',
@@ -550,15 +795,30 @@ class _SourceRow extends ConsumerWidget {
     if (failure == null) return null;
     return '${failure.displayCode}：${failure.displayHint}';
   }
+}
 
-  static String _categoryCountText(
-    DiscoverSourceSummary source,
-    AsyncValue<DiscoverSourceSummary>? categoriesAsync,
-  ) {
-    if (categoriesAsync?.isLoading == true) return '加载中';
-    if (categoriesAsync?.hasError == true) return '异常';
-    if (source.categories.isEmpty) return '分类';
-    return '${source.categoryCount}类';
+class _SourceRowLoadedMeta extends StatelessWidget {
+  const _SourceRowLoadedMeta({required this.source});
+
+  final DiscoverSourceSummary source;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final latency = _SourceRow._latencyText(source.latencyMs);
+    final parts = <String>['${source.categoryCount}类'];
+    if (latency != '-') {
+      parts.add(latency);
+    }
+    return Text(
+      parts.join(' · '),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        color: colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w700,
+      ),
+    );
   }
 }
 
@@ -616,28 +876,67 @@ class _CategoryPanel extends ConsumerWidget {
               () => ref.invalidate(discoverSourceCategoriesProvider(source)),
         ),
         _ when categories.isEmpty => message(
-          _SourceRow._failureText(loadedSource) ?? '暂无可浏览分类',
+          _SourceRow._failureText(loadedSource) ??
+              '暂无可浏览分类${_loadMetaText(loadedSource)}',
         ),
-        _ => Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children:
-              categories
-                  .map(
-                    (category) => _CategoryChip(
-                      category: category,
-                      palette: palette,
-                      onTap:
-                          (sourceContext) => onCategoryTap(
-                            sourceContext,
-                            loadedSource,
-                            category,
-                          ),
-                    ),
-                  )
-                  .toList(),
+        _ => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CategoryLoadMeta(source: loadedSource),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children:
+                  categories
+                      .map(
+                        (category) => _CategoryChip(
+                          category: category,
+                          palette: palette,
+                          onTap:
+                              (sourceContext) => onCategoryTap(
+                                sourceContext,
+                                loadedSource,
+                                category,
+                              ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ],
         ),
       },
+    );
+  }
+
+  String _loadMetaText(DiscoverSourceSummary source) {
+    final latency = _SourceRow._latencyText(source.latencyMs);
+    if (latency == '-') {
+      return '';
+    }
+    return '，用时 $latency';
+  }
+}
+
+class _CategoryLoadMeta extends StatelessWidget {
+  const _CategoryLoadMeta({required this.source});
+
+  final DiscoverSourceSummary source;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final latency = _SourceRow._latencyText(source.latencyMs);
+    final parts = <String>['已加载 ${source.categoryCount} 个分类'];
+    if (latency != '-') {
+      parts.add('用时 $latency');
+    }
+    return Text(
+      parts.join(' · '),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
@@ -718,57 +1017,6 @@ class _StatusDot extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MetaText extends StatelessWidget {
-  const _MetaText({required this.text, required this.color});
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: color,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
-class _ValueCell extends StatelessWidget {
-  const _ValueCell({
-    required this.label,
-    required this.width,
-    this.alignEnd = false,
-    this.color,
-  });
-
-  final String label;
-  final double width;
-  final bool alignEnd;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Text(
-        label,
-        textAlign: alignEnd ? TextAlign.end : TextAlign.center,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: color ?? Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
