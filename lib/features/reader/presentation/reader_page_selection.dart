@@ -285,6 +285,13 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       return;
     }
     final details = _selectionNotifier.selection;
+    _logLongPressTrace(
+      'selection_notifier_changed',
+      context: <String, Object?>{'status': details.status.name},
+    );
+    if (details.status != SelectionStatus.none) {
+      _readerTapHandledByChild = true;
+    }
     _selectionStatus = details.status;
     if (_isEditingBookmarkNote &&
         _selectionStatus != SelectionStatus.uncollapsed) {
@@ -296,7 +303,15 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     }
     try {
       _selectionRange = details.range;
+      _logLongPressTrace(
+        'selection_range_captured',
+        context: <String, Object?>{
+          'startOffset': details.range?.startOffset,
+          'endOffset': details.range?.endOffset,
+        },
+      );
     } catch (_) {
+      _logLongPressTrace('selection_range_capture_failed');
       _clearSelectionState();
       return;
     }
@@ -312,6 +327,16 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
         _selectionStatus == SelectionStatus.uncollapsed &&
         hasRange &&
         hasSnippet;
+    _logLongPressTrace(
+      'selection_sync',
+      context: <String, Object?>{
+        'selectionStatus': _selectionStatus.name,
+        'hasRange': hasRange,
+        'hasSnippet': hasSnippet,
+        'snippetLength': snippet.length,
+        'isActive': isActive,
+      },
+    );
 
     if (!isActive) {
       if (_isEditingBookmarkNote) {
@@ -370,10 +395,25 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
         _pauseAutoReadSession(showMessage: true);
       }
       _hideOverlayControls(resumeAutoRead: false);
+      _logLongPressTrace(
+        'selection_activated',
+        context: <String, Object?>{
+          'startOffset': safeStart,
+          'endOffset': safeEnd,
+          'snippetLength': _selectedSnippet.length,
+        },
+      );
     }
   }
 
   void _clearSelectionState() {
+    _logLongPressTrace(
+      'selection_clear',
+      context: <String, Object?>{
+        'selectionActive': _isTextSelectionActive,
+        'hasSnippet': _selectionState.hasSnippet,
+      },
+    );
     if (!_isTextSelectionActive && !_selectionState.hasSnippet) {
       _selectionState = _selectionState.copyWith(
         range: null,

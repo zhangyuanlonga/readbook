@@ -110,19 +110,17 @@ class ServerGatewayContentProvider extends ContentProvider {
       chapterTitle: chapterTitle,
     );
     final rawContent = content.content.trim();
-    final normalizedImages = _normalizeServerImageUrls(
-      content.imageUrls.isNotEmpty
-          ? content.imageUrls
-          : _extractImageUrlsFromServerContent(rawContent),
-    );
+    final normalizedImages = _normalizeServerImageUrls(content.imageUrls);
     final normalizedContent =
         normalizedImages.isEmpty
             ? _cleaner.clean(rawContent)
             : _contentWithoutServerImages(rawContent, normalizedImages);
+    final normalizedKind = content.kind.trim().toLowerCase();
     final hasAudioContent =
         (content.audioUrl?.trim().isNotEmpty ?? false) ||
         (content.audioManifestUrl?.trim().isNotEmpty ?? false) ||
-        content.contentType.trim().toLowerCase() == 'audio';
+        content.contentType.trim().toLowerCase() == 'audio' ||
+        normalizedKind == 'audio';
     if (normalizedContent.isEmpty &&
         normalizedImages.isEmpty &&
         !hasAudioContent) {
@@ -137,11 +135,13 @@ class ServerGatewayContentProvider extends ContentProvider {
       fromCache: content.cacheHit,
       imageUrls: normalizedImages,
       imageHeaders: content.imageHeaders,
-      contentType: content.contentType,
+      contentType:
+          normalizedKind.isNotEmpty ? normalizedKind : content.contentType,
       audioUrl: content.audioUrl,
       audioManifestUrl: content.audioManifestUrl,
       audioHeaders: content.audioHeaders,
       displayChapterTitle: chapterTitle,
+      executionContext: content.executionContext,
     );
   }
 

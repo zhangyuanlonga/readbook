@@ -549,6 +549,7 @@ class ServerGatewayContentResult {
     required this.content,
     required this.cacheHit,
     required this.contentType,
+    required this.kind,
     required this.format,
     this.imageUrls = const <String>[],
     this.imageHeaders = const <String, String>{},
@@ -561,6 +562,7 @@ class ServerGatewayContentResult {
   final String content;
   final bool cacheHit;
   final String contentType;
+  final String kind;
   final String format;
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
@@ -576,6 +578,7 @@ class ServerGatewayContentResult {
       content: map['content']?.toString() ?? '',
       cacheHit: report['cacheHit'] == true,
       contentType: _optionalString(map['contentType']) ?? '',
+      kind: _optionalString(map['kind']) ?? '',
       format: _optionalString(map['format']) ?? 'plain',
       imageUrls: _firstStringList(map, const [
         'imageUrls',

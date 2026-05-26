@@ -372,23 +372,25 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
 
         if (transitionPlan.renderMode ==
             ReaderPagedViewportRenderMode.staticPage) {
-          return ReaderTextPagedView(
-            model: pagedViewModel,
-            pageController: _resolveStaticPagedTextPageController(pageCount),
-            pageBuilder: (context, pageIndex) {
-              return buildPage(pageIndex: pageIndex);
-            },
-            onPageChanged: (pageIndex) {
-              if (!mounted) {
-                return;
-              }
-              _updateReaderState(() {
-                _currentPageIndex = pageIndex;
-              });
-              _syncActiveReadingRecordSessionProgress();
-              _scheduleProgressSave();
-            },
-            onScrollInteractionChanged: _handlePagedScrollInteractionChanged,
+          return _wrapSelectionArea(
+            child: ReaderTextPagedView(
+              model: pagedViewModel,
+              pageController: _resolveStaticPagedTextPageController(pageCount),
+              pageBuilder: (context, pageIndex) {
+                return buildPage(pageIndex: pageIndex);
+              },
+              onPageChanged: (pageIndex) {
+                if (!mounted) {
+                  return;
+                }
+                _updateReaderState(() {
+                  _currentPageIndex = pageIndex;
+                });
+                _syncActiveReadingRecordSessionProgress();
+                _scheduleProgressSave();
+              },
+              onScrollInteractionChanged: _handlePagedScrollInteractionChanged,
+            ),
           );
         }
 

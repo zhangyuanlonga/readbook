@@ -1913,9 +1913,17 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                   if (selected == null) {
                                     return;
                                   }
+                                  final nextActions =
+                                      List<ReaderTapZoneAction>.from(
+                                        localActions,
+                                      );
+                                  nextActions[index] = selected;
                                   setZoneState(() {
-                                    localActions[index] = selected;
+                                    localActions = nextActions;
                                   });
+                                  updateDraft(
+                                    draft.copyWith(tapZoneActions: nextActions),
+                                  );
                                 }
 
                                 return SafeArea(
@@ -2017,31 +2025,31 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                           children: [
                                             OutlinedButton(
                                               onPressed: () {
+                                                final nextActions = List<
+                                                  ReaderTapZoneAction
+                                                >.from(
+                                                  ReaderSettings
+                                                      .defaultTapZoneActions,
+                                                );
                                                 setZoneState(() {
-                                                  localActions = List<
-                                                    ReaderTapZoneAction
-                                                  >.from(
-                                                    ReaderSettings
-                                                        .defaultTapZoneActions,
-                                                  );
+                                                  localActions = nextActions;
                                                 });
+                                                updateDraft(
+                                                  draft.copyWith(
+                                                    tapZoneActions: nextActions,
+                                                  ),
+                                                );
                                               },
                                               child: const Text('恢复默认'),
                                             ),
                                             const Spacer(),
                                             FilledButton(
-                                              onPressed: () {
-                                                setModalState(() {
-                                                  draft = draft.copyWith(
-                                                    tapZoneActions:
-                                                        localActions,
-                                                  );
-                                                });
-                                                Navigator.of(
-                                                  sheetContext,
-                                                ).pop();
-                                              },
-                                              child: const Text('应用'),
+                                              onPressed:
+                                                  () =>
+                                                      Navigator.of(
+                                                        sheetContext,
+                                                      ).pop(),
+                                              child: const Text('完成'),
                                             ),
                                           ],
                                         ),

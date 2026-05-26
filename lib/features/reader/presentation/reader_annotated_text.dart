@@ -65,6 +65,9 @@ class ReaderAnnotatedText extends StatelessWidget {
     return RepaintBoundary(
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final selectionRegistrar = SelectionContainer.maybeOf(context);
+          final selectionColor =
+              DefaultSelectionStyle.of(context).selectionColor;
           final mergedRanges =
               annotationRanges.isNotEmpty
                   ? _mergeRanges(annotationRanges)
@@ -102,10 +105,12 @@ class ReaderAnnotatedText extends StatelessWidget {
                   ? _buildTextPainter(maxWidth: constraints.maxWidth)
                   : null;
 
-          Widget textWidget = Text.rich(
-            textSpan,
+          Widget textWidget = RichText(
+            text: textSpan,
             textAlign: textAlign,
             textDirection: textDirection,
+            selectionRegistrar: selectionRegistrar,
+            selectionColor: selectionColor,
           );
 
           if (needsPainter && textPainter != null) {

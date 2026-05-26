@@ -426,6 +426,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _blockingLoadingCardTimer;
   Timer? _hiddenLoadingPlaceholderTimer;
   Timer? _readingRecordAutoCommitTimer;
+  Timer? _readerLongPressTimer;
   DateTime? _lastReaderSnackAt;
   String? _lastReaderSnackKey;
   StreamSubscription<ReaderVolumeKeyEvent>? _volumeKeyEventSubscription;
@@ -468,6 +469,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Offset? _tapPointerDownPosition;
   DateTime? _tapPointerDownTime;
   bool _tapPointerMoved = false;
+  bool _tapPointerLongPressTriggered = false;
   bool _readerTapHandledByChild = false;
   bool _isOverlayAutoHideSuspended = false;
   bool _hasShownToolbarHint = false;
@@ -3077,6 +3079,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  void _logLongPressTrace(
+    String step, {
+    Map<String, Object?> context = const <String, Object?>{},
+  }) {
+    _logger.info(
+      'Reader long press trace',
+      context: <String, Object?>{
+        'chain': 'reader_long_press',
+        'step': step,
+        'chapterId': _chapterId,
+        'viewportKind': _currentViewportKind.name,
+        'contentMode': _currentContentMode.name,
+        ...context,
+      },
+    );
+  }
+
   void _fallbackTextPaginationToScroll(String diagnostic) {
     if (!mounted) {
       return;
@@ -3112,6 +3131,52 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _tapPointerDownPosition = event.localPosition;
             _tapPointerDownTime = DateTime.now();
             _tapPointerMoved = false;
+            _tapPointerLongPressTriggered = false;
+            _readerLongPressTimer?.cancel();
+            _logLongPressTrace(
+              'pointer_down',
+              context: <String, Object?>{
+                'pointer': event.pointer,
+                'dx': event.localPosition.dx.toStringAsFixed(1),
+                'dy': event.localPosition.dy.toStringAsFixed(1),
+                'shouldHandleLongPress': _shouldHandleReaderLongPress,
+                'selectionActive': _isTextSelectionActive,
+              },
+            );
+            if (_shouldHandleReaderLongPress) {
+              _readerLongPressTimer = Timer(kLongPressTimeout, () {
+                final blocked =
+                    !mounted ||
+                    _tapPointerId != event.pointer ||
+                    _tapPointerMoved ||
+                    _tapPointerLongPressTriggered ||
+                    _isTextSelectionActive ||
+                    _readerTapHandledByChild;
+                _logLongPressTrace(
+                  blocked ? 'timer_fire_blocked' : 'timer_fire',
+                  context: <String, Object?>{
+                    'pointer': event.pointer,
+                    'mounted': mounted,
+                    'pointerMatches': _tapPointerId == event.pointer,
+                    'tapPointerMoved': _tapPointerMoved,
+                    'longPressTriggered': _tapPointerLongPressTriggered,
+                    'selectionActive': _isTextSelectionActive,
+                    'readerTapHandledByChild': _readerTapHandledByChild,
+                  },
+                );
+                if (!mounted ||
+                    _tapPointerId != event.pointer ||
+                    _tapPointerMoved ||
+                    _tapPointerLongPressTriggered ||
+                    _isTextSelectionActive ||
+                    _readerTapHandledByChild) {
+                  return;
+                }
+                _tapPointerLongPressTriggered = true;
+                _readerTapHandledByChild = true;
+                unawaited(_handleReaderLongPress());
+              });
+            }
             if (enableSwipeTurn) {
               _swipeDragStartDx = event.localPosition.dx;
               _swipeDragStartDy = event.localPosition.dy;
@@ -3135,6 +3200,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               final moved = (event.localPosition - down).distance;
               if (moved > kTouchSlop) {
                 _tapPointerMoved = true;
+                _readerLongPressTimer?.cancel();
+                _logLongPressTrace(
+                  'pointer_move_cancel_long_press',
+                  context: <String, Object?>{
+                    'pointer': event.pointer,
+                    'distance': moved.toStringAsFixed(2),
+                  },
+                );
               }
             }
           },
@@ -3203,25 +3276,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             }
 
             if (_readerTapHandledByChild) {
+              _logLongPressTrace(
+                'pointer_up_child_handled',
+                context: <String, Object?>{
+                  'pointer': event.pointer,
+                  'elapsedMs': elapsedMs,
+                  'selectionActive': _isTextSelectionActive,
+                  'longPressTriggered': _tapPointerLongPressTriggered,
+                },
+              );
               _resetPointerTracking();
               return;
             }
 
+            _logLongPressTrace(
+              'pointer_up',
+              context: <String, Object?>{
+                'pointer': event.pointer,
+                'elapsedMs': elapsedMs,
+                'tapPointerMoved': _tapPointerMoved,
+                'selectionActive': _isTextSelectionActive,
+                'longPressTriggered': _tapPointerLongPressTriggered,
+              },
+            );
             if (!_tapPointerMoved &&
+                !_tapPointerLongPressTriggered &&
                 elapsedMs <= kLongPressTimeout.inMilliseconds &&
                 !_isTextSelectionActive) {
+              _logLongPressTrace(
+                'pointer_up_fallback_tap',
+                context: <String, Object?>{
+                  'pointer': event.pointer,
+                  'elapsedMs': elapsedMs,
+                },
+              );
               _onReaderTap(event.localPosition, size, gestureInsets);
             }
             _resetPointerTracking();
           },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onLongPress:
-                _isTextPagedViewport || _isTextScrollViewport
-                    ? null
-                    : () => unawaited(_handleReaderLongPress()),
-            child: child,
-          ),
+          child: child,
         );
       },
     );
@@ -3292,10 +3385,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _resetPointerTracking() {
+    _readerLongPressTimer?.cancel();
+    _readerLongPressTimer = null;
     _tapPointerId = null;
     _tapPointerDownPosition = null;
     _tapPointerDownTime = null;
     _tapPointerMoved = false;
+    _tapPointerLongPressTriggered = false;
     _readerTapHandledByChild = false;
     _swipeDragStartDx = null;
     _swipeDragStartDy = null;

@@ -294,6 +294,7 @@ class ChapterContentService {
         chapterTitle: chapterTitle,
       );
       final rawContent = content.content.trim();
+      final normalizedKind = content.kind.trim().toLowerCase();
       final normalizedImages = content.imageUrls
           .map((item) => item.trim())
           .where((item) => item.isNotEmpty)
@@ -303,7 +304,8 @@ class ChapterContentService {
       final hasAudioContent =
           (content.audioUrl?.trim().isNotEmpty ?? false) ||
           (content.audioManifestUrl?.trim().isNotEmpty ?? false) ||
-          content.contentType.trim().toLowerCase() == 'audio';
+          content.contentType.trim().toLowerCase() == 'audio' ||
+          normalizedKind == 'audio';
       if (normalizedContent.isEmpty &&
           normalizedImages.isEmpty &&
           !hasAudioContent) {
@@ -353,7 +355,8 @@ class ChapterContentService {
         fromCache: content.cacheHit,
         imageUrls: normalizedImages,
         imageHeaders: content.imageHeaders,
-        contentType: content.contentType,
+        contentType:
+            normalizedKind.isNotEmpty ? normalizedKind : content.contentType,
         audioUrl: content.audioUrl,
         audioManifestUrl: content.audioManifestUrl,
         audioHeaders: content.audioHeaders,
