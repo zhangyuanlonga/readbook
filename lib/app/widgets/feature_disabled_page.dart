@@ -80,16 +80,6 @@ class FeatureDisabledPage extends StatelessWidget {
 class FeatureDisabledPages {
   const FeatureDisabledPages._();
 
-  static FeatureDisabledPage discover({AppCapabilityState? capability}) =>
-      FeatureDisabledPage(
-        title: '发现暂未启用',
-        message: _messageFromCapability(
-          capability,
-          '发现页将由服务器书源网关提供，当前版本优先打磨本地阅读和搜索体验。',
-        ),
-        icon: Icons.explore_off_outlined,
-      );
-
   static FeatureDisabledPage onlineSearch({AppCapabilityState? capability}) =>
       FeatureDisabledPage(
         title: '在线搜索暂未启用',

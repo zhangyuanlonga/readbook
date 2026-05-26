@@ -19,7 +19,25 @@ final List<RouteBase> bookRoutes = <RouteBase>[
       final heroTag = state.uri.queryParameters['heroTag'];
       final titleHeroTag = state.uri.queryParameters['titleHeroTag'];
       final metaHeroTag = state.uri.queryParameters['metaHeroTag'];
+      final useRevealTransition =
+          state.uri.queryParameters['transition'] == 'reveal';
       final initialBook = state.extra is Book ? state.extra as Book : null;
+      final child = BookDetailPage(
+        bookId: bookId,
+        initialBook: initialBook,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+        title: title,
+        author: author,
+        coverUrl: coverUrl,
+        heroTag: heroTag,
+        titleHeroTag: titleHeroTag,
+        metaHeroTag: metaHeroTag,
+      );
+
+      if (useRevealTransition) {
+        return NoTransitionPage<void>(key: state.pageKey, child: child);
+      }
 
       return buildFadeSlideTransitionPage(
         state: state,
@@ -27,18 +45,7 @@ final List<RouteBase> bookRoutes = <RouteBase>[
         reverseTransitionDuration: const Duration(milliseconds: 240),
         beginOffset: const Offset(0, 0.03),
         beginOpacity: 0.78,
-        child: BookDetailPage(
-          bookId: bookId,
-          initialBook: initialBook,
-          sourceId: sourceId,
-          detailUrl: detailUrl,
-          title: title,
-          author: author,
-          coverUrl: coverUrl,
-          heroTag: heroTag,
-          titleHeroTag: titleHeroTag,
-          metaHeroTag: metaHeroTag,
-        ),
+        child: child,
       );
     },
   ),

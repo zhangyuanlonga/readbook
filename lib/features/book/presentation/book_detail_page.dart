@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:path/path.dart' as p;
@@ -451,14 +452,14 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   @override
   Widget build(BuildContext context) => _buildBookDetailPage(context);
 
-  void _handleBackNavigation() {
+  void _handleBackNavigation([BuildContext? sourceContext]) {
     if (_isDetailExitAnimating) {
       return;
     }
     _updateDetailPageState(() {
       _isDetailExitAnimating = true;
     });
-    Future<void>.delayed(const Duration(milliseconds: 120), () {
+    Future<void> closeRoute() async {
       if (!mounted) {
         return;
       }
@@ -467,7 +468,28 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         return;
       }
       context.go('/bookshelf');
-    });
+    }
+
+    final overlay =
+        sourceContext == null
+            ? null
+            : CircularThemeRevealOverlay.of(sourceContext);
+    if (sourceContext == null || overlay == null) {
+      Future<void>.delayed(const Duration(milliseconds: 120), closeRoute);
+      return;
+    }
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
+    );
+    unawaited(
+      overlay.startTransition(
+        center: center,
+        reverse: false,
+        onThemeChange: () {
+          unawaited(closeRoute());
+        },
+      ),
+    );
   }
 
   String _buildReaderCoverHeroTag({

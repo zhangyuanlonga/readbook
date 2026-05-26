@@ -549,6 +549,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
 
     if (_isAutoReadSessionEnabled) {
+      final guardUntil = _autoReadTapGuardUntil;
+      if (guardUntil != null && DateTime.now().isBefore(guardUntil)) {
+        return;
+      }
       if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
         unawaited(_openAutoReadFromOverlay());
       } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
@@ -1009,6 +1013,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
 
     _autoReadResumeTimer?.cancel();
+    _lastAutoReadProgressUiRefreshAt = null;
+    _autoReadTapGuardUntil = DateTime.now().add(
+      const Duration(milliseconds: 650),
+    );
     _pageTurnModeBeforeAutoRead = _settings.pageTurnMode;
     _isAutoReadPausedByRuntime = false;
     final targetPageTurnMode =
@@ -1039,7 +1047,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     _autoReadSessionState = ReaderAutoReadSessionState.paused;
-    _stopAutoRead();
+    _stopAutoRead(preserveDisplayProgress: true);
     if (mounted) {
       setState(() {});
     }

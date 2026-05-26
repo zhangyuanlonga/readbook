@@ -435,6 +435,31 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     return (local / available).clamp(0.0, 1.0);
   }
 
+  double _continuousTextChapterDocumentRatioForFlow(
+    _ContinuousTextChapter chapter,
+  ) {
+    if (!_scrollController.hasClients) {
+      return 0;
+    }
+
+    final layout = _measureContinuousTextChapterLayoutFlow(chapter);
+    if (layout == null) {
+      return 0;
+    }
+
+    final extent = (layout.endOffset - layout.startOffset).clamp(
+      0.0,
+      double.infinity,
+    );
+    if (extent <= 0) {
+      return 0;
+    }
+
+    final local = (_scrollController.position.pixels - layout.startOffset)
+        .clamp(0.0, extent);
+    return (local / extent).clamp(0.0, 1.0);
+  }
+
   _ContinuousTextChapter? _resolveActiveContinuousTextChapterFlow() {
     if (!_scrollController.hasClients || _continuousTextChapters.isEmpty) {
       return null;

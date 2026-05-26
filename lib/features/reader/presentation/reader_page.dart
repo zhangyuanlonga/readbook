@@ -467,6 +467,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isRestoringContinuousTextAnchor = false;
   int? _lastAutoReadContinuousSyncSkipLogToken;
   int? _lastAutoReadVisibleChapterIndex;
+  DateTime? _lastAutoReadProgressUiRefreshAt;
+  double? _autoReadDisplayProgressRatio;
+  double? _autoReadRunStartOffset;
+  double? _autoReadRunTargetOffset;
+  double? _autoReadRunStartProgressRatio;
+  DateTime? _autoReadTapGuardUntil;
   ReaderAutoReadSessionState _autoReadSessionState =
       ReaderAutoReadSessionState.off;
   bool _isReaderRuntimeVisible = true;
@@ -955,7 +961,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return ReaderLogicalPosition.fromDocument(
       document: continuousChapter?.document ?? _document,
       chapterIndex: chapterIndex,
-      chapterPositionRatio: _currentScrollRatio(),
+      chapterPositionRatio: _currentLogicalPositionRatio(),
       pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
     );
   }
@@ -4506,6 +4512,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   double _safeCurrentScrollRatio({double fallback = 0}) {
     try {
+      if (_settings.autoReadMode == ReaderAutoReadMode.scroll &&
+          _autoReadSessionState == ReaderAutoReadSessionState.running) {
+        final autoReadProgress = _autoReadDisplayProgressRatio;
+        if (autoReadProgress != null) {
+          return autoReadProgress.clamp(0.0, 1.0);
+        }
+      }
       return _currentScrollRatio();
     } on FlutterError {
       return fallback;

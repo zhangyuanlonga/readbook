@@ -8,6 +8,7 @@ String buildBookDetailRoute({
   String? heroTag,
   String? titleHeroTag,
   String? metaHeroTag,
+  bool revealTransition = false,
 }) {
   final normalizedBookId = bookId.trim();
   final effectiveBookId =
@@ -30,6 +31,9 @@ String buildBookDetailRoute({
   putIfNotBlank('heroTag', heroTag);
   putIfNotBlank('titleHeroTag', titleHeroTag);
   putIfNotBlank('metaHeroTag', metaHeroTag);
+  if (revealTransition) {
+    query['transition'] = 'reveal';
+  }
   final encodedBookId = Uri.encodeComponent(effectiveBookId);
 
   return Uri(

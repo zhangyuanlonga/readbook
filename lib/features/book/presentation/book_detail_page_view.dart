@@ -38,10 +38,13 @@ extension on _BookDetailPageState {
               ),
               surfaceTintColor: Colors.transparent,
               shadowColor: Colors.transparent,
-              leading: IconButton(
-                onPressed: _handleBackNavigation,
-                tooltip: '返回',
-                icon: const Icon(Icons.arrow_back),
+              leading: Builder(
+                builder:
+                    (leadingContext) => IconButton(
+                      onPressed: () => _handleBackNavigation(leadingContext),
+                      tooltip: '返回',
+                      icon: const Icon(Icons.arrow_back),
+                    ),
               ),
               actions: [
                 if (_isEditingMetadata) ...[

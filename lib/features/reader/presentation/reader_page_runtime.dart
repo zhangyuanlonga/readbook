@@ -141,6 +141,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return _continuousTextChapterScrollRatioForFlow(chapter);
   }
 
+  double _continuousTextChapterDocumentRatioFor(
+    _ContinuousTextChapter chapter,
+  ) {
+    return _continuousTextChapterDocumentRatioForFlow(chapter);
+  }
+
   _ContinuousTextChapter? _resolveActiveContinuousTextChapterForRuntime() {
     return _resolveActiveContinuousTextChapterFlow();
   }
@@ -439,6 +445,11 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       final pageCount = _currentPagedPageCount;
       return pageCount > 0 && _currentPageIndex >= pageCount - 1;
     }
+    if (_settings.autoReadMode == ReaderAutoReadMode.scroll &&
+        _isTextScrollViewport &&
+        _isCurrentContinuousTextChapterVisibleEnd()) {
+      return true;
+    }
     final hasScrollClients = _scrollController.hasClients;
     final position = hasScrollClients ? _scrollController.position : null;
     return _autoReadCoordinator.isAtChapterEnd(
@@ -446,6 +457,27 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       maxScrollExtent: position?.maxScrollExtent ?? 0,
       scrollOffset: position?.pixels ?? 0,
     );
+  }
+
+  bool _isCurrentContinuousTextChapterVisibleEnd() {
+    if (!_shouldUseContinuousTextFlow || !_scrollController.hasClients) {
+      return false;
+    }
+    final currentChapter = _findCurrentContinuousTextChapter();
+    if (currentChapter == null) {
+      return false;
+    }
+    final layout = _measureContinuousTextChapterLayoutFlow(currentChapter);
+    if (layout == null) {
+      return false;
+    }
+    final position = _scrollController.position;
+    final target = _resolveAutoReadScrollTargetOffset(position);
+    if (position.pixels < target - 1.5) {
+      return false;
+    }
+    final viewportEnd = position.pixels + position.viewportDimension;
+    return viewportEnd >= layout.endOffset - 2.0;
   }
 
   void _scheduleAutoReadResume() {
@@ -527,15 +559,25 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
 
+    _syncAutoReadVisibleContinuousTextChapter();
     final position = _scrollController.position;
     final startOffset = position.pixels;
-    final target = position.maxScrollExtent;
+    final target = _resolveAutoReadScrollTargetOffset(position);
     final remaining = target - startOffset;
     if (remaining <= 0.5) {
-      _finishAutoReadScrollRun(token, reason: 'already_at_end');
+      final atChapterEnd = _isAutoReadAtChapterEnd();
+      _finishAutoReadScrollRun(
+        token,
+        reason: atChapterEnd ? 'already_at_end' : 'no_scroll_room',
+        handleBoundary: atChapterEnd,
+      );
       return;
     }
 
+    _beginAutoReadDisplayProgressRun(
+      startOffset: startOffset,
+      targetOffset: target,
+    );
     final duration = _resolveAutoReadScrollDuration(remaining);
     _logAutoReadScrollTrace(
       step: 'start',
@@ -565,14 +607,11 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
 
     final stillCurrent = mounted && token == _autoReadTaskToken;
-    final reachedEnd =
+    final reachedTarget =
         _scrollController.hasClients &&
-        (_scrollController.position.maxScrollExtent -
-                    _scrollController.position.pixels)
-                .abs() <=
-            1.5;
+        _scrollController.position.pixels >= target - 1.5;
     _logAutoReadScrollTrace(
-      step: stillCurrent && reachedEnd ? 'complete' : 'interrupted',
+      step: stillCurrent && reachedTarget ? 'complete' : 'interrupted',
       token: token,
       startOffset: startOffset,
       targetOffset: target,
@@ -581,11 +620,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           _scrollController.hasClients
               ? _scrollController.position.pixels
               : null,
-      reachedEnd: reachedEnd,
+      reachedEnd: reachedTarget,
     );
     _finishAutoReadScrollRun(
       token,
-      reason: reachedEnd ? 'complete' : 'interrupted',
+      reason: reachedTarget ? 'complete' : 'interrupted',
+      handleBoundary: stillCurrent && reachedTarget,
     );
   }
 
@@ -606,13 +646,42 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
   }
 
-  void _finishAutoReadScrollRun(int token, {required String reason}) {
+  double _resolveAutoReadScrollTargetOffset(ScrollPosition position) {
+    if (_settings.autoReadMode != ReaderAutoReadMode.scroll ||
+        !_shouldUseContinuousTextFlow) {
+      return position.maxScrollExtent;
+    }
+    final currentChapter = _findCurrentContinuousTextChapter();
+    if (currentChapter == null) {
+      return position.maxScrollExtent;
+    }
+    final layout = _measureContinuousTextChapterLayoutFlow(currentChapter);
+    if (layout == null) {
+      return position.maxScrollExtent;
+    }
+    final chapterEndOffset = layout.endOffset - position.viewportDimension;
+    return chapterEndOffset.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+  }
+
+  void _finishAutoReadScrollRun(
+    int token, {
+    required String reason,
+    bool handleBoundary = false,
+  }) {
     if (token != _autoReadTaskToken) {
       return;
     }
     _isAutoReadRunning = false;
+    if (reason != 'complete' || handleBoundary) {
+      _clearAutoReadDisplayProgressRun(clearDisplayRatio: handleBoundary);
+    }
     _logAutoReadScrollTrace(step: 'finish', token: token, reason: reason);
-    unawaited(_handleAutoReadChapterBoundary());
+    if (handleBoundary) {
+      unawaited(_handleAutoReadChapterBoundary());
+    }
   }
 
   void _logAutoReadScrollTrace({
@@ -726,12 +795,36 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
       final advanced = await _tryAdvanceAutoReadToNextChapter();
       if (advanced) {
+        _scheduleAutoReadBoundaryContinue();
         return;
       }
       await _handleAutoReadBookFinished();
     } finally {
       _isAutoReadHandlingBoundary = false;
     }
+  }
+
+  void _scheduleAutoReadBoundaryContinue() {
+    _autoReadResumeTimer?.cancel();
+    _lastAutoReadVisibleChapterIndex = null;
+    _lastAutoReadProgressUiRefreshAt = null;
+    _clearAutoReadDisplayProgressRun(clearDisplayRatio: true);
+    _autoReadTapGuardUntil = DateTime.now().add(
+      _ReaderPageState._kAutoReadBoundaryResumeDelay,
+    );
+    _autoReadResumeTimer = Timer(
+      _ReaderPageState._kAutoReadBoundaryResumeDelay,
+      () {
+        if (!mounted ||
+            !_isAutoReadSessionEnabled ||
+            _autoReadSessionState != ReaderAutoReadSessionState.running) {
+          return;
+        }
+        _lastAutoReadProgressUiRefreshAt = null;
+        _clearAutoReadDisplayProgressRun(clearDisplayRatio: true);
+        _reconcileAutoRead(restart: true);
+      },
+    );
   }
 
   Future<bool> _tryAdvanceAutoReadToNextChapter() async {
@@ -886,9 +979,17 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _stopAutoReadSession();
   }
 
-  void _stopAutoRead() {
+  void _stopAutoRead({bool preserveDisplayProgress = false}) {
+    if (preserveDisplayProgress) {
+      _updateAutoReadDisplayProgressRatio();
+    }
+    final preservedDisplayProgress =
+        preserveDisplayProgress ? _autoReadDisplayProgressRatio : null;
     _autoReadTaskToken += 1;
     _isAutoReadRunning = false;
+    _clearAutoReadDisplayProgressRun(
+      clearDisplayRatio: !preserveDisplayProgress,
+    );
     _stopPagedAutoRead();
     _autoReadResumeTimer?.cancel();
     _autoReadResumeTimer = null;
@@ -902,6 +1003,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     } catch (_) {
       // ignore
     }
+    if (preserveDisplayProgress) {
+      _autoReadDisplayProgressRatio = preservedDisplayProgress;
+    }
   }
 
   bool get _isReaderBatteryLowForRuntime =>
@@ -913,7 +1017,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
     _isAutoReadPausedByRuntime = true;
     _autoReadSessionState = ReaderAutoReadSessionState.paused;
-    _stopAutoRead();
+    _stopAutoRead(preserveDisplayProgress: true);
   }
 
   void _pauseAutoReadIfRuntimePolicyRequires() {
@@ -944,9 +1048,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
     if (_isProgrammaticAutoReadScrollActive) {
       _syncAutoReadVisibleContinuousTextChapter();
+      _refreshAutoReadProgressUiIfNeeded();
       _logAutoReadContinuousSyncSkipped();
     } else {
       _lastAutoReadVisibleChapterIndex = null;
+      _lastAutoReadProgressUiRefreshAt = null;
+      _clearAutoReadDisplayProgressRun(clearDisplayRatio: true);
       _syncActiveContinuousTextChapterFromScroll();
       _maybePrefetchContinuousTextNeighbors();
     }
@@ -957,6 +1064,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   void _syncAutoReadVisibleContinuousTextChapter() {
     final resolved = _resolveActiveContinuousTextChapterForRuntime();
     if (resolved == null || resolved.chapterIndex == _currentIndex) {
+      return;
+    }
+    final currentIndex = _currentIndex;
+    if (currentIndex != null && resolved.chapterIndex < currentIndex) {
+      _logAutoReadScrollTrace(
+        step: 'backward_visible_chapter_ignored',
+        token: _autoReadTaskToken,
+        reason: 'resolved=${resolved.chapterIndex}, current=$currentIndex',
+      );
       return;
     }
     if (_lastAutoReadVisibleChapterIndex == resolved.chapterIndex) {
@@ -973,6 +1089,65 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
               : resolved.chapterTitle;
       _isCurrentChapterCached = resolved.isCached;
     });
+  }
+
+  void _refreshAutoReadProgressUiIfNeeded() {
+    if (!mounted) {
+      return;
+    }
+    _updateAutoReadDisplayProgressRatio();
+    final now = DateTime.now();
+    final last = _lastAutoReadProgressUiRefreshAt;
+    if (last != null && now.difference(last).inMilliseconds < 200) {
+      return;
+    }
+    _lastAutoReadProgressUiRefreshAt = now;
+    setState(() {});
+  }
+
+  void _beginAutoReadDisplayProgressRun({
+    required double startOffset,
+    required double targetOffset,
+  }) {
+    _autoReadRunStartOffset = startOffset;
+    _autoReadRunTargetOffset = targetOffset;
+    _autoReadRunStartProgressRatio =
+        _autoReadDisplayProgressRatio ?? _currentScrollRatio();
+    _autoReadDisplayProgressRatio = _autoReadRunStartProgressRatio;
+  }
+
+  void _updateAutoReadDisplayProgressRatio() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final startOffset = _autoReadRunStartOffset;
+    final targetOffset = _autoReadRunTargetOffset;
+    final startProgress = _autoReadRunStartProgressRatio;
+    if (startOffset == null || targetOffset == null || startProgress == null) {
+      _autoReadDisplayProgressRatio = _currentScrollRatio();
+      return;
+    }
+    final distance = targetOffset - startOffset;
+    if (distance <= 0) {
+      _autoReadDisplayProgressRatio = _currentScrollRatio();
+      return;
+    }
+
+    final scrolled = ((_scrollController.position.pixels - startOffset) /
+            distance)
+        .clamp(0.0, 1.0);
+    _autoReadDisplayProgressRatio =
+        (startProgress + (1 - startProgress) * scrolled).clamp(0.0, 1.0);
+  }
+
+  void _clearAutoReadDisplayProgressRun({bool clearDisplayRatio = false}) {
+    _autoReadRunStartOffset = null;
+    _autoReadRunTargetOffset = null;
+    _autoReadRunStartProgressRatio = null;
+    _lastAutoReadProgressUiRefreshAt = null;
+    if (clearDisplayRatio) {
+      _autoReadDisplayProgressRatio = null;
+    }
   }
 
   void _logAutoReadContinuousSyncSkipped() {
@@ -1159,6 +1334,17 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
   }
 
+  double _currentLogicalPositionRatio() {
+    if (!_shouldUseContinuousTextFlow) {
+      return _currentScrollRatio();
+    }
+    final currentChapter = _findCurrentContinuousTextChapter();
+    if (currentChapter == null) {
+      return _currentScrollRatio();
+    }
+    return _continuousTextChapterDocumentRatioFor(currentChapter);
+  }
+
   void _showChapterSwitchFailedSnackbar(int targetIndex) {
     if (!mounted) {
       return;
@@ -1276,6 +1462,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
     final logicalPosition = _currentLogicalPosition();
     final viewportState = _currentViewportState();
+    final positionRatio = _currentLogicalPositionRatio();
 
     await _preferencesService.saveProgress(
       ReadingProgress(
@@ -1287,8 +1474,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         chapterTitle: chapterTitle,
         chapterIndex: currentIndex,
         updatedAt: DateTime.now(),
-        chapterPositionRatio: _currentScrollRatio(),
+        chapterPositionRatio: positionRatio,
         logicalPosition: logicalPosition?.copyWith(
+          chapterPositionRatio: positionRatio,
           pageIndex: viewportState.pageIndex,
           totalPageCount: viewportState.pageCount,
           viewportMode: viewportState.kind.name,
