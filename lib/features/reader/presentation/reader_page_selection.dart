@@ -19,7 +19,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     }
     _readerTapHandledByChild = true;
     if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession(showMessage: true);
+      _pauseAutoReadSession();
     }
   }
 
@@ -392,7 +392,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
 
     if (!wasActive) {
       if (_isAutoReadSessionEnabled) {
-        _pauseAutoReadSession(showMessage: true);
+        _pauseAutoReadSession();
       }
       _hideOverlayControls(resumeAutoRead: false);
       _logLongPressTrace(

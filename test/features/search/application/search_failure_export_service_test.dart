@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
 import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
 import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/core/errors/gateway_failure.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_failure_export_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +52,14 @@ void main() {
             stage: ErrorStage.search,
             requestUrl: 'https://example.com/search',
             debugMessage: 'FormatException: invalid selector',
+            gatewayFailure: GatewayFailure(
+              stage: 'search',
+              category: 'parse',
+              code: 'PARSE_FAILED',
+              message: '规则解析失败',
+              retryable: false,
+              hint: '检查搜索规则',
+            ),
           ),
         ],
         sourceNames: const {'src_1': '测试源'},
@@ -84,6 +93,8 @@ void main() {
         item['error']['debugMessage'],
         'FormatException: invalid selector',
       );
+      expect(item['error']['gatewayFailure']['code'], 'PARSE_FAILED');
+      expect(item['error']['gatewayFailure']['hint'], '检查搜索规则');
     });
 
     test(

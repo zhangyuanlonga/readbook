@@ -466,6 +466,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadPausedByRuntime = false;
   bool _isRestoringContinuousTextAnchor = false;
   int? _lastAutoReadContinuousSyncSkipLogToken;
+  int? _lastAutoReadVisibleChapterIndex;
   ReaderAutoReadSessionState _autoReadSessionState =
       ReaderAutoReadSessionState.off;
   bool _isReaderRuntimeVisible = true;
@@ -947,8 +948,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (chapterIndex == null) {
       return null;
     }
+    final continuousChapter =
+        _shouldUseContinuousTextFlow
+            ? _findCurrentContinuousTextChapter()
+            : null;
     return ReaderLogicalPosition.fromDocument(
-      document: _document,
+      document: continuousChapter?.document ?? _document,
       chapterIndex: chapterIndex,
       chapterPositionRatio: _currentScrollRatio(),
       pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
@@ -1876,14 +1881,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _ReaderThemeColors colors, {
     required bool isHeader,
   }) {
-    final footerItems = <ReaderInfoBarItemData>[
+    final leadingItems = <ReaderInfoBarItemData>[
       if (_settings.infoShowProgress)
         ReaderInfoBarItemData.text(
           '进度 ${(_safeCurrentScrollRatio() * 100).round()}%',
         ),
+    ];
+    final centerItems = <ReaderInfoBarItemData>[
       if (_settings.infoShowChapter &&
           (_chapterTitle?.trim().isNotEmpty ?? false))
         ReaderInfoBarItemData.text(_chapterTitle!.trim(), expand: true),
+    ];
+    final trailingItems = <ReaderInfoBarItemData>[
       if (_settings.infoShowTime)
         ReaderInfoBarItemData.text(_formatReaderInfoTime(_readerInfoNow)),
       if (_settings.infoShowBattery)
@@ -1908,9 +1917,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           (_, true) => ReaderChromeRole.pagedHeader,
           (_, false) => ReaderChromeRole.pagedFooter,
         },
-        leadingItems: const <ReaderInfoBarItemData>[],
-        centerItems: isHeader ? const <ReaderInfoBarItemData>[] : footerItems,
-        trailingItems: const <ReaderInfoBarItemData>[],
+        leadingItems: isHeader ? const <ReaderInfoBarItemData>[] : leadingItems,
+        centerItems: isHeader ? const <ReaderInfoBarItemData>[] : centerItems,
+        trailingItems:
+            isHeader ? const <ReaderInfoBarItemData>[] : trailingItems,
       ),
       palette: _chromePalette(colors),
     );
@@ -2099,10 +2109,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int _chapterTextLength() {
+    final continuousChapter =
+        _shouldUseContinuousTextFlow
+            ? _findCurrentContinuousTextChapter()
+            : null;
     final paragraphs =
-        _paragraphs.isEmpty
+        continuousChapter?.paragraphs ??
+        (_paragraphs.isEmpty
             ? <String>[_content.trim()]
-            : _paragraphs.toList(growable: false);
+            : _paragraphs.toList(growable: false));
     if (paragraphs.isEmpty) {
       return 0;
     }
@@ -3509,7 +3524,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession(showMessage: true);
+      _pauseAutoReadSession();
       return;
     }
 
@@ -4288,12 +4303,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final topPadding = MediaQuery.viewPaddingOf(context).top;
     final colorScheme = Theme.of(context).colorScheme;
-    final progress =
-        ((_settings.autoReadSpeedLevel - ReaderSettings.minAutoReadSpeedLevel) /
-                (ReaderSettings.maxAutoReadSpeedLevel -
-                    ReaderSettings.minAutoReadSpeedLevel))
-            .clamp(0.0, 1.0)
-            .toDouble();
+    final progress = _safeCurrentScrollRatio();
     final isPaused =
         _autoReadSessionState == ReaderAutoReadSessionState.paused ||
         _autoReadSessionState == ReaderAutoReadSessionState.chapterPaused;
@@ -4327,7 +4337,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           if (_autoReadSessionState == ReaderAutoReadSessionState.paused)
             Center(
               child: GestureDetector(
-                onTap: () => _resumeAutoReadSession(showMessage: true),
+                onTap: () => _resumeAutoReadSession(),
                 onLongPress:
                     () => _showSettingsSheet(
                       initialTab: _ReaderSettingsTab.reading,

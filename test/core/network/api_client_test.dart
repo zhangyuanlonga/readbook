@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:shuxiang_reading_next/core/network/auth_token_refresher.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,6 +60,57 @@ void main() {
           isA<ApiException>()
               .having((e) => e.apiCode, 'apiCode', 'INVALID_ARGUMENT')
               .having((e) => e.code, 'code', ErrorCode.validation),
+        ),
+      );
+
+      await server.close(force: true);
+    });
+
+    test('preserves gateway failure from error envelope', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response.statusCode = 502;
+        request.response.write(
+          jsonEncode({
+            'code': 'UPSTREAM_ERROR',
+            'message': 'upstream failed',
+            'data': null,
+            'failure': {
+              'stage': 'toc',
+              'category': 'timeout',
+              'code': 'UPSTREAM_TIMEOUT',
+              'message': 'toc timeout',
+              'retryable': true,
+              'hint': '上游请求超时，可稍后重试',
+            },
+          }),
+        );
+        await request.response.close();
+      });
+
+      final client = ApiClient();
+      await expectLater(
+        client.request<Object?>(
+          method: ApiMethod.post,
+          path: 'http://${server.address.host}:${server.port}/failure',
+          enableRetry: false,
+          stage: ErrorStage.detail,
+        ),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.code, 'code', ErrorCode.network)
+              .having((e) => e.stage, 'stage', ErrorStage.toc)
+              .having((e) => e.briefMessage, 'briefMessage', 'toc timeout')
+              .having(
+                (e) => e.gatewayFailure?.code,
+                'gatewayFailure.code',
+                'UPSTREAM_TIMEOUT',
+              )
+              .having(
+                (e) => e.gatewayFailure?.retryable,
+                'gatewayFailure.retryable',
+                isTrue,
+              ),
         ),
       );
 

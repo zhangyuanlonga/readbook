@@ -62,7 +62,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return KeyEventResult.ignored;
     }
     if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession(showMessage: true);
+      _pauseAutoReadSession();
       return KeyEventResult.handled;
     }
 
@@ -131,7 +131,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         _isAutoReadSessionEnabled &&
         _autoReadSessionState == ReaderAutoReadSessionState.running;
     if (shouldResumeAutoRead) {
-      _pauseAutoReadSession(showMessage: false);
+      _pauseAutoReadSession();
     }
 
     if (event.direction == ReaderVolumeKeyDirection.up) {
@@ -144,7 +144,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         mounted &&
         _isAutoReadSessionEnabled &&
         _autoReadSessionState == ReaderAutoReadSessionState.paused) {
-      _resumeAutoReadSession(showMessage: false);
+      _resumeAutoReadSession();
     }
   }
 
@@ -619,7 +619,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   Future<void> _handleReaderLongPress() async {
     if (_isAutoReadSessionEnabled) {
       if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
-        _pauseAutoReadSession(showMessage: true);
+        _pauseAutoReadSession();
       } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
         await _showSettingsSheet(
           initialTab: _ReaderSettingsTab.reading,
@@ -680,11 +680,11 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   Future<void> _toggleAutoReadSession() async {
     if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
-      _pauseAutoReadSession(showMessage: true);
+      _pauseAutoReadSession();
       return;
     }
     if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
-      _resumeAutoReadSession(showMessage: true);
+      _resumeAutoReadSession();
       return;
     }
     if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
@@ -700,12 +700,12 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (_showOverlayControls) {
       _hideOverlayControls(resumeAutoRead: false);
     }
-    _startAutoReadSession(showMessage: true);
+    _startAutoReadSession();
   }
 
   Future<void> _openAutoReadFromOverlay() async {
     if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
-      _pauseAutoReadSession(showMessage: false);
+      _pauseAutoReadSession();
       await _showAutoReadControlSheet();
       return;
     }
@@ -924,21 +924,21 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         return;
       case _ReaderAutoReadControlAction.toggle:
         if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
-          _pauseAutoReadSession(showMessage: true);
+          _pauseAutoReadSession();
         } else if (_autoReadSessionState ==
             ReaderAutoReadSessionState.chapterPaused) {
           unawaited(_continueAutoReadAfterChapterPause());
         } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
-          _resumeAutoReadSession(showMessage: true);
+          _resumeAutoReadSession();
         } else if (_supportsAutoRead) {
-          _startAutoReadSession(showMessage: true);
+          _startAutoReadSession();
         }
         return;
       case _ReaderAutoReadControlAction.settings:
         await _showSettingsSheet(initialTab: _ReaderSettingsTab.interface);
         return;
       case _ReaderAutoReadControlAction.exit:
-        _stopAutoReadSession(showMessage: true);
+        _stopAutoReadSession();
         return;
     }
   }
@@ -1003,7 +1003,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
   }
 
-  void _startAutoReadSession({bool showMessage = false}) {
+  void _startAutoReadSession() {
     if (!mounted || !_supportsAutoRead) {
       return;
     }
@@ -1029,12 +1029,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       },
     );
     _reconcileAutoRead(restart: true);
-    if (showMessage) {
-      _showMessage('已开启自动阅读。');
-    }
   }
 
-  void _pauseAutoReadSession({bool showMessage = false}) {
+  void _pauseAutoReadSession() {
     if (!_isAutoReadSessionEnabled ||
         (_autoReadSessionState != ReaderAutoReadSessionState.running &&
             _autoReadSessionState !=
@@ -1046,12 +1043,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (mounted) {
       setState(() {});
     }
-    if (showMessage) {
-      _showMessage('已暂停自动阅读。');
-    }
   }
 
-  void _resumeAutoReadSession({bool showMessage = false}) {
+  void _resumeAutoReadSession() {
     if (!_isAutoReadSessionEnabled ||
         _autoReadSessionState != ReaderAutoReadSessionState.paused) {
       return;
@@ -1062,15 +1056,14 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (mounted) {
       setState(() {});
     }
-    if (showMessage) {
-      _showMessage('继续自动阅读。');
-    }
   }
 
-  void _stopAutoReadSession({bool showMessage = false}) {
+  void _stopAutoReadSession() {
     if (!_isAutoReadSessionEnabled) {
       return;
     }
+    _syncAutoReadVisibleContinuousTextChapter();
+    _flushProgressSave();
     _isAutoReadAdvancingChapter = false;
     _isAutoReadHandlingBoundary = false;
     _isAutoReadPausedByRuntime = false;
@@ -1094,10 +1087,6 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     } else {
       _isAutoReadSessionEnabled = false;
       _autoReadSessionState = ReaderAutoReadSessionState.off;
-    }
-
-    if (showMessage) {
-      _showMessage('已停止自动阅读。');
     }
   }
 

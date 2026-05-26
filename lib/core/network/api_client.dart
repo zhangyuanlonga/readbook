@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
+import '../errors/gateway_failure.dart';
 import '../logging/app_logger.dart';
 import 'auth_token_refresher.dart';
 import 'interceptors.dart';
@@ -17,11 +18,13 @@ class ApiResponse<T> {
     required this.code,
     required this.message,
     required this.data,
+    this.failure,
   });
 
   final String code;
   final String message;
   final T data;
+  final GatewayFailure? failure;
 
   bool get isOk => code == 'OK';
 }
@@ -34,6 +37,7 @@ class ApiException extends AppException {
     this.statusCode,
     super.stage,
     super.requestUrl,
+    super.gatewayFailure,
     super.cause,
     super.stackTrace,
   });
@@ -192,6 +196,15 @@ class ApiClient {
           if (shouldRetry) {
             await _delayForRetry(attempt);
             continue;
+          }
+          final errorEnvelope = _tryParseEnvelope(response.data);
+          if (errorEnvelope != null && !errorEnvelope.isOk) {
+            throw _mapApiError(
+              envelope: errorEnvelope,
+              statusCode: statusCode,
+              stage: stage,
+              requestUrl: url,
+            );
           }
           throw NetworkException(
             briefMessage: '网络异常，状态码：$statusCode',
@@ -355,7 +368,16 @@ class ApiClient {
       code: code,
       message: message.isEmpty ? _defaultMessageForCode(code) : message,
       data: map['data'],
+      failure: GatewayFailure.tryParse(map['failure']),
     );
+  }
+
+  ApiResponse<Object?>? _tryParseEnvelope(Object? payload) {
+    try {
+      return _parseEnvelope(payload);
+    } catch (_) {
+      return null;
+    }
   }
 
   T _decodeData<T>(Object? data, T Function(Object? data)? decoder) {
@@ -372,20 +394,29 @@ class ApiClient {
     required String requestUrl,
   }) {
     final apiCode = envelope.code;
-    final mapped = switch (apiCode) {
-      'INVALID_ARGUMENT' => ErrorCode.validation,
-      'NOT_FOUND' => ErrorCode.unknown,
-      'INTERNAL_ERROR' => ErrorCode.unknown,
-      _ => ErrorCode.unknown,
-    };
+    final failure = envelope.failure;
+    final mapped =
+        failure?.toErrorCode() ??
+        switch (apiCode) {
+          'INVALID_ARGUMENT' => ErrorCode.validation,
+          'NOT_FOUND' => ErrorCode.unknownSource,
+          'INTERNAL_ERROR' => ErrorCode.unknown,
+          _ => ErrorCode.unknown,
+        };
+    final mappedStage = failure?.toErrorStage(fallback: stage) ?? stage;
+    final message =
+        failure?.message.trim().isNotEmpty == true
+            ? failure!.message
+            : envelope.message;
 
     return ApiException(
       code: mapped,
-      briefMessage: envelope.message,
+      briefMessage: message,
       apiCode: apiCode,
       statusCode: statusCode,
-      stage: stage,
+      stage: mappedStage,
       requestUrl: requestUrl,
+      gatewayFailure: failure,
     );
   }
 

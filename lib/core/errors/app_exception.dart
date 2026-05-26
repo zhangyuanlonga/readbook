@@ -1,5 +1,6 @@
 import 'error_codes.dart';
 import 'error_stage.dart';
+import 'gateway_failure.dart';
 
 class AppException implements Exception {
   const AppException({
@@ -8,6 +9,7 @@ class AppException implements Exception {
     this.sourceId,
     this.stage = ErrorStage.unknown,
     this.requestUrl,
+    this.gatewayFailure,
     this.cause,
     this.stackTrace,
   });
@@ -17,6 +19,7 @@ class AppException implements Exception {
   final String? sourceId;
   final ErrorStage stage;
   final String? requestUrl;
+  final GatewayFailure? gatewayFailure;
   final Object? cause;
   final StackTrace? stackTrace;
 
@@ -26,6 +29,7 @@ class AppException implements Exception {
     String? sourceId,
     ErrorStage? stage,
     String? requestUrl,
+    GatewayFailure? gatewayFailure,
     Object? cause,
     StackTrace? stackTrace,
   }) {
@@ -35,6 +39,7 @@ class AppException implements Exception {
       sourceId: sourceId ?? this.sourceId,
       stage: stage ?? this.stage,
       requestUrl: requestUrl ?? this.requestUrl,
+      gatewayFailure: gatewayFailure ?? this.gatewayFailure,
       cause: cause ?? this.cause,
       stackTrace: stackTrace ?? this.stackTrace,
     );
@@ -47,6 +52,7 @@ class AppException implements Exception {
         'stage: $stage, '
         'sourceId: $sourceId, '
         'requestUrl: $requestUrl, '
+        'gatewayFailure: $gatewayFailure, '
         'briefMessage: $briefMessage)';
   }
 }
@@ -57,6 +63,7 @@ class NetworkException extends AppException {
     super.sourceId,
     super.stage,
     super.requestUrl,
+    super.gatewayFailure,
     super.cause,
     super.stackTrace,
   }) : super(code: ErrorCode.network);
@@ -68,6 +75,7 @@ class RuleParseException extends AppException {
     super.sourceId,
     super.stage,
     super.requestUrl,
+    super.gatewayFailure,
     super.cause,
     super.stackTrace,
   }) : super(code: ErrorCode.ruleParse);
@@ -79,6 +87,7 @@ class RuleMatchEmptyException extends AppException {
     super.sourceId,
     super.stage,
     super.requestUrl,
+    super.gatewayFailure,
     super.cause,
     super.stackTrace,
   }) : super(code: ErrorCode.ruleMatchEmpty);
@@ -90,6 +99,7 @@ class DecodeException extends AppException {
     super.sourceId,
     super.stage,
     super.requestUrl,
+    super.gatewayFailure,
     super.cause,
     super.stackTrace,
   }) : super(code: ErrorCode.decode);
@@ -101,6 +111,7 @@ class UnknownSourceException extends AppException {
     super.sourceId,
     super.stage,
     super.requestUrl,
+    super.gatewayFailure,
     super.cause,
     super.stackTrace,
   }) : super(code: ErrorCode.unknownSource);

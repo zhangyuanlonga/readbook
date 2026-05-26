@@ -383,7 +383,8 @@ class _BookshelfAnimatedProgressSectionState
                   if (widget.showSummaryText)
                     Expanded(
                       child: Text(
-                        widget.summaryText ?? widget.progressDisplay.summaryText,
+                        widget.summaryText ??
+                            widget.progressDisplay.summaryText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: widget.summaryStyle,

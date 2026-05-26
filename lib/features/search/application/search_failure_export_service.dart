@@ -76,6 +76,8 @@ class SearchFailureExportService {
               'code': failure.code.name,
               'stage': failure.stage.name,
               'message': failure.message,
+              if (failure.gatewayFailure != null)
+                'gatewayFailure': failure.gatewayFailure!.toJson(),
               if (failure.debugMessage != null &&
                   failure.debugMessage!.trim().isNotEmpty)
                 'debugMessage': failure.debugMessage,

@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/errors/gateway_failure.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
@@ -885,6 +886,7 @@ class _ServerSearchFailure {
     required this.message,
     required this.failureStage,
     required this.failureCategory,
+    this.failure,
   });
 
   final String sourceId;
@@ -892,6 +894,7 @@ class _ServerSearchFailure {
   final String message;
   final String failureStage;
   final String failureCategory;
+  final GatewayFailure? failure;
 
   factory _ServerSearchFailure.fromJson(Object? value) {
     if (value is! Map) {
@@ -910,21 +913,37 @@ class _ServerSearchFailure {
       message: _stringOrEmpty(map['message']),
       failureStage: _stringOrEmpty(map['failureStage']),
       failureCategory: _stringOrEmpty(map['failureCategory']),
+      failure: GatewayFailure.tryParse(map['failure']),
     );
   }
 
   SourceSearchFailure toSourceSearchFailure() {
+    final gatewayFailure = failure;
+    final stage =
+        gatewayFailure?.toErrorStage(fallback: ErrorStage.search) ??
+        ErrorStage.search;
+    final category =
+        gatewayFailure?.category.trim().isNotEmpty == true
+            ? gatewayFailure!.category
+            : failureCategory;
+    final stageText =
+        gatewayFailure?.stage.trim().isNotEmpty == true
+            ? gatewayFailure!.stage
+            : failureStage;
     return SourceSearchFailure(
       sourceId: toServerGatewaySourceId(sourceId),
       sourceName: sourceName,
-      message: message.isEmpty ? '服务器搜索失败' : message,
+      message:
+          gatewayFailure?.message.trim().isNotEmpty == true
+              ? gatewayFailure!.message
+              : (message.isEmpty ? '服务器搜索失败' : message),
       code:
-          failureCategory == 'timeout' ? ErrorCode.network : ErrorCode.unknown,
-      stage: ErrorStage.search,
+          gatewayFailure?.toErrorCode() ??
+          (category == 'timeout' ? ErrorCode.network : ErrorCode.unknown),
+      stage: stage,
       debugMessage:
-          failureStage.isEmpty && failureCategory.isEmpty
-              ? null
-              : '$failureStage/$failureCategory',
+          stageText.isEmpty && category.isEmpty ? null : '$stageText/$category',
+      gatewayFailure: gatewayFailure,
     );
   }
 }

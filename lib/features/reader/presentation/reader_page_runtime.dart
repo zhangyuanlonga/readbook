@@ -141,6 +141,10 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return _continuousTextChapterScrollRatioForFlow(chapter);
   }
 
+  _ContinuousTextChapter? _resolveActiveContinuousTextChapterForRuntime() {
+    return _resolveActiveContinuousTextChapterFlow();
+  }
+
   void _syncActiveContinuousTextChapterFromScroll() {
     _syncActiveContinuousTextChapterFromScrollFlow();
   }
@@ -854,7 +858,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
             openRouteKind: 'auto_read_next_book',
           );
-      _stopAutoReadSession(showMessage: false);
+      _stopAutoReadSession();
       if (!mounted) {
         return false;
       }
@@ -879,7 +883,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       duration: _ReaderPageState._kReaderSnackActionDuration,
       dedupeKey: 'auto_read_finished',
     );
-    _stopAutoReadSession(showMessage: false);
+    _stopAutoReadSession();
   }
 
   void _stopAutoRead() {
@@ -939,13 +943,36 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
 
     if (_isProgrammaticAutoReadScrollActive) {
+      _syncAutoReadVisibleContinuousTextChapter();
       _logAutoReadContinuousSyncSkipped();
     } else {
+      _lastAutoReadVisibleChapterIndex = null;
       _syncActiveContinuousTextChapterFromScroll();
       _maybePrefetchContinuousTextNeighbors();
     }
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
+  }
+
+  void _syncAutoReadVisibleContinuousTextChapter() {
+    final resolved = _resolveActiveContinuousTextChapterForRuntime();
+    if (resolved == null || resolved.chapterIndex == _currentIndex) {
+      return;
+    }
+    if (_lastAutoReadVisibleChapterIndex == resolved.chapterIndex) {
+      return;
+    }
+    _lastAutoReadVisibleChapterIndex = resolved.chapterIndex;
+    _updateReaderState(() {
+      _currentIndex = resolved.chapterIndex;
+      _chapterId = resolved.chapterId;
+      _chapterUrl = resolved.chapterUrl;
+      _chapterTitle =
+          resolved.displayTitle.trim().isNotEmpty
+              ? resolved.displayTitle
+              : resolved.chapterTitle;
+      _isCurrentChapterCached = resolved.isCached;
+    });
   }
 
   void _logAutoReadContinuousSyncSkipped() {

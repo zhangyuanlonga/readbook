@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/errors/gateway_failure.dart';
 import '../../../domain/entities/book.dart';
 
 class SourceSearchFailure {
@@ -13,6 +14,7 @@ class SourceSearchFailure {
     required this.stage,
     this.requestUrl,
     this.debugMessage,
+    this.gatewayFailure,
   });
 
   final String sourceId;
@@ -22,6 +24,11 @@ class SourceSearchFailure {
   final ErrorStage stage;
   final String? requestUrl;
   final String? debugMessage;
+  final GatewayFailure? gatewayFailure;
+
+  String? get gatewayCode => gatewayFailure?.displayCode;
+  bool get retryable => gatewayFailure?.retryable ?? code == ErrorCode.network;
+  String? get hint => gatewayFailure?.displayHint;
 }
 
 class SearchExecutionReport {
