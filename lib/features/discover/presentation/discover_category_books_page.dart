@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../core/network/api_client.dart';
 import '../../../domain/entities/book.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -195,7 +196,7 @@ class _MissingCategoryState extends StatelessWidget {
   }
 }
 
-class _CategoryBooksGrid extends StatelessWidget {
+class _CategoryBooksGrid extends ConsumerWidget {
   const _CategoryBooksGrid({
     required this.source,
     required this.category,
@@ -209,10 +210,52 @@ class _CategoryBooksGrid extends StatelessWidget {
   final ResolvedAdvancedThemePalette palette;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final books = category.books;
+    final request = DiscoverCategoryBooksRequest(
+      source: source,
+      category: category,
+    );
+    final booksAsync = ref.watch(discoverCategoryBooksProvider(request));
+
+    if (booksAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (booksAsync.hasError) {
+      final failure =
+          booksAsync.error is ApiException
+              ? (booksAsync.error as ApiException).gatewayFailure
+              : null;
+      final description =
+          failure == null
+              ? '该分类书籍暂时无法加载，请稍后重试'
+              : '${failure.displayCode}：${failure.displayHint}';
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          metrics.pagePadding,
+          topInset + metrics.sectionGap,
+          metrics.pagePadding,
+          metrics.sectionGap,
+        ),
+        child: Center(
+          child: AppEmptyStateCard(
+            icon: Icons.error_outline_rounded,
+            title: failure?.message ?? '加载失败',
+            description: description,
+            actionLabel: failure?.retryable == false ? null : '重试',
+            onAction:
+                failure?.retryable == false
+                    ? null
+                    : () =>
+                        ref.invalidate(discoverCategoryBooksProvider(request)),
+          ),
+        ),
+      );
+    }
+
+    final books = booksAsync.value ?? const <DiscoverCategoryBook>[];
 
     if (books.isEmpty) {
       return Padding(
@@ -310,13 +353,17 @@ class _DiscoverBookTile extends StatelessWidget {
   }
 
   Future<void> _openBookDetail(BuildContext context) async {
-    final initialBook = Book(
-      id: book.id,
-      sourceId: source.id,
-      title: book.name,
-      detailUrl: book.detailUrl,
-      category: source.name,
-    );
+    final initialBook =
+        book.book ??
+        Book(
+          id: book.id,
+          sourceId: source.id,
+          title: book.name,
+          detailUrl: book.detailUrl,
+          coverUrl: book.coverUrl,
+          author: book.author,
+          category: source.name,
+        );
     final overlay = CircularThemeRevealOverlay.of(context);
     if (overlay == null) {
       final route = buildBookDetailRoute(
@@ -324,6 +371,8 @@ class _DiscoverBookTile extends StatelessWidget {
         sourceId: source.id,
         detailUrl: book.detailUrl,
         title: book.name,
+        author: book.author,
+        coverUrl: book.coverUrl,
       );
       await context.push(route, extra: initialBook);
       return;
@@ -333,6 +382,8 @@ class _DiscoverBookTile extends StatelessWidget {
       sourceId: source.id,
       detailUrl: book.detailUrl,
       title: book.name,
+      author: book.author,
+      coverUrl: book.coverUrl,
       revealTransition: true,
     );
     final center = CircularThemeRevealOverlay.getCenterFromContext(context);

@@ -269,6 +269,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   void _handleBackNavigation() {
     _markBackNavigationTriggered();
+    _stopAutoReadSessionForReaderExit();
     final now = DateTime.now();
     final previousBackAt = _lastReaderBackAt;
     _lastReaderBackAt = now;
@@ -282,6 +283,13 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     context.go('/bookshelf');
+  }
+
+  void _stopAutoReadSessionForReaderExit() {
+    if (!_isAutoReadSessionEnabled) {
+      return;
+    }
+    _stopAutoReadSession();
   }
 
   void _markBackNavigationTriggered() {

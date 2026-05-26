@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -164,7 +165,53 @@ class _AdvancedThemeEditorPageState
     }
   }
 
-  Future<void> _saveTheme() => _saveThemeImpl();
+  Future<void> _saveTheme(BuildContext sourceContext) {
+    final overlay = CircularThemeRevealOverlay.of(sourceContext);
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
+    );
+    return _saveThemeImpl(revealOverlay: overlay, revealCenter: center);
+  }
+
+  Future<void> _closeWithReveal(
+    BuildContext sourceContext, {
+    String? result,
+  }) async {
+    final overlay = CircularThemeRevealOverlay.of(sourceContext);
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
+    );
+
+    await _closeWithRevealAt(overlay: overlay, center: center, result: result);
+  }
+
+  Future<void> _closeWithRevealAt({
+    required CircularThemeRevealOverlayState? overlay,
+    required Offset center,
+    String? result,
+  }) async {
+    void closeRoute() {
+      if (!mounted) {
+        return;
+      }
+      if (context.canPop()) {
+        context.pop(result);
+        return;
+      }
+      context.go('/appearance/advanced-themes');
+    }
+
+    if (overlay == null) {
+      closeRoute();
+      return;
+    }
+
+    await overlay.startTransition(
+      center: center,
+      reverse: false,
+      onThemeChange: closeRoute,
+    );
+  }
 
   AppAdvancedThemeColors? _parseColorsForMode(AppAdvancedThemeMode mode) {
     final values = <_ThemeColorSlot, int?>{};
@@ -2065,6 +2112,14 @@ class _AdvancedThemeEditorPageState
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
+        leading: Builder(
+          builder:
+              (leadingContext) => IconButton(
+                tooltip: '返回',
+                onPressed: () => unawaited(_closeWithReveal(leadingContext)),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              ),
+        ),
         title:
             _isEditingName
                 ? ConstrainedBox(
@@ -2176,10 +2231,16 @@ class _AdvancedThemeEditorPageState
               onPressed: _finishEditingName,
               icon: const Icon(Icons.check_rounded),
             ),
-          IconButton(
-            tooltip: '保存主题',
-            onPressed: _isLoading || _isSaving ? null : _saveTheme,
-            icon: const Icon(Icons.save_outlined),
+          Builder(
+            builder:
+                (saveContext) => IconButton(
+                  tooltip: '保存主题',
+                  onPressed:
+                      _isLoading || _isSaving
+                          ? null
+                          : () => unawaited(_saveTheme(saveContext)),
+                  icon: const Icon(Icons.save_outlined),
+                ),
           ),
         ],
       ),

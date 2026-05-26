@@ -428,7 +428,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         );
         await overlay.startTransition(
           center: dockSearchCenter,
-          reverse: true,
+          reverse: false,
           onThemeChange: () {
             context.pop();
           },

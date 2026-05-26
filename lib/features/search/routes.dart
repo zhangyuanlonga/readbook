@@ -13,23 +13,7 @@ final List<RouteBase> searchRoutes = <RouteBase>[
       final child = SearchPage(entry: entry);
 
       if (entry == 'dock') {
-        return CustomTransitionPage<void>(
-          key: state.pageKey,
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: const Duration(milliseconds: 280),
-          child: child,
-          transitionsBuilder: (
-            context,
-            animation,
-            secondaryAnimation,
-            transitionChild,
-          ) {
-            if (animation.status != AnimationStatus.reverse) {
-              return transitionChild;
-            }
-            return transitionChild;
-          },
-        );
+        return NoTransitionPage<void>(key: state.pageKey, child: child);
       }
 
       if (entry == 'bookshelf_top') {

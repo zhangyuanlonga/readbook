@@ -52,7 +52,10 @@ extension on _AdvancedThemeEditorPageState {
     });
   }
 
-  Future<void> _saveThemeImpl() async {
+  Future<void> _saveThemeImpl({
+    required CircularThemeRevealOverlayState? revealOverlay,
+    required Offset revealCenter,
+  }) async {
     final draft = _draft;
     if (draft == null || _isSaving) {
       return;
@@ -99,7 +102,11 @@ extension on _AdvancedThemeEditorPageState {
       _updateAdvancedThemeEditorState(() {
         _draft = saved;
       });
-      context.pop('已保存高级主题');
+      await _closeWithRevealAt(
+        overlay: revealOverlay,
+        center: revealCenter,
+        result: '已保存高级主题',
+      );
     } finally {
       if (mounted) {
         _updateAdvancedThemeEditorState(() {

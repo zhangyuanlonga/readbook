@@ -9,6 +9,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../core/network/api_client.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../application/discover_source_provider.dart';
 import '../domain/discover_source_summary.dart';
@@ -112,6 +113,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
     }
 
     if (sourcesAsync.hasError) {
+      final failure =
+          sourcesAsync.error is ApiException
+              ? (sourcesAsync.error as ApiException).gatewayFailure
+              : null;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -122,9 +127,18 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
               color: theme.colorScheme.error,
             ),
             const SizedBox(height: 12),
-            Text('加载失败', style: theme.textTheme.titleMedium),
+            Text(
+              failure?.message ?? '加载失败',
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
-            Text('请点击刷新重试', style: theme.textTheme.bodySmall),
+            Text(
+              failure == null
+                  ? '请点击刷新重试'
+                  : '${failure.displayCode}：${failure.displayHint}',
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -458,6 +472,7 @@ class _SourceRow extends StatelessWidget {
             child:
                 isExpanded
                     ? _CategoryPanel(
+                      failureText: _failureText(source),
                       categories: source.categories,
                       palette: palette,
                       onCategoryTap: onCategoryTap,
@@ -512,15 +527,23 @@ class _SourceRow extends StatelessWidget {
     }
     return '${(latencyMs / 1000).toStringAsFixed(1)}s';
   }
+
+  static String? _failureText(DiscoverSourceSummary source) {
+    final failure = source.failure;
+    if (failure == null) return null;
+    return '${failure.displayCode}：${failure.displayHint}';
+  }
 }
 
 class _CategoryPanel extends StatelessWidget {
   const _CategoryPanel({
+    required this.failureText,
     required this.categories,
     required this.palette,
     required this.onCategoryTap,
   });
 
+  final String? failureText;
   final List<DiscoverSourceCategory> categories;
   final ResolvedAdvancedThemePalette palette;
   final _DiscoverCategoryTap onCategoryTap;
@@ -537,7 +560,7 @@ class _CategoryPanel extends StatelessWidget {
               ? Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  '暂无可浏览分类',
+                  failureText ?? '暂无可浏览分类',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
