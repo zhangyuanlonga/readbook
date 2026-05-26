@@ -48,6 +48,6 @@ void main() {
 
     expect(find.text('UPSTREAM_TIMEOUT'), findsOneWidget);
     expect(find.text('降低并发后重试'), findsOneWidget);
-    expect(find.text('建议：可重试或稍后再试'), findsOneWidget);
+    expect(find.text('可以稍后重试，或切换其他书源。'), findsOneWidget);
   });
 }

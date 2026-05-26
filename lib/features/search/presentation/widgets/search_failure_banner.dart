@@ -159,9 +159,10 @@ class SearchFailureBanner extends StatelessWidget {
                               ],
                               const SizedBox(height: 4),
                               Text(
-                                failure.retryable
-                                    ? '建议：可重试或稍后再试'
-                                    : '建议：检查书源或切换书源',
+                                failure.gatewayFailure?.actionHint ??
+                                    (failure.retryable
+                                        ? '建议：可重试或稍后再试'
+                                        : '建议：检查书源或切换书源'),
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                   fontWeight: FontWeight.w600,

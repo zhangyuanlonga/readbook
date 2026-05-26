@@ -2725,152 +2725,18 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                             }),
                                       ),
                                     ),
-                                  ],
-                                ),
-                                SizedBox(height: compactScaleValue(8)),
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    left: compactScaleValue(2),
-                                  ),
-                                  child: Text(
-                                    '字号',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelMedium?.copyWith(
-                                      fontSize:
-                                          (Theme.of(context)
-                                                  .textTheme
-                                                  .labelMedium
-                                                  ?.fontSize ??
-                                              12) *
-                                          compactSheetScale *
-                                          0.9,
-                                      color:
-                                          Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: compactScaleValue(4)),
-                                Row(
-                                  children: [
+                                    SizedBox(width: compactScaleValue(8)),
                                     Expanded(
-                                      flex: 4,
-                                      child: buildInterfaceInlineCapsule(
-                                        padding: EdgeInsets.zero,
-                                        child: SizedBox(
-                                          height: compactScaleValue(38),
-                                          child: Row(
-                                            children: [
-                                              SizedBox(
-                                                width: compactScaleValue(6),
-                                              ),
-                                              IconButton(
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                constraints: BoxConstraints(
-                                                  minWidth: compactScaleValue(
-                                                    26,
-                                                  ),
-                                                  minHeight: compactScaleValue(
-                                                    26,
-                                                  ),
-                                                ),
-                                                padding: EdgeInsets.zero,
-                                                onPressed: () {
-                                                  final next =
-                                                      (draft.fontSize - 1)
-                                                          .clamp(5, 50)
-                                                          .toDouble();
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      fontSize: next,
-                                                    );
-                                                  });
-                                                },
-                                                icon: Icon(
-                                                  Icons.remove_rounded,
-                                                  size: compactScaleValue(15),
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: Center(
-                                                  child: Text(
-                                                    draft.fontSize
-                                                        .toStringAsFixed(0),
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.bodyMedium?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                      height: 1,
-                                                      fontSize:
-                                                          (Theme.of(context)
-                                                                  .textTheme
-                                                                  .bodyMedium
-                                                                  ?.fontSize ??
-                                                              14) *
-                                                          compactSheetScale *
-                                                          0.95,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              IconButton(
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                constraints: BoxConstraints(
-                                                  minWidth: compactScaleValue(
-                                                    26,
-                                                  ),
-                                                  minHeight: compactScaleValue(
-                                                    26,
-                                                  ),
-                                                ),
-                                                padding: EdgeInsets.zero,
-                                                onPressed: () {
-                                                  final next =
-                                                      (draft.fontSize + 1)
-                                                          .clamp(5, 50)
-                                                          .toDouble();
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      fontSize: next,
-                                                    );
-                                                  });
-                                                },
-                                                icon: Icon(
-                                                  Icons.add_rounded,
-                                                  size: compactScaleValue(15),
-                                                ),
-                                              ),
-                                              SizedBox(
-                                                width: compactScaleValue(6),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+                                      child: buildInterfaceCapsuleEntry(
+                                        icon: Icons.tune_rounded,
+                                        title: '更多',
+                                        margin: EdgeInsets.zero,
+                                        onTap:
+                                            () => setModalState(() {
+                                              activeSettingsGroupKey =
+                                                  'interaction';
+                                            }),
                                       ),
-                                    ),
-                                    SizedBox(width: compactScaleValue(6)),
-                                    Expanded(
-                                      flex: 4,
-                                      child: buildInterfaceSecondaryCapsule(
-                                        icon: Icons.format_size_rounded,
-                                        title: currentFontLabel(),
-                                        onTap: openFontPickerSheet,
-                                      ),
-                                    ),
-                                    SizedBox(width: compactScaleValue(6)),
-                                    buildInterfaceIconCapsule(
-                                      icon: Icons.tune_rounded,
-                                      tooltip: '更多',
-                                      onTap:
-                                          () => setModalState(() {
-                                            activeSettingsGroupKey =
-                                                'interaction';
-                                          }),
                                     ),
                                   ],
                                 ),
@@ -3015,30 +2881,118 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               ],
                         'quick_margins' => buildQuickMarginCards(),
                         'typography' => <Widget>[
-                          buildCompactSectionTitle('字体样式'),
+                          buildCompactSectionTitle('字体'),
                           const SizedBox(height: 10),
                           Row(
                             children: [
-                              Text(
-                                currentFontLabel(),
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const Spacer(),
-                              OutlinedButton(
-                                onPressed:
-                                    () => unawaited(openFontWeightTabSheet()),
-                                child: Text(fontWeightDisplayLabel(draft)),
-                              ),
-                              const SizedBox(width: 8),
-                              OutlinedButton.icon(
-                                onPressed:
-                                    () => unawaited(openMineFontManagement()),
-                                icon: const Icon(
-                                  Icons.open_in_new_rounded,
-                                  size: 16,
+                              Expanded(
+                                child: buildInterfaceSecondaryCapsule(
+                                  icon: Icons.font_download_outlined,
+                                  title: currentFontLabel(),
+                                  onTap: openFontPickerSheet,
                                 ),
-                                label: const Text('去我的管理'),
+                              ),
+                              SizedBox(width: compactScaleValue(8)),
+                              Expanded(
+                                child: buildInterfaceSecondaryCapsule(
+                                  icon: Icons.line_weight_rounded,
+                                  title: '字重 ${fontWeightDisplayLabel(draft)}',
+                                  onTap:
+                                      () => unawaited(openFontWeightTabSheet()),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: compactScaleValue(8)),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: buildInterfaceInlineCapsule(
+                                  padding: EdgeInsets.zero,
+                                  child: SizedBox(
+                                    height: compactScaleValue(38),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(width: compactScaleValue(6)),
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          constraints: BoxConstraints(
+                                            minWidth: compactScaleValue(26),
+                                            minHeight: compactScaleValue(26),
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          onPressed: () {
+                                            final next =
+                                                (draft.fontSize - 1)
+                                                    .clamp(5, 50)
+                                                    .toDouble();
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                fontSize: next,
+                                              );
+                                            });
+                                          },
+                                          icon: Icon(
+                                            Icons.remove_rounded,
+                                            size: compactScaleValue(15),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Center(
+                                            child: Text(
+                                              '字号 ${draft.fontSize.toStringAsFixed(0)}',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                height: 1,
+                                                fontSize:
+                                                    (Theme.of(context)
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.fontSize ??
+                                                        14) *
+                                                    compactSheetScale *
+                                                    0.95,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          constraints: BoxConstraints(
+                                            minWidth: compactScaleValue(26),
+                                            minHeight: compactScaleValue(26),
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          onPressed: () {
+                                            final next =
+                                                (draft.fontSize + 1)
+                                                    .clamp(5, 50)
+                                                    .toDouble();
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                fontSize: next,
+                                              );
+                                            });
+                                          },
+                                          icon: Icon(
+                                            Icons.add_rounded,
+                                            size: compactScaleValue(15),
+                                          ),
+                                        ),
+                                        SizedBox(width: compactScaleValue(6)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: compactScaleValue(8)),
+                              buildInterfaceIconCapsule(
+                                icon: Icons.open_in_new_rounded,
+                                tooltip: '管理字体',
+                                onTap:
+                                    () => unawaited(openMineFontManagement()),
                               ),
                             ],
                           ),

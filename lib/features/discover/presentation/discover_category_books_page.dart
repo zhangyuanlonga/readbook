@@ -9,6 +9,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/errors/gateway_failure.dart';
 import '../../../domain/entities/book.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -290,9 +291,7 @@ class _CategoryBooksGrid extends ConsumerWidget {
               ? (booksAsync.error as ApiException).gatewayFailure
               : null;
       final description =
-          failure == null
-              ? '该分类书籍暂时无法加载，请稍后重试'
-              : '${failure.displayCode}：${failure.displayHint}';
+          failure == null ? '该分类书籍暂时无法加载，请稍后重试' : _failureDescription(failure);
       return Padding(
         padding: EdgeInsets.fromLTRB(
           metrics.pagePadding,
@@ -368,6 +367,14 @@ class _CategoryBooksGrid extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  static String _failureDescription(GatewayFailure failure) {
+    final actionHint = failure.actionHint.trim();
+    if (actionHint.isEmpty) {
+      return '${failure.displayCode}：${failure.displayHint}';
+    }
+    return '${failure.displayCode}：${failure.displayHint}\n$actionHint';
   }
 }
 

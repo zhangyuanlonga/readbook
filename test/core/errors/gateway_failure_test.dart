@@ -43,6 +43,29 @@ void main() {
       expect(parseFailure.toErrorStage(), ErrorStage.detail);
       expect(loginFailure.toErrorCode(), ErrorCode.validation);
       expect(loginFailure.toErrorStage(), ErrorStage.search);
+      expect(loginFailure.actionHint, contains('登录'));
+    });
+
+    test('marks webview and anti spider hints clearly', () {
+      final webviewFailure = GatewayFailure.fromJson(const <String, Object?>{
+        'stage': 'search',
+        'category': 'webviewRequired',
+        'code': 'BAD_REQUEST',
+        'message': 'unsupported:java.webView:requiresWebView',
+        'retryable': false,
+      });
+      final antiSpiderFailure = GatewayFailure.fromJson(const <String, Object?>{
+        'stage': 'search',
+        'category': 'antiSpider',
+        'code': 'UPSTREAM_ERROR',
+        'message': 'captcha required',
+        'retryable': false,
+      });
+
+      expect(webviewFailure.isWebViewRequired, isTrue);
+      expect(webviewFailure.actionHint, contains('WebView'));
+      expect(antiSpiderFailure.isAntiSpider, isTrue);
+      expect(antiSpiderFailure.actionHint, contains('反爬'));
     });
   });
 }

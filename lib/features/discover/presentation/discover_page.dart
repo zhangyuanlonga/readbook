@@ -793,7 +793,11 @@ class _SourceRow extends ConsumerWidget {
   static String? _failureText(DiscoverSourceSummary source) {
     final failure = source.failure;
     if (failure == null) return null;
-    return '${failure.displayCode}：${failure.displayHint}';
+    final actionHint = failure.actionHint.trim();
+    if (actionHint.isEmpty) {
+      return '${failure.displayCode}：${failure.displayHint}';
+    }
+    return '${failure.displayCode}：${failure.displayHint}\n$actionHint';
   }
 }
 

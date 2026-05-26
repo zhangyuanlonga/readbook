@@ -26,6 +26,9 @@ class AdvancedThemeService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
   static const String _activeThemeAppearanceSnapshotKey =
       'app.advancedThemes.activeAppearanceSnapshot';
+  static const String _colorExportType = 'advanced_theme_colors';
+  static const int _legacyColorExportVersion = 1;
+  static const int _colorExportVersion = 2;
   static const String _bundleExportType = 'advanced_theme_bundle';
   static const int _bundleExportVersion = 1;
 
@@ -577,6 +580,55 @@ class AdvancedThemeService {
 
   String createThemeId() {
     return 'advanced_theme_${_uuid.v4()}';
+  }
+
+  Future<AppAdvancedTheme> importThemeColorJson(String rawJson) async {
+    final fingerprint = _computeImportFingerprint(utf8.encode(rawJson));
+    await _ensureImportFingerprintAvailable(fingerprint);
+    final decoded = jsonDecode(rawJson);
+    if (decoded is! Map) {
+      throw const FormatException('旧 JSON 主题配置无效。');
+    }
+    final payload = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final type = payload['type']?.toString().trim() ?? '';
+    if (type != _colorExportType) {
+      throw const FormatException('不支持的旧 JSON 主题类型。');
+    }
+    final version = payload['version'];
+    final normalizedVersion =
+        version is num ? version.toInt() : int.tryParse('$version');
+    if (normalizedVersion != _legacyColorExportVersion &&
+        normalizedVersion != _colorExportVersion) {
+      throw const FormatException('不支持的旧 JSON 主题版本。');
+    }
+
+    final rawName = payload['name']?.toString().trim() ?? '';
+    final now = DateTime.now().toUtc();
+    final lightConfig =
+        normalizedVersion == _legacyColorExportVersion
+            ? AppAdvancedThemeModeConfig(
+              colors: _readExportedColors(payload, 'lightColors'),
+            )
+            : _readExportedModeConfig(payload, 'lightConfig');
+    final darkConfig =
+        normalizedVersion == _legacyColorExportVersion
+            ? AppAdvancedThemeModeConfig(
+              colors: _readExportedColors(payload, 'darkColors'),
+            )
+            : _readExportedModeConfig(payload, 'darkConfig');
+
+    final importedTheme = AppAdvancedTheme(
+      id: createThemeId(),
+      name: rawName.isEmpty ? '导入旧主题' : rawName,
+      createdAt: now,
+      updatedAt: now,
+      lightConfig: lightConfig,
+      darkConfig: darkConfig,
+      importFingerprint: fingerprint,
+    );
+    return saveTheme(importedTheme);
   }
 
   Future<List<int>> encodeThemeBundleZip(AppAdvancedTheme theme) async {
@@ -1505,6 +1557,61 @@ class AdvancedThemeService {
     }
   }
 
+  AppAdvancedThemeColors _readExportedColors(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final rawColors = payload[key];
+    if (rawColors is! Map) {
+      throw FormatException('Missing or invalid field: $key');
+    }
+    return AppAdvancedThemeColors.fromJson(
+      rawColors.map(
+        (nestedKey, nestedValue) => MapEntry(nestedKey.toString(), nestedValue),
+      ),
+    );
+  }
+
+  AppAdvancedThemeModeConfig _readExportedModeConfig(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final rawConfig = payload[key];
+    if (rawConfig is! Map) {
+      throw FormatException('Missing or invalid field: $key');
+    }
+    final normalizedConfig = rawConfig.map(
+      (nestedKey, nestedValue) => MapEntry(nestedKey.toString(), nestedValue),
+    );
+    return AppAdvancedThemeModeConfig(
+      colors: _readExportedColors(normalizedConfig, 'colors'),
+      wallpaperOpacity:
+          _readExportedDouble(normalizedConfig, 'wallpaperOpacity') ?? 1,
+      wallpaperBlurSigma:
+          _readExportedDouble(normalizedConfig, 'wallpaperBlurSigma') ?? 0,
+      wallpaperFit:
+          _readExportedWallpaperFit(normalizedConfig, 'wallpaperFit') ??
+          AppAdvancedThemeWallpaperFit.cover,
+      wallpaperOverlayOpacity:
+          _readExportedDouble(normalizedConfig, 'wallpaperOverlayOpacity') ??
+          0.32,
+      readerWallpaperOpacity:
+          _readExportedDouble(normalizedConfig, 'readerWallpaperOpacity') ?? 1,
+      readerWallpaperBlurSigma:
+          _readExportedDouble(normalizedConfig, 'readerWallpaperBlurSigma') ??
+          0,
+      readerWallpaperFit:
+          _readExportedWallpaperFit(normalizedConfig, 'readerWallpaperFit') ??
+          AppAdvancedThemeWallpaperFit.cover,
+      readerWallpaperOverlayOpacity:
+          _readExportedDouble(
+            normalizedConfig,
+            'readerWallpaperOverlayOpacity',
+          ) ??
+          0,
+    );
+  }
+
   double? _readExportedDouble(Map<String, dynamic> payload, String key) {
     final value = payload[key];
     if (value == null) {
@@ -1517,6 +1624,18 @@ class AdvancedThemeService {
       return value.toDouble();
     }
     return double.tryParse(value.toString().trim());
+  }
+
+  AppAdvancedThemeWallpaperFit? _readExportedWallpaperFit(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final raw = payload[key]?.toString().trim();
+    return switch (raw) {
+      'fill' => AppAdvancedThemeWallpaperFit.fill,
+      'cover' => AppAdvancedThemeWallpaperFit.cover,
+      _ => null,
+    };
   }
 
   Archive _decodeZipArchiveBytes(List<int> bytes) {

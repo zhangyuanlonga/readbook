@@ -1040,11 +1040,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final service = ref.read(advancedThemeServiceProvider);
     final effectiveKind =
         packageKind ?? await _detectPackageKind(path: path, mimeType: mimeType);
-    final normalizedExtension = p.extension(path).trim().toLowerCase();
-    if (effectiveKind == _ThemeImportPackageKind.official &&
-        normalizedExtension == '.json') {
-      throw const FormatException('已不再支持导入 JSON 主题文件，请使用 ZIP 主题包。');
-    }
     if (effectiveKind == _ThemeImportPackageKind.official &&
         _isZipThemeFile(path: path, mimeType: mimeType)) {
       final importedTheme = await service.importThemeBundleZipFile(path);
@@ -1088,7 +1083,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _ThemeImportPackageKind.official =>
         _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
             ? await service.importThemeBundleZipBytes(bytes)
-            : throw const FormatException('已不再支持导入 JSON 主题文件，请使用 ZIP 主题包。'),
+            : await service.importThemeColorJson(
+              utf8.decode(bytes, allowMalformed: true),
+            ),
     };
     if (markRevision) {
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
@@ -1805,7 +1802,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               '1. 主题名称\n'
               '2. 浅色 / 深色壁纸\n'
               '3. 部分颜色映射\n\n'
-              '两种兼容导入都不支持完整还原原应用的阅读器排版、字体、页眉页脚模板和交互行为。',
+              '旧 JSON 主题兼容导入支持颜色配置和部分透明度参数，导出会统一使用新的 ZIP 主题包。\n\n'
+              '兼容导入不支持完整还原原应用的阅读器排版、字体、页眉页脚模板和交互行为。',
             ),
             const SizedBox(height: 20),
             Align(
@@ -3721,7 +3719,7 @@ class _AdvancedThemeBatchImportSheetState
   Widget _buildEmptyPicker(BuildContext context) {
     return AppTaskActionCard(
       title: '添加主题文件',
-      description: '支持一次选择多个 ZIP / RED / RGSHARE 主题文件，也支持导入批量主题包。',
+      description: '支持一次选择多个 ZIP / JSON / RED / RGSHARE 主题文件，也支持导入批量主题包。',
       icon: Icons.add_photo_alternate_outlined,
       dashedBorder: true,
       onTap: _pickFiles,

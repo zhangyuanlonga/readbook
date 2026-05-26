@@ -135,6 +135,29 @@ class GatewayFailure {
     return retryable ? '可以稍后重试，或切换其他书源。' : '建议检查书源配置或切换书源。';
   }
 
+  bool get isLoginRequired =>
+      code.trim().toUpperCase() == 'LOGIN_REQUIRED' ||
+      _categoryEquals('loginRequired');
+
+  bool get isWebViewRequired =>
+      code.trim().toUpperCase() == 'WEBVIEW_REQUIRED' ||
+      _categoryEquals('webviewRequired');
+
+  bool get isAntiSpider => _categoryEquals('antiSpider');
+
+  String get actionHint {
+    if (isLoginRequired) {
+      return '该书源需要登录或登录态已失效，可先完成登录再重试，或切换其他书源。';
+    }
+    if (isWebViewRequired) {
+      return '该书源依赖 WebView/浏览器环境，当前网关仅能做纯 HTTP 兼容，建议切换书源。';
+    }
+    if (isAntiSpider) {
+      return '疑似触发反爬或限流，可稍后重试、降低并发，或切换其他书源。';
+    }
+    return retryable ? '可以稍后重试，或切换其他书源。' : '建议检查书源配置或切换书源。';
+  }
+
   bool _categoryEquals(String value) =>
       category.trim().toLowerCase() == value.toLowerCase();
 }

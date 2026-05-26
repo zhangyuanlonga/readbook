@@ -79,62 +79,186 @@ void main() {
     expect(themes.first.darkConfig.readerWallpaperPath, '/tmp/reader_dark.jpg');
   });
 
-  test('persists themes into advanced_themes index file instead of SharedPreferences', () async {
-    final assetStore = await _createAssetStore();
-    final prefs = await SharedPreferences.getInstance();
-    final service = AdvancedThemeService(
-      preferences: prefs,
-      assetStore: assetStore,
+  test(
+    'persists themes into advanced_themes index file instead of SharedPreferences',
+    () async {
+      final assetStore = await _createAssetStore();
+      final prefs = await SharedPreferences.getInstance();
+      final service = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final theme = AppAdvancedTheme(
+        id: 'theme_index_file',
+        name: '索引文件主题',
+        createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+      );
+
+      await service.saveTheme(theme);
+
+      expect(prefs.containsKey('app.advancedThemes'), isFalse);
+
+      final documentsDir = await _pathProviderDocumentsDir();
+      final indexFile = File('${documentsDir.path}/advanced_themes/index.json');
+      expect(await indexFile.exists(), isTrue);
+      final raw = await indexFile.readAsString();
+      expect(raw, contains('theme_index_file'));
+    },
+  );
+
+  test(
+    'migrates legacy SharedPreferences theme payload into index file',
+    () async {
+      final assetStore = await _createAssetStore();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'app.advancedThemes',
+        jsonEncode(<Map<String, dynamic>>[
+          AppAdvancedTheme(
+            id: 'legacy_theme',
+            name: '旧主题',
+            createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            lightConfig: AppAdvancedThemeModeConfig(),
+            darkConfig: AppAdvancedThemeModeConfig(),
+          ).toJson(),
+        ]),
+      );
+
+      final service = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final themes = await service.loadThemes();
+
+      expect(themes, hasLength(1));
+      expect(themes.first.id, 'legacy_theme');
+      expect(prefs.containsKey('app.advancedThemes'), isFalse);
+      final documentsDir = await _pathProviderDocumentsDir();
+      final indexFile = File('${documentsDir.path}/advanced_themes/index.json');
+      expect(await indexFile.exists(), isTrue);
+    },
+  );
+
+  test('imports legacy v1 color json into current theme storage', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+
+    final imported = await service.importThemeColorJson(
+      jsonEncode(<String, dynamic>{
+        'type': 'advanced_theme_colors',
+        'version': 1,
+        'name': '薄雾灰',
+        'lightColors': <String, dynamic>{
+          'primaryColorValue': 0xFF556677,
+          'surfaceColorValue': 0xFFF6F6F4,
+        },
+        'darkColors': <String, dynamic>{
+          'primaryColorValue': 0xFF99AABB,
+          'surfaceColorValue': 0xFF17191A,
+        },
+      }),
     );
-    final theme = AppAdvancedTheme(
-      id: 'theme_index_file',
-      name: '索引文件主题',
-      createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-      updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-      lightConfig: AppAdvancedThemeModeConfig(),
-      darkConfig: AppAdvancedThemeModeConfig(),
-    );
 
-    await service.saveTheme(theme);
+    expect(imported.id, startsWith('advanced_theme_'));
+    expect(imported.name, '薄雾灰');
+    expect(imported.lightConfig.colors.primaryColorValue, 0xFF556677);
+    expect(imported.darkConfig.colors.primaryColorValue, 0xFF99AABB);
+    expect(imported.coverGalleryId, isNull);
+    expect(imported.launchImageGalleryId, isNull);
+    expect(imported.bottomNavGalleryId, isNull);
+    expect(imported.lightConfig.wallpaperPath, isNull);
+    expect(imported.darkConfig.wallpaperPath, isNull);
+    expect(imported.lightConfig.readerWallpaperPath, isNull);
+    expect(imported.darkConfig.readerWallpaperPath, isNull);
 
-    expect(prefs.containsKey('app.advancedThemes'), isFalse);
-
-    final documentsDir = await _pathProviderDocumentsDir();
-    final indexFile = File('${documentsDir.path}/advanced_themes/index.json');
-    expect(await indexFile.exists(), isTrue);
-    final raw = await indexFile.readAsString();
-    expect(raw, contains('theme_index_file'));
+    final themes = await service.loadThemes();
+    expect(themes, hasLength(1));
+    expect(themes.first.name, '薄雾灰');
   });
 
-  test('migrates legacy SharedPreferences theme payload into index file', () async {
-    final assetStore = await _createAssetStore();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'app.advancedThemes',
-      jsonEncode(<Map<String, dynamic>>[
-        AppAdvancedTheme(
-          id: 'legacy_theme',
-          name: '旧主题',
-          createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-          updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-          lightConfig: AppAdvancedThemeModeConfig(),
-          darkConfig: AppAdvancedThemeModeConfig(),
-        ).toJson(),
-      ]),
+  test('imports legacy v2 color json mode config', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+
+    final imported = await service.importThemeColorJson(
+      jsonEncode(<String, dynamic>{
+        'type': 'advanced_theme_colors',
+        'version': 2,
+        'name': '语义分组主题',
+        'lightConfig': <String, dynamic>{
+          'colors': <String, dynamic>{
+            AppAdvancedThemeColors.semanticColorGroupsKey: <String, dynamic>{
+              'core': <String, dynamic>{
+                'primary': 0xFF556677,
+                'background': 0xFFF6F6F4,
+              },
+              'component': <String, dynamic>{'card': 0xFFFFFFFF},
+            },
+          },
+          'wallpaperOpacity': 0.72,
+          'wallpaperFit': 'fill',
+        },
+        'darkConfig': <String, dynamic>{
+          'colors': <String, dynamic>{
+            AppAdvancedThemeColors.semanticColorGroupsKey: <String, dynamic>{
+              'core': <String, dynamic>{
+                'primary': 0xFF99AABB,
+                'background': 0xFF17191A,
+              },
+              'component': <String, dynamic>{'card': 0xFF202326},
+            },
+          },
+          'readerWallpaperOpacity': 0.66,
+          'readerWallpaperFit': 'cover',
+        },
+      }),
     );
 
-    final service = AdvancedThemeService(
-      preferences: prefs,
-      assetStore: assetStore,
+    expect(imported.name, '语义分组主题');
+    expect(imported.lightConfig.colors.primaryColorValue, 0xFF556677);
+    expect(imported.darkConfig.colors.primaryColorValue, 0xFF99AABB);
+    expect(imported.lightConfig.colors.cardColorValue, 0xFFFFFFFF);
+    expect(imported.darkConfig.colors.cardColorValue, 0xFF202326);
+    expect(imported.lightConfig.wallpaperOpacity, 0.72);
+    expect(
+      imported.lightConfig.wallpaperFit,
+      AppAdvancedThemeWallpaperFit.fill,
     );
-    final themes = await service.loadThemes();
+    expect(imported.darkConfig.readerWallpaperOpacity, 0.66);
+    expect(
+      imported.darkConfig.componentStyle.cardStyle,
+      AppAdvancedThemeCardStyle.soft,
+    );
+  });
 
-    expect(themes, hasLength(1));
-    expect(themes.first.id, 'legacy_theme');
-    expect(prefs.containsKey('app.advancedThemes'), isFalse);
-    final documentsDir = await _pathProviderDocumentsDir();
-    final indexFile = File('${documentsDir.path}/advanced_themes/index.json');
-    expect(await indexFile.exists(), isTrue);
+  test('rejects duplicate legacy color json import by fingerprint', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final payload = jsonEncode(<String, dynamic>{
+      'type': 'advanced_theme_colors',
+      'version': 2,
+      'name': '薄雾灰',
+      'lightConfig': <String, dynamic>{
+        'colors': <String, dynamic>{'primaryColorValue': 0xFF556677},
+      },
+      'darkConfig': <String, dynamic>{
+        'colors': <String, dynamic>{'primaryColorValue': 0xFF99AABB},
+      },
+    });
+
+    await service.importThemeColorJson(payload);
+
+    await expectLater(
+      () => service.importThemeColorJson(payload),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('已导入重复主题'),
+        ),
+      ),
+    );
   });
 
   test('persists launch image gallery binding in theme payload', () async {
