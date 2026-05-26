@@ -65,10 +65,15 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
             ),
           ),
       data: (sources) {
-        final selected = _findCategory(sources);
-        final source = selected?.$1;
-        final category = selected?.$2;
-        final title = category?.name ?? '分类';
+        final source = _findSource(sources);
+        final categoriesAsync =
+            source == null
+                ? null
+                : ref.watch(discoverSourceCategoriesProvider(source));
+        final loadedSource = categoriesAsync?.valueOrNull ?? source;
+        final category =
+            loadedSource == null ? null : _findCategory(loadedSource);
+        final title = category?.name ?? loadedSource?.name ?? '分类';
 
         return Scaffold(
           extendBodyBehindAppBar: true,
@@ -85,10 +90,22 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
                   ),
                 ),
                 child:
-                    category == null || source == null
+                    source == null
+                        ? _MissingCategoryState(metrics: metrics)
+                        : categoriesAsync == null || categoriesAsync.isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : categoriesAsync.hasError
+                        ? _CategoryLoadFailureState(
+                          metrics: metrics,
+                          onRetry:
+                              () => ref.invalidate(
+                                discoverSourceCategoriesProvider(source),
+                              ),
+                        )
+                        : category == null || loadedSource == null
                         ? _MissingCategoryState(metrics: metrics)
                         : _CategoryBooksGrid(
-                          source: source,
+                          source: loadedSource,
                           category: category,
                           metrics: metrics,
                           palette: palette,
@@ -151,22 +168,56 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
     );
   }
 
-  (DiscoverSourceSummary, DiscoverSourceCategory)? _findCategory(
-    List<DiscoverSourceSummary> sources,
-  ) {
+  DiscoverSourceSummary? _findSource(List<DiscoverSourceSummary> sources) {
     final decodedSourceId = Uri.decodeComponent(sourceId);
-    final decodedCategoryId = Uri.decodeComponent(categoryId);
     for (final source in sources) {
-      if (source.id != decodedSourceId) {
-        continue;
-      }
-      for (final category in source.categories) {
-        if (category.id == decodedCategoryId) {
-          return (source, category);
-        }
+      if (source.id == decodedSourceId) {
+        return source;
       }
     }
     return null;
+  }
+
+  DiscoverSourceCategory? _findCategory(DiscoverSourceSummary source) {
+    final decodedCategoryId = Uri.decodeComponent(categoryId);
+    for (final category in source.categories) {
+      if (category.id == decodedCategoryId) {
+        return category;
+      }
+    }
+    return null;
+  }
+}
+
+class _CategoryLoadFailureState extends StatelessWidget {
+  const _CategoryLoadFailureState({
+    required this.metrics,
+    required this.onRetry,
+  });
+
+  final AppAdaptiveMetrics metrics;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        topInset + metrics.sectionGap,
+        metrics.pagePadding,
+        metrics.sectionGap,
+      ),
+      child: Center(
+        child: AppEmptyStateCard(
+          icon: Icons.error_outline_rounded,
+          title: '分类加载失败',
+          description: '该书源分类暂时无法加载，请稍后重试',
+          actionLabel: '重试',
+          onAction: onRetry,
+        ),
+      ),
+    );
   }
 }
 

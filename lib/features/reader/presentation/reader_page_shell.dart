@@ -523,21 +523,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
     _isSystemUiVisible = shouldShow;
 
-    if (shouldShow) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      return;
-    }
-
-    final platform = Theme.of(context).platform;
-    if (platform == TargetPlatform.android) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      return;
-    }
-
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: const [SystemUiOverlay.bottom],
-    );
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   void _onReaderTap(Offset localPosition, Size size, EdgeInsets gestureInsets) {

@@ -14,6 +14,15 @@ final discoverSourceSummariesProvider =
       return service.loadDiscoverSources();
     });
 
+final discoverSourceCategoriesProvider =
+    FutureProvider.family<DiscoverSourceSummary, DiscoverSourceSummary>((
+      ref,
+      source,
+    ) async {
+      final service = ref.watch(serverDiscoverGatewayServiceProvider);
+      return service.loadSourceCategories(source: source);
+    });
+
 final discoverCategoryBooksProvider = FutureProvider.family<
   List<DiscoverCategoryBook>,
   DiscoverCategoryBooksRequest

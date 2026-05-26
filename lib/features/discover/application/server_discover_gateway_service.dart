@@ -26,25 +26,29 @@ class ServerDiscoverGatewayService {
   final SourceHealthService _sourceHealthService;
 
   static const int _sourcePageSize = 500;
-  static const int _exploreKindsConcurrency = 6;
 
   Future<List<DiscoverSourceSummary>> loadDiscoverSources() async {
     final sources = await _loadEnabledSources();
-    return _mapConcurrent(
-      sources,
-      _exploreKindsConcurrency,
-      _loadSourceSummary,
-    ).then((items) {
-      final visible = items
-          .where((item) => item.categories.isNotEmpty || item.failure != null)
-          .toList(growable: false);
-      visible.sort((a, b) {
-        final byStatus = a.status.index.compareTo(b.status.index);
-        if (byStatus != 0) return byStatus;
-        return a.name.compareTo(b.name);
-      });
-      return visible;
+    final items = sources.map(_sourceSummaryFromItem).toList(growable: false);
+    items.sort((a, b) {
+      final byStatus = a.status.index.compareTo(b.status.index);
+      if (byStatus != 0) return byStatus;
+      return a.name.compareTo(b.name);
     });
+    return items;
+  }
+
+  Future<DiscoverSourceSummary> loadSourceCategories({
+    required DiscoverSourceSummary source,
+  }) async {
+    final sourceId = fromServerGatewaySourceId(source.id);
+    final sourceItem = _GatewaySourceItem(
+      id: sourceId,
+      sourceUrl: source.sourceUrl ?? sourceId,
+      name: source.name,
+      enabled: true,
+    );
+    return _loadSourceSummary(sourceItem);
   }
 
   Future<List<DiscoverCategoryBook>> loadCategoryBooks({
@@ -211,32 +215,18 @@ class ServerDiscoverGatewayService {
       );
     }
   }
-}
 
-Future<List<R>> _mapConcurrent<T, R>(
-  List<T> values,
-  int concurrency,
-  Future<R> Function(T value) mapper,
-) async {
-  if (values.isEmpty) return <R>[];
-  final results = List<R?>.filled(values.length, null);
-  var nextIndex = 0;
-
-  Future<void> worker() async {
-    while (true) {
-      final index = nextIndex;
-      nextIndex += 1;
-      if (index >= values.length) return;
-      results[index] = await mapper(values[index]);
-    }
+  DiscoverSourceSummary _sourceSummaryFromItem(_GatewaySourceItem source) {
+    return DiscoverSourceSummary(
+      id: toServerGatewaySourceId(source.id),
+      sourceUrl: source.sourceUrl,
+      name: source.name,
+      categoryCount: 0,
+      status: _statusFromHealth(source.healthStatus, 0),
+      latencyMs: null,
+      categories: const <DiscoverSourceCategory>[],
+    );
   }
-
-  final workers = List.generate(
-    concurrency.clamp(1, values.length),
-    (_) => worker(),
-  );
-  await Future.wait(workers);
-  return results.whereType<R>().toList(growable: false);
 }
 
 DiscoverSourceStatus _statusFromHealth(String? healthStatus, int latencyMs) {

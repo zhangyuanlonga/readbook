@@ -194,10 +194,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                           _expandedSourceId == source.id ? null : source.id;
                     });
                   },
-                  onCategoryTap: (sourceContext, category) {
+                  onCategoryTap: (sourceContext, loadedSource, category) {
                     _openCategoryWithReveal(
                       sourceContext,
-                      source: source,
+                      source: loadedSource,
                       category: category,
                     );
                   },
@@ -357,9 +357,13 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
 }
 
 typedef _DiscoverCategoryTap =
-    void Function(BuildContext sourceContext, DiscoverSourceCategory category);
+    void Function(
+      BuildContext sourceContext,
+      DiscoverSourceSummary source,
+      DiscoverSourceCategory category,
+    );
 
-class _SourceRow extends StatelessWidget {
+class _SourceRow extends ConsumerWidget {
   const _SourceRow({
     required this.source,
     required this.showColumns,
@@ -377,11 +381,18 @@ class _SourceRow extends StatelessWidget {
   final _DiscoverCategoryTap onCategoryTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final latencyMs = source.latencyMs;
-    final statusColor = _getStatusColor(source.status, latencyMs, colorScheme);
+    final categoriesAsync =
+        isExpanded ? ref.watch(discoverSourceCategoriesProvider(source)) : null;
+    final loadedSource = categoriesAsync?.valueOrNull ?? source;
+    final latencyMs = loadedSource.latencyMs;
+    final statusColor = _getStatusColor(
+      loadedSource.status,
+      latencyMs,
+      colorScheme,
+    );
     final latencyColor = _getLatencyColor(latencyMs, colorScheme);
 
     return Padding(
@@ -408,12 +419,12 @@ class _SourceRow extends StatelessWidget {
                   children: [
                     _StatusDot(
                       color: statusColor,
-                      label: _statusLabel(source.status),
+                      label: _statusLabel(loadedSource.status),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        source.name,
+                        loadedSource.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -424,7 +435,10 @@ class _SourceRow extends StatelessWidget {
                     ),
                     if (showColumns) ...[
                       _ValueCell(
-                        label: '${source.categoryCount}类',
+                        label: _categoryCountText(
+                          loadedSource,
+                          categoriesAsync,
+                        ),
                         width: 72,
                         color: colorScheme.onSurfaceVariant,
                       ),
@@ -439,7 +453,10 @@ class _SourceRow extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _MetaText(
-                            text: '${source.categoryCount}类',
+                            text: _categoryCountText(
+                              loadedSource,
+                              categoriesAsync,
+                            ),
                             color: colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 10),
@@ -472,8 +489,8 @@ class _SourceRow extends StatelessWidget {
             child:
                 isExpanded
                     ? _CategoryPanel(
-                      failureText: _failureText(source),
-                      categories: source.categories,
+                      source: loadedSource,
+                      categoriesAsync: categoriesAsync,
                       palette: palette,
                       onCategoryTap: onCategoryTap,
                     )
@@ -533,56 +550,94 @@ class _SourceRow extends StatelessWidget {
     if (failure == null) return null;
     return '${failure.displayCode}：${failure.displayHint}';
   }
+
+  static String _categoryCountText(
+    DiscoverSourceSummary source,
+    AsyncValue<DiscoverSourceSummary>? categoriesAsync,
+  ) {
+    if (categoriesAsync?.isLoading == true) return '加载中';
+    if (categoriesAsync?.hasError == true) return '异常';
+    if (source.categories.isEmpty) return '分类';
+    return '${source.categoryCount}类';
+  }
 }
 
-class _CategoryPanel extends StatelessWidget {
+class _CategoryPanel extends ConsumerWidget {
   const _CategoryPanel({
-    required this.failureText,
-    required this.categories,
+    required this.source,
+    required this.categoriesAsync,
     required this.palette,
     required this.onCategoryTap,
   });
 
-  final String? failureText;
-  final List<DiscoverSourceCategory> categories;
+  final DiscoverSourceSummary source;
+  final AsyncValue<DiscoverSourceSummary>? categoriesAsync;
   final ResolvedAdvancedThemePalette palette;
   final _DiscoverCategoryTap onCategoryTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final async = categoriesAsync;
+    final loadedSource = async?.valueOrNull ?? source;
+    final categories = loadedSource.categories;
+
+    Widget message(String text, {VoidCallback? onRetry}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                text,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (onRetry != null)
+              TextButton(onPressed: onRetry, child: const Text('重试')),
+          ],
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(top: 6, left: 33, right: 14),
-      child:
-          categories.isEmpty
-              ? Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  failureText ?? '暂无可浏览分类',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              )
-              : Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children:
-                    categories
-                        .map(
-                          (category) => _CategoryChip(
-                            category: category,
-                            palette: palette,
-                            onTap:
-                                (sourceContext) =>
-                                    onCategoryTap(sourceContext, category),
+      child: switch (async) {
+        AsyncValue(:final isLoading) when isLoading => message(
+          '正在加载该书源的发现分类...',
+        ),
+        AsyncValue(:final hasError) when hasError => message(
+          _SourceRow._failureText(loadedSource) ?? '分类加载失败，请稍后重试',
+          onRetry:
+              () => ref.invalidate(discoverSourceCategoriesProvider(source)),
+        ),
+        _ when categories.isEmpty => message(
+          _SourceRow._failureText(loadedSource) ?? '暂无可浏览分类',
+        ),
+        _ => Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children:
+              categories
+                  .map(
+                    (category) => _CategoryChip(
+                      category: category,
+                      palette: palette,
+                      onTap:
+                          (sourceContext) => onCategoryTap(
+                            sourceContext,
+                            loadedSource,
+                            category,
                           ),
-                        )
-                        .toList(),
-              ),
+                    ),
+                  )
+                  .toList(),
+        ),
+      },
     );
   }
 }
