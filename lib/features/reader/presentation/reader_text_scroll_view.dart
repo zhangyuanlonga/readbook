@@ -75,7 +75,7 @@ class ReaderTextScrollView extends StatelessWidget {
       return Stack(
         children: [
           Positioned.fill(child: content!),
-          if (overlay != null) Positioned.fill(child: overlay!),
+          if (overlay != null) _positionOverlay(overlay!),
         ],
       );
     }
@@ -136,6 +136,13 @@ class ReaderTextScrollView extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Widget _positionOverlay(Widget overlay) {
+    if (overlay is Positioned) {
+      return overlay;
+    }
+    return Positioned.fill(child: overlay);
   }
 }
 

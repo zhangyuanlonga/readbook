@@ -544,16 +544,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
 
     if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
-      unawaited(_continueAutoReadAfterChapterPause());
+      unawaited(_showAutoReadControlSheet());
       return;
     }
 
     if (_isAutoReadSessionEnabled) {
       if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
-        _pauseAutoReadSession(showMessage: true);
+        unawaited(_openAutoReadFromOverlay());
       } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
-        _setOverlayControlsVisibility(true);
-        _touchOverlayControls();
+        unawaited(_showAutoReadControlSheet());
       }
       return;
     }
@@ -706,15 +705,16 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   Future<void> _openAutoReadFromOverlay() async {
     if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
-      _pauseAutoReadSession(showMessage: true);
+      _pauseAutoReadSession(showMessage: false);
+      await _showAutoReadControlSheet();
       return;
     }
     if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
-      _resumeAutoReadSession(showMessage: true);
+      await _showAutoReadControlSheet();
       return;
     }
     if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
-      unawaited(_continueAutoReadAfterChapterPause());
+      await _showAutoReadControlSheet();
       return;
     }
 
@@ -740,6 +740,267 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
 
     await _toggleAutoReadSession();
+  }
+
+  Future<void> _showAutoReadControlSheet() async {
+    if (!mounted) {
+      return;
+    }
+
+    var speedLevel = _settings.autoReadSpeedLevel;
+    final action = await showAdaptiveActionSurface<
+      _ReaderAutoReadControlAction
+    >(
+      context: context,
+      maxWidth: 420,
+      maxHeightFactor: 0.56,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final theme = Theme.of(context);
+            final colorScheme = theme.colorScheme;
+            final isPagedMode =
+                _settings.autoReadMode != ReaderAutoReadMode.scroll;
+            final speedDescription =
+                isPagedMode
+                    ? '${(_autoReadCoordinator.resolvePagedHoldDuration(speedLevel: speedLevel).inMilliseconds / 1000).toStringAsFixed(1)} 秒/页'
+                    : '${ReaderSettings.autoReadSpeedForLevel(speedLevel).round()} px/s';
+            final canContinue =
+                _isAutoReadSessionEnabled &&
+                (_autoReadSessionState == ReaderAutoReadSessionState.paused ||
+                    _autoReadSessionState ==
+                        ReaderAutoReadSessionState.chapterPaused);
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.auto_mode_rounded,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '自动阅读控制台',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            canContinue ? '已暂停，调整后可继续阅读' : '调整自动阅读节奏',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.62,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '速度 $speedLevel 档',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            speedDescription,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Slider(
+                        min: ReaderSettings.minAutoReadSpeedLevel.toDouble(),
+                        max: ReaderSettings.maxAutoReadSpeedLevel.toDouble(),
+                        divisions:
+                            ReaderSettings.maxAutoReadSpeedLevel -
+                            ReaderSettings.minAutoReadSpeedLevel,
+                        label: '$speedLevel',
+                        value: speedLevel.toDouble(),
+                        onChanged: (value) {
+                          final nextLevel = value.round();
+                          setSheetState(() {
+                            speedLevel = nextLevel;
+                          });
+                          unawaited(_applyAutoReadSpeedLevel(nextLevel));
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildAutoReadControlButton(
+                        context: context,
+                        icon: Icons.list_alt_outlined,
+                        label: '目录',
+                        action: _ReaderAutoReadControlAction.catalog,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildAutoReadControlButton(
+                        context: context,
+                        icon:
+                            canContinue
+                                ? Icons.play_arrow_rounded
+                                : Icons.pause_rounded,
+                        label: canContinue ? '继续' : '暂停',
+                        action: _ReaderAutoReadControlAction.toggle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildAutoReadControlButton(
+                        context: context,
+                        icon: Icons.tune_rounded,
+                        label: '设置',
+                        action: _ReaderAutoReadControlAction.settings,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildAutoReadControlButton(
+                        context: context,
+                        icon: Icons.close_rounded,
+                        label: '退出',
+                        action: _ReaderAutoReadControlAction.exit,
+                        destructive: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _ReaderAutoReadControlAction.catalog:
+        await _openCatalogSheetFromOverlay();
+        return;
+      case _ReaderAutoReadControlAction.toggle:
+        if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
+          _pauseAutoReadSession(showMessage: true);
+        } else if (_autoReadSessionState ==
+            ReaderAutoReadSessionState.chapterPaused) {
+          unawaited(_continueAutoReadAfterChapterPause());
+        } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
+          _resumeAutoReadSession(showMessage: true);
+        } else if (_supportsAutoRead) {
+          _startAutoReadSession(showMessage: true);
+        }
+        return;
+      case _ReaderAutoReadControlAction.settings:
+        await _showSettingsSheet(initialTab: _ReaderSettingsTab.interface);
+        return;
+      case _ReaderAutoReadControlAction.exit:
+        _stopAutoReadSession(showMessage: true);
+        return;
+    }
+  }
+
+  Widget _buildAutoReadControlButton({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required _ReaderAutoReadControlAction action,
+    bool destructive = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground =
+        destructive ? colorScheme.error : colorScheme.onSurfaceVariant;
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: foreground,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        side: BorderSide(
+          color:
+              destructive
+                  ? colorScheme.error.withValues(alpha: 0.45)
+                  : colorScheme.outlineVariant,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      onPressed: () => Navigator.of(context).pop(action),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(height: 4),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyAutoReadSpeedLevel(int level) async {
+    if (!mounted) {
+      return;
+    }
+    final normalized =
+        level
+            .clamp(
+              ReaderSettings.minAutoReadSpeedLevel,
+              ReaderSettings.maxAutoReadSpeedLevel,
+            )
+            .toInt();
+    if (_settings.autoReadSpeedLevel == normalized) {
+      return;
+    }
+    final nextSettings = _settings.copyWith(autoReadSpeedLevel: normalized);
+    _applyReaderSettingsWithModeRestore(
+      nextSettings: nextSettings,
+      syncVolumeKeyPageInterception: false,
+    );
+    await _persistResolvedReaderSettingsLayers(nextSettings);
+    if (mounted &&
+        _autoReadSessionState == ReaderAutoReadSessionState.running) {
+      _reconcileAutoRead(restart: true);
+    }
   }
 
   void _startAutoReadSession({bool showMessage = false}) {
@@ -851,6 +1112,39 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     _lightModeBackgroundImageBackup = result.nextLightModeBackgroundImageBackup;
     _applyReaderSettingsWithModeRestore(nextSettings: result.nextSettings);
     await _persistResolvedReaderSettingsLayers(result.nextSettings);
+  }
+
+  Future<void> _toggleDayNightModeWithReveal(BuildContext sourceContext) async {
+    final result = _readerThemeModeService.buildToggleResult(
+      settings: _settings,
+      lightModeBackgroundImageBackup: _lightModeBackgroundImageBackup,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    Future<void> applyToggle() async {
+      _lightModeBackgroundImageBackup =
+          result.nextLightModeBackgroundImageBackup;
+      _applyReaderSettingsWithModeRestore(nextSettings: result.nextSettings);
+      await _persistResolvedReaderSettingsLayers(result.nextSettings);
+    }
+
+    final overlay = CircularThemeRevealOverlay.of(sourceContext);
+    if (overlay == null) {
+      await applyToggle();
+      return;
+    }
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
+    );
+    await overlay.startTransition(
+      center: center,
+      reverse: false,
+      onThemeChange: () {
+        unawaited(applyToggle());
+      },
+    );
   }
 
   void _showMessage(

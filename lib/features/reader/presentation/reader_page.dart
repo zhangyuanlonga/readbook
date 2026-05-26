@@ -6,6 +6,7 @@ import 'dart:ui' show ImageFilter, lerpDouble;
 import 'dart:ui' as ui;
 
 import 'package:battery_plus/battery_plus.dart';
+import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -182,6 +183,8 @@ enum _OverlayEdge { top, bottom }
 enum _ReaderInteractionState { idle, dragging, animating, settling }
 
 enum _ReaderTopMoreAction { cacheChapter, switchSource, toggleBookshelf }
+
+enum _ReaderAutoReadControlAction { catalog, toggle, settings, exit }
 
 enum ReaderAutoReadSessionState {
   off,
@@ -461,6 +464,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
   bool _isAutoReadPausedByRuntime = false;
+  bool _isRestoringContinuousTextAnchor = false;
+  int? _lastAutoReadContinuousSyncSkipLogToken;
   ReaderAutoReadSessionState _autoReadSessionState =
       ReaderAutoReadSessionState.off;
   bool _isReaderRuntimeVisible = true;
@@ -574,7 +579,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 760);
   static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 300);
   static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
-  static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
+  static const Duration _kAutoReadMinimumScrollDuration = Duration(
+    milliseconds: 260,
+  );
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
   static const Duration _kAutoReadBoundaryResumeDelay = Duration(
     milliseconds: 360,
@@ -1196,9 +1203,109 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _pagedPaginationState = _pagedPaginationState.copyWith(
         pendingRestoreRatio: anchorRatio,
       );
+    } else if (_restoreContinuousTextAnchorPosition(anchorRatio)) {
+      _scheduleProgressSave();
+      return;
     }
     _restoreScrollPosition(anchorRatio);
     _scheduleProgressSave();
+  }
+
+  bool _restoreContinuousTextAnchorPosition(double chapterRatio) {
+    if (!_shouldUseContinuousTextFlow || _continuousTextChapters.isEmpty) {
+      return false;
+    }
+    final currentIndex = _currentIndex;
+    if (currentIndex == null) {
+      return false;
+    }
+    final chapter =
+        _continuousTextChapters
+            .where((item) => item.chapterIndex == currentIndex)
+            .firstOrNull;
+    if (chapter == null) {
+      return false;
+    }
+
+    final normalized = chapterRatio.clamp(0.0, 1.0);
+    _isRestoringContinuousTextAnchor = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreContinuousTextAnchorPositionAfterLayout(
+        chapter: chapter,
+        ratio: normalized,
+        attempt: 0,
+      );
+    });
+    return true;
+  }
+
+  void _restoreContinuousTextAnchorPositionAfterLayout({
+    required _ContinuousTextChapter chapter,
+    required double ratio,
+    required int attempt,
+  }) {
+    if (!mounted || !_scrollController.hasClients) {
+      _isRestoringContinuousTextAnchor = false;
+      return;
+    }
+
+    final layout = _measureContinuousTextChapterLayoutFlow(chapter);
+    if (layout == null) {
+      if (attempt < 3) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _restoreContinuousTextAnchorPositionAfterLayout(
+            chapter: chapter,
+            ratio: ratio,
+            attempt: attempt + 1,
+          );
+        });
+        return;
+      }
+      _isRestoringContinuousTextAnchor = false;
+      _logger.info(
+        'Reader continuous anchor restore fallback',
+        context: <String, Object?>{
+          'chain': 'reader_auto_read',
+          'step': 'continuous_anchor_restore_fallback',
+          'chapterId': chapter.chapterId,
+          'activeChapterId': _chapterId,
+          'ratio': ratio.toStringAsFixed(3),
+          'attempt': attempt,
+        },
+      );
+      _restoreScrollPosition(ratio);
+      return;
+    }
+
+    final position = _scrollController.position;
+    final viewportExtent = position.viewportDimension;
+    final available = (layout.endOffset - layout.startOffset - viewportExtent)
+        .clamp(0.0, double.infinity);
+    final target = (layout.startOffset + available * ratio).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((position.pixels - target).abs() > 0.5) {
+      position.jumpTo(target);
+    }
+    _isRestoringContinuousTextAnchor = false;
+    _logger.info(
+      'Reader continuous anchor restored',
+      context: <String, Object?>{
+        'chain': 'reader_auto_read',
+        'step': 'continuous_anchor_restored',
+        'chapterId': chapter.chapterId,
+        'activeChapterId': _chapterId,
+        'ratio': ratio.toStringAsFixed(3),
+        'startOffset': layout.startOffset.toStringAsFixed(1),
+        'endOffset': layout.endOffset.toStringAsFixed(1),
+        'targetOffset': target.toStringAsFixed(1),
+      },
+    );
+    if (_isAutoReadSessionEnabled &&
+        _autoReadSessionState == ReaderAutoReadSessionState.running) {
+      _reconcileAutoRead(restart: true);
+    }
   }
 
   bool _isSwipePaginationEnabled() {
@@ -1772,7 +1879,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final footerItems = <ReaderInfoBarItemData>[
       if (_settings.infoShowProgress)
         ReaderInfoBarItemData.text(
-          '进度 ${(_currentScrollRatio() * 100).round()}%',
+          '进度 ${(_safeCurrentScrollRatio() * 100).round()}%',
         ),
       if (_settings.infoShowChapter &&
           (_chapterTitle?.trim().isNotEmpty ?? false))
@@ -1874,8 +1981,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
         return child;
       },
-      overlay:
-          _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
+      overlay: null,
     );
   }
 
@@ -1922,8 +2028,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         surfaceMetrics: surfaceMetrics,
         palette: _presentationPalette(context),
       ),
-      overlay:
-          _isAutoReadSessionEnabled ? _buildAutoReadIndicator(colors) : null,
+      overlay: null,
     );
   }
 
@@ -1952,11 +2057,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }) => _ReaderPageContentRenderingExtension(
     this,
   )._buildSelectableReaderBlockItem(item: item, isLast: isLast, colors: colors);
-
-  Widget _buildAutoReadIndicator(_ReaderThemeColors colors) =>
-      _ReaderPageContentRenderingExtension(
-        this,
-      )._buildAutoReadIndicator(colors);
 
   Widget _buildInlineImageParagraphItem({
     required String imageUrl,
@@ -4110,7 +4210,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: _buildToolbarAction(
                                     icon: Icons.list_alt_outlined,
                                     label: '目录',
-                                    onTap: () async {
+                                    onTap: (_) async {
                                       _touchOverlayControls();
                                       await _openCatalogSheetFromOverlay();
                                     },
@@ -4121,7 +4221,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: _buildToolbarAction(
                                     icon: autoReadIcon,
                                     label: autoReadLabel,
-                                    onTap: () async {
+                                    onTap: (_) async {
                                       _touchOverlayControls();
                                       await _openAutoReadFromOverlay();
                                     },
@@ -4139,9 +4239,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ),
                                 Expanded(
                                   child: _buildToolbarAction(
+                                    icon: dayNightIcon,
+                                    label: dayNightLabel,
+                                    onTap: (buttonContext) async {
+                                      _touchOverlayControls();
+                                      await _toggleDayNightModeWithReveal(
+                                        buttonContext,
+                                      );
+                                    },
+                                    colors: colors,
+                                    active: isDarkMode,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _buildToolbarAction(
                                     icon: middleIcon,
                                     label: middleLabel,
-                                    onTap: () async {
+                                    onTap: (_) async {
                                       _touchOverlayControls();
                                       await _showSettingsSheet(
                                         initialTab:
@@ -4149,18 +4263,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       );
                                     },
                                     colors: colors,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildToolbarAction(
-                                    icon: dayNightIcon,
-                                    label: dayNightLabel,
-                                    onTap: () async {
-                                      _touchOverlayControls();
-                                      await _toggleDayNightMode();
-                                    },
-                                    colors: colors,
-                                    active: isDarkMode,
                                   ),
                                 ),
                               ],
@@ -4309,7 +4411,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Widget _buildBottomProgressStrip(_ReaderThemeColors colors) {
     final progressValue = (_bottomOverlayDraftProgressRatio ??
-            _currentScrollRatio())
+            _safeCurrentScrollRatio())
         .clamp(0.0, 1.0);
     final canNavigateChapters = _chapters.isNotEmpty;
 
@@ -4392,6 +4494,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  double _safeCurrentScrollRatio({double fallback = 0}) {
+    try {
+      return _currentScrollRatio();
+    } on FlutterError {
+      return fallback;
+    }
+  }
+
   Widget _buildShellOverlayTransition({
     required _OverlayEdge edge,
     required Widget child,
@@ -4453,63 +4563,67 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildToolbarAction({
     required IconData icon,
     required String label,
-    required Future<void> Function() onTap,
+    required Future<void> Function(BuildContext context) onTap,
     required _ReaderThemeColors colors,
     Future<void> Function()? onLongPress,
     bool active = false,
   }) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTapDown: (_) => _markReaderTapHandledByChild(),
-        onTap: () async {
-          try {
-            await onTap();
-          } catch (_) {
-            _showMessage('操作失败，请稍后重试。');
-          }
-        },
-        onLongPress:
-            onLongPress == null
-                ? null
-                : () async {
-                  try {
-                    await onLongPress();
-                  } catch (_) {
-                    _showMessage('操作失败，请稍后重试。');
-                  }
-                },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            color:
-                active
-                    ? colors.background.withValues(alpha: 0.52)
-                    : Colors.transparent,
+    return Builder(
+      builder: (buttonContext) {
+        return Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
             borderRadius: BorderRadius.circular(22),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 19, color: colors.text),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 11.5,
-                  height: 1.05,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                ),
+            onTapDown: (_) => _markReaderTapHandledByChild(),
+            onTap: () async {
+              try {
+                await onTap(buttonContext);
+              } catch (_) {
+                _showMessage('操作失败，请稍后重试。');
+              }
+            },
+            onLongPress:
+                onLongPress == null
+                    ? null
+                    : () async {
+                      try {
+                        await onLongPress();
+                      } catch (_) {
+                        _showMessage('操作失败，请稍后重试。');
+                      }
+                    },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                color:
+                    active
+                        ? colors.background.withValues(alpha: 0.52)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(22),
               ),
-            ],
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 19, color: colors.text),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 11.5,
+                      height: 1.05,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

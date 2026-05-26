@@ -206,6 +206,7 @@ extension on _BookshelfPageState {
     var draftListShowProgressBar = _listShowProgressBar;
     var draftListShowSourceBadge = _listShowSourceBadge;
     var draftListShowTaxonomyBadges = _listShowTaxonomyBadges;
+    var draftListShowCover = _listShowCover;
     var draftListCompactMode = _listCompactMode;
     var draftListShowRecentReadTime = _listShowRecentReadTime;
     var draftListAlwaysShowSearchBar = _listAlwaysShowSearchBar;
@@ -287,6 +288,7 @@ extension on _BookshelfPageState {
                 await _bookshelfService.saveListShowTaxonomyBadges(
                   draftListShowTaxonomyBadges,
                 );
+                await _bookshelfService.saveListShowCover(draftListShowCover);
                 await _bookshelfService.saveListCompactMode(
                   draftListCompactMode,
                 );
@@ -319,6 +321,153 @@ extension on _BookshelfPageState {
               await _setBookshelfViewMode(useGridView);
             }
 
+            String gridDensityValue() {
+              if (draftCrossSpacing <= 6 && draftMainSpacing <= 8) {
+                return 'compact';
+              }
+              if (draftCrossSpacing >= 12 && draftMainSpacing >= 16) {
+                return 'relaxed';
+              }
+              if ((draftCrossSpacing - BookshelfService.defaultGridCrossSpacing)
+                          .abs() <=
+                      1 &&
+                  (draftMainSpacing - BookshelfService.defaultGridMainSpacing)
+                          .abs() <=
+                      1) {
+                return 'standard';
+              }
+              return 'custom';
+            }
+
+            String gridDensityLabel(String value) {
+              return switch (value) {
+                'compact' => '紧凑',
+                'relaxed' => '宽松',
+                'custom' => '自定义',
+                _ => '标准',
+              };
+            }
+
+            void applyGridDensity(String value) {
+              final (nextCrossSpacing, nextMainSpacing) = switch (value) {
+                'compact' => (4.0, 6.0),
+                'relaxed' => (14.0, 18.0),
+                _ => (
+                  BookshelfService.defaultGridCrossSpacing,
+                  BookshelfService.defaultGridMainSpacing,
+                ),
+              };
+              setSheetState(() {
+                draftCrossSpacing = nextCrossSpacing;
+                draftMainSpacing = nextMainSpacing;
+              });
+              _updateBookshelfState(() {
+                _gridCrossSpacing = nextCrossSpacing;
+                _gridMainSpacing = nextMainSpacing;
+              });
+              unawaited(persistGridSettings());
+            }
+
+            Future<void> resetGridSettings() async {
+              setSheetState(() {
+                draftAdaptive = BookshelfService.defaultGridAdaptiveColumns;
+                draftColumns = BookshelfService.defaultGridColumnCount;
+                draftCrossSpacing = BookshelfService.defaultGridCrossSpacing;
+                draftMainSpacing = BookshelfService.defaultGridMainSpacing;
+                draftGridVisualStyle = _gridVisualStyleFromStorageValue(
+                  BookshelfService.defaultGridVisualStyle,
+                );
+                draftShowTitle = BookshelfService.defaultGridShowTitle;
+                draftGridTitleCenter = BookshelfService.defaultGridTitleCenter;
+                draftGridTitleMaxLines =
+                    BookshelfService.defaultGridTitleMaxLines;
+                draftGridCoverShadow = BookshelfService.defaultGridCoverShadow;
+                draftShowAuthor = BookshelfService.defaultGridShowAuthor;
+                draftShowLatestChapter =
+                    BookshelfService.defaultGridShowLatestChapter;
+                draftShowProgressBar =
+                    BookshelfService.defaultGridShowProgressBar;
+                draftShowSourceBadge =
+                    BookshelfService.defaultGridShowSourceBadge;
+                draftShowTaxonomyBadges =
+                    BookshelfService.defaultGridShowTaxonomyBadges;
+                draftGridAlwaysShowSearchBar =
+                    BookshelfService.defaultGridAlwaysShowSearchBar;
+                draftGridPinSearchBar =
+                    BookshelfService.defaultGridPinSearchBar;
+                draftGridQuickFilterContent =
+                    _searchQuickFilterContentFromStorageValue(
+                      BookshelfService.defaultGridQuickFilterContent,
+                    );
+              });
+              _updateBookshelfLayoutPreservingScroll(() {
+                _updateBookshelfState(() {
+                  _gridAdaptiveColumns = draftAdaptive;
+                  _gridColumnCount = draftColumns;
+                  _gridCrossSpacing = draftCrossSpacing;
+                  _gridMainSpacing = draftMainSpacing;
+                  _gridVisualStyle = draftGridVisualStyle;
+                  _gridShowTitle = draftShowTitle;
+                  _gridTitleCenter = draftGridTitleCenter;
+                  _gridTitleMaxLines = draftGridTitleMaxLines;
+                  _gridCoverShadow = draftGridCoverShadow;
+                  _gridShowAuthor = draftShowAuthor;
+                  _gridShowLatestChapter = draftShowLatestChapter;
+                  _gridShowProgressBar = draftShowProgressBar;
+                  _gridShowSourceBadge = draftShowSourceBadge;
+                  _gridShowTaxonomyBadges = draftShowTaxonomyBadges;
+                  _gridAlwaysShowSearchBar = draftGridAlwaysShowSearchBar;
+                  _gridPinSearchBar = draftGridPinSearchBar;
+                  _gridQuickFilterContent = draftGridQuickFilterContent;
+                });
+              });
+              await persistGridSettings();
+            }
+
+            Future<void> resetListSettings() async {
+              setSheetState(() {
+                draftListShowTitle = BookshelfService.defaultListShowTitle;
+                draftListShowAuthor = BookshelfService.defaultListShowAuthor;
+                draftListShowLatestChapter =
+                    BookshelfService.defaultListShowLatestChapter;
+                draftListShowProgressBar =
+                    BookshelfService.defaultListShowProgressBar;
+                draftListShowSourceBadge =
+                    BookshelfService.defaultListShowSourceBadge;
+                draftListShowTaxonomyBadges =
+                    BookshelfService.defaultListShowTaxonomyBadges;
+                draftListShowCover = BookshelfService.defaultListShowCover;
+                draftListCompactMode = BookshelfService.defaultListCompactMode;
+                draftListShowRecentReadTime =
+                    BookshelfService.defaultListShowRecentReadTime;
+                draftListAlwaysShowSearchBar =
+                    BookshelfService.defaultListAlwaysShowSearchBar;
+                draftListPinSearchBar =
+                    BookshelfService.defaultListPinSearchBar;
+                draftListQuickFilterContent =
+                    _searchQuickFilterContentFromStorageValue(
+                      BookshelfService.defaultListQuickFilterContent,
+                    );
+              });
+              _updateBookshelfLayoutPreservingScroll(() {
+                _updateBookshelfState(() {
+                  _listShowTitle = draftListShowTitle;
+                  _listShowAuthor = draftListShowAuthor;
+                  _listShowLatestChapter = draftListShowLatestChapter;
+                  _listShowProgressBar = draftListShowProgressBar;
+                  _listShowSourceBadge = draftListShowSourceBadge;
+                  _listShowTaxonomyBadges = draftListShowTaxonomyBadges;
+                  _listShowCover = draftListShowCover;
+                  _listCompactMode = draftListCompactMode;
+                  _listShowRecentReadTime = draftListShowRecentReadTime;
+                  _listAlwaysShowSearchBar = draftListAlwaysShowSearchBar;
+                  _listPinSearchBar = draftListPinSearchBar;
+                  _listQuickFilterContent = draftListQuickFilterContent;
+                });
+              });
+              await persistListSettings();
+            }
+
             Widget buildGroupHeader(String title) {
               return Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 5),
@@ -339,33 +488,165 @@ extension on _BookshelfPageState {
               String? subtitle,
               required ValueChanged<bool>? onChanged,
             }) {
-              return SwitchListTile.adaptive(
-                value: value,
-                dense: false,
-                visualDensity: const VisualDensity(
-                  horizontal: -1,
-                  vertical: -1,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                title: Text(
-                  title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle:
-                    subtitle == null
-                        ? null
-                        : Text(
-                          subtitle,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 12.5,
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.3,
+              final enabled = onChanged != null;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    enabled
+                                        ? colorScheme.onSurface
+                                        : colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                subtitle,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: 12.5,
+                                  color: colorScheme.onSurfaceVariant,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 64,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Switch.adaptive(
+                            value: value,
+                            onChanged: onChanged,
                           ),
                         ),
-                onChanged: onChanged,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            Widget buildDropdownSettingRow<T>({
+              required String title,
+              String? subtitle,
+              required T value,
+              required List<T> values,
+              required String Function(T value) labelBuilder,
+              required ValueChanged<T?>? onChanged,
+              double controlWidth = 132,
+            }) {
+              final enabled = onChanged != null;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                color:
+                                    enabled
+                                        ? colorScheme.onSurface
+                                        : colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                subtitle,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 12.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: controlWidth,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<T>(
+                              value: value,
+                              isDense: true,
+                              isExpanded: true,
+                              borderRadius: BorderRadius.circular(14),
+                              alignment: AlignmentDirectional.centerEnd,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              onChanged: onChanged,
+                              items: [
+                                for (final option in values)
+                                  DropdownMenuItem<T>(
+                                    value: option,
+                                    alignment: AlignmentDirectional.centerEnd,
+                                    child: Text(
+                                      labelBuilder(option),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.end,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            Widget buildResetDefaultsButton({required VoidCallback onPressed}) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 2),
+                child: OutlinedButton.icon(
+                  onPressed: onPressed,
+                  icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                  label: const Text('恢复当前视图默认设置'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(42),
+                    alignment: Alignment.centerLeft,
+                    foregroundColor: colorScheme.onSurface,
+                    side: BorderSide(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
               );
             }
 
@@ -384,11 +665,11 @@ extension on _BookshelfPageState {
                   buildGroupHeader('搜索设置'),
                   buildCompactSwitchTile(
                     value: alwaysShowSearchBar,
-                    title: '搜索框状态',
+                    title: '显示搜索框',
                     subtitle:
                         alwaysShowSearchBar
-                            ? '当前显示搜索框，关闭后会隐藏搜索入口。'
-                            : '当前隐藏搜索框，开启后会直接显示搜索框。',
+                            ? '关闭后收起搜索框，需要从顶部入口展开。'
+                            : '开启后直接显示搜索框。',
                     onChanged: onAlwaysShowChanged,
                   ),
                   buildCompactSwitchTile(
@@ -397,53 +678,14 @@ extension on _BookshelfPageState {
                     subtitle: '滚动时将快捷筛选和搜索入口固定在顶部。',
                     onChanged: onPinChanged,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '快捷筛选内容',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        DropdownButtonHideUnderline(
-                          child: DropdownButton<
-                            _BookshelfSearchQuickFilterContent
-                          >(
-                            value: quickFilterContent,
-                            isDense: true,
-                            borderRadius: BorderRadius.circular(14),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                            onChanged:
-                                (value) =>
-                                    value == null
-                                        ? null
-                                        : onQuickFilterChanged(value),
-                            items: [
-                              for (final option
-                                  in _BookshelfSearchQuickFilterContent.values)
-                                DropdownMenuItem<
-                                  _BookshelfSearchQuickFilterContent
-                                >(
-                                  value: option,
-                                  child: Text(
-                                    _searchQuickFilterContentLabel(option),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  buildDropdownSettingRow<_BookshelfSearchQuickFilterContent>(
+                    title: '快捷筛选内容',
+                    value: quickFilterContent,
+                    values: _BookshelfSearchQuickFilterContent.values,
+                    labelBuilder: _searchQuickFilterContentLabel,
+                    onChanged:
+                        (value) =>
+                            value == null ? null : onQuickFilterChanged(value),
                   ),
                 ],
               );
@@ -499,130 +741,42 @@ extension on _BookshelfPageState {
                               unawaited(persistGridSettings());
                             },
                   ),
-                  BookshelfStepperSettingRow(
-                    title: '列间距',
-                    subtitle: '控制卡片之间的左右间距。',
-                    valueLabel: draftCrossSpacing.toStringAsFixed(0),
-                    onDecrease:
-                        draftCrossSpacing <= 4
-                            ? null
-                            : () {
-                              final next = (draftCrossSpacing - 2).clamp(
-                                4.0,
-                                24.0,
-                              );
-                              setSheetState(() {
-                                draftCrossSpacing = next;
-                              });
-                              _updateBookshelfState(() {
-                                _gridCrossSpacing = next;
-                              });
-                              unawaited(persistGridSettings());
-                            },
-                    onIncrease:
-                        draftCrossSpacing >= 24
-                            ? null
-                            : () {
-                              final next = (draftCrossSpacing + 2).clamp(
-                                4.0,
-                                24.0,
-                              );
-                              setSheetState(() {
-                                draftCrossSpacing = next;
-                              });
-                              _updateBookshelfState(() {
-                                _gridCrossSpacing = next;
-                              });
-                              unawaited(persistGridSettings());
-                            },
+                  buildDropdownSettingRow<String>(
+                    title: '网格密度',
+                    value: gridDensityValue(),
+                    values: <String>[
+                      'compact',
+                      'standard',
+                      'relaxed',
+                      if (gridDensityValue() == 'custom') 'custom',
+                    ],
+                    labelBuilder: gridDensityLabel,
+                    onChanged: (value) {
+                      if (value == null || value == 'custom') {
+                        return;
+                      }
+                      applyGridDensity(value);
+                    },
                   ),
-                  BookshelfStepperSettingRow(
-                    title: '行间距',
-                    subtitle: '控制卡片之间的上下间距。',
-                    valueLabel: draftMainSpacing.toStringAsFixed(0),
-                    onDecrease:
-                        draftMainSpacing <= 4
-                            ? null
-                            : () {
-                              final next = (draftMainSpacing - 2).clamp(
-                                4.0,
-                                24.0,
-                              );
-                              setSheetState(() {
-                                draftMainSpacing = next;
-                              });
-                              _updateBookshelfState(() {
-                                _gridMainSpacing = next;
-                              });
-                              unawaited(persistGridSettings());
-                            },
-                    onIncrease:
-                        draftMainSpacing >= 24
-                            ? null
-                            : () {
-                              final next = (draftMainSpacing + 2).clamp(
-                                4.0,
-                                24.0,
-                              );
-                              setSheetState(() {
-                                draftMainSpacing = next;
-                              });
-                              _updateBookshelfState(() {
-                                _gridMainSpacing = next;
-                              });
-                              unawaited(persistGridSettings());
-                            },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '网格样式',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        DropdownButtonHideUnderline(
-                          child: DropdownButton<_BookshelfGridVisualStyle>(
-                            value: draftGridVisualStyle,
-                            isDense: true,
-                            borderRadius: BorderRadius.circular(14),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                            onChanged: (value) {
-                              if (value == null) {
-                                return;
-                              }
-                              setSheetState(() {
-                                draftGridVisualStyle = value;
-                              });
-                              _updateBookshelfLayoutPreservingScroll(() {
-                                _updateBookshelfState(() {
-                                  _gridVisualStyle = value;
-                                });
-                              });
-                              unawaited(persistGridSettings());
-                            },
-                            items: [
-                              for (final option
-                                  in _BookshelfGridVisualStyle.values)
-                                DropdownMenuItem<_BookshelfGridVisualStyle>(
-                                  value: option,
-                                  child: Text(_gridVisualStyleLabel(option)),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  buildDropdownSettingRow<_BookshelfGridVisualStyle>(
+                    title: '网格样式',
+                    value: draftGridVisualStyle,
+                    values: _BookshelfGridVisualStyle.values,
+                    labelBuilder: _gridVisualStyleLabel,
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setSheetState(() {
+                        draftGridVisualStyle = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _gridVisualStyle = value;
+                        });
+                      });
+                      unawaited(persistGridSettings());
+                    },
                   ),
                   buildGroupHeader('文字信息'),
                   BookshelfStepperSettingRow(
@@ -679,74 +833,54 @@ extension on _BookshelfPageState {
                             },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftShowTitle,
-                    title: '隐藏书籍名称',
+                    value: draftShowTitle,
+                    title: '显示书籍名称',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftShowTitle = next;
+                        draftShowTitle = value;
                       });
                       _updateBookshelfState(() {
-                        _gridShowTitle = next;
+                        _gridShowTitle = value;
                       });
                       unawaited(persistGridSettings());
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftShowAuthor,
-                    title: '隐藏作者名称',
+                    value: draftShowAuthor,
+                    title: '显示作者名称',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftShowAuthor = next;
+                        draftShowAuthor = value;
                       });
                       _updateBookshelfState(() {
-                        _gridShowAuthor = next;
+                        _gridShowAuthor = value;
                       });
                       unawaited(persistGridSettings());
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftShowLatestChapter,
-                    title: '隐藏最新章节',
+                    value: draftShowLatestChapter,
+                    title: '显示最新章节',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftShowLatestChapter = next;
+                        draftShowLatestChapter = value;
                       });
                       _updateBookshelfState(() {
-                        _gridShowLatestChapter = next;
+                        _gridShowLatestChapter = value;
                       });
                       unawaited(persistGridSettings());
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftShowSourceBadge,
-                    title: '隐藏来源标识',
-                    subtitle: '隐藏封面右上角的在线/本地标识。',
+                    value: draftShowSourceBadge,
+                    title: '显示来源标识',
+                    subtitle: '在封面右上角显示在线/本地标识。',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftShowSourceBadge = next;
+                        draftShowSourceBadge = value;
                       });
                       _updateBookshelfState(() {
-                        _gridShowSourceBadge = next;
-                      });
-                      unawaited(persistGridSettings());
-                    },
-                  ),
-                  buildCompactSwitchTile(
-                    value: draftShowTaxonomyBadges,
-                    title: '显示分类和标签',
-                    subtitle: '在网格书籍下方显示彩色分类和标签。',
-                    onChanged: (value) {
-                      setSheetState(() {
-                        draftShowTaxonomyBadges = value;
-                      });
-                      _updateBookshelfLayoutPreservingScroll(() {
-                        _updateBookshelfState(() {
-                          _gridShowTaxonomyBadges = value;
-                        });
+                        _gridShowSourceBadge = value;
                       });
                       unawaited(persistGridSettings());
                     },
@@ -811,18 +945,20 @@ extension on _BookshelfPageState {
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftShowProgressBar,
-                    title: '隐藏进度条',
+                    value: draftShowProgressBar,
+                    title: '显示进度条',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftShowProgressBar = next;
+                        draftShowProgressBar = value;
                       });
                       _updateBookshelfState(() {
-                        _gridShowProgressBar = next;
+                        _gridShowProgressBar = value;
                       });
                       unawaited(persistGridSettings());
                     },
+                  ),
+                  buildResetDefaultsButton(
+                    onPressed: () => unawaited(resetGridSettings()),
                   ),
                 ],
               );
@@ -847,61 +983,79 @@ extension on _BookshelfPageState {
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftListShowTitle,
-                    title: '隐藏书籍名称',
+                    value: draftListShowCover,
+                    title: '显示封面图',
+                    subtitle: '关闭后列表只显示书名、作者和其他文字信息。',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftListShowTitle = next;
+                        draftListShowCover = value;
                       });
-                      _updateBookshelfState(() {
-                        _listShowTitle = next;
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _listShowCover = value;
+                        });
                       });
                       unawaited(persistListSettings());
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftListShowAuthor,
-                    title: '隐藏作者名称',
+                    value: draftListShowTitle,
+                    title: '显示书籍名称',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftListShowAuthor = next;
+                        draftListShowTitle = value;
                       });
                       _updateBookshelfState(() {
-                        _listShowAuthor = next;
+                        _listShowTitle = value;
                       });
                       unawaited(persistListSettings());
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftListShowLatestChapter,
-                    title: '隐藏最新章节',
+                    value: draftListShowAuthor,
+                    title: '显示作者名称',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftListShowLatestChapter = next;
+                        draftListShowAuthor = value;
                       });
                       _updateBookshelfState(() {
-                        _listShowLatestChapter = next;
+                        _listShowAuthor = value;
                       });
                       unawaited(persistListSettings());
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftListShowSourceBadge,
-                    title: '隐藏来源标识',
-                    subtitle: '隐藏封面右上角的在线/本地标识。',
+                    value: draftListShowLatestChapter,
+                    title: '显示最新章节',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftListShowSourceBadge = next;
+                        draftListShowLatestChapter = value;
                       });
                       _updateBookshelfState(() {
-                        _listShowSourceBadge = next;
+                        _listShowLatestChapter = value;
                       });
                       unawaited(persistListSettings());
                     },
+                  ),
+                  buildCompactSwitchTile(
+                    value: draftListShowSourceBadge,
+                    title: '显示来源标识',
+                    subtitle:
+                        draftListShowCover
+                            ? '在封面右上角显示在线/本地标识。'
+                            : '封面图隐藏时不会显示来源标识。',
+                    onChanged:
+                        draftListShowCover
+                            ? (value) {
+                              setSheetState(() {
+                                draftListShowSourceBadge = value;
+                              });
+                              _updateBookshelfState(() {
+                                _listShowSourceBadge = value;
+                              });
+                              unawaited(persistListSettings());
+                            }
+                            : null,
                   ),
                   buildCompactSwitchTile(
                     value: draftListShowTaxonomyBadges,
@@ -978,41 +1132,20 @@ extension on _BookshelfPageState {
                     },
                   ),
                   buildCompactSwitchTile(
-                    value: !draftListShowProgressBar,
-                    title: '隐藏进度条',
+                    value: draftListShowProgressBar,
+                    title: '显示进度条',
                     onChanged: (value) {
-                      final next = !value;
                       setSheetState(() {
-                        draftListShowProgressBar = next;
+                        draftListShowProgressBar = value;
                       });
                       _updateBookshelfState(() {
-                        _listShowProgressBar = next;
+                        _listShowProgressBar = value;
                       });
                       unawaited(persistListSettings());
                     },
                   ),
-                  buildGroupHeader('封面设置'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: _resolvedPalette(sheetContext).surfaceColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _resolvedPalette(
-                            sheetContext,
-                          ).cardBorderColor.withValues(alpha: 0.55),
-                        ),
-                      ),
-                      child: Text(
-                        '当前暂未提供额外封面设置。',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
+                  buildResetDefaultsButton(
+                    onPressed: () => unawaited(resetListSettings()),
                   ),
                 ],
               );
@@ -1409,51 +1542,6 @@ extension on _BookshelfPageState {
               );
             }
 
-            Widget buildCurrentViewSummary() {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: palette.primaryContainerColor.withValues(alpha: 0.28),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: palette.primaryColor.withValues(alpha: 0.18),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.filter_alt_rounded,
-                      size: 17,
-                      color: palette.primaryColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '当前视图：${_activeFilterLabel()}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: palette.textPrimaryColor,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${_filteredBooks.length} 本',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
             Widget buildEmptyHint(String text) {
               return Text(
                 text,
@@ -1585,8 +1673,6 @@ extension on _BookshelfPageState {
                   child: ListView(
                     shrinkWrap: true,
                     children: [
-                      buildCurrentViewSummary(),
-                      const SizedBox(height: 8),
                       TextField(
                         decoration: InputDecoration(
                           isDense: true,
@@ -1731,7 +1817,6 @@ extension on _BookshelfPageState {
         break;
     }
   }
-
 }
 
 class _BookshelfSettingsModeButton extends StatelessWidget {

@@ -333,74 +333,100 @@ extension on _AppearancePageState {
                             ? 0
                             : 6,
                   ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () {
-                      if (selected) return;
-                      unawaited(
-                        ref
-                            .read(appThemeModeProvider.notifier)
-                            .setThemeMode(option.mode),
-                      );
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 9,
-                      ),
-                      decoration: BoxDecoration(
-                        color:
-                            selected
-                                ? colorScheme.secondaryContainer
-                                : colorScheme.surface,
+                  child: Builder(
+                    builder: (buttonContext) {
+                      return InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color:
-                              selected
-                                  ? colorScheme.primary
-                                  : colorScheme.outlineVariant.withValues(
-                                    alpha: 0.5,
-                                  ),
-                          width: selected ? 1.4 : 1,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            option.icon,
-                            size: 16,
+                        onTap: () {
+                          if (selected) return;
+                          unawaited(
+                            _setAppThemeModeWithReveal(
+                              buttonContext,
+                              option.mode,
+                            ),
+                          );
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          curve: Curves.easeOutCubic,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
                             color:
                                 selected
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            option.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
+                                    ? colorScheme.secondaryContainer
+                                    : colorScheme.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
                               color:
                                   selected
                                       ? colorScheme.primary
-                                      : colorScheme.onSurfaceVariant,
+                                      : colorScheme.outlineVariant.withValues(
+                                        alpha: 0.5,
+                                      ),
+                              width: selected ? 1.4 : 1,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                option.icon,
+                                size: 16,
+                                color:
+                                    selected
+                                        ? colorScheme.primary
+                                        : colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                option.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color:
+                                      selected
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               );
             })
             .toList(growable: false),
       ),
+    );
+  }
+
+  Future<void> _setAppThemeModeWithReveal(
+    BuildContext sourceContext,
+    ThemeMode mode,
+  ) async {
+    final overlay = CircularThemeRevealOverlay.of(sourceContext);
+    if (overlay == null) {
+      await ref.read(appThemeModeProvider.notifier).setThemeMode(mode);
+      return;
+    }
+    final center = CircularThemeRevealOverlay.getCenterFromContext(
+      sourceContext,
+    );
+    await overlay.startTransition(
+      center: center,
+      reverse: false,
+      onThemeChange: () {
+        unawaited(ref.read(appThemeModeProvider.notifier).setThemeMode(mode));
+      },
     );
   }
 

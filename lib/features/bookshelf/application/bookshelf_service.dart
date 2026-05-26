@@ -175,6 +175,7 @@ class BookshelfService {
       'bookshelf.list.showSourceBadge';
   static const String _listShowTaxonomyBadgesKey =
       'bookshelf.list.showTaxonomyBadges';
+  static const String _listShowCoverKey = 'bookshelf.list.showCover';
   static const String _listAlwaysShowSearchBarKey =
       'bookshelf.list.search.alwaysVisible';
   static const String _listPinSearchBarKey = 'bookshelf.list.search.pinned';
@@ -205,8 +206,8 @@ class BookshelfService {
   static const bool defaultGridShowAuthor = true;
   static const bool defaultGridShowLatestChapter = true;
   static const bool defaultGridShowProgressBar = true;
-  static const bool defaultGridShowSourceBadge = true;
-  static const bool defaultGridShowTaxonomyBadges = true;
+  static const bool defaultGridShowSourceBadge = false;
+  static const bool defaultGridShowTaxonomyBadges = false;
   static const bool defaultGridAlwaysShowSearchBar = true;
   static const bool defaultGridPinSearchBar = false;
   static const String defaultGridQuickFilterContent = 'none';
@@ -214,8 +215,9 @@ class BookshelfService {
   static const bool defaultListShowAuthor = true;
   static const bool defaultListShowLatestChapter = true;
   static const bool defaultListShowProgressBar = true;
-  static const bool defaultListShowSourceBadge = true;
+  static const bool defaultListShowSourceBadge = false;
   static const bool defaultListShowTaxonomyBadges = true;
+  static const bool defaultListShowCover = true;
   static const bool defaultListAlwaysShowSearchBar = true;
   static const bool defaultListPinSearchBar = false;
   static const String defaultListQuickFilterContent = 'none';
@@ -725,6 +727,16 @@ class BookshelfService {
   Future<void> saveListShowTaxonomyBadges(bool visible) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_listShowTaxonomyBadgesKey, visible);
+  }
+
+  Future<bool> loadListShowCover() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowCoverKey) ?? defaultListShowCover;
+  }
+
+  Future<void> saveListShowCover(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowCoverKey, visible);
   }
 
   Future<bool> loadListAlwaysShowSearchBar() async {

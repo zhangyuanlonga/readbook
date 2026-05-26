@@ -226,7 +226,9 @@ class _BookshelfAnimatedProgressSection extends StatefulWidget {
     required this.trailingStyle,
     required this.fillColor,
     required this.backgroundColor,
+    this.summaryText,
     this.showSummaryText = true,
+    this.showTrailingText = true,
     this.showBar = true,
     this.minHeight = 3,
     this.spacing = 6,
@@ -237,7 +239,9 @@ class _BookshelfAnimatedProgressSection extends StatefulWidget {
   final TextStyle? trailingStyle;
   final Color fillColor;
   final Color backgroundColor;
+  final String? summaryText;
   final bool showSummaryText;
+  final bool showTrailingText;
   final bool showBar;
   final double minHeight;
   final double spacing;
@@ -367,29 +371,34 @@ class _BookshelfAnimatedProgressSectionState
               flashStrength,
             )!;
 
+        final showTextRow = widget.showSummaryText || widget.showTrailingText;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (widget.showSummaryText)
-                  Expanded(
-                    child: Text(
-                      widget.progressDisplay.summaryText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: widget.summaryStyle,
-                    ),
-                  )
-                else
-                  const Spacer(),
-                const SizedBox(width: 8),
-                Text('$animatedPercent%', style: widget.trailingStyle),
-              ],
-            ),
+            if (showTextRow)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (widget.showSummaryText)
+                    Expanded(
+                      child: Text(
+                        widget.summaryText ?? widget.progressDisplay.summaryText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: widget.summaryStyle,
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (widget.showTrailingText) ...[
+                    const SizedBox(width: 8),
+                    Text('$animatedPercent%', style: widget.trailingStyle),
+                  ],
+                ],
+              ),
             if (widget.showBar) ...[
-              SizedBox(height: widget.spacing),
+              if (showTextRow) SizedBox(height: widget.spacing),
               ClipRRect(
                 borderRadius: BorderRadius.circular(widget.minHeight * 2),
                 child: _BookshelfAnimatedProgressBar(
@@ -446,7 +455,7 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
-                  final highlightWidth = math.max(minHeight * 7, width * 0.22);
+                  final highlightWidth = math.max(minHeight * 10, width * 0.34);
                   final sweepOffset =
                       (width + highlightWidth) * sweepProgress - highlightWidth;
                   return Stack(
@@ -491,7 +500,7 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
                                   colors: [
                                     Colors.transparent,
                                     Colors.white.withValues(alpha: 0.0),
-                                    Colors.white.withValues(alpha: 0.34),
+                                    Colors.white.withValues(alpha: 0.52),
                                     Colors.transparent,
                                   ],
                                   stops: const [0, 0.18, 0.55, 1],
@@ -690,6 +699,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
   bool _listShowSourceBadge = BookshelfService.defaultListShowSourceBadge;
   bool _listShowTaxonomyBadges = BookshelfService.defaultListShowTaxonomyBadges;
+  bool _listShowCover = BookshelfService.defaultListShowCover;
   bool _listCompactMode = BookshelfService.defaultListCompactMode;
   bool _listShowRecentReadTime = BookshelfService.defaultListShowRecentReadTime;
   bool _listAlwaysShowSearchBar =
@@ -1686,36 +1696,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridVisualStyle == _BookshelfGridVisualStyle.overlayTitle) {
       return 0;
     }
-    var extraHeight = 16.0;
     final hasMetaInfo =
         _gridShowTitle ||
         _gridShowAuthor ||
         _gridShowLatestChapter ||
         _gridShowProgressBar;
-    if (hasMetaInfo) {
-      extraHeight += 6;
+    if (!hasMetaInfo) {
+      return 16;
     }
-    if (_gridShowTitle) {
-      extraHeight += 18.0 * _gridTitleMaxLines.clamp(1, 3).toDouble();
-    }
-    if (_gridShowAuthor) {
-      extraHeight += (_gridShowTitle ? 2 : 0) + 16;
+    if (_gridShowTitle && _gridTitleMaxLines > 1) {
+      return 104;
     }
     if (_gridShowLatestChapter) {
-      extraHeight += ((_gridShowTitle || _gridShowAuthor) ? 1 : 0) + 16;
+      return 82;
     }
-    if (_gridShowTaxonomyBadges &&
-        (_bookTagsByKey.isNotEmpty || _bookCategoriesByKey.isNotEmpty)) {
-      extraHeight += 24;
-    }
-    if (_gridShowProgressBar) {
-      extraHeight +=
-          ((_gridShowTitle || _gridShowAuthor || _gridShowLatestChapter)
-              ? 4
-              : 0) +
-          5;
-    }
-    return extraHeight;
+    return 62;
   }
 
   Widget _buildBookTaxonomyStrip(
@@ -2148,24 +2143,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ),
                     ),
                   ],
-                  if (!coverOnly &&
-                      !overlayTitle &&
-                      _gridShowTaxonomyBadges) ...[
-                    SizedBox(
-                      height:
-                          (_gridShowTitle ||
-                                  _gridShowAuthor ||
-                                  _gridShowLatestChapter)
-                              ? 4
-                              : 0,
-                    ),
-                    _buildBookTaxonomyStrip(
-                      book,
-                      compact: true,
-                      maxTags: 1,
-                      singleLine: true,
-                    ),
-                  ],
                   if (!coverOnly && !overlayTitle && _gridShowProgressBar) ...[
                     SizedBox(
                       height:
@@ -2191,6 +2168,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       fillColor: palette.primaryColor,
                       backgroundColor: palette.elevatedSurfaceColor,
                       showSummaryText: false,
+                      showTrailingText: false,
                       showBar: true,
                       minHeight: 3,
                       spacing: 4,
@@ -2241,12 +2219,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final authorLine = _authorLineByBookKey[bookKey] ?? '作者: 未知';
     final latestLine = _latestLineByBookKey[bookKey] ?? '最新: 暂无章节';
     final isEditingSelected = _isSelectionMode && isSelected;
-    final coverWidth = _listCompactMode ? 52.0 : 68.0;
-    final coverHeight = _listCompactMode ? 74.0 : 96.0;
+    final visibleDetailCount =
+        <bool>[
+          _listShowLatestChapter,
+          _listShowTaxonomyBadges,
+          _listShowProgressBar,
+          _listShowRecentReadTime && progress != null,
+        ].where((visible) => visible).length;
+    final coverHeight =
+        _listCompactMode
+            ? (visibleDetailCount >= 3
+                ? 90.0
+                : visibleDetailCount >= 2
+                ? 82.0
+                : 74.0)
+            : (visibleDetailCount >= 3
+                ? 118.0
+                : visibleDetailCount >= 2
+                ? 108.0
+                : 96.0);
+    final coverWidth = coverHeight * 68 / 96;
     final cardPadding =
         _listCompactMode
             ? const EdgeInsets.fromLTRB(12, 9, 12, 9)
             : const EdgeInsets.fromLTRB(14, 12, 14, 12);
+    final minCardHeight =
+        _listCompactMode
+            ? (_listShowCover ? coverHeight + 18 : 72.0)
+            : (_listShowCover ? coverHeight + 24 : 88.0);
     final recentReadLine =
         _listShowRecentReadTime && progress != null
             ? '最近阅读: ${_formatRelativeReadTime(progress.updatedAt)}'
@@ -2294,146 +2294,187 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     await _openFromBookshelf(book, progress: progress);
                   },
           borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: cardPadding,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_isSelectionMode)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8, top: 2),
-                    child: _buildListSelectionIndicator(
-                      selected: isSelected,
-                      onTap: () => _toggleBookSelection(book),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minCardHeight),
+            child: Padding(
+              padding: cardPadding,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8, top: 2),
+                      child: _buildListSelectionIndicator(
+                        selected: isSelected,
+                        onTap: () => _toggleBookSelection(book),
+                      ),
                     ),
-                  ),
-                InkResponse(
-                  onLongPress:
-                      _isBatchDeleting
-                          ? null
-                          : () async {
-                            _setPressedBookKey(null);
-                            if (_isSelectionMode) {
-                              _toggleBookSelection(book);
-                              return;
-                            }
-                            await _openBookDetailFromLongPress(
-                              book,
-                              pressedKey: bookKey,
-                            );
-                          },
-                  containedInkWell: true,
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: coverWidth,
-                    height: coverHeight,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: _buildCover(
-                            realCoverUrl: book.coverUrl,
-                            title: displayTitle,
-                            author: displayAuthor,
-                            bookId: book.bookId,
-                            sourceId: book.sourceId,
-                            detailUrl: book.detailUrl,
-                            heroTag: coverHeroTag,
-                            presentation: presentation,
-                            width: coverWidth,
-                            height: coverHeight,
-                          ),
-                        ),
-                        if (_listShowSourceBadge)
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: _buildSourceBadge(book, compact: true),
-                          ),
-                        if (_isCoverRefreshActive)
-                          Positioned(
-                            left: 7,
-                            right: 7,
-                            bottom: 6,
-                            child: _buildCoverRefreshIndicator(),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress:
-                        _isBatchDeleting
-                            ? null
-                            : () async {
-                              if (_isSelectionMode) {
-                                _toggleBookSelection(book);
-                                return;
-                              }
-                              await _openBookDetailFromLongPress(
-                                book,
-                                pressedKey: bookKey,
-                              );
-                            },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                  if (_listShowCover) ...[
+                    InkResponse(
+                      onLongPress:
+                          _isBatchDeleting
+                              ? null
+                              : () async {
+                                _setPressedBookKey(null);
+                                if (_isSelectionMode) {
+                                  _toggleBookSelection(book);
+                                  return;
+                                }
+                                await _openBookDetailFromLongPress(
+                                  book,
+                                  pressedKey: bookKey,
+                                );
+                              },
+                      containedInkWell: true,
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: coverWidth,
+                        height: coverHeight,
+                        child: Stack(
                           children: [
-                            if (_listShowTitle)
-                              Expanded(
-                                child: Hero(
-                                  tag: titleHeroTag,
-                                  child: Text(
-                                    titleText,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: palette.cardTextColor,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                            else
-                              const Spacer(),
-                            if (!_isSelectionMode) ...[
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    isOpening
-                                        ? const CircularProgressIndicator(
-                                          strokeWidth: 1.9,
-                                        )
-                                        : Container(
-                                          decoration: BoxDecoration(
-                                            color: palette.elevatedSurfaceColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Icon(
-                                            Icons.chevron_right_rounded,
-                                            size: 18,
-                                            color: palette.textSecondaryColor,
-                                          ),
-                                        ),
+                            Positioned.fill(
+                              child: _buildCover(
+                                realCoverUrl: book.coverUrl,
+                                title: displayTitle,
+                                author: displayAuthor,
+                                bookId: book.bookId,
+                                sourceId: book.sourceId,
+                                detailUrl: book.detailUrl,
+                                heroTag: coverHeroTag,
+                                presentation: presentation,
+                                width: coverWidth,
+                                height: coverHeight,
                               ),
-                            ],
+                            ),
+                            if (_listShowSourceBadge)
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: _buildSourceBadge(book, compact: true),
+                              ),
+                            if (_isCoverRefreshActive)
+                              Positioned(
+                                left: 7,
+                                right: 7,
+                                bottom: 6,
+                                child: _buildCoverRefreshIndicator(),
+                              ),
                           ],
                         ),
-                        if (_listShowAuthor) ...[
-                          SizedBox(height: _listCompactMode ? 3 : 6),
-                          Hero(
-                            tag: metaHeroTag,
-                            child: Text(
-                              authorLine,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress:
+                          _isBatchDeleting
+                              ? null
+                              : () async {
+                                if (_isSelectionMode) {
+                                  _toggleBookSelection(book);
+                                  return;
+                                }
+                                await _openBookDetailFromLongPress(
+                                  book,
+                                  pressedKey: bookKey,
+                                );
+                              },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (_listShowTitle)
+                                Expanded(
+                                  child: Hero(
+                                    tag: titleHeroTag,
+                                    child: Text(
+                                      titleText,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: palette.cardTextColor,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                              else
+                                const Spacer(),
+                              if (!_isSelectionMode) ...[
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      isOpening
+                                          ? const CircularProgressIndicator(
+                                            strokeWidth: 1.9,
+                                          )
+                                          : Container(
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  palette.elevatedSurfaceColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Icon(
+                                              Icons.chevron_right_rounded,
+                                              size: 18,
+                                              color: palette.textSecondaryColor,
+                                            ),
+                                          ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (_listShowAuthor) ...[
+                            SizedBox(height: _listCompactMode ? 3 : 6),
+                            Hero(
+                              tag: metaHeroTag,
+                              child: Text(
+                                authorLine,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: palette.textSecondaryColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (_listShowLatestChapter) ...[
+                            SizedBox(
+                              height:
+                                  _listCompactMode
+                                      ? 2
+                                      : (_listShowAuthor ? 3 : 5),
+                            ),
+                            Text(
+                              latestLine,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color: palette.textSecondaryColor.withValues(
+                                  alpha: 0.82,
+                                ),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                          if (recentReadLine != null) ...[
+                            SizedBox(height: _listCompactMode ? 3 : 4),
+                            Text(
+                              recentReadLine,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(
@@ -2443,86 +2484,53 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ),
-                        ],
-                        if (_listShowLatestChapter) ...[
-                          SizedBox(
-                            height:
-                                _listCompactMode
-                                    ? 3
-                                    : (_listShowAuthor ? 4 : 6),
-                          ),
-                          Text(
-                            latestLine,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: palette.textSecondaryColor,
-                              fontWeight: FontWeight.w500,
+                          ],
+                          if (_listShowTaxonomyBadges) ...[
+                            SizedBox(height: _listCompactMode ? 5 : 7),
+                            _buildBookTaxonomyStrip(
+                              book,
+                              compact: _listCompactMode,
+                              maxTags: _listCompactMode ? 1 : 2,
                             ),
-                          ),
-                        ],
-                        if (recentReadLine != null) ...[
-                          SizedBox(height: _listCompactMode ? 3 : 4),
-                          Text(
-                            recentReadLine,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: palette.textSecondaryColor,
-                              fontWeight: FontWeight.w500,
+                          ],
+                          if (_listShowProgressBar) ...[
+                            SizedBox(height: _listCompactMode ? 5 : 7),
+                            _BookshelfAnimatedProgressSection(
+                              key: ValueKey<String>('list_progress_$bookKey'),
+                              progressDisplay: progressDisplay,
+                              summaryStyle: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color: palette.textSecondaryColor.withValues(
+                                  alpha: 0.88,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              trailingStyle: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color:
+                                    progressDisplay.hasProgress
+                                        ? palette.primaryColor
+                                        : palette.textSecondaryColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              fillColor: palette.primaryColor,
+                              backgroundColor: palette.elevatedSurfaceColor,
+                              summaryText: '阅读进度',
+                              showSummaryText: true,
+                              showTrailingText: true,
+                              showBar: true,
+                              minHeight: 4,
+                              spacing: _listCompactMode ? 4 : 5,
                             ),
-                          ),
+                          ],
                         ],
-                        if (_listShowTaxonomyBadges) ...[
-                          SizedBox(height: _listCompactMode ? 5 : 7),
-                          _buildBookTaxonomyStrip(
-                            book,
-                            compact: _listCompactMode,
-                            maxTags: _listCompactMode ? 1 : 2,
-                          ),
-                        ],
-                        SizedBox(height: _listCompactMode ? 3 : 4),
-                        _BookshelfAnimatedProgressSection(
-                          key: ValueKey<String>('list_progress_$bookKey'),
-                          progressDisplay: progressDisplay,
-                          summaryStyle: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color:
-                                progressDisplay.hasProgress
-                                    ? palette.primaryColor
-                                    : palette.textSecondaryColor,
-                            fontWeight:
-                                progressDisplay.hasProgress
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                          ),
-                          trailingStyle: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            color:
-                                progressDisplay.hasProgress
-                                    ? palette.primaryColor
-                                    : palette.textSecondaryColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          fillColor: palette.primaryColor,
-                          backgroundColor: palette.elevatedSurfaceColor,
-                          showSummaryText: true,
-                          showBar: _listShowProgressBar,
-                          minHeight: 3,
-                          spacing: _listCompactMode ? 5 : 8,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -4148,6 +4156,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showSourceBadge = await _bookshelfService.loadListShowSourceBadge();
     final showTaxonomyBadges =
         await _bookshelfService.loadListShowTaxonomyBadges();
+    final showCover = await _bookshelfService.loadListShowCover();
     final compactMode = await _bookshelfService.loadListCompactMode();
     final showRecentReadTime =
         await _bookshelfService.loadListShowRecentReadTime();
@@ -4166,6 +4175,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowProgressBar == showProgressBar &&
         _listShowSourceBadge == showSourceBadge &&
         _listShowTaxonomyBadges == showTaxonomyBadges &&
+        _listShowCover == showCover &&
         _listCompactMode == compactMode &&
         _listShowRecentReadTime == showRecentReadTime &&
         _listAlwaysShowSearchBar == alwaysShowSearchBar &&
@@ -4180,6 +4190,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowProgressBar = showProgressBar;
       _listShowSourceBadge = showSourceBadge;
       _listShowTaxonomyBadges = showTaxonomyBadges;
+      _listShowCover = showCover;
       _listCompactMode = compactMode;
       _listShowRecentReadTime = showRecentReadTime;
       _listAlwaysShowSearchBar = alwaysShowSearchBar;

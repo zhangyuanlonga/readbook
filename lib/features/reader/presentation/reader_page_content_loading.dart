@@ -371,13 +371,37 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     }
 
     final context = _continuousTextChapterKey(chapter).currentContext;
-    final renderObject = context?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) {
+    if (context == null) {
       return null;
     }
 
-    final viewport = RenderAbstractViewport.of(renderObject);
-    final startOffset = viewport.getOffsetToReveal(renderObject, 0).offset;
+    final RenderObject? renderObject;
+    try {
+      renderObject = context.findRenderObject();
+    } on FlutterError {
+      // During auto-read mode switches, chapter keyed subtrees can be inactive
+      // for one frame. Treat them as temporarily unmeasurable instead of
+      // failing the reader build.
+      return null;
+    }
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    if (!renderObject.attached) {
+      return null;
+    }
+
+    final viewport = RenderAbstractViewport.maybeOf(renderObject);
+    if (viewport == null) {
+      return null;
+    }
+
+    final double startOffset;
+    try {
+      startOffset = viewport.getOffsetToReveal(renderObject, 0).offset;
+    } on FlutterError {
+      return null;
+    }
     return _ContinuousTextChapterLayout(
       startOffset: startOffset,
       endOffset: startOffset + renderObject.size.height,

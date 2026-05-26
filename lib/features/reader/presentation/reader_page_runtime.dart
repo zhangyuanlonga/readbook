@@ -331,7 +331,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isLowBattery: _isReaderBatteryLowForRuntime,
       showOverlayControls: _showOverlayControls,
       isBootstrapping: _isBootstrapping,
-      isLoadingContent: _isLoadingContent,
+      isLoadingContent: _isLoadingContent || _isRestoringContinuousTextAnchor,
       hasError: _errorText != null,
       hasTextContent:
           _content.trim().isNotEmpty ||
@@ -360,17 +360,6 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isAnimating: _isPagedTransitionAnimating || _isCurlAutoTurning,
       pageCount: _currentPagedPageCount,
     );
-  }
-
-  double _autoReadProgressRatio() {
-    if (!_hasSingleAttachedScrollPosition) {
-      return 0;
-    }
-    final maxExtent = _scrollController.position.maxScrollExtent;
-    if (maxExtent <= 0) {
-      return 1;
-    }
-    return (_scrollController.position.pixels / maxExtent).clamp(0.0, 1.0);
   }
 
   Future<void> _refreshChapterBookmarks() async {
@@ -522,39 +511,137 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     unawaited(_runAutoReadLoop(token));
   }
 
+  bool get _isProgrammaticAutoReadScrollActive =>
+      _isAutoReadSessionEnabled &&
+      _autoReadSessionState == ReaderAutoReadSessionState.running &&
+      _settings.autoReadMode == ReaderAutoReadMode.scroll &&
+      _isAutoReadRunning;
+
   Future<void> _runAutoReadLoop(int token) async {
-    while (mounted && token == _autoReadTaskToken) {
-      if (!_canRunAutoReadNow()) {
-        break;
-      }
+    if (!_canRunAutoReadNow()) {
+      _finishAutoReadScrollRun(token, reason: 'not_ready');
+      return;
+    }
 
-      final position = _scrollController.position;
-      final target = _autoReadCoordinator.resolveStepTargetOffset(
-        currentOffset: position.pixels,
-        maxScrollExtent: position.maxScrollExtent,
-        autoReadSpeed: _settings.autoReadSpeed,
-        stepDuration: _ReaderPageState._kAutoReadStepDuration,
+    final position = _scrollController.position;
+    final startOffset = position.pixels;
+    final target = position.maxScrollExtent;
+    final remaining = target - startOffset;
+    if (remaining <= 0.5) {
+      _finishAutoReadScrollRun(token, reason: 'already_at_end');
+      return;
+    }
+
+    final duration = _resolveAutoReadScrollDuration(remaining);
+    _logAutoReadScrollTrace(
+      step: 'start',
+      token: token,
+      startOffset: startOffset,
+      targetOffset: target,
+      duration: duration,
+    );
+
+    try {
+      await _scrollController.animateTo(
+        target,
+        duration: duration,
+        curve: Curves.linear,
       );
-
-      if ((target - position.pixels).abs() < 0.5) {
-        break;
-      }
-
-      try {
-        await _scrollController.animateTo(
-          target,
-          duration: _ReaderPageState._kAutoReadStepDuration,
-          curve: Curves.linear,
-        );
-      } catch (_) {
-        break;
-      }
+    } catch (error) {
+      _logAutoReadScrollTrace(
+        step: 'error',
+        token: token,
+        startOffset: startOffset,
+        targetOffset: target,
+        duration: duration,
+        error: error,
+      );
+      _finishAutoReadScrollRun(token, reason: 'error');
+      return;
     }
 
-    if (token == _autoReadTaskToken) {
-      _isAutoReadRunning = false;
-      unawaited(_handleAutoReadChapterBoundary());
+    final stillCurrent = mounted && token == _autoReadTaskToken;
+    final reachedEnd =
+        _scrollController.hasClients &&
+        (_scrollController.position.maxScrollExtent -
+                    _scrollController.position.pixels)
+                .abs() <=
+            1.5;
+    _logAutoReadScrollTrace(
+      step: stillCurrent && reachedEnd ? 'complete' : 'interrupted',
+      token: token,
+      startOffset: startOffset,
+      targetOffset: target,
+      duration: duration,
+      currentOffset:
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null,
+      reachedEnd: reachedEnd,
+    );
+    _finishAutoReadScrollRun(
+      token,
+      reason: reachedEnd ? 'complete' : 'interrupted',
+    );
+  }
+
+  Duration _resolveAutoReadScrollDuration(double distance) {
+    final speed =
+        _settings.autoReadSpeed
+            .clamp(
+              ReaderSettings.minAutoReadSpeed,
+              ReaderSettings.maxAutoReadSpeed,
+            )
+            .toDouble();
+    final milliseconds = (distance / speed * 1000).round();
+    return Duration(
+      milliseconds: max(
+        _ReaderPageState._kAutoReadMinimumScrollDuration.inMilliseconds,
+        milliseconds,
+      ),
+    );
+  }
+
+  void _finishAutoReadScrollRun(int token, {required String reason}) {
+    if (token != _autoReadTaskToken) {
+      return;
     }
+    _isAutoReadRunning = false;
+    _logAutoReadScrollTrace(step: 'finish', token: token, reason: reason);
+    unawaited(_handleAutoReadChapterBoundary());
+  }
+
+  void _logAutoReadScrollTrace({
+    required String step,
+    required int token,
+    double? startOffset,
+    double? targetOffset,
+    double? currentOffset,
+    Duration? duration,
+    bool? reachedEnd,
+    String? reason,
+    Object? error,
+  }) {
+    _logger.info(
+      'Reader auto read scroll trace',
+      context: <String, Object?>{
+        'chain': 'reader_auto_read',
+        'step': step,
+        'token': token,
+        'chapterId': _chapterId,
+        'mode': _settings.autoReadMode.name,
+        'pageTurnMode': _settings.pageTurnMode.name,
+        'speedLevel': _settings.autoReadSpeedLevel,
+        'speed': _settings.autoReadSpeed.round(),
+        'startOffset': startOffset?.toStringAsFixed(1),
+        'targetOffset': targetOffset?.toStringAsFixed(1),
+        'currentOffset': currentOffset?.toStringAsFixed(1),
+        'durationMs': duration?.inMilliseconds,
+        'reachedEnd': reachedEnd,
+        'reason': reason,
+        'error': error?.toString(),
+      },
+    );
   }
 
   void _startPagedAutoReadIfNeeded() {
@@ -851,10 +938,37 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
 
-    _syncActiveContinuousTextChapterFromScroll();
-    _maybePrefetchContinuousTextNeighbors();
+    if (_isProgrammaticAutoReadScrollActive) {
+      _logAutoReadContinuousSyncSkipped();
+    } else {
+      _syncActiveContinuousTextChapterFromScroll();
+      _maybePrefetchContinuousTextNeighbors();
+    }
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
+  }
+
+  void _logAutoReadContinuousSyncSkipped() {
+    if (_lastAutoReadContinuousSyncSkipLogToken == _autoReadTaskToken) {
+      return;
+    }
+    _lastAutoReadContinuousSyncSkipLogToken = _autoReadTaskToken;
+    final position =
+        _scrollController.hasClients ? _scrollController.position : null;
+    _logger.info(
+      'Reader auto read scroll trace',
+      context: <String, Object?>{
+        'chain': 'reader_auto_read',
+        'step': 'continuous_sync_skipped',
+        'token': _autoReadTaskToken,
+        'chapterId': _chapterId,
+        'mode': _settings.autoReadMode.name,
+        'pageTurnMode': _settings.pageTurnMode.name,
+        'scrollOffset': position?.pixels.toStringAsFixed(1),
+        'maxScrollExtent': position?.maxScrollExtent.toStringAsFixed(1),
+        'continuousChapterCount': _continuousTextChapters.length,
+      },
+    );
   }
 
   void _maybePrefetchContinuousTextNeighbors() {
@@ -862,7 +976,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         !_scrollController.hasClients ||
         _continuousTextChapters.isEmpty ||
         _isScrollEdgeAdvancingChapter ||
-        _isAutoReadAdvancingChapter) {
+        _isAutoReadAdvancingChapter ||
+        _isProgrammaticAutoReadScrollActive) {
       return;
     }
 
