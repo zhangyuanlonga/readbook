@@ -34,6 +34,7 @@ class ReaderContentLoadingPresenter {
     required String currentBookId,
     required String bookTitle,
     required String? detailUrl,
+    required String? executionContext,
   }) async {
     final contentResult = await contentProvider.loadChapterContent(
       sourceId: sourceId,
@@ -44,6 +45,7 @@ class ReaderContentLoadingPresenter {
       chapterId: chapterId,
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
+      executionContext: executionContext,
     );
 
     return ReaderChapterLoadSnapshot(

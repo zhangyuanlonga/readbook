@@ -8,6 +8,7 @@ enum PagedTransitionActionType {
   ignored,
   crossChapter,
   curl,
+  paperCurl,
   immediate,
   animated,
 }
@@ -128,6 +129,11 @@ class PagedTransitionController {
       case PagedTurnDecisionType.curl:
         return PagedTransitionAction(
           type: PagedTransitionActionType.curl,
+          targetPageIndex: turnDecision.targetPageIndex,
+        );
+      case PagedTurnDecisionType.paperCurl:
+        return PagedTransitionAction(
+          type: PagedTransitionActionType.paperCurl,
           targetPageIndex: turnDecision.targetPageIndex,
         );
       case PagedTurnDecisionType.immediate:

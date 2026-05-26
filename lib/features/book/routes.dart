@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router_transitions.dart';
+import '../../domain/entities/book.dart';
 import 'presentation/book_detail_page.dart';
 
 final List<RouteBase> bookRoutes = <RouteBase>[
@@ -18,6 +19,7 @@ final List<RouteBase> bookRoutes = <RouteBase>[
       final heroTag = state.uri.queryParameters['heroTag'];
       final titleHeroTag = state.uri.queryParameters['titleHeroTag'];
       final metaHeroTag = state.uri.queryParameters['metaHeroTag'];
+      final initialBook = state.extra is Book ? state.extra as Book : null;
 
       return buildFadeSlideTransitionPage(
         state: state,
@@ -27,6 +29,7 @@ final List<RouteBase> bookRoutes = <RouteBase>[
         beginOpacity: 0.78,
         child: BookDetailPage(
           bookId: bookId,
+          initialBook: initialBook,
           sourceId: sourceId,
           detailUrl: detailUrl,
           title: title,

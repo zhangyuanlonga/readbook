@@ -99,6 +99,13 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       duration: _ReaderPageState._kCurlAutoTurnDuration,
     );
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
+    _crossChapterSnapshotController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _crossChapterSnapshotController.addStatusListener(
+      _onCrossChapterSnapshotStatus,
+    );
     _scrollController.addListener(_onScrollChanged);
     _selectionNotifier.addListener(_handleSelectionNotifierChanged);
     if (_platformBridgeService.isVolumeKeyPagingSupported) {
@@ -148,8 +155,10 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _overlayControlsController.stop();
     _pagedTransitionController.stop();
     _curlAutoTurnController.stop();
+    _crossChapterSnapshotController.stop();
     _pagedTransition = PagedTransitionController.idleState;
     _curlTransition = const _CurlTransitionState();
+    _clearCrossChapterSnapshotTransition();
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
     _autoReadPagedTimer?.cancel();
@@ -179,6 +188,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _overlayControlsController.dispose();
     _pagedTransitionController.dispose();
     _curlAutoTurnController.dispose();
+    _crossChapterSnapshotController.dispose();
   }
 
   void _applyReaderImageCacheBudget() {

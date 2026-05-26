@@ -78,6 +78,7 @@ dependencies:
   just_audio: ^0.10.5
   circular_theme_reveal: ^1.0.2
   pdfrx: ^2.2.24
+  turnable_page: 1.0.1
 
 dev_dependencies:
   flutter_test:
@@ -102,6 +103,8 @@ dependency_overrides:
     path: third_party/plugins/flutter_charset_detector_web_stub
   pdf_text_extract:
     path: third_party/plugins/pdf_text_extract
+  turnable_page:
+    path: third_party/plugins/turnable_page
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

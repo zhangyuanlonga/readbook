@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../domain/entities/book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../book/application/book_detail_service.dart';
@@ -45,6 +46,7 @@ class ServerGatewayContentProvider extends ContentProvider {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -55,8 +57,13 @@ class ServerGatewayContentProvider extends ContentProvider {
       sourceId: sourceId,
       bookId: bookId,
       detailUrl: detailUrl,
+      tocUrl: initialBook?.tocUrl,
+      executionContext: initialBook?.executionContext,
+      infoHtml: initialBook?.infoHtml,
+      tocHtml: initialBook?.tocHtml,
       fallbackTitle: fallbackTitle,
       fallbackAuthor: fallbackAuthor,
+      coverUrl: initialBook?.coverUrl,
       refresh: forceRefresh,
     );
     if (!includeCatalog) {
@@ -65,6 +72,7 @@ class ServerGatewayContentProvider extends ContentProvider {
         chapters: const <Chapter>[],
         sourceName: detail.sourceName,
         tocFromCache: false,
+        executionContext: detail.executionContext,
         catalogAvailable: true,
         catalogLoaded: false,
         catalogComplete: false,
@@ -75,6 +83,7 @@ class ServerGatewayContentProvider extends ContentProvider {
       bookId: detail.detail.id,
       detailUrl: detail.detail.detailUrl,
       tocUrl: detail.detail.tocUrl,
+      executionContext: detail.executionContext,
       refresh: forceRefresh,
     );
     return BookDetailLoadResult(
@@ -82,6 +91,7 @@ class ServerGatewayContentProvider extends ContentProvider {
       chapters: toc.chapters,
       sourceName: detail.sourceName,
       tocFromCache: toc.cacheHit,
+      executionContext: toc.executionContext ?? detail.executionContext,
       catalogAvailable: true,
       catalogLoaded: true,
       catalogComplete: toc.isComplete,
@@ -99,6 +109,7 @@ class ServerGatewayContentProvider extends ContentProvider {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   }) async {
     await _ensureServerGatewayEnabled(ErrorStage.content);
     final content = await _gatewayService.loadContent(
@@ -108,9 +119,14 @@ class ServerGatewayContentProvider extends ContentProvider {
       chapterUrl: chapterUrl,
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
+      executionContext: executionContext,
     );
     final rawContent = content.content.trim();
-    final normalizedImages = _normalizeServerImageUrls(content.imageUrls);
+    final normalizedImages = _normalizeServerImageUrls(
+      content.imageUrls.isNotEmpty
+          ? content.imageUrls
+          : _extractImageUrlsFromServerContent(content.content),
+    );
     final normalizedContent =
         normalizedImages.isEmpty
             ? _cleaner.clean(rawContent)

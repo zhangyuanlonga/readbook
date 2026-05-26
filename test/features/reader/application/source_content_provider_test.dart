@@ -1,3 +1,4 @@
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
 import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
@@ -18,6 +19,7 @@ class _FakeBookDetailService extends BookDetailService {
   String? detailUrl;
   String? fallbackTitle;
   String? fallbackAuthor;
+  Book? initialBook;
   bool? forceRefresh;
   bool? includeCatalog;
 
@@ -26,6 +28,7 @@ class _FakeBookDetailService extends BookDetailService {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -34,6 +37,7 @@ class _FakeBookDetailService extends BookDetailService {
     this.sourceId = sourceId;
     this.bookId = bookId;
     this.detailUrl = detailUrl;
+    this.initialBook = initialBook;
     this.fallbackTitle = fallbackTitle;
     this.fallbackAuthor = fallbackAuthor;
     this.forceRefresh = forceRefresh;
@@ -63,6 +67,7 @@ class _FakeChapterContentService extends ChapterContentService {
   int? chapterIndex;
   String? chapterTitle;
   String? nextChapterUrl;
+  String? executionContext;
 
   @override
   Future<ChapterContentResult> load({
@@ -74,6 +79,7 @@ class _FakeChapterContentService extends ChapterContentService {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   }) async {
     this.sourceId = sourceId;
     this.chapterUrl = chapterUrl;
@@ -83,6 +89,7 @@ class _FakeChapterContentService extends ChapterContentService {
     this.chapterIndex = chapterIndex;
     this.chapterTitle = chapterTitle;
     this.nextChapterUrl = nextChapterUrl;
+    this.executionContext = executionContext;
     return result;
   }
 }
@@ -143,11 +150,20 @@ void main() {
       detailService: fakeDetailService,
       contentService: fakeContentService,
     );
+    const initialBook = Book(
+      id: 'book_1',
+      sourceId: 'source_a',
+      title: '示例书籍',
+      detailUrl: 'https://example.com/book/1',
+      tocUrl: 'https://example.com/book/1/toc',
+      executionContext: '{"sourceId":"source_a"}',
+    );
 
     final loadedDetail = await provider.loadDetail(
       sourceId: 'source_a',
       bookId: 'book_1',
       detailUrl: 'https://example.com/book/1',
+      initialBook: initialBook,
       fallbackTitle: '兜底标题',
       fallbackAuthor: '兜底作者',
       forceRefresh: true,
@@ -158,6 +174,7 @@ void main() {
     expect(fakeDetailService.sourceId, 'source_a');
     expect(fakeDetailService.bookId, 'book_1');
     expect(fakeDetailService.detailUrl, 'https://example.com/book/1');
+    expect(fakeDetailService.initialBook, same(initialBook));
     expect(fakeDetailService.fallbackTitle, '兜底标题');
     expect(fakeDetailService.fallbackAuthor, '兜底作者');
     expect(fakeDetailService.forceRefresh, isTrue);
@@ -172,6 +189,7 @@ void main() {
       chapterIndex: 0,
       chapterTitle: '第一章',
       nextChapterUrl: 'https://example.com/book/1/c2',
+      executionContext: '{"chapterUrl":"https://example.com/book/1/c1"}',
     );
 
     expect(loadedContent, same(contentResult));
@@ -183,6 +201,10 @@ void main() {
     expect(fakeContentService.chapterIndex, 0);
     expect(fakeContentService.chapterTitle, '第一章');
     expect(fakeContentService.nextChapterUrl, 'https://example.com/book/1/c2');
+    expect(
+      fakeContentService.executionContext,
+      '{"chapterUrl":"https://example.com/book/1/c1"}',
+    );
     expect(loadedContent.contentType, 'audio');
     expect(loadedContent.audioUrl, 'https://cdn.example/chapter-1.mp3');
   });

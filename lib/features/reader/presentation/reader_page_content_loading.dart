@@ -612,6 +612,11 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       currentBookId: _currentBookId,
       bookTitle: _bookTitle,
       detailUrl: _detailUrl,
+      executionContext: _executionContextForChapter(
+        chapterId: chapterId,
+        chapterUrl: chapterUrl,
+        chapterIndex: chapterIndex,
+      ),
       chapterId: chapterId,
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
@@ -621,6 +626,33 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       result: snapshot.result,
       isCached: snapshot.isCached,
     );
+  }
+
+  String? _executionContextForChapter({
+    required String chapterId,
+    required String chapterUrl,
+    required int? chapterIndex,
+  }) {
+    Chapter? chapter;
+    if (chapterIndex != null &&
+        chapterIndex >= 0 &&
+        chapterIndex < _chapters.length) {
+      chapter = _chapters[chapterIndex];
+    } else {
+      final normalizedId = chapterId.trim();
+      final normalizedUrl = chapterUrl.trim();
+      for (final item in _chapters) {
+        if ((normalizedId.isNotEmpty && item.id.trim() == normalizedId) ||
+            (normalizedUrl.isNotEmpty &&
+                item.chapterUrl.trim() == normalizedUrl)) {
+          chapter = item;
+          break;
+        }
+      }
+    }
+    final normalized =
+        (chapter?.executionContext ?? _chapterExecutionContext)?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   Future<void> _applyLoadedChapterSnapshotFlow({
@@ -1156,6 +1188,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           chapterIndex: index,
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
+          executionContext:
+              chapter.executionContext ?? _chapterExecutionContext,
         );
         _preloadFailureMemory.recordSuccess(preloadIdentity);
         if (_canWarmNeighborPaginationCache() &&

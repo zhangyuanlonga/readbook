@@ -762,6 +762,7 @@ class _ServerSearchItem {
     required this.title,
     required this.detailUrl,
     required this.sourceHitCount,
+    this.tocUrl,
     this.executionContext,
     this.author,
     this.intro,
@@ -771,6 +772,8 @@ class _ServerSearchItem {
     this.category,
     this.tags = const <String>[],
     this.updateTime,
+    this.infoHtml,
+    this.tocHtml,
   });
 
   final String bookId;
@@ -779,6 +782,7 @@ class _ServerSearchItem {
   final String title;
   final String detailUrl;
   final int sourceHitCount;
+  final String? tocUrl;
   final String? executionContext;
   final String? author;
   final String? intro;
@@ -788,6 +792,8 @@ class _ServerSearchItem {
   final String? category;
   final List<String> tags;
   final String? updateTime;
+  final String? infoHtml;
+  final String? tocHtml;
 
   factory _ServerSearchItem.fromJson(Object? value) {
     if (value is! Map) {
@@ -801,6 +807,7 @@ class _ServerSearchItem {
       title: _requiredString(map, 'title'),
       detailUrl: _requiredString(map, 'detailUrl'),
       sourceHitCount: _intOrDefault(map['sourceHitCount'], 1),
+      tocUrl: _optionalString(map['tocUrl']),
       executionContext: _optionalString(map['executionContext']),
       author: _optionalString(map['author']),
       intro: _optionalString(map['intro']),
@@ -810,6 +817,8 @@ class _ServerSearchItem {
       category: _optionalString(map['category']),
       tags: _stringList(map['tags']),
       updateTime: _optionalString(map['updateTime']),
+      infoHtml: _optionalString(map['infoHtml']),
+      tocHtml: _optionalString(map['tocHtml']),
     );
   }
 
@@ -819,6 +828,7 @@ class _ServerSearchItem {
       sourceId: toServerGatewaySourceId(sourceId),
       title: title,
       detailUrl: detailUrl,
+      tocUrl: tocUrl,
       author: author,
       intro: intro,
       coverUrl: coverUrl,
@@ -827,6 +837,8 @@ class _ServerSearchItem {
       category: category,
       tags: tags,
       updateTime: updateTime,
+      infoHtml: infoHtml,
+      tocHtml: tocHtml,
       executionContext: executionContext,
     );
   }

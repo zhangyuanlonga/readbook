@@ -37,6 +37,10 @@ class ServerBookGatewayService {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    String? tocUrl,
+    String? executionContext,
+    String? infoHtml,
+    String? tocHtml,
     String? fallbackTitle,
     String? fallbackAuthor,
     String? coverUrl,
@@ -51,6 +55,11 @@ class ServerBookGatewayService {
           'bookId': bookId,
           'sourceId': fromServerGatewaySourceId(gatewaySourceId),
           'detailUrl': detailUrl,
+          if ((tocUrl ?? '').trim().isNotEmpty) 'tocUrl': tocUrl!.trim(),
+          if ((executionContext ?? '').trim().isNotEmpty)
+            'executionContext': executionContext!.trim(),
+          if ((infoHtml ?? '').trim().isNotEmpty) 'infoHtml': infoHtml!.trim(),
+          if ((tocHtml ?? '').trim().isNotEmpty) 'tocHtml': tocHtml!.trim(),
         },
         'hints': {
           'title': fallbackTitle,
@@ -81,6 +90,7 @@ class ServerBookGatewayService {
     required String bookId,
     required String detailUrl,
     String? tocUrl,
+    String? executionContext,
     bool refresh = false,
   }) {
     final gatewaySourceId = toServerGatewaySourceId(sourceId);
@@ -95,6 +105,8 @@ class ServerBookGatewayService {
           'sourceId': fromServerGatewaySourceId(gatewaySourceId),
           'detailUrl': detailUrl,
           if (effectiveTocUrl.isNotEmpty) 'tocUrl': effectiveTocUrl,
+          if ((executionContext ?? '').trim().isNotEmpty)
+            'executionContext': executionContext!.trim(),
         },
         'options': {'refresh': refresh, 'timeoutMs': 60000},
       },
@@ -115,6 +127,7 @@ class ServerBookGatewayService {
     required String bookId,
     required String detailUrl,
     String? tocUrl,
+    String? executionContext,
     bool refresh = false,
   }) async {
     try {
@@ -123,6 +136,7 @@ class ServerBookGatewayService {
         bookId: bookId,
         detailUrl: detailUrl,
         tocUrl: tocUrl,
+        executionContext: executionContext,
         refresh: refresh,
       )) {
         if (result.chapters.isNotEmpty) {
@@ -137,6 +151,7 @@ class ServerBookGatewayService {
       bookId: bookId,
       detailUrl: detailUrl,
       tocUrl: tocUrl,
+      executionContext: executionContext,
       refresh: refresh,
     );
   }
@@ -146,6 +161,7 @@ class ServerBookGatewayService {
     required String bookId,
     required String detailUrl,
     String? tocUrl,
+    String? executionContext,
     bool refresh = false,
   }) async {
     ServerGatewayTocResult? latest;
@@ -155,6 +171,7 @@ class ServerBookGatewayService {
         bookId: bookId,
         detailUrl: detailUrl,
         tocUrl: tocUrl,
+        executionContext: executionContext,
         refresh: refresh,
       )) {
         if (result.chapters.isNotEmpty) {
@@ -189,6 +206,7 @@ class ServerBookGatewayService {
       bookId: bookId,
       detailUrl: detailUrl,
       tocUrl: tocUrl,
+      executionContext: executionContext,
       refresh: refresh,
     );
   }
@@ -198,6 +216,7 @@ class ServerBookGatewayService {
     required String bookId,
     required String detailUrl,
     String? tocUrl,
+    String? executionContext,
     bool refresh = false,
   }) async* {
     final gatewaySourceId = toServerGatewaySourceId(sourceId);
@@ -210,6 +229,8 @@ class ServerBookGatewayService {
         'sourceId': fromServerGatewaySourceId(gatewaySourceId),
         'detailUrl': detailUrl,
         if (effectiveTocUrl.isNotEmpty) 'tocUrl': effectiveTocUrl,
+        if ((executionContext ?? '').trim().isNotEmpty)
+          'executionContext': executionContext!.trim(),
         'refresh': refresh ? 'true' : 'false',
         'timeoutMs': '60000',
       },
@@ -277,6 +298,7 @@ class ServerBookGatewayService {
     required String chapterUrl,
     int? chapterIndex,
     String? chapterTitle,
+    String? executionContext,
     bool refresh = false,
   }) {
     final gatewaySourceId = toServerGatewaySourceId(sourceId);
@@ -288,12 +310,16 @@ class ServerBookGatewayService {
           'bookId': bookId,
           'sourceId': fromServerGatewaySourceId(gatewaySourceId),
           'detailUrl': detailUrl,
+          if ((executionContext ?? '').trim().isNotEmpty)
+            'executionContext': executionContext!.trim(),
         },
         'chapterRef': {
           'chapterUrl': chapterUrl,
           if (chapterIndex != null) 'index': chapterIndex,
           if ((chapterTitle ?? '').trim().isNotEmpty)
             'title': chapterTitle!.trim(),
+          if ((executionContext ?? '').trim().isNotEmpty)
+            'executionContext': executionContext!.trim(),
         },
         'options': {
           'refresh': refresh,

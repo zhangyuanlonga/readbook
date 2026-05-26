@@ -46,7 +46,15 @@ enum ReaderFontSource { system, builtin, custom }
 
 enum ReaderSystemFontPreset { defaultSans, serif, monospace }
 
-enum ReaderPageAnimationStyle { curl, fade, cover, translate, vertical, none }
+enum ReaderPageAnimationStyle {
+  curl,
+  paperCurl,
+  fade,
+  cover,
+  translate,
+  vertical,
+  none,
+}
 
 enum ReaderMangaReadMode { continuous, paged, horizontal }
 
@@ -127,7 +135,7 @@ class ReaderSettings {
     this.bodyTextShadowBlurRadius = 0,
     this.bodyTextShadowOffsetDx = 0,
     this.bodyTextShadowOffsetDy = 0,
-    this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
+    this.pageAnimationStyle = ReaderPageAnimationStyle.paperCurl,
     this.backgroundImageBase64,
     this.bodyTextColorValue,
     this.bodyTextDecorationStyle = ReaderBodyTextDecorationStyle.none,
@@ -833,7 +841,7 @@ class ReaderSettings {
     final animationName = json['pageAnimationStyle']?.toString();
     final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
-      orElse: () => ReaderPageAnimationStyle.curl,
+      orElse: () => ReaderPageAnimationStyle.paperCurl,
     );
 
     final mangaReadModeName = json['mangaReadMode']?.toString();

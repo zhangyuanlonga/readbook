@@ -338,6 +338,65 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         }
 
         final pageCount = _currentPagedPageCount;
+        if (pageCount <= 0) {
+          return Column(
+            children: [
+              if (_showsPagedPinnedChapterHeaderFor(_currentViewportKind))
+                _buildPinnedChapterHeader(colors),
+              if (layoutMetrics.pagedHeaderReserve > 0)
+                _buildPagedHeaderSection(colors, layoutMetrics),
+              Expanded(
+                child: Padding(
+                  padding: layoutMetrics.effectivePagePadding,
+                  child: ReaderBodyRegion(
+                    model: const ReaderBodyRegionModel.content(),
+                    palette: ReaderBodyRegionPalette(
+                      textColor: colors.text,
+                      metaColor: colors.meta,
+                      overlayColor: colors.overlay,
+                      dividerColor: colors.divider,
+                    ),
+                    child: const ReaderViewportLoadingPlaceholder(),
+                  ),
+                ),
+              ),
+              _buildPagedFooterSection(
+                colors: colors,
+                index: 0,
+                total: 1,
+                layoutMetrics: layoutMetrics,
+              ),
+            ],
+          );
+        }
+
+        if (_usesPaperCurlAnimation) {
+          return ReaderPaperCurlPagedView(
+            key: _paperCurlViewKey,
+            chapterId: _chapterId,
+            pageCount: pageCount,
+            currentPageIndex: _currentPageIndex,
+            onTurnStarted: (_) {
+              _markReaderInteractionBusy(_ReaderInteractionState.animating);
+              _recordFirstPageTurnCompleted(mode: 'paper_curl');
+            },
+            onTurnRejected: (_) {
+              _scheduleReaderInteractionSettle();
+            },
+            onPageCommitted: _commitPaperCurlPage,
+            pageBuilder: (context, pageIndex) {
+              return _buildPagedPageContainer(
+                colors: colors,
+                pageIndex: pageIndex,
+                total: pageCount,
+                pageSize: constraints.biggest,
+                pagedViewModel: pagedViewModel,
+                includeBackgroundDecoration: true,
+              );
+            },
+          );
+        }
+
         final motion = _pagedTextRenderer.motionSpecForStyle(
           _currentPagedAnimationStyle(),
         );

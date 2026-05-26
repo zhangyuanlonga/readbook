@@ -1,5 +1,6 @@
 import '../../bookshelf/application/local_book_import_service.dart';
 import '../../book/application/book_detail_service.dart';
+import '../../../domain/entities/book.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 
@@ -41,6 +42,7 @@ class SourceContentProvider extends ContentProvider {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -50,6 +52,7 @@ class SourceContentProvider extends ContentProvider {
       sourceId: sourceId,
       bookId: bookId,
       detailUrl: detailUrl,
+      initialBook: initialBook,
       fallbackTitle: fallbackTitle,
       fallbackAuthor: fallbackAuthor,
       forceRefresh: forceRefresh,
@@ -68,6 +71,7 @@ class SourceContentProvider extends ContentProvider {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   }) {
     return _contentService.load(
       sourceId: sourceId,
@@ -78,6 +82,7 @@ class SourceContentProvider extends ContentProvider {
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
       nextChapterUrl: nextChapterUrl,
+      executionContext: executionContext,
     );
   }
 }

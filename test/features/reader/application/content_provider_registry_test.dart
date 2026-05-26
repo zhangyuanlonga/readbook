@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/chapter_content_service.dart';
@@ -28,6 +29,7 @@ class _FakeContentProvider extends ContentProvider {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -47,6 +49,7 @@ class _FakeContentProvider extends ContentProvider {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   }) {
     throw UnimplementedError();
   }

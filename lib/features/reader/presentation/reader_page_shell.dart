@@ -543,18 +543,6 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
-    final leftGuard = max(22.0, gestureInsets.left + size.width * 0.02);
-    final rightGuard = max(22.0, gestureInsets.right + size.width * 0.02);
-    final topGuard = max(0.0, gestureInsets.top);
-    final bottomGuard = max(0.0, gestureInsets.bottom);
-    final tapZoneRect = _resolveTapZoneRect(
-      size: size,
-      leftGuard: leftGuard,
-      rightGuard: rightGuard,
-      topGuard: topGuard,
-      bottomGuard: bottomGuard,
-    );
-
     if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused) {
       unawaited(_continueAutoReadAfterChapterPause());
       return;
@@ -580,53 +568,37 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
-    if (!tapZoneRect.contains(localPosition)) {
+    final hit = _resolveTapZoneHit(
+      localPosition: localPosition,
+      size: size,
+      gestureInsets: gestureInsets,
+    );
+    if (hit == null) {
       return;
     }
-    final action = _resolveTapZoneAction(
-      localPosition: localPosition,
-      tapZoneRect: tapZoneRect,
-    );
-    _performTapZoneAction(action);
+    _performTapZoneAction(hit.action);
   }
 
-  Rect _resolveTapZoneRect({
+  ReaderTapZoneHit? _resolveTapZoneHit({
+    required Offset localPosition,
     required Size size,
-    required double leftGuard,
-    required double rightGuard,
-    required double topGuard,
-    required double bottomGuard,
+    required EdgeInsets gestureInsets,
   }) {
     final surfaceMetrics = _resolveReaderSurfaceMetrics(
       context,
       viewportSize: size,
       viewportKind: _currentViewportKind,
     );
-    final contentRect = surfaceMetrics.contentRect;
-    final left = max(leftGuard, contentRect.left);
-    final top = max(topGuard, contentRect.top);
-    final right = min(size.width - rightGuard, contentRect.right);
-    final bottom = min(size.height - bottomGuard, contentRect.bottom);
-    if (right <= left || bottom <= top) {
-      return Rect.zero;
-    }
-    return Rect.fromLTRB(left, top, right, bottom);
-  }
-
-  ReaderTapZoneAction _resolveTapZoneAction({
-    required Offset localPosition,
-    required Rect tapZoneRect,
-  }) {
-    final usableWidth = max(1.0, tapZoneRect.width);
-    final usableHeight = max(1.0, tapZoneRect.height);
-    final normalizedDx = ((localPosition.dx - tapZoneRect.left) / usableWidth)
-        .clamp(0.0, 0.999999);
-    final normalizedDy = ((localPosition.dy - tapZoneRect.top) / usableHeight)
-        .clamp(0.0, 0.999999);
-    final column = (normalizedDx * 3).floor().clamp(0, 2);
-    final row = (normalizedDy * 3).floor().clamp(0, 2);
-    final index = row * 3 + column;
-    return _settings.tapZoneActions[index];
+    final tapZoneRect = _tapZoneResolver.resolveRect(
+      viewportSize: size,
+      contentRect: surfaceMetrics.contentRect,
+      gestureInsets: gestureInsets,
+    );
+    return _tapZoneResolver.resolveHit(
+      localPosition: localPosition,
+      rect: tapZoneRect,
+      actions: _settings.tapZoneActions,
+    );
   }
 
   bool get _supportsFloatingToolbarOnLongPress {

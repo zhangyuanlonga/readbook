@@ -17,6 +17,7 @@ class PagedAnimationRendererRegistry {
         const VerticalPagedAnimationRenderer(),
       ReaderPageAnimationStyle.fade => const FadePagedAnimationRenderer(),
       ReaderPageAnimationStyle.curl ||
+      ReaderPageAnimationStyle.paperCurl ||
       ReaderPageAnimationStyle.none => const FadePagedAnimationRenderer(),
     };
   }

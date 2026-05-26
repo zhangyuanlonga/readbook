@@ -1,4 +1,5 @@
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/book.dart';
 import '../../book/application/book_detail_service.dart';
 import 'chapter_content_service.dart';
 
@@ -49,6 +50,7 @@ abstract class ContentProvider {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -65,6 +67,7 @@ abstract class ContentProvider {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   });
 }
 

@@ -1171,6 +1171,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
 
                     Widget buildPageAnimationSelector() {
                       const animationStyles = <ReaderPageAnimationStyle>[
+                        ReaderPageAnimationStyle.paperCurl,
                         ReaderPageAnimationStyle.curl,
                         ReaderPageAnimationStyle.cover,
                         ReaderPageAnimationStyle.translate,

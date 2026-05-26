@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
-import 'dart:ui';
+import 'dart:ui' show ImageFilter, lerpDouble;
+import 'dart:ui' as ui;
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -144,6 +145,7 @@ import 'reader_content_loading_presenter.dart';
 import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'reader_pdf_view.dart';
+import 'reader_paper_curl_paged_view.dart';
 import 'reader_page_lifecycle_delegate.dart';
 import 'reader_selection_state.dart';
 import 'reader_shell.dart';
@@ -152,8 +154,10 @@ import 'reader_settings_presenter.dart';
 import 'reader_text_offset_mapper.dart' as text_offset_mapper;
 import 'reader_text_block_presentation.dart';
 import 'reader_paged_viewport_support.dart';
+import 'reader_cross_chapter_snapshot_overlay.dart';
 import 'reader_presentation_resolver.dart';
 import 'reader_runtime_controller.dart';
+import 'reader_tap_zone_resolver.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_viewport_builder.dart';
 
@@ -342,10 +346,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final FocusNode _readerFocusNode = FocusNode(debugLabel: 'ReaderPage');
   final Set<String> _precachedInlineImageUrls = <String>{};
   final GlobalKey _readerBodyKey = GlobalKey();
+  final GlobalKey _readerContentSnapshotKey = GlobalKey();
+  final GlobalKey<ReaderPaperCurlPagedViewState> _paperCurlViewKey =
+      GlobalKey<ReaderPaperCurlPagedViewState>();
   final GlobalKey<SelectionAreaState> _selectionAreaKey =
       GlobalKey<SelectionAreaState>();
   final SelectionListenerNotifier _selectionNotifier =
       SelectionListenerNotifier();
+  final ReaderTapZoneResolver _tapZoneResolver = const ReaderTapZoneResolver();
   late final BookmarkRepository _bookmarkRepository;
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   late final LocalBookRepository _localBookRepository;
@@ -502,6 +510,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double? _measuredPinnedChapterHeaderWidth;
   PagedTransitionState _pagedTransition = PagedTransitionController.idleState;
   _CurlTransitionState _curlTransition = const _CurlTransitionState();
+  _CrossChapterSnapshotTransitionState _crossChapterSnapshotTransition =
+      const _CrossChapterSnapshotTransitionState();
+  int _crossChapterSnapshotGeneration = 0;
   Stopwatch? _firstPageTurnStopwatch;
   bool _hasLoggedFirstPageTurn = false;
   bool _isSystemUiVisible = true;
@@ -509,6 +520,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final AnimationController _overlayControlsController;
   late final AnimationController _pagedTransitionController;
   late final AnimationController _curlAutoTurnController;
+  late final AnimationController _crossChapterSnapshotController;
   ReaderReadingRecordSession? _activeReadingRecordSession;
   String? _catalogSearchCacheFingerprint;
   Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
@@ -1192,7 +1204,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isSwipePaginationEnabled() {
     return _currentReaderMode.viewportKind ==
             ReaderModeViewportKind.textPaged &&
-        _currentReaderMode.swipeTurnEnabled;
+        _currentReaderMode.swipeTurnEnabled &&
+        !_usesPaperCurlAnimation;
   }
 
   bool get _isMixedMediaTextDocument =>
@@ -1663,7 +1676,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildReaderContent(_ReaderThemeColors colors) {
     final hasRenderableContent =
         _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty;
-    return AppAnimatedSwitcher(
+    final content = AppAnimatedSwitcher(
       duration: AppMotion.fast,
       layoutBuilder: (currentChild, previousChildren) {
         return currentChild ?? const SizedBox.shrink();
@@ -1674,6 +1687,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ),
         child: _composeReaderContent(colors),
       ),
+    );
+    final transition = _crossChapterSnapshotTransition;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(key: _readerContentSnapshotKey, child: content),
+        if (transition.isActive)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ReaderCrossChapterSnapshotOverlay(
+                key: ValueKey<int>(transition.generation),
+                fromImage: transition.fromImage!,
+                toImage: transition.toImage,
+                style: transition.style,
+                direction: transition.direction,
+                animation: _crossChapterSnapshotController,
+                generation: transition.generation,
+                curlColors: CurlRendererColors(
+                  backgroundColor: colors.background,
+                  dividerColor: colors.divider,
+                  overlayColor: colors.overlay,
+                ),
+                onPaperCurlCompleted: _completeCrossChapterSnapshotAnimation,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -2455,6 +2495,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ReaderPageAnimationStyle.none;
   }
 
+  bool get _usesPaperCurlAnimation =>
+      _currentViewportKind == ReaderModeViewportKind.textPaged &&
+      _currentPagedAnimationStyle() == ReaderPageAnimationStyle.paperCurl;
+
   bool _currentChapterHasInlineImageParagraphs() {
     return _paragraphs.any(_isInlineImageParagraph);
   }
@@ -2693,12 +2737,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
     if (direction < 0 && currentIndex <= 0) {
-      await _jumpToAdjacentReadableChapter(forward: false);
+      await _turnCrossChapterWithSnapshot(
+        forward: false,
+        style: ReaderPageAnimationStyle.curl,
+        completionMode: 'curl_cross_chapter',
+      );
       return;
     }
 
     if (direction > 0 && currentIndex >= pageCount - 1) {
-      await _jumpToAdjacentReadableChapter(forward: true);
+      await _turnCrossChapterWithSnapshot(
+        forward: true,
+        style: ReaderPageAnimationStyle.curl,
+        completionMode: 'curl_cross_chapter',
+      );
       return;
     }
 
@@ -5549,6 +5601,45 @@ class _CurlTransitionState {
       previewProgress: previewProgress ?? this.previewProgress,
       commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
       isCrossChapter: isCrossChapter ?? this.isCrossChapter,
+    );
+  }
+}
+
+class _CrossChapterSnapshotTransitionState {
+  const _CrossChapterSnapshotTransitionState({
+    this.fromImage,
+    this.toImage,
+    this.style = ReaderPageAnimationStyle.none,
+    this.direction = 1,
+    this.generation = 0,
+    this.completionMode = 'cross_chapter',
+  });
+
+  final ui.Image? fromImage;
+  final ui.Image? toImage;
+  final ReaderPageAnimationStyle style;
+  final int direction;
+  final int generation;
+  final String completionMode;
+
+  bool get isActive => fromImage != null;
+  bool get hasTarget => fromImage != null && toImage != null;
+
+  _CrossChapterSnapshotTransitionState copyWith({
+    ui.Image? fromImage,
+    ui.Image? toImage,
+    ReaderPageAnimationStyle? style,
+    int? direction,
+    int? generation,
+    String? completionMode,
+  }) {
+    return _CrossChapterSnapshotTransitionState(
+      fromImage: fromImage ?? this.fromImage,
+      toImage: toImage ?? this.toImage,
+      style: style ?? this.style,
+      direction: direction ?? this.direction,
+      generation: generation ?? this.generation,
+      completionMode: completionMode ?? this.completionMode,
     );
   }
 }

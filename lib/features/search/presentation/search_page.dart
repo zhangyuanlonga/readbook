@@ -981,7 +981,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
     _pauseActiveSearchIfNeeded();
     try {
-      await context.push(route);
+      await context.push(route, extra: book);
     } finally {
       if (mounted) {
         _resumeActiveSearchIfNeeded();

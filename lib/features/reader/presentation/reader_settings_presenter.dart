@@ -82,6 +82,7 @@ class ReaderSettingsPresenter {
   String pageAnimationLabel(ReaderPageAnimationStyle style) {
     return switch (style) {
       ReaderPageAnimationStyle.curl => '仿真',
+      ReaderPageAnimationStyle.paperCurl => '纸页卷动',
       ReaderPageAnimationStyle.fade => '淡入淡出',
       ReaderPageAnimationStyle.cover => '覆盖',
       ReaderPageAnimationStyle.translate => '滑动',

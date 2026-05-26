@@ -236,7 +236,7 @@ class ReaderPreferencesService {
     final animationName = prefs.getString(_pageAnimationStyleKey);
     final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
-      orElse: () => ReaderPageAnimationStyle.curl,
+      orElse: () => ReaderPageAnimationStyle.paperCurl,
     );
     final bodyTextDecorationStyleName = prefs.getString(
       _bodyTextDecorationStyleKey,

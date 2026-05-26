@@ -34,7 +34,13 @@ class ReaderRestorePlan {
   final bool shouldDefer;
 }
 
-enum PagedTurnDecisionType { crossChapter, immediate, animated, curl }
+enum PagedTurnDecisionType {
+  crossChapter,
+  immediate,
+  animated,
+  curl,
+  paperCurl,
+}
 
 class PagedAnimationMotionSpec {
   const PagedAnimationMotionSpec({
@@ -149,7 +155,9 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
     if (document != null &&
         document.hasImageBlocks &&
         !document.isPureImageDocument &&
-        settings.pageAnimationStyle == ReaderPageAnimationStyle.curl) {
+        (settings.pageAnimationStyle == ReaderPageAnimationStyle.curl ||
+            settings.pageAnimationStyle ==
+                ReaderPageAnimationStyle.paperCurl)) {
       return ReaderPageAnimationStyle.none;
     }
     return settings.pageAnimationStyle;
@@ -159,6 +167,11 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
     return switch (style) {
       ReaderPageAnimationStyle.curl => const PagedAnimationMotionSpec(
         duration: Duration(milliseconds: 700),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInOutCubic,
+      ),
+      ReaderPageAnimationStyle.paperCurl => const PagedAnimationMotionSpec(
+        duration: Duration(milliseconds: 1200),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInOutCubic,
       ),
@@ -217,6 +230,13 @@ class PagedTextReaderRenderer extends TextReaderRenderer {
       );
     }
 
+    if (animationStyle == ReaderPageAnimationStyle.paperCurl) {
+      return PagedTurnDecision(
+        type: PagedTurnDecisionType.paperCurl,
+        targetPageIndex: targetPageIndex,
+        animationStyle: animationStyle,
+      );
+    }
     if (animationStyle == ReaderPageAnimationStyle.curl) {
       return PagedTurnDecision(
         type: PagedTurnDecisionType.curl,

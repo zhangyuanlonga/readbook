@@ -2,6 +2,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/storage/managed_file_path_resolver.dart';
+import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_chapter.dart';
@@ -90,6 +91,7 @@ class LocalContentProvider extends ContentProvider {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -159,6 +161,7 @@ class LocalContentProvider extends ContentProvider {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   }) async {
     _ensureLocalSource(sourceId, stage: ErrorStage.content);
 

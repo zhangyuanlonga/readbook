@@ -4,6 +4,7 @@ class Book {
     required this.sourceId,
     required this.title,
     required this.detailUrl,
+    this.tocUrl,
     this.author,
     this.intro,
     this.coverUrl,
@@ -12,6 +13,8 @@ class Book {
     this.category,
     this.tags = const <String>[],
     this.updateTime,
+    this.infoHtml,
+    this.tocHtml,
     this.executionContext,
   });
 
@@ -19,6 +22,7 @@ class Book {
   final String sourceId;
   final String title;
   final String detailUrl;
+  final String? tocUrl;
   final String? author;
   final String? intro;
   final String? coverUrl;
@@ -27,6 +31,8 @@ class Book {
   final String? category;
   final List<String> tags;
   final String? updateTime;
+  final String? infoHtml;
+  final String? tocHtml;
   final String? executionContext;
 
   Book copyWith({
@@ -34,6 +40,7 @@ class Book {
     String? sourceId,
     String? title,
     String? detailUrl,
+    Object? tocUrl = _sentinel,
     String? author,
     bool clearAuthor = false,
     String? intro,
@@ -49,6 +56,8 @@ class Book {
     List<String>? tags,
     String? updateTime,
     bool clearUpdateTime = false,
+    Object? infoHtml = _sentinel,
+    Object? tocHtml = _sentinel,
     String? executionContext,
     bool clearExecutionContext = false,
   }) {
@@ -57,6 +66,7 @@ class Book {
       sourceId: sourceId ?? this.sourceId,
       title: title ?? this.title,
       detailUrl: detailUrl ?? this.detailUrl,
+      tocUrl: identical(tocUrl, _sentinel) ? this.tocUrl : tocUrl as String?,
       author: clearAuthor ? null : (author ?? this.author),
       intro: clearIntro ? null : (intro ?? this.intro),
       coverUrl: clearCoverUrl ? null : (coverUrl ?? this.coverUrl),
@@ -66,6 +76,10 @@ class Book {
       category: clearCategory ? null : (category ?? this.category),
       tags: tags ?? this.tags,
       updateTime: clearUpdateTime ? null : (updateTime ?? this.updateTime),
+      infoHtml:
+          identical(infoHtml, _sentinel) ? this.infoHtml : infoHtml as String?,
+      tocHtml:
+          identical(tocHtml, _sentinel) ? this.tocHtml : tocHtml as String?,
       executionContext:
           clearExecutionContext
               ? null
@@ -79,6 +93,7 @@ class Book {
       'sourceId': sourceId,
       'title': title,
       'detailUrl': detailUrl,
+      'tocUrl': tocUrl,
       'author': author,
       'intro': intro,
       'coverUrl': coverUrl,
@@ -87,6 +102,8 @@ class Book {
       'category': category,
       'tags': tags,
       'updateTime': updateTime,
+      'infoHtml': infoHtml,
+      'tocHtml': tocHtml,
       'executionContext': executionContext,
     };
   }
@@ -97,6 +114,7 @@ class Book {
       sourceId: _requiredString(json, 'sourceId'),
       title: _requiredString(json, 'title'),
       detailUrl: _requiredString(json, 'detailUrl'),
+      tocUrl: _optionalString(json['tocUrl']),
       author: _optionalString(json['author']),
       intro: _optionalString(json['intro']),
       coverUrl: _optionalString(json['coverUrl']),
@@ -105,9 +123,13 @@ class Book {
       category: _optionalString(json['category']),
       tags: _stringList(json['tags']),
       updateTime: _optionalString(json['updateTime']),
+      infoHtml: _optionalString(json['infoHtml']),
+      tocHtml: _optionalString(json['tocHtml']),
       executionContext: _optionalString(json['executionContext']),
     );
   }
+
+  static const Object _sentinel = Object();
 
   static String _requiredString(Map<String, dynamic> json, String key) {
     final value = json[key]?.toString().trim() ?? '';

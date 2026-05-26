@@ -73,6 +73,7 @@ extension on _BookDetailPageState {
         sourceId: _activeSourceId!,
         bookId: _activeBookId,
         detailUrl: _activeDetailUrl!,
+        initialBook: widget.initialBook,
         fallbackTitle: _displayTitle ?? widget.title,
         includeCatalog: true,
       );

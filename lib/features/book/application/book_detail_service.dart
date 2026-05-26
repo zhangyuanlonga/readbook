@@ -4,6 +4,7 @@ import '../../../core/session/session_cancellation.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../reader/application/removed_script_source_guard.dart';
@@ -156,6 +157,7 @@ class BookDetailService {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     bool forceRefresh = false,
@@ -196,6 +198,7 @@ class BookDetailService {
         sourceId: normalizedSourceId,
         bookId: normalizedBookId,
         detailUrl: normalizedDetailUrl,
+        initialBook: initialBook,
         fallbackTitle: normalizedFallbackTitle,
         fallbackAuthor: normalizedFallbackAuthor,
         forceRefresh: forceRefresh,
@@ -219,6 +222,7 @@ class BookDetailService {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    Book? initialBook,
     String? fallbackTitle,
     String? fallbackAuthor,
     SessionCancellationHandle? cancellationHandle,
@@ -255,6 +259,7 @@ class BookDetailService {
         sourceId: normalizedSourceId,
         bookId: normalizedBookId,
         detailUrl: normalizedDetailUrl,
+        initialBook: initialBook,
         fallbackTitle: normalizedFallbackTitle,
         fallbackAuthor: normalizedFallbackAuthor,
         forceRefresh: true,
@@ -278,6 +283,7 @@ class BookDetailService {
     required String sourceId,
     required String bookId,
     required String detailUrl,
+    required Book? initialBook,
     required String? fallbackTitle,
     required String? fallbackAuthor,
     required bool forceRefresh,
@@ -288,8 +294,13 @@ class BookDetailService {
       sourceId: sourceId,
       bookId: bookId,
       detailUrl: detailUrl,
+      tocUrl: initialBook?.tocUrl,
+      executionContext: initialBook?.executionContext,
+      infoHtml: initialBook?.infoHtml,
+      tocHtml: initialBook?.tocHtml,
       fallbackTitle: fallbackTitle,
       fallbackAuthor: fallbackAuthor,
+      coverUrl: initialBook?.coverUrl,
       refresh: forceRefresh,
     );
     _sourceHealthService.markDetailSuccess(
@@ -315,6 +326,7 @@ class BookDetailService {
         bookId: detail.detail.id,
         detailUrl: detail.detail.detailUrl,
         tocUrl: detail.detail.tocUrl,
+        executionContext: detail.executionContext,
         refresh: forceRefresh,
       );
       _sourceHealthService.markChaptersSuccess(sourceId: sourceId);

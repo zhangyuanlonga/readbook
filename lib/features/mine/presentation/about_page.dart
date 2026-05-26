@@ -396,11 +396,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final entries = <({
-      IconData icon,
-      String title,
-      VoidCallback onTap,
-    })>[
+    final entries = <({IconData icon, String title, VoidCallback onTap})>[
       if (visibilityState.isVisible(MinePageItemId.feedback))
         (
           icon: Icons.rate_review_outlined,
@@ -435,7 +431,11 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.support_agent_rounded, size: 19, color: colorScheme.primary),
+                Icon(
+                  Icons.support_agent_rounded,
+                  size: 19,
+                  color: colorScheme.primary,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   '支持',

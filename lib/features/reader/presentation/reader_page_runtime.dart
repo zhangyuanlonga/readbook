@@ -1192,6 +1192,12 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
 
     final safeDirection = direction >= 0 ? 1 : -1;
+    if (_usesPaperCurlAnimation) {
+      _markFirstPageTurnRequested();
+      await _turnPaperCurlPage(safeDirection, pageCount);
+      return;
+    }
+
     final action = _pagedTransitionLogic.planTurn(
       direction: safeDirection,
       currentPageIndex: _currentPageIndex,
@@ -1206,17 +1212,25 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         return;
       case PagedTransitionActionType.crossChapter:
         _markFirstPageTurnRequested();
-        await _playCrossChapterPagedTurnAnimation(action);
-        final turned = await _jumpToAdjacentReadableChapter(
+        final style =
+            action.transitionState?.style ??
+            _pagedTextRenderer.resolveAnimationStyle(
+              _settings,
+              document: _document,
+            );
+        await _turnCrossChapterWithSnapshot(
           forward: safeDirection >= 0,
+          style: style,
+          completionMode: 'cross_chapter',
         );
-        if (turned) {
-          _recordFirstPageTurnCompleted(mode: 'cross_chapter');
-        }
         return;
       case PagedTransitionActionType.curl:
         _markFirstPageTurnRequested();
         await _autoTurnCurlPage(safeDirection);
+        return;
+      case PagedTransitionActionType.paperCurl:
+        _markFirstPageTurnRequested();
+        await _turnPaperCurlPage(safeDirection, pageCount);
         return;
       case PagedTransitionActionType.immediate:
         _markFirstPageTurnRequested();
@@ -1248,63 +1262,279 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _pagedTransitionController.forward();
   }
 
-  Future<void> _playCrossChapterPagedTurnAnimation(
-    PagedTransitionAction action,
-  ) async {
-    final transitionState = action.transitionState;
-    final motion = action.motion;
-    if (transitionState == null ||
-        motion == null ||
-        motion.duration <= Duration.zero) {
-      return;
+  Future<bool> _turnCrossChapterWithSnapshot({
+    required bool forward,
+    required ReaderPageAnimationStyle style,
+    required String completionMode,
+  }) async {
+    if (_crossChapterSnapshotTransition.isActive) {
+      return false;
     }
-    if (transitionState.style == ReaderPageAnimationStyle.curl) {
-      await _playCrossChapterCurlTurnAnimation(transitionState, motion);
-      return;
+
+    final sessionState = _currentTextSessionState();
+    final decision = _chapterFlow.resolveAdjacentChapter(
+      chapters: _chapters,
+      currentChapterIndex: sessionState?.currentChapterIndex ?? _currentIndex,
+      forward: forward,
+      initialScrollRatio: forward ? 0 : 1,
+    );
+    if (decision.type == ReaderAdjacentChapterDecisionType.noCurrent) {
+      return false;
     }
-    if (_isPagedTransitionAnimating) {
-      return;
+    if (decision.type == ReaderAdjacentChapterDecisionType.boundary) {
+      _showChapterBoundaryHint(isFirst: decision.isFirstBoundary);
+      return false;
     }
+
+    final direction = forward ? 1 : -1;
+    final fromImage = await _captureReaderContentSnapshot();
+    if (fromImage == null) {
+      await _jumpToAdjacentReadableChapter(forward: forward);
+      return true;
+    }
+
+    final generation = ++_crossChapterSnapshotGeneration;
     _markReaderInteractionBusy(_ReaderInteractionState.animating);
-    _pagedTransitionController.duration = motion.duration;
-    setState(() {
-      _pagedTransition = transitionState;
-    });
-    _pagedTransitionController.value = 0;
+    _startCrossChapterSnapshotTransition(
+      generation: generation,
+      fromImage: fromImage,
+      style: style,
+      direction: direction,
+      completionMode: completionMode,
+    );
+
+    final targetChapterIndex = decision.targetChapterIndex!;
+    await _jumpTo(
+      targetChapterIndex,
+      initialScrollRatio: decision.initialScrollRatio,
+    );
+    if (!mounted ||
+        generation != _crossChapterSnapshotGeneration ||
+        _currentIndex != targetChapterIndex) {
+      _clearCrossChapterSnapshotTransition();
+      _scheduleReaderInteractionSettle();
+      return false;
+    }
+
+    await _waitForCrossChapterSnapshotTarget(
+      generation: generation,
+      targetChapterIndex: targetChapterIndex,
+    );
+    if (!mounted || generation != _crossChapterSnapshotGeneration) {
+      _clearCrossChapterSnapshotTransition();
+      _scheduleReaderInteractionSettle();
+      return false;
+    }
+
+    final toImage = await _captureReaderContentSnapshot();
+    if (toImage == null) {
+      _clearCrossChapterSnapshotTransition();
+      _recordFirstPageTurnCompleted(mode: completionMode);
+      _scheduleReaderInteractionSettle();
+      return true;
+    }
+
+    _attachCrossChapterSnapshotTarget(generation: generation, toImage: toImage);
+    if (style == ReaderPageAnimationStyle.paperCurl) {
+      return true;
+    }
+
+    final motion = _pagedTextRenderer.motionSpecForStyle(style);
+    _crossChapterSnapshotController.duration = motion.duration;
+    _crossChapterSnapshotController.value = 0;
+    if (motion.duration <= Duration.zero) {
+      _completeCrossChapterSnapshotAnimation();
+      return true;
+    }
     try {
-      await _pagedTransitionController.forward().orCancel;
+      await _crossChapterSnapshotController.forward().orCancel;
     } on TickerCanceled {
-      // Reader may leave the page while the boundary animation is running.
+      if (mounted) {
+        _clearCrossChapterSnapshotTransition();
+        _scheduleReaderInteractionSettle();
+      }
+    }
+    return true;
+  }
+
+  Future<ui.Image?> _captureReaderContentSnapshot() async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return null;
+    }
+    final context = _readerContentSnapshotKey.currentContext;
+    if (context == null || !context.mounted) {
+      return null;
+    }
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary) {
+      return null;
+    }
+    if (renderObject.debugNeedsPaint) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted || !context.mounted) {
+      return null;
+    }
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
+    return renderObject.toImage(pixelRatio: pixelRatio);
+  }
+
+  Future<void> _waitForCrossChapterSnapshotTarget({
+    required int generation,
+    required int targetChapterIndex,
+  }) async {
+    const maxFrames = 60;
+    for (var frame = 0; frame < maxFrames; frame++) {
+      if (!mounted ||
+          generation != _crossChapterSnapshotGeneration ||
+          _currentIndex != targetChapterIndex) {
+        return;
+      }
+      final hasPagedContent = _currentPagedPageCount > 0;
+      if (!_isLoadingContent &&
+          !_pagedPaginationState.isPaginating &&
+          hasPagedContent) {
+        await WidgetsBinding.instance.endOfFrame;
+        return;
+      }
+      await WidgetsBinding.instance.endOfFrame;
     }
   }
 
-  Future<void> _playCrossChapterCurlTurnAnimation(
-    PagedTransitionState transitionState,
-    PagedAnimationMotionSpec motion,
-  ) async {
-    if (_isCurlAutoTurning) {
+  void _startCrossChapterSnapshotTransition({
+    required int generation,
+    required ui.Image fromImage,
+    required ReaderPageAnimationStyle style,
+    required int direction,
+    required String completionMode,
+  }) {
+    _crossChapterSnapshotController.stop();
+    _crossChapterSnapshotController.value = 0;
+    _replaceCrossChapterSnapshotTransition(
+      _CrossChapterSnapshotTransitionState(
+        fromImage: fromImage,
+        style: style,
+        direction: direction,
+        generation: generation,
+        completionMode: completionMode,
+      ),
+    );
+  }
+
+  void _attachCrossChapterSnapshotTarget({
+    required int generation,
+    required ui.Image toImage,
+  }) {
+    final current = _crossChapterSnapshotTransition;
+    if (!current.isActive || current.generation != generation) {
+      toImage.dispose();
       return;
     }
-    _markReaderInteractionBusy(_ReaderInteractionState.animating);
-    _curlAutoTurnController.duration = motion.duration;
+    _replaceCrossChapterSnapshotTransition(current.copyWith(toImage: toImage));
+  }
+
+  void _replaceCrossChapterSnapshotTransition(
+    _CrossChapterSnapshotTransitionState next,
+  ) {
+    final previous = _crossChapterSnapshotTransition;
+    final previousFrom = previous.fromImage;
+    final previousTo = previous.toImage;
+    final nextFrom = next.fromImage;
+    final nextTo = next.toImage;
     setState(() {
-      _curlTransition = _curlTransition.copyWith(
-        direction: transitionState.direction,
-        fromIndex: transitionState.fromIndex,
-        toIndex: transitionState.toIndex,
-        commitOnAnimationEnd: true,
-        isPreview: false,
-        previewProgress: 0,
-        isAnimating: true,
-        isCrossChapter: true,
+      _crossChapterSnapshotTransition = next;
+    });
+    if (previousFrom != null && previousFrom != nextFrom) {
+      previousFrom.dispose();
+    }
+    if (previousTo != null && previousTo != nextTo) {
+      previousTo.dispose();
+    }
+  }
+
+  void _clearCrossChapterSnapshotTransition({bool setStateIfNeeded = false}) {
+    _crossChapterSnapshotController.stop();
+    final previous = _crossChapterSnapshotTransition;
+    _crossChapterSnapshotTransition =
+        const _CrossChapterSnapshotTransitionState();
+    previous.fromImage?.dispose();
+    previous.toImage?.dispose();
+    if (mounted && setStateIfNeeded) {
+      setState(() {});
+    }
+  }
+
+  void _completeCrossChapterSnapshotAnimation() {
+    if (!_crossChapterSnapshotTransition.hasTarget) {
+      return;
+    }
+    final completionMode = _crossChapterSnapshotTransition.completionMode;
+    _clearCrossChapterSnapshotTransition(setStateIfNeeded: true);
+    _recordFirstPageTurnCompleted(mode: completionMode);
+    _syncActiveReadingRecordSessionProgress();
+    _scheduleProgressSave();
+    _scheduleReaderInteractionSettle();
+  }
+
+  void _onCrossChapterSnapshotStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) {
+      return;
+    }
+    _completeCrossChapterSnapshotAnimation();
+  }
+
+  Future<void> _turnPaperCurlPage(int direction, int pageCount) async {
+    if (_paperCurlViewKey.currentState?.isAnimating ?? false) {
+      return;
+    }
+    final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
+    if (direction < 0 && currentIndex <= 0) {
+      await _turnCrossChapterWithSnapshot(
+        forward: false,
+        style: ReaderPageAnimationStyle.paperCurl,
+        completionMode: 'paper_curl_cross_chapter',
+      );
+      return;
+    }
+    if (direction > 0 && currentIndex >= pageCount - 1) {
+      await _turnCrossChapterWithSnapshot(
+        forward: true,
+        style: ReaderPageAnimationStyle.paperCurl,
+        completionMode: 'paper_curl_cross_chapter',
+      );
+      return;
+    }
+
+    final paperCurlState = _paperCurlViewKey.currentState;
+    if (paperCurlState == null) {
+      _scheduleReaderInteractionSettle();
+      return;
+    }
+    final turned = paperCurlState.turnPage(direction);
+    if (!turned) {
+      _scheduleReaderInteractionSettle();
+    }
+  }
+
+  void _commitPaperCurlPage(int pageIndex) {
+    if (!mounted) {
+      return;
+    }
+    final pageCount = _currentPagedPageCount;
+    if (pageCount <= 0) {
+      return;
+    }
+    final safeIndex = pageIndex.clamp(0, _safePageUpperBound(pageCount));
+    _updateReaderState(() {
+      _currentPageIndex = safeIndex;
+      _pagedPaginationState = _pagedPaginationState.copyWith(
+        pendingRestoreRatio: safeIndex / max(1, pageCount - 1),
       );
     });
-    _curlAutoTurnController.value = 0;
-    try {
-      await _curlAutoTurnController.forward().orCancel;
-    } on TickerCanceled {
-      // Reader may leave the page while the boundary animation is running.
-    }
+    _syncActiveReadingRecordSessionProgress();
+    _scheduleProgressSave();
+    _scheduleReaderInteractionSettle();
   }
 
   void _onPagedTransitionStatus(AnimationStatus status) {

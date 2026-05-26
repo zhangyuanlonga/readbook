@@ -29,6 +29,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/storage/local_file_stat.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
+import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book_metadata_override.dart';
@@ -84,6 +85,7 @@ class BookDetailPage extends ConsumerStatefulWidget {
   const BookDetailPage({
     super.key,
     required this.bookId,
+    this.initialBook,
     this.sourceId,
     this.detailUrl,
     this.title,
@@ -98,6 +100,7 @@ class BookDetailPage extends ConsumerStatefulWidget {
   });
 
   final String bookId;
+  final Book? initialBook;
   final String? sourceId;
   final String? detailUrl;
   final String? title;
@@ -321,15 +324,25 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       searchHitCacheService: _searchHitCacheService,
       switchSourceScoreService: _switchSourceScoreService,
     );
-    _activeSourceId = _normalizeRouteParam(widget.sourceId);
-    _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
-    _activeBookId = widget.bookId.trim();
+    final initialBook = widget.initialBook;
+    _activeSourceId =
+        _normalizeRouteParam(widget.sourceId) ??
+        _normalizeRouteParam(initialBook?.sourceId);
+    _activeDetailUrl =
+        _normalizeRouteParam(widget.detailUrl) ??
+        _normalizeRouteParam(initialBook?.detailUrl);
+    _activeBookId =
+        widget.bookId.trim().isNotEmpty
+            ? widget.bookId.trim()
+            : (initialBook?.id.trim() ?? '');
     _detailScrollController.addListener(_handleDetailScrollChanged);
     _cancelBackgroundRefreshConflictForCurrentBook(
       byScene: RemoteContentConflictScene.detail,
     );
     _applyLocalSchemeFallback();
-    _displayTitle = _normalizeRouteParam(widget.title);
+    _displayTitle =
+        _normalizeRouteParam(widget.title) ??
+        _normalizeRouteParam(initialBook?.title);
     final hydratedFromCache = _hydrateCachedDetailIfAvailable();
     if (!hydratedFromCache) {
       _updatePresentationState(
@@ -2136,6 +2149,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         sourceId: _activeSourceId!,
         bookId: _activeBookId,
         detailUrl: _activeDetailUrl!,
+        initialBook: widget.initialBook,
         fallbackTitle: _displayTitle ?? widget.title,
         fallbackAuthor: _result?.detail.author ?? widget.author,
         forceRefresh: forceRefresh,

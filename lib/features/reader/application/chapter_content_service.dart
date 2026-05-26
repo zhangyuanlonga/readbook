@@ -169,6 +169,7 @@ class ChapterContentService {
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
+    String? executionContext,
   }) async {
     final normalizedSourceId = sourceId.trim();
     final normalizedChapterUrl = chapterUrl.trim();
@@ -261,6 +262,7 @@ class ChapterContentService {
         detailUrl: detailUrl?.trim(),
         chapterIndex: chapterIndex,
         chapterTitle: chapterTitle,
+        executionContext: executionContext,
         cacheKey: cacheKey,
       );
     }
@@ -281,6 +283,7 @@ class ChapterContentService {
     required String? detailUrl,
     required int? chapterIndex,
     required String? chapterTitle,
+    required String? executionContext,
     required String cacheKey,
   }) async {
     try {
@@ -292,6 +295,7 @@ class ChapterContentService {
         chapterUrl: chapterUrl,
         chapterIndex: chapterIndex,
         chapterTitle: chapterTitle,
+        executionContext: executionContext,
       );
       final rawContent = content.content.trim();
       final normalizedKind = content.kind.trim().toLowerCase();
