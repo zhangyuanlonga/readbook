@@ -425,6 +425,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     } else {
       _cancelOverlayAutoHideTimer();
     }
+    _syncSystemUiVisibility(visible: visible);
     unawaited(_syncVolumeKeyPageInterception());
     if (visible) {
       _overlayControlsController.forward();
@@ -523,7 +524,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
     _isSystemUiVisible = shouldShow;
 
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (shouldShow) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      return;
+    }
+
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: const <SystemUiOverlay>[SystemUiOverlay.bottom],
+    );
   }
 
   void _onReaderTap(Offset localPosition, Size size, EdgeInsets gestureInsets) {

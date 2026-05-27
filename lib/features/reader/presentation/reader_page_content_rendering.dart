@@ -285,7 +285,10 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           ),
           bodyDecorationStyle: _settings.bodyTextDecorationStyle,
           bodyDecorationThickness: _settings.bodyTextUnderlineThickness,
-          bodyDecorationGap: _settings.bodyTextUnderlineGap,
+          bodyDecorationGap: max(
+            _settings.bodyTextUnderlineGap,
+            ReaderSettings.defaultBodyTextUnderlineGap,
+          ),
           bodyDecorationDashLength: _settings.bodyTextUnderlineDashLength,
           bodyDecorationDashGapRatio: _settings.bodyTextUnderlineDashGapRatio,
           onTapUp: (details) {
@@ -889,7 +892,10 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
             ),
             bodyDecorationStyle: _settings.bodyTextDecorationStyle,
             bodyDecorationThickness: _settings.bodyTextUnderlineThickness,
-            bodyDecorationGap: _settings.bodyTextUnderlineGap,
+            bodyDecorationGap: max(
+              _settings.bodyTextUnderlineGap,
+              ReaderSettings.defaultBodyTextUnderlineGap,
+            ),
             bodyDecorationDashLength: _settings.bodyTextUnderlineDashLength,
             bodyDecorationDashGapRatio: _settings.bodyTextUnderlineDashGapRatio,
             onTapUp: (details) {

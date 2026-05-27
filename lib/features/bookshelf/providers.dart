@@ -137,6 +137,12 @@ final bookshelfReaderOpenServiceProvider = Provider<BookshelfReaderOpenService>(
       ),
       localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
       bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
+      localReaderEntryGuardService: LocalReaderEntryGuardService(
+        localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+        readerEntryRouteResolver: ref.watch(
+          bookshelfReaderEntryRouteResolverProvider,
+        ),
+      ),
       logger: ref.watch(bookshelfLoggerProvider),
     );
   },

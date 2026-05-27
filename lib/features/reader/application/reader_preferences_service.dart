@@ -355,17 +355,24 @@ class ReaderPreferencesService {
       bodyTextDecorationColorValue: prefs.getInt(
         _bodyTextDecorationColorValueKey,
       ),
-      bodyTextUnderlineThickness:
-          (prefs.getDouble(_bodyTextUnderlineThicknessKey) ?? 2.2).clamp(1, 10),
-      bodyTextUnderlineGap: (prefs.getDouble(_bodyTextUnderlineGapKey) ?? 2)
+      bodyTextUnderlineThickness: (prefs.getDouble(
+                _bodyTextUnderlineThicknessKey,
+              ) ??
+              ReaderSettings.defaultBodyTextUnderlineThickness)
+          .clamp(1, 10),
+      bodyTextUnderlineGap: (prefs.getDouble(_bodyTextUnderlineGapKey) ??
+              ReaderSettings.defaultBodyTextUnderlineGap)
           .clamp(0, 16),
-      bodyTextUnderlineDashLength:
-          (prefs.getDouble(_bodyTextUnderlineDashLengthKey) ?? 6).clamp(1, 24),
-      bodyTextUnderlineDashGapRatio:
-          (prefs.getDouble(_bodyTextUnderlineDashGapRatioKey) ?? 6).clamp(
-            1,
-            12,
-          ),
+      bodyTextUnderlineDashLength: (prefs.getDouble(
+                _bodyTextUnderlineDashLengthKey,
+              ) ??
+              ReaderSettings.defaultBodyTextUnderlineDashLength)
+          .clamp(1, 24),
+      bodyTextUnderlineDashGapRatio: (prefs.getDouble(
+                _bodyTextUnderlineDashGapRatioKey,
+              ) ??
+              ReaderSettings.defaultBodyTextUnderlineDashGapRatio)
+          .clamp(1, 12),
       mangaReadMode: mangaReadMode,
       mangaImageSpacing: (prefs.getDouble(_mangaImageSpacingKey) ?? 10).clamp(
         0,

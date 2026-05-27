@@ -437,8 +437,9 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
       final lineTop = line.baseline - line.ascent;
       final lineBottom = line.baseline + line.descent;
       if (centerY >= lineTop - 0.5 && centerY <= lineBottom + 0.5) {
-        final desired = line.baseline + math.min(gap, line.descent * 0.25);
-        final maxY = rect.bottom - math.max(thickness * 0.5, 1.0);
+        final desired = line.baseline + gap;
+        final maxY =
+            line.baseline + math.max(line.descent - thickness * 0.5, 1.0);
         return math.min(desired, maxY);
       }
     }

@@ -140,10 +140,10 @@ class ReaderSettings {
     this.bodyTextColorValue,
     this.bodyTextDecorationStyle = ReaderBodyTextDecorationStyle.none,
     this.bodyTextDecorationColorValue,
-    this.bodyTextUnderlineThickness = 2.2,
-    this.bodyTextUnderlineGap = 2,
-    this.bodyTextUnderlineDashLength = 6,
-    this.bodyTextUnderlineDashGapRatio = 6,
+    this.bodyTextUnderlineThickness = defaultBodyTextUnderlineThickness,
+    this.bodyTextUnderlineGap = defaultBodyTextUnderlineGap,
+    this.bodyTextUnderlineDashLength = defaultBodyTextUnderlineDashLength,
+    this.bodyTextUnderlineDashGapRatio = defaultBodyTextUnderlineDashGapRatio,
     this.mangaReadMode = ReaderMangaReadMode.continuous,
     this.mangaImageSpacing = 10,
     this.mangaImagePadding = 8,
@@ -197,6 +197,10 @@ class ReaderSettings {
   static const double maxParagraphSpacing = 20;
   static const double minParagraphIndent = 0;
   static const double maxParagraphIndent = 4;
+  static const double defaultBodyTextUnderlineThickness = 1.6;
+  static const double defaultBodyTextUnderlineGap = 6;
+  static const double defaultBodyTextUnderlineDashLength = 5;
+  static const double defaultBodyTextUnderlineDashGapRatio = 4;
   static const int minFontWeightValue = 100;
   static const int maxFontWeightValue = 900;
   static const double minInfoBarPadding = 0;
@@ -956,13 +960,17 @@ class ReaderSettings {
       bodyTextDecorationStyle: bodyTextDecorationStyle,
       bodyTextDecorationColorValue: bodyTextDecorationColorValue,
       bodyTextUnderlineThickness:
-          _asDouble(json['bodyTextUnderlineThickness'])?.clamp(1, 10) ?? 2.2,
+          _asDouble(json['bodyTextUnderlineThickness'])?.clamp(1, 10) ??
+          defaultBodyTextUnderlineThickness,
       bodyTextUnderlineGap:
-          _asDouble(json['bodyTextUnderlineGap'])?.clamp(0, 16) ?? 2,
+          _asDouble(json['bodyTextUnderlineGap'])?.clamp(0, 16) ??
+          defaultBodyTextUnderlineGap,
       bodyTextUnderlineDashLength:
-          _asDouble(json['bodyTextUnderlineDashLength'])?.clamp(1, 24) ?? 6,
+          _asDouble(json['bodyTextUnderlineDashLength'])?.clamp(1, 24) ??
+          defaultBodyTextUnderlineDashLength,
       bodyTextUnderlineDashGapRatio:
-          _asDouble(json['bodyTextUnderlineDashGapRatio'])?.clamp(1, 12) ?? 6,
+          _asDouble(json['bodyTextUnderlineDashGapRatio'])?.clamp(1, 12) ??
+          defaultBodyTextUnderlineDashGapRatio,
       mangaReadMode: mangaReadMode,
       mangaImageSpacing:
           _asDouble(json['mangaImageSpacing'])?.clamp(0.0, 24.0) ?? 10,

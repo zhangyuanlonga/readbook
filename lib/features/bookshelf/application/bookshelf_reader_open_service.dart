@@ -8,6 +8,7 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../reader/application/reader_chapter_navigation.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
+import '../../reader/application/local/local_reader_entry_guard_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import 'local_book_import_service.dart';
@@ -56,11 +57,13 @@ class BookshelfReaderOpenService {
     required ReaderEntryRouteResolver readerEntryRouteResolver,
     required LocalBookRepository localBookRepository,
     required BookDetailService bookDetailService,
+    LocalReaderEntryGuardService? localReaderEntryGuardService,
     AppLogger? logger,
   }) : _readerPreferencesService = readerPreferencesService,
        _readerEntryRouteResolver = readerEntryRouteResolver,
        _localBookRepository = localBookRepository,
        _bookDetailService = bookDetailService,
+       _localReaderEntryGuardService = localReaderEntryGuardService,
        _logger = logger ?? AppLogger.instance;
 
   static const Duration _progressLoadTimeout = Duration(seconds: 2);
@@ -70,6 +73,7 @@ class BookshelfReaderOpenService {
   final ReaderEntryRouteResolver _readerEntryRouteResolver;
   final LocalBookRepository _localBookRepository;
   final BookDetailService _bookDetailService;
+  final LocalReaderEntryGuardService? _localReaderEntryGuardService;
   final AppLogger _logger;
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
@@ -104,6 +108,20 @@ class BookshelfReaderOpenService {
       final effectiveProgress = latestProgress ?? progressHint;
       if (effectiveProgress != null) {
         progressHit = true;
+        if (normalizedSourceId == LocalBookImportService.localBookSourceId) {
+          final guardedPlan = await _resolveLocalGuardPlan(
+            resultFuture: _localReaderEntryGuardService?.guardProgress(
+              effectiveProgress,
+            ),
+            kind: BookshelfReaderOpenKind.progress,
+            latestProgress: latestProgress,
+            feedbackMessage: latestProgress == null ? '已恢复本地阅读位置。' : null,
+          );
+          if (guardedPlan != null) {
+            plan = guardedPlan;
+            return plan;
+          }
+        }
         plan = BookshelfReaderOpenPlan(
           action: BookshelfReaderOpenAction.openReader,
           kind: BookshelfReaderOpenKind.progress,
@@ -125,6 +143,23 @@ class BookshelfReaderOpenService {
       final snapshotChapter = _firstReadableChapter(snapshot?.chapters);
       if (snapshotChapter != null) {
         tocSnapshotHit = true;
+        if (normalizedSourceId == LocalBookImportService.localBookSourceId) {
+          final guardedPlan = await _resolveLocalGuardPlan(
+            resultFuture: _localReaderEntryGuardService?.guardChapter(
+              bookId: normalizedBookId,
+              chapterId: snapshotChapter.id,
+              chapterUrl: snapshotChapter.chapterUrl,
+              chapterTitle: snapshotChapter.title,
+              chapterIndex: snapshotChapter.index,
+            ),
+            kind: BookshelfReaderOpenKind.tocSnapshot,
+            tocSnapshotHit: true,
+          );
+          if (guardedPlan != null) {
+            plan = guardedPlan;
+            return plan;
+          }
+        }
         plan = BookshelfReaderOpenPlan(
           action: BookshelfReaderOpenAction.openReader,
           kind: BookshelfReaderOpenKind.tocSnapshot,
@@ -310,5 +345,40 @@ class BookshelfReaderOpenService {
     }
     return progress.sourceId.trim() == book.sourceId.trim() &&
         progress.detailUrl.trim() == book.detailUrl.trim();
+  }
+
+  Future<BookshelfReaderOpenPlan?> _resolveLocalGuardPlan({
+    required Future<LocalReaderEntryGuardResult>? resultFuture,
+    required BookshelfReaderOpenKind kind,
+    ReadingProgress? latestProgress,
+    String? feedbackMessage,
+    bool tocSnapshotHit = false,
+  }) async {
+    if (resultFuture == null) {
+      return null;
+    }
+    final result = await resultFuture;
+    return switch (result.action) {
+      LocalReaderEntryGuardAction.openReader => BookshelfReaderOpenPlan(
+        action: BookshelfReaderOpenAction.openReader,
+        kind: kind,
+        readerRoute: result.route,
+        latestProgress: latestProgress,
+        feedbackMessage: feedbackMessage ?? result.message,
+        tocSnapshotHit: tocSnapshotHit,
+      ),
+      LocalReaderEntryGuardAction.openDetail => BookshelfReaderOpenPlan(
+        action: BookshelfReaderOpenAction.openDetail,
+        kind: BookshelfReaderOpenKind.openDetail,
+        latestProgress: latestProgress,
+        feedbackMessage: result.message,
+      ),
+      LocalReaderEntryGuardAction.unavailable => BookshelfReaderOpenPlan(
+        action: BookshelfReaderOpenAction.openDetail,
+        kind: BookshelfReaderOpenKind.openDetail,
+        latestProgress: latestProgress,
+        feedbackMessage: result.message,
+      ),
+    };
   }
 }

@@ -528,7 +528,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int _crossChapterSnapshotGeneration = 0;
   Stopwatch? _firstPageTurnStopwatch;
   bool _hasLoggedFirstPageTurn = false;
-  bool _isSystemUiVisible = true;
+  bool _isSystemUiVisible = false;
   bool _isVolumeKeyPageInterceptionEnabled = false;
   late final AnimationController _overlayControlsController;
   late final AnimationController _pagedTransitionController;
@@ -3665,121 +3665,232 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     List<int> recentColors = const <int>[],
   }) async {
     Color draftColor = Color(initialColorValue);
-    return showAdaptiveActionSurface<int>(
+    final hexController = TextEditingController(
+      text: _formatReaderHex(draftColor.toARGB32()),
+    );
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final desktopLike = AppLayout.isDesktopLike(
+      context,
+      platform: theme.platform,
+    );
+    final panelRadius = BorderRadius.vertical(
+      top: const Radius.circular(28),
+      bottom: desktopLike ? const Radius.circular(28) : Radius.zero,
+    );
+
+    final result = await showAdaptiveRawSurface<int>(
       context: context,
-      maxWidth: 460,
-      maxHeightFactor: 0.86,
+      showDragHandle: false,
+      mobileBackgroundColor: Colors.transparent,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final preview = draftColor;
-
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: previewBuilder(context, preview),
-                ),
-                const SizedBox(height: 12),
-                ColorPicker(
-                  pickerColor: draftColor,
-                  onColorChanged: (color) {
-                    setDialogState(() {
-                      draftColor = color;
-                    });
-                  },
-                  enableAlpha: false,
-                  displayThumbColor: true,
-                  portraitOnly: true,
-                  paletteType: PaletteType.hueWheel,
-                  pickerAreaHeightPercent: 0.72,
-                  labelTypes: const [],
-                  hexInputBar: true,
-                ),
-                if (recentColors.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    '最近使用',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+            return Material(
+              color: colorScheme.surfaceContainerHigh,
+              shape: RoundedRectangleBorder(borderRadius: panelRadius),
+              clipBehavior: Clip.antiAlias,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!desktopLike) ...[
+                      const AdaptiveSheetDragHandle(),
+                      const SizedBox(height: 12),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        FilledButton.tonal(
+                          onPressed:
+                              () => Navigator.of(
+                                dialogContext,
+                              ).pop(draftColor.toARGB32()),
+                          child: const Text('保存'),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: recentColors
-                        .map((value) {
-                          final color = Color(value);
-                          final selected = draftColor.toARGB32() == value;
-                          return GestureDetector(
-                            onTap: () {
-                              setDialogState(() {
-                                draftColor = color;
-                              });
-                            },
-                            child: Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: color,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color:
-                                      selected
-                                          ? Theme.of(
-                                            context,
-                                          ).colorScheme.primary
-                                          : Theme.of(
-                                            context,
-                                          ).colorScheme.outlineVariant,
-                                  width: selected ? 2 : 1,
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: previewBuilder(context, preview),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: hexController,
+                      keyboardType: TextInputType.text,
+                      textCapitalization: TextCapitalization.characters,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[#0-9a-fA-F]'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        final parsed = _parseReaderHexColor(value);
+                        if (parsed == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          draftColor = Color(parsed);
+                        });
+                      },
+                      decoration: InputDecoration(
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                        hintText: '#RRGGBB / #AARRGGBB',
+                        filled: true,
+                        fillColor: colorScheme.surface.withValues(alpha: 0.72),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ColorPicker(
+                      pickerColor: draftColor,
+                      onColorChanged: (color) {
+                        setDialogState(() {
+                          draftColor = color;
+                        });
+                      },
+                      enableAlpha: true,
+                      displayThumbColor: true,
+                      portraitOnly: true,
+                      paletteType: PaletteType.hsvWithHue,
+                      colorPickerWidth: 360,
+                      pickerAreaHeightPercent: 0.62,
+                      pickerAreaBorderRadius: const BorderRadius.all(
+                        Radius.circular(12),
+                      ),
+                      labelTypes: const [],
+                      hexInputController: hexController,
+                    ),
+                    if (recentColors.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '最近使用',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: recentColors
+                            .map((value) {
+                              final color = Color(value);
+                              final selected = draftColor.toARGB32() == value;
+                              return GestureDetector(
+                                onTap: () {
+                                  setDialogState(() {
+                                    draftColor = color;
+                                    hexController.text = _formatReaderHex(
+                                      color.toARGB32(),
+                                    );
+                                  });
+                                },
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color:
+                                          selected
+                                              ? colorScheme.primary
+                                              : colorScheme.outlineVariant,
+                                      width: selected ? 2 : 1,
+                                    ),
+                                  ),
                                 ),
+                              );
+                            })
+                            .toList(growable: false),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: draftColor,
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(
+                              color: colorScheme.outline.withValues(
+                                alpha: 0.38,
                               ),
                             ),
-                          );
-                        })
-                        .toList(growable: false),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('取消'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed:
-                          () => Navigator.of(
-                            dialogContext,
-                          ).pop(preview.toARGB32()),
-                      child: const Text('使用颜色'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _formatReaderHex(draftColor.toARGB32()),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('取消'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             );
           },
         );
       },
     );
+    hexController.dispose();
+    return result;
+  }
+
+  int? _parseReaderHexColor(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return null;
+    }
+    final normalized = value.startsWith('#') ? value.substring(1) : value;
+    if (normalized.length == 6) {
+      final parsed = int.tryParse(normalized, radix: 16);
+      return parsed == null ? null : 0xFF000000 | parsed;
+    }
+    if (normalized.length == 8) {
+      return int.tryParse(normalized, radix: 16);
+    }
+    return null;
+  }
+
+  String _formatReaderHex(int? value) {
+    if (value == null) {
+      return '#000000';
+    }
+    final hex = value.toRadixString(16).toUpperCase().padLeft(8, '0');
+    if (hex.startsWith('FF')) {
+      return '#${hex.substring(2)}';
+    }
+    return '#$hex';
   }
 
   String _applyParagraphIndent(String paragraph) {

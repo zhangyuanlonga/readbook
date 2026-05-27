@@ -229,29 +229,35 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     final content =
         previewBytes == null
             ? (icon != null
-                ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      size: 18 * scale,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    if (showLabel) ...[
-                      SizedBox(height: 2 * scale),
-                      Text(
-                        label,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          fontSize:
-                              (Theme.of(
-                                    context,
-                                  ).textTheme.labelSmall?.fontSize ??
-                                  11) *
-                              scale,
-                        ),
+                ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 18 * scale,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
+                      if (showLabel) ...[
+                        SizedBox(height: 2 * scale),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            fontSize:
+                                (Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall?.fontSize ??
+                                    11) *
+                                scale,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 )
                 : Text(
                   label,
