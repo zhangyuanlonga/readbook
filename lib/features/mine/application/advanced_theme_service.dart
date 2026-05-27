@@ -1585,6 +1585,15 @@ class AdvancedThemeService {
     );
     return AppAdvancedThemeModeConfig(
       colors: _readExportedColors(normalizedConfig, 'colors'),
+      componentStyle:
+          normalizedConfig['componentStyle'] is Map
+              ? AppAdvancedThemeComponentStyle.fromJson(
+                (normalizedConfig['componentStyle'] as Map).map(
+                  (nestedKey, nestedValue) =>
+                      MapEntry(nestedKey.toString(), nestedValue),
+                ),
+              )
+              : const AppAdvancedThemeComponentStyle(),
       wallpaperOpacity:
           _readExportedDouble(normalizedConfig, 'wallpaperOpacity') ?? 1,
       wallpaperBlurSigma:

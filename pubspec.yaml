@@ -79,6 +79,7 @@ dependencies:
   circular_theme_reveal: ^1.0.2
   pdfrx: ^2.2.24
   turnable_page: 1.0.1
+  webview_flutter: ^4.13.1
 
 dev_dependencies:
   flutter_test:

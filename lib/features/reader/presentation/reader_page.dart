@@ -120,6 +120,7 @@ import '../application/reader_reading_record_coordinator.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_feedback_service.dart';
+import '../application/reader_failure_presentation_service.dart';
 import '../application/reader_system_settings_service.dart';
 import '../application/reader_theme_mode_service.dart';
 import '../application/reader_typography_resolver.dart';
@@ -4665,6 +4666,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String _toUserReadableError(AppException error) {
+    final gatewayFailure = error.gatewayFailure;
+    if (gatewayFailure != null) {
+      return const ReaderFailurePresentationService().resolve(error).message;
+    }
     final message = error.briefMessage;
     if (_isLocalContent) {
       return LocalBookWorkflowPolicy.readerLoadError(message);

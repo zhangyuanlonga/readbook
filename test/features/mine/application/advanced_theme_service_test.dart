@@ -197,6 +197,16 @@ void main() {
               'component': <String, dynamic>{'card': 0xFFFFFFFF},
             },
           },
+          'componentStyle': <String, dynamic>{
+            'globalRadiusScale': 1.18,
+            'shadowStrength': 0.76,
+            'cardStyle': 'elevated',
+            'buttonStyle': 'rounded',
+            'inputStyle': 'outlined',
+            'overlayStyle': 'compact',
+            'navigationStyle': 'floating',
+            'switchStyle': 'contrast',
+          },
           'wallpaperOpacity': 0.72,
           'wallpaperFit': 'fill',
         },
@@ -209,6 +219,10 @@ void main() {
               },
               'component': <String, dynamic>{'card': 0xFF202326},
             },
+          },
+          'componentStyle': <String, dynamic>{
+            'cardStyle': 'outlined',
+            'buttonStyle': 'sharp',
           },
           'readerWallpaperOpacity': 0.66,
           'readerWallpaperFit': 'cover',
@@ -228,8 +242,38 @@ void main() {
     );
     expect(imported.darkConfig.readerWallpaperOpacity, 0.66);
     expect(
+      imported.lightConfig.componentStyle.cardStyle,
+      AppAdvancedThemeCardStyle.elevated,
+    );
+    expect(
+      imported.lightConfig.componentStyle.buttonStyle,
+      AppAdvancedThemeButtonStyle.rounded,
+    );
+    expect(
+      imported.lightConfig.componentStyle.inputStyle,
+      AppAdvancedThemeInputStyle.outlined,
+    );
+    expect(
+      imported.lightConfig.componentStyle.overlayStyle,
+      AppAdvancedThemeOverlayStyle.compact,
+    );
+    expect(
+      imported.lightConfig.componentStyle.navigationStyle,
+      AppAdvancedThemeNavigationStyle.floating,
+    );
+    expect(
+      imported.lightConfig.componentStyle.switchStyle,
+      AppAdvancedThemeSwitchStyle.contrast,
+    );
+    expect(imported.lightConfig.componentStyle.globalRadiusScale, 1.18);
+    expect(imported.lightConfig.componentStyle.shadowStrength, 0.76);
+    expect(
       imported.darkConfig.componentStyle.cardStyle,
-      AppAdvancedThemeCardStyle.soft,
+      AppAdvancedThemeCardStyle.outlined,
+    );
+    expect(
+      imported.darkConfig.componentStyle.buttonStyle,
+      AppAdvancedThemeButtonStyle.sharp,
     );
   });
 

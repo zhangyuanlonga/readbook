@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -11,6 +10,7 @@ import '../../search/application/server_book_gateway_service.dart';
 import '../../search/application/server_gateway_identity.dart';
 import '../../source/application/source_health_service.dart';
 import 'content_text_cleaner.dart';
+import 'reader_gateway_content_cache_codec.dart';
 import 'removed_script_source_guard.dart';
 
 class ChapterContentResult {
@@ -158,7 +158,6 @@ class ChapterContentService {
   final AppLogger _logger;
 
   static final Map<String, String> _chapterCache = <String, String>{};
-  static const String _imageCachePrefix = '__appread_image_payload__:';
 
   Future<ChapterContentResult> load({
     required String sourceId,
@@ -193,7 +192,7 @@ class ChapterContentService {
     final normalizedBookId = bookId?.trim() ?? '';
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
-      final decoded = _decodeCachedPayload(cached);
+      final decoded = ReaderGatewayContentCacheCodec.decode(cached);
       _logger.info(
         'Chapter content cache hit',
         context: <String, Object?>{
@@ -211,6 +210,10 @@ class ChapterContentService {
         fromCache: true,
         imageUrls: decoded.imageUrls,
         imageHeaders: decoded.imageHeaders,
+        contentType: decoded.contentType,
+        audioUrl: decoded.audioUrl,
+        audioManifestUrl: decoded.audioManifestUrl,
+        audioHeaders: decoded.audioHeaders,
         executionContext: null,
       );
     }
@@ -220,7 +223,7 @@ class ChapterContentService {
       final persistedContent = persisted?.content.trim() ?? '';
       if (persistedContent.isNotEmpty) {
         _chapterCache[cacheKey] = persistedContent;
-        final decoded = _decodeCachedPayload(persistedContent);
+        final decoded = ReaderGatewayContentCacheCodec.decode(persistedContent);
         _logger.info(
           'Chapter content cache hit',
           context: <String, Object?>{
@@ -239,6 +242,10 @@ class ChapterContentService {
           fromCache: true,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
+          contentType: decoded.contentType,
+          audioUrl: decoded.audioUrl,
+          audioManifestUrl: decoded.audioManifestUrl,
+          audioHeaders: decoded.audioHeaders,
           executionContext: null,
         );
       }
@@ -321,23 +328,29 @@ class ChapterContentService {
         );
       }
 
-      final cachePayload =
-          normalizedImages.isNotEmpty
-              ? _encodeImageCachePayload(
-                normalizedImages,
-                imageHeaders: content.imageHeaders,
-              )
-              : normalizedContent;
-      _chapterCache[cacheKey] = cachePayload;
-      await _persistChapterCache(
-        cacheKey: cacheKey,
-        bookId: bookId,
-        sourceId: sourceId,
-        chapterIndex: chapterIndex,
-        chapterTitle: chapterTitle,
-        chapterUrl: chapterUrl,
-        content: cachePayload,
+      final effectiveContentType =
+          normalizedKind.isNotEmpty ? normalizedKind : content.contentType;
+      final cachePayload = ReaderGatewayContentCacheCodec.encode(
+        content: normalizedContent,
+        imageUrls: normalizedImages,
+        imageHeaders: content.imageHeaders,
+        contentType: effectiveContentType,
+        audioUrl: content.audioUrl,
+        audioManifestUrl: content.audioManifestUrl,
+        audioHeaders: content.audioHeaders,
       );
+      if (cachePayload.trim().isNotEmpty) {
+        _chapterCache[cacheKey] = cachePayload;
+        await _persistChapterCache(
+          cacheKey: cacheKey,
+          bookId: bookId,
+          sourceId: sourceId,
+          chapterIndex: chapterIndex,
+          chapterTitle: chapterTitle,
+          chapterUrl: chapterUrl,
+          content: cachePayload,
+        );
+      }
       _sourceHealthService.markContentSuccess(sourceId: sourceId);
       _logger.info(
         'Server gateway content success',
@@ -359,8 +372,7 @@ class ChapterContentService {
         fromCache: content.cacheHit,
         imageUrls: normalizedImages,
         imageHeaders: content.imageHeaders,
-        contentType:
-            normalizedKind.isNotEmpty ? normalizedKind : content.contentType,
+        contentType: effectiveContentType,
         audioUrl: content.audioUrl,
         audioManifestUrl: content.audioManifestUrl,
         audioHeaders: content.audioHeaders,
@@ -411,81 +423,4 @@ class ChapterContentService {
       );
     }
   }
-
-  String _encodeImageCachePayload(
-    List<String> imageUrls, {
-    Map<String, String> imageHeaders = const {},
-  }) {
-    final payload = <String, dynamic>{
-      'imageUrls': imageUrls,
-      'imageHeaders': imageHeaders,
-    };
-    return '$_imageCachePrefix${jsonEncode(payload)}';
-  }
-
-  _DecodedChapterCache _decodeCachedPayload(String payload) {
-    final trimmed = payload.trim();
-    if (!trimmed.startsWith(_imageCachePrefix)) {
-      return _DecodedChapterCache(content: trimmed);
-    }
-
-    final raw = trimmed.substring(_imageCachePrefix.length);
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        final urls = decoded
-            .map((item) => item?.toString().trim() ?? '')
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
-        return _DecodedChapterCache(content: '', imageUrls: urls);
-      }
-
-      if (decoded is Map) {
-        final urls =
-            (decoded['imageUrls'] as List?)
-                ?.map((item) => item?.toString().trim() ?? '')
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[];
-        final headers =
-            (decoded['imageHeaders'] as Map?)
-                ?.map(
-                  (key, value) =>
-                      MapEntry(key.toString(), value?.toString().trim() ?? ''),
-                )
-                .map((key, value) => MapEntry(key.trim(), value.trim()))
-                .entries
-                .where(
-                  (entry) => entry.key.isNotEmpty && entry.value.isNotEmpty,
-                )
-                .fold<Map<String, String>>(
-                  <String, String>{},
-                  (result, entry) => result..[entry.key] = entry.value,
-                ) ??
-            const <String, String>{};
-
-        return _DecodedChapterCache(
-          content: '',
-          imageUrls: urls,
-          imageHeaders: headers,
-        );
-      }
-    } on FormatException {
-      return _DecodedChapterCache(content: trimmed);
-    }
-
-    return _DecodedChapterCache(content: trimmed);
-  }
-}
-
-class _DecodedChapterCache {
-  const _DecodedChapterCache({
-    required this.content,
-    this.imageUrls = const <String>[],
-    this.imageHeaders = const <String, String>{},
-  });
-
-  final String content;
-  final List<String> imageUrls;
-  final Map<String, String> imageHeaders;
 }

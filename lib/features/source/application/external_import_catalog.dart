@@ -54,9 +54,14 @@ class ExternalImportCatalog {
 
   static const XTypeGroup advancedThemeImportTypeGroup = XTypeGroup(
     label: 'Advanced theme package',
-    extensions: <String>['zip'],
-    mimeTypes: <String>['application/zip', 'application/x-zip-compressed'],
-    uniformTypeIdentifiers: <String>['public.zip-archive'],
+    extensions: <String>['zip', 'json'],
+    mimeTypes: <String>[
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/json',
+      'text/json',
+    ],
+    uniformTypeIdentifiers: <String>['public.zip-archive', 'public.json'],
   );
 
   static const XTypeGroup advancedThemeRedTypeGroup = XTypeGroup(
@@ -148,6 +153,7 @@ class ExternalImportCatalog {
 
   static const Set<String> _advancedThemeExtensions = <String>{
     '.zip',
+    '.json',
     '.red',
     '.rgshare',
   };
