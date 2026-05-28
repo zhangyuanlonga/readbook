@@ -579,8 +579,11 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     final style = _getVipLevelStyle(profile);
     final progress = _computeMembershipProgress(profile);
     final expireAt = profile?.vipExpireAt;
+    final isLifetime = profile?.planType?.toLowerCase() == 'lifetime';
     final expireText =
-        expireAt != null
+        isLifetime
+            ? '永久有效'
+            : expireAt != null
             ? '${expireAt.year}-${expireAt.month.toString().padLeft(2, '0')}-${expireAt.day.toString().padLeft(2, '0')} 到期'
             : '会员有效';
 
@@ -631,42 +634,44 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: progress.progress,
-                minHeight: 4,
-                backgroundColor: colorScheme.outlineVariant.withValues(
-                  alpha: 0.3,
-                ),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  style.color == const Color(0xFFB8860B)
-                      ? const Color(0xFFFFD700)
-                      : style.color,
+            if (!isLifetime) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: progress.progress,
+                  minHeight: 4,
+                  backgroundColor: colorScheme.outlineVariant.withValues(
+                    alpha: 0.3,
+                  ),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    style.color == const Color(0xFFB8860B)
+                        ? const Color(0xFFFFD700)
+                        : style.color,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '已享受 ${_formatDays(progress.enjoyedDays)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 11,
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '已享受 ${_formatDays(progress.enjoyedDays)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-                Text(
-                  '剩余 ${_formatDays(progress.remainingDays)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 11,
+                  Text(
+                    '剩余 ${_formatDays(progress.remainingDays)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

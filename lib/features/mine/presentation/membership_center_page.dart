@@ -1715,7 +1715,10 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     final planLabel = _describePlan(entitlement.planType);
     final sourceLabel = entitlement.displaySourceLabel;
     final expireText =
-        entitlement.expireAt == null
+        entitlement.expireAt == null &&
+                entitlement.planType.toLowerCase() == 'lifetime'
+            ? '永久有效'
+            : entitlement.expireAt == null
             ? '长期有效'
             : '${_formatTime(entitlement.expireAt)} 到期';
 

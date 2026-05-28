@@ -540,8 +540,25 @@ extension on _MinePageState {
     Color membershipAccent,
   ) {
     final expireAt = _vipExpireAt;
+    final isLifetime = _membershipPlanType?.toLowerCase() == 'lifetime';
     if (expireAt == null) {
-      return const SizedBox.shrink();
+      if (!isLifetime) {
+        return const SizedBox.shrink();
+      }
+      return Row(
+        children: [
+          Icon(Icons.all_inclusive_rounded, size: 15, color: membershipAccent),
+          const SizedBox(width: 6),
+          Text(
+            '终身会员 · 永久有效',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: membershipAccent,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      );
     }
 
     final now = DateTime.now();
