@@ -9,6 +9,7 @@ import '../../core/auth/auth_session_store.dart';
 import '../../core/media/image_selection_service.dart';
 import '../../core/membership/membership_service.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
+import '../../core/user/user_profile_service.dart';
 import '../../domain/repositories/bookmark_repository.dart';
 import '../../features/reader/application/local/local_reader_entry_guard_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
@@ -76,6 +77,10 @@ final mineMembershipServiceProvider = Provider<MembershipService>((ref) {
   return MembershipService();
 });
 
+final mineUserProfileServiceProvider = Provider<UserProfileService>((ref) {
+  return UserProfileService();
+});
+
 final remoteAccessSnapshotServiceProvider =
     Provider<RemoteAccessSnapshotService>((ref) {
       return RemoteAccessSnapshotService();
@@ -136,6 +141,7 @@ final minePageSessionServiceProvider = Provider<MinePageSessionService>((ref) {
     authSessionStore: ref.watch(mineAuthSessionStoreProvider),
     mobileFeatureService: ref.watch(mineMobileFeatureServiceProvider),
     membershipService: ref.watch(mineMembershipServiceProvider),
+    userProfileService: ref.watch(mineUserProfileServiceProvider),
     remoteAccessSnapshotService: ref.watch(remoteAccessSnapshotServiceProvider),
   );
 });

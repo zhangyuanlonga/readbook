@@ -14,7 +14,9 @@ import '../../../core/auth/auth_session_store.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/user/user_profile.dart';
 import '../../../core/user/user_profile_service.dart';
+import '../../mine/application/mine_page_session_service.dart';
 import '../providers.dart';
+import '../../mine/providers.dart';
 
 class UserProfilePage extends ConsumerStatefulWidget {
   const UserProfilePage({super.key});
@@ -27,6 +29,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   late final AuthSessionStore _sessionStore;
   late final AuthService _authService;
   late final UserProfileService _userProfileService;
+  late final MinePageSessionService _minePageSessionService;
 
   AuthSession? _session;
   UserProfile? _profile;
@@ -42,6 +45,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     _sessionStore = ref.read(authSessionStoreProvider);
     _authService = ref.read(authServiceProvider);
     _userProfileService = ref.read(userProfileServiceProvider);
+    _minePageSessionService = ref.read(minePageSessionServiceProvider);
     _loadSession();
   }
 
@@ -912,7 +916,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     });
 
     try {
+      final userId = _session?.userId;
       await _authService.logout();
+      await _minePageSessionService.clearUserScopedCache(userId);
       if (!mounted) {
         return;
       }

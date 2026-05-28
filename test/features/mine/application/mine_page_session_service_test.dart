@@ -6,6 +6,8 @@ import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dar
 import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
+import 'package:shuxiang_reading_next/core/user/user_profile.dart';
+import 'package:shuxiang_reading_next/core/user/user_profile_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 
@@ -56,6 +58,12 @@ void main() {
         authSessionStore: store,
         mobileFeatureService: _FakeMobileFeatureService(),
         membershipService: _FakeMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_1',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+        ),
         remoteAccessSnapshotService: RemoteAccessSnapshotService(
           preferences: prefs,
         ),
@@ -79,6 +87,12 @@ void main() {
       ),
       mobileFeatureService: _FakeMobileFeatureService(),
       membershipService: _FakeMembershipService(),
+      userProfileService: _FakeUserProfileService(
+        userId: 'layout_user',
+        username: 'layout_user',
+        account: 'layout_user',
+        displayName: 'Layout User',
+      ),
       remoteAccessSnapshotService: RemoteAccessSnapshotService(),
     );
 
@@ -106,6 +120,12 @@ void main() {
       authSessionStore: store,
       mobileFeatureService: featureService,
       membershipService: membershipService,
+      userProfileService: _FakeUserProfileService(
+        userId: 'user_cached',
+        username: 'tester',
+        account: 'tester',
+        displayName: 'Tester',
+      ),
       remoteAccessSnapshotService: RemoteAccessSnapshotService(
         preferences: prefs,
       ),
@@ -186,6 +206,39 @@ class _FakeMembershipService extends MembershipService {
       isTrial: false,
       maxDevices: 3,
       features: ['theme_custom'],
+    );
+  }
+}
+
+class _FakeUserProfileService extends UserProfileService {
+  _FakeUserProfileService({
+    required this.userId,
+    required this.username,
+    required this.account,
+    required this.displayName,
+  }) : super(baseUrl: 'https://example.com');
+
+  final String userId;
+  final String username;
+  final String account;
+  final String displayName;
+
+  @override
+  Future<UserProfile> fetchMe() async {
+    return UserProfile(
+      userId: userId,
+      username: username,
+      account: account,
+      displayName: displayName,
+      phone: null,
+      email: null,
+      role: null,
+      createdAt: null,
+      vipLevel: null,
+      planType: null,
+      vipStatus: null,
+      vipExpireAt: null,
+      features: <String>[],
     );
   }
 }

@@ -620,7 +620,7 @@ extension on _MinePageState {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              '开通会员，享去广告 · 无限书架 · 专属书单',
+              '开通会员，享受专属特权',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: palette.primaryColor,
                 fontSize: 12,

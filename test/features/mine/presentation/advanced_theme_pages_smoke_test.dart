@@ -16,6 +16,8 @@ import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
+import 'package:shuxiang_reading_next/core/user/user_profile.dart';
+import 'package:shuxiang_reading_next/core/user/user_profile_service.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_editor_state_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_page_flow_coordinator.dart';
@@ -200,6 +202,7 @@ void main() {
         authSessionStore: sessionStore,
         mobileFeatureService: _FakeMobileFeatureService(),
         membershipService: _FakeMembershipService(),
+        userProfileService: _FakeUserProfileService(),
         remoteAccessSnapshotService: RemoteAccessSnapshotService(
           preferences: prefs,
         ),
@@ -316,6 +319,29 @@ class _FakeMembershipService extends MembershipService {
       isTrial: false,
       maxDevices: 3,
       features: <String>[MembershipFeatures.themeCustom],
+    );
+  }
+}
+
+class _FakeUserProfileService extends UserProfileService {
+  _FakeUserProfileService() : super(baseUrl: 'https://example.com');
+
+  @override
+  Future<UserProfile> fetchMe() async {
+    return const UserProfile(
+      userId: 'user_smoke',
+      username: 'theme_smoke',
+      account: 'theme_smoke',
+      displayName: 'Theme Smoke',
+      phone: null,
+      email: null,
+      role: null,
+      createdAt: null,
+      vipLevel: null,
+      planType: null,
+      vipStatus: null,
+      vipExpireAt: null,
+      features: <String>[],
     );
   }
 }

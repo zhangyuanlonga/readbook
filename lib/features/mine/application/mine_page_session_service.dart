@@ -8,6 +8,7 @@ import '../../../core/auth/auth_session_store.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
+import '../../../core/user/user_profile_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import 'remote_access_snapshot_service.dart';
 
@@ -60,24 +61,28 @@ class MinePageSessionService {
     required AuthSessionStore authSessionStore,
     required MobileFeatureService mobileFeatureService,
     required MembershipService membershipService,
+    required UserProfileService userProfileService,
     required RemoteAccessSnapshotService remoteAccessSnapshotService,
     AppDatabase? database,
   }) : _authSessionStore = authSessionStore,
        _mobileFeatureService = mobileFeatureService,
        _membershipService = membershipService,
+       _userProfileService = userProfileService,
        _remoteAccessSnapshotService = remoteAccessSnapshotService,
        _database = database ?? AppDatabase.instance;
 
   final AuthSessionStore _authSessionStore;
   final MobileFeatureService _mobileFeatureService;
   final MembershipService _membershipService;
+  final UserProfileService _userProfileService;
   final RemoteAccessSnapshotService _remoteAccessSnapshotService;
   final AppDatabase _database;
 
   Future<MinePageSessionSnapshot> loadSession({
     bool refreshRemote = true,
   }) async {
-    final session = await _authSessionStore.getSession();
+    final persistedSession = await _authSessionStore.getSession();
+    final session = await _syncSessionIdentity(persistedSession);
     if (session == null) {
       return const MinePageSessionSnapshot(
         session: null,
@@ -215,6 +220,19 @@ class MinePageSessionService {
     return prefs.getString(storageKey);
   }
 
+  Future<void> clearUserScopedCache(String? userId) async {
+    final normalizedUserId = userId?.trim() ?? '';
+    if (normalizedUserId.isEmpty) {
+      return;
+    }
+    final existingAvatarPath = await loadLocalAvatarPath(normalizedUserId);
+    await removeLocalAvatar(
+      userId: normalizedUserId,
+      existingPath: existingAvatarPath,
+    );
+    await _remoteAccessSnapshotService.clear(normalizedUserId);
+  }
+
   Future<void> persistLayoutMode({
     required String storageKey,
     required String value,
@@ -264,6 +282,42 @@ class MinePageSessionService {
       totalReadingHours: readingSummary.totalReadingHours,
       readingStreakDays: readingSummary.readingStreakDays,
     );
+  }
+
+  Future<AuthSession?> _syncSessionIdentity(AuthSession? session) async {
+    if (session == null) {
+      return null;
+    }
+    try {
+      final profile = await _userProfileService.fetchMe();
+      final nextSession = AuthSession(
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        accessExpiresAt: session.accessExpiresAt,
+        refreshExpiresAt: session.refreshExpiresAt,
+        userId: profile.userId,
+        username: profile.username,
+        account: profile.account,
+        displayName:
+            profile.displayName?.trim().isNotEmpty == true
+                ? profile.displayName
+                : profile.username,
+      );
+      if (_isSameIdentity(session, nextSession)) {
+        return session;
+      }
+      await _authSessionStore.saveSession(nextSession);
+      return nextSession;
+    } catch (_) {
+      return session;
+    }
+  }
+
+  bool _isSameIdentity(AuthSession a, AuthSession b) {
+    return (a.userId?.trim() ?? '') == (b.userId?.trim() ?? '') &&
+        (a.username?.trim() ?? '') == (b.username?.trim() ?? '') &&
+        (a.account?.trim() ?? '') == (b.account?.trim() ?? '') &&
+        (a.displayName?.trim() ?? '') == (b.displayName?.trim() ?? '');
   }
 
   Future<_MineReadingSummary> _loadReadingSummary() async {
