@@ -20,6 +20,7 @@ import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 
+import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/membership/membership_features.dart';
@@ -112,6 +113,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   bool _isCheckingOnlineSearchAccess = true;
   bool _hasOnlineSearchAccess = false;
   String? _onlineSearchAccessMessage;
+  StreamSubscription<AuthEvent>? _authEventSubscription;
+  int _onlineSearchAccessRequestId = 0;
 
   // Search history
   List<String> _searchHistory = const <String>[];
@@ -142,6 +145,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
     _sessionStore = AuthSessionStore();
     _membershipService = MembershipService();
+    _authEventSubscription = AuthEventBus.instance.stream.listen(
+      _handleAuthEvent,
+    );
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -156,6 +162,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _clearProgressUiThrottle();
     _clearDeferredProgressUiUpdate();
     _clearPendingSearchCompletion();
+    final authEventSubscription = _authEventSubscription;
+    _authEventSubscription = null;
+    unawaited(authEventSubscription?.cancel() ?? Future<void>.value());
     _pageScrollController.removeListener(_onPageScroll);
     _pageScrollController.dispose();
     _progressReportNotifier.dispose();
@@ -661,53 +670,140 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<void> _loadOnlineSearchAccess() async {
-    setState(() {
-      _isCheckingOnlineSearchAccess = true;
-      _onlineSearchAccessMessage = null;
-    });
+    await _refreshOnlineSearchAccess(showChecking: true);
+  }
+
+  Future<bool> _refreshOnlineSearchAccess({required bool showChecking}) async {
+    final requestId = ++_onlineSearchAccessRequestId;
+    if (showChecking && mounted) {
+      setState(() {
+        _isCheckingOnlineSearchAccess = true;
+        _onlineSearchAccessMessage = null;
+      });
+    }
 
     try {
       final session = await _sessionStore.getSession();
+      if (!_isLatestOnlineSearchAccessRequest(requestId)) {
+        return false;
+      }
       if (session == null) {
         if (!mounted) {
-          return;
+          return false;
         }
         setState(() {
           _hasOnlineSearchAccess = false;
           _isCheckingOnlineSearchAccess = false;
           _onlineSearchAccessMessage = '登录并开通会员后可使用在线搜索。';
+          _isLoadingServerSourceCount = false;
+          _availableServerSourceCount = 0;
+          _selectedServerSourceIds = <String>{};
         });
-        return;
+        return false;
       }
 
       final entitlement = await _membershipService.fetchEntitlement();
+      if (!_isLatestOnlineSearchAccessRequest(requestId)) {
+        return false;
+      }
       final hasAccess = MembershipFeatures.hasFeature(
         entitlement,
         MembershipFeatures.onlineService,
       );
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _hasOnlineSearchAccess = hasAccess;
         _isCheckingOnlineSearchAccess = false;
         _onlineSearchAccessMessage = hasAccess ? null : '在线搜索为会员服务，开通会员后即可使用。';
+        if (!hasAccess) {
+          _isLoadingServerSourceCount = false;
+          _availableServerSourceCount = 0;
+          _selectedServerSourceIds = <String>{};
+        }
       });
       if (hasAccess) {
         unawaited(_loadSearchSystemSettings());
         unawaited(_refreshServerSourceCount());
       }
+      return hasAccess;
     } catch (error) {
+      if (!_isLatestOnlineSearchAccessRequest(requestId)) {
+        return false;
+      }
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _hasOnlineSearchAccess = false;
         _isCheckingOnlineSearchAccess = false;
         _onlineSearchAccessMessage =
             error is AppException ? error.briefMessage : '会员状态校验失败，请稍后重试。';
+        _isLoadingServerSourceCount = false;
+        _availableServerSourceCount = 0;
+        _selectedServerSourceIds = <String>{};
       });
+      return false;
     }
+  }
+
+  bool _isLatestOnlineSearchAccessRequest(int requestId) {
+    return mounted && requestId == _onlineSearchAccessRequestId;
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    switch (event.type) {
+      case AuthEventType.loggedIn:
+        _invalidateOnlineSearchAccess(
+          message: null,
+          checking: true,
+          cancelActiveSearch: true,
+        );
+        unawaited(_loadOnlineSearchAccess());
+        break;
+      case AuthEventType.loggedOut:
+        _invalidateOnlineSearchAccess(
+          message: '登录并开通会员后可使用在线搜索。',
+          checking: false,
+          cancelActiveSearch: true,
+        );
+        break;
+      case AuthEventType.sessionExpired:
+        _invalidateOnlineSearchAccess(
+          message: event.message,
+          checking: false,
+          cancelActiveSearch: true,
+        );
+        break;
+    }
+  }
+
+  void _invalidateOnlineSearchAccess({
+    required String? message,
+    required bool checking,
+    required bool cancelActiveSearch,
+  }) {
+    _onlineSearchAccessRequestId++;
+    if (cancelActiveSearch) {
+      _activeSearchToken?.cancel();
+    }
+    _clearSearchOutput();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _hasOnlineSearchAccess = false;
+      _isCheckingOnlineSearchAccess = checking;
+      _onlineSearchAccessMessage = message;
+      _isLoadingServerSourceCount = false;
+      _availableServerSourceCount = 0;
+      _selectedServerSourceIds = <String>{};
+      if (cancelActiveSearch) {
+        _isSearching = false;
+        _activeSearchToken = null;
+      }
+    });
   }
 
   Widget _buildOnlineSearchGate(BuildContext context) {
@@ -793,7 +889,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<void> _refreshServerSourceCount() async {
-    if (!mounted) return;
+    if (!mounted || !_hasOnlineSearchAccess) return;
 
     final requestedMode = _searchContentMode;
     setState(() {
@@ -804,7 +900,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       final sourcePage = await _serverOnlineSearchService
           .loadSourcePage(contentMode: requestedMode, page: 1, pageSize: 1)
           .timeout(_sourceCountLoadTimeout);
-      if (!mounted || requestedMode != _searchContentMode) {
+      if (!mounted ||
+          requestedMode != _searchContentMode ||
+          !_hasOnlineSearchAccess) {
         return;
       }
 
@@ -812,7 +910,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         _availableServerSourceCount = sourcePage.total;
       });
     } catch (error) {
-      if (!mounted || requestedMode != _searchContentMode) {
+      if (!mounted ||
+          requestedMode != _searchContentMode ||
+          !_hasOnlineSearchAccess) {
         return;
       }
       debugPrint('Failed to load server source count: $error');
@@ -820,7 +920,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         _availableServerSourceCount = 0;
       });
     } finally {
-      if (mounted && requestedMode == _searchContentMode) {
+      if (mounted &&
+          requestedMode == _searchContentMode &&
+          _hasOnlineSearchAccess) {
         setState(() {
           _isLoadingServerSourceCount = false;
         });
@@ -1326,15 +1428,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return;
     }
 
-    if (!_hasOnlineSearchAccess) {
-      _showMessage(_onlineSearchAccessMessage ?? '在线搜索为会员服务。');
-      unawaited(_loadOnlineSearchAccess());
-      return;
-    }
-
     final keyword = _keywordController.text.trim();
     if (keyword.isEmpty) {
       _showMessage('请输入关键词。');
+      return;
+    }
+
+    final hasOnlineSearchAccess = await _refreshOnlineSearchAccess(
+      showChecking: !_hasOnlineSearchAccess,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!hasOnlineSearchAccess) {
+      _showMessage(_onlineSearchAccessMessage ?? '在线搜索为会员服务。');
       return;
     }
 

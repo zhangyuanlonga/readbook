@@ -7,7 +7,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/errors/gateway_failure.dart';
-import '../../../core/auth/auth_session_store.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
@@ -22,13 +21,11 @@ class ServerOnlineSearchService {
     ApiClient? client,
     Dio? dio,
     AppLogger? logger,
-    AuthSessionStore? sessionStore,
     String? baseUrl,
   }) : _baseUrl =
            (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
        _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
-       _sessionStore = sessionStore ?? AuthSessionStore(),
        _client =
            client ??
            ApiClient(
@@ -44,7 +41,6 @@ class ServerOnlineSearchService {
   final ApiClient _client;
   final Dio _dio;
   final AppLogger _logger;
-  final AuthSessionStore _sessionStore;
   final String _baseUrl;
 
   static const int _rawSearchPageSize = 100;
@@ -121,7 +117,6 @@ class ServerOnlineSearchService {
       method: ApiMethod.post,
       path: 'v1/books/search',
       body: payload,
-      headers: await _authContextHeaders(),
       attachAccessToken: true,
       enableRetry: false,
       timeout: const Duration(seconds: 35),
@@ -185,7 +180,6 @@ class ServerOnlineSearchService {
       final headers = <String, String>{
         'Accept': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        ...await _authContextHeaders(),
       };
       final accessToken =
           await ApiClient.defaultAuthTokenRefresher?.getAccessToken();
@@ -305,14 +299,6 @@ class ServerOnlineSearchService {
     } finally {
       cancellationPoller.cancel();
     }
-  }
-
-  Future<Map<String, String>> _authContextHeaders() async {
-    final userId = (await _sessionStore.getUserId())?.trim() ?? '';
-    if (userId.isEmpty) {
-      return const <String, String>{};
-    }
-    return <String, String>{'X-Reader-User-Id': userId};
   }
 
   Future<List<ServerSearchSourceSummary>> loadSources({
