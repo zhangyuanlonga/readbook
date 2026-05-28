@@ -46,6 +46,34 @@ void main() {
       expect(restored.positionSnapshot!.pageCount, 8);
     });
 
+    test('preserves audio snapshot fields through json roundtrip', () {
+      final progress = ReadingProgress(
+        bookId: 'book_audio',
+        sourceId: 'src_audio',
+        detailUrl: 'https://example.com/book/audio',
+        chapterId: 'chapter_audio',
+        chapterUrl: 'https://example.com/book/audio/chapter',
+        chapterTitle: '听书章节',
+        chapterIndex: 3,
+        updatedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+        chapterPositionRatio: 0.25,
+        positionSnapshot: const ReaderPositionSnapshot(
+          viewportMode: 'audio',
+          audioPositionMs: 32000,
+          audioDurationMs: 180000,
+          audioSpeed: 1.5,
+        ),
+      );
+
+      final restored = ReadingProgress.fromJson(progress.toJson());
+
+      expect(restored.positionSnapshot, isNotNull);
+      expect(restored.positionSnapshot!.viewportMode, 'audio');
+      expect(restored.positionSnapshot!.audioPositionMs, 32000);
+      expect(restored.positionSnapshot!.audioDurationMs, 180000);
+      expect(restored.positionSnapshot!.audioSpeed, 1.5);
+    });
+
     test('rejects legacy payload without chapter position ratio', () {
       expect(
         () => ReadingProgress.fromJson({

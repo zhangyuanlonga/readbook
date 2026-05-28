@@ -498,12 +498,22 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         return;
       }
       _isAutoReadPausedByRuntime = false;
-      _autoReadSessionState = ReaderAutoReadSessionState.running;
-      if (mounted) {
-        setState(() {});
-      }
+      _setAutoReadSessionState(ReaderAutoReadSessionState.running);
       _reconcileAutoRead();
     });
+  }
+
+  void _setAutoReadSessionState(
+    ReaderAutoReadSessionState state, {
+    bool rebuild = true,
+  }) {
+    if (_autoReadSessionState == state) {
+      return;
+    }
+    _autoReadSessionState = state;
+    if (rebuild && mounted) {
+      setState(() {});
+    }
   }
 
   void _reconcileAutoRead({bool restart = false}) {
@@ -852,9 +862,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
     _stopAutoRead();
     _stopPagedAutoRead();
-    setState(() {
-      _autoReadSessionState = ReaderAutoReadSessionState.chapterPaused;
-    });
+    _setAutoReadSessionState(ReaderAutoReadSessionState.chapterPaused);
   }
 
   Future<void> _continueAutoReadAfterChapterPause() async {
@@ -870,10 +878,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       await _handleAutoReadBookFinished();
       return;
     }
-    _autoReadSessionState = ReaderAutoReadSessionState.running;
-    if (mounted) {
-      setState(() {});
-    }
+    _setAutoReadSessionState(ReaderAutoReadSessionState.running);
     _autoReadResumeTimer?.cancel();
     _autoReadResumeTimer = Timer(
       _ReaderPageState._kAutoReadBoundaryResumeDelay,
@@ -906,8 +911,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         if (!mounted || !_isAutoReadSessionEnabled) {
           return;
         }
-        _autoReadSessionState = ReaderAutoReadSessionState.running;
-        setState(() {});
+        _setAutoReadSessionState(ReaderAutoReadSessionState.running);
         _reconcileAutoRead(restart: true);
         return;
       case ReaderAutoReadEndBehavior.nextBook:
@@ -972,9 +976,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
     _stopAutoRead();
     _stopPagedAutoRead();
-    setState(() {
-      _autoReadSessionState = ReaderAutoReadSessionState.finished;
-    });
+    _setAutoReadSessionState(ReaderAutoReadSessionState.finished);
     _showMessage(
       message,
       duration: _ReaderPageState._kReaderSnackActionDuration,

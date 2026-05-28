@@ -20,7 +20,7 @@ class ReaderAudioViewModel {
     this.onNextChapter,
   });
 
-  final ReaderAudioController controller;
+  final ReaderAudioControllerHandle controller;
   final ReaderContentSession contentSession;
   final Duration? initialPosition;
   final double initialSpeed;
@@ -42,7 +42,7 @@ class ReaderAudioView extends StatefulWidget {
 }
 
 class _ReaderAudioViewState extends State<ReaderAudioView> {
-  ReaderAudioController get _controller => widget.model.controller;
+  ReaderAudioControllerHandle get _controller => widget.model.controller;
 
   @override
   void initState() {

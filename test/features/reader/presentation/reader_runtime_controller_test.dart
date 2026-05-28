@@ -32,6 +32,32 @@ void main() {
       expect(ratio, 0.6);
     });
 
+    test('computes audio ratio from playback position and duration', () {
+      final ratio = controller.currentScrollRatio(
+        viewportKind: ReaderRuntimeViewportKind.audio,
+        captureTextProgress: () => 0.1,
+        mangaPageIndex: 0,
+        mangaPageCount: 0,
+        continuousChapterRatio: null,
+        useContinuousTextFlow: false,
+      );
+
+      expect(ratio, 0.1);
+    });
+
+    test('falls back to zero audio ratio when duration is unavailable', () {
+      final ratio = controller.currentScrollRatio(
+        viewportKind: ReaderRuntimeViewportKind.audio,
+        captureTextProgress: () => 0,
+        mangaPageIndex: 0,
+        mangaPageCount: 0,
+        continuousChapterRatio: null,
+        useContinuousTextFlow: false,
+      );
+
+      expect(ratio, 0);
+    });
+
     test('resolves bottom drag end as next chapter only', () {
       final bottomAction = controller.resolveScrollEdgeDragEndAction(
         isArmed: false,

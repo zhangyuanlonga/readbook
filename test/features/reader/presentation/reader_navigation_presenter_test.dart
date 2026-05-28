@@ -100,6 +100,21 @@ void main() {
       expect(target, 1);
     });
 
+    test(
+      'returns resume plan when catalog selection has no readable target',
+      () {
+        final plan = presenter.resolveCatalogResult(
+          result: const ReaderCatalogSheetResult.selection(
+            ReaderCatalogSheetSelection(chapterIndex: 99),
+          ),
+          chapters: chapters,
+          currentChapterIndex: 1,
+        );
+
+        expect(plan.request?.type, ReaderNavigationRequestType.resumeAutoRead);
+      },
+    );
+
     test('builds manga position presentation for paged manga', () {
       final presentation = presenter.resolveMangaPositionPresentation(
         isMangaViewport: true,

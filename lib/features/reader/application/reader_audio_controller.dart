@@ -6,6 +6,35 @@ import 'package:just_audio/just_audio.dart';
 import 'audio_reading_mode.dart';
 import 'reader_content_session.dart';
 
+abstract class ReaderAudioControllerHandle implements Listenable {
+  ReaderAudioControllerState get state;
+
+  Future<void> configure({
+    required ReaderContentSession session,
+    Duration? initialPosition,
+    double initialSpeed = 1.0,
+    bool autoPlay = false,
+  });
+
+  Future<void> reset();
+
+  Future<void> retry();
+
+  Future<void> togglePlayback();
+
+  Future<void> restart();
+
+  Future<void> seekTo(Duration position);
+
+  Future<void> seekRelative(Duration delta);
+
+  Future<void> setSpeed(double speed);
+
+  Future<void> pauseForLifecycle();
+
+  Future<void> resumeAfterLifecycle();
+}
+
 @immutable
 class ReaderAudioControllerState {
   const ReaderAudioControllerState({
@@ -60,7 +89,7 @@ class ReaderAudioControllerState {
 const Object _readerAudioControllerSentinel = Object();
 
 class ReaderAudioController extends ChangeNotifier
-    implements AudioPlaybackController {
+    implements AudioPlaybackController, ReaderAudioControllerHandle {
   ReaderAudioController({AudioPlayer? player})
     : _player = player ?? AudioPlayer() {
     _bindPlayerStreams();
@@ -74,11 +103,14 @@ class ReaderAudioController extends ChangeNotifier
   StreamSubscription<Object>? _errorSubscription;
 
   ReaderAudioControllerState _state = const ReaderAudioControllerState();
+  @override
   ReaderAudioControllerState get state => _state;
 
   String? _configurationKey;
   int _prepareToken = 0;
+  bool _shouldResumeAfterLifecyclePause = false;
 
+  @override
   Future<void> configure({
     required ReaderContentSession session,
     Duration? initialPosition,
@@ -175,13 +207,16 @@ class ReaderAudioController extends ChangeNotifier
     }
   }
 
+  @override
   Future<void> reset() async {
     _configurationKey = null;
     _prepareToken += 1;
+    _shouldResumeAfterLifecyclePause = false;
     await _player.stop();
     _setState(const ReaderAudioControllerState());
   }
 
+  @override
   Future<void> retry() async {
     final session = _state.session;
     if (session == null) {
@@ -193,6 +228,7 @@ class ReaderAudioController extends ChangeNotifier
     );
   }
 
+  @override
   Future<void> togglePlayback() async {
     final status = _state.playbackState.status;
     if (_state.hasError) {
@@ -209,6 +245,7 @@ class ReaderAudioController extends ChangeNotifier
     await play();
   }
 
+  @override
   Future<void> restart() async {
     if (!_state.isReady && (_state.preparedUrl?.isEmpty ?? true)) {
       return;
@@ -217,6 +254,7 @@ class ReaderAudioController extends ChangeNotifier
     await _player.play();
   }
 
+  @override
   Future<void> seekRelative(Duration delta) async {
     if (!_state.isReady) {
       return;
@@ -231,6 +269,25 @@ class ReaderAudioController extends ChangeNotifier
       ),
     );
     await seekTo(clamped);
+  }
+
+  @override
+  Future<void> pauseForLifecycle() async {
+    _shouldResumeAfterLifecyclePause =
+        _state.playbackState.status == AudioPlaybackStatus.playing;
+    if (_shouldResumeAfterLifecyclePause) {
+      await pause();
+    }
+  }
+
+  @override
+  Future<void> resumeAfterLifecycle() async {
+    final shouldResume = _shouldResumeAfterLifecyclePause;
+    _shouldResumeAfterLifecyclePause = false;
+    if (!shouldResume || !_state.isReady || _state.hasError) {
+      return;
+    }
+    await play();
   }
 
   @override

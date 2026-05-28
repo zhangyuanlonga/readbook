@@ -211,6 +211,9 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       _isReaderRuntimeVisible = false;
       _pauseAutoReadForRuntime();
       _flushProgressSave();
+      if (_currentContentMode == ReaderContentMode.audio) {
+        unawaited(_readerAudioController.pauseForLifecycle());
+      }
       unawaited(_setVolumeKeyPageInterceptionEnabled(false));
       unawaited(_restoreSystemReaderBrightness());
       _commitReadingRecordSession();
@@ -223,6 +226,9 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       _scheduleReaderInfoMinuteTick();
       unawaited(_syncVolumeKeyPageInterception());
       unawaited(_applySystemReaderBrightness());
+      if (_currentContentMode == ReaderContentMode.audio) {
+        unawaited(_readerAudioController.resumeAfterLifecycle());
+      }
       _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
       if (_isAutoReadPausedByRuntime) {
         _isAutoReadPausedByRuntime = false;

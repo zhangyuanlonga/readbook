@@ -1074,11 +1074,8 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                 ReaderAutoReadSessionState.chapterPaused)) {
       return;
     }
-    _autoReadSessionState = ReaderAutoReadSessionState.paused;
+    _setAutoReadSessionState(ReaderAutoReadSessionState.paused);
     _stopAutoRead(preserveDisplayProgress: true);
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   void _resumeAutoReadSession() {
@@ -1087,11 +1084,8 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     _isAutoReadPausedByRuntime = false;
-    _autoReadSessionState = ReaderAutoReadSessionState.running;
+    _setAutoReadSessionState(ReaderAutoReadSessionState.running);
     _reconcileAutoRead(restart: true);
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   void _stopAutoReadSession() {
@@ -1103,7 +1097,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     _isAutoReadAdvancingChapter = false;
     _isAutoReadHandlingBoundary = false;
     _isAutoReadPausedByRuntime = false;
-    _autoReadSessionState = ReaderAutoReadSessionState.off;
+    _setAutoReadSessionState(ReaderAutoReadSessionState.off, rebuild: false);
     _autoReadResumeTimer?.cancel();
     _stopPagedAutoRead();
     _stopAutoRead();
@@ -1117,12 +1111,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         syncVolumeKeyPageInterception: false,
         beforeStateUpdate: () {
           _isAutoReadSessionEnabled = false;
-          _autoReadSessionState = ReaderAutoReadSessionState.off;
+          _setAutoReadSessionState(
+            ReaderAutoReadSessionState.off,
+            rebuild: false,
+          );
         },
       );
     } else {
       _isAutoReadSessionEnabled = false;
-      _autoReadSessionState = ReaderAutoReadSessionState.off;
+      _setAutoReadSessionState(ReaderAutoReadSessionState.off, rebuild: false);
     }
   }
 

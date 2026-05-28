@@ -194,7 +194,11 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         return;
                       }
 
-                      schedulePersistDraft();
+                      if (isSliderInteracting) {
+                        schedulePersistDraft();
+                      } else {
+                        unawaited(persistDraftNow(draft));
+                      }
                       final currentFingerprint = fingerprint(_settings);
                       final draftFingerprint = fingerprint(draft);
                       if (currentFingerprint == draftFingerprint) {
@@ -1759,6 +1763,85 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                 ).textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                   height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      Widget buildColorSettingRow({
+                        required String label,
+                        required int? currentColorValue,
+                        required VoidCallback onReset,
+                        required Future<void> Function() onPick,
+                        String resetLabel = '跟随',
+                      }) {
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: compactScaleValue(10),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: compactScaleValue(68),
+                                child: Text(
+                                  label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize:
+                                        (Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.fontSize ??
+                                            14) *
+                                        compactSheetScale *
+                                        0.92,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: compactScaleValue(10)),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      OutlinedButton(
+                                        onPressed: onReset,
+                                        child: Text(resetLabel),
+                                      ),
+                                      SizedBox(width: compactScaleValue(8)),
+                                      FilledButton.tonalIcon(
+                                        onPressed: () => unawaited(onPick()),
+                                        icon: const Icon(
+                                          Icons.colorize_rounded,
+                                          size: 16,
+                                        ),
+                                        label: const Text('颜色'),
+                                      ),
+                                      if (currentColorValue != null) ...[
+                                        SizedBox(width: compactScaleValue(8)),
+                                        Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Color(currentColorValue),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.outlineVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -3404,72 +3487,33 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               ),
                             ),
                             buildSectionDivider(),
-                            buildCompactLabeledSettingRow(
+                            buildColorSettingRow(
                               label: '字体颜色',
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: [
-                                    OutlinedButton(
-                                      onPressed: () {
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            clearBodyTextColor: true,
-                                          );
-                                        });
-                                      },
-                                      child: const Text('跟随'),
-                                    ),
-                                    SizedBox(width: compactScaleValue(8)),
-                                    FilledButton.tonalIcon(
-                                      onPressed: () async {
-                                        final selectedColor =
-                                            await _showBodyTextColorPickerDialog(
-                                              context,
-                                              initialColorValue:
-                                                  draft.bodyTextColorValue,
-                                            );
-                                        if (selectedColor == null ||
-                                            !context.mounted) {
-                                          return;
-                                        }
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            bodyTextColorValue: selectedColor,
-                                          );
-                                        });
-                                        unawaited(
-                                          rememberBodyTextColor(selectedColor),
-                                        );
-                                      },
-                                      icon: const Icon(
-                                        Icons.colorize_rounded,
-                                        size: 16,
-                                      ),
-                                      label: const Text('颜色'),
-                                    ),
-                                    if (draft.bodyTextColorValue != null) ...[
-                                      SizedBox(width: compactScaleValue(8)),
-                                      Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color: Color(
-                                            draft.bodyTextColorValue!,
-                                          ),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color:
-                                                Theme.of(
-                                                  context,
-                                                ).colorScheme.outlineVariant,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
+                              currentColorValue: draft.bodyTextColorValue,
+                              onReset: () {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    clearBodyTextColor: true,
+                                  );
+                                });
+                              },
+                              onPick: () async {
+                                final selectedColor =
+                                    await _showBodyTextColorPickerDialog(
+                                      context,
+                                      initialColorValue:
+                                          draft.bodyTextColorValue,
+                                    );
+                                if (selectedColor == null || !context.mounted) {
+                                  return;
+                                }
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    bodyTextColorValue: selectedColor,
+                                  );
+                                });
+                                await rememberBodyTextColor(selectedColor);
+                              },
                             ),
                             buildSectionDivider(),
                             buildCompactLabeledSettingRow(
@@ -3509,58 +3553,35 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                             ),
                             if (draft.bodyTextShadowEnabled) ...[
                               buildSectionDivider(),
-                              buildCompactLabeledSettingRow(
+                              buildColorSettingRow(
                                 label: '阴影颜色',
-                                child: Row(
-                                  children: [
-                                    OutlinedButton.icon(
-                                      onPressed: () async {
-                                        final selectedColor =
-                                            await _showBodyTextShadowColorPickerDialog(
-                                              context,
-                                              initialColorValue:
-                                                  draft
-                                                      .bodyTextShadowColorValue,
-                                            );
-                                        if (selectedColor == null ||
-                                            !context.mounted) {
-                                          return;
-                                        }
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            bodyTextShadowColorValue:
-                                                selectedColor,
-                                          );
-                                        });
-                                      },
-                                      icon: const Icon(
-                                        Icons.blur_on_rounded,
-                                        size: 16,
-                                      ),
-                                      label: const Text('颜色'),
-                                    ),
-                                    if (draft.bodyTextShadowColorValue !=
-                                        null) ...[
-                                      const SizedBox(width: 10),
-                                      Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color: Color(
-                                            draft.bodyTextShadowColorValue!,
-                                          ),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color:
-                                                Theme.of(
-                                                  context,
-                                                ).colorScheme.outlineVariant,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
+                                currentColorValue:
+                                    draft.bodyTextShadowColorValue,
+                                onReset: () {
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      bodyTextShadowColorValue: null,
+                                    );
+                                  });
+                                },
+                                onPick: () async {
+                                  final selectedColor =
+                                      await _showBodyTextShadowColorPickerDialog(
+                                        context,
+                                        initialColorValue:
+                                            draft.bodyTextShadowColorValue,
+                                      );
+                                  if (selectedColor == null ||
+                                      !context.mounted) {
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      bodyTextShadowColorValue: selectedColor,
+                                    );
+                                  });
+                                },
+                                resetLabel: '清空',
                               ),
                               buildTypographySliderRow(
                                 label: '模糊',
@@ -3691,57 +3712,45 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                                 });
                                               },
                                     ),
-                                    if (draft.bodyTextDecorationStyle !=
-                                        ReaderBodyTextDecorationStyle.none) ...[
-                                      SizedBox(width: compactScaleValue(8)),
-                                      OutlinedButton(
-                                        onPressed: () async {
-                                          final selectedColor =
-                                              await _showBodyTextDecorationColorPickerDialog(
-                                                context,
-                                                initialColorValue:
-                                                    draft
-                                                        .bodyTextDecorationColorValue,
-                                              );
-                                          if (selectedColor == null ||
-                                              !context.mounted) {
-                                            return;
-                                          }
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              bodyTextDecorationColorValue:
-                                                  selectedColor,
-                                            );
-                                          });
-                                        },
-                                        child: const Text('颜色'),
-                                      ),
-                                      if (draft.bodyTextDecorationColorValue !=
-                                          null) ...[
-                                        SizedBox(width: compactScaleValue(8)),
-                                        Container(
-                                          width: 24,
-                                          height: 24,
-                                          decoration: BoxDecoration(
-                                            color: Color(
-                                              draft
-                                                  .bodyTextDecorationColorValue!,
-                                            ),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color:
-                                                  Theme.of(
-                                                    context,
-                                                  ).colorScheme.outlineVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
                                   ],
                                 ),
                               ),
                             ),
+                            if (draft.bodyTextDecorationStyle !=
+                                ReaderBodyTextDecorationStyle.none) ...[
+                              buildSectionDivider(),
+                              buildColorSettingRow(
+                                label: '划线颜色',
+                                currentColorValue:
+                                    draft.bodyTextDecorationColorValue,
+                                onReset: () {
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      clearBodyTextDecorationColor: true,
+                                    );
+                                  });
+                                },
+                                onPick: () async {
+                                  final selectedColor =
+                                      await _showBodyTextDecorationColorPickerDialog(
+                                        context,
+                                        initialColorValue:
+                                            draft.bodyTextDecorationColorValue,
+                                      );
+                                  if (selectedColor == null ||
+                                      !context.mounted) {
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      bodyTextDecorationColorValue:
+                                          selectedColor,
+                                    );
+                                  });
+                                },
+                                resetLabel: '跟随',
+                              ),
+                            ],
                           ]),
                         ],
                         'interaction' => <Widget>[
