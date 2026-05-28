@@ -37,5 +37,13 @@ void main() {
         '衬线',
       );
     });
+
+    test('describes ownership for audio and auto read groups', () {
+      final audio = presenter.ownershipDescriptor('audio');
+      final autoRead = presenter.ownershipDescriptor('auto_read');
+
+      expect(audio.title, '设备级听书偏好');
+      expect(autoRead.title, '设备级 + 会话级');
+    });
   });
 }

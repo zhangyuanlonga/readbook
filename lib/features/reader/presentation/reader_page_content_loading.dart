@@ -54,6 +54,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _audioPlaybackPosition = Duration.zero;
     _audioPlaybackDuration = Duration.zero;
     _audioPlaybackSpeed = 1.0;
+    unawaited(_readerAudioController.reset());
     _chapterSourceFilePath =
         sourceFilePath?.trim().isEmpty ?? true ? null : sourceFilePath!.trim();
     _chapterTotalPageCount = totalPageCount;

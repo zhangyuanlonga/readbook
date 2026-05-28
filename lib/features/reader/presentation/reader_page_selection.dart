@@ -377,6 +377,16 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     final nextUnderline = overlapStyle.underline;
 
     final wasActive = _isTextSelectionActive;
+    if (!wasActive && (_isTextPagedViewport || _isTextScrollViewport)) {
+      final paragraphTarget =
+          _resolveParagraphSelectionTargetForOffset(safeStart) ??
+          _resolveParagraphSelectionTargetForOffset(safeEnd);
+      if (paragraphTarget != null) {
+        safeStart = paragraphTarget.startOffset;
+        safeEnd = paragraphTarget.endOffset;
+        _selectedSnippet = paragraphTarget.snippet;
+      }
+    }
     _updateReaderState(() {
       _selectionState = _selectionState.activate(
         startOffset: safeStart,

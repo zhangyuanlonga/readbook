@@ -1,6 +1,16 @@
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_font_registry_service.dart';
 
+class ReaderSettingsOwnershipDescriptor {
+  const ReaderSettingsOwnershipDescriptor({
+    required this.title,
+    required this.description,
+  });
+
+  final String title;
+  final String description;
+}
+
 class ReaderSettingsPresenter {
   const ReaderSettingsPresenter();
 
@@ -115,6 +125,33 @@ class ReaderSettingsPresenter {
       return '自定义字体';
     }
     return systemFontPresetLabel(settings.systemFontPreset);
+  }
+
+  ReaderSettingsOwnershipDescriptor ownershipDescriptor(String groupKey) {
+    return switch (groupKey) {
+      'typography' ||
+      'quick_margins' ||
+      'info_layout' => const ReaderSettingsOwnershipDescriptor(
+        title: '文本模式偏好',
+        description: '这组设置会跟随当前阅读模式长期保存，影响文本正文的显示与排版。',
+      ),
+      'interaction' => const ReaderSettingsOwnershipDescriptor(
+        title: '设备级交互偏好',
+        description: '这组设置会作为当前设备的阅读交互偏好保存，影响工具栏、翻页和按键行为。',
+      ),
+      'auto_read' => const ReaderSettingsOwnershipDescriptor(
+        title: '设备级 + 会话级',
+        description: '自动阅读配置会长期保存，但本次是否正在自动阅读属于阅读会话状态，不会单独持久化。',
+      ),
+      'audio' => const ReaderSettingsOwnershipDescriptor(
+        title: '设备级听书偏好',
+        description: '这组设置会作为听书模式的设备级偏好保存，进入新章节时继续沿用。',
+      ),
+      _ => const ReaderSettingsOwnershipDescriptor(
+        title: '阅读器偏好',
+        description: '该分组会按阅读器当前模式和设备偏好共同生效。',
+      ),
+    };
   }
 
   String _formatTypographyValue({

@@ -12,6 +12,7 @@ class ReaderAutoReadCoordinator {
     required bool isReaderVisible,
     required bool isLowBattery,
     required bool showOverlayControls,
+    required bool textSelectionActive,
     required bool isBootstrapping,
     required bool isLoadingContent,
     required bool hasError,
@@ -27,6 +28,7 @@ class ReaderAutoReadCoordinator {
         !isReaderVisible ||
         isLowBattery ||
         showOverlayControls ||
+        textSelectionActive ||
         isBootstrapping ||
         isLoadingContent ||
         hasError ||
@@ -46,6 +48,7 @@ class ReaderAutoReadCoordinator {
     required bool isReaderVisible,
     required bool isLowBattery,
     required bool showOverlayControls,
+    required bool textSelectionActive,
     required bool isBootstrapping,
     required bool isLoadingContent,
     required bool hasError,
@@ -60,6 +63,7 @@ class ReaderAutoReadCoordinator {
         isReaderVisible &&
         !isLowBattery &&
         !showOverlayControls &&
+        !textSelectionActive &&
         !isBootstrapping &&
         !isLoadingContent &&
         !hasError &&
@@ -92,6 +96,7 @@ class ReaderAutoReadCoordinator {
     required bool isReaderVisible,
     required bool isLowBattery,
     required bool showOverlayControls,
+    required bool textSelectionActive,
     required bool isBootstrapping,
     required bool isLoadingContent,
     required bool hasError,
@@ -104,6 +109,7 @@ class ReaderAutoReadCoordinator {
         isReaderVisible &&
         !isLowBattery &&
         !showOverlayControls &&
+        !textSelectionActive &&
         !isBootstrapping &&
         !isLoadingContent &&
         !hasError &&

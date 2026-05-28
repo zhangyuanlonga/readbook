@@ -1,27 +1,35 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../application/audio_reading_mode.dart';
+import '../application/reader_audio_controller.dart';
 import '../application/reader_content_session.dart';
 
 class ReaderAudioViewModel {
   const ReaderAudioViewModel({
+    required this.controller,
     required this.contentSession,
     this.initialPosition,
-    this.onPlaybackSnapshotChanged,
+    this.initialSpeed = 1.0,
+    this.autoPlay = false,
+    this.seekStepSeconds = 15,
+    this.canGoPreviousChapter = false,
+    this.canGoNextChapter = false,
+    this.onPreviousChapter,
+    this.onNextChapter,
   });
 
+  final ReaderAudioController controller;
   final ReaderContentSession contentSession;
   final Duration? initialPosition;
-  final void Function({
-    required Duration position,
-    required Duration duration,
-    required double speed,
-  })?
-  onPlaybackSnapshotChanged;
+  final double initialSpeed;
+  final bool autoPlay;
+  final int seekStepSeconds;
+  final bool canGoPreviousChapter;
+  final bool canGoNextChapter;
+  final Future<bool> Function()? onPreviousChapter;
+  final Future<bool> Function()? onNextChapter;
 }
 
 class ReaderAudioView extends StatefulWidget {
@@ -34,265 +42,377 @@ class ReaderAudioView extends StatefulWidget {
 }
 
 class _ReaderAudioViewState extends State<ReaderAudioView> {
-  late final AudioPlayer _player;
-  StreamSubscription<PlayerState>? _playerStateSubscription;
-  StreamSubscription<Duration?>? _durationSubscription;
-  StreamSubscription<Duration>? _positionSubscription;
-  StreamSubscription<Object>? _errorSubscription;
-
-  bool _isPreparing = true;
-  bool _isReady = false;
-  bool _isPlaying = false;
-  bool _hasCompleted = false;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-  String? _errorText;
-  String? _preparedUrl;
-  double _speed = 1.0;
-
-  ReaderContentSession get _session => widget.model.contentSession;
-
-  String get _title =>
-      (_session.chapterTitle?.trim().isNotEmpty ?? false)
-          ? _session.chapterTitle!.trim()
-          : _session.bookTitle;
-
-  String? get _audioUrl {
-    final preferred = _session.audioUrl?.trim();
-    if (preferred != null && preferred.isNotEmpty) {
-      return preferred;
-    }
-    final manifest = _session.audioManifestUrl?.trim();
-    if (manifest != null && manifest.isNotEmpty) {
-      return manifest;
-    }
-    return null;
-  }
-
-  bool get _isManifest =>
-      (_session.audioManifestUrl?.trim().isNotEmpty ?? false) &&
-      _session.audioManifestUrl?.trim() == _audioUrl;
+  ReaderAudioController get _controller => widget.model.controller;
 
   @override
   void initState() {
     super.initState();
-    _player = AudioPlayer();
-    _bindPlayerStreams();
-    unawaited(_prepareAudio());
+    _configureController();
   }
 
   @override
   void didUpdateWidget(covariant ReaderAudioView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final previousUrl = _normalizedAudioUrl(oldWidget.model.contentSession);
-    final nextUrl = _normalizedAudioUrl(widget.model.contentSession);
-    final previousHeaders = oldWidget.model.contentSession.audioHeaders;
-    final nextHeaders = widget.model.contentSession.audioHeaders;
-    if (previousUrl != nextUrl || !_sameHeaders(previousHeaders, nextHeaders)) {
-      unawaited(_prepareAudio());
+    if (oldWidget.model.contentSession != widget.model.contentSession ||
+        oldWidget.model.initialPosition != widget.model.initialPosition ||
+        oldWidget.model.controller != widget.model.controller) {
+      _configureController();
     }
   }
 
-  @override
-  void dispose() {
-    unawaited(_playerStateSubscription?.cancel());
-    unawaited(_durationSubscription?.cancel());
-    unawaited(_positionSubscription?.cancel());
-    unawaited(_errorSubscription?.cancel());
-    unawaited(_player.dispose());
-    super.dispose();
+  void _configureController() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.configure(
+        session: widget.model.contentSession,
+        initialPosition: widget.model.initialPosition,
+        initialSpeed: widget.model.initialSpeed,
+        autoPlay: widget.model.autoPlay,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final url = _audioUrl;
-    final durationMs = _duration.inMilliseconds;
-    final positionMs = _position.inMilliseconds.clamp(
-      0,
-      durationMs <= 0 ? 0 : durationMs,
-    );
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final theme = Theme.of(context);
+        final state = _controller.state;
+        final session = state.session ?? widget.model.contentSession;
+        final playback = state.playbackState;
+        final audioUrl = state.audioUrl;
+        final totalDuration = playback.totalDuration ?? Duration.zero;
+        final totalMs = totalDuration.inMilliseconds;
+        final positionMs = playback.currentPosition.inMilliseconds.clamp(
+          0,
+          totalMs <= 0 ? 0 : totalMs,
+        );
+        final chapterTitle =
+            (session.chapterTitle?.trim().isNotEmpty ?? false)
+                ? session.chapterTitle!.trim()
+                : session.bookTitle;
+        final chapterIndex =
+            session.chapterIndex == null ? null : session.chapterIndex! + 1;
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerHighest.withValues(
-              alpha: 0.78,
-            ),
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
             child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '听书模式',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(_title, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    _session.bookTitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildStatusChip(theme),
-                  const SizedBox(height: 16),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 8,
-                      ),
-                    ),
-                    child: Slider(
-                      value: positionMs.toDouble(),
-                      max: durationMs <= 0 ? 1 : durationMs.toDouble(),
-                      onChanged:
-                          _isReady
-                              ? (value) => setState(() {
-                                _position = Duration(
-                                  milliseconds: value.round(),
-                                );
-                              })
-                              : null,
-                      onChangeEnd:
-                          _isReady
-                              ? (value) =>
-                                  _seek(Duration(milliseconds: value.round()))
-                              : null,
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+              child: Card(
+                elevation: 0,
+                color: theme.colorScheme.surfaceContainerHigh.withValues(
+                  alpha: 0.9,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _formatDuration(_position),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      Text(
-                        _formatDuration(_duration),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      FilledButton.icon(
-                        onPressed:
-                            (_isReady || _hasCompleted)
-                                ? _togglePlayback
-                                : null,
-                        icon: Icon(
-                          _isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                        ),
-                        label: Text(_isPlaying ? '暂停' : '播放'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _isReady ? _restart : null,
-                        icon: const Icon(Icons.replay_rounded),
-                        label: const Text('重播'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed:
-                            url == null
-                                ? null
-                                : () => _openExternal(context, url),
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('外部打开'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed:
-                            url == null
-                                ? null
-                                : () => _copyToClipboard(context, url),
-                        icon: const Icon(Icons.copy_rounded),
-                        label: const Text('复制地址'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text('倍速', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [0.75, 1.0, 1.25, 1.5, 2.0]
-                        .map(
-                          (speed) => ChoiceChip(
-                            label: Text('${speed}x'),
-                            selected: (_speed - speed).abs() < 0.001,
-                            onSelected:
-                                _isReady ? (_) => _setSpeed(speed) : null,
+                      Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer
+                                  .withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(
+                              Icons.graphic_eq_rounded,
+                              color: theme.colorScheme.onPrimaryContainer,
+                              size: 28,
+                            ),
                           ),
-                        )
-                        .toList(growable: false),
-                  ),
-                  if (_errorText != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _errorText!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.error,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  chapterTitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  chapterIndex == null
+                                      ? session.bookTitle
+                                      : '第 $chapterIndex 章 · ${session.bookTitle}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _buildStatusChip(theme, playback.status),
+                        ],
                       ),
-                    ),
-                  ],
-                  if (url != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _isManifest ? 'Manifest URL' : 'Audio URL',
-                      style: theme.textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    SelectableText(url, style: theme.textTheme.bodySmall),
-                  ],
-                  if (_session.audioHeaders.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text('请求头', style: theme.textTheme.labelLarge),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      _session.audioHeaders.entries
-                          .map((entry) => '${entry.key}: ${entry.value}')
-                          .join('\n'),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ],
+                      const SizedBox(height: 18),
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 5,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 8,
+                          ),
+                        ),
+                        child: Slider(
+                          value: positionMs.toDouble(),
+                          max: totalMs <= 0 ? 1 : totalMs.toDouble(),
+                          onChanged:
+                              state.isReady
+                                  ? (value) async {
+                                    await _controller.seekTo(
+                                      Duration(milliseconds: value.round()),
+                                    );
+                                  }
+                                  : null,
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatDuration(playback.currentPosition),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          Text(
+                            _formatDuration(totalDuration),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed:
+                                  widget.model.canGoPreviousChapter
+                                      ? () async {
+                                        await widget.model.onPreviousChapter
+                                            ?.call();
+                                      }
+                                      : null,
+                              icon: const Icon(Icons.skip_previous_rounded),
+                              label: const Text('上一章'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  state.isReady
+                                      ? () => _controller.seekRelative(
+                                        Duration(
+                                          seconds:
+                                              -widget.model.seekStepSeconds,
+                                        ),
+                                      )
+                                      : null,
+                              icon: const Icon(Icons.replay_10_rounded),
+                              label: const Text('快退'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed:
+                                  state.isReady ||
+                                          playback.status ==
+                                              AudioPlaybackStatus.completed
+                                      ? _controller.togglePlayback
+                                      : null,
+                              icon: Icon(
+                                playback.isPlaying
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                              ),
+                              label: Text(playback.isPlaying ? '暂停' : '播放'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  state.isReady
+                                      ? () => _controller.seekRelative(
+                                        Duration(
+                                          seconds: widget.model.seekStepSeconds,
+                                        ),
+                                      )
+                                      : null,
+                              icon: const Icon(Icons.forward_30_rounded),
+                              label: const Text('快进'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed:
+                                  widget.model.canGoNextChapter
+                                      ? () async {
+                                        await widget.model.onNextChapter
+                                            ?.call();
+                                      }
+                                      : null,
+                              icon: const Icon(Icons.skip_next_rounded),
+                              label: const Text('下一章'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '倍速',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [0.75, 1.0, 1.25, 1.5, 2.0]
+                            .map(
+                              (speed) => ChoiceChip(
+                                label: Text('${speed}x'),
+                                selected:
+                                    (playback.speed - speed).abs() < 0.001,
+                                onSelected:
+                                    state.isReady
+                                        ? (_) => _controller.setSpeed(speed)
+                                        : null,
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+                      if (playback.errorMessage != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer.withValues(
+                              alpha: 0.42,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                playback.errorMessage!,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onErrorContainer,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              FilledButton.tonalIcon(
+                                onPressed: _controller.retry,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('重试'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: Text(
+                          '更多操作',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        children: [
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed:
+                                    state.isReady ? _controller.restart : null,
+                                icon: const Icon(Icons.replay_rounded),
+                                label: const Text('重播'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    audioUrl == null
+                                        ? null
+                                        : () =>
+                                            _openExternal(context, audioUrl),
+                                icon: const Icon(Icons.open_in_new_rounded),
+                                label: const Text('外部打开'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    audioUrl == null
+                                        ? null
+                                        : () =>
+                                            _copyToClipboard(context, audioUrl),
+                                icon: const Icon(Icons.copy_rounded),
+                                label: const Text('复制地址'),
+                              ),
+                            ],
+                          ),
+                          if (audioUrl != null) ...[
+                            const SizedBox(height: 14),
+                            Text(
+                              state.isManifest ? 'Manifest URL' : 'Audio URL',
+                              style: theme.textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 6),
+                            SelectableText(
+                              audioUrl,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                          if (session.audioHeaders.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Text('请求头', style: theme.textTheme.labelLarge),
+                            const SizedBox(height: 6),
+                            SelectableText(
+                              session.audioHeaders.entries
+                                  .map(
+                                    (entry) => '${entry.key}: ${entry.value}',
+                                  )
+                                  .join('\n'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildStatusChip(ThemeData theme) {
-    final (label, color) = switch ((
-      _errorText,
-      _isPreparing,
-      _isPlaying,
-      _hasCompleted,
-    )) {
-      (String _, _, _, _) => ('播放失败', theme.colorScheme.error),
-      (_, true, _, _) => ('准备中', theme.colorScheme.tertiary),
-      (_, _, true, _) => ('播放中', theme.colorScheme.primary),
-      (_, _, _, true) => ('已播放完成', theme.colorScheme.secondary),
-      _ => ('已暂停', theme.colorScheme.outline),
+  Widget _buildStatusChip(ThemeData theme, AudioPlaybackStatus status) {
+    final (label, color) = switch (status) {
+      AudioPlaybackStatus.error => ('播放失败', theme.colorScheme.error),
+      AudioPlaybackStatus.buffering => ('准备中', theme.colorScheme.tertiary),
+      AudioPlaybackStatus.playing => ('播放中', theme.colorScheme.primary),
+      AudioPlaybackStatus.completed => ('已播放完成', theme.colorScheme.secondary),
+      AudioPlaybackStatus.paused => ('已暂停', theme.colorScheme.outline),
+      AudioPlaybackStatus.idle => ('待播放', theme.colorScheme.outline),
     };
 
     return DecoratedBox(
@@ -310,167 +430,6 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
           ),
         ),
       ),
-    );
-  }
-
-  void _bindPlayerStreams() {
-    _playerStateSubscription = _player.playerStateStream.listen((state) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isPlaying = state.playing;
-        _hasCompleted = state.processingState == ProcessingState.completed;
-        _isPreparing =
-            state.processingState == ProcessingState.loading ||
-            state.processingState == ProcessingState.buffering;
-      });
-    });
-
-    _durationSubscription = _player.durationStream.listen((duration) {
-      if (!mounted || duration == null) {
-        return;
-      }
-      setState(() {
-        _duration = duration;
-      });
-      widget.model.onPlaybackSnapshotChanged?.call(
-        position: _position,
-        duration: duration,
-        speed: _speed,
-      );
-    });
-
-    _positionSubscription = _player.positionStream.listen((position) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _position = position;
-      });
-      widget.model.onPlaybackSnapshotChanged?.call(
-        position: position,
-        duration: _duration,
-        speed: _speed,
-      );
-    });
-
-    _errorSubscription = _player.errorStream.listen((error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '播放器初始化失败: $error';
-        _isReady = false;
-        _isPreparing = false;
-      });
-    });
-  }
-
-  Future<void> _prepareAudio() async {
-    final url = _audioUrl;
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isPreparing = true;
-      _isReady = false;
-      _errorText = null;
-      _hasCompleted = false;
-      _position = Duration.zero;
-      _duration = Duration.zero;
-    });
-
-    await _player.stop();
-
-    if (url == null) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isPreparing = false;
-        _errorText = '当前章节未提供可播放的音频地址。';
-      });
-      return;
-    }
-
-    final headers = _session.audioHeaders;
-    try {
-      final uri = Uri.parse(url);
-      await _player.setUrl(
-        uri.toString(),
-        headers: headers.isEmpty ? null : headers,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _preparedUrl = url;
-        _isReady = true;
-        _isPreparing = false;
-        _errorText = null;
-        _duration = _player.duration ?? Duration.zero;
-        _speed = _player.speed;
-      });
-      final initialPosition = widget.model.initialPosition;
-      if (initialPosition != null && initialPosition > Duration.zero) {
-        await _player.seek(initialPosition);
-      }
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '音频加载失败: $error';
-        _isReady = false;
-        _isPreparing = false;
-      });
-    }
-  }
-
-  Future<void> _togglePlayback() async {
-    if (!_isReady && !_hasCompleted) {
-      return;
-    }
-    if (_hasCompleted) {
-      await _restart();
-      return;
-    }
-    if (_isPlaying) {
-      await _player.pause();
-      return;
-    }
-    await _player.play();
-  }
-
-  Future<void> _restart() async {
-    if (!_isReady && _preparedUrl == null) {
-      return;
-    }
-    await _player.seek(Duration.zero);
-    await _player.play();
-  }
-
-  Future<void> _seek(Duration position) async {
-    if (!_isReady) {
-      return;
-    }
-    await _player.seek(position);
-  }
-
-  Future<void> _setSpeed(double speed) async {
-    await _player.setSpeed(speed);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _speed = speed;
-    });
-    widget.model.onPlaybackSnapshotChanged?.call(
-      position: _position,
-      duration: _duration,
-      speed: speed,
     );
   }
 
@@ -495,33 +454,6 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
 
   void _showSnackBar(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-
-  String? _normalizedAudioUrl(ReaderContentSession session) {
-    final preferred = session.audioUrl?.trim();
-    if (preferred != null && preferred.isNotEmpty) {
-      return preferred;
-    }
-    final manifest = session.audioManifestUrl?.trim();
-    if (manifest != null && manifest.isNotEmpty) {
-      return manifest;
-    }
-    return null;
-  }
-
-  bool _sameHeaders(Map<String, String> left, Map<String, String> right) {
-    if (identical(left, right)) {
-      return true;
-    }
-    if (left.length != right.length) {
-      return false;
-    }
-    for (final entry in left.entries) {
-      if (right[entry.key] != entry.value) {
-        return false;
-      }
-    }
-    return true;
   }
 
   String _formatDuration(Duration value) {

@@ -36,15 +36,15 @@ class ReaderViewportStateResolver {
       case ReaderModeViewportKind.textPaged:
         return ReaderViewportStateKind.textPaged;
       case ReaderModeViewportKind.textScroll:
-        return contentMode == ReaderContentMode.audio
-            ? ReaderViewportStateKind.audio
-            : ReaderViewportStateKind.textScroll;
+        return ReaderViewportStateKind.textScroll;
       case ReaderModeViewportKind.imagePaged:
         return ReaderViewportStateKind.mangaPaged;
       case ReaderModeViewportKind.imageScroll:
         return ReaderViewportStateKind.mangaContinuous;
       case ReaderModeViewportKind.hybridPaged:
         return ReaderViewportStateKind.hybridPaged;
+      case ReaderModeViewportKind.audio:
+        return ReaderViewportStateKind.audio;
     }
   }
 }

@@ -72,6 +72,7 @@ import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
 import '../application/paged_transition_controller.dart';
+import '../application/reader_audio_controller.dart';
 import '../application/reader_auto_read_coordinator.dart';
 import '../application/reader_cache_feedback_resolver.dart';
 import '../application/reader_content_session.dart';
@@ -358,6 +359,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final SelectionListenerNotifier _selectionNotifier =
       SelectionListenerNotifier();
   final ReaderTapZoneResolver _tapZoneResolver = const ReaderTapZoneResolver();
+  late final ReaderAudioController _readerAudioController;
   late final BookmarkRepository _bookmarkRepository;
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   late final LocalBookRepository _localBookRepository;
@@ -433,6 +435,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _autoReadResumeTimer;
   Timer? _autoReadPagedTimer;
   Timer? _overlayAutoHideTimer;
+  Timer? _systemUiHideTimer;
   Timer? _readerInfoClockTimer;
   Timer? _chapterLoadingIndicatorTimer;
   Timer? _blockingLoadingCardTimer;
@@ -1142,6 +1145,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ? _scrollController.position.maxScrollExtent
                   : 0,
         );
+      case ReaderModeViewportKind.audio:
+        return _viewportStateResolver.resolve(
+          contentMode: _currentContentMode,
+          mode: _currentReaderMode,
+          chapterPositionRatio: ratio,
+        );
     }
   }
 
@@ -1157,6 +1166,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ReaderPresentationViewportKind.mangaContinuous,
       ReaderModeViewportKind.hybridPaged =>
         ReaderPresentationViewportKind.mangaPaged,
+      ReaderModeViewportKind.audio => ReaderPresentationViewportKind.textScroll,
     };
   }
 
@@ -1794,7 +1804,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Widget _buildReaderContent(_ReaderThemeColors colors) {
     final hasRenderableContent =
-        _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty;
+        _content.trim().isNotEmpty ||
+        _chapterImageUrls.isNotEmpty ||
+        (_chapterAudioUrl?.trim().isNotEmpty ?? false) ||
+        (_chapterAudioManifestUrl?.trim().isNotEmpty ?? false);
     final content = AppAnimatedSwitcher(
       duration: AppMotion.fast,
       layoutBuilder: (currentChild, previousChildren) {
@@ -2159,6 +2172,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       paragraphIndex: paragraphIndex,
       paragraphOffset: paragraphOffset,
     );
+  }
+
+  ({int startOffset, int endOffset, String snippet})?
+  _resolveParagraphSelectionTargetForOffset(int chapterOffset) {
+    final paragraphs =
+        _paragraphs.isEmpty
+            ? <String>[_content.trim()]
+            : _paragraphs.toList(growable: false);
+    if (paragraphs.isEmpty) {
+      return null;
+    }
+    final safeOffset = chapterOffset.clamp(0, _chapterTextLength());
+    var cursor = 0;
+    for (var index = 0; index < paragraphs.length; index += 1) {
+      final paragraph = paragraphs[index];
+      final start = cursor;
+      final end = start + paragraph.length;
+      if (safeOffset <= end || index == paragraphs.length - 1) {
+        final snippet = paragraph.trim();
+        if (snippet.isEmpty) {
+          return null;
+        }
+        return (startOffset: start, endOffset: end, snippet: snippet);
+      }
+      cursor = end + 2;
+    }
+    return null;
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
@@ -3963,10 +4003,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildTopOverlay(_ReaderThemeColors colors) {
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '阅读';
-    final bookTitle = _bookTitle.trim().isNotEmpty ? _bookTitle.trim() : '阅读';
-    final displayBookTitle = _ellipsizeReaderTopTitle(bookTitle);
     final sourceName = _currentSourceNameForTopOverlay();
-    final chapterLine = '$chapterTitle · ${_chapterProgressLabel()}';
+    final chapterLine =
+        sourceName.isEmpty
+            ? _chapterProgressLabel()
+            : '${_chapterProgressLabel()} · $sourceName';
 
     return Positioned(
       top: 0,
@@ -4009,115 +4050,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     child: SafeArea(
                       bottom: false,
                       child: SizedBox(
-                        height: 92,
+                        height: 78,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 8, 12, 10),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          padding: const EdgeInsets.fromLTRB(6, 6, 10, 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  _buildTopActionButton(
-                                    icon: Icons.arrow_back_ios_new,
-                                    tooltip: '返回',
-                                    onPressed: _handleBackNavigation,
-                                    colors: colors,
-                                    emphasizeHitArea: true,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      displayBookTitle,
+                              _buildTopActionButton(
+                                icon: Icons.arrow_back_ios_new,
+                                tooltip: '返回',
+                                onPressed: _handleBackNavigation,
+                                colors: colors,
+                                emphasizeHitArea: true,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      chapterTitle,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: colors.text,
-                                        fontSize: 21,
-                                        height: 1.1,
+                                        fontSize: 18,
+                                        height: 1.05,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                  ),
-                                  if ((widget.heroTag ?? '').trim().isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 8),
-                                      child: Hero(
-                                        tag: widget.heroTag!.trim(),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                          child: SizedBox(
-                                            width: 24,
-                                            height: 34,
-                                            child: _buildReaderTopCoverThumb(),
-                                          ),
-                                        ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      chapterLine,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: colors.meta,
+                                        fontSize: 12,
+                                        height: 1.05,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                  const SizedBox(width: 12),
-                                  _buildTopActionButton(
-                                    icon: Icons.auto_stories_rounded,
-                                    tooltip: '书籍详情',
-                                    onPressed: _openDetailPage,
-                                    colors: colors,
-                                    emphasizeHitArea: true,
-                                  ),
-                                  const SizedBox(width: 2),
-                                  _buildTopActionButton(
-                                    icon: Icons.more_vert_rounded,
-                                    tooltip: '更多',
-                                    onPressed:
-                                        () => unawaited(
-                                          _showTopMoreActions(colors),
-                                        ),
-                                    colors: colors,
-                                    emphasizeHitArea: true,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 15),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        chapterLine,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: colors.meta,
-                                          fontSize: 13,
-                                          height: 1.1,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    if (sourceName.isNotEmpty) ...[
-                                      const SizedBox(width: 12),
-                                      Flexible(
-                                        flex: 0,
-                                        child: Text(
-                                          sourceName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.end,
-                                          style: TextStyle(
-                                            color: colors.meta.withValues(
-                                              alpha: 0.82,
-                                            ),
-                                            fontSize: 12,
-                                            height: 1.1,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildTopActionButton(
+                                icon: Icons.auto_stories_rounded,
+                                tooltip: '书籍详情',
+                                onPressed: _openDetailPage,
+                                colors: colors,
+                                emphasizeHitArea: true,
+                              ),
+                              const SizedBox(width: 2),
+                              _buildTopActionButton(
+                                icon: Icons.more_vert_rounded,
+                                tooltip: '更多',
+                                onPressed:
+                                    () =>
+                                        unawaited(_showTopMoreActions(colors)),
+                                colors: colors,
+                                emphasizeHitArea: true,
                               ),
                             ],
                           ),
@@ -4131,36 +4125,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           },
         ),
       ),
-    );
-  }
-
-  String _ellipsizeReaderTopTitle(String title) {
-    const maxCharacters = 12;
-    final normalized = title.trim();
-    if (normalized.runes.length <= maxCharacters) {
-      return normalized;
-    }
-    return '${String.fromCharCodes(normalized.runes.take(maxCharacters))}...';
-  }
-
-  Widget _buildReaderTopCoverThumb() {
-    final resolvedCover = resolveBookCover(
-      realCoverUrl: _bookCoverUrl,
-      customCoverPath: _bookCustomCoverPath,
-      activeTheme: _activeAdvancedTheme,
-      galleries: _coverGalleries,
-      brightness: Theme.of(context).brightness,
-      bookId: _currentBookId,
-      sourceId: _sourceId,
-      detailUrl: _detailUrl,
-    );
-    return ResolvedBookCoverView(
-      cover: resolvedCover,
-      title: _bookTitle,
-      author: _bookAuthor,
-      width: 24,
-      height: 34,
-      borderRadius: BorderRadius.circular(6),
     );
   }
 

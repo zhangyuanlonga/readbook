@@ -1717,6 +1717,123 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         );
                       }
 
+                      Widget buildOwnershipHintCard(String groupKey) {
+                        final descriptor = _readerSettingsPresenter
+                            .ownershipDescriptor(groupKey);
+                        final colorScheme = Theme.of(context).colorScheme;
+                        return Container(
+                          width: double.infinity,
+                          margin: EdgeInsets.only(bottom: compactScaleValue(8)),
+                          padding: EdgeInsets.fromLTRB(
+                            compactScaleValue(12),
+                            compactScaleValue(10),
+                            compactScaleValue(12),
+                            compactScaleValue(10),
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer.withValues(
+                              alpha: 0.22,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              compactScaleValue(16),
+                            ),
+                            border: Border.all(
+                              color: colorScheme.primary.withValues(
+                                alpha: 0.18,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                descriptor.title,
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              SizedBox(height: compactScaleValue(4)),
+                              Text(
+                                descriptor.description,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      Widget buildCurrentModeSummaryCard() {
+                        final colorScheme = Theme.of(context).colorScheme;
+                        final (
+                          title,
+                          description,
+                        ) = switch (_currentContentMode) {
+                          ReaderContentMode.text => (
+                            '文本阅读模式',
+                            '支持字体、信息排版、背景、翻页动画和自动阅读等完整文本能力。',
+                          ),
+                          ReaderContentMode.hybrid => (
+                            '版式阅读模式',
+                            '以固定版式为主，保留界面和位置相关设置，不提供正文排版能力。',
+                          ),
+                          ReaderContentMode.comic => (
+                            '漫画阅读模式',
+                            '以图片阅读为主，保留背景与漫画阅读方式，隐藏正文排版和自动阅读。',
+                          ),
+                          ReaderContentMode.audio => (
+                            '听书模式',
+                            '保留亮度、背景和听书设置，正文排版与翻页动画不参与当前章节。',
+                          ),
+                        };
+                        return Container(
+                          width: double.infinity,
+                          margin: EdgeInsets.only(
+                            bottom: compactScaleValue(10),
+                          ),
+                          padding: EdgeInsets.fromLTRB(
+                            compactScaleValue(12),
+                            compactScaleValue(10),
+                            compactScaleValue(12),
+                            compactScaleValue(10),
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(
+                              compactScaleValue(16),
+                            ),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.36,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              SizedBox(height: compactScaleValue(4)),
+                              Text(
+                                description,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
                       Widget buildInterfaceCapsuleEntry({
                         required IconData icon,
                         required String title,
@@ -2870,6 +2987,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         null =>
                           showInterfaceSettings
                               ? <Widget>[
+                                buildCurrentModeSummaryCard(),
                                 Row(
                                   children: [
                                     Text(
@@ -2980,34 +3098,37 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                 SizedBox(height: compactScaleValue(8)),
                                 Row(
                                   children: [
-                                    Flexible(
-                                      fit: FlexFit.loose,
-                                      child: buildInterfaceCapsuleEntry(
-                                        icon: Icons.format_size_rounded,
-                                        title: '字体',
-                                        margin: EdgeInsets.zero,
-                                        onTap:
-                                            () => setModalState(() {
-                                              activeSettingsGroupKey =
-                                                  'typography';
-                                            }),
+                                    if (_currentContentMode ==
+                                        ReaderContentMode.text) ...[
+                                      Flexible(
+                                        fit: FlexFit.loose,
+                                        child: buildInterfaceCapsuleEntry(
+                                          icon: Icons.format_size_rounded,
+                                          title: '字体',
+                                          margin: EdgeInsets.zero,
+                                          onTap:
+                                              () => setModalState(() {
+                                                activeSettingsGroupKey =
+                                                    'typography';
+                                              }),
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(width: compactScaleValue(8)),
-                                    Flexible(
-                                      fit: FlexFit.loose,
-                                      child: buildInterfaceCapsuleEntry(
-                                        icon: Icons.info_outline_rounded,
-                                        title: '信息排版',
-                                        margin: EdgeInsets.zero,
-                                        onTap:
-                                            () => setModalState(() {
-                                              activeSettingsGroupKey =
-                                                  'info_layout';
-                                            }),
+                                      SizedBox(width: compactScaleValue(8)),
+                                      Flexible(
+                                        fit: FlexFit.loose,
+                                        child: buildInterfaceCapsuleEntry(
+                                          icon: Icons.info_outline_rounded,
+                                          title: '信息排版',
+                                          margin: EdgeInsets.zero,
+                                          onTap:
+                                              () => setModalState(() {
+                                                activeSettingsGroupKey =
+                                                    'info_layout';
+                                              }),
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(width: compactScaleValue(8)),
+                                      SizedBox(width: compactScaleValue(8)),
+                                    ],
                                     Flexible(
                                       fit: FlexFit.loose,
                                       child: buildInterfaceCapsuleEntry(
@@ -3111,10 +3232,13 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 14),
-                                buildCompactSectionTitle('翻页动画'),
-                                const SizedBox(height: 10),
-                                buildPageAnimationSelector(),
+                                if (_currentContentMode ==
+                                    ReaderContentMode.text) ...[
+                                  const SizedBox(height: 14),
+                                  buildCompactSectionTitle('翻页动画'),
+                                  const SizedBox(height: 10),
+                                  buildPageAnimationSelector(),
+                                ],
                               ]
                               : <Widget>[
                                 buildSettingsGroupEntryCard(
@@ -3147,9 +3271,16 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                       }),
                                 ),
                               ],
-                        'quick_margins' => buildInfoLayoutCards(),
-                        'info_layout' => buildInfoLayoutCards(),
+                        'quick_margins' => <Widget>[
+                          buildOwnershipHintCard('quick_margins'),
+                          ...buildInfoLayoutCards(),
+                        ],
+                        'info_layout' => <Widget>[
+                          buildOwnershipHintCard('info_layout'),
+                          ...buildInfoLayoutCards(),
+                        ],
                         'typography' => <Widget>[
+                          buildOwnershipHintCard('typography'),
                           buildCompactSettingsCard([
                             buildCompactLabeledSettingRow(
                               label: '字体',
@@ -3614,6 +3745,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           ]),
                         ],
                         'interaction' => <Widget>[
+                          buildOwnershipHintCard('interaction'),
                           buildCompactSettingsCard([
                             buildCompactSectionTitle('排版对齐'),
                             const SizedBox(height: 10),
@@ -3747,6 +3879,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           buildCompactSettingsCard([quickToggleCard]),
                         ],
                         'auto_read' => <Widget>[
+                          buildOwnershipHintCard('auto_read'),
                           buildCompactSettingsCard([
                             buildCompactSectionTitle('自动阅读'),
                             const SizedBox(height: 10),
@@ -4000,21 +4133,81 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           ]),
                         ],
                         'audio' => <Widget>[
+                          buildOwnershipHintCard('audio'),
                           buildCompactSettingsCard([
                             buildCompactSectionTitle('听书设置'),
                             const SizedBox(height: 10),
-                            Text(
-                              '当前内容为音频章节，自动阅读和排版类设置已隐藏。',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                              ),
+                            buildCompactToggleRow(
+                              label: '自动续播',
+                              value: draft.audioAutoPlay,
+                              onChanged: (enabled) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    audioAutoPlay: enabled,
+                                  );
+                                });
+                              },
                             ),
                             const SizedBox(height: 12),
+                            buildCompactToggleRow(
+                              label: '记忆倍速',
+                              value: draft.audioRememberSpeed,
+                              onChanged: (enabled) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    audioRememberSpeed: enabled,
+                                  );
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            buildTypographySliderRow(
+                              label: '默认倍速',
+                              min: ReaderSettings.minAudioSpeed,
+                              max: ReaderSettings.maxAudioSpeed,
+                              divisions: 10,
+                              step: 0.25,
+                              value: draft.audioDefaultSpeed,
+                              valueLabel:
+                                  '${draft.audioDefaultSpeed.toStringAsFixed(2)}x',
+                              onChanged: (value) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    audioDefaultSpeed: (value * 4).round() / 4,
+                                  );
+                                });
+                              },
+                            ),
+                            buildTypographySliderRow(
+                              label: '快进/退',
+                              min:
+                                  ReaderSettings.minAudioSeekStepSeconds
+                                      .toDouble(),
+                              max:
+                                  ReaderSettings.maxAudioSeekStepSeconds
+                                      .toDouble(),
+                              divisions:
+                                  (ReaderSettings.maxAudioSeekStepSeconds -
+                                      ReaderSettings.minAudioSeekStepSeconds) ~/
+                                  5,
+                              step: 5,
+                              value: draft.audioSeekStepSeconds.toDouble(),
+                              valueLabel: '${draft.audioSeekStepSeconds} 秒',
+                              onChanged: (value) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    audioSeekStepSeconds:
+                                        ((value / 5).round() * 5).clamp(
+                                          ReaderSettings
+                                              .minAudioSeekStepSeconds,
+                                          ReaderSettings
+                                              .maxAudioSeekStepSeconds,
+                                        ),
+                                  );
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 6),
                             buildCompactToggleRow(
                               label: '启用音量键翻页',
                               value: draft.volumeKeyPageEnabled,

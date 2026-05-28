@@ -70,7 +70,7 @@ class ReaderModeResolver {
         return ReaderModeModel(
           contentKind: ReaderContentKind.audio,
           layoutMode: ReaderLayoutMode.scroll,
-          viewportKind: ReaderModeViewportKind.textScroll,
+          viewportKind: ReaderModeViewportKind.audio,
           supportsTextSelection: false,
           supportsZoomGesture: false,
           supportsAutoRead: false,

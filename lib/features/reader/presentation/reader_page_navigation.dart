@@ -16,9 +16,6 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     bool showBoundaryHint = true,
     double? initialScrollRatio,
   }) async {
-    if (_currentContentMode == ReaderContentMode.audio) {
-      return false;
-    }
     final sessionState = _currentTextSessionState();
     final decision = _chapterFlow.resolveAdjacentChapter(
       chapters: _chapters,
@@ -272,6 +269,10 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
   }
 
   Future<void> _showCatalogSheet() async {
+    if (!_readerModeCapabilities.supportsCatalogNavigation) {
+      _showMessage('当前内容暂不支持目录操作。');
+      return;
+    }
     if (!await _ensureCatalogLoadedForOverlay()) {
       _showMessage('当前书籍暂无目录。');
       return;

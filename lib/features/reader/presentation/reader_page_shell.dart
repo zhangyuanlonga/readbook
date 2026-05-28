@@ -175,6 +175,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         }
         return;
       case ReaderModeViewportKind.imageScroll:
+      case ReaderModeViewportKind.audio:
         return;
     }
   }
@@ -412,6 +413,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
+    _cancelPendingSystemUiHide();
     setState(() {
       _showOverlayControls = visible;
       if (!visible) {
@@ -422,16 +424,36 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       _pauseAutoReadForRuntime();
       _scheduleOverlayAutoHide();
       _maybeShowToolbarHint();
+      _syncSystemUiVisibility(visible: true);
     } else {
       _cancelOverlayAutoHideTimer();
     }
-    _syncSystemUiVisibility(visible: visible);
     unawaited(_syncVolumeKeyPageInterception());
     if (visible) {
       _overlayControlsController.forward();
     } else {
       _overlayControlsController.reverse();
+      _scheduleSystemUiHideAfterOverlay();
     }
+  }
+
+  void _scheduleSystemUiHideAfterOverlay() {
+    _systemUiHideTimer?.cancel();
+    _systemUiHideTimer = Timer(
+      _ReaderPageState._kOverlayControlsHideDuration,
+      () {
+        _systemUiHideTimer = null;
+        if (!mounted || _showOverlayControls) {
+          return;
+        }
+        _syncSystemUiVisibility(visible: false);
+      },
+    );
+  }
+
+  void _cancelPendingSystemUiHide() {
+    _systemUiHideTimer?.cancel();
+    _systemUiHideTimer = null;
   }
 
   void _scheduleOverlayAutoHide() {
@@ -942,7 +964,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         }
         return;
       case _ReaderAutoReadControlAction.settings:
-        await _showSettingsSheet(initialTab: _ReaderSettingsTab.interface);
+        await _showSettingsSheet(
+          initialTab: _ReaderSettingsTab.reading,
+          initialSettingsGroupKey: 'auto_read',
+        );
         return;
       case _ReaderAutoReadControlAction.exit:
         _stopAutoReadSession();

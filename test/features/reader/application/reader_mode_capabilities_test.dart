@@ -24,6 +24,7 @@ void main() {
         resolved.primaryBottomAction,
         ReaderPrimaryBottomAction.interfacePanel,
       );
+      expect(resolved.supportsCatalogNavigation, isTrue);
     });
 
     test('disables auto read and search for hybrid mode', () {
@@ -40,6 +41,19 @@ void main() {
         ReaderPrimaryBottomAction.positionPanel,
       );
       expect(resolved.interfaceSettingsTitle, '版式界面');
+      expect(resolved.supportsCatalogNavigation, isTrue);
+    });
+
+    test('keeps audio catalog navigation while disabling正文搜索', () {
+      final resolved = resolver.resolve(
+        contentMode: ReaderContentMode.audio,
+        contentCapabilities: capabilities,
+        hasInlineImageParagraphs: false,
+      );
+
+      expect(resolved.supportsCatalogNavigation, isTrue);
+      expect(resolved.supportsCatalogContentSearch, isFalse);
+      expect(resolved.readingSettingsTitle, '听书设置');
     });
   });
 }

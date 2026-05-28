@@ -118,6 +118,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             ReaderModeViewportKind.hybridPaged => _buildHybridReader(colors),
             ReaderModeViewportKind.textPaged => _buildPagedReader(colors),
             ReaderModeViewportKind.textScroll => _buildReaderList(colors),
+            ReaderModeViewportKind.audio => _buildAudioReader(colors),
           },
       onRetry: () => unawaited(_loadCurrentChapter(initialScrollRatio: null)),
       onPullToRefresh:
@@ -142,23 +143,35 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
 
   Widget _buildAudioReader(_ReaderThemeColors colors) {
     final snapshot = _bootstrapProgress?.positionSnapshot;
+    final canGoPreviousChapter = (_currentIndex ?? 0) > 0;
+    final canGoNextChapter =
+        _currentIndex != null &&
+        _currentIndex! >= 0 &&
+        _currentIndex! < _chapters.length - 1;
     return ReaderAudioView(
       model: ReaderAudioViewModel(
+        controller: _readerAudioController,
         contentSession: _resolvedContentSession(),
         initialPosition:
             snapshot?.audioPositionMs == null
                 ? null
                 : Duration(milliseconds: snapshot!.audioPositionMs!),
-        onPlaybackSnapshotChanged: ({
-          required position,
-          required duration,
-          required speed,
-        }) {
-          _audioPlaybackPosition = position;
-          _audioPlaybackDuration = duration;
-          _audioPlaybackSpeed = speed;
-          _scheduleProgressSave();
-        },
+        initialSpeed:
+            _settings.audioRememberSpeed && (snapshot?.audioSpeed ?? 0) > 0
+                ? snapshot!.audioSpeed!
+                : _settings.audioDefaultSpeed,
+        autoPlay: _settings.audioAutoPlay,
+        seekStepSeconds: _settings.audioSeekStepSeconds,
+        canGoPreviousChapter: canGoPreviousChapter,
+        canGoNextChapter: canGoNextChapter,
+        onPreviousChapter:
+            canGoPreviousChapter
+                ? () => _jumpToAdjacentReadableChapter(forward: false)
+                : null,
+        onNextChapter:
+            canGoNextChapter
+                ? () => _jumpToAdjacentReadableChapter(forward: true)
+                : null,
       ),
     );
   }

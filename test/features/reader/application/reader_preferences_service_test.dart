@@ -39,6 +39,10 @@ void main() {
         autoReadSpeedLevel: 6,
         autoReadPauseMode: ReaderAutoReadPauseMode.chapterEnd,
         autoReadEndBehavior: ReaderAutoReadEndBehavior.loopBook,
+        audioDefaultSpeed: 1.5,
+        audioRememberSpeed: false,
+        audioSeekStepSeconds: 30,
+        audioAutoPlay: true,
         backgroundStyle: ReaderBackgroundStyle.paper,
         pageTurnStepRatio: 0.72,
         fontWeightLevel: ReaderFontWeightLevel.medium,
@@ -112,6 +116,10 @@ void main() {
       expect(restored.autoReadSpeedLevel, 6);
       expect(restored.autoReadPauseMode, ReaderAutoReadPauseMode.chapterEnd);
       expect(restored.autoReadEndBehavior, ReaderAutoReadEndBehavior.loopBook);
+      expect(restored.audioDefaultSpeed, 1.5);
+      expect(restored.audioRememberSpeed, isFalse);
+      expect(restored.audioSeekStepSeconds, 30);
+      expect(restored.audioAutoPlay, isTrue);
       expect(restored.backgroundStyle, ReaderBackgroundStyle.paper);
       expect(restored.pageTurnStepRatio, 0.72);
       expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);

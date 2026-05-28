@@ -112,5 +112,21 @@ void main() {
       expect(mode.supportsZoomGesture, isTrue);
       expect(mode.supportsAutoRead, isFalse);
     });
+
+    test('resolves audio content as independent audio viewport', () {
+      const settings = ReaderSettings();
+
+      final mode = resolver.resolve(
+        contentMode: ReaderContentMode.audio,
+        settings: settings,
+        canUsePagedText: false,
+      );
+
+      expect(mode.contentKind, ReaderContentKind.audio);
+      expect(mode.layoutMode, ReaderLayoutMode.scroll);
+      expect(mode.viewportKind, ReaderModeViewportKind.audio);
+      expect(mode.supportsTextSelection, isFalse);
+      expect(mode.supportsAutoRead, isFalse);
+    });
   });
 }

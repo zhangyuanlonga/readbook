@@ -14,6 +14,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: false,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -29,6 +30,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: false,
         showOverlayControls: true,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -50,6 +52,7 @@ void main() {
         isReaderVisible: false,
         isLowBattery: false,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -65,6 +68,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: true,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -124,6 +128,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: false,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -137,6 +142,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: false,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -144,6 +150,27 @@ void main() {
       );
 
       expect(shouldAdvance, isTrue);
+      expect(blocked, isFalse);
+    });
+
+    test('blocks running auto read when text selection is active', () {
+      final blocked = coordinator.canRunNow(
+        isAutoReadSessionEnabled: true,
+        isMangaChapter: false,
+        isPagedTextReaderEnabled: false,
+        isReaderVisible: true,
+        isLowBattery: false,
+        showOverlayControls: false,
+        textSelectionActive: true,
+        isBootstrapping: false,
+        isLoadingContent: false,
+        hasError: false,
+        hasTextContent: true,
+        hasScrollClients: true,
+        maxScrollExtent: 500,
+        scrollOffset: 240,
+      );
+
       expect(blocked, isFalse);
     });
 
@@ -155,6 +182,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: false,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,
@@ -170,6 +198,7 @@ void main() {
         isReaderVisible: true,
         isLowBattery: false,
         showOverlayControls: false,
+        textSelectionActive: false,
         isBootstrapping: false,
         isLoadingContent: false,
         hasError: false,

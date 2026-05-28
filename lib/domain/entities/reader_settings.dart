@@ -120,6 +120,10 @@ class ReaderSettings {
     this.autoReadSpeedLevel = defaultAutoReadSpeedLevel,
     this.autoReadPauseMode = ReaderAutoReadPauseMode.none,
     this.autoReadEndBehavior = ReaderAutoReadEndBehavior.stop,
+    this.audioDefaultSpeed = 1.0,
+    this.audioRememberSpeed = true,
+    this.audioSeekStepSeconds = 15,
+    this.audioAutoPlay = false,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
     this.backgroundTone = ReaderBackgroundTone.surface,
     this.pageTurnStepRatio = 0.88,
@@ -187,6 +191,10 @@ class ReaderSettings {
   static const double minAutoReadSpeed = 20;
   static const double maxAutoReadSpeed = 120;
   static const double defaultAutoReadSpeed = 48;
+  static const double minAudioSpeed = 0.5;
+  static const double maxAudioSpeed = 3.0;
+  static const int minAudioSeekStepSeconds = 5;
+  static const int maxAudioSeekStepSeconds = 60;
   static const int minAutoReadSpeedLevel = 1;
   static const int maxAutoReadSpeedLevel = 10;
   static const int defaultAutoReadSpeedLevel = 4;
@@ -271,6 +279,10 @@ class ReaderSettings {
   final int autoReadSpeedLevel;
   final ReaderAutoReadPauseMode autoReadPauseMode;
   final ReaderAutoReadEndBehavior autoReadEndBehavior;
+  final double audioDefaultSpeed;
+  final bool audioRememberSpeed;
+  final int audioSeekStepSeconds;
+  final bool audioAutoPlay;
   final ReaderBackgroundStyle backgroundStyle;
   final ReaderBackgroundTone backgroundTone;
   final double pageTurnStepRatio;
@@ -394,6 +406,10 @@ class ReaderSettings {
     int? autoReadSpeedLevel,
     ReaderAutoReadPauseMode? autoReadPauseMode,
     ReaderAutoReadEndBehavior? autoReadEndBehavior,
+    double? audioDefaultSpeed,
+    bool? audioRememberSpeed,
+    int? audioSeekStepSeconds,
+    bool? audioAutoPlay,
     ReaderBackgroundStyle? backgroundStyle,
     ReaderBackgroundTone? backgroundTone,
     double? pageTurnStepRatio,
@@ -529,6 +545,16 @@ class ReaderSettings {
               .toInt(),
       autoReadPauseMode: autoReadPauseMode ?? this.autoReadPauseMode,
       autoReadEndBehavior: autoReadEndBehavior ?? this.autoReadEndBehavior,
+      audioDefaultSpeed:
+          (audioDefaultSpeed ?? this.audioDefaultSpeed)
+              .clamp(minAudioSpeed, maxAudioSpeed)
+              .toDouble(),
+      audioRememberSpeed: audioRememberSpeed ?? this.audioRememberSpeed,
+      audioSeekStepSeconds:
+          (audioSeekStepSeconds ?? this.audioSeekStepSeconds)
+              .clamp(minAudioSeekStepSeconds, maxAudioSeekStepSeconds)
+              .toInt(),
+      audioAutoPlay: audioAutoPlay ?? this.audioAutoPlay,
       backgroundStyle: backgroundStyle ?? this.backgroundStyle,
       backgroundTone: backgroundTone ?? this.backgroundTone,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
@@ -721,6 +747,10 @@ class ReaderSettings {
       'autoReadSpeedLevel': autoReadSpeedLevel,
       'autoReadPauseMode': autoReadPauseMode.name,
       'autoReadEndBehavior': autoReadEndBehavior.name,
+      'audioDefaultSpeed': audioDefaultSpeed,
+      'audioRememberSpeed': audioRememberSpeed,
+      'audioSeekStepSeconds': audioSeekStepSeconds,
+      'audioAutoPlay': audioAutoPlay,
       'backgroundStyle': backgroundStyle.name,
       'backgroundTone': backgroundTone.name,
       'pageTurnStepRatio': pageTurnStepRatio,
@@ -925,6 +955,17 @@ class ReaderSettings {
               .toInt(),
       autoReadPauseMode: autoReadPauseMode,
       autoReadEndBehavior: autoReadEndBehavior,
+      audioDefaultSpeed:
+          _asDouble(
+            json['audioDefaultSpeed'],
+          )?.clamp(minAudioSpeed, maxAudioSpeed) ??
+          1.0,
+      audioRememberSpeed: _asBool(json['audioRememberSpeed']) ?? true,
+      audioSeekStepSeconds:
+          (_asInt(json['audioSeekStepSeconds']) ?? 15)
+              .clamp(minAudioSeekStepSeconds, maxAudioSeekStepSeconds)
+              .toInt(),
+      audioAutoPlay: _asBool(json['audioAutoPlay']) ?? false,
       backgroundStyle: backgroundStyle,
       backgroundTone: backgroundTone,
       pageTurnStepRatio:

@@ -45,7 +45,38 @@ class AudioPlaybackState {
 
   bool get isPlaying => status == AudioPlaybackStatus.playing;
   bool get isBuffering => status == AudioPlaybackStatus.buffering;
+
+  AudioPlaybackState copyWith({
+    AudioPlaybackStatus? status,
+    double? speed,
+    Duration? currentPosition,
+    Object? totalDuration = _audioPlaybackStateSentinel,
+    AudioPlayMode? playMode,
+    Object? sleepTimer = _audioPlaybackStateSentinel,
+    Object? errorMessage = _audioPlaybackStateSentinel,
+  }) {
+    return AudioPlaybackState(
+      status: status ?? this.status,
+      speed: speed ?? this.speed,
+      currentPosition: currentPosition ?? this.currentPosition,
+      totalDuration:
+          identical(totalDuration, _audioPlaybackStateSentinel)
+              ? this.totalDuration
+              : totalDuration as Duration?,
+      playMode: playMode ?? this.playMode,
+      sleepTimer:
+          identical(sleepTimer, _audioPlaybackStateSentinel)
+              ? this.sleepTimer
+              : sleepTimer as Duration?,
+      errorMessage:
+          identical(errorMessage, _audioPlaybackStateSentinel)
+              ? this.errorMessage
+              : errorMessage as String?,
+    );
+  }
 }
+
+const Object _audioPlaybackStateSentinel = Object();
 
 abstract class AudioPlaybackController {
   Future<void> play();

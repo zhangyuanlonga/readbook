@@ -51,6 +51,13 @@ class ReaderPreferencesService {
       'reader.settings.autoReadPauseMode';
   static const String _autoReadEndBehaviorKey =
       'reader.settings.autoReadEndBehavior';
+  static const String _audioDefaultSpeedKey =
+      'reader.settings.audioDefaultSpeed';
+  static const String _audioRememberSpeedKey =
+      'reader.settings.audioRememberSpeed';
+  static const String _audioSeekStepSecondsKey =
+      'reader.settings.audioSeekStepSeconds';
+  static const String _audioAutoPlayKey = 'reader.settings.audioAutoPlay';
   static const String _autoReadConfiguredKey =
       'reader.settings.autoReadConfigured.v1';
   static const String _toolbarHintShownKey =
@@ -319,6 +326,19 @@ class ReaderPreferencesService {
               .toInt(),
       autoReadPauseMode: autoReadPauseMode,
       autoReadEndBehavior: autoReadEndBehavior,
+      audioDefaultSpeed: (prefs.getDouble(_audioDefaultSpeedKey) ?? 1.0).clamp(
+        ReaderSettings.minAudioSpeed,
+        ReaderSettings.maxAudioSpeed,
+      ),
+      audioRememberSpeed: prefs.getBool(_audioRememberSpeedKey) ?? true,
+      audioSeekStepSeconds:
+          (prefs.getInt(_audioSeekStepSecondsKey) ?? 15)
+              .clamp(
+                ReaderSettings.minAudioSeekStepSeconds,
+                ReaderSettings.maxAudioSeekStepSeconds,
+              )
+              .toInt(),
+      audioAutoPlay: prefs.getBool(_audioAutoPlayKey) ?? false,
       backgroundStyle: backgroundStyle,
       backgroundTone: backgroundTone,
       pageTurnStepRatio: (prefs.getDouble(_pageTurnStepRatioKey) ?? 0.88).clamp(
@@ -534,6 +554,10 @@ class ReaderPreferencesService {
       _autoReadEndBehaviorKey,
       settings.autoReadEndBehavior.name,
     );
+    await prefs.setDouble(_audioDefaultSpeedKey, settings.audioDefaultSpeed);
+    await prefs.setBool(_audioRememberSpeedKey, settings.audioRememberSpeed);
+    await prefs.setInt(_audioSeekStepSecondsKey, settings.audioSeekStepSeconds);
+    await prefs.setBool(_audioAutoPlayKey, settings.audioAutoPlay);
     await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);
     await prefs.setString(_backgroundToneKey, settings.backgroundTone.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);

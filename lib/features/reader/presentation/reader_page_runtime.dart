@@ -322,6 +322,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           );
           _scrollController.jumpTo(plan.scrollOffset ?? 0);
           return;
+        case ReaderModeViewportKind.audio:
+          return;
       }
     });
   }
@@ -340,6 +342,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isReaderVisible: _isReaderRuntimeVisible,
       isLowBattery: _isReaderBatteryLowForRuntime,
       showOverlayControls: _showOverlayControls,
+      textSelectionActive: _isTextSelectionActive,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent || _isRestoringContinuousTextAnchor,
       hasError: _errorText != null,
@@ -362,6 +365,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isReaderVisible: _isReaderRuntimeVisible,
       isLowBattery: _isReaderBatteryLowForRuntime,
       showOverlayControls: _showOverlayControls,
+      textSelectionActive: _isTextSelectionActive,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent,
       hasError: _errorText != null,
@@ -1331,6 +1335,25 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           }
         }
         return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
+      case ReaderModeViewportKind.audio:
+        final totalMs = _audioPlaybackDuration.inMilliseconds;
+        if (totalMs <= 0) {
+          return 0;
+        }
+        return (_audioPlaybackPosition.inMilliseconds / totalMs).clamp(
+          0.0,
+          1.0,
+        );
+    }
+  }
+
+  void _handleReaderAudioControllerChanged() {
+    final playbackState = _readerAudioController.state.playbackState;
+    _audioPlaybackPosition = playbackState.currentPosition;
+    _audioPlaybackDuration = playbackState.totalDuration ?? Duration.zero;
+    _audioPlaybackSpeed = playbackState.speed;
+    if (_currentContentMode == ReaderContentMode.audio) {
+      _scheduleProgressSave();
     }
   }
 

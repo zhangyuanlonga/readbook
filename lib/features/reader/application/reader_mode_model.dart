@@ -10,6 +10,7 @@ enum ReaderModeViewportKind {
   imagePaged,
   imageScroll,
   hybridPaged,
+  audio,
 }
 
 extension ReaderPageTurnModeX on ReaderPageTurnMode {

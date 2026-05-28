@@ -8,6 +8,7 @@ class ReaderModeCapabilities {
     required this.canAutoRead,
     required this.canUsePagedText,
     required this.supportsCatalogContentSearch,
+    required this.supportsCatalogNavigation,
     required this.primaryBottomAction,
     required this.canSwitchSource,
     required this.canCacheChapter,
@@ -18,6 +19,7 @@ class ReaderModeCapabilities {
   final bool canAutoRead;
   final bool canUsePagedText;
   final bool supportsCatalogContentSearch;
+  final bool supportsCatalogNavigation;
   final ReaderPrimaryBottomAction primaryBottomAction;
   final bool canSwitchSource;
   final bool canCacheChapter;
@@ -41,6 +43,7 @@ class ReaderModeCapabilitiesResolver {
           canAutoRead: true,
           canUsePagedText: true,
           supportsCatalogContentSearch: true,
+          supportsCatalogNavigation: true,
           primaryBottomAction: ReaderPrimaryBottomAction.interfacePanel,
           canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,
@@ -52,6 +55,7 @@ class ReaderModeCapabilitiesResolver {
           canAutoRead: false,
           canUsePagedText: false,
           supportsCatalogContentSearch: false,
+          supportsCatalogNavigation: true,
           primaryBottomAction: ReaderPrimaryBottomAction.positionPanel,
           canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,
@@ -63,6 +67,7 @@ class ReaderModeCapabilitiesResolver {
           canAutoRead: false,
           canUsePagedText: false,
           supportsCatalogContentSearch: false,
+          supportsCatalogNavigation: true,
           primaryBottomAction: ReaderPrimaryBottomAction.positionPanel,
           canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,
@@ -74,6 +79,7 @@ class ReaderModeCapabilitiesResolver {
           canAutoRead: false,
           canUsePagedText: false,
           supportsCatalogContentSearch: false,
+          supportsCatalogNavigation: true,
           primaryBottomAction: ReaderPrimaryBottomAction.interfacePanel,
           canSwitchSource: canSwitchSource,
           canCacheChapter: canCacheChapter,

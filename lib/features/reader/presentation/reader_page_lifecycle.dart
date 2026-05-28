@@ -108,6 +108,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     );
     _scrollController.addListener(_onScrollChanged);
     _selectionNotifier.addListener(_handleSelectionNotifierChanged);
+    _readerAudioController = ReaderAudioController();
+    _readerAudioController.addListener(_handleReaderAudioControllerChanged);
     if (_platformBridgeService.isVolumeKeyPagingSupported) {
       _volumeKeyEventSubscription = _platformBridgeService.volumeKeyEvents
           .listen(
@@ -163,6 +165,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _autoReadResumeTimer?.cancel();
     _autoReadPagedTimer?.cancel();
     _overlayAutoHideTimer?.cancel();
+    _systemUiHideTimer?.cancel();
     _readerInfoClockTimer?.cancel();
     _chapterLoadingIndicatorTimer?.cancel();
     _blockingLoadingCardTimer?.cancel();
@@ -178,6 +181,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _scrollController.removeListener(_onScrollChanged);
     _selectionNotifier.removeListener(_handleSelectionNotifierChanged);
     _selectionNotifier.dispose();
+    _readerAudioController.removeListener(_handleReaderAudioControllerChanged);
+    unawaited(_readerAudioController.disposeController());
     unawaited(_setVolumeKeyPageInterceptionEnabled(false));
     _stopAutoRead();
     _scrollController.dispose();
