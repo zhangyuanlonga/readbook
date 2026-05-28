@@ -25,8 +25,6 @@ import '../../../core/membership/membership_service.dart';
 import '../../../core/network/api_client.dart';
 import '../application/advanced_theme_provider.dart';
 import '../providers.dart';
-import '../../search/application/search_system_settings_service.dart';
-import '../../search/providers.dart';
 
 class MembershipCenterPage extends ConsumerStatefulWidget {
   const MembershipCenterPage({super.key});
@@ -116,7 +114,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 
   late final AuthSessionStore _sessionStore;
   late final MembershipService _membershipService;
-  late final SearchSystemSettingsService _searchSystemSettingsService;
   final TextEditingController _codeController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -127,8 +124,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   bool _isLoading = true;
   bool _isRedeeming = false;
   bool _isClaimingTrial = false;
-  bool _serverOnlineSearchEnabled = false;
-  bool _isSavingServerOnlineSearch = false;
   String? _errorMessage;
 
   bool get _hasActiveMembership => _entitlement?.isActive ?? false;
@@ -139,9 +134,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     super.initState();
     _sessionStore = ref.read(mineAuthSessionStoreProvider);
     _membershipService = ref.read(mineMembershipServiceProvider);
-    _searchSystemSettingsService = ref.read(
-      searchSystemSettingsServiceProvider,
-    );
     _loadPage();
   }
 
@@ -235,8 +227,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       _isLoading = true;
       _errorMessage = null;
     });
-    final serverOnlineSearchEnabled =
-        await _searchSystemSettingsService.loadServerOnlineSearchEnabled();
     final session = await _sessionStore.getSession();
     if (!mounted) {
       return;
@@ -246,17 +236,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       _entitlement = null;
       _seatSyncResult = null;
       _deviceSeats = const <MembershipDeviceSeat>[];
-      _serverOnlineSearchEnabled = serverOnlineSearchEnabled;
     });
     if (session == null) {
-      if (serverOnlineSearchEnabled) {
-        await _searchSystemSettingsService.saveServerOnlineSearchEnabled(false);
-      }
       if (!mounted) {
         return;
       }
       setState(() {
-        _serverOnlineSearchEnabled = false;
         _isLoading = false;
       });
       return;
@@ -323,8 +308,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
           transientError =
               error is AppException ? error.briefMessage : '设备席位同步失败。';
         }
-      } else if (_serverOnlineSearchEnabled) {
-        await _searchSystemSettingsService.saveServerOnlineSearchEnabled(false);
       }
       if (!mounted) {
         return;
@@ -333,9 +316,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         _entitlement = entitlement;
         _seatSyncResult = seatSyncResult;
         _deviceSeats = seats;
-        if (!entitlement.isActive) {
-          _serverOnlineSearchEnabled = false;
-        }
         _errorMessage = transientError;
         _isLoading = false;
       });
@@ -693,8 +673,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         SizedBox(height: metrics.sectionGap),
         _buildFeatureCard(context),
         SizedBox(height: metrics.sectionGap),
-        _buildServerOnlineSearchCard(context),
-        SizedBox(height: metrics.sectionGap),
         _buildMembershipStatusStrip(context),
       ]);
     }
@@ -702,8 +680,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (_hasActiveMembership) {
       widgets.addAll([
         _buildEntitlementCard(context),
-        SizedBox(height: metrics.sectionGap),
-        _buildServerOnlineSearchCard(context),
         SizedBox(height: metrics.sectionGap),
         _buildMembershipStatusStrip(context),
       ]);
@@ -719,107 +695,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
           child: widgets[index],
         ),
     ];
-  }
-
-  Future<void> _setServerOnlineSearchEnabled(bool enabled) async {
-    if (!_hasActiveMembership) {
-      _showMessage('服务器在线搜索为会员功能，开通会员后可开启。');
-      return;
-    }
-    setState(() {
-      _isSavingServerOnlineSearch = true;
-      _serverOnlineSearchEnabled = enabled;
-    });
-    try {
-      await _searchSystemSettingsService.saveServerOnlineSearchEnabled(enabled);
-      if (!mounted) {
-        return;
-      }
-      _showMessage(enabled ? '已开启服务器在线搜索。' : '已关闭服务器在线搜索。');
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _serverOnlineSearchEnabled = !enabled;
-      });
-      _showMessage('保存设置失败，请稍后重试。');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSavingServerOnlineSearch = false;
-        });
-      }
-    }
-  }
-
-  Widget _buildServerOnlineSearchCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    final enabled = _hasActiveMembership && _serverOnlineSearchEnabled;
-    return Container(
-      padding: EdgeInsets.all(metrics.cardPadding),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(metrics.cardRadius),
-        border: Border.all(
-          color:
-              enabled
-                  ? colorScheme.primary.withValues(alpha: 0.28)
-                  : colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.travel_explore_rounded,
-              size: 20,
-              color: colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '服务器在线搜索',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _hasActiveMembership
-                      ? '开启后，搜索关键词和书源范围会发送至服务器书源网关。'
-                      : '会员开启后可使用服务器书源网关搜索；搜索关键词会发送至服务器。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Switch.adaptive(
-            value: enabled,
-            onChanged:
-                _isSavingServerOnlineSearch
-                    ? null
-                    : _setServerOnlineSearchEnabled,
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildBottomActionBar(BuildContext context, double bottomSafe) {

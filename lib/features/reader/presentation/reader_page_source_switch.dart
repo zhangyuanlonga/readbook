@@ -6,6 +6,9 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
   Future<void> _showSwitchSourceSheet() async {
     _suspendOverlayAutoHide();
     try {
+      if (!await _ensureSwitchSourceMembership()) {
+        return;
+      }
       final validation = _sourceSwitchCoordinator.validateManualSwitchRequest(
         isSwitchSourceLoading: _isSwitchSourceLoading,
         canSwitchSource: _canSwitchSource,
@@ -111,6 +114,38 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       await _applySwitchSourceCandidate(selected);
     } finally {
       _resumeOverlayAutoHide();
+    }
+  }
+
+  Future<bool> _ensureSwitchSourceMembership() async {
+    try {
+      final session = await AuthSessionStore().getSession();
+      if (session == null) {
+        _showMessage('切换书源为会员服务，请先登录并开通会员。');
+        if (mounted) {
+          unawaited(context.push('/membership'));
+        }
+        return false;
+      }
+
+      final entitlement = await MembershipService().fetchEntitlement();
+      final hasAccess = MembershipFeatures.hasFeature(
+        entitlement,
+        MembershipFeatures.onlineService,
+      );
+      if (!hasAccess) {
+        _showMessage('切换书源为会员服务，开通会员后可使用。');
+        if (mounted) {
+          unawaited(context.push('/membership'));
+        }
+        return false;
+      }
+      return true;
+    } catch (error) {
+      _showMessage(
+        error is AppException ? error.briefMessage : '会员状态校验失败，请稍后重试。',
+      );
+      return false;
     }
   }
 
