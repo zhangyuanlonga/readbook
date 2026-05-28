@@ -198,7 +198,7 @@ class ReaderSettings {
   static const double minParagraphIndent = 0;
   static const double maxParagraphIndent = 4;
   static const double defaultBodyTextUnderlineThickness = 1.6;
-  static const double defaultBodyTextUnderlineGap = 6;
+  static const double defaultBodyTextUnderlineGap = 4;
   static const double defaultBodyTextUnderlineDashLength = 5;
   static const double defaultBodyTextUnderlineDashGapRatio = 4;
   static const int minFontWeightValue = 100;

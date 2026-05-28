@@ -430,20 +430,19 @@ class ReaderBodyUnderlinePainter extends CustomPainter {
     required List<LineMetrics> lineMetrics,
   }) {
     if (lineMetrics.isEmpty) {
-      return rect.bottom - math.max(thickness * 0.5, 1.0);
+      return rect.bottom + math.max(gap, 0);
     }
     final centerY = rect.center.dy;
     for (final line in lineMetrics) {
       final lineTop = line.baseline - line.ascent;
       final lineBottom = line.baseline + line.descent;
       if (centerY >= lineTop - 0.5 && centerY <= lineBottom + 0.5) {
-        final desired = line.baseline + gap;
-        final maxY =
-            line.baseline + math.max(line.descent - thickness * 0.5, 1.0);
+        final desired = rect.bottom + math.max(gap, 0);
+        final maxY = lineBottom - math.max(thickness * 0.5, 0.5);
         return math.min(desired, maxY);
       }
     }
-    return rect.bottom - math.max(thickness * 0.5, 1.0);
+    return rect.bottom + math.max(gap, 0);
   }
 
   @override
