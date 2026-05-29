@@ -78,7 +78,9 @@ final mineMembershipServiceProvider = Provider<MembershipService>((ref) {
 });
 
 final mineUserProfileServiceProvider = Provider<UserProfileService>((ref) {
-  return UserProfileService();
+  return UserProfileService(
+    sessionStore: ref.watch(mineAuthSessionStoreProvider),
+  );
 });
 
 final remoteAccessSnapshotServiceProvider =

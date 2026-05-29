@@ -1,6 +1,7 @@
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
+import '../auth/auth_session_store.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import 'user_profile.dart';
@@ -20,20 +21,27 @@ class UserProfileUpdateInput {
 }
 
 class UserProfileService {
-  UserProfileService({ApiClient? client, String? baseUrl})
-    : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
-      _client =
-          client ??
-          ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim());
+  UserProfileService({
+    ApiClient? client,
+    String? baseUrl,
+    AuthSessionStore? sessionStore,
+  }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
+       _client =
+           client ??
+           ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
+       _sessionStore = sessionStore;
 
   final ApiClient _client;
   final String _baseUrl;
+  final AuthSessionStore? _sessionStore;
 
   Future<UserProfile> fetchMe() async {
     _ensureBaseUrl();
+    final headers = await _authHeaders();
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.get,
       path: '/v1/users/me',
+      headers: headers,
       attachAccessToken: true,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
@@ -46,6 +54,7 @@ class UserProfileService {
     String? userId,
   }) async {
     _ensureBaseUrl();
+    final headers = await _authHeaders();
     final payload = <String, dynamic>{
       'display_name': input.displayName.trim(),
       'phone': input.phone.trim(),
@@ -58,6 +67,7 @@ class UserProfileService {
       data = await _client.request<Map<String, dynamic>>(
         method: ApiMethod.patch,
         path: '/v1/users/me',
+        headers: headers,
         attachAccessToken: true,
         stage: ErrorStage.unknown,
         body: payload,
@@ -71,6 +81,7 @@ class UserProfileService {
       data = await _client.request<Map<String, dynamic>>(
         method: ApiMethod.patch,
         path: '/v1/users/$normalizedUserId',
+        headers: headers,
         attachAccessToken: true,
         stage: ErrorStage.unknown,
         body: payload,
@@ -87,6 +98,14 @@ class UserProfileService {
 
   bool _shouldFallbackToUserId(ApiException error) {
     return error.statusCode == 404 || error.apiCode == 'NOT_FOUND';
+  }
+
+  Future<Map<String, String>> _authHeaders() async {
+    final token = (await _sessionStore?.getAccessToken())?.trim() ?? '';
+    if (token.isEmpty) {
+      return const <String, String>{};
+    }
+    return <String, String>{'Authorization': 'Bearer $token'};
   }
 
   void _ensureBaseUrl() {
