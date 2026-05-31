@@ -4,13 +4,12 @@
 
 ## 当前红线
 
-- [ ] 桌面端与 Web 的兼容推进不得影响 Android/iOS 已稳定的 UI、交互、业务逻辑和数据路径。
+- [ ] Web / Desktop 兼容只面向 Web、Windows、macOS、Linux；不得牵扯 iOS / Android 的 UI、交互、平台能力、业务流程或验收任务。
 
 ## 当前推进
 
-- [Web / Windows / macOS 渐进式适配规则](progressive_multiplatform_adaptation_rules_2026-05-30.md)
-- [Web / Windows / macOS 适配功能模块扫描清单](multiplatform_adaptation_inventory_2026-05-30.md)
-- [桌面端与 Web 第一阶段里程碑](desktop_web_phase1_milestone_2026-05-30.md)
+- [Web / Desktop 业务逻辑兼容规则](web_desktop_business_logic_compatibility_rules_2026-05-31.md)
+- [桌面端 UI 第一里程碑：外壳导航与我的页展示基线](desktop_ui_phase1_shell_mine_milestone_2026-05-31.md)
 
 ## 长期约束
 
