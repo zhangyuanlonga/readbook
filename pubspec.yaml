@@ -77,7 +77,7 @@ dependencies:
   flutter_svg: ^2.1.0
   just_audio: ^0.10.5
   circular_theme_reveal: ^1.0.2
-  pdfrx: ^2.2.24
+  pdfrx: ^2.4.3
   turnable_page: 1.0.1
   webview_flutter: ^4.13.1
   window_manager: ^0.5.1
@@ -101,6 +101,8 @@ dev_dependencies:
   freezed: 3.2.5
 
 dependency_overrides:
+  pdfium_dart:
+    path: third_party/plugins/pdfium_dart
   flutter_charset_detector_android:
     path: third_party/plugins/flutter_charset_detector_android
   flutter_charset_detector_web:

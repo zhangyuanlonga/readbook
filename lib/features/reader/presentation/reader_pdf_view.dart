@@ -54,7 +54,9 @@ class _ReaderPdfViewState extends State<ReaderPdfView> {
           blurRadius: 20,
           offset: const Offset(0, 10),
         ),
-        maxScale: 6,
+        sizeDelegateProvider: const PdfViewerSizeDelegateProviderLegacy(
+          maxScale: 6,
+        ),
         onViewerReady: (document, controller) {
           widget.onViewerReady?.call(controller, document.pages.length);
         },
