@@ -322,9 +322,9 @@ Web / Desktop 页面必须有明确的宽屏策略：
 
 历史文档用途如下：
 
-- `desktop_ui_phase1_shell_mine_milestone_2026-05-31.md`：当前第一里程碑，定义桌面端外壳导航和我的模块 UI 展示基线。
-- `progressive_multiplatform_adaptation_rules_2026-05-30.md`：早期多平台原则参考。
-- `multiplatform_adaptation_inventory_2026-05-30.md`：功能模块与平台风险扫描清单。
-- `desktop_web_phase1_milestone_2026-05-30.md`：Phase 1 执行历史。
+- `platform_development_rules.md`：当前 Web / Desktop / Mobile 平台规则。
+- `ui_adaptive_design_rules.md`：当前 UI 与自适应设计规则。
+- `desktop_ui_phase1_shell_mine_milestone_2026-05-31.md`：当前桌面端外壳导航和我的模块 UI 展示基线。
+- 早期多平台草案、扫描清单和 Phase 1 历史文档已被合并进当前规则文档，不再保留。
 
 后续新增执行记录应优先引用本文档，不再复制旧文档中的四端验收模板。

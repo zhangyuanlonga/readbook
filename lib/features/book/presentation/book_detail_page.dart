@@ -60,6 +60,7 @@ import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../../reader/presentation/reader_catalog_sheet.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../search/application/server_gateway_identity.dart';
 import '../../search/providers.dart' as search_providers;
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
@@ -1393,13 +1394,15 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
     final currentResult = _result;
     if (currentResult != null && _canOpenCatalogForResult(currentResult)) {
-      final loadedResult = await _ensureCatalogLoaded(currentResult);
+      final loadedResult = await _ensureFirstReadableCatalogBatch(
+        currentResult,
+      );
       if (!mounted || loadedResult == null) {
         return;
       }
       final readableChapters = _readableChapters(loadedResult.chapters);
       if (readableChapters.isNotEmpty) {
-        _openChapter(readableChapters.first);
+        _openChapter(readableChapters.first, warmCompleteCatalog: true);
         return;
       }
       _showMessage('当前目录没有可阅读的正文章节。');
@@ -2081,7 +2084,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return null;
   }
 
-  void _openChapter(Chapter chapter) {
+  void _openChapter(Chapter chapter, {bool warmCompleteCatalog = false}) {
     if (chapter.isVolume || chapter.chapterUrl.trim().isEmpty) {
       _showMessage('当前节点是分卷标题，不能直接阅读。');
       return;
@@ -2122,6 +2125,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       }
       context.push(route);
       _setDetailExitAnimating(false);
+      if (warmCompleteCatalog) {
+        _scheduleCompleteCatalogWarmupAfterReaderOpen();
+      }
     });
   }
 
@@ -2276,6 +2282,19 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return;
     }
     unawaited(_load(includeCatalog: true, backgroundRefresh: true));
+  }
+
+  void _scheduleCompleteCatalogWarmupAfterReaderOpen() {
+    final result = _result;
+    if (result == null || result.catalogComplete || !result.catalogLoaded) {
+      return;
+    }
+    Future<void>.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_load(includeCatalog: true, backgroundRefresh: true));
+    });
   }
 
   List<String> _currentConflictKeys() {

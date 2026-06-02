@@ -114,8 +114,13 @@ class BookDetailService {
     );
   }
 
-  void _writeDetailCache(String key, BookDetailLoadResult result) {
-    if (!result.catalogLoaded || !result.catalogComplete) {
+  void _writeDetailCache(
+    String key,
+    BookDetailLoadResult result, {
+    bool allowPartialCatalog = false,
+  }) {
+    if (!result.catalogLoaded ||
+        (!allowPartialCatalog && !result.catalogComplete)) {
       return;
     }
     final snapshot = BookDetailLoadResult(
@@ -190,7 +195,7 @@ class BookDetailService {
     if (isServerGatewaySourceId(normalizedSourceId)) {
       if (!forceRefresh) {
         final cached = _readDetailCache(cacheKey);
-        if (cached != null) {
+        if (cached != null && (!includeCatalog || cached.catalogComplete)) {
           return cached;
         }
       }
@@ -205,7 +210,11 @@ class BookDetailService {
         includeCatalog: includeCatalog,
       );
       if (includeCatalog) {
-        _writeDetailCache(cacheKey, result);
+        _writeDetailCache(
+          cacheKey,
+          result,
+          allowPartialCatalog: !result.catalogComplete,
+        );
       }
       return result;
     }
@@ -277,6 +286,65 @@ class BookDetailService {
       sourceId: normalizedSourceId,
       briefMessage: '当前书籍不属于服务器书源详情链路。',
     );
+  }
+
+  Future<BookDetailLoadResult> loadCatalogFirstBatch({
+    required BookDetailLoadResult currentResult,
+    bool forceRefresh = false,
+  }) async {
+    final detail = currentResult.detail;
+    final sourceId = detail.sourceId.trim();
+    final bookId = detail.id.trim();
+    final detailUrl = detail.detailUrl.trim();
+    if (sourceId.isEmpty || bookId.isEmpty || detailUrl.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.toc,
+        briefMessage: '加载目录缺少参数。',
+      );
+    }
+    if (!isServerGatewaySourceId(sourceId)) {
+      throw AppException(
+        code: ErrorCode.unknownSource,
+        stage: ErrorStage.toc,
+        sourceId: sourceId,
+        briefMessage: '当前书籍不属于服务器书源目录链路。',
+      );
+    }
+
+    try {
+      final toc = await _serverGatewayService.loadTocFirstBatch(
+        sourceId: sourceId,
+        bookId: bookId,
+        detailUrl: detailUrl,
+        tocUrl: detail.tocUrl,
+        executionContext: currentResult.executionContext,
+        refresh: forceRefresh,
+      );
+      _sourceHealthService.markChaptersSuccess(sourceId: sourceId);
+      final result = currentResult.copyWith(
+        chapters: toc.chapters,
+        tocFromCache: currentResult.tocFromCache || toc.cacheHit,
+        executionContext:
+            toc.executionContext ?? currentResult.executionContext,
+        tocError: null,
+        catalogLoaded: toc.chapters.isNotEmpty,
+        catalogComplete: toc.isComplete,
+      );
+      _writeDetailCache(
+        '$sourceId|$detailUrl',
+        result,
+        allowPartialCatalog: !result.catalogComplete,
+      );
+      return result;
+    } on AppException catch (error) {
+      _sourceHealthService.markChaptersFailure(
+        sourceId: sourceId,
+        message: error.briefMessage,
+        error: error,
+      );
+      rethrow;
+    }
   }
 
   Future<BookDetailLoadResult> _loadFromServerGateway({

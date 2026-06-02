@@ -6,9 +6,9 @@
 
 关联文档：
 
-- [sto.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/sto.md)
-- [storage_governance_spec_2026-05-21.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/storage_governance_spec_2026-05-21.md)
-- [storage_inventory_2026-05-20.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/storage_inventory_2026-05-20.md)
+- [存储治理定版规范](storage_governance_spec_2026-05-21.md)
+- [存储盘点清单](storage_inventory_2026-05-20.md)
+- [缓存治理优化计划](cache_governance_optimization_plan_2026-06-02.md)
 
 ## 1. 本轮验证目标
 

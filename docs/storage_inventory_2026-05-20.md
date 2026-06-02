@@ -6,9 +6,9 @@
 
 关联文档：
 
-- [sto.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/sto.md)
-- [storage_governance_draft_2026-05-20.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/storage_governance_draft_2026-05-20.md)
-- [development_architecture_guardrails.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/development_architecture_guardrails.md)
+- [存储治理定版规范](storage_governance_spec_2026-05-21.md)
+- [存储升级验证清单](storage_upgrade_validation_2026-05-21.md)
+- [多端架构开发约束](development_architecture_guardrails.md)
 
 ## 1. 结论摘要
 

@@ -146,6 +146,122 @@ extension on _BookDetailPageState {
     }
   }
 
+  Future<BookDetailLoadResult?> _ensureFirstReadableCatalogBatch(
+    BookDetailLoadResult currentResult,
+  ) async {
+    if (currentResult.chapters.any(
+      (chapter) => !chapter.isVolume && chapter.chapterUrl.trim().isNotEmpty,
+    )) {
+      return currentResult;
+    }
+    if (!_canOpenCatalogForResult(currentResult) || _isMissingParams) {
+      _showMessage('当前书籍暂无目录。');
+      return null;
+    }
+    if (_isCatalogLoading) {
+      return null;
+    }
+
+    final sourceId = currentResult.detail.sourceId.trim();
+    if (!isServerGatewaySourceId(sourceId)) {
+      return _ensureCatalogLoaded(currentResult);
+    }
+
+    _updatePresentationState(
+      _presentationState.copyWith(
+        isCatalogLoading: true,
+        clearTocWarningText: true,
+      ),
+    );
+
+    final requestStopwatch = Stopwatch()..start();
+    try {
+      final result = await _bookDetailService.loadCatalogFirstBatch(
+        currentResult: currentResult,
+      );
+      if (!mounted) {
+        return result;
+      }
+
+      _activeBookId = result.detail.id.trim();
+      _activeSourceId = result.detail.sourceId.trim();
+      _activeDetailUrl = result.detail.detailUrl.trim();
+      _displayTitle = result.detail.title.trim();
+      _updatePresentationState(
+        _presentationState.copyWith(
+          isCatalogLoading: false,
+          result: result,
+          tocWarningText: _toTocWarningText(result.tocError),
+        ),
+      );
+      unawaited(_loadSupplementaryState(result: result));
+      _logger.info(
+        'Book detail first catalog batch ready',
+        context: <String, Object?>{
+          'chain': 'book_detail',
+          'step': 'catalog_first_batch_ready',
+          'bookId': result.detail.id,
+          'sourceId': result.detail.sourceId,
+          'detailUrl': result.detail.detailUrl,
+          'chapterCount': result.chapters.length,
+          'catalogComplete': result.catalogComplete,
+          'durationMs': requestStopwatch.elapsedMilliseconds,
+        },
+      );
+      return result;
+    } on AppException catch (error) {
+      if (!mounted) {
+        return null;
+      }
+      _logger.warn(
+        'Book detail first catalog batch failed',
+        context: <String, Object?>{
+          'chain': 'book_detail',
+          'step': 'catalog_first_batch_failed',
+          'bookId': _activeBookId,
+          'sourceId': _activeSourceId,
+          'detailUrl': _activeDetailUrl,
+          'code': error.code.name,
+          'stage': error.stage.name,
+          'durationMs': requestStopwatch.elapsedMilliseconds,
+          'message': error.briefMessage,
+        },
+      );
+      _updatePresentationState(
+        _presentationState.copyWith(
+          isCatalogLoading: false,
+          tocWarningText: _toTocWarningText(error),
+        ),
+      );
+      _showMessage(error.briefMessage);
+      return null;
+    } catch (_) {
+      if (!mounted) {
+        return null;
+      }
+      _logger.warn(
+        'Book detail first catalog batch failed',
+        context: <String, Object?>{
+          'chain': 'book_detail',
+          'step': 'catalog_first_batch_failed',
+          'bookId': _activeBookId,
+          'sourceId': _activeSourceId,
+          'detailUrl': _activeDetailUrl,
+          'durationMs': requestStopwatch.elapsedMilliseconds,
+          'message': '目录加载失败，请稍后重试。',
+        },
+      );
+      _updatePresentationState(
+        _presentationState.copyWith(
+          isCatalogLoading: false,
+          tocWarningText: '目录加载失败，请稍后重试。',
+        ),
+      );
+      _showMessage('目录加载失败，请稍后重试。');
+      return null;
+    }
+  }
+
   void _resetCatalogSearchCache() {
     _catalogSearchCacheFingerprint = null;
     _catalogSearchEntriesCache =

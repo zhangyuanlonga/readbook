@@ -123,7 +123,7 @@ SPEC CHECKSUMS:
   just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   pdf_text_extract: c36cdf801571aa0f72e5332f3fb5f6ce5340bf45
-  pdfium_flutter: 1d4402842569c43566ee75de6c6e7fdb3639c1ed
+  pdfium_flutter: e5a6e881af0b182d5b0465ebad23a8a20caa28d4
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqlite3_flutter_libs: dee77ac8f88a0f0f762ac16e58ded77a82866993

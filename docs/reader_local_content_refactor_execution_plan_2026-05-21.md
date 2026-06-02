@@ -9,14 +9,13 @@
 - 本地图书导入与存储
 - 本地图书索引与正文解析
 - 阅读器分页、正文加载、缓存落位
-- 存储治理草案在阅读器链路的补齐
+- 存储治理规范在阅读器链路的补齐
 
 关联文档：
 
-- [storage_governance_spec_2026-05-21.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/storage_governance_spec_2026-05-21.md)
-- [sto.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/sto.md)
-- [storage_inventory_2026-05-20.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/storage_inventory_2026-05-20.md)
-- [storage_upgrade_validation_2026-05-21.md](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/storage_upgrade_validation_2026-05-21.md)
+- [存储治理定版规范](storage_governance_spec_2026-05-21.md)
+- [存储盘点清单](storage_inventory_2026-05-20.md)
+- [存储升级验证清单](storage_upgrade_validation_2026-05-21.md)
 
 ## 1. 使用说明
 
@@ -309,7 +308,7 @@
 - [x] 在规范中补充“索引表与正文缓存表分离”原则
 - [x] 在规范中补充“解析线程隔离”原则
 - [x] 在规范中补充“PDF 按需提取”原则
-- [x] 更新 `sto.md`，登记本次阶段性落地记录
+- [x] 更新存储治理文档，登记本次阶段性落地记录
 - [x] 补覆盖安装升级回归用例
 - [x] 补本地图书导入与阅读性能基线记录
 - [x] 记录数据库体积、分页缓存体积、首开耗时、连续翻页耗时
