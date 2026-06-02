@@ -205,6 +205,10 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
   "${FLUTTER_CMD}" pub get
 fi
 
+# flutter clean removes build-rooted artifact folders used by the unified
+# packaging flow, so restore this session directory before building.
+mkdir -p "${SESSION_DIR}"
+
 build_apk() {
   local cmd=("${FLUTTER_CMD}" build apk "--${BUILD_MODE}")
   if [[ "${APK_PROFILE}" == "split" ]]; then

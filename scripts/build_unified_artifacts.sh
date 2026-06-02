@@ -403,6 +403,10 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
   "${FLUTTER_CMD}" pub get
 fi
 
+# flutter clean removes the build-rooted session directories, so recreate them
+# before invoking per-platform packaging scripts.
+mkdir -p "${SESSION_DIR}" "${STAGING_ROOT}"
+
 for platform in "${PLATFORMS[@]-}"; do
   case "${platform}" in
     android)
